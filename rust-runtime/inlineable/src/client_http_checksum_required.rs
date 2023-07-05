@@ -5,20 +5,33 @@
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorRegistrar, SharedInterceptor,
+use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::base64;
 use aws_smithy_types::config_bag::ConfigBag;
 use http::header::HeaderName;
+use std::borrow::Cow;
 
 #[derive(Debug)]
-pub(crate) struct HttpChecksumRequiredRuntimePlugin;
+pub(crate) struct HttpChecksumRequiredRuntimePlugin {
+    runtime_components: RuntimeComponentsBuilder,
+}
+
+impl HttpChecksumRequiredRuntimePlugin {
+    pub(crate) fn new() -> Self {
+        Self {
+            runtime_components: RuntimeComponentsBuilder::new("HttpChecksumRequiredRuntimePlugin")
+                .with_interceptor(SharedInterceptor::new(HttpChecksumRequiredInterceptor)),
+        }
+    }
+}
 
 impl RuntimePlugin for HttpChecksumRequiredRuntimePlugin {
-    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-        interceptors.register(SharedInterceptor::new(HttpChecksumRequiredInterceptor));
+    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        Cow::Borrowed(&self.runtime_components)
     }
 }
 
@@ -29,6 +42,7 @@ impl Interceptor for HttpChecksumRequiredInterceptor {
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let request = context.request_mut();

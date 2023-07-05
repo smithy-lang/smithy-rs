@@ -35,20 +35,21 @@ pub trait RetryStrategy: Send + Sync + Debug {
     fn should_attempt_retry(
         &self,
         context: &InterceptorContext,
+        runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
     ) -> Result<ShouldAttempt, BoxError>;
 }
 
-#[derive(Debug)]
-pub struct DynRetryStrategy(Box<dyn RetryStrategy>);
+#[derive(Clone, Debug)]
+pub struct SharedRetryStrategy(Arc<dyn RetryStrategy>);
 
-impl DynRetryStrategy {
+impl SharedRetryStrategy {
     pub fn new(retry_strategy: impl RetryStrategy + 'static) -> Self {
-        Self(Box::new(retry_strategy))
+        Self(Arc::new(retry_strategy))
     }
 }
 
-impl RetryStrategy for DynRetryStrategy {
+impl RetryStrategy for SharedRetryStrategy {
     fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError> {
         self.0.should_attempt_initial_request(cfg)
     }
@@ -56,13 +57,15 @@ impl RetryStrategy for DynRetryStrategy {
     fn should_attempt_retry(
         &self,
         context: &InterceptorContext,
+        runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
     ) -> Result<ShouldAttempt, BoxError> {
-        self.0.should_attempt_retry(context, cfg)
+        self.0
+            .should_attempt_retry(context, runtime_components, cfg)
     }
 }
 
-impl Storable for DynRetryStrategy {
+impl Storable for SharedRetryStrategy {
     type Storer = StoreReplace<Self>;
 }
 
@@ -83,9 +86,9 @@ pub trait ClassifyRetry: Send + Sync + Debug {
     fn name(&self) -> &'static str;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RetryClassifiers {
-    inner: Vec<Box<dyn ClassifyRetry>>,
+    inner: Vec<Arc<dyn ClassifyRetry>>,
 }
 
 impl RetryClassifiers {
@@ -98,8 +101,7 @@ impl RetryClassifiers {
     }
 
     pub fn with_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
-        self.inner.push(Box::new(retry_classifier));
-
+        self.inner.push(Arc::new(retry_classifier));
         self
     }
 
@@ -160,5 +162,7 @@ mod test_util {
 }
 
 use crate::box_error::BoxError;
+use crate::client::runtime_components::RuntimeComponents;
+use std::sync::Arc;
 #[cfg(feature = "test-util")]
 pub use test_util::AlwaysRetry;

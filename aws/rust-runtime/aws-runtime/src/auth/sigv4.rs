@@ -13,10 +13,9 @@ use aws_smithy_runtime_api::client::auth::{
     AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpRequestSigner,
 };
 use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
-use aws_smithy_runtime_api::client::identity::{
-    Identity, IdentityResolvers, SharedIdentityResolver,
-};
+use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::GetIdentityResolver;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::Document;
 use aws_types::region::{Region, SigningRegion};
@@ -99,7 +98,7 @@ impl HttpAuthScheme for SigV4HttpAuthScheme {
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }

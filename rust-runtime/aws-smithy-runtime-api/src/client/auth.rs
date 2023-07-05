@@ -4,8 +4,9 @@
  */
 
 use crate::box_error::BoxError;
-use crate::client::identity::{Identity, IdentityResolvers, SharedIdentityResolver};
+use crate::client::identity::{Identity, SharedIdentityResolver};
 use crate::client::orchestrator::HttpRequest;
+use crate::client::runtime_components::GetIdentityResolver;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
 use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_types::Document;
@@ -66,20 +67,20 @@ pub trait AuthOptionResolver: Send + Sync + fmt::Debug {
     ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError>;
 }
 
-#[derive(Debug)]
-pub struct DynAuthOptionResolver(Box<dyn AuthOptionResolver>);
+#[derive(Clone, Debug)]
+pub struct SharedAuthOptionResolver(Arc<dyn AuthOptionResolver>);
 
-impl DynAuthOptionResolver {
+impl SharedAuthOptionResolver {
     pub fn new(auth_option_resolver: impl AuthOptionResolver + 'static) -> Self {
-        Self(Box::new(auth_option_resolver))
+        Self(Arc::new(auth_option_resolver))
     }
 }
 
-impl Storable for DynAuthOptionResolver {
+impl Storable for SharedAuthOptionResolver {
     type Storer = StoreReplace<Self>;
 }
 
-impl AuthOptionResolver for DynAuthOptionResolver {
+impl AuthOptionResolver for SharedAuthOptionResolver {
     fn resolve_auth_options(
         &self,
         params: &AuthOptionResolverParams,
@@ -93,7 +94,7 @@ pub trait HttpAuthScheme: Send + Sync + fmt::Debug {
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver>;
 
     fn request_signer(&self) -> &dyn HttpRequestSigner;
@@ -117,7 +118,7 @@ impl HttpAuthScheme for SharedHttpAuthScheme {
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver> {
         self.0.identity_resolver(identity_resolvers)
     }
@@ -181,7 +182,10 @@ mod tests {
                 AuthSchemeId::new(self.0)
             }
 
-            fn identity_resolver(&self, _: &IdentityResolvers) -> Option<SharedIdentityResolver> {
+            fn identity_resolver(
+                &self,
+                _: &dyn GetIdentityResolver,
+            ) -> Option<SharedIdentityResolver> {
                 unreachable!("this shouldn't get called in this test")
             }
 

@@ -170,7 +170,8 @@ class ClientCodegenVisitor(
             ),
         )
         try {
-            "cargo fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
+            // use an increased max_width to make rustfmt fail less frequently
+            "cargo fmt -- --config max_width=150".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
         } catch (err: CommandFailed) {
             logger.warning("Failed to run cargo fmt: [${service.id}]\n${err.output}")
         }

@@ -7,8 +7,9 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::client::retries::{
-    ClassifyRetry, RetryClassifiers, RetryReason, RetryStrategy, ShouldAttempt,
+    ClassifyRetry, RetryReason, RetryStrategy, ShouldAttempt,
 };
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::time::Duration;
 
@@ -41,6 +42,7 @@ impl RetryStrategy for FixedDelayRetryStrategy {
     fn should_attempt_retry(
         &self,
         ctx: &InterceptorContext,
+        runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
     ) -> Result<ShouldAttempt, BoxError> {
         // Look a the result. If it's OK then we're done; No retry required. Otherwise, we need to inspect it
@@ -65,8 +67,8 @@ impl RetryStrategy for FixedDelayRetryStrategy {
             return Ok(ShouldAttempt::No);
         }
 
-        let retry_classifiers = cfg
-            .load::<RetryClassifiers>()
+        let retry_classifiers = runtime_components
+            .retry_classifiers()
             .expect("a retry classifier is set");
         let retry_reason = retry_classifiers.classify_retry(ctx);
 

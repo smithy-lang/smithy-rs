@@ -264,7 +264,7 @@ class CustomizableOperationGenerator(
                             };
 
                             self.interceptors.into_iter().for_each(|interceptor| {
-                                config_override.add_interceptor(interceptor);
+                                config_override.push_interceptor(interceptor);
                             });
 
                             (self.customizable_send)(config_override).await

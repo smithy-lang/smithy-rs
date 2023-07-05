@@ -47,7 +47,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                     ) {
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
-                                """self.inner.load::<#{SharedTimeSource}>().expect("time source should be set").clone()""",
+                                """self.config.load::<#{SharedTimeSource}>().expect("time source should be set").clone()""",
                                 *codegenScope,
                             )
                         } else {
@@ -88,7 +88,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                                 &mut self,
                                 time_source: #{Option}<#{SharedTimeSource}>,
                             ) -> &mut Self {
-                                self.inner.store_or_unset(time_source);
+                                self.config.store_or_unset(time_source);
                                 self
                             }
                             """,

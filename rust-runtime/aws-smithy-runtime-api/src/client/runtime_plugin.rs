@@ -4,8 +4,11 @@
  */
 
 use crate::box_error::BoxError;
-use crate::client::interceptors::InterceptorRegistrar;
+use crate::client::runtime_components::{
+    RuntimeComponentsBuilder, EMPTY_RUNTIME_COMPONENTS_BUILDER,
+};
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer};
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::sync::Arc;
 
@@ -19,8 +22,8 @@ pub trait RuntimePlugin: Debug + Send + Sync {
         None
     }
 
-    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-        let _ = interceptors;
+    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        Cow::Borrowed(&EMPTY_RUNTIME_COMPONENTS_BUILDER)
     }
 }
 
@@ -38,8 +41,8 @@ impl RuntimePlugin for SharedRuntimePlugin {
         self.0.config()
     }
 
-    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-        self.0.interceptors(interceptors)
+    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        self.0.runtime_components()
     }
 }
 
@@ -68,33 +71,31 @@ impl RuntimePlugins {
     pub fn apply_client_configuration(
         &self,
         cfg: &mut ConfigBag,
-        interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError> {
+    ) -> Result<RuntimeComponentsBuilder, BoxError> {
         tracing::trace!("applying client runtime plugins");
+        let mut builder = RuntimeComponentsBuilder::new("apply_client_configuration");
         for plugin in self.client_plugins.iter() {
             if let Some(layer) = plugin.config() {
                 cfg.push_shared_layer(layer);
             }
-            plugin.interceptors(interceptors);
+            builder = builder.merge_from(&plugin.runtime_components());
         }
-
-        Ok(())
+        Ok(builder)
     }
 
     pub fn apply_operation_configuration(
         &self,
         cfg: &mut ConfigBag,
-        interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError> {
+    ) -> Result<RuntimeComponentsBuilder, BoxError> {
         tracing::trace!("applying operation runtime plugins");
+        let mut builder = RuntimeComponentsBuilder::new("apply_operation_configuration");
         for plugin in self.operation_plugins.iter() {
             if let Some(layer) = plugin.config() {
                 cfg.push_shared_layer(layer);
             }
-            plugin.interceptors(interceptors);
+            builder = builder.merge_from(&plugin.runtime_components());
         }
-
-        Ok(())
+        Ok(builder)
     }
 }
 

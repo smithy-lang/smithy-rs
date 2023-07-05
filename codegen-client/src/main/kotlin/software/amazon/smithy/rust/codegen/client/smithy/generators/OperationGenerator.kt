@@ -160,10 +160,11 @@ open class OperationGenerator(
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
                         if let Some(config_override) = config_override {
-                            runtime_plugins = runtime_plugins.with_operation_plugin(crate::config::ConfigOverrideRuntimePlugin {
+                            runtime_plugins = runtime_plugins.with_operation_plugin(crate::config::ConfigOverrideRuntimePlugin::new(
                                 config_override,
-                                client_config: #{RuntimePlugin}::config(client_config).expect("frozen layer should exist in client config"),
-                            })
+                                #{RuntimePlugin}::config(client_config).expect("frozen layer should exist in client config"),
+                                &#{RuntimePlugin}::runtime_components(client_config),
+                            ))
                         }
                         runtime_plugins
                             #{additional_runtime_plugins}

@@ -15,6 +15,7 @@ use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::client::retries::{
     ClassifyRetry, RetryReason, RetryStrategy, ShouldAttempt,
 };
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 use std::sync::Mutex;
@@ -188,6 +189,7 @@ impl RetryStrategy for StandardRetryStrategy {
     fn should_attempt_retry(
         &self,
         ctx: &InterceptorContext,
+        runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
     ) -> Result<ShouldAttempt, BoxError> {
         // Look a the result. If it's OK then we're done; No retry required. Otherwise, we need to inspect it
@@ -229,7 +231,9 @@ impl RetryStrategy for StandardRetryStrategy {
         }
 
         // Run the classifiers against the context to determine if we should retry
-        let retry_classifiers = cfg.retry_classifiers();
+        let retry_classifiers = runtime_components
+            .retry_classifiers()
+            .ok_or("retry classifiers are required by the retry configuration")?;
         let retry_reason = retry_classifiers.classify_retry(ctx);
 
         // Calculate the appropriate backoff time.
@@ -292,6 +296,7 @@ mod tests {
     use aws_smithy_runtime_api::client::retries::{
         AlwaysRetry, ClassifyRetry, RetryClassifiers, RetryReason, RetryStrategy,
     };
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::Layer;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
     use aws_smithy_types::type_erasure::TypeErasedBox;
@@ -305,11 +310,12 @@ mod tests {
     #[test]
     fn no_retry_necessary_for_ok_result() {
         let cfg = ConfigBag::base();
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         let strategy = StandardRetryStrategy::default();
         ctx.set_output_or_error(Ok(TypeErasedBox::doesnt_matter()));
         let actual = strategy
-            .should_attempt_retry(&ctx, &cfg)
+            .should_attempt_retry(&ctx, &rc, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::No, actual);
     }
@@ -317,26 +323,29 @@ mod tests {
     fn set_up_cfg_and_context(
         error_kind: ErrorKind,
         current_request_attempts: u32,
-    ) -> (InterceptorContext, ConfigBag) {
+    ) -> (InterceptorContext, RuntimeComponents, ConfigBag) {
         let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::other("doesn't matter")));
+        let rc = RuntimeComponentsBuilder::for_tests()
+            .with_retry_classifiers(Some(
+                RetryClassifiers::new().with_classifier(AlwaysRetry(error_kind)),
+            ))
+            .build()
+            .unwrap();
         let mut layer = Layer::new("test");
-        layer.set_retry_classifiers(
-            RetryClassifiers::new().with_classifier(AlwaysRetry(error_kind)),
-        );
         layer.store_put(RequestAttempts::new(current_request_attempts));
         let cfg = ConfigBag::of_layers(vec![layer]);
 
-        (ctx, cfg)
+        (ctx, rc, cfg)
     }
 
     // Test that error kinds produce the correct "retry after X seconds" output.
     // All error kinds are handled in the same way for the standard strategy.
     fn test_should_retry_error_kind(error_kind: ErrorKind) {
-        let (ctx, cfg) = set_up_cfg_and_context(error_kind, 3);
+        let (ctx, rc, cfg) = set_up_cfg_and_context(error_kind, 3);
         let strategy = StandardRetryStrategy::default().with_base(|| 1.0);
         let actual = strategy
-            .should_attempt_retry(&ctx, &cfg)
+            .should_attempt_retry(&ctx, &rc, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::YesAfterDelay(Duration::from_secs(4)), actual);
     }
@@ -365,12 +374,12 @@ mod tests {
     fn dont_retry_when_out_of_attempts() {
         let current_attempts = 4;
         let max_attempts = current_attempts;
-        let (ctx, cfg) = set_up_cfg_and_context(ErrorKind::TransientError, current_attempts);
+        let (ctx, rc, cfg) = set_up_cfg_and_context(ErrorKind::TransientError, current_attempts);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(max_attempts);
         let actual = strategy
-            .should_attempt_retry(&ctx, &cfg)
+            .should_attempt_retry(&ctx, &rc, &cfg)
             .expect("method is infallible for this use");
         assert_eq!(ShouldAttempt::No, actual);
     }
@@ -431,23 +440,28 @@ mod tests {
     }
 
     #[cfg(feature = "test-util")]
-    fn setup_test(retry_reasons: Vec<RetryReason>) -> (ConfigBag, InterceptorContext) {
-        let mut cfg = ConfigBag::base();
-        cfg.interceptor_state().set_retry_classifiers(
-            RetryClassifiers::new()
-                .with_classifier(PresetReasonRetryClassifier::new(retry_reasons)),
-        );
+    fn setup_test(
+        retry_reasons: Vec<RetryReason>,
+    ) -> (ConfigBag, RuntimeComponents, InterceptorContext) {
+        let rc = RuntimeComponentsBuilder::for_tests()
+            .with_retry_classifiers(Some(
+                RetryClassifiers::new()
+                    .with_classifier(PresetReasonRetryClassifier::new(retry_reasons)),
+            ))
+            .build()
+            .unwrap();
+        let cfg = ConfigBag::base();
         let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         // This type doesn't matter b/c the classifier will just return whatever we tell it to.
         ctx.set_output_or_error(Err(OrchestratorError::other("doesn't matter")));
 
-        (cfg, ctx)
+        (cfg, rc, ctx)
     }
 
     #[cfg(feature = "test-util")]
     #[test]
     fn eventual_success() {
-        let (mut cfg, mut ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -455,13 +469,13 @@ mod tests {
         let token_bucket = cfg.load::<TokenBucket>().unwrap().clone();
 
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(token_bucket.available_permits(), 495);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(2));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(token_bucket.available_permits(), 490);
@@ -469,7 +483,7 @@ mod tests {
         ctx.set_output_or_error(Ok(TypeErasedBox::doesnt_matter()));
 
         cfg.interceptor_state().store_put(RequestAttempts::new(3));
-        let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         assert_eq!(no_retry, ShouldAttempt::No);
         assert_eq!(token_bucket.available_permits(), 495);
     }
@@ -477,7 +491,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_more_attempts() {
-        let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(3);
@@ -485,19 +499,19 @@ mod tests {
         let token_bucket = cfg.load::<TokenBucket>().unwrap().clone();
 
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(token_bucket.available_permits(), 495);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(2));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(token_bucket.available_permits(), 490);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(3));
-        let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         assert_eq!(no_retry, ShouldAttempt::No);
         assert_eq!(token_bucket.available_permits(), 490);
     }
@@ -505,7 +519,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_quota() {
-        let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -513,13 +527,13 @@ mod tests {
         let token_bucket = cfg.load::<TokenBucket>().unwrap().clone();
 
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(token_bucket.available_permits(), 0);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(2));
-        let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         assert_eq!(no_retry, ShouldAttempt::No);
         assert_eq!(token_bucket.available_permits(), 0);
     }
@@ -527,7 +541,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn quota_replenishes_on_success() {
-        let (mut cfg, mut ctx) = setup_test(vec![
+        let (mut cfg, rc, mut ctx) = setup_test(vec![
             RetryReason::Error(ErrorKind::TransientError),
             RetryReason::Explicit(Duration::from_secs(1)),
         ]);
@@ -538,13 +552,13 @@ mod tests {
         let token_bucket = cfg.load::<TokenBucket>().unwrap().clone();
 
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(token_bucket.available_permits(), 90);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(2));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(token_bucket.available_permits(), 90);
@@ -552,7 +566,7 @@ mod tests {
         ctx.set_output_or_error(Ok(TypeErasedBox::doesnt_matter()));
 
         cfg.interceptor_state().store_put(RequestAttempts::new(3));
-        let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         assert_eq!(no_retry, ShouldAttempt::No);
 
         assert_eq!(token_bucket.available_permits(), 100);
@@ -562,7 +576,8 @@ mod tests {
     #[test]
     fn quota_replenishes_on_first_try_success() {
         const PERMIT_COUNT: usize = 20;
-        let (mut cfg, mut ctx) = setup_test(vec![RetryReason::Error(ErrorKind::TransientError)]);
+        let (mut cfg, rc, mut ctx) =
+            setup_test(vec![RetryReason::Error(ErrorKind::TransientError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(u32::MAX);
@@ -581,7 +596,7 @@ mod tests {
 
             cfg.interceptor_state()
                 .store_put(RequestAttempts::new(attempt));
-            let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+            let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
             assert!(matches!(should_retry, ShouldAttempt::YesAfterDelay(_)));
             attempt += 1;
         }
@@ -600,7 +615,7 @@ mod tests {
 
             cfg.interceptor_state()
                 .store_put(RequestAttempts::new(attempt));
-            let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+            let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
             assert_eq!(no_retry, ShouldAttempt::No);
             attempt += 1;
         }
@@ -612,7 +627,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn backoff_timing() {
-        let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -620,31 +635,31 @@ mod tests {
         let token_bucket = cfg.load::<TokenBucket>().unwrap().clone();
 
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(token_bucket.available_permits(), 495);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(2));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(token_bucket.available_permits(), 490);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(3));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(4));
         assert_eq!(token_bucket.available_permits(), 485);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(4));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(8));
         assert_eq!(token_bucket.available_permits(), 480);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(5));
-        let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         assert_eq!(no_retry, ShouldAttempt::No);
         assert_eq!(token_bucket.available_permits(), 480);
     }
@@ -652,7 +667,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn max_backoff_time() {
-        let (mut cfg, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5)
@@ -662,31 +677,31 @@ mod tests {
         let token_bucket = cfg.load::<TokenBucket>().unwrap().clone();
 
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(1));
         assert_eq!(token_bucket.available_permits(), 495);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(2));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(2));
         assert_eq!(token_bucket.available_permits(), 490);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(3));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(3));
         assert_eq!(token_bucket.available_permits(), 485);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(4));
-        let should_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         let dur = should_retry.expect_delay();
         assert_eq!(dur, Duration::from_secs(3));
         assert_eq!(token_bucket.available_permits(), 480);
 
         cfg.interceptor_state().store_put(RequestAttempts::new(5));
-        let no_retry = strategy.should_attempt_retry(&ctx, &cfg).unwrap();
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
         assert_eq!(no_retry, ShouldAttempt::No);
         assert_eq!(token_bucket.available_permits(), 480);
     }

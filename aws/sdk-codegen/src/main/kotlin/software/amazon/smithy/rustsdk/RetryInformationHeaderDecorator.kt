@@ -35,7 +35,7 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterInterceptor) {
+        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             // Track the latency between client and server.
             section.registerInterceptor(runtimeConfig, this) {
                 rust(

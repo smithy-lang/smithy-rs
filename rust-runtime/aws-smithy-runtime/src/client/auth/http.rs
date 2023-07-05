@@ -13,10 +13,9 @@ use aws_smithy_runtime_api::client::auth::{
     AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpRequestSigner,
 };
 use aws_smithy_runtime_api::client::identity::http::{Login, Token};
-use aws_smithy_runtime_api::client::identity::{
-    Identity, IdentityResolvers, SharedIdentityResolver,
-};
+use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::GetIdentityResolver;
 use aws_smithy_types::base64::encode;
 use aws_smithy_types::config_bag::ConfigBag;
 use http::header::HeaderName;
@@ -59,7 +58,7 @@ impl HttpAuthScheme for ApiKeyAuthScheme {
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
@@ -129,7 +128,7 @@ impl HttpAuthScheme for BasicAuthScheme {
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
@@ -187,7 +186,7 @@ impl HttpAuthScheme for BearerAuthScheme {
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
@@ -243,7 +242,7 @@ impl HttpAuthScheme for DigestAuthScheme {
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }

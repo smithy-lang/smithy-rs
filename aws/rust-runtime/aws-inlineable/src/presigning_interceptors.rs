@@ -20,11 +20,15 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::{
-    disable_interceptor, Interceptor, InterceptorRegistrar, SharedInterceptor,
+    disable_interceptor, Interceptor, SharedInterceptor,
 };
-use aws_smithy_runtime_api::client::retries::DynRetryStrategy;
+use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
+};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
+use std::borrow::Cow;
 
 /// Interceptor that tells the SigV4 signer to add the signature to query params,
 /// and sets the request expiration time from the presigning config.
@@ -47,6 +51,7 @@ impl Interceptor for SigV4PresigningInterceptor {
     fn modify_before_serialization(
         &self,
         _context: &mut BeforeSerializationInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         cfg.interceptor_state()
@@ -65,6 +70,7 @@ impl Interceptor for SigV4PresigningInterceptor {
     fn modify_before_signing(
         &self,
         _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         if let Some(mut config) = cfg.load::<SigV4OperationSigningConfig>().cloned() {
@@ -86,16 +92,18 @@ impl Interceptor for SigV4PresigningInterceptor {
 /// Runtime plugin that registers the SigV4PresigningInterceptor.
 #[derive(Debug)]
 pub(crate) struct SigV4PresigningRuntimePlugin {
-    interceptor: SharedInterceptor,
+    runtime_components: RuntimeComponentsBuilder,
 }
 
 impl SigV4PresigningRuntimePlugin {
     pub(crate) fn new(config: PresigningConfig, payload_override: SignableBody<'static>) -> Self {
         Self {
-            interceptor: SharedInterceptor::new(SigV4PresigningInterceptor::new(
-                config,
-                payload_override,
-            )),
+            runtime_components: RuntimeComponentsBuilder::new("SigV4PresigningRuntimePlugin")
+                .with_interceptor(SharedInterceptor::new(SigV4PresigningInterceptor::new(
+                    config,
+                    payload_override,
+                )))
+                .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new()))),
         }
     }
 }
@@ -103,14 +111,13 @@ impl SigV4PresigningRuntimePlugin {
 impl RuntimePlugin for SigV4PresigningRuntimePlugin {
     fn config(&self) -> Option<FrozenLayer> {
         let mut layer = Layer::new("Presigning");
-        layer.set_retry_strategy(DynRetryStrategy::new(NeverRetryStrategy::new()));
         layer.store_put(disable_interceptor::<InvocationIdInterceptor>("presigning"));
         layer.store_put(disable_interceptor::<RequestInfoInterceptor>("presigning"));
         layer.store_put(disable_interceptor::<UserAgentInterceptor>("presigning"));
         Some(layer.freeze())
     }
 
-    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-        interceptors.register(self.interceptor.clone());
+    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        Cow::Borrowed(&self.runtime_components)
     }
 }
