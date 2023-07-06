@@ -21,20 +21,16 @@ use tracing_subscriber::{
 
 use crate::error::PyException;
 
+#[derive(Debug, Default)]
 enum Format {
     Json,
     Pretty,
+    #[default]
     Compact,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 struct InvalidFormatError;
-
-impl Default for Format {
-    fn default() -> Self {
-        Format::Compact
-    }
-}
 
 impl FromStr for Format {
     type Err = InvalidFormatError;
