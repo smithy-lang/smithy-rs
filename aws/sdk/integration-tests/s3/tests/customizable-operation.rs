@@ -57,3 +57,60 @@ async fn test_s3_ops_are_customizable() {
         snapshot_signature
     );
 }
+
+#[cfg(aws_sdk_orchestrator_mode)]
+#[tokio::test]
+async fn test_extract_metadata_via_customizable_operation() {
+    // Interceptors aren’t supposed to store states, but it is done this way for a testing purpose.
+    #[derive(Debug)]
+    struct ExtractMetadataInterceptor(
+        std::sync::Mutex<Option<std::sync::mpsc::Sender<(String, String)>>>,
+    );
+
+    impl aws_smithy_runtime_api::client::interceptors::Interceptor for ExtractMetadataInterceptor {
+        fn modify_before_signing(
+            &self,
+            _context: &mut aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut<'_>,
+            cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+        ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+            let metadata = cfg
+                .load::<aws_smithy_http::operation::Metadata>()
+                .expect("metadata should exist");
+            let service_name = metadata.service().to_string();
+            let operation_name = metadata.name().to_string();
+            let tx = self.0.lock().unwrap().take().unwrap();
+            tx.send((service_name.clone(), operation_name.clone()))
+                .unwrap();
+            Ok(())
+        }
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel();
+
+    let (conn, _captured_request) = capture_request(None);
+    let sdk_config = SdkConfig::builder()
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .region(Region::new("us-west-2"))
+        .http_connector(conn)
+        .build();
+    let client = Client::new(&sdk_config);
+    let _ = client
+        .list_objects_v2()
+        .bucket("test-bucket")
+        .customize()
+        .await
+        .expect("operation should be customizable")
+        .interceptor(ExtractMetadataInterceptor(std::sync::Mutex::new(Some(tx))))
+        .send()
+        .await;
+
+    match rx.recv() {
+        Ok((service_name, operation_name)) => {
+            assert_eq!("s3", &service_name);
+            assert_eq!("ListObjectsV2", &operation_name);
+        }
+        Err(_) => panic!(
+            "failed to receive service name and operation name from `ExtractMetadataInterceptor`"
+        ),
+    }
+}
