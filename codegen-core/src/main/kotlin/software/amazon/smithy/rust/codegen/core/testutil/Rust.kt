@@ -381,6 +381,15 @@ fun FileManifest.printGeneratedFiles() {
  * Setting `runClippy` to true can be helpful when debugging clippy failures, but
  * should generally be set to `false` to avoid invalidating the Cargo cache between
  * every unit test run.
+ * If you want to enable each features individually, specify the name of the feature on featuresToEnable.
+ * e.g.
+ * ```kotlin
+ * compileAndTest(featuresToEnable = ["this", "that"])
+ * ```
+ * All features are enabled by default. If you wish to disable them, set enableAllFeatures to False.
+ * ```kotlin
+ * compileAndTest(featuresToEnable = false)
+ * ```
  */
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
