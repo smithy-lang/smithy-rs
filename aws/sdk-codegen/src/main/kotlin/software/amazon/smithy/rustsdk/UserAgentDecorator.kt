@@ -88,7 +88,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
             )
         }
 
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
             rustTemplate(
                 "pub use #{AppName};",
@@ -207,7 +207,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
                 is ServiceConfig.BuilderBuild -> writable {
                     if (runtimeMode.defaultToOrchestrator) {
-                        rust("layer.put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                        rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
                     } else {
                         rust("app_name: self.app_name,")
                     }

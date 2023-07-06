@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::BoxError;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::client::retries::{
     ClassifyRetry, RetryClassifiers, RetryReason, RetryStrategy, ShouldAttempt,
@@ -53,10 +53,10 @@ impl RetryStrategy for FixedDelayRetryStrategy {
         }
 
         // Check if we're out of attempts
-        let request_attempts: &RequestAttempts = cfg
-            .get()
+        let request_attempts = cfg
+            .load::<RequestAttempts>()
             .expect("at least one request attempt is made before any retry is attempted");
-        if request_attempts.attempts() >= self.max_attempts as usize {
+        if request_attempts.attempts() >= self.max_attempts {
             tracing::trace!(
                 attempts = request_attempts.attempts(),
                 max_attempts = self.max_attempts,
@@ -66,7 +66,7 @@ impl RetryStrategy for FixedDelayRetryStrategy {
         }
 
         let retry_classifiers = cfg
-            .get::<RetryClassifiers>()
+            .load::<RetryClassifiers>()
             .expect("a retry classifier is set");
         let retry_reason = retry_classifiers.classify_retry(ctx);
 

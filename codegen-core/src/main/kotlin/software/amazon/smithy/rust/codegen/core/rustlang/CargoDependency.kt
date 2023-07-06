@@ -124,6 +124,7 @@ class InlineDependency(
             "serialization_settings",
             CargoDependency.Http,
             CargoDependency.smithyHttp(runtimeConfig),
+            CargoDependency.smithyTypes(runtimeConfig),
         )
 
         fun constrained(): InlineDependency =
@@ -232,6 +233,7 @@ data class CargoDependency(
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
 
         // Test-only dependencies
+        val Approx: CargoDependency = CargoDependency("approx", CratesIo("0.5.1"), DependencyScope.Dev)
         val AsyncStd: CargoDependency = CargoDependency("async-std", CratesIo("1.12.0"), DependencyScope.Dev)
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
@@ -287,6 +289,8 @@ data class CargoDependency(
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
+        fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
 

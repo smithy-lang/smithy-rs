@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -53,7 +54,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
 
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             rust(
                 "pub use #T::Credentials;",
                 AwsRuntimeType.awsCredentialTypes(codegenContext.runtimeConfig),
@@ -138,24 +139,24 @@ class CredentialsIdentityResolverRegistration(
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
             is ServiceRuntimePluginSection.AdditionalConfig -> {
-                rustTemplate(
-                    """
-                    cfg.set_identity_resolvers(
-                        #{IdentityResolvers}::builder()
-                            .identity_resolver(
-                                #{SIGV4_SCHEME_ID},
-                                #{CredentialsIdentityResolver}::new(self.handle.conf.credentials_cache())
-                            )
-                            .build()
-                    );
-                    """,
-                    "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                        .resolve("auth::sigv4::SCHEME_ID"),
-                    "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                        .resolve("identity::credentials::CredentialsIdentityResolver"),
-                    "IdentityResolvers" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        .resolve("client::identity::IdentityResolvers"),
-                )
+                rustBlockTemplate("if let Some(credentials_cache) = ${section.serviceConfigName}.credentials_cache()") {
+                    section.registerIdentityResolver(this, runtimeConfig) {
+                        rustTemplate(
+                            """
+                            #{SIGV4_SCHEME_ID},
+                            #{SharedIdentityResolver}::new(
+                                #{CredentialsIdentityResolver}::new(credentials_cache),
+                            ),
+                            """,
+                            "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                                .resolve("auth::sigv4::SCHEME_ID"),
+                            "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                                .resolve("identity::credentials::CredentialsIdentityResolver"),
+                            "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                                .resolve("client::identity::SharedIdentityResolver"),
+                        )
+                    }
+                }
             }
             else -> {}
         }

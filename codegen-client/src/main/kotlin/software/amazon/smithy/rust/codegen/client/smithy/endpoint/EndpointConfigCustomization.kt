@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
  * Customization which injects an Endpoints 2.0 Endpoint Resolver into the service config struct
  */
 internal class EndpointConfigCustomization(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val typesGenerator: EndpointTypesGenerator,
 ) :
     ConfigCustomization() {
@@ -35,6 +35,7 @@ internal class EndpointConfigCustomization(
             val codegenScope = arrayOf(
                 *preludeScope,
                 "DefaultEndpointResolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
+                "DynEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::DynEndpointResolver"),
                 "SharedEndpointResolver" to types.sharedEndpointResolver,
                 "SmithyResolver" to types.resolveEndpoint,
                 "Params" to typesGenerator.paramsStruct(),
@@ -85,6 +86,8 @@ internal class EndpointConfigCustomization(
                 ServiceConfig.BuilderImpl -> {
                     // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
                     val defaultResolverDocs = if (typesGenerator.defaultResolver() != null) {
+                        val endpointModule = ClientRustModule.endpoint(codegenContext).fullyQualifiedPath()
+                            .replace("crate::", "$moduleUseName::")
                         """
                         ///
                         /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
@@ -93,7 +96,7 @@ internal class EndpointConfigCustomization(
                         /// ## Examples
                         /// ```no_run
                         /// use aws_smithy_http::endpoint;
-                        /// use $moduleUseName::endpoint::{Params as EndpointParams, DefaultResolver};
+                        /// use $endpointModule::{Params as EndpointParams, DefaultResolver};
                         /// /// Endpoint resolver which adds a prefix to the generated endpoint
                         /// ##[derive(Debug)]
                         /// struct PrefixResolver {
@@ -165,11 +168,15 @@ internal class EndpointConfigCustomization(
                     if (defaultResolver != null) {
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
+                                // TODO(enableNewSmithyRuntimeCleanup): Simplify the endpoint resolvers
                                 """
-                                let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                                layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
-                                    #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
-                                ));
+                                let endpoint_resolver = #{DynEndpointResolver}::new(
+                                    #{DefaultEndpointResolver}::<#{Params}>::new(
+                                        layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
+                                            #{SharedEndpointResolver}::new(#{DefaultResolver}::new())
+                                        )
+                                    )
+                                );
                                 layer.set_endpoint_resolver(endpoint_resolver);
                                 """,
                                 *codegenScope,
@@ -188,7 +195,7 @@ internal class EndpointConfigCustomization(
                         }
                     } else {
                         val alwaysFailsResolver =
-                            RuntimeType.forInlineFun("MissingResolver", ClientRustModule.Endpoint) {
+                            RuntimeType.forInlineFun("MissingResolver", ClientRustModule.endpoint(codegenContext)) {
                                 rustTemplate(
                                     """
                                     ##[derive(Debug)]
@@ -209,10 +216,13 @@ internal class EndpointConfigCustomization(
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
                                 """
-                                let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                                layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
-                                    #{SharedEndpointResolver}::new(#{FailingResolver})
-                                ).clone());
+                                let endpoint_resolver = #{DynEndpointResolver}::new(
+                                    #{DefaultEndpointResolver}::<#{Params}>::new(
+                                        layer.load::<$sharedEndpointResolver>().cloned().unwrap_or_else(||
+                                            #{SharedEndpointResolver}::new(#{FailingResolver})
+                                        ).clone()
+                                    )
+                                );
                                 layer.set_endpoint_resolver(endpoint_resolver);
                                 """,
                                 *codegenScope,
@@ -227,6 +237,24 @@ internal class EndpointConfigCustomization(
                                 "FailingResolver" to alwaysFailsResolver,
                             )
                         }
+                    }
+                }
+
+                is ServiceConfig.OperationConfigOverride -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            if let #{Some}(resolver) = layer
+                                .load::<$sharedEndpointResolver>()
+                                .cloned()
+                            {
+                                let endpoint_resolver = #{DynEndpointResolver}::new(
+                                    #{DefaultEndpointResolver}::<#{Params}>::new(resolver));
+                                layer.set_endpoint_resolver(endpoint_resolver);
+                            }
+                            """,
+                            *codegenScope,
+                        )
                     }
                 }
 
