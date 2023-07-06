@@ -97,7 +97,12 @@ private object Commands {
     // // cargo test --features serde-serialize serde-deserialize
     // ```
     fun cargoTest(featuresToEnable: Array<String>?): String {
-        return func("cargo test", allFeature, enableAllFeatures)
+        if (featuresToEnable != null) {
+            val s = featuresToEnable.joinToString { " " }
+            return "cargo test --features $s"
+        }else {
+            return "cargo test"
+        }
     }
 
     // enable features specified in the array
@@ -107,7 +112,12 @@ private object Commands {
     // // cargo check --features serde-serialize serde-deserialize
     // ```
     fun cargoCheck(featuresToEnable: Array<String>?): String {
-        return func("cargo check", allFeature, enableAllFeatures)
+        if (featuresToEnable != null) {
+            val s = featuresToEnable.joinToString { " " }
+            return "cargo check --features $s"
+        }else {
+            return "cargo check"
+        }
     }
 }
 
