@@ -79,8 +79,7 @@ async fn test_extract_metadata_via_customizable_operation() {
             let service_name = metadata.service().to_string();
             let operation_name = metadata.name().to_string();
             let tx = self.0.lock().unwrap().take().unwrap();
-            tx.send((service_name.clone(), operation_name.clone()))
-                .unwrap();
+            tx.send((service_name, operation_name)).unwrap();
             Ok(())
         }
     }
