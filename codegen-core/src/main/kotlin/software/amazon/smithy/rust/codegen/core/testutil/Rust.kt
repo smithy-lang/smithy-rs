@@ -100,7 +100,7 @@ private object Commands {
         if (featuresToEnable != null) {
             val s = featuresToEnable.joinToString { " " }
             return "cargo test --features $s"
-        }else {
+        } else {
             return "cargo test"
         }
     }
@@ -115,7 +115,7 @@ private object Commands {
         if (featuresToEnable != null) {
             val s = featuresToEnable.joinToString { " " }
             return "cargo check --features $s"
-        }else {
+        } else {
             return "cargo check"
         }
     }
