@@ -46,7 +46,7 @@ import kotlin.io.path.absolutePathString
 private object Commands {
     const val CargoFmt = "cargo fmt"
     const val CargoClippy = "cargo clippy"
-    
+
     private const val cfgUnstable = "--cfg aws_sdk_unstable"
     private const val allFeature = "--all-features"
 
