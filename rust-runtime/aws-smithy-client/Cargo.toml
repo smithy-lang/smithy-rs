@@ -47,7 +47,7 @@ hyper-tls = { version = "0.5.0" }
 # This forces a more recent version of `openssl-sys` to be brought in.
 # Without this `cargo minimal-versions check` would fail in a container whose base image is `amazonlinux:2023`
 # with the failure symptom: https://github.com/sfackler/rust-openssl/issues/1724
-openssl = { version = "0.10.52", optional = true }
+openssl = "0.10.52"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
