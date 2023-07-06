@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::box_error::BoxError;
 use crate::client::auth::{AuthOptionResolver, AuthOptionResolverParams, AuthSchemeId};
-use crate::client::orchestrator::BoxError;
 use std::borrow::Cow;
 
 /// New-type around a `Vec<HttpAuthOption>` that implements `AuthOptionResolver`.
@@ -23,10 +23,10 @@ impl StaticAuthOptionResolver {
 }
 
 impl AuthOptionResolver for StaticAuthOptionResolver {
-    fn resolve_auth_options<'a>(
-        &'a self,
+    fn resolve_auth_options(
+        &self,
         _params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [AuthSchemeId]>, BoxError> {
+    ) -> Result<Cow<'_, [AuthSchemeId]>, BoxError> {
         Ok(Cow::Borrowed(&self.auth_options))
     }
 }
@@ -36,8 +36,14 @@ impl AuthOptionResolver for StaticAuthOptionResolver {
 pub struct StaticAuthOptionResolverParams;
 
 impl StaticAuthOptionResolverParams {
-    /// Creates new `StaticAuthOptionResolverParams`.
+    /// Creates a new `StaticAuthOptionResolverParams`.
     pub fn new() -> Self {
         Self
+    }
+}
+
+impl From<StaticAuthOptionResolverParams> for AuthOptionResolverParams {
+    fn from(params: StaticAuthOptionResolverParams) -> Self {
+        AuthOptionResolverParams::new(params)
     }
 }

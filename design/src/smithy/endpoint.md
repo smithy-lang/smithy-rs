@@ -4,7 +4,7 @@
 The core codegen generates HTTP requests that do not contain an authority, scheme or post. These properties must be set later based on configuration. Existing AWS services have a number of requirements that increase the complexity:
 
 1. Endpoints must support manual configuration by end users:
-```rust
+```rust,ignore
 let config = dynamodb::Config::builder()
     .endpoint(StaticEndpoint::for_uri("http://localhost:8000"))
 ```
@@ -14,7 +14,7 @@ When a user specifies a custom endpoint URI, _typically_ they will want to avoid
 2. Endpoints must support being customized on a per-operation basis by the endpoint trait. This will prefix the base endpoint, potentially driven by fields of the operation. [Docs](https://awslabs.github.io/smithy/1.0/spec/core/endpoint-traits.html#endpoint-trait)
 
 3. Endpoints must support being customized by [endpoint discovery](https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#client-endpoint-discovery). A request, customized by a predefined set of fields from the input operation is dispatched to a specific URI. That operation returns the endpoint that should be used. Endpoints must be cached by a cache key containing:
-```
+```markdown
 (access_key_id, [all input fields], operation)
 ```
 Endpoints retrieved in this way specify a TTL.
@@ -29,7 +29,7 @@ Configuration objects for services _must_ contain an `Endpoint`. This endpoint m
 During operation construction (see [Operation Construction](../transport/operation.md#operation-construction)) an `EndpointPrefix` may be set on the property bag. The eventual endpoint middleware will search for this in the property bag and (depending on the URI mutability) utilize this prefix when setting the endpoint.
 
 In the case of endpoint discovery, we envision a different pattern:
-```rust
+```rust,ignore
 // EndpointClient manages the endpoint cache
 let (tx, rx) = dynamodb::EndpointClient::new();
 let client = aws_hyper::Client::new();

@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -23,8 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -55,13 +55,13 @@ class ProtocolParserGenerator(
         "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-        // TODO(enableNewSmithyRuntime): Remove the `PropertyBag` below
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `PropertyBag` below
         "PropertyBag" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("property_bag::PropertyBag"),
     )
 
     fun parseResponseFn(
         operationShape: OperationShape,
-        // TODO(enableNewSmithyRuntime): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
         propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ): RuntimeType {
@@ -189,7 +189,7 @@ class ProtocolParserGenerator(
 
     fun parseStreamingResponseFn(
         operationShape: OperationShape,
-        // TODO(enableNewSmithyRuntime): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
         propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ): RuntimeType {
@@ -241,7 +241,7 @@ class ProtocolParserGenerator(
         outputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
         errorSymbol: Symbol,
-        // TODO(enableNewSmithyRuntime): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
         propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ) {

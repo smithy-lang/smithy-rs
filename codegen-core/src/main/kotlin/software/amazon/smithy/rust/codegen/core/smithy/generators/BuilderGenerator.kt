@@ -17,13 +17,14 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.asArgument
 import software.amazon.smithy.rust.codegen.core.rustlang.asOptional
-import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
@@ -31,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -91,6 +93,9 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
 // Setter names will never hit a reserved word and therefore never need escaping.
 fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
 
+// Getter names will never hit a reserved word and therefore never need escaping.
+fun MemberShape.getterName() = "get_${this.memberName.toSnakeCase()}"
+
 class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
@@ -126,7 +131,6 @@ class BuilderGenerator(
     private val runtimeConfig = symbolProvider.config.runtimeConfig
     private val members: List<MemberShape> = shape.allMembers.values.toList()
     private val structureSymbol = symbolProvider.toSymbol(shape)
-    private val builderSymbol = symbolProvider.symbolForBuilder(shape)
     private val metadata = structureSymbol.expectRustMetadata()
 
     // Filter out any derive that isn't Debug, PartialEq, or Clone. Then add a Default derive
@@ -147,12 +151,12 @@ class BuilderGenerator(
         val fallibleBuilder = hasFallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
         val returnType = when (fallibleBuilder) {
-            true -> "Result<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+            true -> "#{Result}<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
             false -> implBlockWriter.format(outputSymbol)
         }
         implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
-        implBlockWriter.rustBlock("pub fn build(self) -> $returnType") {
-            conditionalBlock("Ok(", ")", conditional = fallibleBuilder) {
+        implBlockWriter.rustBlockTemplate("pub fn build(self) -> $returnType", *preludeScope) {
+            conditionalBlockTemplate("#{Ok}(", ")", conditional = fallibleBuilder, *preludeScope) {
                 // If a wrapper is specified, use the `::new` associated function to construct the wrapper
                 coreBuilder(this)
             }
@@ -182,7 +186,7 @@ class BuilderGenerator(
         writer.documentShape(member, model)
         writer.deprecatedShape(member)
         writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
-            write("self.$memberName = Some(${input.value});")
+            rustTemplate("self.$memberName = #{Some}(${input.value});", *preludeScope)
             write("self")
         }
     }
@@ -206,6 +210,28 @@ class BuilderGenerator(
         writer.deprecatedShape(member)
         writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
             rust("self.$memberName = input; self")
+        }
+    }
+
+    /**
+     * Render a `get_foo` method. This is useful as a target for code generation, because the argument type
+     * is the same as the resulting member type, and is always optional.
+     */
+    private fun renderBuilderMemberGetterFn(
+        writer: RustWriter,
+        outerType: RustType,
+        member: MemberShape,
+        memberName: String,
+    ) {
+        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
+        //  a non `Option`al target type: in all other cases the client generates `Option`al types.
+        val inputType = outerType.asOptional()
+
+        writer.documentShape(member, model)
+        writer.deprecatedShape(member)
+        writer.rustBlock("pub fn ${member.getterName()}(&self) -> &${inputType.render(true)}") {
+            rust("&self.$memberName")
         }
     }
 
@@ -239,6 +265,7 @@ class BuilderGenerator(
                 }
 
                 renderBuilderMemberSetterFn(this, outerType, member, memberName)
+                renderBuilderMemberGetterFn(this, outerType, member, memberName)
             }
             writeCustomizations(customizations, BuilderSection.AdditionalMethods(shape))
             renderBuildFn(this)
@@ -273,13 +300,14 @@ class BuilderGenerator(
         val input = coreType.member.asArgument("input")
 
         rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
-            rust(
+            rustTemplate(
                 """
                 let mut v = self.$memberName.unwrap_or_default();
                 v.push(${input.value});
-                self.$memberName = Some(v);
+                self.$memberName = #{Some}(v);
                 self
                 """,
+                *preludeScope,
             )
         }
     }
@@ -297,13 +325,14 @@ class BuilderGenerator(
         rustBlock(
             "pub fn $memberName(mut self, ${k.argument}, ${v.argument}) -> Self",
         ) {
-            rust(
+            rustTemplate(
                 """
                 let mut hash_map = self.$memberName.unwrap_or_default();
                 hash_map.insert(${k.value}, ${v.value});
-                self.$memberName = Some(hash_map);
+                self.$memberName = #{Some}(hash_map);
                 self
                 """,
+                *preludeScope,
             )
         }
     }

@@ -20,11 +20,11 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.RemoveEventStreamOperations
@@ -71,8 +71,8 @@ class ClientCodegenVisitor(
     private val fileManifest = context.fileManifest
     private val model: Model
     private var codegenContext: ClientCodegenContext
-    private val protocolGeneratorFactory: ProtocolGeneratorFactory<ClientProtocolGenerator, ClientCodegenContext>
-    private val protocolGenerator: ClientProtocolGenerator
+    private val protocolGeneratorFactory: ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext>
+    private val operationGenerator: OperationGenerator
 
     init {
         val rustSymbolProviderConfig = RustSymbolProviderConfig(
@@ -88,7 +88,7 @@ class ClientCodegenVisitor(
             codegenDecorator.protocols(untransformedService.id, ClientProtocolLoader.DefaultProtocols),
         ).protocolFor(context.model, untransformedService)
         protocolGeneratorFactory = generator
-        model = codegenDecorator.transformModel(untransformedService, baseModel)
+        model = codegenDecorator.transformModel(untransformedService, baseModel, settings)
         // the model transformer _might_ change the service shape
         val service = settings.getService(model)
         symbolProvider = RustClientCodegenPlugin.baseSymbolProvider(settings, model, service, rustSymbolProviderConfig, codegenDecorator)
@@ -108,6 +108,7 @@ class ClientCodegenVisitor(
                 codegenContext,
                 ClientModuleDocProvider(codegenContext, service.serviceNameOrDefault("the service")),
             ),
+            protocolImpl = protocolGeneratorFactory.protocol(codegenContext),
         )
 
         rustCrate = RustCrate(
@@ -116,7 +117,7 @@ class ClientCodegenVisitor(
             codegenContext.settings.codegenConfig,
             codegenContext.expectModuleDocProvider(),
         )
-        protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+        operationGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
     /**
@@ -303,7 +304,7 @@ class ClientCodegenVisitor(
         rustCrate.useShapeWriter(operationShape) operationWriter@{
             rustCrate.useShapeWriter(operationShape.inputShape(codegenContext.model)) inputWriter@{
                 // Render the operation shape & serializers input `input.rs`
-                protocolGenerator.renderOperation(
+                operationGenerator.renderOperation(
                     this@operationWriter,
                     this@inputWriter,
                     operationShape,
@@ -311,22 +312,24 @@ class ClientCodegenVisitor(
                 )
 
                 // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
-                ProtocolTestGenerator(
+                codegenDecorator.protocolTestGenerator(
                     codegenContext,
-                    protocolGeneratorFactory.support(),
-                    operationShape,
-                    this@operationWriter,
-                ).render()
+                    DefaultProtocolTestGenerator(
+                        codegenContext,
+                        protocolGeneratorFactory.support(),
+                        operationShape,
+                    ),
+                ).render(this@operationWriter)
             }
-        }
 
-        rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {
-            OperationErrorGenerator(
-                model,
-                symbolProvider,
-                operationShape,
-                codegenDecorator.errorCustomizations(codegenContext, emptyList()),
-            ).render(this)
+            rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {
+                OperationErrorGenerator(
+                    model,
+                    symbolProvider,
+                    operationShape,
+                    codegenDecorator.errorCustomizations(codegenContext, emptyList()),
+                ).render(this)
+            }
         }
     }
 }

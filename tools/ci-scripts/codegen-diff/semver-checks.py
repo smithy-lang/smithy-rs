@@ -34,7 +34,7 @@ def main(skip_generation=False):
     os.chdir(sdk_directory)
 
     failed = False
-    # TODO(enableNewSmithyRuntime): Remove the deny list below
+    # TODO(enableNewSmithyRuntimeLaunch): Remove the deny list below
     deny_list = [
         "aws-runtime",
         "aws-runtime-api",
@@ -50,7 +50,7 @@ def main(skip_generation=False):
                                     # package and manifest path explicitly
                                     f'--manifest-path {path}/Cargo.toml '
                                     f'-p {path} '
-                                    f'--release-type patch', check=False, quiet=True)
+                                    f'--release-type minor', check=False, quiet=True)
             if status == 0:
                 eprint('ok!')
             else:

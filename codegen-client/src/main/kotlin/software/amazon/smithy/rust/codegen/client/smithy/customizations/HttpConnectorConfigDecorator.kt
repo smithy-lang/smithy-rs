@@ -13,8 +13,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class HttpConnectorConfigDecorator : ClientCodegenDecorator {
@@ -31,34 +31,58 @@ class HttpConnectorConfigDecorator : ClientCodegenDecorator {
 }
 
 private class HttpConnectorConfigCustomization(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
+        *preludeScope,
+        "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
+        "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
+        "DynConnector" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::connectors::DynConnector"),
+        "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connectors::adapter::DynConnectorAdapter"),
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
+        "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
+        "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
     )
 
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                }
             }
 
             is ServiceConfig.ConfigImpl -> writable {
-                rustTemplate(
-                    """
-                    /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
-                    pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
-                        self.http_connector.as_ref()
-                    }
-                    """,
-                    *codegenScope,
-                )
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
+                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
+                            self.inner.load::<#{HttpConnector}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
+                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
+                            self.http_connector.as_ref()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             is ServiceConfig.BuilderStruct -> writable {
-                rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                }
             }
 
             ServiceConfig.BuilderImpl -> writable {
@@ -96,7 +120,7 @@ private class HttpConnectorConfigCustomization(
                     /// ## }
                     /// ```
                     pub fn http_connector(mut self, http_connector: impl Into<#{HttpConnector}>) -> Self {
-                        self.http_connector = Some(http_connector.into());
+                        self.set_http_connector(#{Some}(http_connector));
                         self
                     }
 
@@ -111,7 +135,6 @@ private class HttpConnectorConfigCustomization(
                     /// use std::time::Duration;
                     /// use aws_smithy_client::hyper_ext;
                     /// use aws_smithy_client::http_connector::ConnectorSettings;
-                    /// use crate::sdk_config::{SdkConfig, Builder};
                     /// use $moduleUseName::config::{Builder, Config};
                     ///
                     /// fn override_http_connector(builder: &mut Builder) {
@@ -138,17 +161,99 @@ private class HttpConnectorConfigCustomization(
                     /// ## }
                     /// ## }
                     /// ```
-                    pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
-                        self.http_connector = http_connector.map(|inner| inner.into());
-                        self
-                    }
                     """,
                     *codegenScope,
                 )
+
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
+                            http_connector.map(|c| self.inner.store_put(c.into()));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
+                            self.http_connector = http_connector.map(|inner| inner.into());
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             is ServiceConfig.BuilderBuild -> writable {
-                rust("http_connector: self.http_connector,")
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        let sleep_impl = layer.load::<#{SharedAsyncSleep}>().cloned();
+                        let timeout_config = layer.load::<#{TimeoutConfig}>().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
+
+                        let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
+
+                        if let Some(connector) = layer.load::<#{HttpConnector}>()
+                                .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
+                                .or_else(|| #{default_connector}(&connector_settings, sleep_impl)) {
+                            let connector: #{DynConnector} = #{DynConnector}::new(#{DynConnectorAdapter}::new(
+                                // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                                connector
+                            ));
+                            #{ConfigBagAccessors}::set_connector(&mut layer, connector);
+                        }
+
+                        """,
+                        *codegenScope,
+                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
+                        "default_connector" to RuntimeType.smithyClient(runtimeConfig).resolve("conns::default_connector"),
+                    )
+                } else {
+                    rust("http_connector: self.http_connector,")
+                }
+            }
+
+            is ServiceConfig.OperationConfigOverride -> writable {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        if let #{Some}(http_connector) =
+                            layer.load::<#{HttpConnector}>()
+                        {
+                            let sleep_impl = layer
+                                .load::<#{SharedAsyncSleep}>()
+                                .or_else(|| {
+                                    self.client_config
+                                        .load::<#{SharedAsyncSleep}>()
+                                })
+                                .cloned();
+                            let timeout_config = layer
+                                .load::<#{TimeoutConfig}>()
+                                .or_else(|| {
+                                    self.client_config
+                                        .load::<#{TimeoutConfig}>()
+                                })
+                                .expect("timeout config should be set either in `config_override` or in the client config");
+                            let connector_settings =
+                                #{ConnectorSettings}::from_timeout_config(
+                                    timeout_config,
+                                );
+                            if let #{Some}(conn) = http_connector.connector(&connector_settings, sleep_impl) {
+                                let connection: #{DynConnector} = #{DynConnector}::new(#{DynConnectorAdapter}::new(
+                                    // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                                    conn
+                                    ));
+                                layer.set_connector(connection);
+                            }
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             else -> emptySection

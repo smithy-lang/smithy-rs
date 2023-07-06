@@ -16,6 +16,7 @@ import java.nio.file.Path
 sealed class DependencyScope {
     object Dev : DependencyScope()
     object Compile : DependencyScope()
+    object CfgUnstable : DependencyScope()
     object Build : DependencyScope()
 }
 
@@ -103,8 +104,12 @@ class InlineDependency(
                 CargoDependency.Http,
             )
 
-        fun idempotencyToken() =
-            forInlineableRustFile("idempotency_token", CargoDependency.FastRand)
+        fun idempotencyToken(runtimeConfig: RuntimeConfig) =
+            forInlineableRustFile(
+                "idempotency_token",
+                CargoDependency.FastRand,
+                CargoDependency.smithyTypes(runtimeConfig),
+            )
 
         fun ec2QueryErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forInlineableRustFile("ec2_query_errors", CargoDependency.smithyXml(runtimeConfig))
@@ -114,6 +119,13 @@ class InlineDependency(
 
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig): InlineDependency =
             forInlineableRustFile("rest_xml_unwrapped_errors", CargoDependency.smithyXml(runtimeConfig))
+
+        fun serializationSettings(runtimeConfig: RuntimeConfig): InlineDependency = forInlineableRustFile(
+            "serialization_settings",
+            CargoDependency.Http,
+            CargoDependency.smithyHttp(runtimeConfig),
+            CargoDependency.smithyTypes(runtimeConfig),
+        )
 
         fun constrained(): InlineDependency =
             InlineDependency.forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
@@ -197,7 +209,7 @@ data class CargoDependency(
     }
 
     fun toType(): RuntimeType {
-        return RuntimeType(rustName, this)
+        return RuntimeType("::$rustName", this)
     }
 
     companion object {
@@ -209,7 +221,7 @@ data class CargoDependency(
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
-        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"))
+        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.26"))
         val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
@@ -221,11 +233,13 @@ data class CargoDependency(
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
 
         // Test-only dependencies
+        val Approx: CargoDependency = CargoDependency("approx", CratesIo("0.5.1"), DependencyScope.Dev)
         val AsyncStd: CargoDependency = CargoDependency("async-std", CratesIo("1.12.0"), DependencyScope.Dev)
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
-        val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false)
+        val FuturesUtil: CargoDependency =
+            CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false)
         val HdrHistogram: CargoDependency = CargoDependency("hdrhistogram", CratesIo("7.5.2"), DependencyScope.Dev)
         val Hound: CargoDependency = CargoDependency("hound", CratesIo("3.4.0"), DependencyScope.Dev)
         val PrettyAssertions: CargoDependency =
@@ -275,7 +289,12 @@ data class CargoDependency(
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
+        fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
+
+        // behind feature-gate
+        val Serde = CargoDependency("serde", CratesIo("1.0"), features = setOf("derive"), scope = DependencyScope.CfgUnstable)
     }
 }

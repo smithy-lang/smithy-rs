@@ -4,7 +4,7 @@
  */
 
 use crate::fs::Fs;
-use crate::package::{discover_package_manifests, read_packages};
+use crate::package::discover_packages;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
@@ -26,9 +26,15 @@ pub struct GenerateVersionManifestArgs {
     /// Revision of `aws-doc-sdk-examples` repository used to retrieve examples
     #[clap(long)]
     examples_revision: String,
+    /// Same as `input_location` but kept for backwards compatibility
+    #[clap(long, required_unless_present = "input-location")]
+    location: Option<PathBuf>,
     /// Path containing the generated SDK to generate a version manifest for
-    #[clap(long)]
-    location: PathBuf,
+    #[clap(long, required_unless_present = "location")]
+    input_location: Option<PathBuf>,
+    /// Path to a directory in which a version manifest is generated
+    #[clap(long, required_unless_present = "location")]
+    output_location: Option<PathBuf>,
     /// Optional path to the `versions.toml` manifest from the previous SDK release
     #[clap(long)]
     previous_release_versions: Option<PathBuf>,
@@ -39,6 +45,8 @@ pub async fn subcommand_generate_version_manifest(
         smithy_build,
         examples_revision,
         location,
+        input_location,
+        output_location,
         previous_release_versions,
         ..
     }: &GenerateVersionManifestArgs,
@@ -52,10 +60,17 @@ pub async fn subcommand_generate_version_manifest(
     info!("Resolved smithy-rs revision to {}", smithy_rs_revision);
 
     let smithy_build_root = SmithyBuildRoot::from_file(smithy_build)?;
-    let manifests = discover_package_manifests(location.into())
-        .await
-        .context("discover package manifests")?;
-    let packages = read_packages(Fs::Real, manifests)
+    let input_location = match (location, input_location) {
+        (Some(location), None) => location,
+        (None, Some(input_location)) => input_location,
+        _ => bail!("Only one of `--location` or `--input-location` should be provided"),
+    };
+    let output_location = match (location, output_location) {
+        (Some(location), None) => location,
+        (None, Some(output_location)) => output_location,
+        _ => bail!("Only one of `--location` or `--output-location` should be provided"),
+    };
+    let packages = discover_packages(Fs::Real, input_location.into())
         .await
         .context("read packages")?;
 
@@ -99,7 +114,7 @@ pub async fn subcommand_generate_version_manifest(
     };
     versions_manifest.release =
         generate_release_metadata(&versions_manifest, previous_release_versions)?;
-    let manifest_file_name = location.join("versions.toml");
+    let manifest_file_name = output_location.join("versions.toml");
     info!("Writing {:?}...", manifest_file_name);
     versions_manifest.write_to_file(&manifest_file_name)?;
     Ok(())

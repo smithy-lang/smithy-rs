@@ -9,11 +9,11 @@ import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -28,6 +29,20 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 class SigV4AuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "SigV4AuthDecorator"
     override val order: Byte = 0
+
+    override fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthOptions: List<AuthOption>,
+    ): List<AuthOption> = baseAuthOptions.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
+        it + AuthOption.StaticAuthOption(SigV4Trait.ID) {
+            rustTemplate(
+                "#{scheme_id},",
+                "scheme_id" to AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                    .resolve("auth::sigv4::SCHEME_ID"),
+            )
+        }
+    }
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
@@ -37,17 +52,17 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
             it + listOf(AuthServiceRuntimePluginCustomization(codegenContext))
         }
 
-    override fun operationRuntimePluginCustomizations(
+    override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
         baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthOperationRuntimePluginCustomization(codegenContext))
+            it + listOf(AuthOperationCustomization(codegenContext))
         }
 }
 
-private class AuthServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
+private class AuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
@@ -57,37 +72,21 @@ private class AuthServiceRuntimePluginCustomization(codegenContext: ClientCodege
             "SigV4HttpAuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4HttpAuthScheme"),
             "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
             "SigningService" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningService"),
+            "SharedHttpAuthScheme" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::auth::SharedHttpAuthScheme"),
         )
     }
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.HttpAuthScheme -> {
-                rustTemplate(
-                    """
-                    .auth_scheme(#{SIGV4_SCHEME_ID}, #{SigV4HttpAuthScheme}::new())
-                    """,
-                    *codegenScope,
-                )
-            }
-
             is ServiceRuntimePluginSection.AdditionalConfig -> {
-                section.putConfigValue(this) {
-                    rustTemplate("#{SigningService}::from_static(self.handle.conf.signing_service())", *codegenScope)
+                val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
+                if (serviceHasEventStream) {
+                    // enable the aws-runtime `sign-eventstream` feature
+                    addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
                 }
-                rustTemplate(
-                    """
-                    if let Some(region) = self.handle.conf.region() {
-                        #{put_signing_region}
-                    }
-                    """,
-                    *codegenScope,
-                    "put_signing_region" to writable {
-                        section.putConfigValue(this) {
-                            rustTemplate("#{SigningRegion}::from(region.clone())", *codegenScope)
-                        }
-                    },
-                )
+                section.registerHttpAuthScheme(this, runtimeConfig) {
+                    rustTemplate("#{SharedHttpAuthScheme}::new(#{SigV4HttpAuthScheme}::new())", *codegenScope)
+                }
             }
 
             else -> {}
@@ -95,14 +94,11 @@ private class AuthServiceRuntimePluginCustomization(codegenContext: ClientCodege
     }
 }
 
-private class AuthOperationRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
-    OperationRuntimePluginCustomization() {
+private class AuthOperationCustomization(private val codegenContext: ClientCodegenContext) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
-        val runtimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
-            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "HttpSignatureType" to awsRuntime.resolve("auth::sigv4::HttpSignatureType"),
             "SIGV4_SCHEME_ID" to awsRuntime.resolve("auth::sigv4::SCHEME_ID"),
             "SigV4OperationSigningConfig" to awsRuntime.resolve("auth::sigv4::SigV4OperationSigningConfig"),
@@ -114,37 +110,28 @@ private class AuthOperationRuntimePluginCustomization(private val codegenContext
     }
     private val serviceIndex = ServiceIndex.of(codegenContext.model)
 
-    override fun section(section: OperationRuntimePluginSection): Writable = writable {
+    override fun section(section: OperationSection): Writable = writable {
         when (section) {
-            is OperationRuntimePluginSection.AdditionalConfig -> {
+            is OperationSection.AdditionalRuntimePluginConfig -> {
                 val authSchemes = serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, section.operationShape)
                 if (authSchemes.containsKey(SigV4Trait.ID)) {
                     val unsignedPayload = section.operationShape.hasTrait<UnsignedPayloadTrait>()
                     val doubleUriEncode = unsignedPayload || !disableDoubleEncode(codegenContext.serviceShape)
                     val contentSha256Header = needsAmzSha256(codegenContext.serviceShape)
                     val normalizeUrlPath = !disableUriPathNormalization(codegenContext.serviceShape)
-                    val signingOptional = section.operationShape.hasTrait<OptionalAuthTrait>()
                     rustTemplate(
                         """
-                        let signing_region = cfg.get::<#{SigningRegion}>().expect("region required for signing").clone();
-                        let signing_service = cfg.get::<#{SigningService}>().expect("service required for signing").clone();
                         let mut signing_options = #{SigningOptions}::default();
                         signing_options.double_uri_encode = $doubleUriEncode;
                         signing_options.content_sha256_header = $contentSha256Header;
                         signing_options.normalize_uri_path = $normalizeUrlPath;
-                        signing_options.signing_optional = $signingOptional;
                         signing_options.payload_override = #{payload_override};
 
-                        ${section.configBagName}.put(#{SigV4OperationSigningConfig} {
-                            region: signing_region,
-                            service: signing_service,
+                        ${section.newLayerName}.store_put(#{SigV4OperationSigningConfig} {
+                            region: None,
+                            service: None,
                             signing_options,
                         });
-                        // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
-                        let auth_option_resolver = #{StaticAuthOptionResolver}::new(
-                            vec![#{SIGV4_SCHEME_ID}]
-                        );
-                        ${section.configBagName}.set_auth_option_resolver(auth_option_resolver);
                         """,
                         *codegenScope,
                         "payload_override" to writable {

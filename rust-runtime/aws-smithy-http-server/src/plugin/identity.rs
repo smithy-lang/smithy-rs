@@ -3,18 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::operation::Operation;
+use super::{HttpMarker, ModelMarker, Plugin};
 
-use super::Plugin;
-
-/// A [`Plugin`] that maps an `input` [`Operation`] to itself.
+/// A [`Plugin`] that maps a service to itself.
+#[derive(Debug)]
 pub struct IdentityPlugin;
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for IdentityPlugin {
-    type Service = S;
-    type Layer = L;
+impl<Ser, Op, S> Plugin<Ser, Op, S> for IdentityPlugin {
+    type Output = S;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<S, L> {
-        input
+    fn apply(&self, svc: S) -> S {
+        svc
     }
 }
+
+impl ModelMarker for IdentityPlugin {}
+impl HttpMarker for IdentityPlugin {}

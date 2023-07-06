@@ -156,13 +156,13 @@ class ErrorImplGenerator(
                 val errorDesc = symbol.name.letIf(symbol.name != shape.id.name) { symbolName ->
                     "$symbolName [${shape.id.name}]"
                 }
-                write("write!(f, ${errorDesc.dq()})?;")
+                write("::std::write!(f, ${errorDesc.dq()})?;")
                 messageShape?.let {
                     if (it.shouldRedact(model)) {
-                        write("""write!(f, ": {}", $REDACTION)?;""")
+                        write("""::std::write!(f, ": {}", $REDACTION)?;""")
                     } else {
                         ifSet(it, symbolProvider.toSymbol(it), ValueExpression.Reference("&self.message")) { field ->
-                            write("""write!(f, ": {}", ${field.asRef()})?;""")
+                            write("""::std::write!(f, ": {}", ${field.asRef()})?;""")
                         }
                     }
                 }

@@ -109,7 +109,7 @@ object TestWorkspace {
                 // help rust select the right version when we run cargo test
                 // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
                 //  method as we do for runtime crate versions
-                "[toolchain]\nchannel = \"1.67.1\"\n",
+                "[toolchain]\nchannel = \"1.68.2\"\n",
             )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
@@ -215,10 +215,12 @@ fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
     attribute: Attribute = Attribute.Test,
+    additionalAttributes: List<Attribute> = emptyList(),
     async: Boolean = false,
     block: Writable,
 ): RustWriter {
     attribute.render(this)
+    additionalAttributes.forEach { it.render(this) }
     if (async) {
         rust("async")
     }

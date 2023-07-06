@@ -18,10 +18,11 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -52,14 +53,14 @@ class S3Decorator : ClientCodegenDecorator {
 
     override fun protocols(
         serviceId: ShapeId,
-        currentProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>,
-    ): ProtocolMap<ClientProtocolGenerator, ClientCodegenContext> = currentProtocols + mapOf(
+        currentProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>,
+    ): ProtocolMap<OperationGenerator, ClientCodegenContext> = currentProtocols + mapOf(
         RestXmlTrait.ID to ClientRestXmlFactory { protocolConfig ->
             S3ProtocolOverride(protocolConfig)
         },
     )
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isInInvalidXmlRootAllowList(shape)) {
                 logger.info("Adding AllowInvalidXmlRoot trait to $it")
@@ -131,6 +132,7 @@ class FilterEndpointTests(
 class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContext) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
+        *RuntimeType.preludeScope,
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadata" to RuntimeType.errorMetadata(runtimeConfig),
         "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
@@ -143,7 +145,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
         return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> #{Result}<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(

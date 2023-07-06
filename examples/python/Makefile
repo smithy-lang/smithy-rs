@@ -45,7 +45,10 @@ release: codegen
 	$(MAKE) generate-stubs
 	$(MAKE) build-wheel-release
 
-run: build
+run: build install-wheel
+	python3 $(CUR_DIR)/pokemon_service.py
+
+run-release: release install-wheel
 	python3 $(CUR_DIR)/pokemon_service.py
 
 py-check: install-wheel

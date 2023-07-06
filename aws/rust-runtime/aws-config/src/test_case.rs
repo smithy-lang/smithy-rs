@@ -115,7 +115,8 @@ where
             }
             (Err(actual_error), GenericTestResult::Ok(expected_creds)) => panic!(
                 "expected credentials ({:?}) but an error was returned: {}",
-                expected_creds, actual_error
+                expected_creds,
+                DisplayErrorContext(&actual_error)
             ),
             (Ok(creds), GenericTestResult::ErrorContains(substr)) => panic!(
                 "expected an error containing: `{}`, but a result was returned: {:?}",
@@ -135,6 +136,8 @@ pub(crate) struct Metadata {
     name: String,
 }
 
+// TODO(enableNewSmithyRuntimeCleanup): Replace Tee, capture_test_logs, and Rx with
+// the implementations added to aws_smithy_runtime::test_util::capture_test_logs
 struct Tee<W> {
     buf: Arc<Mutex<Vec<u8>>>,
     quiet: bool,
