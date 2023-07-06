@@ -136,7 +136,7 @@ class ServerServiceGenerator(
                 where
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
 
-                    ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                    ModelPl: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
                         #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
@@ -144,9 +144,9 @@ class ServerServiceGenerator(
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
-                        ModelPlugin::Output
+                        ModelPl::Output
                     >,
-                    HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                    HttpPl: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
                         <
@@ -154,13 +154,13 @@ class ServerServiceGenerator(
                             as #{SmithyHttpServer}::plugin::Plugin<
                                 $serviceName,
                                 crate::operation_shape::$structName,
-                                ModelPlugin::Output
+                                ModelPl::Output
                             >
                         >::Output
                     >,
 
-                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -199,7 +199,7 @@ class ServerServiceGenerator(
                 where
                     S: #{SmithyHttpServer}::operation::OperationService<crate::operation_shape::$structName, ServiceExtractors>,
 
-                    ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                    ModelPl: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
                         #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
@@ -207,9 +207,9 @@ class ServerServiceGenerator(
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
-                        ModelPlugin::Output
+                        ModelPl::Output
                     >,
-                    HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
+                    HttpPl: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
                         <
@@ -217,13 +217,13 @@ class ServerServiceGenerator(
                             as #{SmithyHttpServer}::plugin::Plugin<
                                 $serviceName,
                                 crate::operation_shape::$structName,
-                                ModelPlugin::Output
+                                ModelPl::Output
                             >
                         >::Output
                     >,
 
-                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -394,7 +394,7 @@ class ServerServiceGenerator(
 
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
-        val builderGenerics = listOf(builderBodyGenericTypeName, "HttpPlugin", "ModelPlugin").joinToString(", ")
+        val builderGenerics = listOf(builderBodyGenericTypeName, "HttpPl", "ModelPl").joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
@@ -402,8 +402,8 @@ class ServerServiceGenerator(
             /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
             pub struct $builderName<$builderGenerics> {
                 ${builderFields.joinToString(", ")},
-                http_plugin: HttpPlugin,
-                model_plugin: ModelPlugin
+                http_plugin: HttpPl,
+                model_plugin: ModelPl
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -473,9 +473,10 @@ class ServerServiceGenerator(
                 ///
                 /// Use [`$serviceName::builder_without_plugins`] if you don't need to apply plugins.
                 ///
-                /// Check out [`PluginPipeline`](#{SmithyHttpServer}::plugin::PluginPipeline) if you need to apply
+                /// Check out [`HttpPlugins`](#{SmithyHttpServer}::plugin::HttpPlugins) and
+                /// [`ModelPlugins`](#{SmithyHttpServer}::plugin::ModelPlugins) if you need to apply
                 /// multiple plugins.
-                pub fn builder_with_plugins<Body, HttpPlugin, ModelPlugin>(http_plugin: HttpPlugin, model_plugin: ModelPlugin) -> $builderName<Body, HttpPlugin, ModelPlugin> {
+                pub fn builder_with_plugins<Body, HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, ModelPl: #{SmithyHttpServer}::plugin::ModelMarker>(http_plugin: HttpPl, model_plugin: ModelPl) -> $builderName<Body, HttpPl, ModelPl> {
                     $builderName {
                         #{NotSetFields:W},
                         http_plugin,

@@ -284,10 +284,12 @@ fun RustWriter.unitTest(
     name: String,
     vararg args: Any,
     attribute: Attribute = Attribute.Test,
+    additionalAttributes: List<Attribute> = emptyList(),
     async: Boolean = false,
     block: Writable,
 ): RustWriter {
     attribute.render(this)
+    additionalAttributes.forEach { it.render(this) }
     if (async) {
         rust("async")
     }
