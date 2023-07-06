@@ -15,10 +15,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 
 class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -26,8 +26,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
     private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
     private val sleepModule = RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep")
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
-    private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
-    private val retries = smithyRuntimeCrate.resolve("client::retries")
+    private val retries = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries")
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
@@ -367,18 +366,18 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                     }
                 }
 
-                ServiceConfig.BuilderBuild -> {
+                is ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
                             """
-                            let retry_partition = layer.load::<#{RetryPartition}>().cloned().unwrap_or_else(|| #{RetryPartition}::new("${codegenContext.serviceShape.id.name}"));
+                            let retry_partition = layer.load::<#{RetryPartition}>().cloned().unwrap_or_else(|| #{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
                             let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
                             if retry_config.has_retry() {
-                                #{debug}!("creating retry strategy with partition '{}'", retry_partition);
+                                #{debug}!("using retry strategy with partition '{}'", retry_partition);
                             }
 
                             if retry_config.mode() == #{RetryMode}::Adaptive {
-                                if let Some(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
+                                if let #{Some}(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
                                     let seconds_since_unix_epoch = time_source
                                         .now()
                                         .duration_since(#{SystemTime}::UNIX_EPOCH)
@@ -397,6 +396,12 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             let token_bucket = TOKEN_BUCKET.get_or_init(token_bucket_partition, #{TokenBucket}::default);
                             layer.store_put(token_bucket);
                             layer.set_retry_strategy(#{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)));
+
+                            // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
+                            //  is resolved
+                            if layer.load::<#{TimeoutConfig}>().is_none() {
+                                layer.store_put(#{TimeoutConfig}::disabled());
+                            }
                             """,
                             *codegenScope,
                         )
@@ -415,12 +420,33 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                     }
                 }
 
+                is ServiceConfig.OperationConfigOverride -> {
+                    if (runtimeMode.defaultToOrchestrator) {
+                        rustTemplate(
+                            """
+                            if let #{Some}(retry_config) = layer
+                                .load::<#{RetryConfig}>()
+                                .cloned()
+                            {
+                                layer.set_retry_strategy(
+                                    #{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config))
+                                );
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+                }
+
                 else -> emptySection
             }
         }
 }
 
-class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) {
+class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeMode = codegenContext.smithyRuntimeMode
+
     fun extras(rustCrate: RustCrate) {
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
@@ -430,13 +456,16 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
         }
         rustCrate.withModule(ClientRustModule.Config.retry) {
             rustTemplate(
-                "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode};",
+                "pub use #{types_retry}::{RetryConfig, RetryConfigBuilder, RetryMode, ReconnectMode};",
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
             )
-            rustTemplate(
-                "pub use #{RetryPartition};",
-                "RetryPartition" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries::RetryPartition"),
-            )
+
+            if (runtimeMode.generateOrchestrator) {
+                rustTemplate(
+                    "pub use #{types_retry}::RetryPartition;",
+                    "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
+                )
+            }
         }
         rustCrate.withModule(ClientRustModule.Config.timeout) {
             rustTemplate(
@@ -449,30 +478,34 @@ class ResiliencyReExportCustomization(private val runtimeConfig: RuntimeConfig) 
 
 class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyRuntimeCrate = RuntimeType.smithyRuntime(runtimeConfig)
-    private val retries = smithyRuntimeCrate.resolve("client::retries")
+    private val runtimeMode = codegenContext.smithyRuntimeMode
+    private val smithyRuntime = RuntimeType.smithyRuntime(runtimeConfig)
+    private val retries = smithyRuntime.resolve("client::retries")
     private val codegenScope = arrayOf(
         "TokenBucket" to retries.resolve("TokenBucket"),
         "TokenBucketPartition" to retries.resolve("TokenBucketPartition"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
         "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
-        "StaticPartitionMap" to smithyRuntimeCrate.resolve("static_partition_map::StaticPartitionMap"),
+        "StaticPartitionMap" to smithyRuntime.resolve("static_partition_map::StaticPartitionMap"),
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        when (section) {
-            is ServiceRuntimePluginSection.DeclareSingletons -> {
-                // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
-                //    MSRV to 1.70
-                rustTemplate(
-                    """
-                    static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();
-                    static CLIENT_RATE_LIMITER: #{StaticPartitionMap}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{StaticPartitionMap}::new();
-                    """,
-                    *codegenScope,
-                )
+        if (runtimeMode.generateOrchestrator) {
+            when (section) {
+                is ServiceRuntimePluginSection.DeclareSingletons -> {
+                    // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
+                    //    MSRV to 1.70
+                    rustTemplate(
+                        """
+                        static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();
+                        static CLIENT_RATE_LIMITER: #{StaticPartitionMap}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{StaticPartitionMap}::new();
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                else -> emptySection
             }
-            else -> emptySection
         }
     }
 }

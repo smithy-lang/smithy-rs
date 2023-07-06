@@ -242,7 +242,8 @@ class PaginatorGenerator private constructor(
                         """
                         let runtime_plugins = #{operation}::operation_runtime_plugins(
                             handle.runtime_plugins.clone(),
-                            None,
+                            &handle.conf,
+                            #{None},
                         );
                         """,
                         *codegenScope,

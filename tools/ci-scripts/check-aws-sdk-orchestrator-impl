@@ -18,11 +18,6 @@ services_that_dont_compile=(\
     "timestreamwrite",
 )
 
-# TODO(enableNewSmithyRuntimeLaunch): Move these into `services_that_pass_tests` as more progress is made
-services_that_compile=(\
-    "s3"\
-)
-
 services_that_pass_tests=(\
     "aws-config"\
     "config"\
@@ -45,15 +40,6 @@ services_that_pass_tests=(\
 ./gradlew aws:sdk:assemble -Psmithy.runtime.mode=orchestrator
 
 cd aws/sdk/build/aws-sdk/sdk
-for service in "${services_that_compile[@]}"; do
-    pushd "${service}"
-    echo -e "${C_YELLOW}# Running 'cargo check --all-features --all-targets' on '${service}'${C_RESET}"
-    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo check --all-features --all-targets
-    echo -e "${C_YELLOW}# Running 'cargo clippy --all-features' on '${service}'${C_RESET}"
-    RUSTFLAGS="${RUSTFLAGS:-} --cfg aws_sdk_orchestrator_mode" cargo clippy --all-features
-    popd
-done
-
 for service in "${services_that_pass_tests[@]}"; do
     pushd "${service}"
     echo -e "${C_YELLOW}# Running 'cargo test --all-features' on '${service}'${C_RESET}"

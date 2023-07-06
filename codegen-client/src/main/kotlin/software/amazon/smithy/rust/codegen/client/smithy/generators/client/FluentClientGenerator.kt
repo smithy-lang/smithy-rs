@@ -518,7 +518,8 @@ class FluentClientGenerator(
                         let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
                         let runtime_plugins = #{Operation}::operation_runtime_plugins(
                             self.handle.runtime_plugins.clone(),
-                            self.config_override
+                            &self.handle.conf,
+                            self.config_override,
                         );
                         #{Operation}::orchestrate(&runtime_plugins, input).await
                     }

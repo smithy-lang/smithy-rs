@@ -172,7 +172,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
 
                 is ServiceConfig.RuntimePluginInterceptors -> rust(
                     """
-                    ${section.interceptors}.extend(self.interceptors.iter().cloned());
+                    ${section.interceptors}.extend(${section.interceptorsField}.interceptors.iter().cloned());
                     """,
                 )
 
