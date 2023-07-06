@@ -66,12 +66,47 @@ private object Commands {
         )
     }
 
-    // --all-features
+    // enable all features
+    // e.g.
+    // ```kotlin
+    // cargoTest(true)
+    // // cargo test --all-features
+    // cargoTest(false)
+    // // cargo test
+    // ```
     fun cargoTest(enableAllFeatures: Boolean): String {
         return func("cargo test", allFeature, enableAllFeatures)
     }
 
+    // enable all features
+    // e.g.
+    // ```kotlin
+    // cargoCheck(true)
+    // // cargo test --all-features
+    // cargoCheck(false)
+    // // cargo test
+    // ```
     fun cargoCheck(enableAllFeatures: Boolean): String {
+        return func("cargo check", allFeature, enableAllFeatures)
+    }
+
+    // enable features specified in the array
+    // e.g.
+    // ```kotlin
+    // cargoTest(["serde-serialize", "serde-deserialize"])
+    // // cargo test --features serde-serialize serde-deserialize
+    // ```
+    fun cargoTest(featuresToEnable?: Array<String>): String {
+        return func("cargo test", allFeature, enableAllFeatures)
+    }
+
+    // enable features specified in the array
+    // e.g.
+    // ```kotlin
+    // cargoCheck(["serde-serialize", "serde-deserialize"])
+    // // cargo check --features serde-serialize serde-deserialize
+    // ```
+    fun cargoCheck(featuresToEnable?: Array<String>): String {
         return func("cargo check", allFeature, enableAllFeatures)
     }
 }
