@@ -127,7 +127,7 @@ author = "rcoh"
 message = "Bump dependency on `lambda_http` by `aws-smithy-http-server` to 0.8.0. This version of `aws-smithy-http-server` is only guaranteed to be compatible with 0.8.0, or semver-compatible versions of 0.8.0 of the `lambda_http` crate. It will not work with versions prior to 0.8.0 _at runtime_, making requests to your smithy-rs service unroutable, so please make sure you're running your service in a compatible configuration"
 author = "david-perez"
 references = ["smithy-rs#2676", "smithy-rs#2685"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false, target = "server" }
 
 [[smithy-rs]]
 message = """Remove `PollError` from an operations `Service::Error`.
@@ -141,9 +141,9 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "hlbarber"
 
 [[aws-sdk-rust]]
-message = "The SDK has added support for timestreamwrite and timestreamquery. Support for these services is considered experimental at this time. In order to use these services, you MUST call `.enable_endpoint_discovery()` on the `Client` after construction."
+message = "The SDK has added support for timestreamwrite and timestreamquery. Support for these services is considered experimental at this time. In order to use these services, you MUST call `.with_endpoint_discovery_enabled()` on the `Client` after construction."
 meta = { "breaking" = false, "tada" = true, "bug" = false }
-references = ["smithy-rs#2707", "aws-sdk-rust#114"]
+references = ["smithy-rs#2707", "aws-sdk-rust#114", "smithy-rs#2846"]
 author = "rcoh"
 
 [[smithy-rs]]
@@ -197,7 +197,7 @@ filter_by_operation_id(plugin, |id| id.absolute() != "namespace#name");
 """
 author = "82marbag"
 references = ["smithy-rs#2678"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false, target = "server" }
 
 [[smithy-rs]]
 message = "The occurrences of `Arc<dyn ResolveEndpoint>` have now been replaced with `SharedEndpointResolver` in public APIs."
@@ -532,7 +532,7 @@ let scoped_plugin = Scoped::new::<SomeScope>(plugin);
 
 """
 references = ["smithy-rs#2740", "smithy-rs#2759", "smithy-rs#2779", "smithy-rs#2827"]
-meta = { "breaking" = true, "tada" = true, "bug" = false }
+meta = { "breaking" = true, "tada" = true, "bug" = false, target = "server" }
 author = "hlbarber"
 
 [[smithy-rs]]
@@ -608,7 +608,7 @@ let plugin = plugin_from_operation_fn(map);
 ```
 """
 references = ["smithy-rs#2740", "smithy-rs#2759", "smithy-rs#2779"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false, target = "server" }
 author = "hlbarber"
 
 [[smithy-rs]]

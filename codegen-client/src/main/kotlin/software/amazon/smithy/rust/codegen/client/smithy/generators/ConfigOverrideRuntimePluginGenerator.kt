@@ -54,8 +54,7 @@ class ConfigOverrideRuntimePluginGenerator(
                     initial_config: #{FrozenLayer},
                     initial_components: &#{RuntimeComponentsBuilder}
                 ) -> Self {
-                    let mut layer = #{Layer}::from(config_override.config)
-                        .with_name("$moduleUseName::config::ConfigOverrideRuntimePlugin");
+                    let mut layer = config_override.config;
                     let mut components = config_override.runtime_components;
                     let mut resolver = #{Resolver}::overrid(initial_config, initial_components, &mut layer, &mut components);
 
@@ -63,7 +62,8 @@ class ConfigOverrideRuntimePluginGenerator(
 
                     let _ = resolver;
                     Self {
-                        config: layer.freeze(),
+                        config: #{Layer}::from(layer)
+                            .with_name("$moduleUseName::config::ConfigOverrideRuntimePlugin").freeze(),
                         components,
                     }
                 }

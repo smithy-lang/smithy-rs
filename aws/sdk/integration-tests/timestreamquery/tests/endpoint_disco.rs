@@ -16,7 +16,8 @@ use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn do_endpoint_discovery() {
-    tracing_subscriber::fmt::init();
+    let _logs = aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs();
+
     let conn = ReplayingConnection::from_file("tests/traffic.json").unwrap();
     //let conn = aws_smithy_client::dvr::RecordingConnection::new(conn);
     let start = UNIX_EPOCH + Duration::from_secs(1234567890);
@@ -32,7 +33,7 @@ async fn do_endpoint_discovery() {
         .idempotency_token_provider("0000-0000-0000")
         .build();
     let (client, reloader) = query::Client::from_conf(conf)
-        .enable_endpoint_discovery()
+        .with_endpoint_discovery_enabled()
         .await
         .expect("initial setup of endpoint discovery failed");
 
