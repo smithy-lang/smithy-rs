@@ -34,8 +34,8 @@ class MetadataCustomization(
                 rustTemplate(
                     """
                     ${section.newLayerName}.store_put(#{Metadata}::new(
-                        ${operationName.dq()}.to_owned(),
-                        ${codegenContext.serviceShape.sdkId().dq()}.to_owned(),
+                        ${operationName.dq()},
+                        ${codegenContext.serviceShape.sdkId().dq()},
                     ));
                     """,
                     *codegenScope,
