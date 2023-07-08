@@ -55,7 +55,7 @@ class HttpConnectorConfigCustomization(
                         """
                         /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
                         pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
-                            self.inner.load::<#{HttpConnector}>()
+                            self.config.load::<#{HttpConnector}>()
                         }
                         """,
                         *codegenScope,
@@ -161,7 +161,7 @@ class HttpConnectorConfigCustomization(
                     rustTemplate(
                         """
                         pub fn set_http_connector(&mut self, http_connector: #{Option}<impl #{Into}<#{HttpConnector}>>) -> &mut Self {
-                            http_connector.map(|c| self.inner.store_put(c.into()));
+                            http_connector.map(|c| self.config.store_put(c.into()));
                             self
                         }
                         """,
