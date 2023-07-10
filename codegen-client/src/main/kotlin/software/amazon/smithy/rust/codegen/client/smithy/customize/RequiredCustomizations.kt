@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChec
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpVersionListCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.MetadataCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
@@ -29,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersi
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 val TestUtilFeature = Feature("test-util", false, listOf())
 
@@ -46,7 +48,9 @@ class RequiredCustomizations : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> =
-        baseCustomizations +
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
+            it + MetadataCustomization(codegenContext, operation)
+        } +
             IdempotencyTokenGenerator(codegenContext, operation) +
             EndpointPrefixGenerator(codegenContext, operation) +
             HttpChecksumRequiredGenerator(codegenContext, operation) +
