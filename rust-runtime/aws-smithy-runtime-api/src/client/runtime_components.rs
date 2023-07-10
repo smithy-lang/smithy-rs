@@ -18,6 +18,9 @@ use std::fmt;
 pub(crate) static EMPTY_RUNTIME_COMPONENTS_BUILDER: RuntimeComponentsBuilder =
     RuntimeComponentsBuilder::new("empty");
 
+/// Internal to `declare_runtime_components!`.
+///
+/// Merges a field from one builder into another.
 macro_rules! merge {
     (Option $other:ident . $name:ident => $self:ident) => {
         $self.$name = $other.$name.clone().or($self.$name.take());
@@ -28,6 +31,11 @@ macro_rules! merge {
         }
     };
 }
+/// Internal to `declare_runtime_components!`.
+///
+/// This is used when creating the builder's `build` method
+/// to populate each individual field value. The `required`/`atLeastOneRequired`
+/// validations are performed here.
 macro_rules! builder_field_value {
     (Option $self:ident . $name:ident) => {
         $self.$name
@@ -53,7 +61,11 @@ macro_rules! builder_field_value {
         $self.$name
     }};
 }
-macro_rules! rc_type {
+/// Internal to `declare_runtime_components!`.
+///
+/// Converts the field type from `Option<T>` or `Vec<T>` into `Option<Tracked<T>>` or `Vec<Tracked<T>>` respectively.
+/// Also removes the `Option` wrapper for required fields in the non-builder struct.
+macro_rules! runtime_component_field_type {
     (Option $inner_type:ident) => {
         Option<Tracked<$inner_type>>
     };
@@ -67,6 +79,11 @@ macro_rules! rc_type {
         Vec<Tracked<$inner_type>>
     };
 }
+/// Internal to `declare_runtime_components!`.
+///
+/// Converts an `$outer_type` into an empty instantiation for that type.
+/// This is needed since `Default::default()` can't be used in a `const` function,
+/// and `RuntimeComponentsBuilder::new()` is `const`.
 macro_rules! empty_builder_value {
     (Option) => {
         None
@@ -75,6 +92,38 @@ macro_rules! empty_builder_value {
         Vec::new()
     };
 }
+
+/// Macro to define the structs for both `RuntimeComponents` and `RuntimeComponentsBuilder`.
+///
+/// This is a macro in order to keep the fields consistent between the two, and to automatically
+/// update the `merge_from` and `build` methods when new components are added.
+///
+/// It also facilitates unit testing since the overall mechanism can be unit tested with different
+/// fields that are easy to check in tests (testing with real components makes it hard
+/// to tell that the correct component was selected when merging builders).
+///
+/// # Example usage
+///
+/// The two identifiers after "fields for" become the names of the struct and builder respectively.
+/// Following that, all the fields are specified. Fields MUST be wrapped in `Option` or `Vec`.
+/// To make a field required in the non-builder struct, add `#[required]` for `Option` fields, or
+/// `#[atLeastOneRequired]` for `Vec` fields.
+///
+/// ```
+/// declare_runtime_components! {
+///     fields for TestRc and TestRcBuilder {
+///         some_optional_string: Option<String>,
+///
+///         some_optional_vec: Vec<String>,
+///
+///         #[required]
+///         some_required_string: Option<String>,
+///
+///         #[atLeastOneRequired]
+///         some_required_vec: Vec<String>,
+///     }
+/// }
+/// ```
 macro_rules! declare_runtime_components {
     (fields for $rc_name:ident and $builder_name:ident {
         $($(#[$option:ident])? $field_name:ident : $outer_type:ident<$inner_type:ident> ,)+
@@ -82,7 +131,7 @@ macro_rules! declare_runtime_components {
         /// Components that can only be set in runtime plugins that the orchestrator uses directly to call an operation.
         #[derive(Clone, Debug)]
         pub struct $rc_name {
-            $($field_name: rc_type!($outer_type $inner_type $($option)?),)+
+            $($field_name: runtime_component_field_type!($outer_type $inner_type $($option)?),)+
         }
 
         #[derive(Clone, Debug, Default)]
