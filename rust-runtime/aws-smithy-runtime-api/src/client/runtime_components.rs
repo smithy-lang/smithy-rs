@@ -631,6 +631,10 @@ impl fmt::Display for BuildError {
     }
 }
 
+/// A trait for retrieving a shared identity resolver.
+///
+/// This trait exists so that [`HttpAuthScheme::identity_resolver`](crate::client::auth::HttpAuthScheme::identity_resolver)
+/// can have access to configured identity resolvers without having access to all the runtime components.
 pub trait GetIdentityResolver: Send + Sync {
     /// Returns the requested identity resolver if it is set.
     fn identity_resolver(&self, scheme_id: AuthSchemeId) -> Option<SharedIdentityResolver>;
