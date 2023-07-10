@@ -19,7 +19,7 @@ use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::iter::Rev;
 use std::marker::PhantomData;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
 use std::slice::Iter;
 use std::sync::Arc;
 
