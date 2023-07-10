@@ -48,6 +48,8 @@ class MetadataCustomizationTest {
                 "Interceptor" to RuntimeType.interceptor(runtimeConfig),
                 "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
                 "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+                "RuntimeComponents" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                    .resolve("client::runtime_components::RuntimeComponents"),
             )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.withFeature("test-util").toDevDependency())
@@ -64,6 +66,7 @@ class MetadataCustomizationTest {
                             fn modify_before_signing(
                                 &self,
                                 _context: &mut #{BeforeTransmitInterceptorContextMut}<'_>,
+                                _runtime_components: &#{RuntimeComponents},
                                 cfg: &mut #{ConfigBag},
                             ) -> #{Result}<(), #{BoxError}> {
                                 let metadata = cfg
