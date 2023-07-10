@@ -14,9 +14,9 @@ use std::sync::Arc;
 
 /// RuntimePlugin Trait
 ///
-/// A RuntimePlugin is the unit of configuration for augmenting the SDK with new behavior
+/// A RuntimePlugin is the unit of configuration for augmenting the SDK with new behavior.
 ///
-/// Runtime plugins can set configuration and register interceptors.
+/// Runtime plugins can register interceptors, set runtime components, and modify configuration.
 pub trait RuntimePlugin: Debug + Send + Sync {
     fn config(&self) -> Option<FrozenLayer> {
         None
