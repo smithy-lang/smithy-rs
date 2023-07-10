@@ -612,6 +612,12 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "hlbarber"
 
 [[smithy-rs]]
+message = "Fix bug in client generation when using smithy.rules#endpointTests and operation and service shapes are in different namespaces."
+author = "mcmasn-amzn"
+references = ["smithy-rs#2767"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+
+[[smithy-rs]]
 message = "The naming `make_token` for fields and the API of `IdempotencyTokenProvider` in service configs and their builders has now been updated to `idempotency_token_provider`."
 references = ["smithy-rs#2783"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
