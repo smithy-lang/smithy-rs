@@ -54,7 +54,14 @@ private class HttpConnectorConfigCustomization(
         rustTemplate(
             """
             fn set_connector(resolver: &mut #{Resolver}<'_>) {
-                let must_set_connector = resolver.is_latest_set::<#{HttpConnector}>()
+                // Initial configuration needs to set a default if no connector is given, so it
+                // should always get into the condition below.
+                //
+                // Override configuration should set the connector if the override config
+                // contains a connector, sleep impl, or a timeout config since these are all
+                // incorporated into the final connector.
+                let must_set_connector = resolver.is_initial()
+                    || resolver.is_latest_set::<#{HttpConnector}>()
                     || resolver.latest_sleep_impl().is_some()
                     || resolver.is_latest_set::<#{TimeoutConfig}>();
                 if must_set_connector {

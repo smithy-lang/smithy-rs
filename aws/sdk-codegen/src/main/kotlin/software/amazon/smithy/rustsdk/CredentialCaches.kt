@@ -148,7 +148,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                         if let Some(credentials_provider) = layer.load::<#{SharedCredentialsProvider}>().cloned() {
                             let cache_config = layer.load::<#{CredentialsCache}>().cloned()
                                 .unwrap_or_else({
-                                    let sleep = layer.load::<#{SharedAsyncSleep}>().cloned();
+                                    let sleep = self.runtime_components.sleep_impl();
                                     || match sleep {
                                         Some(sleep) => {
                                             #{CredentialsCache}::lazy_builder()

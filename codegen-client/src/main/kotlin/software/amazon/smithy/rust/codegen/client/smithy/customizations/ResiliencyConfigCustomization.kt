@@ -377,7 +377,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             }
 
                             if retry_config.mode() == #{RetryMode}::Adaptive {
-                                if let #{Some}(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
+                                if let #{Some}(time_source) = self.runtime_components.time_source() {
                                     let seconds_since_unix_epoch = time_source
                                         .now()
                                         .duration_since(#{SystemTime}::UNIX_EPOCH)
