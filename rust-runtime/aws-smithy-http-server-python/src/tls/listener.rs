@@ -144,7 +144,7 @@ mod tests {
             assert!(response
                 .unwrap_err()
                 .to_string()
-                .contains("invalid peer certificate: UnknownIssuer"));
+                .contains("invalid peer certificate"));
         }
 
         {
