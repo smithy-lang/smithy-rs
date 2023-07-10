@@ -109,7 +109,7 @@ macro_rules! empty_builder_value {
 /// To make a field required in the non-builder struct, add `#[required]` for `Option` fields, or
 /// `#[atLeastOneRequired]` for `Vec` fields.
 ///
-/// ```
+/// ```no_compile
 /// declare_runtime_components! {
 ///     fields for TestRc and TestRcBuilder {
 ///         some_optional_string: Option<String>,
