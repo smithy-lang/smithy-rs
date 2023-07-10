@@ -5,6 +5,7 @@
 
 //! Errors related to Smithy interceptors
 
+use crate::box_error::BoxError;
 use std::fmt;
 
 macro_rules! interceptor_error_fn {
@@ -29,9 +30,6 @@ macro_rules! interceptor_error_fn {
         }
     }
 }
-
-/// A generic error that behaves itself in async contexts
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// An error related to Smithy interceptors.
 #[derive(Debug)]
@@ -60,6 +58,11 @@ impl InterceptorError {
     interceptor_error_fn!(read_after_attempt => ReadAfterAttempt (with source));
     interceptor_error_fn!(modify_before_completion => ModifyBeforeCompletion (with source));
     interceptor_error_fn!(read_after_execution => ReadAfterExecution (with source));
+
+    interceptor_error_fn!(modify_before_attempt_completion_failed => ModifyBeforeAttemptCompletion (with source));
+    interceptor_error_fn!(read_after_attempt_failed => ReadAfterAttempt (with source));
+    interceptor_error_fn!(modify_before_completion_failed => ModifyBeforeCompletion (with source));
+    interceptor_error_fn!(read_after_execution_failed => ReadAfterExecution (with source));
 
     interceptor_error_fn!(invalid_request_access => InvalidRequestAccess (invalid request access));
     interceptor_error_fn!(invalid_response_access => InvalidResponseAccess (invalid response access));

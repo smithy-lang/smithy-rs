@@ -7,12 +7,14 @@ package software.amazon.smithy.rustsdk.customize.glacier
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+
+// TODO(enableNewSmithyRuntimeCleanup): Delete this file when cleaning up middleware.
 
 class AccountIdAutofill : OperationCustomization() {
     override fun mutSelf(): Boolean = true

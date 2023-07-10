@@ -193,14 +193,67 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
      * The companion object contains commonly used RuntimeTypes
      */
     companion object {
+        /**
+         * Scope that contains all Rust prelude types, but not macros or functions.
+         *
+         * Prelude docs: https://doc.rust-lang.org/std/prelude/index.html#prelude-contents
+         */
+        val preludeScope by lazy {
+            arrayOf(
+                // Rust 1.0
+                "Copy" to std.resolve("marker::Copy"),
+                "Send" to Send,
+                "Sized" to std.resolve("marker::Sized"),
+                "Sync" to Sync,
+                "Unpin" to std.resolve("marker::Unpin"),
+                "Drop" to std.resolve("ops::Drop"),
+                "Fn" to std.resolve("ops::Fn"),
+                "FnMut" to std.resolve("ops::FnMut"),
+                "FnOnce" to std.resolve("ops::FnOnce"),
+                "Box" to Box,
+                "ToOwned" to std.resolve("borrow::ToOwned"),
+                "Clone" to Clone,
+                "PartialEq" to std.resolve("cmp::PartialEq"),
+                "PartialOrd" to std.resolve("cmp::PartialOrd"),
+                "Eq" to Eq,
+                "Ord" to Ord,
+                "AsRef" to AsRef,
+                "AsMut" to std.resolve("convert::AsMut"),
+                "Into" to Into,
+                "From" to From,
+                "Default" to Default,
+                "Iterator" to std.resolve("iter::Iterator"),
+                "Extend" to std.resolve("iter::Extend"),
+                "IntoIterator" to std.resolve("iter::IntoIterator"),
+                "DoubleEndedIterator" to std.resolve("iter::DoubleEndedIterator"),
+                "ExactSizeIterator" to std.resolve("iter::ExactSizeIterator"),
+                "Option" to Option,
+                "Some" to Option.resolve("Some"),
+                "None" to Option.resolve("None"),
+                "Result" to std.resolve("result::Result"),
+                "Ok" to std.resolve("result::Result::Ok"),
+                "Err" to std.resolve("result::Result::Err"),
+                "String" to String,
+                "ToString" to std.resolve("string::ToString"),
+                "Vec" to Vec,
+
+                // 2021 Edition
+                "TryFrom" to std.resolve("convert::TryFrom"),
+                "TryInto" to std.resolve("convert::TryInto"),
+                "FromIterator" to std.resolve("iter::FromIterator"),
+            )
+        }
+
         // stdlib types
-        val std = RuntimeType("std")
+        val std = RuntimeType("::std")
         val stdCmp = std.resolve("cmp")
         val stdFmt = std.resolve("fmt")
         val stdConvert = std.resolve("convert")
+        val Arc = std.resolve("sync::Arc")
         val AsRef = stdConvert.resolve("AsRef")
-        val ByteSlab = std.resolve("vec::Vec<u8>")
+        val Bool = std.resolve("primitive::bool")
         val Box = std.resolve("boxed::Box")
+        val ByteSlab = std.resolve("vec::Vec<u8>")
         val Clone = std.resolve("clone::Clone")
         val Cow = std.resolve("borrow::Cow")
         val Debug = stdFmt.resolve("Debug")
@@ -210,19 +263,19 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val From = stdConvert.resolve("From")
         val Hash = std.resolve("hash::Hash")
         val HashMap = std.resolve("collections::HashMap")
-        val Ord = stdCmp.resolve("Ord")
+        val Into = stdConvert.resolve("Into")
         val Option = std.resolve("option::Option")
+        val Ord = stdCmp.resolve("Ord")
         val PartialEq = stdCmp.resolve("PartialEq")
         val PartialOrd = stdCmp.resolve("PartialOrd")
         val Phantom = std.resolve("marker::PhantomData")
+        val Send = std.resolve("marker::Send")
         val StdError = std.resolve("error::Error")
         val String = std.resolve("string::String")
-        val Bool = std.resolve("primitive::bool")
-        val TryFrom = stdConvert.resolve("TryFrom")
-        val Vec = std.resolve("vec::Vec")
-        val Arc = std.resolve("sync::Arc")
-        val Send = std.resolve("marker::Send")
         val Sync = std.resolve("marker::Sync")
+        val TryFrom = stdConvert.resolve("TryFrom")
+        val U64 = std.resolve("primitive::u64")
+        val Vec = std.resolve("vec::Vec")
 
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
@@ -248,6 +301,11 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         // codegen types
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
         val MaybeConstrained = RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
+
+        // serde types. Gated behind `CfgUnstable`.
+        val Serde = CargoDependency.Serde.toType()
+        val SerdeSerialize = Serde.resolve("Serialize")
+        val SerdeDeserialize = Serde.resolve("Deserialize")
 
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
@@ -275,6 +333,40 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyTypes(runtimeConfig).resolve("base64::encode")
+
+        fun configBag(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag")
+        fun configBagAccessors(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::config_bag_accessors::ConfigBagAccessors")
+        fun runtimePlugins(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins")
+        fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
+        fun interceptor(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::Interceptor")
+        fun interceptorContext(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::InterceptorContext")
+        fun sharedInterceptor(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor")
+
+        fun afterDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::AfterDeserializationInterceptorContextRef")
+        fun beforeSerializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextRef")
+        fun beforeSerializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextMut")
+        fun beforeDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextRef")
+        fun beforeDeserializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextMut")
+        fun beforeTransmitInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextRef")
+        fun beforeTransmitInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextMut")
+        fun finalizerInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextRef")
+        fun finalizerInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextMut")
 
         fun blob(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Blob")
         fun byteStream(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("byte_stream::ByteStream")
@@ -374,7 +466,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
 
-        val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
+        fun idempotencyToken(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.idempotencyToken(runtimeConfig))
 
         fun runtimePlugin(runtimeConfig: RuntimeConfig) =
             RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")

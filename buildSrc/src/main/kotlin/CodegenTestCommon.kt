@@ -18,6 +18,7 @@ data class CodegenTest(
     val service: String,
     val module: String,
     val extraConfig: String? = null,
+    val extraCodegenConfig: String? = null,
     val imports: List<String> = emptyList(),
 )
 
@@ -38,6 +39,7 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                         "relativePath": "$projectDir/rust-runtime"
                     },
                     "codegen": {
+                        ${it.extraCodegenConfig ?: ""}
                     },
                     "service": "${it.service}",
                     "module": "${it.module}",
@@ -252,7 +254,7 @@ fun Project.registerCargoCommandsTasks(
         dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "test", "--all-features")
+        commandLine("cargo", "test", "--all-features", "--no-fail-fast")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {

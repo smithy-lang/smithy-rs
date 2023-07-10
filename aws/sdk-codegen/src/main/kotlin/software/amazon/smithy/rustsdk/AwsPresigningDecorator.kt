@@ -17,10 +17,16 @@ import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientHttpBoundProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -30,11 +36,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -100,12 +103,18 @@ class AwsPresigningDecorator internal constructor(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations + listOf(AwsInputPresignedMethod(codegenContext, operation))
+    ): List<OperationCustomization> {
+        return if (codegenContext.smithyRuntimeMode.generateMiddleware) {
+            baseCustomizations + AwsInputPresignedMethod(codegenContext, operation)
+        } else {
+            baseCustomizations
+        }
+    }
 
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
      */
-    override fun transformModel(service: ServiceShape, model: Model): Model {
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model {
         val modelWithSynthetics = addSyntheticOperations(model)
         val presignableTransforms = mutableListOf<PresignModelTransform>()
         val intermediate = ModelTransformer.create().mapShapes(modelWithSynthetics) { shape ->
@@ -132,6 +141,7 @@ class AwsPresigningDecorator internal constructor(
     }
 }
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete this class when cleaning up middleware
 class AwsInputPresignedMethod(
     private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
@@ -141,8 +151,8 @@ class AwsInputPresignedMethod(
 
     private val codegenScope = (
         presigningTypes + listOf(
-            "PresignedRequestService" to AwsRuntimeType.presigning()
-                .resolve("service::PresignedRequestService"),
+            "PresignedRequestService" to AwsRuntimeType.presigningService()
+                .resolve("PresignedRequestService"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "aws_sigv4" to AwsRuntimeType.awsSigv4(runtimeConfig),
             "sig_auth" to AwsRuntimeType.awsSigAuth(runtimeConfig),
@@ -173,7 +183,7 @@ class AwsInputPresignedMethod(
         MakeOperationGenerator(
             codegenContext,
             protocol,
-            HttpBoundProtocolPayloadGenerator(codegenContext, protocol),
+            ClientHttpBoundProtocolPayloadGenerator(codegenContext, protocol),
             // Prefixed with underscore to avoid colliding with modeled functions
             functionName = makeOperationFn,
             public = false,
@@ -202,12 +212,14 @@ class AwsInputPresignedMethod(
                 *codegenScope,
             )
             rustBlock("") {
-                rust(
+                rustTemplate(
                     """
                     // Change signature type to query params and wire up presigning config
                     let mut props = request.properties_mut();
-                    props.insert(presigning_config.start_time());
+                    props.insert(#{SharedTimeSource}::new(presigning_config.start_time()));
                     """,
+                    "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig)
+                        .resolve("time::SharedTimeSource"),
                 )
                 withBlock("props.insert(", ");") {
                     rustTemplate(
@@ -221,7 +233,7 @@ class AwsInputPresignedMethod(
                 }
                 rustTemplate(
                     """
-                    let mut config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
+                    let config = props.get_mut::<#{sig_auth}::signer::OperationSigningConfig>()
                         .expect("signing config added by make_operation()");
                     config.signature_type = #{sig_auth}::signer::HttpSignatureType::HttpRequestQueryParams;
                     config.expires_in = Some(presigning_config.expires());
@@ -246,10 +258,12 @@ class AwsInputPresignedMethod(
 }
 
 class AwsPresignedFluentBuilderMethod(
-    runtimeConfig: RuntimeConfig,
+    private val codegenContext: ClientCodegenContext,
 ) : FluentClientCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = (
         presigningTypes + arrayOf(
+            *RuntimeType.preludeScope,
             "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
@@ -261,20 +275,141 @@ class AwsPresignedFluentBuilderMethod(
                 documentPresignedMethod(hasConfigArg = false)
                 rustBlockTemplate(
                     """
+                    ##[allow(unused_mut)]
                     pub async fn presigned(
-                        self,
+                        mut self,
                         presigning_config: #{PresigningConfig},
-                    ) -> Result<#{PresignedRequest}, #{SdkError}<#{OpError}>>
+                    ) -> #{Result}<#{PresignedRequest}, #{SdkError}<#{OpError}, #{RawResponseType}>>
                     """,
                     *codegenScope,
                     "OpError" to section.operationErrorType,
+                    "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                        RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
+                    } else {
+                        RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
+                    },
                 ) {
+                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                        renderPresignedMethodBodyMiddleware()
+                    } else {
+                        renderPresignedMethodBody(section)
+                    }
+                }
+            }
+        }
+
+    private fun RustWriter.renderPresignedMethodBodyMiddleware() {
+        rustTemplate(
+            """
+            let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
+            input.presigned(&self.handle.conf, presigning_config).await
+            """,
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.renderPresignedMethodBody(section: FluentClientSection.FluentBuilderImpl) {
+        val presignableOp = PRESIGNABLE_OPERATIONS.getValue(section.operationShape.id)
+        val operationShape = if (presignableOp.hasModelTransforms()) {
+            codegenContext.model.expectShape(syntheticShapeId(section.operationShape.id), OperationShape::class.java)
+        } else {
+            section.operationShape
+        }
+
+        rustTemplate(
+            """
+            #{alternate_presigning_serializer}
+
+            let runtime_plugins = #{Operation}::operation_runtime_plugins(
+                self.handle.runtime_plugins.clone(),
+                &self.handle.conf,
+                self.config_override,
+            )
+                .with_client_plugin(#{SigV4PresigningRuntimePlugin}::new(presigning_config, #{payload_override}))
+                #{alternate_presigning_serializer_registration};
+
+            let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
+            let mut context = #{Operation}::orchestrate_with_stop_point(&runtime_plugins, input, #{StopPoint}::BeforeTransmit)
+                .await
+                .map_err(|err| {
+                    err.map_service_error(|err| {
+                        #{TypedBox}::<#{OperationError}>::assume_from(err.into())
+                            .expect("correct error type")
+                            .unwrap()
+                    })
+                })?;
+            let request = context.take_request().expect("request set before transmit");
+            Ok(#{PresignedRequest}::new(request.map(|_| ())))
+            """,
+            *codegenScope,
+            "Operation" to codegenContext.symbolProvider.toSymbol(section.operationShape),
+            "OperationError" to section.operationErrorType,
+            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+            "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors")
+                .resolve("SharedInterceptor"),
+            "SigV4PresigningRuntimePlugin" to AwsRuntimeType.presigningInterceptor(runtimeConfig)
+                .resolve("SigV4PresigningRuntimePlugin"),
+            "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
+            "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
+            "USER_AGENT" to CargoDependency.Http.toType().resolve("header::USER_AGENT"),
+            "alternate_presigning_serializer" to writable {
+                if (presignableOp.hasModelTransforms()) {
+                    val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
                     rustTemplate(
                         """
-                        let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                        input.presigned(&self.handle.conf, presigning_config).await
+                        ##[derive(Debug)]
+                        struct AlternatePresigningSerializerRuntimePlugin;
+                        impl #{RuntimePlugin} for AlternatePresigningSerializerRuntimePlugin {
+                            fn config(&self) -> Option<#{FrozenLayer}> {
+                                use #{ConfigBagAccessors};
+                                let mut cfg = #{Layer}::new("presigning_serializer");
+                                cfg.set_request_serializer(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
+                                Some(cfg.freeze())
+                            }
+                        }
                         """,
-                        *codegenScope,
+                        "AlternateSerializer" to alternateSerializer(operationShape),
+                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
+                        "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+                        "Layer" to smithyTypes.resolve("config_bag::Layer"),
+                        "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+                        "SharedRequestSerializer" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                            .resolve("client::orchestrator::SharedRequestSerializer"),
+                    )
+                }
+            },
+            "alternate_presigning_serializer_registration" to writable {
+                if (presignableOp.hasModelTransforms()) {
+                    rust(".with_operation_plugin(AlternatePresigningSerializerRuntimePlugin)")
+                }
+            },
+            "payload_override" to writable {
+                rustTemplate(
+                    "#{aws_sigv4}::http_request::SignableBody::" +
+                        when (presignableOp.payloadSigningType) {
+                            PayloadSigningType.EMPTY -> "Bytes(b\"\")"
+                            PayloadSigningType.UNSIGNED_PAYLOAD -> "UnsignedPayload"
+                        },
+                    "aws_sigv4" to AwsRuntimeType.awsSigv4(runtimeConfig),
+                )
+            },
+        )
+    }
+
+    private fun alternateSerializer(transformedOperationShape: OperationShape): RuntimeType =
+        transformedOperationShape.contextName(codegenContext.serviceShape).replaceFirstChar {
+            it.uppercase()
+        }.let { baseName ->
+            "${baseName}PresigningRequestSerializer".let { name ->
+                RuntimeType.forInlineFun(name, codegenContext.symbolProvider.moduleForShape(transformedOperationShape)) {
+                    RequestSerializerGenerator(
+                        codegenContext,
+                        codegenContext.protocolImpl!!,
+                        null,
+                        nameOverride = name,
+                    ).render(
+                        this,
+                        transformedOperationShape,
                     )
                 }
             }

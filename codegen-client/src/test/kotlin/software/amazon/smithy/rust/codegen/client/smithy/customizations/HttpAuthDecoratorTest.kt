@@ -6,25 +6,15 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.node.StringNode
+import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
-
-private fun additionalSettings(): ObjectNode = ObjectNode.objectNodeBuilder()
-    .withMember(
-        "codegen",
-        ObjectNode.objectNodeBuilder()
-            .withMember("enableNewSmithyRuntime", StringNode.from("orchestrator")).build(),
-    )
-    .build()
 
 class HttpAuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
@@ -38,7 +28,7 @@ class HttpAuthDecoratorTest {
     fun multipleAuthSchemesSchemeSelection() {
         clientIntegrationTest(
             TestModels.allSchemes,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("tests") {
                 val moduleName = codegenContext.moduleUseName()
@@ -117,7 +107,7 @@ class HttpAuthDecoratorTest {
     fun apiKeyInQueryString() {
         clientIntegrationTest(
             TestModels.apiKeyInQueryString,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_applied_to_query_string") {
                 val moduleName = codegenContext.moduleUseName()
@@ -162,7 +152,7 @@ class HttpAuthDecoratorTest {
     fun apiKeyInHeaders() {
         clientIntegrationTest(
             TestModels.apiKeyInHeaders,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_applied_to_headers") {
                 val moduleName = codegenContext.moduleUseName()
@@ -208,7 +198,7 @@ class HttpAuthDecoratorTest {
     fun basicAuth() {
         clientIntegrationTest(
             TestModels.basicAuth,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("basic_auth") {
                 val moduleName = codegenContext.moduleUseName()
@@ -254,7 +244,7 @@ class HttpAuthDecoratorTest {
     fun bearerAuth() {
         clientIntegrationTest(
             TestModels.bearerAuth,
-            IntegrationTestParams(additionalSettings = additionalSettings()),
+            TestCodegenSettings.orchestratorModeTestParams,
         ) { codegenContext, rustCrate ->
             rustCrate.integrationTest("bearer_auth") {
                 val moduleName = codegenContext.moduleUseName()
@@ -275,6 +265,48 @@ class HttpAuthDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .bearer_token(Token::new("some-token", None))
+                            .endpoint_resolver("http://localhost:1234")
+                            .http_connector(connector.clone())
+                            .build();
+                        let smithy_client = aws_smithy_client::Builder::new()
+                            .connector(connector.clone())
+                            .middleware_fn(|r| r)
+                            .build_dyn();
+                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let _ = client.some_operation()
+                            .send_orchestrator()
+                            .await
+                            .expect("success");
+                        connector.assert_requests_match(&[]);
+                    }
+                    """,
+                    *codegenScope(codegenContext.runtimeConfig),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun optionalAuth() {
+        clientIntegrationTest(
+            TestModels.optionalAuth,
+            TestCodegenSettings.orchestratorModeTestParams,
+        ) { codegenContext, rustCrate ->
+            rustCrate.integrationTest("optional_auth") {
+                val moduleName = codegenContext.moduleUseName()
+                Attribute.TokioTest.render(this)
+                rustTemplate(
+                    """
+                    async fn optional_auth() {
+                        let connector = #{TestConnection}::new(vec![(
+                            http::Request::builder()
+                                .uri("http://localhost:1234/SomeOperation")
+                                .body(#{SdkBody}::empty())
+                                .unwrap(),
+                            http::Response::builder().status(200).body("").unwrap(),
+                        )]);
+
+                        let config = $moduleName::Config::builder()
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
@@ -426,6 +458,33 @@ private object TestModels {
         }
 
         @http(uri: "/SomeOperation", method: "GET")
+        operation SomeOperation {
+            output: SomeOutput
+        }
+    """.asSmithyModel()
+
+    val optionalAuth = """
+        namespace test
+
+        use aws.api#service
+        use aws.protocols#restJson1
+
+        @service(sdkId: "Test Api Key Auth")
+        @restJson1
+        @httpBearerAuth
+        @auth([httpBearerAuth])
+        service TestService {
+            version: "2023-01-01",
+            operations: [SomeOperation]
+        }
+
+        structure SomeOutput {
+            someAttribute: Long,
+            someVal: String
+        }
+
+        @http(uri: "/SomeOperation", method: "GET")
+        @optionalAuth
         operation SomeOperation {
             output: SomeOutput
         }

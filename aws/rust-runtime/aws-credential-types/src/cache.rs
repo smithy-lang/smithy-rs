@@ -7,11 +7,14 @@
 
 mod expiring_cache;
 mod lazy_caching;
+mod no_caching;
 
 pub use expiring_cache::ExpiringCache;
 pub use lazy_caching::Builder as LazyBuilder;
+use no_caching::NoCredentialsCache;
 
 use crate::provider::{future, SharedCredentialsProvider};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::sync::Arc;
 
 /// Asynchronous Cached Credentials Provider
@@ -60,9 +63,14 @@ impl ProvideCachedCredentials for SharedCredentialsCache {
     }
 }
 
+impl Storable for SharedCredentialsCache {
+    type Storer = StoreReplace<SharedCredentialsCache>;
+}
+
 #[derive(Clone, Debug)]
 pub(crate) enum Inner {
     Lazy(lazy_caching::Builder),
+    NoCaching,
 }
 
 /// `CredentialsCache` allows for configuring and creating a credentials cache.
@@ -104,10 +112,22 @@ impl CredentialsCache {
         lazy_caching::Builder::new()
     }
 
+    /// Creates a [`CredentialsCache`] that offers no caching ability.
+    pub fn no_caching() -> Self {
+        Self {
+            inner: Inner::NoCaching,
+        }
+    }
+
     /// Creates a [`SharedCredentialsCache`] wrapping a concrete caching implementation.
     pub fn create_cache(self, provider: SharedCredentialsProvider) -> SharedCredentialsCache {
         match self.inner {
             Inner::Lazy(builder) => SharedCredentialsCache::new(builder.build(provider)),
+            Inner::NoCaching => SharedCredentialsCache::new(NoCredentialsCache::new(provider)),
         }
     }
+}
+
+impl Storable for CredentialsCache {
+    type Storer = StoreReplace<CredentialsCache>;
 }

@@ -23,7 +23,7 @@ Problems
 --------
 Here is how our attempt to implement the selected design in the preceding RFC can lead to an obstacle. Consider this code snippet we are planning to support:
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::from_env()
     .credentials_cache(CredentialsCache::lazy())
     .load()
@@ -34,7 +34,7 @@ let client = aws_sdk_s3::Client::new(&sdk_config);
 
 A `CredentialsCache` created by `CredentialsCache::lazy()` above will internally go through three crates before the variable `client` has been created:
 1. `aws-config`: after it has been passed to `aws_config::ConfigLoader::credentials_cache`
-```rust
+```rust,ignore
 // in lib.rs
 
 impl ConfigLoader {
@@ -47,7 +47,7 @@ impl ConfigLoader {
 }
 ```
 2. `aws-types`: after `aws_config::ConfigLoader::load` has passed it to `aws_types::sdk_config::Builder::credentials_cache`
-```rust
+```rust,ignore
 // in sdk_config.rs
 
 impl Builder {
@@ -60,7 +60,7 @@ impl Builder {
 }
 ```
 3. `aws-sdk-s3`: after `aws_sdk_s3::Client::new` has been called with the variable `sdk_config`
-```rust
+```rust,ignore
 // in client.rs
 
 impl Client {
@@ -72,7 +72,7 @@ impl Client {
 }
 ```
 calls
-```rust
+```rust,ignore
 // in config.rs
 
 impl From<&aws_types::sdk_config::SdkConfig> for Builder {

@@ -6,49 +6,73 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
     /**
-     * Hook for adding HTTP auth schemes.
+     * Hook for declaring singletons that store cross-operation state.
      *
-     * Should emit code that looks like the following:
-     * ```
-     * .auth_scheme("name", path::to::MyAuthScheme::new())
-     * ```
+     * Examples include token buckets, ID generators, etc.
      */
-    data class HttpAuthScheme(val configBagName: String) : ServiceRuntimePluginSection("HttpAuthScheme")
+    class DeclareSingletons : ServiceRuntimePluginSection("DeclareSingletons")
 
     /**
      * Hook for adding additional things to config inside service runtime plugins.
      */
-    data class AdditionalConfig(val configBagName: String, val interceptorName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+    data class AdditionalConfig(val newLayerName: String, val serviceConfigName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
         /** Adds a value to the config bag */
         fun putConfigValue(writer: RustWriter, value: Writable) {
-            writer.rust("$configBagName.put(#T);", value)
+            writer.rust("$newLayerName.store_put(#T);", value)
         }
 
-        /** Generates the code to register an interceptor */
-        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
-            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
+        fun registerHttpAuthScheme(writer: RustWriter, runtimeConfig: RuntimeConfig, authScheme: Writable) {
             writer.rustTemplate(
                 """
-                $interceptorName.register_client_interceptor(std::sync::Arc::new(#{interceptor}) as _);
+                #{ConfigBagAccessors}::push_http_auth_scheme(
+                    &mut $newLayerName,
+                    #{auth_scheme}
+                );
                 """,
-                "HttpRequest" to smithyRuntimeApi.resolve("client::orchestrator::HttpRequest"),
-                "HttpResponse" to smithyRuntimeApi.resolve("client::orchestrator::HttpResponse"),
-                "Interceptors" to smithyRuntimeApi.resolve("client::interceptors::Interceptors"),
+                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
+                "auth_scheme" to authScheme,
+            )
+        }
+
+        fun registerIdentityResolver(writer: RustWriter, runtimeConfig: RuntimeConfig, identityResolver: Writable) {
+            writer.rustTemplate(
+                """
+                #{ConfigBagAccessors}::push_identity_resolver(
+                    &mut $newLayerName,
+                    #{identity_resolver}
+                );
+                """,
+                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
+                "identity_resolver" to identityResolver,
+            )
+        }
+    }
+
+    data class RegisterInterceptor(val interceptorRegistrarName: String) : ServiceRuntimePluginSection("RegisterInterceptor") {
+        /** Generates the code to register an interceptor */
+        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
+            writer.rustTemplate(
+                """
+                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
+                """,
                 "interceptor" to interceptor,
+                "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }
@@ -59,88 +83,83 @@ typealias ServiceRuntimePluginCustomization = NamedCustomization<ServiceRuntimeP
  * Generates the service-level runtime plugin
  */
 class ServiceRuntimePluginGenerator(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
 ) {
-    private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val http = RuntimeType.smithyHttp(rc)
-        val runtime = RuntimeType.smithyRuntime(rc)
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
-            "AnonymousIdentityResolver" to runtimeApi.resolve("client::identity::AnonymousIdentityResolver"),
-            "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
-            "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
-            "Connection" to runtimeApi.resolve("client::orchestrator::Connection"),
-            "ConnectorSettings" to RuntimeType.smithyClient(rc).resolve("http_connector::ConnectorSettings"),
-            "DefaultEndpointResolver" to runtime.resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
-            "DynConnectorAdapter" to runtime.resolve("client::connections::adapter::DynConnectorAdapter"),
-            "HttpAuthSchemes" to runtimeApi.resolve("client::auth::HttpAuthSchemes"),
-            "IdentityResolvers" to runtimeApi.resolve("client::identity::IdentityResolvers"),
-            "NeverRetryStrategy" to runtime.resolve("client::retries::strategy::NeverRetryStrategy"),
-            "Params" to endpointTypesGenerator.paramsStruct(),
-            "ResolveEndpoint" to http.resolve("endpoint::ResolveEndpoint"),
+            *preludeScope,
+            "Arc" to RuntimeType.Arc,
+            "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
+            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
+            "Layer" to smithyTypes.resolve("config_bag::Layer"),
+            "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+            "ConfigBagAccessors" to RuntimeType.configBagAccessors(rc),
+            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "Interceptors" to runtimeApi.resolve("client::interceptors::Interceptors"),
-            "SharedEndpointResolver" to http.resolve("endpoint::SharedEndpointResolver"),
-            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
         )
     }
 
-    fun render(writer: RustWriter, customizations: List<ServiceRuntimePluginCustomization>) {
+    fun render(
+        writer: RustWriter,
+        customizations: List<ServiceRuntimePluginCustomization>,
+    ) {
+        val additionalConfig = writable {
+            writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_service_config"))
+        }
         writer.rustTemplate(
             """
+            ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
-                handle: std::sync::Arc<crate::client::Handle>,
+                config: #{Option}<#{FrozenLayer}>,
             }
 
             impl ServiceRuntimePlugin {
-                pub fn new(handle: std::sync::Arc<crate::client::Handle>) -> Self {
-                    Self { handle }
+                pub fn new(_service_config: crate::config::Config) -> Self {
+                    Self {
+                        config: {
+                            #{config}
+                        },
+                    }
                 }
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, cfg: &mut #{ConfigBag}, _interceptors: &mut #{Interceptors}) -> Result<(), #{BoxError}> {
-                    use #{ConfigBagAccessors};
+                fn config(&self) -> #{Option}<#{FrozenLayer}> {
+                    self.config.clone()
+                }
 
-                    // HACK: Put the handle into the config bag to work around config not being fully implemented yet
-                    cfg.put(self.handle.clone());
-
-                    let http_auth_schemes = #{HttpAuthSchemes}::builder()
-                        #{http_auth_scheme_customizations}
-                        .build();
-                    cfg.set_http_auth_schemes(http_auth_schemes);
-
-                    // Set an empty auth option resolver to be overridden by operations that need auth.
-                    cfg.set_auth_option_resolver(#{StaticAuthOptionResolver}::new(Vec::new()));
-
-                    let endpoint_resolver = #{DefaultEndpointResolver}::<#{Params}>::new(
-                        #{SharedEndpointResolver}::from(self.handle.conf.endpoint_resolver()));
-                    cfg.set_endpoint_resolver(endpoint_resolver);
-
-                    // TODO(RuntimePlugins): Wire up standard retry
-                    cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
-
-                    // TODO(RuntimePlugins): Replace this with the correct long-term solution
-                    let sleep_impl = self.handle.conf.sleep_impl();
-                    let connection: Box<dyn #{Connection}> = self.handle.conf.http_connector()
-                            .and_then(move |c| c.connector(&#{ConnectorSettings}::default(), sleep_impl))
-                            .map(|c| Box::new(#{DynConnectorAdapter}::new(c)) as _)
-                            .expect("connection set");
-                    cfg.set_connection(connection);
-
-                    #{additional_config}
-                    Ok(())
+                fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
+                    let _interceptors = interceptors;
+                    #{additional_interceptors}
                 }
             }
+
+            /// Cross-operation shared-state singletons
+            #{declare_singletons}
             """,
             *codegenScope,
-            "http_auth_scheme_customizations" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.HttpAuthScheme("cfg"))
+            "config" to writable {
+                if (additionalConfig.isNotEmpty()) {
+                    rustTemplate(
+                        """
+                        let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
+                        #{additional_config}
+                        Some(cfg.freeze())
+                        """,
+                        *codegenScope,
+                        "additional_config" to additionalConfig,
+                    )
+                } else {
+                    rust("None")
+                }
             },
-            "additional_config" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_interceptors"))
+            "additional_interceptors" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("_interceptors"))
+            },
+            "declare_singletons" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.DeclareSingletons())
             },
         )
     }

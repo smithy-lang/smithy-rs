@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::Input;
-use aws_smithy_runtime_api::client::interceptors::Interceptors;
-use aws_smithy_runtime_api::client::orchestrator::{
-    ConfigBagAccessors, HttpRequest, RequestSerializer,
-};
-use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::orchestrator::SharedRequestSerializer;
+use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, RequestSerializer};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 use std::sync::Mutex;
 
 #[derive(Default, Debug)]
@@ -39,24 +39,22 @@ impl CannedRequestSerializer {
 }
 
 impl RequestSerializer for CannedRequestSerializer {
-    fn serialize_input(&self, _input: Input) -> Result<HttpRequest, BoxError> {
-        let req = self
-            .take()
-            .ok_or("CannedRequestSerializer's inner value has already been taken.")?;
-        req
+    fn serialize_input(
+        &self,
+        _input: Input,
+        _cfg: &mut ConfigBag,
+    ) -> Result<HttpRequest, BoxError> {
+        self.take()
+            .ok_or("CannedRequestSerializer's inner value has already been taken.")?
     }
 }
 
 impl RuntimePlugin for CannedRequestSerializer {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        _interceptors: &mut Interceptors,
-    ) -> Result<(), BoxError> {
-        cfg.set_request_serializer(Self {
+    fn config(&self) -> Option<FrozenLayer> {
+        let mut cfg = Layer::new("CannedRequest");
+        cfg.set_request_serializer(SharedRequestSerializer::new(Self {
             inner: Mutex::new(self.take()),
-        });
-
-        Ok(())
+        }));
+        Some(cfg.freeze())
     }
 }

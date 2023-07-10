@@ -6,6 +6,7 @@
 //! Provides an [`AsyncSleep`] trait that returns a future that sleeps for a given duration,
 //! and implementations of `AsyncSleep` for different async runtimes.
 
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::pin::Pin;
@@ -39,20 +40,54 @@ where
     }
 }
 
+/// Wrapper type for sharable `AsyncSleep`
+#[derive(Clone, Debug)]
+pub struct SharedAsyncSleep(Arc<dyn AsyncSleep>);
+
+impl SharedAsyncSleep {
+    /// Create a new `SharedAsyncSleep` from `AsyncSleep`
+    pub fn new(sleep: impl AsyncSleep + 'static) -> Self {
+        Self(Arc::new(sleep))
+    }
+}
+
+impl AsRef<dyn AsyncSleep> for SharedAsyncSleep {
+    fn as_ref(&self) -> &(dyn AsyncSleep + 'static) {
+        self.0.as_ref()
+    }
+}
+
+impl From<Arc<dyn AsyncSleep>> for SharedAsyncSleep {
+    fn from(sleep: Arc<dyn AsyncSleep>) -> Self {
+        SharedAsyncSleep(sleep)
+    }
+}
+
+impl AsyncSleep for SharedAsyncSleep {
+    fn sleep(&self, duration: Duration) -> Sleep {
+        self.0.sleep(duration)
+    }
+}
+
+impl Storable for SharedAsyncSleep {
+    type Storer = StoreReplace<SharedAsyncSleep>;
+}
+
 #[cfg(feature = "rt-tokio")]
 /// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
-    Some(sleep_tokio())
+pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
+    Some(SharedAsyncSleep::from(sleep_tokio()))
 }
 
 #[cfg(not(feature = "rt-tokio"))]
 /// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
+pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
     None
 }
 
 /// Future returned by [`AsyncSleep`].
 #[non_exhaustive]
+#[must_use]
 pub struct Sleep(Pin<Box<dyn Future<Output = ()> + Send + 'static>>);
 
 impl Debug for Sleep {

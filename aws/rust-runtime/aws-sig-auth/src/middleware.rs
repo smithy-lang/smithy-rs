@@ -5,7 +5,6 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::time::SystemTime;
 
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
@@ -13,6 +12,7 @@ use aws_smithy_http::property_bag::PropertyBag;
 
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::SignableBody;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 
@@ -20,8 +20,15 @@ use crate::signer::{
     OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
 };
 
+#[cfg(feature = "sign-eventstream")]
+use crate::event_stream::SigV4MessageSigner as EventStreamSigV4Signer;
+#[cfg(feature = "sign-eventstream")]
+use aws_smithy_eventstream::frame::DeferredSignerSender;
+
+// TODO(enableNewSmithyRuntimeCleanup): Delete `Signature` when switching to the orchestrator
 /// Container for the request signature for use in the property bag.
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub struct Signature(String);
 
 impl Signature {
@@ -47,11 +54,8 @@ impl AsRef<str> for Signature {
 /// - [`Credentials`](Credentials): Credentials to sign with
 /// - [`OperationSigningConfig`](OperationSigningConfig): Operation specific signing configuration, e.g.
 ///   changes to URL encoding behavior, or headers that must be omitted.
+/// - [`SharedTimeSource`]: The time source to use when signing the request.
 /// If any of these fields are missing, the middleware will return an error.
-///
-/// The following fields MAY be present in the property bag:
-/// - [`SystemTime`](SystemTime): The timestamp to use when signing the request. If this field is not present
-///   [`SystemTime::now`](SystemTime::now) will be used.
 #[derive(Clone, Debug)]
 pub struct SigV4SigningStage {
     signer: SigV4Signer,
@@ -145,9 +149,10 @@ fn signing_config(
     let payload_override = config.get::<SignableBody<'static>>();
     let request_config = RequestConfig {
         request_ts: config
-            .get::<SystemTime>()
-            .copied()
-            .unwrap_or_else(SystemTime::now),
+            .get::<SharedTimeSource>()
+            .map(|t| t.now())
+            // TODO(enableNewSmithyRuntimeLaunch): Remove this fallback
+            .unwrap_or_else(|| SharedTimeSource::default().now()),
         region,
         payload_override,
         service: signing_service,
@@ -181,6 +186,22 @@ impl MapRequest for SigV4SigningStage {
                 .signer
                 .sign(operation_config, &request_config, &creds, &mut req)
                 .map_err(SigningStageErrorKind::SigningFailure)?;
+
+            // If this is an event stream operation, set up the event stream signer
+            #[cfg(feature = "sign-eventstream")]
+            if let Some(signer_sender) = config.get::<DeferredSignerSender>() {
+                let time_override = config.get::<SharedTimeSource>().map(|ts| ts.now());
+                signer_sender
+                    .send(Box::new(EventStreamSigV4Signer::new(
+                        signature.as_ref().into(),
+                        creds,
+                        request_config.region.clone(),
+                        request_config.service.clone(),
+                        time_override,
+                    )) as _)
+                    .expect("failed to send deferred signer");
+            }
+
             config.insert(signature);
             Ok(req)
         })
@@ -199,6 +220,7 @@ mod test {
 
     use aws_credential_types::Credentials;
     use aws_endpoint::AwsAuthStage;
+    use aws_smithy_async::time::SharedTimeSource;
     use aws_types::region::{Region, SigningRegion};
     use aws_types::SigningService;
 
@@ -234,6 +256,50 @@ mod test {
         assert!(signature.is_some());
     }
 
+    #[cfg(feature = "sign-eventstream")]
+    #[test]
+    fn sends_event_stream_signer_for_event_stream_operations() {
+        use crate::event_stream::SigV4MessageSigner as EventStreamSigV4Signer;
+        use aws_smithy_eventstream::frame::{DeferredSigner, SignMessage};
+
+        let (mut deferred_signer, deferred_signer_sender) = DeferredSigner::new();
+        let req = http::Request::builder()
+            .uri("https://test-service.test-region.amazonaws.com/")
+            .body(SdkBody::from(""))
+            .unwrap();
+        let region = Region::new("us-east-1");
+        let req = operation::Request::new(req)
+            .augment(|req, properties| {
+                properties.insert(region.clone());
+                properties.insert::<SharedTimeSource>(SharedTimeSource::new(
+                    UNIX_EPOCH + Duration::new(1611160427, 0),
+                ));
+                properties.insert(SigningService::from_static("kinesis"));
+                properties.insert(OperationSigningConfig::default_config());
+                properties.insert(Credentials::for_tests());
+                properties.insert(SigningRegion::from(region.clone()));
+                properties.insert(deferred_signer_sender);
+                Result::<_, Infallible>::Ok(req)
+            })
+            .expect("succeeds");
+
+        let signer = SigV4SigningStage::new(SigV4Signer::new());
+        let _ = signer.apply(req).unwrap();
+
+        let mut signer_for_comparison = EventStreamSigV4Signer::new(
+            // This is the expected SigV4 signature for the HTTP request above
+            "abac477b4afabf5651079e7b9a0aa6a1a3e356a7418a81d974cdae9d4c8e5441".into(),
+            Credentials::for_tests(),
+            SigningRegion::from(region),
+            SigningService::from_static("kinesis"),
+            Some(UNIX_EPOCH + Duration::new(1611160427, 0)),
+        );
+
+        let expected_signed_empty = signer_for_comparison.sign_empty().unwrap().unwrap();
+        let actual_signed_empty = deferred_signer.sign_empty().unwrap().unwrap();
+        assert_eq!(expected_signed_empty, actual_signed_empty);
+    }
+
     // check that the endpoint middleware followed by signing middleware produce the expected result
     #[test]
     fn endpoint_plus_signer() {
@@ -249,7 +315,9 @@ mod test {
         let req = operation::Request::new(req)
             .augment(|req, conf| {
                 conf.insert(region.clone());
-                conf.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
+                conf.insert(SharedTimeSource::new(
+                    UNIX_EPOCH + Duration::new(1611160427, 0),
+                ));
                 conf.insert(SigningService::from_static("kinesis"));
                 conf.insert(endpoint);
                 Result::<_, Infallible>::Ok(req)
