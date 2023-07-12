@@ -465,6 +465,7 @@ class ServiceConfigGenerator(
                         // will soon be part of a `FrozenLayer` owned by the service config. So we will convert the
                         // current `CloneableLayer` into a `Layer` that does not impose the `Clone` requirement.
                         let mut layer = #{Layer}::from(self.config).with_name("$moduleUseName::config::Config");
+                        ##[allow(unused)]
                         let mut resolver = #{Resolver}::initial(&mut layer, &mut self.runtime_components);
                         """,
                         *codegenScope,

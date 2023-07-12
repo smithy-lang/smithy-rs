@@ -79,8 +79,8 @@ internal class CredentialCacheConfigTest {
                             crate::config::Config::builder().credentials_provider(#{Credentials}::for_tests());
                         let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                            client_config.config().unwrap(),
-                            &client_config.runtime_components(),
+                            client_config.config,
+                            &client_config.runtime_components,
                         );
 
                         // this should cause `panic!`
@@ -103,8 +103,8 @@ internal class CredentialCacheConfigTest {
                             .credentials_cache(#{CredentialsCache}::no_caching());
                         let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                            client_config.config().unwrap(),
-                            &client_config.runtime_components(),
+                            client_config.config,
+                            &client_config.runtime_components,
                         );
 
                         // this should cause `panic!`
@@ -123,7 +123,7 @@ internal class CredentialCacheConfigTest {
                         let client_config = crate::config::Config::builder()
                             .credentials_provider(#{Credentials}::for_tests())
                             .build();
-                        let client_config_layer = client_config.config().unwrap();
+                        let client_config_layer = client_config.config;
 
                         // make sure test credentials are set in the client config level
                         assert_eq!(#{Credentials}::for_tests(),
@@ -148,7 +148,7 @@ internal class CredentialCacheConfigTest {
                         let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
                             client_config_layer,
-                            &client_config.runtime_components(),
+                            &client_config.runtime_components,
                         );
                         let sut_layer = sut.config().unwrap();
 
@@ -175,8 +175,8 @@ internal class CredentialCacheConfigTest {
                         let config_override = crate::config::Config::builder();
                         let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                            client_config.config().unwrap(),
-                            &client_config.runtime_components(),
+                            client_config.config,
+                            &client_config.runtime_components,
                         );
                         let sut_layer = sut.config().unwrap();
                         assert!(sut_layer

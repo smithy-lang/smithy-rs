@@ -65,8 +65,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                             crate::config::Config::builder().endpoint_resolver(expected_url);
                         let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                            client_config.config().unwrap(),
-                            &client_config.runtime_components(),
+                            client_config.config,
+                            &client_config.runtime_components,
                         );
                         let sut_components = sut.runtime_components();
                         let endpoint_resolver = sut_components.endpoint_resolver().unwrap();
@@ -211,7 +211,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         layer.store_put(#{RequestAttempts}::new(1));
 
                         let mut cfg = #{ConfigBag}::of_layers(vec![layer]);
-                        let client_config_layer = client_config.config().unwrap();
+                        let client_config_layer = client_config.config;
                         cfg.push_shared_layer(client_config_layer.clone());
 
                         let retry_classifiers_component = #{RuntimeComponentsBuilder}::new("retry_classifier")
@@ -221,7 +221,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
-                            .merge_from(&client_config.runtime_components())
+                            .merge_from(&client_config.runtime_components)
                             .merge_from(&retry_classifiers_component)
                             .build()
                             .unwrap();
@@ -240,16 +240,16 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override_builder,
                             client_config_layer,
-                            &client_config.runtime_components(),
+                            &client_config.runtime_components,
                         );
                         let sut_layer = sut.config().unwrap();
                         cfg.push_shared_layer(sut_layer);
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
-                            .merge_from(&client_config.runtime_components())
+                            .merge_from(&client_config.runtime_components)
                             .merge_from(&retry_classifiers_component)
-                            .merge_from(&config_override.runtime_components())
+                            .merge_from(&config_override.runtime_components)
                             .build()
                             .unwrap();
 
