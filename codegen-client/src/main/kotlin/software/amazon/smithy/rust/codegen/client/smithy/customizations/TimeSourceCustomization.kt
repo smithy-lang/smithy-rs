@@ -51,7 +51,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                                 *codegenScope,
                             )
                         } else {
-                            rust("self.time_source.clone()")
+                            rustTemplate("#{Some}(self.time_source.clone())", *codegenScope)
                         }
                     }
                 }
