@@ -4,7 +4,7 @@
  */
 
 use crate::client::interceptors::context::InterceptorContext;
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
 use std::time::Duration;
 use tracing::trace;
@@ -74,10 +74,6 @@ impl RetryStrategy for SharedRetryStrategy {
     }
 }
 
-impl Storable for SharedRetryStrategy {
-    type Storer = StoreReplace<Self>;
-}
-
 #[non_exhaustive]
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum RetryReason {
@@ -116,10 +112,6 @@ impl RetryClassifiers {
 
     // TODO(https://github.com/awslabs/smithy-rs/issues/2632) make a map function so users can front-run or second-guess the classifier's decision
     // pub fn map_classifiers(mut self, fun: Fn() -> RetryClassifiers)
-}
-
-impl Storable for RetryClassifiers {
-    type Storer = StoreReplace<Self>;
 }
 
 impl ClassifyRetry for RetryClassifiers {

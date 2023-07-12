@@ -129,10 +129,6 @@ impl EndpointResolver for SharedEndpointResolver {
     }
 }
 
-impl Storable for SharedEndpointResolver {
-    type Storer = StoreReplace<Self>;
-}
-
 /// Informs the orchestrator on whether or not the request body needs to be loaded into memory before transmit.
 ///
 /// This enum gets placed into the `ConfigBag` to change the orchestrator behavior.

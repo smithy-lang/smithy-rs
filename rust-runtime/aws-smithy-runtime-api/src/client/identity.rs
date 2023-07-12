@@ -5,7 +5,7 @@
 
 use crate::client::auth::AuthSchemeId;
 use crate::client::orchestrator::Future;
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend};
+use aws_smithy_types::config_bag::ConfigBag;
 use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;
@@ -65,10 +65,6 @@ impl ConfiguredIdentityResolver {
     pub(crate) fn identity_resolver(&self) -> SharedIdentityResolver {
         self.identity_resolver.clone()
     }
-}
-
-impl Storable for ConfiguredIdentityResolver {
-    type Storer = StoreAppend<Self>;
 }
 
 #[derive(Clone)]

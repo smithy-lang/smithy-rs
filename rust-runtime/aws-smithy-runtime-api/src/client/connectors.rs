@@ -4,7 +4,6 @@
  */
 
 use crate::client::orchestrator::{BoxFuture, HttpRequest, HttpResponse};
-use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt;
 use std::sync::Arc;
 
@@ -25,8 +24,4 @@ impl Connector for SharedConnector {
     fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
         (*self.0).call(request)
     }
-}
-
-impl Storable for SharedConnector {
-    type Storer = StoreReplace<Self>;
 }

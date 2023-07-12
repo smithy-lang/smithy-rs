@@ -12,7 +12,7 @@ use crate::client::interceptors::context::{
     FinalizerInterceptorContextRef, InterceptorContext,
 };
 use crate::client::runtime_components::RuntimeComponents;
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::error::display::DisplayErrorContext;
 use context::{Error, Input, Output};
 use std::fmt;
@@ -630,18 +630,6 @@ impl SharedInterceptor {
     }
 }
 
-/// A interceptor wrapper to conditionally enable the interceptor based on [`DisableInterceptor`]
-struct ConditionallyEnabledInterceptor(SharedInterceptor);
-impl ConditionallyEnabledInterceptor {
-    fn if_enabled(&self, cfg: &ConfigBag) -> Option<&dyn Interceptor> {
-        if self.0.enabled(cfg) {
-            Some(self.0.as_ref())
-        } else {
-            None
-        }
-    }
-}
-
 impl AsRef<dyn Interceptor> for SharedInterceptor {
     fn as_ref(&self) -> &(dyn Interceptor + 'static) {
         self.interceptor.as_ref()
@@ -655,8 +643,16 @@ impl Deref for SharedInterceptor {
     }
 }
 
-impl Storable for SharedInterceptor {
-    type Storer = StoreAppend<SharedInterceptor>;
+/// A interceptor wrapper to conditionally enable the interceptor based on [`DisableInterceptor`]
+struct ConditionallyEnabledInterceptor(SharedInterceptor);
+impl ConditionallyEnabledInterceptor {
+    fn if_enabled(&self, cfg: &ConfigBag) -> Option<&dyn Interceptor> {
+        if self.0.enabled(cfg) {
+            Some(self.0.as_ref())
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug)]
