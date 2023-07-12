@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 
 /**
  * End-to-end test of endpoint resolvers, attaching a real resolver to a fully generated service
@@ -162,7 +162,7 @@ class EndpointsDecoratorTest {
             }
         }
         // the model has an intentionally failing test—ensure it fails
-        val failure = shouldThrow<CommandFailed> { "cargo test".runWithWarnings(testDir) }
+        val failure = shouldThrow<CommandError> { "cargo test".runWithWarnings(testDir) }
         failure.output shouldContain "endpoint::test::test_1"
         failure.output shouldContain "https://failingtest.com"
         "cargo clippy".runWithWarnings(testDir)

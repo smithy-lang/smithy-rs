@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 internal class ExecKtTest {
     @Test
     fun `missing command throws CommandFailed`() {
-        shouldThrow<CommandFailed> {
+        shouldThrow<CommandError> {
             "notaprogram run".runCommand()
         }
     }
