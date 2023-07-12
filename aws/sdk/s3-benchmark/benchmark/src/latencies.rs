@@ -6,7 +6,7 @@
 use std::fmt;
 use std::time;
 
-const ONE_GIGABYTE: u64 = 1024 * 1024 * 1024;
+const ONE_GIGABYTE: u64 = 1000 * 1000 * 1000;
 
 #[derive(Debug)]
 pub struct Latencies {
