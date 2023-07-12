@@ -205,8 +205,8 @@ class CustomizableOperationGenerator(
                         }
 
                         /// Adds a runtime plugin.
-                        ##[doc(hidden)]
-                        pub fn runtime_plugin(mut self, runtime_plugin: impl #{RuntimePlugin} + 'static) -> Self {
+                        ##[allow(unused)]
+                        pub(crate) fn runtime_plugin(mut self, runtime_plugin: impl #{RuntimePlugin} + 'static) -> Self {
                             self.runtime_plugins.push(#{SharedRuntimePlugin}::new(runtime_plugin));
                             self
                         }

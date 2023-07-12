@@ -100,12 +100,12 @@ impl RuntimePlugins {
 }
 
 #[derive(Default, Debug)]
-pub struct PassthroughRuntimePlugin {
+pub struct StaticRuntimePlugin {
     config: Option<FrozenLayer>,
     runtime_components: Option<RuntimeComponentsBuilder>,
 }
 
-impl PassthroughRuntimePlugin {
+impl StaticRuntimePlugin {
     pub fn new() -> Self {
         Default::default()
     }
@@ -121,7 +121,7 @@ impl PassthroughRuntimePlugin {
     }
 }
 
-impl RuntimePlugin for PassthroughRuntimePlugin {
+impl RuntimePlugin for StaticRuntimePlugin {
     fn config(&self) -> Option<FrozenLayer> {
         self.config.clone()
     }

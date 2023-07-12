@@ -25,8 +25,8 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
         "http" to CargoDependency.Http.toType(),
         "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-        "PassthroughRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::runtime_plugin::PassthroughRuntimePlugin"),
+        "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            .resolve("client::runtime_plugin::StaticRuntimePlugin"),
         "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
         "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).withFeature("test-util").toType()
             .resolve("time::SharedTimeSource"),
@@ -46,7 +46,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn request_time_for_tests(self, request_time: ::std::time::SystemTime) -> Self {
                             self.runtime_plugin(
-                                #{PassthroughRuntimePlugin}::new()
+                                #{StaticRuntimePlugin}::new()
                                     .with_runtime_components(
                                         #{RuntimeComponentsBuilder}::new("request_time_for_tests")
                                             .with_time_source(Some(#{SharedTimeSource}::new(request_time)))

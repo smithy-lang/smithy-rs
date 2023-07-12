@@ -419,15 +419,15 @@ class ServiceConfigGenerator(
                 rustTemplate(
                     """
                     /// Adds a runtime plugin to the config.
-                    ##[doc(hidden)]
-                    pub fn runtime_plugin(mut self, plugin: impl #{RuntimePlugin} + 'static) -> Self {
-                        self.runtime_plugins.push(#{SharedRuntimePlugin}::new(plugin));
+                    ##[allow(unused)]
+                    pub(crate) fn runtime_plugin(mut self, plugin: impl #{RuntimePlugin} + 'static) -> Self {
+                        self.push_runtime_plugin(#{SharedRuntimePlugin}::new(plugin));
                         self
                     }
 
                     /// Adds a runtime plugin to the config.
-                    ##[doc(hidden)]
-                    pub fn push_runtime_plugin(&mut self, plugin: #{SharedRuntimePlugin}) -> &mut Self {
+                    ##[allow(unused)]
+                    pub(crate) fn push_runtime_plugin(&mut self, plugin: #{SharedRuntimePlugin}) -> &mut Self {
                         self.runtime_plugins.push(plugin);
                         self
                     }

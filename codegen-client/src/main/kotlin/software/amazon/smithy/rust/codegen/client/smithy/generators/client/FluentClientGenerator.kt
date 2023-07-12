@@ -659,7 +659,7 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                 let mut plugins = #{RuntimePlugins}::new()
                     .with_client_plugin(
-                        #{PassthroughRuntimePlugin}::new()
+                        #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
                             .with_runtime_components(config.runtime_components.clone())
                     )
@@ -675,8 +675,8 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
             "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-            "PassthroughRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::runtime_plugin::PassthroughRuntimePlugin"),
+            "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                .resolve("client::runtime_plugin::StaticRuntimePlugin"),
         )
     }
 
