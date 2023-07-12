@@ -42,12 +42,12 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 is ServiceConfig.ConfigImpl -> {
                     rust("/// Return time source used for this service.")
                     rustBlockTemplate(
-                        "pub fn time_source(&self) -> #{SharedTimeSource}",
+                        "pub fn time_source(&self) -> #{Option}<#{SharedTimeSource}>",
                         *codegenScope,
                     ) {
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
-                                """self.config.load::<#{SharedTimeSource}>().expect("time source should be set").clone()""",
+                                """self.runtime_components.time_source()""",
                                 *codegenScope,
                             )
                         } else {
