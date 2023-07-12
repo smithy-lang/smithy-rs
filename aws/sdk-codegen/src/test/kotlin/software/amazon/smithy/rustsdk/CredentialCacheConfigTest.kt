@@ -77,10 +77,11 @@ internal class CredentialCacheConfigTest {
                         let client_config = crate::config::Config::builder().build();
                         let config_override =
                             crate::config::Config::builder().credentials_provider(#{Credentials}::for_tests());
-                        let sut = crate::config::ConfigOverrideRuntimePlugin {
-                            client_config: client_config.config().unwrap(),
+                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                        };
+                            client_config.config,
+                            &client_config.runtime_components,
+                        );
 
                         // this should cause `panic!`
                         let _ = sut.config().unwrap();
@@ -100,10 +101,11 @@ internal class CredentialCacheConfigTest {
                         let client_config = crate::config::Config::builder().build();
                         let config_override = crate::config::Config::builder()
                             .credentials_cache(#{CredentialsCache}::no_caching());
-                        let sut = crate::config::ConfigOverrideRuntimePlugin {
-                            client_config: client_config.config().unwrap(),
+                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                        };
+                            client_config.config,
+                            &client_config.runtime_components,
+                        );
 
                         // this should cause `panic!`
                         let _ = sut.config().unwrap();
@@ -121,7 +123,7 @@ internal class CredentialCacheConfigTest {
                         let client_config = crate::config::Config::builder()
                             .credentials_provider(#{Credentials}::for_tests())
                             .build();
-                        let client_config_layer = client_config.config().unwrap();
+                        let client_config_layer = client_config.config;
 
                         // make sure test credentials are set in the client config level
                         assert_eq!(#{Credentials}::for_tests(),
@@ -143,10 +145,11 @@ internal class CredentialCacheConfigTest {
                         let config_override = crate::config::Config::builder()
                             .credentials_cache(#{CredentialsCache}::lazy())
                             .credentials_provider(credentials.clone());
-                        let sut = crate::config::ConfigOverrideRuntimePlugin {
-                            client_config: client_config_layer,
+                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                        };
+                            client_config_layer,
+                            &client_config.runtime_components,
+                        );
                         let sut_layer = sut.config().unwrap();
 
                         // make sure `.provide_cached_credentials` returns credentials set through `config_override`
@@ -170,10 +173,11 @@ internal class CredentialCacheConfigTest {
 
                         let client_config = crate::config::Config::builder().build();
                         let config_override = crate::config::Config::builder();
-                        let sut = crate::config::ConfigOverrideRuntimePlugin {
-                            client_config: client_config.config().unwrap(),
+                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                        };
+                            client_config.config,
+                            &client_config.runtime_components,
+                        );
                         let sut_layer = sut.config().unwrap();
                         assert!(sut_layer
                             .load::<#{SharedCredentialsCache}>()

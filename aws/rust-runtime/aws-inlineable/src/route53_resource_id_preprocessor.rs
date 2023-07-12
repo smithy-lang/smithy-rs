@@ -8,6 +8,7 @@
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt;
 use std::marker::PhantomData;
@@ -74,6 +75,7 @@ where
     fn modify_before_serialization(
         &self,
         context: &mut BeforeSerializationInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let input: &mut T = context.input_mut().downcast_mut().expect("correct type");

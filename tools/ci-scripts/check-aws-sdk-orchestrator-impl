@@ -31,6 +31,7 @@ services_that_pass_tests=(\
     "polly"\
     "qldbsession"\
     "route53"\
+    "s3"\
     "s3control"\
     "sso"\
     "sts"\

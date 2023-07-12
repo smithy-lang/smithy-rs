@@ -34,17 +34,19 @@ class OperationRuntimePluginGenerator(
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
+            *preludeScope,
             "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "ConfigBagAccessors" to RuntimeType.configBagAccessors(codegenContext.runtimeConfig),
-            "DynAuthOptionResolver" to runtimeApi.resolve("client::auth::DynAuthOptionResolver"),
+            "Cow" to RuntimeType.Cow,
+            "SharedAuthOptionResolver" to runtimeApi.resolve("client::auth::SharedAuthOptionResolver"),
             "DynResponseDeserializer" to runtimeApi.resolve("client::orchestrator::DynResponseDeserializer"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
-            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+            "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+            "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
             "SharedRequestSerializer" to runtimeApi.resolve("client::orchestrator::SharedRequestSerializer"),
             "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
             "StaticAuthOptionResolverParams" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolverParams"),
@@ -68,22 +70,25 @@ class OperationRuntimePluginGenerator(
                     cfg.set_request_serializer(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
                     cfg.set_response_deserializer(#{DynResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
 
-                    // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
-                    let retry_classifiers = #{RetryClassifiers}::new()
-                        #{retry_classifier_customizations};
-                    cfg.set_retry_classifiers(retry_classifiers);
-
                     ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
                     cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{StaticAuthOptionResolverParams}::new()));
 
-                    #{auth_options}
                     #{additional_config}
 
                     Some(cfg.freeze())
                 }
 
-                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
-                    #{interceptors}
+                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                    // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
+                    let retry_classifiers = #{RetryClassifiers}::new()
+                        #{retry_classifier_customizations};
+
+                    #{Cow}::Owned(
+                        #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
+                            .with_retry_classifiers(Some(retry_classifiers))
+                            #{auth_options}
+                            #{interceptors}
+                    )
                 }
             }
 
@@ -117,7 +122,7 @@ class OperationRuntimePluginGenerator(
             "interceptors" to writable {
                 writeCustomizations(
                     customizations,
-                    OperationSection.AdditionalInterceptors(customizations, "_interceptors", operationShape),
+                    OperationSection.AdditionalInterceptors(customizations, operationShape),
                 )
             },
         )
@@ -135,8 +140,12 @@ class OperationRuntimePluginGenerator(
                 option.schemeShapeId to option
             }
             withBlockTemplate(
-                "cfg.set_auth_option_resolver(#{DynAuthOptionResolver}::new(#{StaticAuthOptionResolver}::new(vec![",
-                "])));",
+                """
+                .with_auth_option_resolver(#{Some}(
+                    #{SharedAuthOptionResolver}::new(
+                        #{StaticAuthOptionResolver}::new(vec![
+                """,
+                "]))))",
                 *codegenScope,
             ) {
                 var noSupportedAuthSchemes = true

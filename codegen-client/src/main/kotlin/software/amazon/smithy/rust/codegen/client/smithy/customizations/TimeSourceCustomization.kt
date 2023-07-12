@@ -42,16 +42,16 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 is ServiceConfig.ConfigImpl -> {
                     rust("/// Return time source used for this service.")
                     rustBlockTemplate(
-                        "pub fn time_source(&self) -> #{SharedTimeSource}",
+                        "pub fn time_source(&self) -> #{Option}<#{SharedTimeSource}>",
                         *codegenScope,
                     ) {
                         if (runtimeMode.defaultToOrchestrator) {
                             rustTemplate(
-                                """self.inner.load::<#{SharedTimeSource}>().expect("time source should be set").clone()""",
+                                """self.runtime_components.time_source()""",
                                 *codegenScope,
                             )
                         } else {
-                            rust("self.time_source.clone()")
+                            rustTemplate("#{Some}(self.time_source.clone())", *codegenScope)
                         }
                     }
                 }
@@ -88,7 +88,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                                 &mut self,
                                 time_source: #{Option}<#{SharedTimeSource}>,
                             ) -> &mut Self {
-                                self.inner.store_or_unset(time_source);
+                                self.runtime_components.set_time_source(time_source);
                                 self
                             }
                             """,
@@ -114,7 +114,11 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 ServiceConfig.BuilderBuild -> {
                     if (runtimeMode.defaultToOrchestrator) {
                         rustTemplate(
-                            "layer.store_put(layer.load::<#{SharedTimeSource}>().cloned().unwrap_or_default());",
+                            """
+                            if self.runtime_components.time_source().is_none() {
+                                self.runtime_components.set_time_source(#{Default}::default());
+                            }
+                            """,
                             *codegenScope,
                         )
                     } else {

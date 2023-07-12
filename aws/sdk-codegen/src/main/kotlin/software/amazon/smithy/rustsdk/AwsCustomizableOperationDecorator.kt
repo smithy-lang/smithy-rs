@@ -25,6 +25,9 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
         "http" to CargoDependency.Http.toType(),
         "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
+        "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            .resolve("client::runtime_plugin::StaticRuntimePlugin"),
+        "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
         "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).withFeature("test-util").toType()
             .resolve("time::SharedTimeSource"),
         "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -41,13 +44,14 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         """
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
-                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            use #{ConfigBagAccessors};
-                            let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
-                                cfg.interceptor_state().set_request_time(#{SharedTimeSource}::new(request_time));
-                            });
-                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
-                            self
+                        pub fn request_time_for_tests(self, request_time: ::std::time::SystemTime) -> Self {
+                            self.runtime_plugin(
+                                #{StaticRuntimePlugin}::new()
+                                    .with_runtime_components(
+                                        #{RuntimeComponentsBuilder}::new("request_time_for_tests")
+                                            .with_time_source(Some(#{SharedTimeSource}::new(request_time)))
+                                    )
+                            )
                         }
 
                         ##[doc(hidden)]

@@ -106,7 +106,7 @@ internal class ServiceConfigGeneratorTest {
                                 """
                                 ##[allow(missing_docs)]
                                 pub fn config_field(&self) -> u64 {
-                                    self.inner.load::<#{T}>().map(|u| u.0).unwrap()
+                                    self.config.load::<#{T}>().map(|u| u.0).unwrap()
                                 }
                                 """,
                                 "T" to configParamNewtype(
@@ -137,7 +137,7 @@ internal class ServiceConfigGeneratorTest {
                                 """
                                 ##[allow(missing_docs)]
                                 pub fn config_field(mut self, config_field: u64) -> Self {
-                                    self.inner.store_put(#{T}(config_field));
+                                    self.config.store_put(#{T}(config_field));
                                     self
                                 }
                                 """,

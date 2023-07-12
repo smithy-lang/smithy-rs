@@ -114,6 +114,8 @@ project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
 
+tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
+
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 

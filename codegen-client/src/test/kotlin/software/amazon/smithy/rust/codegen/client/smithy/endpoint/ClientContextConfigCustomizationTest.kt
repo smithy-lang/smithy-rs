@@ -47,16 +47,14 @@ class ClientContextConfigCustomizationTest {
                     use #{RuntimePlugin};
                     let conf = crate::Config::builder().a_string_param("hello!").a_bool_param(true).build();
                     assert_eq!(
-                        conf.config()
-                            .unwrap()
+                        conf.config
                             .load::<crate::config::AStringParam>()
                             .map(|u| u.0.clone())
                             .unwrap(),
                         "hello!"
                     );
                     assert_eq!(
-                        conf.config()
-                            .unwrap()
+                        conf.config
                             .load::<crate::config::ABoolParam>()
                             .map(|u| u.0),
                         Some(true)
@@ -82,16 +80,14 @@ class ClientContextConfigCustomizationTest {
                     use #{RuntimePlugin};
                     let conf = crate::Config::builder().a_string_param("hello!").build();
                     assert_eq!(
-                        conf.config()
-                            .unwrap()
+                        conf.config
                             .load::<crate::config::AStringParam>()
                             .map(|u| u.0.clone())
                             .unwrap(),
                         "hello!"
                     );
                     assert_eq!(
-                        conf.config()
-                            .unwrap()
+                        conf.config
                             .load::<crate::config::ABoolParam>()
                             .map(|u| u.0),
                         None,

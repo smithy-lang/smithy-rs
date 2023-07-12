@@ -14,6 +14,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::HeaderValue;
 use std::{fmt, mem};
@@ -58,6 +59,7 @@ where
     fn read_before_serialization(
         &self,
         context: &BeforeSerializationInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let validation_enabled = (self.validation_enabled)(context.input());
@@ -72,6 +74,7 @@ where
     fn modify_before_deserialization(
         &self,
         context: &mut BeforeDeserializationInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let state = cfg

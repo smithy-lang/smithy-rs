@@ -17,7 +17,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class RecursiveShapesIntegrationTest {
@@ -61,7 +61,7 @@ class RecursiveShapesIntegrationTest {
             project
         }
         val unmodifiedProject = check(model)
-        val output = assertThrows<CommandFailed> {
+        val output = assertThrows<CommandError> {
             unmodifiedProject.compileAndTest(expectFailure = true)
         }
         // THIS IS A LOAD-BEARING shouldContain! If the compiler error changes then this will break!

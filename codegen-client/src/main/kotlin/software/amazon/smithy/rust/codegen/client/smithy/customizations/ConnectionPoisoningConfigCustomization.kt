@@ -20,7 +20,7 @@ class ConnectionPoisoningRuntimePluginCustomization(
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.RegisterInterceptor -> {
+            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 // This interceptor assumes that a compatible Connector is set. Otherwise, connection poisoning
                 // won't work and an error message will be logged.
                 section.registerInterceptor(runtimeConfig, this) {

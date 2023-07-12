@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
@@ -389,7 +389,7 @@ fun RustWriter.compileAndTest(
             println("Test sources for debugging: file://${testModule.absolutePath}")
         }
         return testOutput
-    } catch (e: CommandFailed) {
+    } catch (e: CommandError) {
         if (!expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
         }
