@@ -45,13 +45,13 @@ macro_rules! declare_method {
     (&mut $name:ident, $doc:literal, $($tt:tt)+) => {
         #[doc=$doc]
         pub fn $name(&mut self) -> output!(&mut $($tt)+) {
-            self.inner.$name().expect("wrapper type cannot be created unless this is set")
+            self.inner.$name().expect(concat!("`", stringify!($name), "` wasn't set in the underlying interceptor context. This is a bug."))
         }
     };
     (&$name:ident, $doc:literal, $($tt:tt)+) => {
         #[doc=$doc]
         pub fn $name(&self) -> output!(&$($tt)+) {
-            self.inner.$name().expect("wrapper type cannot be created unless this is set")
+            self.inner.$name().expect(concat!("`", stringify!($name), "` wasn't set in the underlying interceptor context. This is a bug."))
         }
     };
 }
@@ -84,7 +84,7 @@ macro_rules! declare_known_method {
 }
 
 macro_rules! declare_wrapper {
-    (($ref_struct_name:ident $mut_struct_name:ident)$($tt:tt)+) => {
+    (($ref_struct_name:ident readonly)$($tt:tt)+) => {
         pub struct $ref_struct_name<'a, I = Input, O = Output, E = Error> {
             inner: &'a InterceptorContext<I, O, E>,
         }
@@ -99,6 +99,9 @@ macro_rules! declare_wrapper {
         impl<'a, I, O, E: Debug> $ref_struct_name<'a, I, O, E> {
             declare_ref_wrapper_methods!($($tt)+);
         }
+    };
+    (($ref_struct_name:ident $mut_struct_name:ident)$($tt:tt)+) => {
+        declare_wrapper!(($ref_struct_name readonly) $($tt)+);
 
         pub struct $mut_struct_name<'a, I = Input, O = Output, E = Error> {
             inner: &'a mut InterceptorContext<I, O, E>,
@@ -145,7 +148,6 @@ declare_wrapper!(
 
 declare_wrapper!(
     (BeforeTransmitInterceptorContextRef BeforeTransmitInterceptorContextMut)
-    (input: I)
     (request: Request)
 );
 
@@ -157,12 +159,12 @@ declare_wrapper!(
 );
 
 declare_wrapper!(
-    (AfterDeserializationInterceptorContextRef AfterDeserializationInterceptorContextMut)
+    (AfterDeserializationInterceptorContextRef readonly)
     (input: I)
     (request: Request)
     (response: Response)
-    (output_or_error: Result<O, OrchestratorError<E>>)
-);
+    (output_or_error: Result<O, OrchestratorError<E>>
+));
 
 // Why are all the rest of these defined with a macro but these last two aren't? I simply ran out of
 // time. Consider updating the macros to support these last two if you're looking for a challenge.

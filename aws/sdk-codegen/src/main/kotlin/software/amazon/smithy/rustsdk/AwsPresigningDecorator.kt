@@ -363,7 +363,7 @@ class AwsPresignedFluentBuilderMethod(
                             fn config(&self) -> Option<#{FrozenLayer}> {
                                 use #{ConfigBagAccessors};
                                 let mut cfg = #{Layer}::new("presigning_serializer");
-                                cfg.set_request_serializer(#{AlternateSerializer});
+                                cfg.set_request_serializer(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
                                 Some(cfg.freeze())
                             }
                         }
@@ -374,6 +374,8 @@ class AwsPresignedFluentBuilderMethod(
                         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
                         "Layer" to smithyTypes.resolve("config_bag::Layer"),
                         "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+                        "SharedRequestSerializer" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                            .resolve("client::orchestrator::SharedRequestSerializer"),
                     )
                 }
             },

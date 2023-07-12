@@ -248,7 +248,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             ?.let { "#{Some}(${it.dq()})" } ?: "#{None}"
                         rustTemplate(
                             """
-                            #{SmithyHttpServer}::protocols::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
+                            #{SmithyHttpServer}::protocol::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
                             """,
                             *codegenScope,
                         )
@@ -745,7 +745,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocols::content_type_header_empty_body_no_modeled_input(&parts.headers)?;
+                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(&parts.headers)?;
                     """,
                     *codegenScope,
                 )
@@ -974,7 +974,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             val (queryBindingsTargetingCollection, queryBindingsTargetingSimple) =
                 queryBindings.partition { model.expectShape(it.member.target) is CollectionShape }
             queryBindingsTargetingSimple.forEach {
-                rust("let mut seen_${symbolProvider.toMemberName(it.member)} = false;")
+                rust("let mut ${symbolProvider.toMemberName(it.member)}_seen = false;")
             }
             queryBindingsTargetingCollection.forEach {
                 rust("let mut ${symbolProvider.toMemberName(it.member)} = Vec::new();")
@@ -986,11 +986,11 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     val memberName = symbolProvider.toMemberName(it.member)
                     rustTemplate(
                         """
-                        if !seen_$memberName && k == "${it.locationName}" {
+                        if !${memberName}_seen && k == "${it.locationName}" {
                             input = input.${it.member.setterName()}(
                                 #{deserializer}(&v)?
                             );
-                            seen_$memberName = true;
+                            ${memberName}_seen = true;
                         }
                         """.trimIndent(),
                         "deserializer" to deserializer,

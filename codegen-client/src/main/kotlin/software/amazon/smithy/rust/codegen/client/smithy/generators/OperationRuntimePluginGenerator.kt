@@ -26,14 +26,16 @@ class OperationRuntimePluginGenerator(
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
-            "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "Layer" to smithyTypes.resolve("config_bag::Layer"),
-            "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
+            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "ConfigBagAccessors" to runtimeApi.resolve("client::orchestrator::ConfigBagAccessors"),
+            "DynResponseDeserializer" to runtimeApi.resolve("client::orchestrator::DynResponseDeserializer"),
+            "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+            "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+            "SharedRequestSerializer" to runtimeApi.resolve("client::orchestrator::SharedRequestSerializer"),
             "StaticAuthOptionResolverParams" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolverParams"),
         )
     }
@@ -50,8 +52,8 @@ class OperationRuntimePluginGenerator(
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
                     let mut cfg = #{Layer}::new(${operationShape.id.name.dq()});
                     use #{ConfigBagAccessors} as _;
-                    cfg.set_request_serializer(${operationStructName}RequestSerializer);
-                    cfg.set_response_deserializer(${operationStructName}ResponseDeserializer);
+                    cfg.set_request_serializer(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
+                    cfg.set_response_deserializer(#{DynResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
 
                     ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
                     cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{StaticAuthOptionResolverParams}::new()));

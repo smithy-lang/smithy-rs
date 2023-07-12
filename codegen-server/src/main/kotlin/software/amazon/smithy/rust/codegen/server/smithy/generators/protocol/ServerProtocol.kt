@@ -39,7 +39,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJso
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
 interface ServerProtocol : Protocol {
-    /** The path such that `aws_smithy_http_server::proto::$path` points to the protocol's module. */
+    /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */
     val protocolModulePath: String
 
     /** Returns the Rust marker struct enjoying `OperationShape`. */
@@ -79,17 +79,17 @@ interface ServerProtocol : Protocol {
     /** The protocol-specific `RequestRejection` type. **/
     fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
-            .toType().resolve("proto::$protocolModulePath::rejection::RequestRejection")
+            .toType().resolve("protocol::$protocolModulePath::rejection::RequestRejection")
 
     /** The protocol-specific `ResponseRejection` type. **/
     fun responseRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
-            .toType().resolve("proto::$protocolModulePath::rejection::ResponseRejection")
+            .toType().resolve("protocol::$protocolModulePath::rejection::ResponseRejection")
 
     /** The protocol-specific `RuntimeError` type. **/
     fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
-            .toType().resolve("proto::$protocolModulePath::runtime_error::RuntimeError")
+            .toType().resolve("protocol::$protocolModulePath::runtime_error::RuntimeError")
 }
 
 fun returnSymbolToParseFn(codegenContext: ServerCodegenContext): (Shape) -> ReturnSymbolToParse {
@@ -145,7 +145,7 @@ class ServerAwsJsonProtocol(
     }
 
     override fun routerType() = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("proto::aws_json::router::AwsJsonRouter")
+        .resolve("protocol::aws_json::router::AwsJsonRouter")
 
     /**
      * Returns the operation name as required by the awsJson1.x protocols.
@@ -170,18 +170,18 @@ class ServerAwsJsonProtocol(
 
     override fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
-            .toType().resolve("proto::aws_json::rejection::RequestRejection")
+            .toType().resolve("protocol::aws_json::rejection::RequestRejection")
     override fun responseRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
-            .toType().resolve("proto::aws_json::rejection::ResponseRejection")
+            .toType().resolve("protocol::aws_json::rejection::ResponseRejection")
     override fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
-            .toType().resolve("proto::aws_json::runtime_error::RuntimeError")
+            .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
 }
 
 private fun restRouterType(runtimeConfig: RuntimeConfig) =
     ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("proto::rest::router::RestRouter")
+        .resolve("protocol::rest::router::RestRouter")
 
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,

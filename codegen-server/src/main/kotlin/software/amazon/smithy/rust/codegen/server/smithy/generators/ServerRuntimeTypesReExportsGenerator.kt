@@ -50,7 +50,7 @@ class ServerRuntimeTypesReExportsGenerator(
             }
 
             pub use #{SmithyHttpServer}::instrumentation;
-            pub use #{SmithyHttpServer}::proto;
+            pub use #{SmithyHttpServer}::protocol;
 
             pub use #{SmithyHttpServer}::Extension;
             """,

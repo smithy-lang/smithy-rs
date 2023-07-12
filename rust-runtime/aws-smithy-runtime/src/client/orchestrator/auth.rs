@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{AuthSchemeEndpointConfig, AuthSchemeId};
-use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::{BoxError, ConfigBagAccessors};
+use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::Document;
@@ -79,7 +80,7 @@ pub(super) async fn orchestrate_auth(
             if let Some(identity_resolver) = auth_scheme.identity_resolver(identity_resolvers) {
                 let request_signer = auth_scheme.request_signer();
                 let endpoint = cfg
-                    .get::<Endpoint>()
+                    .load::<Endpoint>()
                     .expect("endpoint added to config bag by endpoint orchestrator");
                 let auth_scheme_endpoint_config =
                     extract_endpoint_auth_scheme_config(endpoint, scheme_id)?;
@@ -135,10 +136,11 @@ mod tests {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::auth::option_resolver::StaticAuthOptionResolver;
     use aws_smithy_runtime_api::client::auth::{
-        AuthOptionResolverParams, AuthSchemeId, HttpAuthScheme, HttpAuthSchemes, HttpRequestSigner,
+        AuthOptionResolverParams, AuthSchemeId, DynAuthOptionResolver, HttpAuthScheme,
+        HttpAuthSchemes, HttpRequestSigner,
     };
     use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
-    use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
     use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
     use aws_smithy_types::config_bag::Layer;
     use aws_smithy_types::type_erasure::TypedBox;
@@ -203,7 +205,9 @@ mod tests {
 
         let mut layer = Layer::new("test");
         layer.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
-        layer.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![TEST_SCHEME_ID]));
+        layer.set_auth_option_resolver(DynAuthOptionResolver::new(StaticAuthOptionResolver::new(
+            vec![TEST_SCHEME_ID],
+        )));
         layer.set_identity_resolvers(
             IdentityResolvers::builder()
                 .identity_resolver(TEST_SCHEME_ID, TestIdentityResolver)
@@ -214,7 +218,7 @@ mod tests {
                 .auth_scheme(TEST_SCHEME_ID, TestAuthScheme { signer: TestSigner })
                 .build(),
         );
-        layer.put(Endpoint::builder().url("dontcare").build());
+        layer.store_put(Endpoint::builder().url("dontcare").build());
 
         let mut cfg = ConfigBag::base();
         cfg.push_layer(layer);
@@ -247,17 +251,16 @@ mod tests {
 
         let mut layer = Layer::new("test");
         layer.set_auth_option_resolver_params(AuthOptionResolverParams::new("doesntmatter"));
-        layer.set_auth_option_resolver(StaticAuthOptionResolver::new(vec![
-            HTTP_BASIC_AUTH_SCHEME_ID,
-            HTTP_BEARER_AUTH_SCHEME_ID,
-        ]));
+        layer.set_auth_option_resolver(DynAuthOptionResolver::new(StaticAuthOptionResolver::new(
+            vec![HTTP_BASIC_AUTH_SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID],
+        )));
         layer.set_http_auth_schemes(
             HttpAuthSchemes::builder()
                 .auth_scheme(HTTP_BASIC_AUTH_SCHEME_ID, BasicAuthScheme::new())
                 .auth_scheme(HTTP_BEARER_AUTH_SCHEME_ID, BearerAuthScheme::new())
                 .build(),
         );
-        layer.put(Endpoint::builder().url("dontcare").build());
+        layer.store_put(Endpoint::builder().url("dontcare").build());
 
         // First, test the presence of a basic auth login and absence of a bearer token
         layer.set_identity_resolvers(

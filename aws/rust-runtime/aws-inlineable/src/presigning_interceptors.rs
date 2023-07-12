@@ -14,12 +14,15 @@ use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_sigv4::http_request::SignableBody;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::{
+    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
+};
 use aws_smithy_runtime_api::client::interceptors::{
-    disable_interceptor, BeforeSerializationInterceptorContextMut,
-    BeforeTransmitInterceptorContextMut, BoxError, Interceptor, InterceptorRegistrar,
-    SharedInterceptor,
+    disable_interceptor, Interceptor, InterceptorRegistrar, SharedInterceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
+use aws_smithy_runtime_api::client::retries::DynRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 
@@ -46,11 +49,12 @@ impl Interceptor for SigV4PresigningInterceptor {
         _context: &mut BeforeSerializationInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        cfg.interceptor_state().put::<HeaderSerializationSettings>(
-            HeaderSerializationSettings::new()
-                .omit_default_content_length()
-                .omit_default_content_type(),
-        );
+        cfg.interceptor_state()
+            .store_put::<HeaderSerializationSettings>(
+                HeaderSerializationSettings::new()
+                    .omit_default_content_length()
+                    .omit_default_content_type(),
+            );
         cfg.interceptor_state()
             .set_request_time(SharedTimeSource::new(StaticTimeSource::new(
                 self.config.start_time(),
@@ -63,12 +67,12 @@ impl Interceptor for SigV4PresigningInterceptor {
         _context: &mut BeforeTransmitInterceptorContextMut<'_>,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(mut config) = cfg.get::<SigV4OperationSigningConfig>().cloned() {
+        if let Some(mut config) = cfg.load::<SigV4OperationSigningConfig>().cloned() {
             config.signing_options.expires_in = Some(self.config.expires());
             config.signing_options.signature_type = HttpSignatureType::HttpRequestQueryParams;
             config.signing_options.payload_override = Some(self.payload_override.clone());
             cfg.interceptor_state()
-                .put::<SigV4OperationSigningConfig>(config);
+                .store_put::<SigV4OperationSigningConfig>(config);
             Ok(())
         } else {
             Err(
@@ -99,10 +103,10 @@ impl SigV4PresigningRuntimePlugin {
 impl RuntimePlugin for SigV4PresigningRuntimePlugin {
     fn config(&self) -> Option<FrozenLayer> {
         let mut layer = Layer::new("Presigning");
-        layer.set_retry_strategy(NeverRetryStrategy::new());
-        layer.put(disable_interceptor::<InvocationIdInterceptor>("presigning"));
-        layer.put(disable_interceptor::<RequestInfoInterceptor>("presigning"));
-        layer.put(disable_interceptor::<UserAgentInterceptor>("presigning"));
+        layer.set_retry_strategy(DynRetryStrategy::new(NeverRetryStrategy::new()));
+        layer.store_put(disable_interceptor::<InvocationIdInterceptor>("presigning"));
+        layer.store_put(disable_interceptor::<RequestInfoInterceptor>("presigning"));
+        layer.store_put(disable_interceptor::<UserAgentInterceptor>("presigning"));
         Some(layer.freeze())
     }
 
