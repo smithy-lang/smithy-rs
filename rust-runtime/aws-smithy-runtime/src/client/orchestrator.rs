@@ -217,7 +217,7 @@ async fn try_op(
     // Otherwise, assume we should attempt the initial request.
     let should_attempt = runtime_components
         .retry_strategy()
-        .should_attempt_initial_request(cfg);
+        .should_attempt_initial_request(runtime_components, cfg);
     match should_attempt {
         // Yes, let's make a request
         Ok(ShouldAttempt::Yes) => debug!("retry strategy has OKed initial request"),

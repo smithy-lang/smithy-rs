@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::auth::{
 use aws_smithy_runtime_api::client::identity::http::{Login, Token};
 use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use aws_smithy_runtime_api::client::runtime_components::GetIdentityResolver;
+use aws_smithy_runtime_api::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use aws_smithy_types::base64::encode;
 use aws_smithy_types::config_bag::ConfigBag;
 use http::header::HeaderName;
@@ -81,6 +81,7 @@ impl HttpRequestSigner for ApiKeySigner {
         request: &mut HttpRequest,
         identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let api_key = identity
@@ -147,6 +148,7 @@ impl HttpRequestSigner for BasicAuthSigner {
         request: &mut HttpRequest,
         identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let login = identity
@@ -205,6 +207,7 @@ impl HttpRequestSigner for BearerAuthSigner {
         request: &mut HttpRequest,
         identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let token = identity
@@ -261,6 +264,7 @@ impl HttpRequestSigner for DigestAuthSigner {
         _request: &mut HttpRequest,
         _identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         unimplemented!(
@@ -274,6 +278,7 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::identity::http::Login;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 
     #[test]
     fn test_api_key_signing_headers() {
@@ -282,6 +287,7 @@ mod tests {
             location: ApiKeyLocation::Header,
             name: "some-header-name".into(),
         };
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let config_bag = ConfigBag::base();
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder()
@@ -293,6 +299,7 @@ mod tests {
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");
@@ -310,6 +317,7 @@ mod tests {
             location: ApiKeyLocation::Query,
             name: "some-query-name".into(),
         };
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let config_bag = ConfigBag::base();
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder()
@@ -321,6 +329,7 @@ mod tests {
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");
@@ -334,6 +343,7 @@ mod tests {
     #[test]
     fn test_basic_auth() {
         let signer = BasicAuthSigner;
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let config_bag = ConfigBag::base();
         let identity = Identity::new(Login::new("Aladdin", "open sesame", None), None);
         let mut request = http::Request::builder().body(SdkBody::empty()).unwrap();
@@ -343,6 +353,7 @@ mod tests {
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");
@@ -357,6 +368,7 @@ mod tests {
         let signer = BearerAuthSigner;
 
         let config_bag = ConfigBag::base();
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder().body(SdkBody::empty()).unwrap();
         signer
@@ -364,6 +376,7 @@ mod tests {
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");

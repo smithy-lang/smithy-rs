@@ -35,7 +35,11 @@ impl FixedDelayRetryStrategy {
 }
 
 impl RetryStrategy for FixedDelayRetryStrategy {
-    fn should_attempt_initial_request(&self, _cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError> {
+    fn should_attempt_initial_request(
+        &self,
+        _runtime_components: &RuntimeComponents,
+        _cfg: &ConfigBag,
+    ) -> Result<ShouldAttempt, BoxError> {
         Ok(ShouldAttempt::Yes)
     }
 

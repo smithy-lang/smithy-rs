@@ -344,6 +344,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins")
         fun runtimePlugin(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
+        fun sharedRuntimePlugin(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::SharedRuntimePlugin")
         fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
         fun interceptor(runtimeConfig: RuntimeConfig): RuntimeType =

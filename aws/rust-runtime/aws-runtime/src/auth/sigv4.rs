@@ -12,10 +12,9 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpRequestSigner,
 };
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use aws_smithy_runtime_api::client::runtime_components::GetIdentityResolver;
+use aws_smithy_runtime_api::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::Document;
 use aws_types::region::{Region, SigningRegion};
@@ -318,11 +317,12 @@ impl HttpRequestSigner for SigV4HttpRequestSigner {
         request: &mut HttpRequest,
         identity: &Identity,
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        runtime_components: &RuntimeComponents,
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let operation_config =
             Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-        let request_time = config_bag.request_time().unwrap_or_default().now();
+        let request_time = runtime_components.time_source().unwrap_or_default().now();
 
         let credentials = if let Some(creds) = identity.data::<Credentials>() {
             creds
@@ -372,7 +372,7 @@ impl HttpRequestSigner for SigV4HttpRequestSigner {
             use event_stream::SigV4MessageSigner;
 
             if let Some(signer_sender) = config_bag.load::<DeferredSignerSender>() {
-                let time_source = config_bag.request_time().unwrap_or_default();
+                let time_source = runtime_components.time_source().unwrap_or_default();
                 signer_sender
                     .send(Box::new(SigV4MessageSigner::new(
                         _signature,

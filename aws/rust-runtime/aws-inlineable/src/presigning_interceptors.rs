@@ -15,7 +15,6 @@ use aws_sigv4::http_request::SignableBody;
 use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
 use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
@@ -60,10 +59,6 @@ impl Interceptor for SigV4PresigningInterceptor {
                     .omit_default_content_length()
                     .omit_default_content_type(),
             );
-        cfg.interceptor_state()
-            .set_request_time(SharedTimeSource::new(StaticTimeSource::new(
-                self.config.start_time(),
-            )));
         Ok(())
     }
 
@@ -97,13 +92,15 @@ pub(crate) struct SigV4PresigningRuntimePlugin {
 
 impl SigV4PresigningRuntimePlugin {
     pub(crate) fn new(config: PresigningConfig, payload_override: SignableBody<'static>) -> Self {
+        let time_source = SharedTimeSource::new(StaticTimeSource::new(config.start_time()));
         Self {
             runtime_components: RuntimeComponentsBuilder::new("SigV4PresigningRuntimePlugin")
                 .with_interceptor(SharedInterceptor::new(SigV4PresigningInterceptor::new(
                     config,
                     payload_override,
                 )))
-                .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new()))),
+                .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())))
+                .with_time_source(Some(time_source)),
         }
     }
 }

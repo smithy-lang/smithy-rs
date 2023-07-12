@@ -88,7 +88,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                                 &mut self,
                                 time_source: #{Option}<#{SharedTimeSource}>,
                             ) -> &mut Self {
-                                self.config.store_or_unset(time_source);
+                                self.runtime_components.set_time_source(time_source);
                                 self
                             }
                             """,

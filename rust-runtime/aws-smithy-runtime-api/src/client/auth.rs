@@ -6,7 +6,7 @@
 use crate::box_error::BoxError;
 use crate::client::identity::{Identity, SharedIdentityResolver};
 use crate::client::orchestrator::HttpRequest;
-use crate::client::runtime_components::GetIdentityResolver;
+use crate::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreAppend, StoreReplace};
 use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
 use aws_smithy_types::Document;
@@ -141,6 +141,7 @@ pub trait HttpRequestSigner: Send + Sync + fmt::Debug {
         request: &mut HttpRequest,
         identity: &Identity,
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        runtime_components: &RuntimeComponents,
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError>;
 }

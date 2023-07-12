@@ -30,7 +30,11 @@ impl ShouldAttempt {
 }
 
 pub trait RetryStrategy: Send + Sync + Debug {
-    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError>;
+    fn should_attempt_initial_request(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<ShouldAttempt, BoxError>;
 
     fn should_attempt_retry(
         &self,
@@ -50,8 +54,13 @@ impl SharedRetryStrategy {
 }
 
 impl RetryStrategy for SharedRetryStrategy {
-    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError> {
-        self.0.should_attempt_initial_request(cfg)
+    fn should_attempt_initial_request(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<ShouldAttempt, BoxError> {
+        self.0
+            .should_attempt_initial_request(runtime_components, cfg)
     }
 
     fn should_attempt_retry(

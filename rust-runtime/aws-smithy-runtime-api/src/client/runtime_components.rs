@@ -574,6 +574,7 @@ impl RuntimeComponentsBuilder {
         impl RetryStrategy for FakeRetryStrategy {
             fn should_attempt_initial_request(
                 &self,
+                _: &RuntimeComponents,
                 _: &ConfigBag,
             ) -> Result<crate::client::retries::ShouldAttempt, crate::box_error::BoxError>
             {

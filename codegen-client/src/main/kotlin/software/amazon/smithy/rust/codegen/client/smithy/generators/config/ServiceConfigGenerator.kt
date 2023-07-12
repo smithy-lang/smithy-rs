@@ -317,6 +317,7 @@ class ServiceConfigGenerator(
         "Resolver" to RuntimeType.smithyRuntime(codegenContext.runtimeConfig).resolve("client::config_override::Resolver"),
         "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
         "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+        "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(codegenContext.runtimeConfig),
     )
     private val moduleUseName = codegenContext.moduleUseName()
     private val runtimeMode = codegenContext.smithyRuntimeMode
@@ -334,8 +335,9 @@ class ServiceConfigGenerator(
             if (runtimeMode.defaultToOrchestrator) {
                 rustTemplate(
                     """
-                    config: #{FrozenLayer},
-                    runtime_components: #{RuntimeComponentsBuilder},
+                    pub(crate) config: #{FrozenLayer},
+                    pub(crate) runtime_components: #{RuntimeComponentsBuilder},
+                    pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
                     """,
                     *codegenScope,
                 )
@@ -380,8 +382,9 @@ class ServiceConfigGenerator(
             if (runtimeMode.defaultToOrchestrator) {
                 rustTemplate(
                     """
-                    config: #{CloneableLayer},
-                    runtime_components: #{RuntimeComponentsBuilder},
+                    pub(crate) config: #{CloneableLayer},
+                    pub(crate) runtime_components: #{RuntimeComponentsBuilder},
+                    pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
                     """,
                     *codegenScope,
                 )
@@ -410,6 +413,27 @@ class ServiceConfigGenerator(
             writer.rust("pub fn new() -> Self { Self::default() }")
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
+            }
+
+            if (runtimeMode.defaultToOrchestrator) {
+                rustTemplate(
+                    """
+                    /// Adds a runtime plugin to the config.
+                    ##[doc(hidden)]
+                    pub fn runtime_plugin(mut self, plugin: impl #{RuntimePlugin} + 'static) -> Self {
+                        self.runtime_plugins.push(#{SharedRuntimePlugin}::new(plugin));
+                        self
+                    }
+
+                    /// Adds a runtime plugin to the config.
+                    ##[doc(hidden)]
+                    pub fn push_runtime_plugin(&mut self, plugin: #{SharedRuntimePlugin}) -> &mut Self {
+                        self.runtime_plugins.push(plugin);
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
             }
 
             val testUtilOnly =
@@ -452,8 +476,13 @@ class ServiceConfigGenerator(
                         customizations.forEach {
                             it.section(ServiceConfig.BuilderBuildExtras)(this)
                         }
-                        rust("config: layer.freeze(),")
-                        rust("runtime_components: self.runtime_components,")
+                        rust(
+                            """
+                            config: layer.freeze(),
+                            runtime_components: self.runtime_components,
+                            runtime_plugins: self.runtime_plugins,
+                            """,
+                        )
                     }
                 }
             } else {
@@ -469,23 +498,5 @@ class ServiceConfigGenerator(
                 it.section(ServiceConfig.Extras)(writer)
             }
         }
-    }
-
-    fun renderRuntimePluginImplForSelf(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            impl #{RuntimePlugin} for Config {
-                fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    #{Some}(self.config.clone())
-                }
-
-                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
-                    #{Cow}::Borrowed(&self.runtime_components)
-                }
-            }
-
-            """,
-            *codegenScope,
-        )
     }
 }

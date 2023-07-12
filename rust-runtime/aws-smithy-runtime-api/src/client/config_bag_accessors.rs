@@ -8,8 +8,6 @@ use crate::client::orchestrator::{
     DynResponseDeserializer, EndpointResolverParams, LoadedRequestBody, ResponseDeserializer,
     SharedRequestSerializer, NOT_NEEDED,
 };
-use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_types::config_bag::{CloneableLayer, ConfigBag, FrozenLayer, Layer};
 
 // Place traits in a private module so that they can be used in the public API without being a part of the public API.
@@ -141,26 +139,6 @@ pub trait ConfigBagAccessors {
         Self: Settable,
     {
         self.store_put::<DynResponseDeserializer>(response_deserializer);
-    }
-
-    fn request_time(&self) -> Option<SharedTimeSource>
-    where
-        Self: Gettable,
-    {
-        self.load::<SharedTimeSource>().cloned()
-    }
-    fn set_request_time(&mut self, time_source: impl TimeSource + 'static)
-    where
-        Self: Settable,
-    {
-        self.store_put::<SharedTimeSource>(SharedTimeSource::new(time_source));
-    }
-
-    fn sleep_impl(&self) -> Option<SharedAsyncSleep>
-    where
-        Self: Gettable,
-    {
-        self.load::<SharedAsyncSleep>().cloned()
     }
 
     fn loaded_request_body(&self) -> &LoadedRequestBody

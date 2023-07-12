@@ -28,10 +28,10 @@ pub trait RuntimePlugin: Debug + Send + Sync {
 }
 
 #[derive(Debug, Clone)]
-struct SharedRuntimePlugin(Arc<dyn RuntimePlugin>);
+pub struct SharedRuntimePlugin(Arc<dyn RuntimePlugin>);
 
 impl SharedRuntimePlugin {
-    fn new(plugin: impl RuntimePlugin + 'static) -> Self {
+    pub fn new(plugin: impl RuntimePlugin + 'static) -> Self {
         Self(Arc::new(plugin))
     }
 }
@@ -96,6 +96,41 @@ impl RuntimePlugins {
             builder = builder.merge_from(&plugin.runtime_components());
         }
         Ok(builder)
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct PassthroughRuntimePlugin {
+    config: Option<FrozenLayer>,
+    runtime_components: Option<RuntimeComponentsBuilder>,
+}
+
+impl PassthroughRuntimePlugin {
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    pub fn with_config(mut self, config: FrozenLayer) -> Self {
+        self.config = Some(config);
+        self
+    }
+
+    pub fn with_runtime_components(mut self, runtime_components: RuntimeComponentsBuilder) -> Self {
+        self.runtime_components = Some(runtime_components);
+        self
+    }
+}
+
+impl RuntimePlugin for PassthroughRuntimePlugin {
+    fn config(&self) -> Option<FrozenLayer> {
+        self.config.clone()
+    }
+
+    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        self.runtime_components
+            .as_ref()
+            .map(Cow::Borrowed)
+            .unwrap_or_else(|| RuntimePlugin::runtime_components(self))
     }
 }
 

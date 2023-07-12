@@ -107,6 +107,7 @@ pub(super) async fn orchestrate_auth(
                     request,
                     &identity,
                     auth_scheme_endpoint_config,
+                    runtime_components,
                     cfg,
                 )?;
                 return Ok(());
@@ -186,6 +187,7 @@ mod tests {
                 request: &mut HttpRequest,
                 _identity: &Identity,
                 _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+                _runtime_components: &RuntimeComponents,
                 _config_bag: &ConfigBag,
             ) -> Result<(), BoxError> {
                 request

@@ -9,7 +9,6 @@ use crate::client::retries::strategy::standard::ReleaseResult::{
 };
 use crate::client::retries::token_bucket::TokenBucket;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
 use aws_smithy_runtime_api::client::retries::{
@@ -97,6 +96,7 @@ impl StandardRetryStrategy {
 
     fn calculate_backoff(
         &self,
+        runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
         retry_reason: Option<&RetryReason>,
     ) -> Result<Duration, ShouldAttempt> {
@@ -109,8 +109,12 @@ impl StandardRetryStrategy {
         match retry_reason {
             Some(RetryReason::Explicit(backoff)) => Ok(*backoff),
             Some(RetryReason::Error(kind)) => {
-                update_rate_limiter_if_exists(cfg, *kind == ErrorKind::ThrottlingError);
-                if let Some(delay) = check_rate_limiter_for_delay(cfg, *kind) {
+                update_rate_limiter_if_exists(
+                    runtime_components,
+                    cfg,
+                    *kind == ErrorKind::ThrottlingError,
+                );
+                if let Some(delay) = check_rate_limiter_for_delay(runtime_components, cfg, *kind) {
                     let delay = delay.min(self.max_backoff);
                     debug!("rate limiter has requested a {delay:?} delay before retrying");
                     Ok(delay)
@@ -139,7 +143,7 @@ impl StandardRetryStrategy {
             }
             Some(_) => unreachable!("RetryReason is non-exhaustive"),
             None => {
-                update_rate_limiter_if_exists(cfg, false);
+                update_rate_limiter_if_exists(runtime_components, cfg, false);
                 debug!(
                     attempts = request_attempts,
                     max_attempts = self.max_attempts,
@@ -170,9 +174,13 @@ impl Default for StandardRetryStrategy {
 }
 
 impl RetryStrategy for StandardRetryStrategy {
-    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError> {
+    fn should_attempt_initial_request(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<ShouldAttempt, BoxError> {
         if let Some(crl) = cfg.load::<ClientRateLimiter>() {
-            let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+            let seconds_since_unix_epoch = get_seconds_since_unix_epoch(runtime_components);
             if let Err(delay) = crl.acquire_permission_to_send_a_request(
                 seconds_since_unix_epoch,
                 RequestReason::InitialRequest,
@@ -209,7 +217,7 @@ impl RetryStrategy for StandardRetryStrategy {
                     tb.regenerate_a_token();
                 }
             }
-            update_rate_limiter_if_exists(cfg, false);
+            update_rate_limiter_if_exists(runtime_components, cfg, false);
 
             return Ok(ShouldAttempt::No);
         }
@@ -220,7 +228,7 @@ impl RetryStrategy for StandardRetryStrategy {
             .expect("at least one request attempt is made before any retry is attempted")
             .attempts();
         if request_attempts >= self.max_attempts {
-            update_rate_limiter_if_exists(cfg, false);
+            update_rate_limiter_if_exists(runtime_components, cfg, false);
 
             debug!(
                 attempts = request_attempts,
@@ -237,7 +245,7 @@ impl RetryStrategy for StandardRetryStrategy {
         let retry_reason = retry_classifiers.classify_retry(ctx);
 
         // Calculate the appropriate backoff time.
-        let backoff = match self.calculate_backoff(cfg, retry_reason.as_ref()) {
+        let backoff = match self.calculate_backoff(runtime_components, cfg, retry_reason.as_ref()) {
             Ok(value) => value,
             // In some cases, backoff calculation will decide that we shouldn't retry at all.
             Err(value) => return Ok(value),
@@ -252,23 +260,32 @@ impl RetryStrategy for StandardRetryStrategy {
     }
 }
 
-fn update_rate_limiter_if_exists(cfg: &ConfigBag, is_throttling_error: bool) {
+fn update_rate_limiter_if_exists(
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+    is_throttling_error: bool,
+) {
     if let Some(crl) = cfg.load::<ClientRateLimiter>() {
-        let seconds_since_unix_epoch = get_seconds_since_unix_epoch(cfg);
+        let seconds_since_unix_epoch = get_seconds_since_unix_epoch(runtime_components);
         crl.update_rate_limiter(seconds_since_unix_epoch, is_throttling_error);
     }
 }
 
-fn check_rate_limiter_for_delay(cfg: &ConfigBag, kind: ErrorKind) -> Option<Duration> {
+fn check_rate_limiter_for_delay(
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+    kind: ErrorKind,
+) -> Option<Duration> {
     if let Some(crl) = cfg.load::<ClientRateLimiter>() {
         let retry_reason = if kind == ErrorKind::ThrottlingError {
             RequestReason::RetryTimeout
         } else {
             RequestReason::Retry
         };
-        if let Err(delay) = crl
-            .acquire_permission_to_send_a_request(get_seconds_since_unix_epoch(cfg), retry_reason)
-        {
+        if let Err(delay) = crl.acquire_permission_to_send_a_request(
+            get_seconds_since_unix_epoch(runtime_components),
+            retry_reason,
+        ) {
             return Some(delay);
         }
     }
@@ -280,8 +297,10 @@ fn calculate_exponential_backoff(base: f64, initial_backoff: f64, retry_attempts
     base * initial_backoff * 2_u32.pow(retry_attempts) as f64
 }
 
-fn get_seconds_since_unix_epoch(cfg: &ConfigBag) -> f64 {
-    let request_time = cfg.request_time().unwrap();
+fn get_seconds_since_unix_epoch(runtime_components: &RuntimeComponents) -> f64 {
+    let request_time = runtime_components
+        .time_source()
+        .expect("time source required for retries");
     request_time
         .now()
         .duration_since(SystemTime::UNIX_EPOCH)

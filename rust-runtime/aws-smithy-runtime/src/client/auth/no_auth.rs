@@ -13,7 +13,7 @@ use aws_smithy_runtime_api::client::auth::{
 use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::{
-    GetIdentityResolver, RuntimeComponentsBuilder,
+    GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::config_bag::ConfigBag;
@@ -74,6 +74,7 @@ impl HttpRequestSigner for NoAuthSigner {
         _request: &mut HttpRequest,
         _identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         Ok(())
