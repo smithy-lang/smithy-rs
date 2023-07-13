@@ -135,7 +135,9 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            self.operation.properties_mut().insert(#{SharedTimeSource}::new(request_time));
+                            self.operation.properties_mut().insert(
+                                #{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))
+                            );
                             self
                         }
 
