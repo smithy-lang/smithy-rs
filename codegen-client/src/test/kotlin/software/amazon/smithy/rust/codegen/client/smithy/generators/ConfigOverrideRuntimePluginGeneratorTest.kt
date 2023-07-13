@@ -52,7 +52,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             )
             rustCrate.testModule {
-                addDependency(CargoDependency.Tokio.withFeature("test-util").toDevDependency())
+                addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_operation_overrides_endpoint_resolver") {
                     rustTemplate(
                         """
@@ -97,7 +97,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             )
             rustCrate.testModule {
-                addDependency(CargoDependency.Tokio.withFeature("test-util").toDevDependency())
+                addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_operation_overrides_http_connection") {
                     rustTemplate(
                         """

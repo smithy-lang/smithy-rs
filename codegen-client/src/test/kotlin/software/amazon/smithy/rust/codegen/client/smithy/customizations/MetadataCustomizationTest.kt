@@ -52,7 +52,7 @@ class MetadataCustomizationTest {
                     .resolve("client::runtime_components::RuntimeComponents"),
             )
             rustCrate.testModule {
-                addDependency(CargoDependency.Tokio.withFeature("test-util").toDevDependency())
+                addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_extract_metadata_via_customizable_operation") {
                     rustTemplate(
                         """
