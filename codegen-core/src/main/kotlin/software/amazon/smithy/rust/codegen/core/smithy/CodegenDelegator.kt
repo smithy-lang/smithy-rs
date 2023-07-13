@@ -12,6 +12,7 @@ import software.amazon.smithy.codegen.core.WriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DEV_ONLY_FEATURES
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
@@ -298,7 +299,9 @@ internal fun List<CargoDependency>.mergeIdenticalTestDependencies(): List<CargoD
     val compileDeps =
         this.filter { it.scope == DependencyScope.Compile }.toSet()
 
-    return this.filterNot {
-        it.scope == DependencyScope.Dev && compileDeps.contains(it.copy(scope = DependencyScope.Compile))
+    return this.filterNot { dep ->
+        dep.scope == DependencyScope.Dev &&
+            DEV_ONLY_FEATURES.none { devOnly -> dep.features.contains(devOnly) } &&
+            compileDeps.contains(dep.copy(scope = DependencyScope.Compile))
     }
 }
