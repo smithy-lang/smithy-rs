@@ -256,6 +256,7 @@ impl<'inp> Document<'inp> {
 
 /// A new-type wrapper around `Token` to prevent the wrapped third party type from showing up in
 /// public API
+#[derive(Debug)]
 pub struct XmlToken<'inp> {
     token: Token<'inp>,
 }
@@ -449,13 +450,19 @@ fn next_start_element<'a, 'inp>(
 /// If the current position is not a data element (and is instead a `<start-element>`) an error
 /// will be returned
 pub fn try_data<'a, 'inp>(
-    tokens: &'a mut impl Iterator<Item = Result<(Token<'inp>, Depth), XmlDecodeError>>,
+    tokens: &'a mut impl Iterator<Item = Result<(XmlToken<'inp>, Depth), XmlDecodeError>>,
 ) -> Result<Cow<'inp, str>, XmlDecodeError> {
     loop {
         match tokens.next().map(|opt| opt.map(|opt| opt.0)) {
             None => return Ok(Cow::Borrowed("")),
-            Some(Ok(Token::Text { text })) => return unescape(text.as_str()),
-            Some(Ok(e @ Token::ElementStart { .. })) => {
+            Some(Ok(XmlToken {
+                token: Token::Text { text },
+            })) => return unescape(text.as_str()),
+            Some(Ok(
+                e @ XmlToken {
+                    token: Token::ElementStart { .. },
+                },
+            )) => {
                 return Err(XmlDecodeError::custom(format!(
                     "looking for a data element, found: {:?}",
                     e
