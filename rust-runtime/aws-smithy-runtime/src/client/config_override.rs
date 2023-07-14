@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn initial_mode_config() {
-        let mut config = Layer::new("test");
+        let mut config = CloneableLayer::new("test");
         let mut components = RuntimeComponentsBuilder::new("test");
 
         let mut resolver = Resolver::initial(&mut config, &mut components);
@@ -204,7 +204,7 @@ mod tests {
     fn override_mode_config() {
         let mut initial_config = CloneableLayer::new("initial");
         let initial_components = RuntimeComponentsBuilder::new("initial");
-        let mut config = Layer::new("override");
+        let mut config = CloneableLayer::new("override");
         let mut components = RuntimeComponentsBuilder::new("override");
 
         let resolver = Resolver::overrid(
