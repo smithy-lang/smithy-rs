@@ -51,6 +51,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
             "endpoint_discovery",
             Visibility.PUBLIC,
             CargoDependency.Tokio.copy(scope = DependencyScope.Compile, features = setOf("sync")),
+            CargoDependency.smithyAsync(codegenContext.runtimeConfig).toDevDependency().withFeature("test-util"),
         )
         rustCrate.withModule(ClientRustModule.client) {
             // helper function to resolve an endpoint given a base client
