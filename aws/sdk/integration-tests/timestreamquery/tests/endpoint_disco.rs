@@ -3,19 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_sdk_timestreamquery as query;
-use aws_sdk_timestreamquery::config::Credentials;
-use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_async::test_util::controlled_time_and_sleep;
-use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-use aws_smithy_client::dvr::{MediaType, ReplayingConnection};
-use aws_types::region::Region;
-use aws_types::SdkConfig;
-use std::time::{Duration, UNIX_EPOCH};
-
+#[cfg(aws_sdk_orchestrator_mode)]
 #[tokio::test]
 async fn do_endpoint_discovery() {
+    use aws_credential_types::provider::SharedCredentialsProvider;
+    use aws_sdk_timestreamquery as query;
+    use aws_sdk_timestreamquery::config::Credentials;
+    use aws_smithy_async::rt::sleep::SharedAsyncSleep;
+    use aws_smithy_async::test_util::controlled_time_and_sleep;
+    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_client::dvr::{MediaType, ReplayingConnection};
+    use aws_types::region::Region;
+    use aws_types::SdkConfig;
+    use std::time::{Duration, UNIX_EPOCH};
+
     let _logs = aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs();
 
     let conn = ReplayingConnection::from_file("tests/traffic.json").unwrap();
