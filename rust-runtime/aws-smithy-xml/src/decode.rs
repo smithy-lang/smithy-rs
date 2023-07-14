@@ -257,9 +257,7 @@ impl<'inp> Document<'inp> {
 /// A new-type wrapper around `Token` to prevent the wrapped third party type from showing up in
 /// public API
 #[derive(Debug)]
-pub struct XmlToken<'inp> {
-    token: Token<'inp>,
-}
+pub struct XmlToken<'inp>(Token<'inp>);
 
 /// Depth tracking iterator
 ///
@@ -295,11 +293,11 @@ impl<'inp> Iterator for Document<'inp> {
                 self.depth += 1;
                 // We want the startel and endel to have the same depth, but after the opener,
                 // the parser will be at depth 1. Return the previous depth:
-                return Some(Ok((XmlToken { token: t }, self.depth - 1)));
+                return Some(Ok((XmlToken(t), self.depth - 1)));
             }
             _ => {}
         }
-        Some(Ok((XmlToken { token: tok }, self.depth)))
+        Some(Ok((XmlToken(tok), self.depth)))
     }
 }
 
@@ -370,7 +368,7 @@ impl<'inp, 'a> Iterator for ScopedDecoder<'inp, 'a> {
             other => return other,
         };
 
-        match tok.token {
+        match tok.0 {
             Token::ElementEnd { end, .. } if self.start_el.end_el(end, depth) => {
                 self.terminated = true;
                 return None;
@@ -388,26 +386,18 @@ fn next_start_element<'a, 'inp>(
     let mut out = StartEl::new("", "", 0);
     loop {
         match tokens.next()? {
-            Ok((
-                XmlToken {
-                    token: Token::ElementStart { local, prefix, .. },
-                },
-                depth,
-            )) => {
+            Ok((XmlToken(Token::ElementStart { local, prefix, .. }), depth)) => {
                 out.name.local = local.as_str();
                 out.name.prefix = prefix.as_str();
                 out.depth = depth;
             }
             Ok((
-                XmlToken {
-                    token:
-                        Token::Attribute {
-                            prefix,
-                            local,
-                            value,
-                            ..
-                        },
-                },
+                XmlToken(Token::Attribute {
+                    prefix,
+                    local,
+                    value,
+                    ..
+                }),
                 _,
             )) => out.attributes.push(Attr {
                 name: Name {
@@ -417,23 +407,17 @@ fn next_start_element<'a, 'inp>(
                 value: unescape(value.as_str()).ok()?,
             }),
             Ok((
-                XmlToken {
-                    token:
-                        Token::ElementEnd {
-                            end: ElementEnd::Open,
-                            ..
-                        },
-                },
+                XmlToken(Token::ElementEnd {
+                    end: ElementEnd::Open,
+                    ..
+                }),
                 _,
             )) => break,
             Ok((
-                XmlToken {
-                    token:
-                        Token::ElementEnd {
-                            end: ElementEnd::Empty,
-                            ..
-                        },
-                },
+                XmlToken(Token::ElementEnd {
+                    end: ElementEnd::Empty,
+                    ..
+                }),
                 _,
             )) => {
                 out.closed = true;
@@ -455,14 +439,8 @@ pub fn try_data<'a, 'inp>(
     loop {
         match tokens.next().map(|opt| opt.map(|opt| opt.0)) {
             None => return Ok(Cow::Borrowed("")),
-            Some(Ok(XmlToken {
-                token: Token::Text { text },
-            })) => return unescape(text.as_str()),
-            Some(Ok(
-                e @ XmlToken {
-                    token: Token::ElementStart { .. },
-                },
-            )) => {
+            Some(Ok(XmlToken(Token::Text { text }))) => return unescape(text.as_str()),
+            Some(Ok(e @ XmlToken(Token::ElementStart { .. }))) => {
                 return Err(XmlDecodeError::custom(format!(
                     "looking for a data element, found: {:?}",
                     e
