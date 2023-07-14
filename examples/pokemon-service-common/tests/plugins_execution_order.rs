@@ -14,7 +14,8 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, IdentityPlugin, Plugin};
 use tower::{Layer, Service};
 
-use pokemon_service_client::{operation::do_nothing::DoNothingInput, Config};
+use aws_smithy_client::test_connection::capture_request;
+use pokemon_service_client::{Client, Config};
 use pokemon_service_common::do_nothing;
 
 trait OperationExt {
@@ -43,13 +44,17 @@ async fn plugin_layers_are_executed_in_registration_order() {
     )
     .do_nothing(do_nothing)
     .build_unchecked();
-    let request = DoNothingInput::builder()
-        .build()
-        .unwrap()
-        .make_operation(&Config::builder().build())
-        .await
-        .unwrap()
-        .into_http();
+
+    let request = {
+        let (conn, rcvr) = capture_request(None);
+        let config = Config::builder()
+            .http_connector(conn)
+            .endpoint_url("http://localhost:1234")
+            .build();
+        Client::from_conf(config).do_nothing().send().await.unwrap();
+        rcvr.expect_request()
+    };
+
     app.call(request).await.unwrap();
 
     let output_guard = output.lock().unwrap();

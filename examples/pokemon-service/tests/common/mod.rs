@@ -3,16 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{process::Command, str::FromStr, time::Duration};
+use std::{process::Command, time::Duration};
 
 use assert_cmd::prelude::*;
-use aws_smithy_client::erase::{DynConnector, DynMiddleware};
-use hyper::http::uri::{Authority, Scheme};
 use tokio::time::sleep;
 
 use pokemon_service::{DEFAULT_ADDRESS, DEFAULT_PORT};
-use pokemon_service_client::{Builder, Client, Config};
-use pokemon_service_common::{rewrite_base_url, ChildDrop};
+use pokemon_service_client::{Client, Config};
+use pokemon_service_common::ChildDrop;
 
 pub async fn run_server() -> ChildDrop {
     let crate_name = std::env::var("CARGO_PKG_NAME").unwrap();
@@ -27,13 +25,9 @@ pub fn base_url() -> String {
     format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}")
 }
 
-pub fn client() -> Client<DynConnector, DynMiddleware<DynConnector>> {
-    let authority = Authority::from_str(&format!("{DEFAULT_ADDRESS}:{DEFAULT_PORT}"))
-        .expect("could not parse authority");
-    let raw_client = Builder::new()
-        .rustls_connector(Default::default())
-        .middleware_fn(rewrite_base_url(Scheme::HTTP, authority))
-        .build_dyn();
-    let config = Config::builder().build();
-    Client::with_config(raw_client, config)
+pub fn client() -> Client {
+    let config = Config::builder()
+        .endpoint_url(format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}"))
+        .build();
+    Client::from_conf(config)
 }
