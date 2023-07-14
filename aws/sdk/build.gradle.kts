@@ -61,7 +61,7 @@ val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, prop
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "middleware"
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }

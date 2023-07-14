@@ -15,7 +15,7 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "middleware"
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
 val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"

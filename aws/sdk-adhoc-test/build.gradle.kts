@@ -37,7 +37,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "middleware"
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
 val allCodegenTests = listOf(
     CodegenTest(

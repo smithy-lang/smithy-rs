@@ -133,7 +133,7 @@ data class ClientCodegenConfig(
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
-        private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Middleware
+        private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Orchestrator
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
