@@ -216,10 +216,12 @@ class AwsInputPresignedMethod(
                     """
                     // Change signature type to query params and wire up presigning config
                     let mut props = request.properties_mut();
-                    props.insert(#{SharedTimeSource}::new(presigning_config.start_time()));
+                    props.insert(#{SharedTimeSource}::new(#{StaticTimeSource}::new(presigning_config.start_time())));
                     """,
                     "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig)
                         .resolve("time::SharedTimeSource"),
+                    "StaticTimeSource" to RuntimeType.smithyAsync(runtimeConfig)
+                        .resolve("time::StaticTimeSource"),
                 )
                 withBlock("props.insert(", ");") {
                     rustTemplate(

@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -392,9 +393,10 @@ class ServiceConfigGenerator(
         }
 
         writer.docs("Builder for creating a `Config`.")
-        writer.raw("#[derive(Clone, Default)]")
-        if (runtimeMode.defaultToOrchestrator) {
-            Attribute(Attribute.derive(RuntimeType.Debug)).render(writer)
+        if (runtimeMode.defaultToMiddleware) {
+            writer.raw("#[derive(Clone, Default)]")
+        } else {
+            writer.raw("#[derive(Clone, Debug)]")
         }
         writer.rustBlock("pub struct Builder") {
             if (runtimeMode.defaultToOrchestrator) {
@@ -422,6 +424,22 @@ class ServiceConfigGenerator(
                         config.finish()
                     }
                     """,
+                )
+            }
+        } else {
+            // Custom implementation of Default to give the runtime components builder a name
+            writer.rustBlockTemplate("impl #{Default} for Builder", *codegenScope) {
+                writer.rustTemplate(
+                    """
+                    fn default() -> Self {
+                        Self {
+                            config: #{Default}::default(),
+                            runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
+                            runtime_plugins: #{Default}::default(),
+                        }
+                    }
+                    """,
+                    *codegenScope,
                 )
             }
         }

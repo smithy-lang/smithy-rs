@@ -80,14 +80,14 @@ class IntegrationTestDependencies(
     override fun section(section: LibRsSection) = when (section) {
         is LibRsSection.Body -> testDependenciesOnly {
             if (hasTests) {
-                val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
+                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                addDependency(smithyClient)
                 addDependency(smithyAsync)
+                addDependency(smithyClient)
                 addDependency(smithyTypes)
                 addDependency(CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig))
                 addDependency(SerdeJson)
