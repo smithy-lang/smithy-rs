@@ -628,3 +628,15 @@ message = "The naming `make_token` for fields and the API of `IdempotencyTokenPr
 references = ["smithy-rs#2783"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_async::future::rendezvous::Sender::send` no longer exposes `tokio::sync::mpsc::error::SendError` for the error of its return type and instead exposes a new-type wrapper called `aws_smithy_async::future::rendezvous::error::SendError`. In addition, the `aws_smithy_xml` crate no longer exposes types from `xmlparser`."
+references = ["smithy-rs#2845"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "The implementation `From<http::header::value::InvalidHeaderValue>` for `aws_http::user_agent::UserAgentStageError` has been removed."
+references = ["smithy-rs#2845"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
