@@ -640,3 +640,9 @@ message = "The implementation `From<http::header::value::InvalidHeaderValue>` fo
 references = ["smithy-rs#2845"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The implementation `From<bytes_utils::segmented::SegmentedBuf>` for `aws_smithy_http::event_stream::RawMessage` has been removed."
+references = ["smithy-rs#2848"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
