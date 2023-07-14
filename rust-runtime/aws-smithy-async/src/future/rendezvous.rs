@@ -40,15 +40,16 @@ pub fn channel<T>() -> (Sender<T>, Receiver<T>) {
 /// Errors for rendezvous channel
 pub mod error {
     use std::fmt;
+    use tokio::sync::mpsc::error::SendError as TokioSendError;
 
     /// Error when [crate::future::rendezvous::Sender] fails to send a value to the associated `Receiver`
     #[derive(Debug)]
     pub struct SendError<T> {
-        source: tokio::sync::mpsc::error::SendError<T>,
+        source: TokioSendError<T>,
     }
 
     impl<T> SendError<T> {
-        pub(crate) fn tokio_send_error(source: tokio::sync::mpsc::error::SendError<T>) -> Self {
+        pub(crate) fn tokio_send_error(source: TokioSendError<T>) -> Self {
             Self { source }
         }
     }
