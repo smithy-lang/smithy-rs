@@ -8,10 +8,9 @@ use std::io::BufReader;
 use std::process::Command;
 use std::time::Duration;
 
-use aws_smithy_client::{erase::DynConnector, hyper_ext::Adapter};
-use aws_smithy_http::operation::Request;
+use aws_smithy_client::hyper_ext::Adapter;
 use command_group::{CommandGroup, GroupChild};
-use pokemon_service_client::{Builder, Client, Config};
+use pokemon_service_client::{Client, Config};
 use tokio::time;
 
 const TEST_KEY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/testdata/localhost.key");
@@ -115,6 +114,9 @@ pub fn http2_client() -> PokemonClient {
         .build();
 
     let base_url = PokemonServiceVariant::Http2.base_url();
-    let config = Config::builder().endpoint_url(base_url).build();
+    let config = Config::builder()
+        .http_connector(Adapter::builder().build(connector))
+        .endpoint_url(base_url)
+        .build();
     Client::from_conf(config)
 }
