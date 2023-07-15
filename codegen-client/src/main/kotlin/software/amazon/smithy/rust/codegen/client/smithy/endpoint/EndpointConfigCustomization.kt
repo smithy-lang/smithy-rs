@@ -126,37 +126,43 @@ internal class EndpointConfigCustomization(
                     } else {
                         ""
                     }
+                    if (codegenContext.settings.codegenConfig.includeEndpointUrlConfig) {
+                        rustTemplate(
+                            """
+                            /// Set the endpoint URL to use when making requests.
+                            ///
+                            /// Note: setting an endpoint URL will replace any endpoint resolver that has been set.
+                            ///
+                            /// ## Panics
+                            /// Panics if an invalid URL is given.
+                            pub fn endpoint_url(mut self, endpoint_url: impl #{Into}<#{String}>) -> Self {
+                                self.set_endpoint_url(#{Some}(endpoint_url.into()));
+                                self
+                            }
+
+                            /// Set the endpoint URL to use when making requests.
+                            ///
+                            /// Note: setting an endpoint URL will replace any endpoint resolver that has been set.
+                            ///
+                            /// ## Panics
+                            /// Panics if an invalid URL is given.
+                            pub fn set_endpoint_url(&mut self, endpoint_url: #{Option}<#{String}>) -> &mut Self {
+                                ##[allow(deprecated)]
+                                self.set_endpoint_resolver(
+                                    endpoint_url.map(|url| {
+                                        #{OldSharedEndpointResolver}::new(
+                                            #{Endpoint}::immutable(url).expect("invalid endpoint URL")
+                                        )
+                                    })
+                                );
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
                     rustTemplate(
                         """
-                        /// Set the endpoint URL to use when making requests.
-                        ///
-                        /// Note: setting an endpoint URL will replace any endpoint resolver that has been set.
-                        ///
-                        /// ## Panics
-                        /// Panics if an invalid URL is given.
-                        pub fn endpoint_url(mut self, endpoint_url: impl #{Into}<#{String}>) -> Self {
-                            self.set_endpoint_url(#{Some}(endpoint_url.into()));
-                            self
-                        }
-
-                        /// Set the endpoint URL to use when making requests.
-                        ///
-                        /// Note: setting an endpoint URL will replace any endpoint resolver that has been set.
-                        ///
-                        /// ## Panics
-                        /// Panics if an invalid URL is given.
-                        pub fn set_endpoint_url(&mut self, endpoint_url: #{Option}<#{String}>) -> &mut Self {
-                            ##[allow(deprecated)]
-                            self.set_endpoint_resolver(
-                                endpoint_url.map(|url| {
-                                    #{OldSharedEndpointResolver}::new(
-                                        #{Endpoint}::immutable(url).expect("invalid endpoint URL")
-                                    )
-                                })
-                            );
-                            self
-                        }
-
                         /// Sets the endpoint resolver to use when making requests.
                         ///
                         /// Note: setting an endpoint resolver will replace any endpoint URL that has been set.

@@ -101,6 +101,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                         },
                         "codegen": {
                             "includeFluentClient": false,
+                            "includeEndpointUrlConfig": false,
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
