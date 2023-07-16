@@ -36,29 +36,30 @@ class SerdeDecorator : ClientCodegenDecorator {
 }
 
 class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
+    companion object {
+        public fun serdeInfoText() = """# How to enable `Serialize` and `Deserialize`
+            This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
+            but those traits are behind feature gate.
+    
+            As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
+            Furthermore, implementation of serde is still unstable, and implementation may change anytime in future.
+    
+            To enable traits, you must pass `aws_sdk_unstable` to RUSTFLAGS and enable `serde-serialize` or `serde-deserialize` feature.
+    
+            e.g.
+            ```bash
+            export RUSTFLAGS="--cfg aws_sdk_unstable"
+            cargo build --features serde-serialize serde-deserialize
+            ```
+    
+            If you enable `serde-serialize` and/or `serde-deserialize` without `RUSTFLAGS="--cfg aws_sdk_unstable"`,
+            compilation will fail with warning.
+        """.trimIndent()
+
+    }
     override fun section(section: LibRsSection): Writable {
         if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.ServiceDocs) {
-            return writable {
-                """
-                # How to enable `Serialize` and `Deserialize`
-                This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
-                but those traits are behind feature gate.
-
-                As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
-                Furthermore, implementation of serde is still unstable, and implementation may change anytime in future.
-
-                To enable traits, you must pass `aws_sdk_unstable` to RUSTFLAGS and enable `serde-serialize` or `serde-deserialize` feature.
-
-                e.g.
-                ```bash
-                export RUSTFLAGS="--cfg aws_sdk_unstable"
-                cargo build --features serde-serialize serde-deserialize
-                ```
-
-                If you enable `serde-serialize` and/or `serde-deserialize` without `RUSTFLAGS="--cfg aws_sdk_unstable"`,
-                compilation will fail with warning.
-                """.trimIndent()
-            }
+            return writable { serdeInfoText() }
         } else {
             return emptySection
         }
