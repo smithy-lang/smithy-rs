@@ -37,29 +37,6 @@ class SerdeDecorator : ClientCodegenDecorator {
 
 class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
-        return if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.UnstableFeature) {
-            writable {
-                """
-                ## How to enable `Serialize` and `Deserialize`
-                This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
-                but those traits are behind feature gate.
-
-                As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
-                """.trimIndent()
-            }
-        } else {
-            emptySection
-        }
-    }
-
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations + SerdeDocGenerator(codegenContext)
-}
-
-class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
-    override fun section(section: LibRsSection): Writable {
         if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.ServiceDocs) {
             return writable {
                 """
