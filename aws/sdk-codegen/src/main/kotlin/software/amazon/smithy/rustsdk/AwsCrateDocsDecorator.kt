@@ -134,6 +134,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
         val compileExample = AwsDocs.canRelyOnAwsConfig(codegenContext)
         val exampleMode = if (compileExample) "no_run" else "ignore"
+        val serdeInfoText = "##"+SerdeDocGenerator.SerdeInfoText
         template(
             asComments,
             """
@@ -170,6 +171,9 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
             See the [client documentation](https://docs.rs/$moduleName/latest/$snakeCaseModuleName/client/struct.Client.html)
             for information on what calls can be made, and the inputs and outputs for each of those calls.${"\n"}
+
+            $serdeInfoText
+
             """.trimIndent().trimStart(),
             "tokio" to CargoDependency.Tokio.toDevDependency().toType(),
             "aws_config" to when (compileExample) {
@@ -179,14 +183,10 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             "constructClient" to AwsDocs.constructClient(codegenContext, indent = "    "),
         )
 
-
-        template(asComments, SerdeDocGenerator.serdeInfoText())
-
         template(
             asComments,
             """
-            
-            
+
             """.trimIndent(),
         )
 
