@@ -488,12 +488,12 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
 
     private fun compilationGuard(featureName: String): Attribute {
         val comment = """\n
-            You must pass \"aws_sdk_unstable\" flag to RUSTFLAG.    
-            e.g.  
-            ```bash  
-            export RUSTFLAG=\"--cfg aws_sdk_unstable\"  
-            ```  
-            Learn more about this on this SDK's document.  
+            You must pass \"aws_sdk_unstable\" flag to RUSTFLAG.
+            e.g.
+            ```bash
+            export RUSTFLAG=\"--cfg aws_sdk_unstable\"
+            ```
+            Learn more about this on this SDK's document.
         """.trimIndent()
 
         return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature(featureName)), attributeWithStringAsArgument(RuntimeType.CompileGuardAttr, comment)))

@@ -258,7 +258,6 @@ fun WriterDelegator<RustWriter>.finalize(
         LibRsGenerator(settings, model, libRsCustomizations, requireDocs).render(it)
     }
     val cargoDependencies =
-
         this.dependencies.map { RustDependency.fromSymbolDependency(it) }
             .filterIsInstance<CargoDependency>().distinct()
             .mergeDependencyFeatures()
