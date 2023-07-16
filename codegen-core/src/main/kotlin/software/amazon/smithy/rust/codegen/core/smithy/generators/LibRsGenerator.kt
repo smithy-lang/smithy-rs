@@ -22,7 +22,6 @@ sealed class ModuleDocSection {
     data class ServiceDocs(val documentationTraitValue: String?) : ModuleDocSection()
     object CrateOrganization : ModuleDocSection()
     object Examples : ModuleDocSection()
-    object UnstableFeature : ModuleDocSection()
 }
 
 sealed class LibRsSection(name: String) : Section(name) {
