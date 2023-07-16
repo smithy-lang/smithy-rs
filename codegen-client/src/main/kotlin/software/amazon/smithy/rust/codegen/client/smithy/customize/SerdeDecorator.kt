@@ -29,13 +29,7 @@ class SerdeDecorator : ClientCodegenDecorator {
         rustCrate.mergeFeature(feature("serde-deserialize"))
     }
 
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations + SerdeDocGenerator(codegenContext)
-}
-
-class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
+    // I initially tried to implement with LibRsCustomization but it didn't work some how.
     companion object {
         const val SerdeInfoText = """## How to enable `Serialize` and `Deserialize`
 
@@ -58,14 +52,4 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
 
         """
     }
-    /*
-    I initially tried to implement with LibRsCustomization but it didn't work some how.
-    override fun section(section: LibRsSection): Writable {
-        return if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.UnstableFeature) {
-            writable { SerdeInfoText.trimIndent() }
-        } else {
-            emptySection
-        }
-    }
-    */
 }
