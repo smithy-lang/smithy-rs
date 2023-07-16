@@ -12,12 +12,6 @@ C_RESET='\033[0m'
 set -eu
 cd smithy-rs
 
-# TODO(enableNewSmithyRuntimeLaunch): Move these into `services_that_compile` as more progress is made
-services_that_dont_compile=(\
-    "timestreamquery",
-    "timestreamwrite",
-)
-
 services_that_pass_tests=(\
     "aws-config"\
     "config"\
@@ -31,9 +25,12 @@ services_that_pass_tests=(\
     "polly"\
     "qldbsession"\
     "route53"\
+    "s3"\
     "s3control"\
     "sso"\
     "sts"\
+    "timestreamquery"\
+    "timestreamwrite"\
     "transcribestreaming"\
 )
 

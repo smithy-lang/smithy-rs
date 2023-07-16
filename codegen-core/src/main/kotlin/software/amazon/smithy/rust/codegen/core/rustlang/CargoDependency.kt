@@ -13,11 +13,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import java.nio.file.Path
 
-sealed class DependencyScope {
-    object Dev : DependencyScope()
-    object Compile : DependencyScope()
-    object CfgUnstable : DependencyScope()
-    object Build : DependencyScope()
+enum class DependencyScope {
+    Build,
+    CfgUnstable,
+    Compile,
+    Dev,
 }
 
 sealed class DependencyLocation
@@ -136,6 +136,8 @@ fun InlineDependency.toType() = RuntimeType(module.fullyQualifiedPath(), this)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
 
+val DEV_ONLY_FEATURES = setOf("test-util")
+
 /**
  * A dependency on an internal or external Cargo Crate
  */
@@ -149,6 +151,12 @@ data class CargoDependency(
     val rustName: String = name.replace("-", "_"),
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
+
+    init {
+        if (scope != DependencyScope.Dev && DEV_ONLY_FEATURES.any { features.contains(it) }) {
+            throw IllegalArgumentException("The `test-util` feature cannot be used outside of DependencyScope.Dev")
+        }
+    }
 
     fun withFeature(feature: String): CargoDependency {
         return copy(features = features.toMutableSet().apply { add(feature) })
@@ -205,7 +213,8 @@ data class CargoDependency(
                 attribs.add("features = [${joinToString(",") { it.dq() }}]")
             }
         }
-        return "$name = { ${attribs.joinToString(",")} }"
+        attribs.add("scope = $scope")
+        return "$name = { ${attribs.joinToString(", ")} }"
     }
 
     fun toType(): RuntimeType {

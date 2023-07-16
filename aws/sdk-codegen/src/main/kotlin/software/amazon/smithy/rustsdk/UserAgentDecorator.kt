@@ -104,7 +104,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
             when (section) {
-                is ServiceRuntimePluginSection.RegisterInterceptor -> {
+                is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                     section.registerInterceptor(runtimeConfig, this) {
                         rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
                     }
@@ -182,7 +182,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                             /// This _optional_ name is used to identify the application in the user agent that
                             /// gets sent along with requests.
                             pub fn set_app_name(&mut self, app_name: #{Option}<#{AppName}>) -> &mut Self {
-                                self.inner.store_or_unset(app_name);
+                                self.config.store_or_unset(app_name);
                                 self
                             }
                             """,
@@ -228,7 +228,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                             /// This _optional_ name is used to identify the application in the user agent that
                             /// gets sent along with requests.
                             pub fn app_name(&self) -> #{Option}<&#{AppName}> {
-                               self.inner.load::<#{AppName}>()
+                               self.config.load::<#{AppName}>()
                             }
                             """,
                             *codegenScope,

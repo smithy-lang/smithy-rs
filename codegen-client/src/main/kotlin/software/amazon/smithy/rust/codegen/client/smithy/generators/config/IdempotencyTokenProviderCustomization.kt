@@ -42,7 +42,7 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
                         /// If a random token provider was configured,
                         /// a newly-randomized token provider will be returned.
                         pub fn idempotency_token_provider(&self) -> #{IdempotencyTokenProvider} {
-                            self.inner.load::<#{IdempotencyTokenProvider}>().expect("the idempotency provider should be set").clone()
+                            self.config.load::<#{IdempotencyTokenProvider}>().expect("the idempotency provider should be set").clone()
                         }
                         """,
                         *codegenScope,
@@ -85,7 +85,7 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
                         """
                         /// Sets the idempotency token provider to use for service calls that require tokens.
                         pub fn set_idempotency_token_provider(&mut self, idempotency_token_provider: #{Option}<#{IdempotencyTokenProvider}>) -> &mut Self {
-                            self.inner.store_or_unset(idempotency_token_provider);
+                            self.config.store_or_unset(idempotency_token_provider);
                             self
                         }
                         """,
@@ -108,7 +108,11 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
             ServiceConfig.BuilderBuild -> writable {
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
-                        "layer.store_put(layer.load::<#{IdempotencyTokenProvider}>().cloned().unwrap_or_else(#{default_provider}));",
+                        """
+                        if !resolver.is_set::<#{IdempotencyTokenProvider}>() {
+                            resolver.config_mut().store_put(#{default_provider}());
+                        }
+                        """,
                         *codegenScope,
                     )
                 } else {

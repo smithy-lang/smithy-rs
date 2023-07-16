@@ -206,7 +206,7 @@ private class ApiKeyConfigCustomization(codegenContext: ClientCodegenContext) : 
                         """
                         /// Returns API key used by the client, if it was provided.
                         pub fn api_key(&self) -> #{Option}<&#{ApiKey}> {
-                            self.inner.load::<#{ApiKey}>()
+                            self.config.load::<#{ApiKey}>()
                         }
                         """,
                         *codegenScope,

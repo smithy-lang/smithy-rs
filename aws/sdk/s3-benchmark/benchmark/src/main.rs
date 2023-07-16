@@ -4,9 +4,11 @@
  */
 
 use crate::latencies::Latencies;
-use crate::multipart_get::get_object_multipart;
-use crate::multipart_put::put_object_multipart;
+use crate::multipart_put::{put_object_multipart, PutObjectMultipart};
+use async_trait::async_trait;
+use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
+use aws_sdk_s3::Client;
 use clap::Parser as _;
 use s3::error::DisplayErrorContext;
 use s3::primitives::ByteStream;
@@ -14,15 +16,23 @@ use std::error::Error as StdError;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process;
+use std::process::{Command, Stdio};
 use std::time;
 
+mod get_test;
 mod latencies;
 mod multipart_get;
 mod multipart_put;
+mod put_test;
+mod verify;
 
 pub type BoxError = Box<dyn StdError + Send + Sync>;
 
 pub const BENCH_KEY: &str = "s3_bench_file";
+
+use crate::get_test::GetBenchmark;
+use crate::put_test::PutBenchmark;
+use tracing::Instrument;
 
 #[derive(Copy, Clone, Debug, clap::ValueEnum)]
 pub enum Fs {
@@ -41,7 +51,7 @@ pub enum Bench {
     GetObjectMultipart,
 }
 
-#[derive(Debug, clap::Parser)]
+#[derive(Debug, Clone, clap::Parser)]
 #[command()]
 pub struct Args {
     /// Which benchmark to run.
@@ -79,6 +89,9 @@ pub struct Args {
     /// Number of concurrent uploads/downloads to perform.
     #[arg(long, default_value_t = 4)]
     concurrency: usize,
+
+    #[arg(long, default_value_t = 1000)]
+    part_upload_timeout_millis: u64,
 }
 
 #[tokio::main]
@@ -94,13 +107,12 @@ async fn main() {
         }
         loader.load().await
     };
-    let client = s3::Client::new(&config);
 
     let result = match args.bench {
-        Bench::PutObject => benchmark_put_object(&client, &args).await,
-        Bench::GetObject => benchmark_get_object(&client, &args).await,
-        Bench::PutObjectMultipart => benchmark_put_object_multipart(&client, &args).await,
-        Bench::GetObjectMultipart => benchmark_get_object_multipart(&client, &args).await,
+        Bench::PutObject => benchmark_put_object(&config, &args).await,
+        Bench::GetObject => benchmark_get_object(&config, &args).await,
+        Bench::PutObjectMultipart => benchmark_put_object_multipart(&config, &args).await,
+        Bench::GetObjectMultipart => benchmark_get_object_multipart(&config, &args).await,
     };
     match result {
         Ok(latencies) => {
@@ -117,15 +129,31 @@ async fn main() {
 }
 
 macro_rules! benchmark {
-    ($client:ident, $args:ident, setup => $setup:expr, operation => $operation:expr) => {{
+    ($sdk_config:ident, $args:ident, setup => $setup:expr, operation => $operation:expr) => {{
+        #[allow(unused)]
+        use crate::get_test::GetBenchmark;
+        #[allow(unused)]
+        use crate::put_test::PutBenchmark;
+        println!("setting up...");
         let test_file_path = generate_test_file($args)?;
-        $setup($client, $args, &test_file_path).await?;
+        let setup_client = aws_sdk_s3::Client::new(&$sdk_config);
+        $setup(&setup_client, $args, &test_file_path).await?;
+        println!("setup complete");
 
         let mut latencies = Latencies::new($args.size_bytes);
         for i in 0..$args.iterations {
+            let span = tracing::info_span!("run operation");
+            let bench = $operation;
+            let client = bench.prepare($sdk_config).await;
             let start = time::Instant::now();
-            $operation($client, $args, &test_file_path).await?;
+            let result = bench
+                .do_bench(client, $args, &test_file_path)
+                .instrument(span)
+                .await?;
             let latency = start.elapsed();
+            if let Err(e) = bench.verify(&setup_client, $args, result).await {
+                println!("benchmark did not finish correctly: {}", e);
+            }
             latencies.push(latency);
             println!(
                 "finished iteration {i} in {} seconds",
@@ -137,38 +165,79 @@ macro_rules! benchmark {
     }};
 }
 
-async fn benchmark_put_object(client: &s3::Client, args: &Args) -> Result<Latencies, BoxError> {
-    benchmark!(client, args, setup => no_setup, operation => put_object)
+async fn benchmark_put_object(conf: &SdkConfig, args: &Args) -> Result<Latencies, BoxError> {
+    struct PutObject;
+    #[async_trait]
+    impl PutBenchmark for PutObject {
+        type Setup = Client;
+
+        async fn prepare(&self, conf: &SdkConfig) -> Self::Setup {
+            Client::new(conf)
+        }
+
+        async fn do_put(
+            &self,
+            state: Self::Setup,
+            target_key: &str,
+            local_file: &Path,
+            args: &Args,
+        ) -> Result<(), BoxError> {
+            state
+                .put_object()
+                .bucket(&args.bucket)
+                .key(target_key)
+                .body(ByteStream::from_path(local_file).await?)
+                .send()
+                .await?;
+            Ok(())
+        }
+    }
+    benchmark!(conf, args, setup => no_setup, operation => PutObject)
 }
 
-async fn benchmark_get_object(client: &s3::Client, args: &Args) -> Result<Latencies, BoxError> {
-    async fn operation(client: &s3::Client, args: &Args, path: &Path) -> Result<(), BoxError> {
-        let output = client
-            .get_object()
-            .bucket(&args.bucket)
-            .key(BENCH_KEY)
-            .send()
-            .await?;
-        let mut body = output.body.into_async_read();
-        let mut file = tokio::fs::File::create(path).await?;
-        tokio::io::copy(&mut body, &mut file).await?;
-        Ok(())
+async fn benchmark_get_object(client: &SdkConfig, args: &Args) -> Result<Latencies, BoxError> {
+    struct GetObject;
+    #[async_trait]
+    impl GetBenchmark for GetObject {
+        type Setup = Client;
+
+        async fn prepare(&self, conf: &SdkConfig) -> Self::Setup {
+            Client::new(&conf)
+        }
+
+        async fn do_get(
+            &self,
+            state: Self::Setup,
+            target_path: &Path,
+            args: &Args,
+        ) -> Result<PathBuf, BoxError> {
+            let output = state
+                .get_object()
+                .bucket(&args.bucket)
+                .key(BENCH_KEY)
+                .send()
+                .await?;
+            let mut body = output.body.into_async_read();
+            let mut file = tokio::fs::File::create(target_path).await?;
+            tokio::io::copy(&mut body, &mut file).await?;
+            Ok(target_path.to_path_buf())
+        }
     }
-    benchmark!(client, args, setup => put_object_intelligent, operation => operation)
+    benchmark!(client, args, setup => put_object_intelligent, operation => GetObject)
 }
 
 async fn benchmark_put_object_multipart(
-    client: &s3::Client,
+    conf: &SdkConfig,
     args: &Args,
 ) -> Result<Latencies, BoxError> {
-    benchmark!(client, args, setup => no_setup, operation => put_object_multipart)
+    benchmark!(conf, args, setup => no_setup, operation => PutObjectMultipart)
 }
 
 async fn benchmark_get_object_multipart(
-    client: &s3::Client,
+    config: &SdkConfig,
     args: &Args,
 ) -> Result<Latencies, BoxError> {
-    benchmark!(client, args, setup => put_object_intelligent, operation => get_object_multipart)
+    benchmark!(config, args, setup => put_object_intelligent, operation => multipart_get::GetObjectMultipart::new())
 }
 
 fn generate_test_file(args: &Args) -> Result<PathBuf, BoxError> {
@@ -183,11 +252,27 @@ fn generate_test_file(args: &Args) -> Result<PathBuf, BoxError> {
         }
     };
 
-    process::Command::new("truncate")
-        .arg("-s")
+    let mut yes_process = Command::new("yes")
+        .arg("01234567890abcdefghijklmnopqrstuvwxyz")
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    let mut head_process = Command::new("head")
+        .arg("-c")
         .arg(format!("{}", args.size_bytes))
-        .arg(&path)
-        .output()?;
+        .stdin(yes_process.stdout.take().unwrap())
+        .stdout(Stdio::piped())
+        .spawn()?;
+
+    let mut file = std::fs::File::create(&path)?;
+    head_process.stdout.as_mut().unwrap();
+    std::io::copy(&mut head_process.stdout.take().unwrap(), &mut file)?;
+
+    let exit_status = head_process.wait()?;
+
+    if !exit_status.success() {
+        Err("failed to generate temp file")?
+    }
 
     Ok(path)
 }
@@ -202,7 +287,7 @@ async fn put_object_intelligent(
     path: &Path,
 ) -> Result<(), BoxError> {
     if args.size_bytes > args.part_size_bytes {
-        put_object_multipart(client, args, path).await
+        put_object_multipart(&[client.clone()], args, BENCH_KEY, path).await
     } else {
         put_object(client, args, path).await
     }

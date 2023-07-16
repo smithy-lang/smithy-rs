@@ -543,6 +543,7 @@ class FluentClientGenerator(
                             }),
                             config_override: None,
                             interceptors: vec![],
+                            runtime_plugins: vec![],
                         }
                     }
                     """,
@@ -652,18 +653,30 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
         rustTemplate(
             """
             pub(crate) fn base_client_runtime_plugins(
-                config: crate::Config,
+                mut config: crate::Config,
             ) -> #{RuntimePlugins} {
-                #{RuntimePlugins}::new()
-                    .with_client_plugin(config.clone())
+                let mut configured_plugins = #{Vec}::new();
+                ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+                let mut plugins = #{RuntimePlugins}::new()
+                    .with_client_plugin(
+                        #{StaticRuntimePlugin}::new()
+                            .with_config(config.config.clone())
+                            .with_runtime_components(config.runtime_components.clone())
+                    )
                     .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
-                    .with_client_plugin(#{NoAuthRuntimePlugin}::new())
+                    .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+                for plugin in configured_plugins {
+                    plugins = plugins.with_client_plugin(plugin);
+                }
+                plugins
             }
             """,
             *preludeScope,
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
             "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+            "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                .resolve("client::runtime_plugin::StaticRuntimePlugin"),
         )
     }
 

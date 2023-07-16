@@ -10,7 +10,7 @@ use std::{net::SocketAddr, sync::Arc};
 use aws_smithy_http_server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
-    plugin::{alb_health_check::AlbHealthCheckLayer, IdentityPlugin, PluginPipeline, Scoped},
+    plugin::{alb_health_check::AlbHealthCheckLayer, HttpPlugins, IdentityPlugin, Scoped},
     request::request_id::ServerRequestIdProviderLayer,
     AddExtensionLayer,
 };
@@ -51,9 +51,9 @@ pub async fn main() {
         }
     }
     // Scope the `PrintPlugin`, defined in `plugin.rs`, to `PrintScope`
-    let print_plugin = Scoped::new::<PrintScope>(PluginPipeline::new().print());
+    let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 
-    let plugins = PluginPipeline::new()
+    let plugins = HttpPlugins::new()
         // Apply the scoped `PrintPlugin`
         .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other

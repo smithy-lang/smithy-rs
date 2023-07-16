@@ -127,7 +127,7 @@ author = "rcoh"
 message = "Bump dependency on `lambda_http` by `aws-smithy-http-server` to 0.8.0. This version of `aws-smithy-http-server` is only guaranteed to be compatible with 0.8.0, or semver-compatible versions of 0.8.0 of the `lambda_http` crate. It will not work with versions prior to 0.8.0 _at runtime_, making requests to your smithy-rs service unroutable, so please make sure you're running your service in a compatible configuration"
 author = "david-perez"
 references = ["smithy-rs#2676", "smithy-rs#2685"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false, target = "server" }
 
 [[smithy-rs]]
 message = """Remove `PollError` from an operations `Service::Error`.
@@ -141,9 +141,9 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "hlbarber"
 
 [[aws-sdk-rust]]
-message = "The SDK has added support for timestreamwrite and timestreamquery. Support for these services is considered experimental at this time. In order to use these services, you MUST call `.enable_endpoint_discovery()` on the `Client` after construction."
+message = "The SDK has added support for timestreamwrite and timestreamquery. Support for these services is considered experimental at this time. In order to use these services, you MUST call `.with_endpoint_discovery_enabled()` on the `Client` after construction."
 meta = { "breaking" = false, "tada" = true, "bug" = false }
-references = ["smithy-rs#2707", "aws-sdk-rust#114"]
+references = ["smithy-rs#2707", "aws-sdk-rust#114", "smithy-rs#2846"]
 author = "rcoh"
 
 [[smithy-rs]]
@@ -197,7 +197,7 @@ filter_by_operation_id(plugin, |id| id.absolute() != "namespace#name");
 """
 author = "82marbag"
 references = ["smithy-rs#2678"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false, target = "server" }
 
 [[smithy-rs]]
 message = "The occurrences of `Arc<dyn ResolveEndpoint>` have now been replaced with `SharedEndpointResolver` in public APIs."
@@ -210,6 +210,7 @@ message = """The middleware system has been reworked as we push for a unified, s
 
 - A `ServiceShape` trait has been added.
 - The `Plugin` trait has been simplified.
+- The `HttpMarker` and `ModelMarker` marker traits have been added to better distinguish when plugins run and what they have access to.
 - The `Operation` structure has been removed.
 - A `Scoped` `Plugin` has been added.
 
@@ -371,6 +372,8 @@ where
         PrintService { inner, name: Op::ID.name() }
     }
 }
+
+impl HttpMarker for PrintPlugin { }
 ```
 
 Alternatively, using the new `ServiceShape`, implemented on `Ser`:
@@ -397,6 +400,11 @@ let app = PokemonService::builder_with_plugins(/* HTTP plugins */, /* model plug
     .unwrap();
 ```
 
+To better distinguish when a plugin runs and what it has access to, `Plugin`s now have to additionally implement the `HttpMarker` marker trait, the `ModelMarker` marker trait, or both:
+
+- A HTTP plugin acts on the HTTP request before it is deserialized, and acts on the HTTP response after it is serialized.
+- A model plugin acts on the modeled operation input after it is deserialized, and acts on the modeled operation output or the modeled operation error before it is serialized.
+
 The motivation behind this change is to simplify the job of middleware authors, separate concerns, accomodate common cases better, and to improve composition internally.
 
 Because `Plugin` is now closer to `tower::Layer` we have two canonical converters:
@@ -412,6 +420,34 @@ let plugin = PluginLayer(layer);
 let plugin = /* some plugin */;
 let layer = LayerPlugin::new::<SomeProtocol, SomeOperation>(plugin);
 ```
+
+## Removal of `PluginPipeline`
+
+Since plugins now come in two flavors (those marked with `HttpMarker` and those marked with `ModelMarker`) that shouldn't be mixed in a collection of plugins, the primary way of concatenating plugins, `PluginPipeline` has been removed in favor of the `HttpPlugins` and `ModelPlugins` types, which eagerly check that whenever a plugin is pushed, it is of the expected type.
+
+This worked before, but you wouldn't be able to do apply this collection of plugins anywhere; if you tried to, the compilation error messages would not be very helpful:
+
+```rust
+use aws_smithy_http_server::plugin::PluginPipeline;
+
+let pipeline = PluginPipeline::new().push(http_plugin).push(model_plugin);
+```
+
+Now collections of plugins must contain plugins of the same flavor:
+
+```rust
+use aws_smithy_http_server::plugin::{HttpPlugins, ModelPlugins};
+
+let http_plugins = HttpPlugins::new()
+    .push(http_plugin)
+    // .push(model_plugin) // This fails to compile with a helpful error message.
+    .push(&http_and_model_plugin);
+let model_plugins = ModelPlugins::new()
+    .push(model_plugin)
+    .push(&http_and_model_plugin);
+```
+
+In the above example, `&http_and_model_plugin` implements both `HttpMarker` and `ModelMarker`, so we can add it to both collections.
 
 ## Removal of `Operation`
 
@@ -495,8 +531,8 @@ let scoped_plugin = Scoped::new::<SomeScope>(plugin);
 ```
 
 """
-references = ["smithy-rs#2740", "smithy-rs#2759", "smithy-rs#2779"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+references = ["smithy-rs#2740", "smithy-rs#2759", "smithy-rs#2779", "smithy-rs#2827"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, target = "server" }
 author = "hlbarber"
 
 [[smithy-rs]]
@@ -572,8 +608,14 @@ let plugin = plugin_from_operation_fn(map);
 ```
 """
 references = ["smithy-rs#2740", "smithy-rs#2759", "smithy-rs#2779"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+meta = { "breaking" = true, "tada" = false, "bug" = false, target = "server" }
 author = "hlbarber"
+
+[[smithy-rs]]
+message = "Fix bug in client generation when using smithy.rules#endpointTests and operation and service shapes are in different namespaces."
+author = "mcmasn-amzn"
+references = ["smithy-rs#2767"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 
 [[smithy-rs]]
 message = "The naming `make_token` for fields and the API of `IdempotencyTokenProvider` in service configs and their builders has now been updated to `idempotency_token_provider`."
@@ -584,5 +626,17 @@ author = "ysaito1001"
 [[aws-sdk-rust]]
 message = "The naming `make_token` for fields and the API of `IdempotencyTokenProvider` in service configs and their builders has now been updated to `idempotency_token_provider`."
 references = ["smithy-rs#2783"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`aws_smithy_async::future::rendezvous::Sender::send` no longer exposes `tokio::sync::mpsc::error::SendError` for the error of its return type and instead exposes a new-type wrapper called `aws_smithy_async::future::rendezvous::error::SendError`. In addition, the `aws_smithy_xml` crate no longer exposes types from `xmlparser`."
+references = ["smithy-rs#2845"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "The implementation `From<http::header::value::InvalidHeaderValue>` for `aws_http::user_agent::UserAgentStageError` has been removed."
+references = ["smithy-rs#2845"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"

@@ -80,7 +80,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                         """
                         /// Returns the credentials cache.
                         pub fn credentials_cache(&self) -> #{Option}<#{SharedCredentialsCache}> {
-                            self.inner.load::<#{SharedCredentialsCache}>().cloned()
+                            self.config.load::<#{SharedCredentialsCache}>().cloned()
                         }
                         """,
                         *codegenScope,
@@ -121,7 +121,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                         """
                         /// Sets the credentials cache for this service
                         pub fn set_credentials_cache(&mut self, credentials_cache: #{Option}<#{CredentialsCache}>) -> &mut Self {
-                            self.inner.store_or_unset(credentials_cache);
+                            self.config.store_or_unset(credentials_cache);
                             self
                         }
                         """,
@@ -148,7 +148,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                         if let Some(credentials_provider) = layer.load::<#{SharedCredentialsProvider}>().cloned() {
                             let cache_config = layer.load::<#{CredentialsCache}>().cloned()
                                 .unwrap_or_else({
-                                    let sleep = layer.load::<#{SharedAsyncSleep}>().cloned();
+                                    let sleep = self.runtime_components.sleep_impl();
                                     || match sleep {
                                         Some(sleep) => {
                                             #{CredentialsCache}::lazy_builder()

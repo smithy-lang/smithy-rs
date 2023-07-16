@@ -30,21 +30,21 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "DynRetryStrategy" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries::DynRetryStrategy"),
+        "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
+        "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
+        "debug" to RuntimeType.Tracing.resolve("debug"),
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
+        "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
+        "RetryPartition" to retries.resolve("RetryPartition"),
         "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
+        "SharedRetryStrategy" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries::SharedRetryStrategy"),
+        "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
         "Sleep" to sleepModule.resolve("Sleep"),
         "StandardRetryStrategy" to retries.resolve("strategy::StandardRetryStrategy"),
         "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
         "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
-        "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
         "TokenBucket" to retries.resolve("TokenBucket"),
-        "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
-        "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
-        "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
         "TokenBucketPartition" to retries.resolve("TokenBucketPartition"),
-        "RetryPartition" to retries.resolve("RetryPartition"),
-        "debug" to RuntimeType.Tracing.resolve("debug"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -69,17 +69,17 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             """
                             /// Return a reference to the retry configuration contained in this config, if any.
                             pub fn retry_config(&self) -> #{Option}<&#{RetryConfig}> {
-                                self.inner.load::<#{RetryConfig}>()
+                                self.config.load::<#{RetryConfig}>()
                             }
 
                             /// Return a cloned shared async sleep implementation from this config, if any.
                             pub fn sleep_impl(&self) -> #{Option}<#{SharedAsyncSleep}> {
-                                self.inner.load::<#{SharedAsyncSleep}>().cloned()
+                                self.runtime_components.sleep_impl()
                             }
 
                             /// Return a reference to the timeout configuration contained in this config, if any.
                             pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
-                                self.inner.load::<#{TimeoutConfig}>()
+                                self.config.load::<#{TimeoutConfig}>()
                             }
 
                             ##[doc(hidden)]
@@ -88,7 +88,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             /// WARNING: This method is unstable and may be removed at any time. Do not rely on this
                             /// method for anything!
                             pub fn retry_partition(&self) -> #{Option}<&#{RetryPartition}> {
-                                self.inner.load::<#{RetryPartition}>()
+                                self.config.load::<#{RetryPartition}>()
                             }
                             """,
                             *codegenScope,
@@ -171,7 +171,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         rustTemplate(
                             """
                             pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
-                                retry_config.map(|r| self.inner.store_put(r));
+                                retry_config.map(|r| self.config.store_put(r));
                                 self
                             }
                             """,
@@ -249,7 +249,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         rustTemplate(
                             """
                             pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
-                                sleep_impl.map(|s| self.inner.store_put(s));
+                                self.runtime_components.set_sleep_impl(sleep_impl);
                                 self
                             }
                             """,
@@ -317,7 +317,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         rustTemplate(
                             """
                             pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
-                                timeout_config.map(|t| self.inner.store_put(t));
+                                timeout_config.map(|t| self.config.store_put(t));
                                 self
                             }
                             """,
@@ -357,7 +357,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             /// also share things like token buckets and client rate limiters. By default, all clients
                             /// for the same service will share a partition.
                             pub fn set_retry_partition(&mut self, retry_partition: #{Option}<#{RetryPartition}>) -> &mut Self {
-                                retry_partition.map(|r| self.inner.store_put(r));
+                                retry_partition.map(|r| self.config.store_put(r));
                                 self
                             }
                             """,
@@ -377,7 +377,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             }
 
                             if retry_config.mode() == #{RetryMode}::Adaptive {
-                                if let #{Some}(time_source) = layer.load::<#{SharedTimeSource}>().cloned() {
+                                if let #{Some}(time_source) = self.runtime_components.time_source() {
                                     let seconds_since_unix_epoch = time_source
                                         .now()
                                         .duration_since(#{SystemTime}::UNIX_EPOCH)
@@ -395,13 +395,16 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             let token_bucket_partition = #{TokenBucketPartition}::new(retry_partition);
                             let token_bucket = TOKEN_BUCKET.get_or_init(token_bucket_partition, #{TokenBucket}::default);
                             layer.store_put(token_bucket);
-                            layer.set_retry_strategy(#{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)));
 
                             // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
                             //  is resolved
                             if layer.load::<#{TimeoutConfig}>().is_none() {
                                 layer.store_put(#{TimeoutConfig}::disabled());
                             }
+
+                            self.runtime_components.set_retry_strategy(#{Some}(
+                                #{SharedRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)))
+                            );
                             """,
                             *codegenScope,
                         )
@@ -414,24 +417,6 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                             retry_config: self.retry_config,
                             sleep_impl: self.sleep_impl.clone(),
                             timeout_config: self.timeout_config,
-                            """,
-                            *codegenScope,
-                        )
-                    }
-                }
-
-                is ServiceConfig.OperationConfigOverride -> {
-                    if (runtimeMode.defaultToOrchestrator) {
-                        rustTemplate(
-                            """
-                            if let #{Some}(retry_config) = layer
-                                .load::<#{RetryConfig}>()
-                                .cloned()
-                            {
-                                layer.set_retry_strategy(
-                                    #{DynRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config))
-                                );
-                            }
                             """,
                             *codegenScope,
                         )
