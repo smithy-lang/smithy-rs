@@ -9,14 +9,16 @@ import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeType
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.ContextIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.ClientContextConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.EndpointTraitBindings
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.configParamNewtype
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.loadFromConfigBag
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -25,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -43,17 +46,18 @@ class EndpointParamsInterceptorGenerator(
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         val smithyTypes = CargoDependency.smithyTypes(rc).toType()
         arrayOf(
-            "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            *preludeScope,
+            "BoxError" to RuntimeType.boxError(rc),
+            "ConfigBag" to RuntimeType.configBag(rc),
             "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
-                .resolve("client::orchestrator::ConfigBagAccessors"),
+                .resolve("client::config_bag_accessors::ConfigBagAccessors"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
             "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
-            "Interceptor" to interceptors.resolve("Interceptor"),
-            "InterceptorContext" to interceptors.resolve("InterceptorContext"),
-            "BeforeSerializationInterceptorContextRef" to interceptors.resolve("context::wrappers::BeforeSerializationInterceptorContextRef"),
+            "Interceptor" to RuntimeType.interceptor(rc),
+            "InterceptorContext" to RuntimeType.interceptorContext(rc),
+            "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
             "Input" to interceptors.resolve("context::Input"),
             "Output" to interceptors.resolve("context::Output"),
             "Error" to interceptors.resolve("context::Error"),
@@ -76,7 +80,7 @@ class EndpointParamsInterceptorGenerator(
                     &self,
                     context: &#{BeforeSerializationInterceptorContextRef}<'_, #{Input}, #{Output}, #{Error}>,
                     cfg: &mut #{ConfigBag},
-                ) -> Result<(), #{BoxError}> {
+                ) -> #{Result}<(), #{BoxError}> {
                     use #{ConfigBagAccessors};
                     let _input = context.input()
                         .downcast_ref::<${operationInput.name}>()
@@ -84,17 +88,12 @@ class EndpointParamsInterceptorGenerator(
 
                     #{endpoint_prefix:W}
 
-                    // HACK: pull the handle out of the config bag until config is implemented right
-                    let handle = cfg.get::<std::sync::Arc<crate::client::Handle>>()
-                        .expect("the handle is hacked into the config bag");
-                    let _config = &handle.conf;
-
                     let params = #{Params}::builder()
                         #{param_setters}
                         .build()
                         .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
                     cfg.interceptor_state().set_endpoint_resolver_params(#{EndpointResolverParams}::new(params));
-                    Ok(())
+                    #{Ok}(())
                 }
             }
             """,
@@ -110,19 +109,24 @@ class EndpointParamsInterceptorGenerator(
         val builtInParams = params.toList().filter { it.isBuiltIn }
         // first load builtins and their defaults
         builtInParams.forEach { param ->
-            endpointTypesGenerator.builtInFor(param, "_config")?.also { defaultValue ->
+            val config = if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                "cfg"
+            } else {
+                "_config"
+            }
+            endpointTypesGenerator.builtInFor(param, config)?.also { defaultValue ->
                 rust(".set_${param.name.rustName()}(#W)", defaultValue)
             }
         }
 
         idx.getClientContextParams(codegenContext.serviceShape).orNull()?.parameters?.forEach { (name, param) ->
-            val paramName = EndpointParamsGenerator.memberName(name)
             val setterName = EndpointParamsGenerator.setterName(name)
-            if (param.type == ShapeType.BOOLEAN) {
-                rust(".$setterName(_config.$paramName())")
-            } else {
-                rust(".$setterName(_config.$paramName().clone())")
-            }
+            val inner = ClientContextConfigCustomization.toSymbol(param.type, symbolProvider)
+            val newtype = configParamNewtype(name, inner, codegenContext.runtimeConfig)
+            rustTemplate(
+                ".$setterName(cfg.#{load_from_service_config_layer})",
+                "load_from_service_config_layer" to loadFromConfigBag(inner.name, newtype),
+            )
         }
 
         idx.getStaticContextParams(operationShape).orNull()?.parameters?.forEach { (name, param) ->
@@ -171,7 +175,7 @@ class EndpointParamsInterceptorGenerator(
                     codegenContext.smithyRuntimeMode,
                 )
             }
-            rust("cfg.interceptor_state().put(endpoint_prefix);")
+            rust("cfg.interceptor_state().store_put(endpoint_prefix);")
         }
     }
 }

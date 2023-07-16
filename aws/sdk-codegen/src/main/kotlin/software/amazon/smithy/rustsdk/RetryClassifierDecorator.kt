@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RetryClassifierDecorator : ClientCodegenDecorator {
     override val name: String = "RetryPolicy"
@@ -25,10 +26,12 @@ class RetryClassifierDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> =
-        baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig) + OperationRetryClassifiersFeature(
-            codegenContext,
-            operation,
-        )
+        (baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig)).letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
+            it + OperationRetryClassifiersFeature(
+                codegenContext,
+                operation,
+            )
+        }
 }
 
 class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
@@ -64,7 +67,7 @@ class OperationRetryClassifiersFeature(
         "HttpStatusCodeClassifier" to smithyRuntime.resolve("client::retries::classifier::HttpStatusCodeClassifier"),
         // Other Types
         "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
-        "InterceptorContext" to smithyRuntimeApi.resolve("client::interceptor::InterceptorContext"),
+        "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
         "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operation),
         "OrchestratorError" to smithyRuntimeApi.resolve("client::orchestrator::OrchestratorError"),
         "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),

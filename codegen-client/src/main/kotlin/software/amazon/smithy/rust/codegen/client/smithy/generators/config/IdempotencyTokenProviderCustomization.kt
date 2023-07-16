@@ -42,7 +42,7 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
                         /// If a random token provider was configured,
                         /// a newly-randomized token provider will be returned.
                         pub fn idempotency_token_provider(&self) -> #{IdempotencyTokenProvider} {
-                            self.inner.load::<#{IdempotencyTokenProvider}>().expect("the idempotency provider should be set").clone()
+                            self.config.load::<#{IdempotencyTokenProvider}>().expect("the idempotency provider should be set").clone()
                         }
                         """,
                         *codegenScope,
@@ -63,7 +63,9 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
             }
 
             ServiceConfig.BuilderStruct -> writable {
-                rustTemplate("idempotency_token_provider: #{Option}<#{IdempotencyTokenProvider}>,", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("idempotency_token_provider: #{Option}<#{IdempotencyTokenProvider}>,", *codegenScope)
+                }
             }
 
             ServiceConfig.BuilderImpl -> writable {
@@ -74,21 +76,43 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
                         self.set_idempotency_token_provider(#{Some}(idempotency_token_provider.into()));
                         self
                     }
-
-                    /// Sets the idempotency token provider to use for service calls that require tokens.
-                    pub fn set_idempotency_token_provider(&mut self, idempotency_token_provider: #{Option}<#{IdempotencyTokenProvider}>) -> &mut Self {
-                        self.idempotency_token_provider = idempotency_token_provider;
-                        self
-                    }
                     """,
                     *codegenScope,
                 )
+
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Sets the idempotency token provider to use for service calls that require tokens.
+                        pub fn set_idempotency_token_provider(&mut self, idempotency_token_provider: #{Option}<#{IdempotencyTokenProvider}>) -> &mut Self {
+                            self.config.store_or_unset(idempotency_token_provider);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Sets the idempotency token provider to use for service calls that require tokens.
+                        pub fn set_idempotency_token_provider(&mut self, idempotency_token_provider: #{Option}<#{IdempotencyTokenProvider}>) -> &mut Self {
+                            self.idempotency_token_provider = idempotency_token_provider;
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             ServiceConfig.BuilderBuild -> writable {
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
-                        "layer.store_put(self.idempotency_token_provider.unwrap_or_else(#{default_provider}));",
+                        """
+                        if !resolver.is_set::<#{IdempotencyTokenProvider}>() {
+                            resolver.config_mut().store_put(#{default_provider}());
+                        }
+                        """,
                         *codegenScope,
                     )
                 } else {

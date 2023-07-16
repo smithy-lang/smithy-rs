@@ -6,6 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
+ARG prev_rust_stable_version=1.67.1
 ARG rust_stable_version=1.68.2
 ARG rust_nightly_version=nightly-2023-05-31
 
@@ -25,6 +26,7 @@ RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
 FROM bare_base_image AS install_rust
 ARG rust_stable_version
 ARG rust_nightly_version
+ARG prev_rust_stable_version
 ENV RUSTUP_HOME=/opt/rustup \
     CARGO_HOME=/opt/cargo \
     PATH=/opt/cargo/bin/:${PATH} \
@@ -60,6 +62,7 @@ RUN set -eux; \
     rustup component add rustfmt; \
     rustup component add clippy; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
+    rustup toolchain install ${prev_rust_stable_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
     rustup target add wasm32-unknown-unknown; \
     rustup target add wasm32-wasi; \

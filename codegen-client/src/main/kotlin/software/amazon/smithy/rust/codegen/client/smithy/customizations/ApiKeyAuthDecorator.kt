@@ -66,7 +66,7 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (applies(codegenContext)) {
-            rustCrate.withModule(ClientRustModule.Config) {
+            rustCrate.withModule(ClientRustModule.config) {
                 rust("pub use #T;", apiKey(codegenContext.runtimeConfig))
             }
         }
@@ -206,7 +206,7 @@ private class ApiKeyConfigCustomization(codegenContext: ClientCodegenContext) : 
                         """
                         /// Returns API key used by the client, if it was provided.
                         pub fn api_key(&self) -> #{Option}<&#{ApiKey}> {
-                            self.inner.load::<#{ApiKey}>()
+                            self.config.load::<#{ApiKey}>()
                         }
                         """,
                         *codegenScope,

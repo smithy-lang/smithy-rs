@@ -7,7 +7,7 @@
 
 use aws_smithy_http_server::{
     operation::OperationShape,
-    plugin::{Plugin, PluginPipeline, PluginStack},
+    plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack},
     service::ServiceShape,
     shape_id::ShapeId,
 };
@@ -63,16 +63,19 @@ where
         }
     }
 }
-/// This provides a [`print`](PrintExt::print) method on [`PluginPipeline`].
+
+impl HttpMarker for PrintPlugin {}
+
+/// This provides a [`print`](PrintExt::print) method on [`HttpPlugins`].
 pub trait PrintExt<CurrentPlugin> {
     /// Causes all operations to print the operation name when called.
     ///
     /// This works by applying the [`PrintPlugin`].
-    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, CurrentPlugin>>;
+    fn print(self) -> HttpPlugins<PluginStack<PrintPlugin, CurrentPlugin>>;
 }
 
-impl<CurrentPlugin> PrintExt<CurrentPlugin> for PluginPipeline<CurrentPlugin> {
-    fn print(self) -> PluginPipeline<PluginStack<PrintPlugin, CurrentPlugin>> {
+impl<CurrentPlugin> PrintExt<CurrentPlugin> for HttpPlugins<CurrentPlugin> {
+    fn print(self) -> HttpPlugins<PluginStack<PrintPlugin, CurrentPlugin>> {
         self.push(PrintPlugin)
     }
 }

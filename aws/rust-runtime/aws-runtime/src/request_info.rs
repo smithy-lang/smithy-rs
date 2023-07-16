@@ -4,10 +4,11 @@
  */
 
 use aws_smithy_runtime::client::orchestrator::interceptors::ServiceClockSkew;
-use aws_smithy_runtime_api::client::interceptors::{
-    BeforeTransmitInterceptorContextMut, BoxError, Interceptor,
-};
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::retry::RetryConfig;
@@ -43,7 +44,7 @@ impl RequestInfoInterceptor {
         cfg: &ConfigBag,
     ) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
         let request_attempts = cfg
-            .get::<RequestAttempts>()
+            .load::<RequestAttempts>()
             .map(|r_a| r_a.attempts())
             .unwrap_or(0);
         let request_attempts = request_attempts.to_string();
@@ -54,7 +55,7 @@ impl RequestInfoInterceptor {
         &self,
         cfg: &ConfigBag,
     ) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
-        if let Some(retry_config) = cfg.get::<RetryConfig>() {
+        if let Some(retry_config) = cfg.load::<RetryConfig>() {
             let max_attempts = retry_config.max_attempts().to_string();
             Some((Cow::Borrowed("max"), Cow::Owned(max_attempts)))
         } else {
@@ -63,9 +64,9 @@ impl RequestInfoInterceptor {
     }
 
     fn build_ttl_pair(&self, cfg: &ConfigBag) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
-        let timeout_config = cfg.get::<TimeoutConfig>()?;
+        let timeout_config = cfg.load::<TimeoutConfig>()?;
         let socket_read = timeout_config.read_timeout()?;
-        let estimated_skew: Duration = cfg.get::<ServiceClockSkew>().cloned()?.into();
+        let estimated_skew: Duration = cfg.load::<ServiceClockSkew>().cloned()?.into();
         let current_time = SystemTime::now();
         let ttl = current_time.checked_add(socket_read + estimated_skew)?;
         let mut timestamp = DateTime::from(ttl);
@@ -89,6 +90,7 @@ impl Interceptor for RequestInfoInterceptor {
     fn modify_before_transmit(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let mut pairs = RequestPairs::new();
@@ -164,7 +166,9 @@ mod tests {
     use super::RequestInfoInterceptor;
     use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::{Interceptor, InterceptorContext};
+    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::Interceptor;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
@@ -185,13 +189,14 @@ mod tests {
 
     #[test]
     fn test_request_pairs_for_initial_attempt() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
 
         let mut layer = Layer::new("test");
-        layer.put(RetryConfig::standard());
-        layer.put(
+        layer.store_put(RetryConfig::standard());
+        layer.store_put(
             TimeoutConfig::builder()
                 .read_timeout(Duration::from_secs(30))
                 .build(),
@@ -203,7 +208,7 @@ mod tests {
         let interceptor = RequestInfoInterceptor::new();
         let mut ctx = (&mut context).into();
         interceptor
-            .modify_before_transmit(&mut ctx, &mut config)
+            .modify_before_transmit(&mut ctx, &rc, &mut config)
             .unwrap();
 
         assert_eq!(
