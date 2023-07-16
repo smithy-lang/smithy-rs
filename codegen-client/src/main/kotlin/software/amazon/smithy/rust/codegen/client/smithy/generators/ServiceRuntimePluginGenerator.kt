@@ -36,43 +36,35 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
         fun putConfigValue(writer: RustWriter, value: Writable) {
             writer.rust("$newLayerName.store_put(#T);", value)
         }
-
-        fun registerHttpAuthScheme(writer: RustWriter, runtimeConfig: RuntimeConfig, authScheme: Writable) {
-            writer.rustTemplate(
-                """
-                #{ConfigBagAccessors}::push_http_auth_scheme(
-                    &mut $newLayerName,
-                    #{auth_scheme}
-                );
-                """,
-                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
-                "auth_scheme" to authScheme,
-            )
-        }
-
-        fun registerIdentityResolver(writer: RustWriter, runtimeConfig: RuntimeConfig, identityResolver: Writable) {
-            writer.rustTemplate(
-                """
-                #{ConfigBagAccessors}::push_identity_resolver(
-                    &mut $newLayerName,
-                    #{identity_resolver}
-                );
-                """,
-                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
-                "identity_resolver" to identityResolver,
-            )
-        }
     }
 
-    data class RegisterInterceptor(val interceptorRegistrarName: String) : ServiceRuntimePluginSection("RegisterInterceptor") {
+    data class RegisterRuntimeComponents(val serviceConfigName: String) : ServiceRuntimePluginSection("RegisterRuntimeComponents") {
         /** Generates the code to register an interceptor */
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
             writer.rustTemplate(
                 """
-                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
+                runtime_components.push_interceptor(#{SharedInterceptor}::new(#{interceptor}) as _);
                 """,
                 "interceptor" to interceptor,
                 "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
+            )
+        }
+
+        fun registerHttpAuthScheme(writer: RustWriter, authScheme: Writable) {
+            writer.rustTemplate(
+                """
+                runtime_components.push_http_auth_scheme(#{auth_scheme});
+                """,
+                "auth_scheme" to authScheme,
+            )
+        }
+
+        fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
+            writer.rustTemplate(
+                """
+                runtime_components.push_identity_resolver(#{identity_resolver});
+                """,
+                "identity_resolver" to identityResolver,
             )
         }
     }
@@ -92,12 +84,11 @@ class ServiceRuntimePluginGenerator(
             *preludeScope,
             "Arc" to RuntimeType.Arc,
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
-            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
+            "Cow" to RuntimeType.Cow,
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-            "ConfigBagAccessors" to RuntimeType.configBagAccessors(rc),
-            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
-            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+            "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
+            "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
         )
     }
 
@@ -113,15 +104,15 @@ class ServiceRuntimePluginGenerator(
             ##[derive(Debug)]
             pub(crate) struct ServiceRuntimePlugin {
                 config: #{Option}<#{FrozenLayer}>,
+                runtime_components: #{RuntimeComponentsBuilder},
             }
 
             impl ServiceRuntimePlugin {
                 pub fn new(_service_config: crate::config::Config) -> Self {
-                    Self {
-                        config: {
-                            #{config}
-                        },
-                    }
+                    let config = { #{config} };
+                    let mut runtime_components = #{RuntimeComponentsBuilder}::new("ServiceRuntimePlugin");
+                    #{runtime_components}
+                    Self { config, runtime_components }
                 }
             }
 
@@ -130,9 +121,8 @@ class ServiceRuntimePluginGenerator(
                     self.config.clone()
                 }
 
-                fn interceptors(&self, interceptors: &mut #{InterceptorRegistrar}) {
-                    let _interceptors = interceptors;
-                    #{additional_interceptors}
+                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                    #{Cow}::Borrowed(&self.runtime_components)
                 }
             }
 
@@ -155,8 +145,8 @@ class ServiceRuntimePluginGenerator(
                     rust("None")
                 }
             },
-            "additional_interceptors" to writable {
-                writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterInterceptor("_interceptors"))
+            "runtime_components" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterRuntimeComponents("_service_config"))
             },
             "declare_singletons" to writable {
                 writeCustomizations(customizations, ServiceRuntimePluginSection.DeclareSingletons())

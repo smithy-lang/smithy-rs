@@ -28,9 +28,11 @@ class ClientRuntimeTypesReExportGenerator(
                 """
                 pub use #{ConfigBag};
                 pub use #{Interceptor};
+                pub use #{SharedInterceptor};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
                 "Interceptor" to RuntimeType.interceptor(rc),
+                "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
             )
         }
         rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {

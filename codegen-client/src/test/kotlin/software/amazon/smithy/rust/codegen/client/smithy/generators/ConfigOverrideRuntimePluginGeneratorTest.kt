@@ -52,23 +52,24 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             )
             rustCrate.testModule {
-                addDependency(CargoDependency.Tokio.withFeature("test-util").toDevDependency())
+                addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_operation_overrides_endpoint_resolver") {
                     rustTemplate(
                         """
-                        use #{ConfigBagAccessors};
                         use #{RuntimePlugin};
+                        use ::aws_smithy_runtime_api::client::orchestrator::EndpointResolver;
 
                         let expected_url = "http://localhost:1234/";
                         let client_config = crate::config::Config::builder().build();
                         let config_override =
                             crate::config::Config::builder().endpoint_resolver(expected_url);
-                        let sut = crate::config::ConfigOverrideRuntimePlugin {
-                            client_config: client_config.config().unwrap(),
+                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
                             config_override,
-                        };
-                        let sut_layer = sut.config().unwrap();
-                        let endpoint_resolver = sut_layer.endpoint_resolver();
+                            client_config.config,
+                            &client_config.runtime_components,
+                        );
+                        let sut_components = sut.runtime_components();
+                        let endpoint_resolver = sut_components.endpoint_resolver().unwrap();
                         let endpoint = endpoint_resolver
                             .resolve_endpoint(&#{EndpointResolverParams}::new(crate::config::endpoint::Params {}))
                             .await
@@ -96,7 +97,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             )
             rustCrate.testModule {
-                addDependency(CargoDependency.Tokio.withFeature("test-util").toDevDependency())
+                addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_operation_overrides_http_connection") {
                     rustTemplate(
                         """
@@ -186,6 +187,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                     .resolve("client::request_attempts::RequestAttempts"),
                 "RetryClassifiers" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::retries::RetryClassifiers"),
+                "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                 "ShouldAttempt" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::retries::ShouldAttempt"),
@@ -195,46 +197,65 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 unitTest("test_operation_overrides_retry_strategy") {
                     rustTemplate(
                         """
-                        use #{ConfigBagAccessors};
                         use #{RuntimePlugin};
+                        use ::aws_smithy_runtime_api::client::retries::RetryStrategy;
 
                         let client_config = crate::config::Config::builder()
                             .retry_config(#{RetryConfig}::standard().with_max_attempts(3))
                             .build();
 
-                        let client_config_layer = client_config.config().unwrap();
-
                         let mut ctx = #{InterceptorContext}::new(#{TypeErasedBox}::new(()));
                         ctx.set_output_or_error(#{Err}(#{OrchestratorError}::other("doesn't matter")));
+
                         let mut layer = #{Layer}::new("test");
                         layer.store_put(#{RequestAttempts}::new(1));
-                        layer.set_retry_classifiers(
-                            #{RetryClassifiers}::new().with_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError)),
-                        );
 
                         let mut cfg = #{ConfigBag}::of_layers(vec![layer]);
+                        let client_config_layer = client_config.config;
                         cfg.push_shared_layer(client_config_layer.clone());
 
-                        let retry = cfg.retry_strategy().unwrap();
+                        let retry_classifiers_component = #{RuntimeComponentsBuilder}::new("retry_classifier")
+                            .with_retry_classifiers(#{Some}(
+                                #{RetryClassifiers}::new().with_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError)),
+                            ));
+
+                        // Emulate the merging of runtime components from runtime plugins that the orchestrator does
+                        let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
+                            .merge_from(&client_config.runtime_components)
+                            .merge_from(&retry_classifiers_component)
+                            .build()
+                            .unwrap();
+
+                        let retry = runtime_components.retry_strategy();
                         assert!(matches!(
-                            retry.should_attempt_retry(&ctx, &cfg).unwrap(),
+                            retry.should_attempt_retry(&ctx, &runtime_components, &cfg).unwrap(),
                             #{ShouldAttempt}::YesAfterDelay(_)
                         ));
 
                         // sets `max_attempts` to 1 implicitly by using `disabled()`, forcing it to run out of
                         // attempts with respect to `RequestAttempts` set to 1 above
-                        let config_override = crate::config::Config::builder()
+                        let config_override_builder = crate::config::Config::builder()
                             .retry_config(#{RetryConfig}::disabled());
-                        let sut = crate::config::ConfigOverrideRuntimePlugin {
-                            client_config: client_config_layer,
-                            config_override,
-                        };
+                        let config_override = config_override_builder.clone().build();
+                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
+                            config_override_builder,
+                            client_config_layer,
+                            &client_config.runtime_components,
+                        );
                         let sut_layer = sut.config().unwrap();
                         cfg.push_shared_layer(sut_layer);
-                        let retry = cfg.retry_strategy().unwrap();
 
+                        // Emulate the merging of runtime components from runtime plugins that the orchestrator does
+                        let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
+                            .merge_from(&client_config.runtime_components)
+                            .merge_from(&retry_classifiers_component)
+                            .merge_from(&config_override.runtime_components)
+                            .build()
+                            .unwrap();
+
+                        let retry = runtime_components.retry_strategy();
                         assert!(matches!(
-                            retry.should_attempt_retry(&ctx, &cfg).unwrap(),
+                            retry.should_attempt_retry(&ctx, &runtime_components, &cfg).unwrap(),
                             #{ShouldAttempt}::No
                         ));
                         """,

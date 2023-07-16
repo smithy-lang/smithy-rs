@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -18,36 +19,82 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
     CustomizableOperationCustomization() {
     private val codegenScope = arrayOf(
         *RuntimeType.preludeScope,
-        "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig)
-            .resolve("user_agent::AwsUserAgent"),
+        "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
         "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
         "ConfigBag" to RuntimeType.configBag(runtimeConfig),
         "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
         "http" to CargoDependency.Http.toType(),
         "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-        "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).withFeature("test-util").toType()
-            .resolve("time::SharedTimeSource"),
-        "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::interceptors::SharedInterceptor"),
-        "TestParamsSetterInterceptor" to CargoDependency.smithyRuntime(runtimeConfig).withFeature("test-util")
-            .toType().resolve("client::test_util::interceptors::TestParamsSetterInterceptor"),
+        "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
+        "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
+        "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).toType().resolve("time::SharedTimeSource"),
+        "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::StaticRuntimePlugin"),
+        "StaticTimeSource" to CargoDependency.smithyAsync(runtimeConfig).toType().resolve("time::StaticTimeSource"),
+        "TestParamsSetterInterceptor" to testParamsSetterInterceptor(),
     )
+
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this once test helpers on `CustomizableOperation` have been removed
+    private fun testParamsSetterInterceptor(): RuntimeType = RuntimeType.forInlineFun("TestParamsSetterInterceptor", ClientRustModule.Client.customize) {
+        rustTemplate(
+            """
+            mod test_params_setter_interceptor {
+                use aws_smithy_runtime_api::box_error::BoxError;
+                use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+                use aws_smithy_runtime_api::client::interceptors::Interceptor;
+                use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                use aws_smithy_types::config_bag::ConfigBag;
+                use std::fmt;
+
+                pub(super) struct TestParamsSetterInterceptor<F> { f: F }
+
+                impl<F> fmt::Debug for TestParamsSetterInterceptor<F> {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        write!(f, "TestParamsSetterInterceptor")
+                    }
+                }
+
+                impl<F> TestParamsSetterInterceptor<F> {
+                    pub fn new(f: F) -> Self { Self { f } }
+                }
+
+                impl<F> Interceptor for TestParamsSetterInterceptor<F>
+                where
+                    F: Fn(&mut BeforeTransmitInterceptorContextMut<'_>, &mut ConfigBag) + Send + Sync + 'static,
+                {
+                    fn modify_before_signing(
+                        &self,
+                        context: &mut BeforeTransmitInterceptorContextMut<'_>,
+                        _runtime_components: &RuntimeComponents,
+                        cfg: &mut ConfigBag,
+                    ) -> Result<(), BoxError> {
+                        (self.f)(context, cfg);
+                        Ok(())
+                    }
+                }
+            }
+            use test_params_setter_interceptor::TestParamsSetterInterceptor;
+            """,
+            *codegenScope,
+        )
+    }
 
     override fun section(section: CustomizableOperationSection): Writable =
         writable {
             if (section is CustomizableOperationSection.CustomizableOperationImpl) {
                 if (section.isRuntimeModeOrchestrator) {
+                    // TODO(enableNewSmithyRuntimeCleanup): Delete these utilities
                     rustTemplate(
                         """
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
-                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            use #{ConfigBagAccessors};
-                            let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
-                                cfg.interceptor_state().set_request_time(#{SharedTimeSource}::new(request_time));
-                            });
-                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
-                            self
+                        pub fn request_time_for_tests(self, request_time: ::std::time::SystemTime) -> Self {
+                            self.runtime_plugin(
+                                #{StaticRuntimePlugin}::new()
+                                    .with_runtime_components(
+                                        #{RuntimeComponentsBuilder}::new("request_time_for_tests")
+                                            .with_time_source(Some(#{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))))
+                                    )
+                            )
                         }
 
                         ##[doc(hidden)]
@@ -88,7 +135,9 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
                         pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            self.operation.properties_mut().insert(#{SharedTimeSource}::new(request_time));
+                            self.operation.properties_mut().insert(
+                                #{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))
+                            );
                             self
                         }
 

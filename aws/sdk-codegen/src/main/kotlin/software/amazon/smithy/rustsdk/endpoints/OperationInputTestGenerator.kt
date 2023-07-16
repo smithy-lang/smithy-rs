@@ -122,9 +122,6 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private val model = ctx.model
     private val instantiator = ClientInstantiator(ctx)
 
-    private fun EndpointTestOperationInput.operationId() =
-        ShapeId.fromOptionalNamespace(ctx.serviceShape.id.namespace, operationName)
-
     /** the Rust SDK doesn't support SigV4a — search  endpoint.properties.authSchemes[].name */
     private fun EndpointTestCase.isSigV4a() =
         expect.endpoint.orNull()?.properties?.get("authSchemes")?.asArrayNode()?.orNull()
@@ -183,7 +180,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private fun operationInvocation(testOperationInput: EndpointTestOperationInput) = writable {
         rust("client.${testOperationInput.operationName.toSnakeCase()}()")
         val operationInput =
-            model.expectShape(testOperationInput.operationId(), OperationShape::class.java).inputShape(model)
+            model.expectShape(ctx.operationId(testOperationInput), OperationShape::class.java).inputShape(model)
         testOperationInput.operationParams.members.forEach { (key, value) ->
             val member = operationInput.expectMember(key.value)
             rustTemplate(
@@ -217,3 +214,6 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
         }
     }
 }
+
+fun ClientCodegenContext.operationId(testOperationInput: EndpointTestOperationInput): ShapeId =
+    this.serviceShape.allOperations.first { it.name == testOperationInput.operationName }

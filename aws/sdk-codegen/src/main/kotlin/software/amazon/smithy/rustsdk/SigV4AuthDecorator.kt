@@ -78,13 +78,13 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.AdditionalConfig -> {
+            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
                 if (serviceHasEventStream) {
                     // enable the aws-runtime `sign-eventstream` feature
                     addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
                 }
-                section.registerHttpAuthScheme(this, runtimeConfig) {
+                section.registerHttpAuthScheme(this) {
                     rustTemplate("#{SharedHttpAuthScheme}::new(#{SigV4HttpAuthScheme}::new())", *codegenScope)
                 }
             }

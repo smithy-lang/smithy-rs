@@ -43,6 +43,7 @@ tracing = "0.1"
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
 tempfile = "3.6.0"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }

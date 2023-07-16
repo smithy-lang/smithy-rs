@@ -338,8 +338,14 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag")
         fun configBagAccessors(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::config_bag_accessors::ConfigBagAccessors")
+        fun runtimeComponentsBuilder(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_components::RuntimeComponentsBuilder")
         fun runtimePlugins(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins")
+        fun runtimePlugin(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
+        fun sharedRuntimePlugin(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::SharedRuntimePlugin")
         fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
         fun interceptor(runtimeConfig: RuntimeConfig): RuntimeType =
@@ -468,8 +474,5 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun idempotencyToken(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.idempotencyToken(runtimeConfig))
-
-        fun runtimePlugin(runtimeConfig: RuntimeConfig) =
-            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
     }
 }

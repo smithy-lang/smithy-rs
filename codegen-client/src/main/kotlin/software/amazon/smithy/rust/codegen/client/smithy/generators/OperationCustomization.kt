@@ -107,14 +107,17 @@ sealed class OperationSection(name: String) : Section(name) {
 
     data class AdditionalInterceptors(
         override val customizations: List<OperationCustomization>,
-        val interceptorRegistrarName: String,
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalInterceptors") {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
+                .with_interceptor(
+                    #{SharedInterceptor}::new(
+                        #{interceptor}
+                    ) as _
+                )
                 """,
                 "interceptor" to interceptor,
                 "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),

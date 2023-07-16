@@ -32,7 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
+private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     val smithyRuntime =
         CargoDependency.smithyRuntime(runtimeConfig).withFeature("http-auth").toType()
     val smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-auth").toType()
@@ -42,7 +42,6 @@ fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
         "AuthSchemeId" to smithyRuntimeApi.resolve("client::auth::AuthSchemeId"),
         "ApiKeyAuthScheme" to authHttp.resolve("ApiKeyAuthScheme"),
         "ApiKeyLocation" to authHttp.resolve("ApiKeyLocation"),
-        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
         "BasicAuthScheme" to authHttp.resolve("BasicAuthScheme"),
         "BearerAuthScheme" to authHttp.resolve("BearerAuthScheme"),
         "DigestAuthScheme" to authHttp.resolve("DigestAuthScheme"),
@@ -163,9 +162,9 @@ private class HttpAuthServiceRuntimePluginCustomization(
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.AdditionalConfig -> {
+            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 fun registerAuthScheme(scheme: Writable) {
-                    section.registerHttpAuthScheme(this, codegenContext.runtimeConfig) {
+                    section.registerHttpAuthScheme(this) {
                         rustTemplate("#{SharedHttpAuthScheme}::new(#{Scheme})", *codegenScope, "Scheme" to scheme)
                     }
                 }
@@ -236,8 +235,7 @@ private class HttpAuthConfigCustomization(
 
                         /// Sets an API key resolver will be used for authentication.
                         pub fn api_key_resolver(mut self, api_key_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            #{ConfigBagAccessors}::push_identity_resolver(
-                                &mut self.inner,
+                            self.runtime_components.push_identity_resolver(
                                 #{HTTP_API_KEY_AUTH_SCHEME_ID},
                                 #{SharedIdentityResolver}::new(api_key_resolver)
                             );
@@ -257,8 +255,7 @@ private class HttpAuthConfigCustomization(
 
                         /// Sets a bearer token provider that will be used for HTTP bearer auth.
                         pub fn bearer_token_resolver(mut self, bearer_token_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            #{ConfigBagAccessors}::push_identity_resolver(
-                                &mut self.inner,
+                            self.runtime_components.push_identity_resolver(
                                 #{HTTP_BEARER_AUTH_SCHEME_ID},
                                 #{SharedIdentityResolver}::new(bearer_token_resolver)
                             );
@@ -278,8 +275,7 @@ private class HttpAuthConfigCustomization(
 
                         /// Sets a login resolver that will be used for HTTP basic auth.
                         pub fn basic_auth_login_resolver(mut self, basic_auth_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            #{ConfigBagAccessors}::push_identity_resolver(
-                                &mut self.inner,
+                            self.runtime_components.push_identity_resolver(
                                 #{HTTP_BASIC_AUTH_SCHEME_ID},
                                 #{SharedIdentityResolver}::new(basic_auth_resolver)
                             );
@@ -299,8 +295,7 @@ private class HttpAuthConfigCustomization(
 
                         /// Sets a login resolver that will be used for HTTP digest auth.
                         pub fn digest_auth_login_resolver(mut self, digest_auth_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            #{ConfigBagAccessors}::push_identity_resolver(
-                                &mut self.inner,
+                            self.runtime_components.push_identity_resolver(
                                 #{HTTP_DIGEST_AUTH_SCHEME_ID},
                                 #{SharedIdentityResolver}::new(digest_auth_resolver)
                             );

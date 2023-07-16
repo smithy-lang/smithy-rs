@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import java.nio.file.Path
@@ -257,7 +257,7 @@ class ProtocolTestGeneratorTest {
 
     @Test
     fun `test incorrect response parsing`() {
-        val err = assertThrows<CommandFailed> {
+        val err = assertThrows<CommandError> {
             testService(
                 """
                 .uri("/?Hi=Hello%20there&required")
@@ -273,7 +273,7 @@ class ProtocolTestGeneratorTest {
 
     @Test
     fun `test invalid body`() {
-        val err = assertThrows<CommandFailed> {
+        val err = assertThrows<CommandError> {
             testService(
                 """
                 .uri("/?Hi=Hello%20there&required")
@@ -290,7 +290,7 @@ class ProtocolTestGeneratorTest {
 
     @Test
     fun `test invalid url parameter`() {
-        val err = assertThrows<CommandFailed> {
+        val err = assertThrows<CommandError> {
             testService(
                 """
                 .uri("/?Hi=INCORRECT&required")
@@ -306,7 +306,7 @@ class ProtocolTestGeneratorTest {
 
     @Test
     fun `test forbidden url parameter`() {
-        val err = assertThrows<CommandFailed> {
+        val err = assertThrows<CommandError> {
             testService(
                 """
                 .uri("/?goodbye&Hi=Hello%20there&required")
@@ -323,7 +323,7 @@ class ProtocolTestGeneratorTest {
     @Test
     fun `test required url parameter`() {
         // Hard coded implementation for this 1 test
-        val err = assertThrows<CommandFailed> {
+        val err = assertThrows<CommandError> {
             testService(
                 """
                 .uri("/?Hi=Hello%20there")
@@ -340,7 +340,7 @@ class ProtocolTestGeneratorTest {
 
     @Test
     fun `invalid header`() {
-        val err = assertThrows<CommandFailed> {
+        val err = assertThrows<CommandError> {
             testService(
                 """
                 .uri("/?Hi=Hello%20there&required")

@@ -101,7 +101,7 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
                         """
                         /// Sets the credentials provider for this service
                         pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
-                            self.inner.store_or_unset(credentials_provider);
+                            self.config.store_or_unset(credentials_provider);
                             self
                         }
                         """,
@@ -138,9 +138,9 @@ class CredentialsIdentityResolverRegistration(
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.AdditionalConfig -> {
+            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 rustBlockTemplate("if let Some(credentials_cache) = ${section.serviceConfigName}.credentials_cache()") {
-                    section.registerIdentityResolver(this, runtimeConfig) {
+                    section.registerIdentityResolver(this) {
                         rustTemplate(
                             """
                             #{SIGV4_SCHEME_ID},

@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -118,6 +119,12 @@ open class OperationGenerator(
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                val additionalPlugins = writable {
+                    writeCustomizations(
+                        operationCustomizations,
+                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
+                    )
+                }
                 rustTemplate(
                     """
                     pub(crate) async fn orchestrate(
@@ -159,14 +166,16 @@ open class OperationGenerator(
                         config_override: #{Option}<crate::config::Builder>,
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
+                        #{additional_runtime_plugins}
                         if let Some(config_override) = config_override {
-                            runtime_plugins = runtime_plugins.with_operation_plugin(crate::config::ConfigOverrideRuntimePlugin {
-                                config_override,
-                                client_config: #{RuntimePlugin}::config(client_config).expect("frozen layer should exist in client config"),
-                            })
+                            for plugin in config_override.runtime_plugins.iter().cloned() {
+                                runtime_plugins = runtime_plugins.with_operation_plugin(plugin);
+                            }
+                            runtime_plugins = runtime_plugins.with_operation_plugin(
+                                crate::config::ConfigOverrideRuntimePlugin::new(config_override, client_config.config.clone(), &client_config.runtime_components)
+                            );
                         }
                         runtime_plugins
-                            #{additional_runtime_plugins}
                     }
                     """,
                     *codegenScope,
@@ -179,10 +188,15 @@ open class OperationGenerator(
                     "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
                     "invoke_with_stop_point" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke_with_stop_point"),
                     "additional_runtime_plugins" to writable {
-                        writeCustomizations(
-                            operationCustomizations,
-                            OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
-                        )
+                        if (additionalPlugins.isNotEmpty()) {
+                            rustTemplate(
+                                """
+                                runtime_plugins = runtime_plugins
+                                    #{additional_runtime_plugins};
+                                """,
+                                "additional_runtime_plugins" to additionalPlugins,
+                            )
+                        }
                     },
                 )
             }

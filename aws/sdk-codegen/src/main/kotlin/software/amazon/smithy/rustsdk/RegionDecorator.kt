@@ -181,7 +181,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                         """
                         /// Returns the AWS region, if it was provided.
                         pub fn region(&self) -> #{Option}<&#{Region}> {
-                            self.inner.load::<#{Region}>()
+                            self.config.load::<#{Region}>()
                         }
                         """,
                         *codegenScope,
@@ -232,7 +232,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                         """
                         /// Sets the AWS region to use when making requests.
                         pub fn set_region(&mut self, region: #{Option}<#{Region}>) -> &mut Self {
-                            self.inner.store_or_unset(region);
+                            self.config.store_or_unset(region);
                             self
                         }
                         """,

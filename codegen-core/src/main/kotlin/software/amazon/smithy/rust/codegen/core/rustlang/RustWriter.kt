@@ -498,6 +498,15 @@ class RustWriter private constructor(
             }
         }
 
+        fun toml(fileName: String, debugMode: Boolean = false): RustWriter =
+            RustWriter(
+                fileName,
+                namespace = "ignore",
+                commentCharacter = "#",
+                printWarning = false,
+                debugMode = debugMode,
+            )
+
         private fun rawWriter(fileName: String, debugMode: Boolean): RustWriter =
             RustWriter(
                 fileName,

@@ -88,35 +88,11 @@ macro_rules! middleware_bench_fn {
 }
 
 async fn orchestrator(client: &s3::Client) {
-    #[derive(Debug)]
-    struct FixupPlugin {
-        region: String,
-    }
-    impl RuntimePlugin for FixupPlugin {
-        fn configure(
-            &self,
-            cfg: &mut ConfigBag,
-            _interceptors: &mut InterceptorRegistrar,
-        ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
-            let params_builder = s3::endpoint::Params::builder()
-                .set_region(Some(self.region.clone()))
-                .bucket("test-bucket");
-
-            cfg.put(params_builder);
-            Ok(())
-        }
-    }
     let _output = client
         .list_objects_v2()
         .bucket("test-bucket")
         .prefix("prefix~")
-        .send_orchestrator_with_plugin(Some(FixupPlugin {
-            region: client
-                .conf()
-                .region()
-                .map(|c| c.as_ref().to_string())
-                .unwrap(),
-        }))
+        .send_orchestrator()
         .await
         .expect("successful execution");
 }
