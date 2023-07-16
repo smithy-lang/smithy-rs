@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
@@ -13,8 +14,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class HttpConnectorConfigDecorator : ClientCodegenDecorator {
@@ -31,34 +32,103 @@ class HttpConnectorConfigDecorator : ClientCodegenDecorator {
 }
 
 private class HttpConnectorConfigCustomization(
-    codegenContext: CodegenContext,
+    codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
+        *preludeScope,
+        "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
+        "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
+        "default_connector" to RuntimeType.smithyClient(runtimeConfig).resolve("conns::default_connector"),
+        "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connectors::adapter::DynConnectorAdapter"),
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
+        "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
+        "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
+        "SharedConnector" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::connectors::SharedConnector"),
+        "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
     )
+
+    private fun setConnectorFn(): RuntimeType = RuntimeType.forInlineFun("set_connector", ClientRustModule.config) {
+        rustTemplate(
+            """
+            fn set_connector(resolver: &mut #{Resolver}<'_>) {
+                // Initial configuration needs to set a default if no connector is given, so it
+                // should always get into the condition below.
+                //
+                // Override configuration should set the connector if the override config
+                // contains a connector, sleep impl, or a timeout config since these are all
+                // incorporated into the final connector.
+                let must_set_connector = resolver.is_initial()
+                    || resolver.is_latest_set::<#{HttpConnector}>()
+                    || resolver.latest_sleep_impl().is_some()
+                    || resolver.is_latest_set::<#{TimeoutConfig}>();
+                if must_set_connector {
+                    let sleep_impl = resolver.sleep_impl();
+                    let timeout_config = resolver.resolve_config::<#{TimeoutConfig}>()
+                        .cloned()
+                        .unwrap_or_else(#{TimeoutConfig}::disabled);
+                    let connector_settings = #{ConnectorSettings}::from_timeout_config(&timeout_config);
+                    let http_connector = resolver.resolve_config::<#{HttpConnector}>();
+
+                    // TODO(enableNewSmithyRuntimeCleanup): Replace the tower-based DynConnector and remove DynConnectorAdapter when deleting the middleware implementation
+                    let connector =
+                        http_connector
+                            .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
+                            .or_else(|| #{default_connector}(&connector_settings, sleep_impl))
+                            .map(|c| #{SharedConnector}::new(#{DynConnectorAdapter}::new(c)));
+
+                    resolver.runtime_components_mut().set_connector(connector);
+                }
+            }
+            """,
+            *codegenScope,
+        )
+    }
 
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                }
             }
 
             is ServiceConfig.ConfigImpl -> writable {
-                rustTemplate(
-                    """
-                    /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
-                    pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
-                        self.http_connector.as_ref()
-                    }
-                    """,
-                    *codegenScope,
-                )
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        // TODO(enableNewSmithyRuntimeCleanup): Remove this function
+                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
+                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
+                            self.config.load::<#{HttpConnector}>()
+                        }
+
+                        /// Return the [`SharedConnector`](#{SharedConnector}) to use when making requests, if any.
+                        pub fn connector(&self) -> Option<#{SharedConnector}> {
+                            self.runtime_components.connector()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
+                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
+                            self.http_connector.as_ref()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             is ServiceConfig.BuilderStruct -> writable {
-                rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
+                }
             }
 
             ServiceConfig.BuilderImpl -> writable {
@@ -96,7 +166,7 @@ private class HttpConnectorConfigCustomization(
                     /// ## }
                     /// ```
                     pub fn http_connector(mut self, http_connector: impl Into<#{HttpConnector}>) -> Self {
-                        self.http_connector = Some(http_connector.into());
+                        self.set_http_connector(#{Some}(http_connector));
                         self
                     }
 
@@ -137,17 +207,50 @@ private class HttpConnectorConfigCustomization(
                     /// ## }
                     /// ## }
                     /// ```
-                    pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
-                        self.http_connector = http_connector.map(|inner| inner.into());
-                        self
-                    }
                     """,
                     *codegenScope,
                 )
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
+                            http_connector.map(|c| self.config.store_put(c.into()));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
+                            self.http_connector = http_connector.map(|inner| inner.into());
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             is ServiceConfig.BuilderBuild -> writable {
-                rust("http_connector: self.http_connector,")
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        "#{set_connector}(&mut resolver);",
+                        "set_connector" to setConnectorFn(),
+                    )
+                } else {
+                    rust("http_connector: self.http_connector,")
+                }
+            }
+
+            is ServiceConfig.OperationConfigOverride -> writable {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        "#{set_connector}(&mut resolver);",
+                        "set_connector" to setConnectorFn(),
+                    )
+                }
             }
 
             else -> emptySection

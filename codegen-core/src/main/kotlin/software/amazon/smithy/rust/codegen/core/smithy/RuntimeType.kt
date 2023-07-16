@@ -274,6 +274,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val String = std.resolve("string::String")
         val Sync = std.resolve("marker::Sync")
         val TryFrom = stdConvert.resolve("TryFrom")
+        val U64 = std.resolve("primitive::u64")
         val Vec = std.resolve("vec::Vec")
 
         // external cargo dependency types
@@ -301,6 +302,11 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
         val MaybeConstrained = RuntimeType("crate::constrained::MaybeConstrained", InlineDependency.constrained())
 
+        // serde types. Gated behind `CfgUnstable`.
+        val Serde = CargoDependency.Serde.toType()
+        val SerdeSerialize = Serde.resolve("Serialize")
+        val SerdeDeserialize = Serde.resolve("Deserialize")
+
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = CargoDependency.smithyChecksums(runtimeConfig).toType()
@@ -327,6 +333,46 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun base64Encode(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyTypes(runtimeConfig).resolve("base64::encode")
+
+        fun configBag(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag")
+        fun configBagAccessors(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::config_bag_accessors::ConfigBagAccessors")
+        fun runtimeComponentsBuilder(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_components::RuntimeComponentsBuilder")
+        fun runtimePlugins(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins")
+        fun runtimePlugin(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
+        fun sharedRuntimePlugin(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::SharedRuntimePlugin")
+        fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
+        fun interceptor(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::Interceptor")
+        fun interceptorContext(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::InterceptorContext")
+        fun sharedInterceptor(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor")
+
+        fun afterDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::AfterDeserializationInterceptorContextRef")
+        fun beforeSerializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextRef")
+        fun beforeSerializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextMut")
+        fun beforeDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextRef")
+        fun beforeDeserializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextMut")
+        fun beforeTransmitInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextRef")
+        fun beforeTransmitInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextMut")
+        fun finalizerInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextRef")
+        fun finalizerInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextMut")
 
         fun blob(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Blob")
         fun byteStream(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("byte_stream::ByteStream")
@@ -426,9 +472,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun unwrappedXmlErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.unwrappedXmlErrors(runtimeConfig))
 
-        val IdempotencyToken by lazy { forInlineDependency(InlineDependency.idempotencyToken()) }
-
-        fun runtimePlugin(runtimeConfig: RuntimeConfig) =
-            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
+        fun idempotencyToken(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.idempotencyToken(runtimeConfig))
     }
 }

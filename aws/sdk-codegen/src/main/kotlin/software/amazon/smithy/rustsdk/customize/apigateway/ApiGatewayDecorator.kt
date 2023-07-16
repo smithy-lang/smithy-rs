@@ -25,7 +25,7 @@ class ApiGatewayDecorator : ClientCodegenDecorator {
     override val name: String = "ApiGateway"
     override val order: Byte = 0
 
-    // TODO(enableNewSmithyRuntime): Delete when cleaning up middleware
+    // TODO(enableNewSmithyRuntimeCleanup): Delete when cleaning up middleware
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
@@ -44,7 +44,7 @@ class ApiGatewayDecorator : ClientCodegenDecorator {
         }
 }
 
-// TODO(enableNewSmithyRuntime): Delete when cleaning up middleware
+// TODO(enableNewSmithyRuntimeCleanup): Delete when cleaning up middleware
 private class ApiGatewayAddAcceptHeader : OperationCustomization() {
     override fun section(section: OperationSection): Writable = when (section) {
         is OperationSection.FinalizeOperation -> emptySection
@@ -66,7 +66,7 @@ private class ApiGatewayAddAcceptHeader : OperationCustomization() {
 private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterInterceptor) {
+        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rustTemplate(
                     "#{Interceptor}::default()",

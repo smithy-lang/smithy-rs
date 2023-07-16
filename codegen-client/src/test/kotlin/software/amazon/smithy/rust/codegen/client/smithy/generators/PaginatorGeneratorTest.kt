@@ -6,8 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.node.StringNode
+import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -26,6 +25,7 @@ internal class PaginatorGeneratorTest {
         }
 
         @readonly
+        @optionalAuth
         @paginated(inputToken: "nextToken", outputToken: "inner.token",
                    pageSize: "maxResults", items: "inner.items")
         operation PaginatedList {
@@ -34,6 +34,7 @@ internal class PaginatorGeneratorTest {
         }
 
         @readonly
+        @optionalAuth
         @paginated(inputToken: "nextToken", outputToken: "inner.token",
                    pageSize: "maxResults", items: "inner.mapItems")
         operation PaginatedMap {
@@ -70,7 +71,7 @@ internal class PaginatorGeneratorTest {
         }
     """.asSmithyModel()
 
-    // TODO(enableNewSmithyRuntime): Remove this middleware test when launching
+    // TODO(enableNewSmithyRuntimeCleanup): Remove this middleware test when launching
     @Test
     fun `generate paginators that compile with middleware`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
@@ -81,19 +82,11 @@ internal class PaginatorGeneratorTest {
         }
     }
 
-    private fun enableNewSmithyRuntime(): ObjectNode = ObjectNode.objectNodeBuilder()
-        .withMember(
-            "codegen",
-            ObjectNode.objectNodeBuilder()
-                .withMember("enableNewSmithyRuntime", StringNode.from("orchestrator")).build(),
-        )
-        .build()
-
     @Test
     fun `generate paginators that compile`() {
         clientIntegrationTest(
             model,
-            params = IntegrationTestParams(additionalSettings = enableNewSmithyRuntime()),
+            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("paginators_generated") {
                 Attribute.AllowUnusedImports.render(this)

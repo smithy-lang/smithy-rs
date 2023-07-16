@@ -9,7 +9,7 @@ import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 
-data class CommandFailed(val output: String) : Exception("Command Failed\n$output")
+data class CommandError(val output: String) : Exception("Command Error\n$output")
 
 fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = mapOf(), timeout: Long = 3600): String {
     val parts = this.split("\\s".toRegex())
@@ -30,13 +30,13 @@ fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = 
         val output = "$stdErr\n$stdOut"
         return when (proc.exitValue()) {
             0 -> output
-            else -> throw CommandFailed("Command Failed\n$output")
+            else -> throw CommandError("Command Error\n$output")
         }
     } catch (_: IllegalThreadStateException) {
-        throw CommandFailed("Timeout")
+        throw CommandError("Timeout")
     } catch (err: IOException) {
-        throw CommandFailed("$this was not a valid command.\n  Hint: is everything installed?\n$err")
+        throw CommandError("$this was not a valid command.\n  Hint: is everything installed?\n$err")
     } catch (other: Exception) {
-        throw CommandFailed("Unexpected exception thrown when executing subprocess:\n$other")
+        throw CommandError("Unexpected exception thrown when executing subprocess:\n$other")
     }
 }

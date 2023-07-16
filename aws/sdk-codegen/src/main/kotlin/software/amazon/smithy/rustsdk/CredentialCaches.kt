@@ -17,6 +17,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 
@@ -27,7 +29,7 @@ class CredentialsCacheDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + CredentialCacheConfig(codegenContext.runtimeConfig)
+        return baseCustomizations + CredentialCacheConfig(codegenContext)
     }
 
     override fun operationCustomizations(
@@ -49,75 +51,175 @@ class CredentialsCacheDecorator : ClientCodegenDecorator {
 /**
  * Add a `.credentials_cache` field and builder to the `Config` for a given service
  */
-class CredentialCacheConfig(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val codegenScope = arrayOf(
-        "cache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache"),
-        "provider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider"),
+        *preludeScope,
+        "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache::CredentialsCache"),
         "DefaultProvider" to defaultProvider(),
+        "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
+        "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache::SharedCredentialsCache"),
+        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider::SharedCredentialsProvider"),
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            ServiceConfig.ConfigStruct -> rustTemplate(
-                """pub(crate) credentials_cache: #{cache}::SharedCredentialsCache,""",
-                *codegenScope,
-            )
-
-            ServiceConfig.ConfigImpl -> rustTemplate(
-                """
-                /// Returns the credentials cache.
-                pub fn credentials_cache(&self) -> #{cache}::SharedCredentialsCache {
-                    self.credentials_cache.clone()
+            ServiceConfig.ConfigStruct -> {
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate(
+                        """pub(crate) credentials_cache: #{SharedCredentialsCache},""",
+                        *codegenScope,
+                    )
                 }
-                """,
-                *codegenScope,
-            )
+            }
+
+            ServiceConfig.ConfigImpl -> {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Returns the credentials cache.
+                        pub fn credentials_cache(&self) -> #{Option}<#{SharedCredentialsCache}> {
+                            self.config.load::<#{SharedCredentialsCache}>().cloned()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Returns the credentials cache.
+                        pub fn credentials_cache(&self) -> #{SharedCredentialsCache} {
+                            self.credentials_cache.clone()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
 
             ServiceConfig.BuilderStruct ->
-                rustTemplate("credentials_cache: Option<#{cache}::CredentialsCache>,", *codegenScope)
+                if (runtimeMode.defaultToMiddleware) {
+                    rustTemplate("credentials_cache: #{Option}<#{CredentialsCache}>,", *codegenScope)
+                }
 
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
                     /// Sets the credentials cache for this service
-                    pub fn credentials_cache(mut self, credentials_cache: #{cache}::CredentialsCache) -> Self {
-                        self.set_credentials_cache(Some(credentials_cache));
+                    pub fn credentials_cache(mut self, credentials_cache: #{CredentialsCache}) -> Self {
+                        self.set_credentials_cache(#{Some}(credentials_cache));
                         self
                     }
 
-                    /// Sets the credentials cache for this service
-                    pub fn set_credentials_cache(&mut self, credentials_cache: Option<#{cache}::CredentialsCache>) -> &mut Self {
-                        self.credentials_cache = credentials_cache;
-                        self
+                    """,
+                    *codegenScope,
+                )
+
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Sets the credentials cache for this service
+                        pub fn set_credentials_cache(&mut self, credentials_cache: #{Option}<#{CredentialsCache}>) -> &mut Self {
+                            self.config.store_or_unset(credentials_cache);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Sets the credentials cache for this service
+                        pub fn set_credentials_cache(&mut self, credentials_cache: Option<#{CredentialsCache}>) -> &mut Self {
+                            self.credentials_cache = credentials_cache;
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+
+            ServiceConfig.BuilderBuild -> {
+                if (runtimeMode.defaultToOrchestrator) {
+                    rustTemplate(
+                        """
+                        if let Some(credentials_provider) = layer.load::<#{SharedCredentialsProvider}>().cloned() {
+                            let cache_config = layer.load::<#{CredentialsCache}>().cloned()
+                                .unwrap_or_else({
+                                    let sleep = self.runtime_components.sleep_impl();
+                                    || match sleep {
+                                        Some(sleep) => {
+                                            #{CredentialsCache}::lazy_builder()
+                                                .sleep(sleep)
+                                                .into_credentials_cache()
+                                        }
+                                        None => #{CredentialsCache}::lazy(),
+                                    }
+                                });
+                            let shared_credentials_cache = cache_config.create_cache(credentials_provider);
+                            layer.store_put(shared_credentials_cache);
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        credentials_cache: self
+                            .credentials_cache
+                            .unwrap_or_else({
+                                let sleep = self.sleep_impl.clone();
+                                || match sleep {
+                                    Some(sleep) => {
+                                        #{CredentialsCache}::lazy_builder()
+                                            .sleep(sleep)
+                                            .into_credentials_cache()
+                                    }
+                                    None => #{CredentialsCache}::lazy(),
+                                }
+                            })
+                            .create_cache(
+                                self.credentials_provider.unwrap_or_else(|| {
+                                    #{SharedCredentialsProvider}::new(#{DefaultProvider})
+                                })
+                            ),
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+
+            is ServiceConfig.OperationConfigOverride -> {
+                rustTemplate(
+                    """
+                    match (
+                        layer
+                            .load::<#{CredentialsCache}>()
+                            .cloned(),
+                        layer
+                            .load::<#{SharedCredentialsProvider}>()
+                            .cloned(),
+                    ) {
+                        (#{None}, #{None}) => {}
+                        (#{None}, _) => {
+                            panic!("also specify `.credentials_cache` when overriding credentials provider for the operation");
+                        }
+                        (_, #{None}) => {
+                            panic!("also specify `.credentials_provider` when overriding credentials cache for the operation");
+                        }
+                        (
+                            #{Some}(credentials_cache),
+                            #{Some}(credentials_provider),
+                        ) => {
+                            layer.store_put(credentials_cache.create_cache(credentials_provider));
+                        }
                     }
                     """,
                     *codegenScope,
                 )
             }
-
-            ServiceConfig.BuilderBuild -> rustTemplate(
-                """
-                credentials_cache: self
-                    .credentials_cache
-                    .unwrap_or_else({
-                        let sleep = self.sleep_impl.clone();
-                        || match sleep {
-                            Some(sleep) => {
-                                #{cache}::CredentialsCache::lazy_builder()
-                                    .sleep(sleep)
-                                    .into_credentials_cache()
-                            }
-                            None => #{cache}::CredentialsCache::lazy(),
-                        }
-                    })
-                    .create_cache(
-                        self.credentials_provider.unwrap_or_else(|| {
-                            #{provider}::SharedCredentialsProvider::new(#{DefaultProvider})
-                        })
-                    ),
-                """,
-                *codegenScope,
-            )
 
             else -> emptySection
         }

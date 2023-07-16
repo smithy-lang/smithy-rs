@@ -33,7 +33,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctio
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
-// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime` (replace with ClientProtocolGenerator)
+// TODO(enableNewSmithyRuntimeCleanup): Delete this class when cleaning up `enableNewSmithyRuntime` (replace with ClientProtocolGenerator)
 class HttpBoundProtocolGenerator(
     codegenContext: ClientCodegenContext,
     protocol: Protocol,
@@ -52,7 +52,7 @@ class HttpBoundProtocolGenerator(
     HttpBoundProtocolTraitImplGenerator(codegenContext, protocol),
 )
 
-// TODO(enableNewSmithyRuntime): Completely delete `AdditionalPayloadContext` when switching to the orchestrator
+// TODO(enableNewSmithyRuntimeCleanup): Completely delete `AdditionalPayloadContext` when switching to the orchestrator
 data class ClientAdditionalPayloadContext(
     val propertyBagAvailable: Boolean,
 ) : AdditionalPayloadContext
@@ -87,14 +87,14 @@ class ClientHttpBoundProtocolPayloadGenerator(
                 if (propertyBagAvailable) {
                     rust("properties.acquire_mut().insert(signer_sender);")
                 } else {
-                    rust("_cfg.interceptor_state().put(signer_sender);")
+                    rust("_cfg.interceptor_state().store_put(signer_sender);")
                 }
             },
         )
     },
 )
 
-// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
+// TODO(enableNewSmithyRuntimeCleanup): Delete this class when cleaning up `enableNewSmithyRuntime`
 open class HttpBoundProtocolTraitImplGenerator(
     codegenContext: ClientCodegenContext,
     protocol: Protocol,

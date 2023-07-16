@@ -3,5 +3,4 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[cfg(feature = "anonymous-auth")]
-pub mod anonymous;
+pub mod no_auth;

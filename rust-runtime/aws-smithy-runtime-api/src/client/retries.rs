@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::interceptors::InterceptorContext;
-use crate::client::orchestrator::BoxError;
+use crate::client::interceptors::context::InterceptorContext;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
 use std::time::Duration;
@@ -31,13 +30,48 @@ impl ShouldAttempt {
 }
 
 pub trait RetryStrategy: Send + Sync + Debug {
-    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<ShouldAttempt, BoxError>;
+    fn should_attempt_initial_request(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<ShouldAttempt, BoxError>;
 
     fn should_attempt_retry(
         &self,
         context: &InterceptorContext,
+        runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
     ) -> Result<ShouldAttempt, BoxError>;
+}
+
+#[derive(Clone, Debug)]
+pub struct SharedRetryStrategy(Arc<dyn RetryStrategy>);
+
+impl SharedRetryStrategy {
+    pub fn new(retry_strategy: impl RetryStrategy + 'static) -> Self {
+        Self(Arc::new(retry_strategy))
+    }
+}
+
+impl RetryStrategy for SharedRetryStrategy {
+    fn should_attempt_initial_request(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<ShouldAttempt, BoxError> {
+        self.0
+            .should_attempt_initial_request(runtime_components, cfg)
+    }
+
+    fn should_attempt_retry(
+        &self,
+        context: &InterceptorContext,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<ShouldAttempt, BoxError> {
+        self.0
+            .should_attempt_retry(context, runtime_components, cfg)
+    }
 }
 
 #[non_exhaustive]
@@ -57,9 +91,9 @@ pub trait ClassifyRetry: Send + Sync + Debug {
     fn name(&self) -> &'static str;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RetryClassifiers {
-    inner: Vec<Box<dyn ClassifyRetry>>,
+    inner: Vec<Arc<dyn ClassifyRetry>>,
 }
 
 impl RetryClassifiers {
@@ -72,8 +106,7 @@ impl RetryClassifiers {
     }
 
     pub fn with_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
-        self.inner.push(Box::new(retry_classifier));
-
+        self.inner.push(Arc::new(retry_classifier));
         self
     }
 
@@ -108,7 +141,7 @@ impl ClassifyRetry for RetryClassifiers {
 #[cfg(feature = "test-util")]
 mod test_util {
     use super::{ClassifyRetry, ErrorKind, RetryReason};
-    use crate::client::interceptors::InterceptorContext;
+    use crate::client::interceptors::context::InterceptorContext;
     use tracing::trace;
 
     /// A retry classifier for testing purposes. This classifier always returns
@@ -129,5 +162,8 @@ mod test_util {
     }
 }
 
+use crate::box_error::BoxError;
+use crate::client::runtime_components::RuntimeComponents;
+use std::sync::Arc;
 #[cfg(feature = "test-util")]
 pub use test_util::AlwaysRetry;

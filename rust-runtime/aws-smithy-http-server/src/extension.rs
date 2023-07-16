@@ -28,7 +28,7 @@ use thiserror::Error;
 use tower::Service;
 
 use crate::operation::OperationShape;
-use crate::plugin::{Plugin, PluginPipeline, PluginStack};
+use crate::plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack};
 use crate::shape_id::ShapeId;
 
 pub use crate::request::extension::{Extension, MissingExtension};
@@ -114,13 +114,13 @@ impl fmt::Debug for OperationExtensionPlugin {
     }
 }
 
-impl<P, Op, S> Plugin<P, Op, S> for OperationExtensionPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for OperationExtensionPlugin
 where
     Op: OperationShape,
 {
-    type Service = OperationExtensionService<S>;
+    type Output = OperationExtensionService<T>;
 
-    fn apply(&self, inner: S) -> Self::Service {
+    fn apply(&self, inner: T) -> Self::Output {
         OperationExtensionService {
             inner,
             operation_extension: OperationExtension(Op::ID),
@@ -128,16 +128,18 @@ where
     }
 }
 
-/// An extension trait on [`PluginPipeline`] allowing the application of [`OperationExtensionPlugin`].
+impl HttpMarker for OperationExtensionPlugin {}
+
+/// An extension trait on [`HttpPlugins`] allowing the application of [`OperationExtensionPlugin`].
 ///
 /// See [`module`](crate::extension) documentation for more info.
 pub trait OperationExtensionExt<CurrentPlugin> {
     /// Apply the [`OperationExtensionPlugin`], which inserts the [`OperationExtension`] into every [`http::Response`].
-    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, CurrentPlugin>>;
+    fn insert_operation_extension(self) -> HttpPlugins<PluginStack<OperationExtensionPlugin, CurrentPlugin>>;
 }
 
-impl<CurrentPlugin> OperationExtensionExt<CurrentPlugin> for PluginPipeline<CurrentPlugin> {
-    fn insert_operation_extension(self) -> PluginPipeline<PluginStack<OperationExtensionPlugin, CurrentPlugin>> {
+impl<CurrentPlugin> OperationExtensionExt<CurrentPlugin> for HttpPlugins<CurrentPlugin> {
+    fn insert_operation_extension(self) -> HttpPlugins<PluginStack<OperationExtensionPlugin, CurrentPlugin>> {
         self.push(OperationExtensionPlugin)
     }
 }
@@ -186,7 +188,7 @@ impl Deref for RuntimeErrorExtension {
 mod tests {
     use tower::{service_fn, Layer, ServiceExt};
 
-    use crate::{plugin::PluginLayer, proto::rest_json_1::RestJson1};
+    use crate::{plugin::PluginLayer, protocol::rest_json_1::RestJson1};
 
     use super::*;
 
@@ -221,7 +223,7 @@ mod tests {
         }
 
         // Apply `Plugin`.
-        let plugins = PluginPipeline::new().insert_operation_extension();
+        let plugins = HttpPlugins::new().insert_operation_extension();
 
         // Apply `Plugin`s `Layer`.
         let layer = PluginLayer::new::<RestJson1, DummyOp>(plugins);
