@@ -58,6 +58,8 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
 
         """
     }
+    /*
+    I initially tried to implement with LibRsCustomization but it didn't work some how.
     override fun section(section: LibRsSection): Writable {
         return if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.UnstableFeature) {
             writable { SerdeInfoText.trimIndent() }
@@ -65,4 +67,5 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
             emptySection
         }
     }
+    */
 }
