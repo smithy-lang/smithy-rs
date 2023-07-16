@@ -37,7 +37,7 @@ class SerdeDecorator : ClientCodegenDecorator {
 
 class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     companion object {
-        const val SerdeInfoText = """## How to enable `Serialize` and `Deserialize`  
+        const val SerdeInfoText = """## How to enable `Serialize` and `Deserialize`
 
             This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,
             but those traits are behind feature gate.
@@ -57,7 +57,6 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
             compilation will fail with warning.
 
         """
-
     }
     override fun section(section: LibRsSection): Writable {
         return if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.UnstableFeature) {

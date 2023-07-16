@@ -134,7 +134,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
         val compileExample = AwsDocs.canRelyOnAwsConfig(codegenContext)
         val exampleMode = if (compileExample) "no_run" else "ignore"
-        val serdeInfoText = "##"+SerdeDocGenerator.SerdeInfoText
+        val serdeInfoText = "##" + SerdeDocGenerator.SerdeInfoText
         template(
             asComments,
             """
