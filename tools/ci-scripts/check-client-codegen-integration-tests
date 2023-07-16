@@ -5,6 +5,8 @@
 #
 
 set -eux
+
+export RUSTFLAG="--cfg aws_sdk_unstable"
 cd smithy-rs
 
 # TODO(enableNewSmithyRuntimeCleanup): Only run the orchestrator version of this
