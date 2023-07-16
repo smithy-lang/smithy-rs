@@ -22,6 +22,7 @@ sealed class ModuleDocSection {
     data class ServiceDocs(val documentationTraitValue: String?) : ModuleDocSection()
     object CrateOrganization : ModuleDocSection()
     object Examples : ModuleDocSection()
+    object UnstableFeature : ModuleDocSection()
 }
 
 sealed class LibRsSection(name: String) : Section(name) {
@@ -60,6 +61,27 @@ class LibRsGenerator(
                 }
             } else {
                 containerDocs(escape(defaultServiceDocs ?: settings.moduleName))
+            }
+
+            // Unstable Feature
+            docSection(ModuleDocSection.UnstableFeature).also { docs ->
+                if (docs.isNotEmpty()) {
+                    val awsSdkUnstable = """
+                        # Unstable Features
+                        Some highly experimental features requires passing `aws_sdk_unstable` to RUSTFLAGS.
+                        e.g.
+                        ```bash
+                        export RUSTFLAGS="--cfg aws_sdk_unstable"
+                        cargo build --features serde-serialize
+                        ```
+
+                        If you enable unstable features without enabling `RUSTFLAGS="--cfg aws_sdk_unstable"`, compilation will fail with a message describing the reason.
+                    """.trimIndent()
+                    containerDocs(awsSdkUnstable)
+                    docs.forEach { writeTo ->
+                        writeTo(this)
+                    }
+                }
             }
 
             // Crate Organization
