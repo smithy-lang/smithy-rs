@@ -5,5 +5,8 @@
 #
 
 set -eux
+
+export RUSTFLAG="--cfg aws_sdk_unstable"
+
 cd aws-sdk-smoketest
 cargo test --all-features
