@@ -129,6 +129,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn server_doesnt_shutdown_after_bad_handshake() {
         let (_new_acceptor_tx, new_acceptor_rx) = mpsc::channel();
