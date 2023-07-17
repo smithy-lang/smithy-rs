@@ -359,14 +359,14 @@ class AwsPresignedFluentBuilderMethod(
                     val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
                     rustTemplate(
                         """
-                        ##[derive(Debug)]
+                        ##[derive(::std::fmt::Debug)]
                         struct AlternatePresigningSerializerRuntimePlugin;
                         impl #{RuntimePlugin} for AlternatePresigningSerializerRuntimePlugin {
-                            fn config(&self) -> Option<#{FrozenLayer}> {
+                            fn config(&self) -> #{Option}<#{FrozenLayer}> {
                                 use #{ConfigBagAccessors};
                                 let mut cfg = #{Layer}::new("presigning_serializer");
                                 cfg.set_request_serializer(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
-                                Some(cfg.freeze())
+                                #{Some}(cfg.freeze())
                             }
                         }
                         """,

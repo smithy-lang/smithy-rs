@@ -167,7 +167,7 @@ open class OperationGenerator(
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
                         #{additional_runtime_plugins}
-                        if let Some(config_override) = config_override {
+                        if let #{Some}(config_override) = config_override {
                             for plugin in config_override.runtime_plugins.iter().cloned() {
                                 runtime_plugins = runtime_plugins.with_operation_plugin(plugin);
                             }

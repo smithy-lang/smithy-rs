@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 class EndpointParamsInterceptorGenerator(
     private val codegenContext: ClientCodegenContext,
@@ -122,7 +123,7 @@ class EndpointParamsInterceptorGenerator(
         idx.getClientContextParams(codegenContext.serviceShape).orNull()?.parameters?.forEach { (name, param) ->
             val setterName = EndpointParamsGenerator.setterName(name)
             val inner = ClientContextConfigCustomization.toSymbol(param.type, symbolProvider)
-            val newtype = configParamNewtype(name, inner, codegenContext.runtimeConfig)
+            val newtype = configParamNewtype(name.toPascalCase(), inner, codegenContext.runtimeConfig)
             rustTemplate(
                 ".$setterName(cfg.#{load_from_service_config_layer})",
                 "load_from_service_config_layer" to loadFromConfigBag(inner.name, newtype),
