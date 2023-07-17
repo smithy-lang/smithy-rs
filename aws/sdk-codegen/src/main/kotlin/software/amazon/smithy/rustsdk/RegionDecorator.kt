@@ -7,7 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
@@ -82,7 +82,7 @@ class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
-    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.getBuiltIn(Builtins.REGION) != null
+    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -130,7 +130,7 @@ class RegionDecorator : ClientCodegenDecorator {
             object : EndpointCustomization {
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
-                        Builtins.REGION.builtIn -> writable {
+                        AwsBuiltIns.REGION.builtIn -> writable {
                             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                                 rustTemplate(
                                     "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
@@ -145,7 +145,7 @@ class RegionDecorator : ClientCodegenDecorator {
                 }
 
                 override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
-                    if (name != Builtins.REGION.builtIn.get()) {
+                    if (name != AwsBuiltIns.REGION.builtIn.get()) {
                         return null
                     }
                     return writable {

@@ -8,7 +8,7 @@ package software.amazon.smithy.rustsdk.endpoints
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -59,9 +59,9 @@ class OperationInputTestDecorator : ClientCodegenDecorator {
 private val deprecatedBuiltins =
     setOf(
         // The Rust SDK DOES NOT support the S3 global endpoint because we do not support bucket redirects
-        Builtins.S3_USE_GLOBAL_ENDPOINT,
+        AwsBuiltIns.S3_USE_GLOBAL_ENDPOINT,
         // STS global endpoint was deprecated after STS regionalization
-        Builtins.STS_USE_GLOBAL_ENDPOINT,
+        AwsBuiltIns.STS_USE_GLOBAL_ENDPOINT,
     ).map { it.builtIn.get() }
 
 fun usesDeprecatedBuiltIns(testOperationInput: EndpointTestOperationInput): Boolean {

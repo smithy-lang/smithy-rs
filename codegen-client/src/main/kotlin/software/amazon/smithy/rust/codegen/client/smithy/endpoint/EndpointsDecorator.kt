@@ -49,7 +49,7 @@ interface EndpointCustomization {
      * ```kotlin
      * override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
      *     return when (parameter.builtIn) {
-     *         Builtins.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
+     *         AwsBuiltIns.REGION.builtIn -> writable { rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())") }
      *         else -> null
      *     }
      * }
@@ -63,7 +63,7 @@ interface EndpointCustomization {
      * Example:
      * ```kotlin
      * override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
-     *     if (name != Builtins.REGION.builtIn.get()) {
+     *     if (name != AwsBuiltIns.REGION.builtIn.get()) {
      *         return null
      *     }
      *     return writable {

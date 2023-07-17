@@ -231,7 +231,7 @@ class CustomizableOperationGenerator(
                         /// Convenience for `map_request` where infallible direct mutation of request is acceptable.
                         pub fn mutate_request<F>(mut self, f: F) -> Self
                         where
-                            F: #{Fn}(&mut http::Request<#{SdkBody}>) + #{Send} + #{Sync} + 'static,
+                            F: #{Fn}(&mut #{HttpRequest}) + #{Send} + #{Sync} + 'static,
                         {
                             self.interceptors.push(
                                 #{SharedInterceptor}::new(

@@ -5,7 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
-import software.amazon.smithy.rulesengine.language.eval.Value
+import software.amazon.smithy.rulesengine.language.evaluation.value.ArrayValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.BooleanValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.IntegerValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.RecordValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.StringValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.Value
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
@@ -119,9 +124,9 @@ internal class EndpointTestGenerator(
     private fun generateValue(value: Value): Writable {
         return {
             when (value) {
-                is Value.String -> rust(escape(value.value()).dq() + ".to_string()")
-                is Value.Bool -> rust(value.toString())
-                is Value.Array -> {
+                is StringValue -> rust(escape(value.value).dq() + ".to_string()")
+                is BooleanValue -> rust(value.toString())
+                is ArrayValue -> {
                     rust(
                         "vec![#W]",
                         value.values.map { member ->
@@ -136,9 +141,9 @@ internal class EndpointTestGenerator(
                     )
                 }
 
-                is Value.Integer -> rust(value.expectInteger().toString())
+                is IntegerValue -> rust(value.value.toString())
 
-                is Value.Record ->
+                is RecordValue ->
                     rustBlock("") {
                         rustTemplate(
                             "let mut out = #{HashMap}::<String, #{Document}>::new();",
@@ -147,7 +152,7 @@ internal class EndpointTestGenerator(
                         // TODO(https://github.com/awslabs/smithy/pull/1555): remove sort by name when upgrading to
                         //   Smithy version with this PR merged
                         val keys = mutableListOf<Identifier>()
-                        value.forEach { id, _ -> keys.add(id) }
+                        value.value.forEach { (id, _) -> keys.add(id) }
                         keys.sortedBy { it.name.value }.forEach { identifier ->
                             val v = value.get(identifier)
                             rust(
