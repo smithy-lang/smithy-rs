@@ -195,12 +195,8 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                 rustTemplate(
                     """
                     match (
-                        layer
-                            .load::<#{CredentialsCache}>()
-                            .cloned(),
-                        layer
-                            .load::<#{SharedCredentialsProvider}>()
-                            .cloned(),
+                        resolver.config_mut().load::<#{CredentialsCache}>().cloned(),
+                        resolver.config_mut().load::<#{SharedCredentialsProvider}>().cloned(),
                     ) {
                         (#{None}, #{None}) => {}
                         (#{None}, _) => {
@@ -213,7 +209,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                             #{Some}(credentials_cache),
                             #{Some}(credentials_provider),
                         ) => {
-                            layer.store_put(credentials_cache.create_cache(credentials_provider));
+                            resolver.config_mut().store_put(credentials_cache.create_cache(credentials_provider));
                         }
                     }
                     """,
