@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import io.kotest.matchers.string.shouldContainInOrder
 import io.kotest.matchers.string.shouldNotContain
-import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -401,7 +400,7 @@ class StructureGeneratorTest {
     }
 
     @Test
-    fun `non-streaming fields are doc-hidden`() {
+    fun `fields are NOT doc-hidden`() {
         val model = """
             namespace com.test
             structure MyStruct {
@@ -415,9 +414,9 @@ class StructureGeneratorTest {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
 
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
-        RustWriter.forModule("test").let {
-            StructureGenerator(model, provider, it, struct, emptyList()).render()
-            assertEquals(6, it.toString().split("#[doc(hidden)]").size, "there should be 5 doc-hiddens")
+        RustWriter.forModule("test").let { writer ->
+            StructureGenerator(model, provider, writer, struct, emptyList()).render()
+            writer.toString().shouldNotContain("#[doc(hidden)]")
         }
     }
 
