@@ -136,6 +136,9 @@ class AwsServices(
  */
 fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membership): AwsServices {
     val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
+    if (!models.exists()) {
+        throw Exception("model path $awsModelsPath does not exist!")
+    }
     logger.info("Using model path: $models")
     val baseServices = fileTree(models)
         .sortedBy { file -> file.name }

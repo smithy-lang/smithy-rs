@@ -302,7 +302,10 @@ class DefaultProtocolTestGenerator(
             if (authScheme.isPresent) {
                 logger.warning("Test case provided authScheme but this was ignored")
             }
-            if (!httpRequestTestCase.vendorParams.isEmpty) {
+
+            val testHasUnknownParams =
+                httpRequestTestCase.vendorParams.members.filterKeys { it.value != "endpointParams" }.isNotEmpty()
+            if (testHasUnknownParams) {
                 logger.warning("Test case provided vendorParams but these were ignored")
             }
         }

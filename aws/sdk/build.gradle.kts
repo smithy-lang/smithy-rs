@@ -174,14 +174,14 @@ tasks.register("relocateServices") {
                 into(sdkOutputDir.resolve(it.module))
             }
 
-            copy {
-                from(projectDir.resolve("integration-tests/${it.module}/tests"))
-                into(sdkOutputDir.resolve(it.module).resolve("tests"))
-            }
-
-            copy {
-                from(projectDir.resolve("integration-tests/${it.module}/benches"))
-                into(sdkOutputDir.resolve(it.module).resolve("benches"))
+            listOf("tests", "benches").forEach { folder ->
+                val fromDir = projectDir.resolve("integration-tests/${it.module}/$folder")
+                if (fromDir.exists()) {
+                    copy {
+                        from(fromDir)
+                        into(sdkOutputDir.resolve(it.module).resolve(folder))
+                    }
+                }
             }
         }
     }
