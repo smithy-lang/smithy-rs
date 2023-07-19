@@ -453,7 +453,12 @@ tasks["test"].dependsOn("assemble")
 tasks["test"].finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 
 tasks.register<Delete>("deleteSdk") {
-    delete = setOf(outputDir)
+    delete(
+        fileTree(outputDir) {
+            // Delete files but keep directories so that terminals don't get messed up in local development
+            include("**/*.*")
+        },
+    )
 }
 tasks["clean"].dependsOn("deleteSdk")
 tasks["clean"].doFirst {
