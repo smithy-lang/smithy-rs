@@ -21,7 +21,7 @@ aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = tr
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
-fastrand = "1.4"
+fastrand = "2.0.0"
 http = "0.2.8"
 http-body = "0.4.5"
 once_cell = "1.18.0"

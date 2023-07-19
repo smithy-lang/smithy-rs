@@ -26,7 +26,7 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1"
-fastrand = "1"
+fastrand = "2.0.0"
 futures-util = "0.3"
 http = "0.2.1"
 md-5 = "0.10.0"

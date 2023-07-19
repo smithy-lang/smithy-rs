@@ -69,7 +69,7 @@ impl DefaultInvocationIdGenerator {
 
 impl InvocationIdGenerator for DefaultInvocationIdGenerator {
     fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
-        let rng = self.rng.lock().unwrap();
+        let mut rng = self.rng.lock().unwrap();
         let mut random_bytes = [0u8; 16];
         rng.fill(&mut random_bytes);
 
