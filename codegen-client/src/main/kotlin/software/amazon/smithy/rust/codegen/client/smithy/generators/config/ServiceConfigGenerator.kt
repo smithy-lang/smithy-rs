@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
 import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -335,7 +336,11 @@ class ServiceConfigGenerator(
             if (runtimeMode.defaultToOrchestrator) {
                 rustTemplate(
                     """
+                    // Both `config` and `cloneable` are the same config, but the cloneable one
+                    // is kept around so that it is possible to convert back into a builder. This can be
+                    // optimized in the future.
                     pub(crate) config: #{FrozenLayer},
+                    cloneable: #{CloneableLayer},
                     pub(crate) runtime_components: #{RuntimeComponentsBuilder},
                     pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
                     """,
@@ -368,15 +373,30 @@ class ServiceConfigGenerator(
                 pub fn builder() -> Builder { Builder::default() }
                 """,
             )
+            if (runtimeMode.defaultToOrchestrator) {
+                writer.rustTemplate(
+                    """
+                    /// Converts this config back into a builder so that it can be tweaked.
+                    pub fn to_builder(&self) -> Builder {
+                        Builder {
+                            config: self.cloneable.clone(),
+                            runtime_components: self.runtime_components.clone(),
+                            runtime_plugins: self.runtime_plugins.clone(),
+                        }
+                    }
+                    """,
+                )
+            }
             customizations.forEach {
                 it.section(ServiceConfig.ConfigImpl)(this)
             }
         }
 
         writer.docs("Builder for creating a `Config`.")
-        writer.raw("#[derive(Clone, Default)]")
-        if (runtimeMode.defaultToOrchestrator) {
-            Attribute(Attribute.derive(RuntimeType.Debug)).render(writer)
+        if (runtimeMode.defaultToMiddleware) {
+            writer.raw("#[derive(Clone, Default)]")
+        } else {
+            writer.raw("#[derive(Clone, Debug)]")
         }
         writer.rustBlock("pub struct Builder") {
             if (runtimeMode.defaultToOrchestrator) {
@@ -404,6 +424,22 @@ class ServiceConfigGenerator(
                         config.finish()
                     }
                     """,
+                )
+            }
+        } else {
+            // Custom implementation of Default to give the runtime components builder a name
+            writer.rustBlockTemplate("impl #{Default} for Builder", *codegenScope) {
+                writer.rustTemplate(
+                    """
+                    fn default() -> Self {
+                        Self {
+                            config: #{Default}::default(),
+                            runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
+                            runtime_plugins: #{Default}::default(),
+                        }
+                    }
+                    """,
+                    *codegenScope,
                 )
             }
         }
@@ -460,12 +496,7 @@ class ServiceConfigGenerator(
                 rustBlock("pub fn build(mut self) -> Config") {
                     rustTemplate(
                         """
-                        // The builder is being turned into a service config. While doing so, we'd like to avoid
-                        // requiring that items created and stored _during_ the build method be `Clone`, since they
-                        // will soon be part of a `FrozenLayer` owned by the service config. So we will convert the
-                        // current `CloneableLayer` into a `Layer` that does not impose the `Clone` requirement.
-                        let mut layer = #{Layer}::from(self.config).with_name("$moduleUseName::config::Config");
-                        ##[allow(unused)]
+                        let mut layer = self.config;
                         let mut resolver = #{Resolver}::initial(&mut layer, &mut self.runtime_components);
                         """,
                         *codegenScope,
@@ -477,12 +508,14 @@ class ServiceConfigGenerator(
                         customizations.forEach {
                             it.section(ServiceConfig.BuilderBuildExtras)(this)
                         }
-                        rust(
+                        rustTemplate(
                             """
-                            config: layer.freeze(),
+                            config: #{Layer}::from(layer.clone()).with_name("$moduleUseName::config::Config").freeze(),
+                            cloneable: layer,
                             runtime_components: self.runtime_components,
                             runtime_plugins: self.runtime_plugins,
                             """,
+                            *codegenScope,
                         )
                     }
                 }
