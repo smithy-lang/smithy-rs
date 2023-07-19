@@ -3,14 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::convert::Infallible;
-
-use crate::body::BoxBody;
 use crate::routing::request_spec::Match;
 use crate::routing::request_spec::RequestSpec;
-use crate::routing::Route;
 use crate::routing::Router;
-use tower::Layer;
 use tower::Service;
 
 use thiserror::Error;
@@ -35,37 +30,9 @@ pub struct RestRouter<S> {
     routes: Vec<(RequestSpec, S)>,
 }
 
-impl<S> RestRouter<S> {
-    /// Applies a [`Layer`] uniformly to all routes.
-    pub fn layer<L>(self, layer: L) -> RestRouter<L::Service>
-    where
-        L: Layer<S>,
-    {
-        RestRouter {
-            routes: self
-                .routes
-                .into_iter()
-                .map(|(request_spec, route)| (request_spec, layer.layer(route)))
-                .collect(),
-        }
-    }
-
-    /// Applies type erasure to the inner route using [`Route::new`].
-    pub fn boxed<B>(self) -> RestRouter<Route<B>>
-    where
-        S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
-        S: Send + Clone + 'static,
-        S::Future: Send + 'static,
-    {
-        RestRouter {
-            routes: self.routes.into_iter().map(|(spec, s)| (spec, Route::new(s))).collect(),
-        }
-    }
-}
-
 impl<B, S> Router<B> for RestRouter<S>
 where
-    S: Clone,
+    S: Service<http::Request<B>, Error = std::convert::Infallible> + Clone,
 {
     type Service = S;
     type Error = Error;

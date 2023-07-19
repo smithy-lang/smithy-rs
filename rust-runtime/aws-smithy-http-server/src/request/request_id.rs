@@ -92,7 +92,7 @@ impl Display for ServerRequestId {
     }
 }
 
-impl<P> FromParts<P> for ServerRequestId {
+impl<Ser, Op> FromParts<Ser, Op> for ServerRequestId {
     type Rejection = MissingServerRequestId;
 
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection> {
@@ -188,7 +188,7 @@ where
     }
 }
 
-impl<Protocol> IntoResponse<Protocol> for MissingServerRequestId {
+impl<Ser, Op> IntoResponse<Ser, Op> for MissingServerRequestId {
     fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }

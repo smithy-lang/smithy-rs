@@ -5,14 +5,14 @@
 
 use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;
-use crate::response::IntoResponse;
+use crate::response::IntoResponseUniform;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::RestJson1;
 
 pub use crate::protocol::rest::router::*;
 
-impl IntoResponse<RestJson1> for Error {
+impl IntoResponseUniform<RestJson1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::NotFound => http::Response::builder()

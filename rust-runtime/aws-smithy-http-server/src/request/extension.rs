@@ -81,13 +81,13 @@ impl<T> Deref for Extension<T> {
 #[error("the `Extension` is not present in the `http::Request`")]
 pub struct MissingExtension;
 
-impl<Protocol> IntoResponse<Protocol> for MissingExtension {
+impl<Ser, Op> IntoResponse<Ser, Op> for MissingExtension {
     fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
 }
 
-impl<Protocol, T> FromParts<Protocol> for Extension<T>
+impl<Ser, Op, T> FromParts<Ser, Op> for Extension<T>
 where
     T: Send + Sync + 'static,
 {

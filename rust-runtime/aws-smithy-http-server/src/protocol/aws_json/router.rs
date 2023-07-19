@@ -3,14 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::convert::Infallible;
-
-use tower::Layer;
 use tower::Service;
 
-use crate::body::BoxBody;
 use crate::routing::tiny_map::TinyMap;
-use crate::routing::Route;
 use crate::routing::Router;
 
 use http::header::ToStrError;
@@ -50,37 +45,9 @@ pub struct AwsJsonRouter<S> {
     routes: TinyMap<String, S, ROUTE_CUTOFF>,
 }
 
-impl<S> AwsJsonRouter<S> {
-    /// Applies a [`Layer`] uniformly to all routes.
-    pub fn layer<L>(self, layer: L) -> AwsJsonRouter<L::Service>
-    where
-        L: Layer<S>,
-    {
-        AwsJsonRouter {
-            routes: self
-                .routes
-                .into_iter()
-                .map(|(key, route)| (key, layer.layer(route)))
-                .collect(),
-        }
-    }
-
-    /// Applies type erasure to the inner route using [`Route::new`].
-    pub fn boxed<B>(self) -> AwsJsonRouter<Route<B>>
-    where
-        S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
-        S: Send + Clone + 'static,
-        S::Future: Send + 'static,
-    {
-        AwsJsonRouter {
-            routes: self.routes.into_iter().map(|(key, s)| (key, Route::new(s))).collect(),
-        }
-    }
-}
-
 impl<B, S> Router<B> for AwsJsonRouter<S>
 where
-    S: Clone,
+    S: Service<http::Request<B>, Error = std::convert::Infallible> + Clone,
 {
     type Service = S;
     type Error = Error;

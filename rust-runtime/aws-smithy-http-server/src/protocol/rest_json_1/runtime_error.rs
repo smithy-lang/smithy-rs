@@ -34,8 +34,10 @@ use super::rejection::ResponseRejection;
 use super::RestJson1;
 use crate::extension::RuntimeErrorExtension;
 use crate::response::IntoResponse;
+use crate::response::IntoResponseUniform;
 use crate::runtime_error::InternalFailureException;
 use crate::runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE;
+use crate::service::ServiceShape;
 use http::StatusCode;
 
 #[derive(Debug)]
@@ -80,13 +82,25 @@ impl RuntimeError {
     }
 }
 
-impl IntoResponse<RestJson1> for InternalFailureException {
+impl<Ser, Op> IntoResponse<Ser, Op> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        IntoResponse::<RestJson1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+        IntoResponseUniform::<RestJson1>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-impl IntoResponse<RestJson1> for RuntimeError {
+impl<Ser, Op> IntoResponse<Ser, Op> for RuntimeError
+where
+    Ser: ServiceShape,
+    Self: IntoResponseUniform<Ser::Protocol>,
+{
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        IntoResponseUniform::<Ser::Protocol>::into_response(RuntimeError::InternalFailure(crate::Error::new(
+            String::new(),
+        )))
+    }
+}
+
+impl IntoResponseUniform<RestJson1> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
             .status(self.status_code())

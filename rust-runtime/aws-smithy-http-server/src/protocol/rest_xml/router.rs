@@ -6,7 +6,7 @@
 use crate::body::empty;
 use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;
-use crate::response::IntoResponse;
+use crate::response::IntoResponseUniform;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::RestXml;
@@ -14,7 +14,7 @@ use super::RestXml;
 pub use crate::protocol::rest::router::*;
 
 /// An AWS REST routing error.
-impl IntoResponse<RestXml> for Error {
+impl IntoResponseUniform<RestXml> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::NotFound => http::Response::builder()

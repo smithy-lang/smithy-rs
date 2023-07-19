@@ -6,148 +6,75 @@
 use std::{
     convert::Infallible,
     future::Future,
-    marker::PhantomData,
     task::{Context, Poll},
 };
 
 use futures_util::{future::Map, FutureExt};
 use tower::Service;
 
-use super::OperationShape;
-
 /// A utility trait used to provide an even interface for all operation handlers.
 ///
 /// See [`operation`](crate::operation) documentation for more info.
-pub trait Handler<Op, Exts>
-where
-    Op: OperationShape,
-{
-    type Future: Future<Output = Result<Op::Output, Op::Error>>;
+pub trait Handler<Input>: Clone + Send + 'static {
+    type Future: Future;
 
-    fn call(&mut self, input: Op::Input, exts: Exts) -> Self::Future;
+    fn call(self, request: Input) -> Self::Future;
 }
 
-/// A utility trait used to provide an even interface over return types `Result<Ok, Error>`/`Ok`.
-trait IntoResult<Ok, Error> {
-    fn into_result(self) -> Result<Ok, Error>;
-}
-
-// We can convert from `Result<Ok, Error>` to `Result<Ok, Error>`.
-impl<Ok, Error> IntoResult<Ok, Error> for Result<Ok, Error> {
-    fn into_result(self) -> Result<Ok, Error> {
-        self
-    }
-}
-
-// We can convert from `T` to `Result<T, Infallible>`.
-impl<Ok> IntoResult<Ok, Infallible> for Ok {
-    fn into_result(self) -> Result<Ok, Infallible> {
-        Ok(self)
-    }
-}
-
-// fn(Input) -> Output
-impl<Op, F, Fut> Handler<Op, ()> for F
-where
-    Op: OperationShape,
-    F: Fn(Op::Input) -> Fut,
-    Fut: Future,
-    Fut::Output: IntoResult<Op::Output, Op::Error>,
-{
-    type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
-
-    fn call(&mut self, input: Op::Input, _exts: ()) -> Self::Future {
-        (self)(input).map(IntoResult::into_result)
-    }
-}
-
-// fn(Input, Ext_i) -> Output
 macro_rules! impl_handler {
-    ($($var:ident),+) => (
-        impl<Op, F, Fut, $($var,)*> Handler<Op, ($($var,)*)> for F
+    ($($ty: ident),*) => {
+        impl<$($ty,)* F, Fut> Handler<($($ty,)*)> for F
         where
-            Op: OperationShape,
-            F: Fn(Op::Input, $($var,)*) -> Fut,
+            F: Fn($($ty),*) -> Fut,
+            F: Clone + Send + 'static,
             Fut: Future,
-            Fut::Output: IntoResult<Op::Output, Op::Error>,
         {
-            type Future = Map<Fut, fn(Fut::Output) -> Result<Op::Output, Op::Error>>;
+            type Future = Fut;
 
-            fn call(&mut self, input: Op::Input, exts: ($($var,)*)) -> Self::Future {
-                #[allow(non_snake_case)]
-                let ($($var,)*) = exts;
-                (self)(input, $($var,)*).map(IntoResult::into_result)
+            #[allow(non_snake_case)]
+            fn call(self, ($($ty,)*): ($($ty,)*)) -> Self::Future {
+                self($($ty),*)
             }
         }
-    )
+    };
 }
 
-impl_handler!(Exts0);
-impl_handler!(Exts0, Exts1);
-impl_handler!(Exts0, Exts1, Exts2);
-impl_handler!(Exts0, Exts1, Exts2, Exts3);
-impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4);
-impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5);
-impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5, Exts6);
-impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5, Exts6, Exts7);
-impl_handler!(Exts0, Exts1, Exts2, Exts3, Exts4, Exts5, Exts6, Exts7, Exts8);
-
-/// An extension trait for [`Handler`].
-pub trait HandlerExt<Op, Exts>: Handler<Op, Exts>
-where
-    Op: OperationShape,
-{
-    /// Convert the [`Handler`] into a [`Service`].
-    fn into_service(self) -> IntoService<Op, Self>
-    where
-        Self: Sized,
-    {
-        IntoService {
-            handler: self,
-            _operation: PhantomData,
-        }
-    }
-}
-
-impl<Op, Exts, H> HandlerExt<Op, Exts> for H
-where
-    Op: OperationShape,
-    H: Handler<Op, Exts>,
-{
-}
+impl_handler!(T0);
+impl_handler!(T0, T2);
+impl_handler!(T0, T2, T3);
+impl_handler!(T0, T2, T3, T4);
+impl_handler!(T0, T2, T3, T4, T5);
+impl_handler!(T0, T2, T3, T4, T5, T6);
+impl_handler!(T0, T2, T3, T4, T5, T6, T7);
+impl_handler!(T0, T2, T3, T4, T5, T6, T7, T8);
+impl_handler!(T0, T2, T3, T4, T5, T6, T7, T8, T9);
 
 /// A [`Service`] provided for every [`Handler`].
-pub struct IntoService<Op, H> {
-    pub(crate) handler: H,
-    pub(crate) _operation: PhantomData<Op>,
+#[derive(Debug, Clone)]
+pub struct IntoService<H> {
+    handler: H,
 }
 
-impl<Op, H> Clone for IntoService<Op, H>
+impl<Input, H> Service<Input> for IntoService<H>
 where
-    H: Clone,
+    H: Handler<Input>,
+    H::Future: Future,
 {
-    fn clone(&self) -> Self {
-        Self {
-            handler: self.handler.clone(),
-            _operation: PhantomData,
-        }
-    }
-}
-
-impl<Op, Exts, H> Service<(Op::Input, Exts)> for IntoService<Op, H>
-where
-    Op: OperationShape,
-    H: Handler<Op, Exts>,
-{
-    type Response = Op::Output;
-    type Error = Op::Error;
-    type Future = H::Future;
+    type Response = <H::Future as Future>::Output;
+    type Error = Infallible;
+    type Future = Map<H::Future, fn(Self::Response) -> Result<Self::Response, Infallible>>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, (input, exts): (Op::Input, Exts)) -> Self::Future {
-        self.handler.call(input, exts)
+    fn call(&mut self, request: Input) -> Self::Future {
+        self.handler.clone().call(request).map(Ok)
+    }
+}
+
+impl<H> IntoService<H> {
+    pub fn new(handler: H) -> Self {
+        Self { handler }
     }
 }

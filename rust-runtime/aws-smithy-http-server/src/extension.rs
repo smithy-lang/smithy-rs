@@ -216,10 +216,6 @@ mod tests {
                 "com.amazonaws.ebs",
                 "CompleteSnapshot",
             );
-
-            type Input = ();
-            type Output = ();
-            type Error = ();
         }
 
         // Apply `Plugin`.
