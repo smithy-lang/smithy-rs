@@ -148,7 +148,7 @@ where
             Oneshot { oneshot } => oneshot.poll(cx).map_err(|err| match err {}),
             Error { error } => {
                 let error = error.take().expect("futures should not be polled after completion");
-                return Poll::Ready(Err(error));
+                Poll::Ready(Err(error))
             }
         }
     }
