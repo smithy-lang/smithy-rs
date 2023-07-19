@@ -40,7 +40,7 @@ fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = 
 // TODO(enableNewSmithyRuntimeCleanup): Remove defaultToOrchestrator once the runtime switches to the orchestrator
 fun awsSdkIntegrationTest(
     model: Model,
-    defaultToOrchestrator: Boolean = false,
+    defaultToOrchestrator: Boolean = true,
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) =
     clientIntegrationTest(
