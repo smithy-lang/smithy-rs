@@ -245,7 +245,7 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     arguments = listOf(
         "use-path-and-version-dependencies",
         "--isolate-crates",
-        "--sdk-path", "../../sdk",
+        "--sdk-path", sdkOutputDir.absolutePath,
         "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
         outputDir.resolve("examples").absolutePath,
     )
