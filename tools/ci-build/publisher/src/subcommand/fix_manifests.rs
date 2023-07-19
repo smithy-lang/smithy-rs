@@ -75,11 +75,7 @@ struct Manifest {
 impl Manifest {
     /// Returns the `publish` setting for a given crate
     fn publish(&self) -> Result<bool> {
-        let value = self
-            .metadata
-            .get("package")
-            .expect("checked above")
-            .get("publish");
+        let value = self.metadata.get("package").and_then(|v| v.get("publish"));
         match value {
             None => Ok(true),
             Some(value) => value
