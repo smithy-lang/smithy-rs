@@ -646,3 +646,9 @@ message = "The implementation `From<bytes_utils::segmented::SegmentedBuf>` for `
 references = ["smithy-rs#2848"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Public fields in structs are no longer marked as `#[doc(hidden)]`, and they are now visible."
+references = ["smithy-rs#2854"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
