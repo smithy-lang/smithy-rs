@@ -21,3 +21,7 @@ aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 pokemon-service-client = { path = "../pokemon-service-client" }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk" }
+
+[dev-dependencies]
+aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }

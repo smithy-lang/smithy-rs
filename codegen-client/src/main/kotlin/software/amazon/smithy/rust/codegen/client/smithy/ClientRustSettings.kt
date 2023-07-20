@@ -125,6 +125,8 @@ data class ClientCodegenConfig(
     val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
     // TODO(SmithyRuntime): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
     val enableNewSmithyRuntime: SmithyRuntimeMode = defaultEnableNewSmithyRuntime,
+    /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
+    val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
@@ -133,7 +135,8 @@ data class ClientCodegenConfig(
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
-        private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Middleware
+        private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Orchestrator
+        private const val defaultIncludeEndpointUrlConfig = true
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -144,11 +147,15 @@ data class ClientCodegenConfig(
                         .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
                         .orNull()?.toSet() ?: defaultEventStreamAllowList,
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
-                    includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
-                    addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
+                    includeFluentClient = node.get()
+                        .getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
+                    addMessageToErrors = node.get()
+                        .getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
                     enableNewSmithyRuntime = SmithyRuntimeMode.fromString(
                         node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware"),
                     ),
+                    includeEndpointUrlConfig = node.get()
+                        .getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
                 )
             } else {
                 ClientCodegenConfig(

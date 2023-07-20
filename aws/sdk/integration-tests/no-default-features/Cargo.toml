@@ -17,6 +17,7 @@ publish = false
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 futures = "0.3.25"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }

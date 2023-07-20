@@ -67,15 +67,15 @@ class OperationRuntimePluginGenerator(
                     let mut cfg = #{Layer}::new(${operationShape.id.name.dq()});
                     use #{ConfigBagAccessors} as _;
 
-                    cfg.set_request_serializer(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
-                    cfg.set_response_deserializer(#{DynResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
+                    cfg.store_put(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
+                    cfg.store_put(#{DynResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
 
                     ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
                     cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{StaticAuthOptionResolverParams}::new()));
 
                     #{additional_config}
 
-                    Some(cfg.freeze())
+                    #{Some}(cfg.freeze())
                 }
 
                 fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
@@ -85,7 +85,7 @@ class OperationRuntimePluginGenerator(
 
                     #{Cow}::Owned(
                         #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
-                            .with_retry_classifiers(Some(retry_classifiers))
+                            .with_retry_classifiers(#{Some}(retry_classifiers))
                             #{auth_options}
                             #{interceptors}
                     )

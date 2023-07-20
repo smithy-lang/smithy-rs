@@ -101,7 +101,7 @@ class ServiceRuntimePluginGenerator(
         }
         writer.rustTemplate(
             """
-            ##[derive(Debug)]
+            ##[derive(::std::fmt::Debug)]
             pub(crate) struct ServiceRuntimePlugin {
                 config: #{Option}<#{FrozenLayer}>,
                 runtime_components: #{RuntimeComponentsBuilder},
@@ -136,7 +136,7 @@ class ServiceRuntimePluginGenerator(
                         """
                         let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
                         #{additional_config}
-                        Some(cfg.freeze())
+                        #{Some}(cfg.freeze())
                         """,
                         *codegenScope,
                         "additional_config" to additionalConfig,

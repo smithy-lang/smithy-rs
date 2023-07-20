@@ -8,19 +8,15 @@ use std::io::BufReader;
 use std::process::Command;
 use std::time::Duration;
 
-use aws_smithy_client::{erase::DynConnector, hyper_ext::Adapter};
-use aws_smithy_http::operation::Request;
+use aws_smithy_client::hyper_ext::Adapter;
 use command_group::{CommandGroup, GroupChild};
-use pokemon_service_client::{Builder, Client, Config};
+use pokemon_service_client::{Client, Config};
 use tokio::time;
 
 const TEST_KEY: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/testdata/localhost.key");
 const TEST_CERT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/testdata/localhost.crt");
 
-pub type PokemonClient = Client<
-    aws_smithy_client::erase::DynConnector,
-    aws_smithy_client::erase::DynMiddleware<aws_smithy_client::erase::DynConnector>,
->;
+pub type PokemonClient = Client;
 
 enum PokemonServiceVariant {
     Http,
@@ -94,12 +90,8 @@ impl Drop for PokemonService {
 #[allow(dead_code)]
 pub fn client() -> PokemonClient {
     let base_url = PokemonServiceVariant::Http.base_url();
-    let raw_client = Builder::new()
-        .rustls_connector(Default::default())
-        .middleware_fn(rewrite_base_url(base_url))
-        .build_dyn();
-    let config = Config::builder().build();
-    Client::with_config(raw_client, config)
+    let config = Config::builder().endpoint_url(base_url).build();
+    Client::from_conf(config)
 }
 
 #[allow(dead_code)]
@@ -122,19 +114,9 @@ pub fn http2_client() -> PokemonClient {
         .build();
 
     let base_url = PokemonServiceVariant::Http2.base_url();
-    let raw_client = Builder::new()
-        .connector(DynConnector::new(Adapter::builder().build(connector)))
-        .middleware_fn(rewrite_base_url(base_url))
-        .build_dyn();
-    let config = Config::builder().build();
-    Client::with_config(raw_client, config)
-}
-
-fn rewrite_base_url(base_url: &'static str) -> impl Fn(Request) -> Request + Clone {
-    move |mut req| {
-        let http_req = req.http_mut();
-        let uri = format!("{base_url}{}", http_req.uri().path());
-        *http_req.uri_mut() = uri.parse().unwrap();
-        req
-    }
+    let config = Config::builder()
+        .http_connector(Adapter::builder().build(connector))
+        .endpoint_url(base_url)
+        .build();
+    Client::from_conf(config)
 }

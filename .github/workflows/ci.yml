@@ -84,8 +84,8 @@ jobs:
         test:
         - action: check-aws-sdk-adhoc-tests
           runner: ubuntu-latest
-        # TODO(enableNewSmithyRuntimeCleanup): Remove `check-aws-sdk-orchestrator-impl` when cleaning up middleware
-        - action: check-aws-sdk-orchestrator-impl
+        # TODO(enableNewSmithyRuntimeCleanup): Remove `check-aws-sdk-middleware-impl` when cleaning up middleware
+        - action: check-aws-sdk-middleware-impl
           runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core

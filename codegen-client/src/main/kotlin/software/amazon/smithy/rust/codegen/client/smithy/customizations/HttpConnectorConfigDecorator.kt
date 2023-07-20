@@ -41,7 +41,6 @@ private class HttpConnectorConfigCustomization(
         *preludeScope,
         "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
         "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
-        "default_connector" to RuntimeType.smithyClient(runtimeConfig).resolve("conns::default_connector"),
         "DynConnectorAdapter" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::connectors::adapter::DynConnectorAdapter"),
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
@@ -49,6 +48,31 @@ private class HttpConnectorConfigCustomization(
         "SharedConnector" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::connectors::SharedConnector"),
         "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
     )
+
+    private fun defaultConnectorFn(): RuntimeType = RuntimeType.forInlineFun("default_connector", ClientRustModule.config) {
+        rustTemplate(
+            """
+            ##[cfg(feature = "rustls")]
+            fn default_connector(
+                connector_settings: &#{ConnectorSettings},
+                sleep_impl: #{Option}<#{SharedAsyncSleep}>,
+            ) -> #{Option}<#{DynConnector}> {
+                #{default_connector}(connector_settings, sleep_impl)
+            }
+
+            ##[cfg(not(feature = "rustls"))]
+            fn default_connector(
+                _connector_settings: &#{ConnectorSettings},
+                _sleep_impl: #{Option}<#{SharedAsyncSleep}>,
+            ) -> #{Option}<#{DynConnector}> {
+                #{None}
+            }
+            """,
+            *codegenScope,
+            "default_connector" to RuntimeType.smithyClient(runtimeConfig).resolve("conns::default_connector"),
+            "DynConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("erase::DynConnector"),
+        )
+    }
 
     private fun setConnectorFn(): RuntimeType = RuntimeType.forInlineFun("set_connector", ClientRustModule.config) {
         rustTemplate(
@@ -84,6 +108,7 @@ private class HttpConnectorConfigCustomization(
             }
             """,
             *codegenScope,
+            "default_connector" to defaultConnectorFn(),
         )
     }
 

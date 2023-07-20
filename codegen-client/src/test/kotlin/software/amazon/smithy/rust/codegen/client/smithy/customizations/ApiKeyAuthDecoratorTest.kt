@@ -6,14 +6,15 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete this test (replaced by HttpAuthDecoratorTest)
 internal class ApiKeyAuthDecoratorTest {
     private val modelQuery = """
         namespace test
@@ -46,7 +47,8 @@ internal class ApiKeyAuthDecoratorTest {
         val testDir = clientIntegrationTest(
             modelQuery,
             // just run integration tests
-            IntegrationTestParams(command = { "cargo test --test *".runWithWarnings(it) }),
+            TestCodegenSettings.middlewareModeTestParams
+                .copy(command = { "cargo test --test *".runWithWarnings(it) }),
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_present_in_property_bag") {
                 val moduleName = clientCodegenContext.moduleUseName()
@@ -136,7 +138,8 @@ internal class ApiKeyAuthDecoratorTest {
         val testDir = clientIntegrationTest(
             modelHeader,
             // just run integration tests
-            IntegrationTestParams(command = { "cargo test --test *".runWithWarnings(it) }),
+            TestCodegenSettings.middlewareModeTestParams
+                .copy(command = { "cargo test --test *".runWithWarnings(it) }),
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_auth_is_set_in_http_header") {
                 val moduleName = clientCodegenContext.moduleUseName()
