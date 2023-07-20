@@ -10,7 +10,7 @@ use aws_smithy_http_server::{
     protocol::{
         aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
     },
-    response::IntoResponse,
+    response::IntoResponseUniform,
 };
 use aws_smithy_types::date_time::{ConversionError, DateTimeParseError};
 use pyo3::{create_exception, exceptions::PyException as BasePyException, prelude::*, PyErr};
@@ -79,7 +79,7 @@ impl From<PyErr> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<RestJson1> for PyMiddlewareException {
+impl IntoResponseUniform<RestJson1> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)
@@ -90,7 +90,7 @@ impl IntoResponse<RestJson1> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<RestXml> for PyMiddlewareException {
+impl IntoResponseUniform<RestXml> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)
@@ -100,7 +100,7 @@ impl IntoResponse<RestXml> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<AwsJson1_0> for PyMiddlewareException {
+impl IntoResponseUniform<AwsJson1_0> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)
@@ -111,7 +111,7 @@ impl IntoResponse<AwsJson1_0> for PyMiddlewareException {
     }
 }
 
-impl IntoResponse<AwsJson1_1> for PyMiddlewareException {
+impl IntoResponseUniform<AwsJson1_1> for PyMiddlewareException {
     fn into_response(self) -> http::Response<BoxBody> {
         http::Response::builder()
             .status(self.status_code)
