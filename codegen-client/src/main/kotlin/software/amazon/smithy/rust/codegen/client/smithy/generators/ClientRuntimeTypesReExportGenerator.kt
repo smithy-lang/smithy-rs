@@ -34,6 +34,10 @@ class ClientRuntimeTypesReExportGenerator(
                 "Interceptor" to RuntimeType.interceptor(rc),
                 "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
             )
+
+            if (codegenContext.enableUserConfigurableRuntimePlugins) {
+                rustTemplate("pub use #{runtime_plugin}::{RuntimePlugin, SharedRuntimePlugin};", "runtime_plugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin"))
+            }
         }
         rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
             rustTemplate(

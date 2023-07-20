@@ -127,6 +127,7 @@ data class ClientCodegenConfig(
     val enableNewSmithyRuntime: SmithyRuntimeMode = defaultEnableNewSmithyRuntime,
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
     val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
+    val enableUserConfigurableRuntimePlugins: Boolean = defaultEnableUserConfigurableRuntimePlugins,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
@@ -137,6 +138,7 @@ data class ClientCodegenConfig(
         private val defaultEventStreamAllowList: Set<String> = emptySet()
         private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Orchestrator
         private const val defaultIncludeEndpointUrlConfig = true
+        private const val defaultEnableUserConfigurableRuntimePlugins = true
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -156,6 +158,11 @@ data class ClientCodegenConfig(
                     ),
                     includeEndpointUrlConfig = node.get()
                         .getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
+                    enableUserConfigurableRuntimePlugins =
+                    node.get().getBooleanMemberOrDefault(
+                        "userConfigurableRuntimePlugins",
+                        defaultEnableUserConfigurableRuntimePlugins,
+                    ),
                 )
             } else {
                 ClientCodegenConfig(
