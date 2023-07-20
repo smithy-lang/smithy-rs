@@ -509,6 +509,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowNonSnakeCase = Attribute(allow("non_snake_case"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
         val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
+        val AllowUnused = Attribute(allow("unused"))
         val AllowUnusedImports = Attribute(allow("unused_imports"))
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))

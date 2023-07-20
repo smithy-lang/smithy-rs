@@ -74,28 +74,28 @@ data class ClientRustSettings(
 
 // TODO(enableNewSmithyRuntimeCleanup): Remove this mode after switching to the orchestrator
 enum class SmithyRuntimeMode {
-    Middleware,
-    BothDefaultMiddleware,
-    BothDefaultOrchestrator,
-    Orchestrator,
+    Middleware, BothDefaultMiddleware, BothDefaultOrchestrator, Orchestrator,
     ;
 
     val exclusivelyGenerateMiddleware: Boolean get() = generateMiddleware && !generateOrchestrator
 
-    val generateMiddleware: Boolean get() = when (this) {
-        Middleware, BothDefaultMiddleware, BothDefaultOrchestrator -> true
-        else -> false
-    }
+    val generateMiddleware: Boolean
+        get() = when (this) {
+            Middleware, BothDefaultMiddleware, BothDefaultOrchestrator -> true
+            else -> false
+        }
 
-    val generateOrchestrator: Boolean get() = when (this) {
-        Orchestrator, BothDefaultMiddleware, BothDefaultOrchestrator -> true
-        else -> false
-    }
+    val generateOrchestrator: Boolean
+        get() = when (this) {
+            Orchestrator, BothDefaultMiddleware, BothDefaultOrchestrator -> true
+            else -> false
+        }
 
-    val defaultToMiddleware: Boolean get() = when (this) {
-        Middleware, BothDefaultMiddleware -> true
-        else -> false
-    }
+    val defaultToMiddleware: Boolean
+        get() = when (this) {
+            Middleware, BothDefaultMiddleware -> true
+            else -> false
+        }
     val defaultToOrchestrator: Boolean get() = !defaultToMiddleware
 
     companion object {
@@ -127,6 +127,7 @@ data class ClientCodegenConfig(
     val enableNewSmithyRuntime: SmithyRuntimeMode = defaultEnableNewSmithyRuntime,
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
     val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
+    val enableUserConfigurableRuntimePlugins: Boolean = defaultEnableUserConfigurableRuntimePlugins,
 ) : CoreCodegenConfig(
     formatTimeoutSeconds, debugMode,
 ) {
@@ -137,25 +138,24 @@ data class ClientCodegenConfig(
         private val defaultEventStreamAllowList: Set<String> = emptySet()
         private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Orchestrator
         private const val defaultIncludeEndpointUrlConfig = true
+        private const val defaultEnableUserConfigurableRuntimePlugins = true
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList")
-                        .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
-                        .orNull()?.toSet() ?: defaultEventStreamAllowList,
+                    eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList").map { array ->
+                        array.toList().mapNotNull { node ->
+                            node.asStringNode().orNull()?.value
+                        }
+                    }.orNull()?.toSet() ?: defaultEventStreamAllowList,
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
-                    includeFluentClient = node.get()
-                        .getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
-                    addMessageToErrors = node.get()
-                        .getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                    enableNewSmithyRuntime = SmithyRuntimeMode.fromString(
-                        node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware"),
-                    ),
-                    includeEndpointUrlConfig = node.get()
-                        .getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
+                    includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
+                    addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
+                    enableNewSmithyRuntime = SmithyRuntimeMode.fromString(node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware")),
+                    includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
+                    enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("userConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
                 )
             } else {
                 ClientCodegenConfig(
