@@ -22,7 +22,6 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
         "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
         "ConfigBag" to RuntimeType.configBag(runtimeConfig),
-        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
         "http" to CargoDependency.Http.toType(),
         "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
         "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),

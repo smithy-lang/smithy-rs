@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
@@ -85,7 +85,7 @@ open class OperationGenerator(
     private fun renderOperationStruct(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        authOptions: List<AuthOption>,
+        authSchemeOptions: List<AuthSchemeOption>,
         operationCustomizations: List<OperationCustomization>,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -213,7 +213,7 @@ open class OperationGenerator(
                 operationWriter,
                 operationShape,
                 operationName,
-                authOptions,
+                authSchemeOptions,
                 operationCustomizations,
             )
 

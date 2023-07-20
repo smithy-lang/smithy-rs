@@ -364,21 +364,19 @@ class AwsPresignedFluentBuilderMethod(
                         struct AlternatePresigningSerializerRuntimePlugin;
                         impl #{RuntimePlugin} for AlternatePresigningSerializerRuntimePlugin {
                             fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                                use #{ConfigBagAccessors};
                                 let mut cfg = #{Layer}::new("presigning_serializer");
-                                cfg.set_request_serializer(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
+                                cfg.store_put(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
                                 #{Some}(cfg.freeze())
                             }
                         }
                         """,
                         *preludeScope,
                         "AlternateSerializer" to alternateSerializer(operationShape),
-                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
                         "Layer" to smithyTypes.resolve("config_bag::Layer"),
                         "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
                         "SharedRequestSerializer" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                            .resolve("client::orchestrator::SharedRequestSerializer"),
+                            .resolve("client::ser_de::SharedRequestSerializer"),
                     )
                 }
             },

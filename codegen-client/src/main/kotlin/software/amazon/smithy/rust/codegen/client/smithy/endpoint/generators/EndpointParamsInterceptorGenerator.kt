@@ -45,15 +45,12 @@ class EndpointParamsInterceptorGenerator(
         val runtimeApi = CargoDependency.smithyRuntimeApi(rc).toType()
         val interceptors = runtimeApi.resolve("client::interceptors")
         val orchestrator = runtimeApi.resolve("client::orchestrator")
-        val smithyTypes = CargoDependency.smithyTypes(rc).toType()
         arrayOf(
             *preludeScope,
             "BoxError" to RuntimeType.boxError(rc),
             "ConfigBag" to RuntimeType.configBag(rc),
-            "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
-                .resolve("client::config_bag_accessors::ConfigBagAccessors"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
-            "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
+            "EndpointResolverParams" to runtimeApi.resolve("client::endpoint::EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Interceptor" to RuntimeType.interceptor(rc),
@@ -82,7 +79,6 @@ class EndpointParamsInterceptorGenerator(
                     context: &#{BeforeSerializationInterceptorContextRef}<'_, #{Input}, #{Output}, #{Error}>,
                     cfg: &mut #{ConfigBag},
                 ) -> #{Result}<(), #{BoxError}> {
-                    use #{ConfigBagAccessors};
                     let _input = context.input()
                         .downcast_ref::<${operationInput.name}>()
                         .ok_or("failed to downcast to ${operationInput.name}")?;
@@ -93,7 +89,7 @@ class EndpointParamsInterceptorGenerator(
                         #{param_setters}
                         .build()
                         .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
-                    cfg.interceptor_state().set_endpoint_resolver_params(#{EndpointResolverParams}::new(params));
+                    cfg.interceptor_state().store_put(#{EndpointResolverParams}::new(params));
                     #{Ok}(())
                 }
             }

@@ -46,9 +46,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
-                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                 "EndpointResolverParams" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::orchestrator::EndpointResolverParams"),
+                    .resolve("client::endpoint::EndpointResolverParams"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             )
             rustCrate.testModule {
@@ -57,7 +56,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                     rustTemplate(
                         """
                         use #{RuntimePlugin};
-                        use ::aws_smithy_runtime_api::client::orchestrator::EndpointResolver;
+                        use ::aws_smithy_runtime_api::client::endpoint::EndpointResolver;
 
                         let expected_url = "http://localhost:1234/";
                         let client_config = crate::config::Config::builder().build();
@@ -93,7 +92,6 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
-                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             )
             rustCrate.testModule {
@@ -175,7 +173,6 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "AlwaysRetry" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::retries::AlwaysRetry"),
                 "ConfigBag" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag"),
-                "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                 "ErrorKind" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::ErrorKind"),
                 "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                 "Layer" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Layer"),
@@ -184,7 +181,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "RetryConfig" to RuntimeType.smithyTypes(clientCodegenContext.runtimeConfig)
                     .resolve("retry::RetryConfig"),
                 "RequestAttempts" to smithyRuntimeApiTestUtil(runtimeConfig).toType()
-                    .resolve("client::request_attempts::RequestAttempts"),
+                    .resolve("client::retries::RequestAttempts"),
                 "RetryClassifiers" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::retries::RetryClassifiers"),
                 "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
