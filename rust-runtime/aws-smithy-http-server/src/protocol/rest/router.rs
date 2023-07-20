@@ -82,11 +82,12 @@ mod tests {
     use crate::{protocol::test_helpers::req, routing::request_spec::*};
 
     use http::Method;
+    use tower::service_fn;
 
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
-    #[test]
-    fn simple_routing() {
+    #[tokio::test]
+    async fn simple_routing() {
         let request_specs: Vec<(RequestSpec, &'static str)> = vec![
             (
                 RequestSpec::from_parts(
@@ -136,7 +137,10 @@ mod tests {
         // Test both RestJson1 and RestXml routers.
         let router: RestRouter<_> = request_specs
             .into_iter()
-            .map(|(spec, svc_name)| (spec, svc_name))
+            .map(|(spec, svc_name)| {
+                let svc = service_fn(move |_| async move { Ok(http::Request::new(svc_name)) });
+                (spec, svc)
+            })
             .collect();
 
         let hits = vec![
@@ -153,7 +157,14 @@ mod tests {
             ("QueryKeyOnly", Method::POST, "/query_key_only?foo=&"),
         ];
         for (svc_name, method, uri) in &hits {
-            assert_eq!(router.match_route(&req(method, uri, None)).unwrap(), *svc_name);
+            let name = router
+                .match_route(&req(method, uri, None))
+                .unwrap()
+                .call(http::Request::new(()))
+                .await
+                .unwrap()
+                .into_body();
+            assert_eq!(name, *svc_name);
         }
 
         for (_, _, uri) in hits {
@@ -224,7 +235,10 @@ mod tests {
 
         let router: RestRouter<_> = request_specs
             .into_iter()
-            .map(|(spec, svc_name)| (spec, svc_name))
+            .map(|(spec, svc_name)| {
+                let svc = service_fn(move |_| async move { Ok(http::Request::new(svc_name)) });
+                (spec, svc)
+            })
             .collect();
 
         let hits = vec![
@@ -233,8 +247,15 @@ mod tests {
             ("B1", Method::GET, "/b/foo/bar/baz"),
             ("B2", Method::GET, "/b/foo?q=baz"),
         ];
-        for (svc_name, method, uri) in hits {
-            assert_eq!(router.match_route(&req(&method, uri, None)).unwrap(), svc_name);
+        for (svc_name, method, uri) in hits.into_iter() {
+            let name = router
+                .match_route(&req(&method, uri, None))
+                .unwrap()
+                .call(http::Request::new(()))
+                .await
+                .unwrap()
+                .into_body();
+            assert_eq!(name, svc_name);
         }
     }
 }

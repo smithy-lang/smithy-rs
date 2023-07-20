@@ -92,6 +92,7 @@ mod tests {
 
     use http::{HeaderMap, HeaderValue, Method};
     use pretty_assertions::assert_eq;
+    use tower::service_fn;
 
     #[tokio::test]
     async fn simple_routing() {
@@ -99,7 +100,12 @@ mod tests {
         let router: AwsJsonRouter<_> = routes
             .clone()
             .into_iter()
-            .map(|operation| (operation.to_string(), ()))
+            .map(|operation| {
+                (
+                    operation.to_string(),
+                    service_fn(move |_| async move { Ok(http::Request::new(operation)) }),
+                )
+            })
             .collect();
 
         let mut headers = HeaderMap::new();

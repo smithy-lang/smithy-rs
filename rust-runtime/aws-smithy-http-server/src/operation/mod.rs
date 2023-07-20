@@ -33,10 +33,6 @@
 //!
 //! impl OperationShape for GetShopping {
 //!     const ID: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
-//!
-//!     type Input = CartIdentifier;
-//!     type Output = ShoppingCart;
-//!     type Error = GetShoppingError;
 //! }
 //! ```
 //!
@@ -110,10 +106,6 @@
 //! # pub struct GetShopping;
 //! # impl OperationShape for GetShopping {
 //! #    const ID: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
-//! #
-//! #    type Input = CartIdentifier;
-//! #    type Output = ShoppingCart;
-//! #    type Error = GetShoppingError;
 //! # }
 //! # type OpFuture = std::future::Ready<Result<ShoppingCart, GetShoppingError>>;
 //! // Construction of an `Operation` from a `Handler`.
@@ -121,8 +113,6 @@
 //! async fn op_handler(input: CartIdentifier) -> Result<ShoppingCart, GetShoppingError> {
 //!     todo!()
 //! }
-//!
-//! let operation = GetShopping::from_handler(op_handler);
 //!
 //! // Construction of an `Operation` from a `Service`.
 //!
@@ -141,8 +131,6 @@
 //!         todo!()
 //!     }
 //! }
-//!
-//! let operation = GetShopping::from_service(OpService);
 //!
 //! ```
 //!

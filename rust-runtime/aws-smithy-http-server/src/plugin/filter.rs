@@ -62,7 +62,7 @@ impl<Inner, F> ModelMarker for FilterByOperation<Inner, F> where Inner: ModelMar
 /// # impl ServiceShape for PokemonService { const VERSION: Option<&'static str> = None; const ID: ShapeId = ShapeId::new("", "", ""); type Operations = Operation; type Protocol = (); }
 /// # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 /// # struct CheckHealth;
-/// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+/// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); }
 /// # impl Plugin<PokemonService, CheckHealth, ()> for Pl { type Output = (); fn apply(&self, input: ()) -> Self::Output { input }}
 /// # let plugin = Pl;
 /// # let svc = ();
