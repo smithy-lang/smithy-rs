@@ -6,13 +6,13 @@
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use fastrand::Rng;
 use http::{HeaderName, HeaderValue};
 use std::fmt::Debug;
+use std::sync::{Arc, Mutex};
 
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use fastrand::Rng;
-use std::sync::Mutex;
 #[cfg(feature = "test-util")]
 pub use test_util::{NoInvocationIdGenerator, PredefinedInvocationIdGenerator};
 
@@ -27,23 +27,23 @@ pub trait InvocationIdGenerator: Debug + Send + Sync {
 }
 
 /// Dynamic dispatch implementation of [`InvocationIdGenerator`]
-#[derive(Debug)]
-pub struct DynInvocationIdGenerator(Box<dyn InvocationIdGenerator>);
+#[derive(Clone, Debug)]
+pub struct SharedInvocationIdGenerator(Arc<dyn InvocationIdGenerator>);
 
-impl DynInvocationIdGenerator {
-    /// Creates a new [`DynInvocationIdGenerator`].
+impl SharedInvocationIdGenerator {
+    /// Creates a new [`SharedInvocationIdGenerator`].
     pub fn new(gen: impl InvocationIdGenerator + 'static) -> Self {
-        Self(Box::new(gen))
+        Self(Arc::new(gen))
     }
 }
 
-impl InvocationIdGenerator for DynInvocationIdGenerator {
+impl InvocationIdGenerator for SharedInvocationIdGenerator {
     fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
         self.0.generate()
     }
 }
 
-impl Storable for DynInvocationIdGenerator {
+impl Storable for SharedInvocationIdGenerator {
     type Storer = StoreReplace<Self>;
 }
 
@@ -100,7 +100,7 @@ impl Interceptor for InvocationIdInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let gen = cfg
-            .load::<DynInvocationIdGenerator>()
+            .load::<SharedInvocationIdGenerator>()
             .map(|gen| gen as &dyn InvocationIdGenerator)
             .unwrap_or(&self.default);
         if let Some(id) = gen.generate()? {
@@ -264,7 +264,7 @@ mod tests {
 
         let mut cfg = ConfigBag::base();
         let mut layer = Layer::new("test");
-        layer.store_put(DynInvocationIdGenerator::new(
+        layer.store_put(SharedInvocationIdGenerator::new(
             PredefinedInvocationIdGenerator::new(vec![InvocationId::new(
                 "the-best-invocation-id".into(),
             )]),
