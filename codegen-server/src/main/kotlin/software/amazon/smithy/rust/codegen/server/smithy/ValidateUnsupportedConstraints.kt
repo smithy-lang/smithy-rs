@@ -61,10 +61,11 @@ private sealed class UnsupportedConstraintMessageKind {
             shape: Shape,
             constraintTrait: Trait,
             trackingIssue: String,
+            willSupport: Boolean = true,
         ) =
             buildMessage(
                 "The ${shape.type} shape `${shape.id}` has the constraint trait `${constraintTrait.toShapeId()}` attached.",
-                willSupport = true,
+                willSupport,
                 trackingIssue,
             )
 
@@ -104,7 +105,12 @@ private sealed class UnsupportedConstraintMessageKind {
 
             is UnsupportedRangeTraitOnShape -> LogMessage(
                 level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, rangeTrait, constraintTraitsUberIssue),
+                buildMessageShapeHasUnsupportedConstraintTrait(
+                    shape,
+                    rangeTrait,
+                    willSupport = false,
+                    trackingIssue = "https://github.com/awslabs/smithy-rs/issues/2007",
+                ),
             )
 
             is UnsupportedUniqueItemsTraitOnShape -> LogMessage(
@@ -250,7 +256,7 @@ fun validateUnsupportedConstraints(
         unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet + unsupportedConstraintErrorShapeReachableViaAnEventStreamSet
 
     // 3. Range trait used on unsupported shapes.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
+    // TODO(https://github.com/awslabs/smithy-rs/issues/2007)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
         .asSequence()
