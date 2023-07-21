@@ -68,6 +68,14 @@ class ServerAwsJsonFactory(
 /**
  * AwsJson requires errors to be serialized in server responses with an additional `__type` field. This
  * customization writes the right field depending on the version of the AwsJson protocol.
+ *
+ * From the specs:
+ * - https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html#operation-error-serialization
+ * - https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html#operation-error-serialization
+ *
+ * > Error responses in the <awsJson1_x> protocol are serialized identically to standard responses with one additional
+ * > component to distinguish which error is contained. New server-side protocol implementations SHOULD use a body
+ * > field named __type
  */
 class ServerAwsJsonError(private val awsJsonVersion: AwsJsonVersion) : JsonSerializerCustomization() {
     override fun section(section: JsonSerializerSection): Writable = when (section) {
