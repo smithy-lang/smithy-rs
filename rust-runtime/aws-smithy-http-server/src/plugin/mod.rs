@@ -194,9 +194,8 @@
 //! impl ModelMarker for PrintPlugin { }
 //! ```
 
-pub mod alb_health_check;
 mod closure;
-mod either;
+pub(crate) mod either;
 mod filter;
 mod http_plugins;
 mod identity;

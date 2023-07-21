@@ -10,7 +10,8 @@ use std::{net::SocketAddr, sync::Arc};
 use aws_smithy_http_server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
-    plugin::{alb_health_check::AlbHealthCheckLayer, HttpPlugins, IdentityPlugin, Scoped},
+    layer::alb_health_check::AlbHealthCheckLayer,
+    plugin::{HttpPlugins, IdentityPlugin, Scoped},
     request::request_id::ServerRequestIdProviderLayer,
     AddExtensionLayer,
 };
@@ -61,11 +62,7 @@ pub async fn main() {
         // `Response::extensions`, or infer routing failure when it's missing.
         .insert_operation_extension()
         // Adds `tracing` spans and events to the request lifecycle.
-        .instrument()
-        // Handle `/ping` health check requests.
-        .layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
-            StatusCode::OK
-        }));
+        .instrument();
 
     let app = PokemonService::builder_with_plugins(plugins, IdentityPlugin)
         // Build a registry containing implementations to all the operations in the service. These
@@ -84,7 +81,11 @@ pub async fn main() {
     let app = app
         // Setup shared state and middlewares.
         .layer(&AddExtensionLayer::new(Arc::new(State::default())))
-        // Add request IDs
+        // Handle `/ping` health check requests.
+        .layer(&AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+            StatusCode::OK
+        }))
+        // Add server request IDs.
         .layer(&ServerRequestIdProviderLayer::new());
 
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `SocketAddr`

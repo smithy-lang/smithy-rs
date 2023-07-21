@@ -15,6 +15,8 @@ use tower::{Layer, Service};
 
 use super::Plugin;
 
+// TODO(https://github.com/awslabs/smithy-rs/pull/2441#pullrequestreview-1331345692): Seems like
+// this type should land in `tower-0.5`.
 pin_project! {
     /// Combine two different [`Futures`](std::future::Future)/[`Services`](tower::Service)/
     /// [`Layers`](tower::Layer)/[`Plugins`](super::Plugin) into a single type.

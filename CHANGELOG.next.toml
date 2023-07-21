@@ -658,3 +658,9 @@ message = "The AppName property can now be set with `sdk_ua_app_id` in profile f
 references = ["smithy-rs#2724"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "The `alb_health_check` module has been moved out of the `plugin` module into a new `layer` module. ALB health checks should be enacted before routing, and plugins run after routing, so the module location was misleading. Examples have been corrected to reflect the intended application of the layer."
+references = ["smithy-rs#2865"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "david-perez"
