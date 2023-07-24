@@ -72,14 +72,14 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
     /// between invocation of this hook and `after_execution` is very close
     /// to full duration of the execution.
     ///
-    /// **Available Information:** The [InterceptorContext::input()] is
-    /// **ALWAYS** available. Other information **WILL NOT** be available.
+    /// **Available Information:** The [`InterceptorContext::input`](context::InterceptorContext::input)
+    /// is **ALWAYS** available. Other information **WILL NOT** be available.
     ///
     /// **Error Behavior:** Errors raised by this hook will be stored
     /// until all interceptors have had their `before_execution` invoked.
     /// Other hooks will then be skipped and execution will jump to
     /// `modify_before_completion` with the raised error as the
-    /// [InterceptorContext::output_or_error()]. If multiple
+    /// [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error). If multiple
     /// `before_execution` methods raise errors, the latest
     /// will be used and earlier ones will be logged and dropped.
     fn read_before_execution(
@@ -103,14 +103,14 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         **When:** This will **ALWAYS** be called once per execution, except when a
         failure occurs earlier in the request pipeline.
 
-        **Available Information:** The [InterceptorContext::input()] is
+        **Available Information:** The [`InterceptorContext::input`](context::InterceptorContext::input) is
         **ALWAYS** available. This request may have been modified by earlier
         `modify_before_serialization` hooks, and may be modified further by
         later hooks. Other information **WILL NOT** be available.
 
         **Error Behavior:** If errors are raised by this hook,
         execution will jump to `modify_before_completion` with the raised
-        error as the [InterceptorContext::output_or_error()].
+        error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
 
         **Return Constraints:** The input message returned by this hook
         MUST be the same type of input message passed into this hook.
@@ -131,12 +131,12 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         duration between invocation of this hook and `after_serialization` is
         very close to the amount of time spent marshalling the request.
 
-        **Available Information:** The [InterceptorContext::input()] is
+        **Available Information:** The [`InterceptorContext::input`](context::InterceptorContext::input) is
         **ALWAYS** available. Other information **WILL NOT** be available.
 
         **Error Behavior:** If errors are raised by this hook,
         execution will jump to `modify_before_completion` with the raised
-        error as the [InterceptorContext::output_or_error()].
+        error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -144,21 +144,20 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         read_after_serialization,
         BeforeTransmitInterceptorContextRef,
         "
-        /// A hook called after the input message is marshalled into
-        /// a transport message.
-        ///
-        /// **When:** This will **ALWAYS** be called once per execution, except when a
-        /// failure occurs earlier in the request pipeline. The duration
-        /// between invocation of this hook and `before_serialization` is very
-        /// close to the amount of time spent marshalling the request.
-        ///
-        /// **Available Information:** The [InterceptorContext::input()]
-        /// and [InterceptorContext::request()] are **ALWAYS** available.
-        /// Other information **WILL NOT** be available.
-        ///
-        /// **Error Behavior:** If errors are raised by this hook,
-        /// execution will jump to `modify_before_completion` with the raised
-        /// error as the [InterceptorContext::output_or_error()].
+        A hook called after the input message is marshalled into
+        a transport message.
+
+        **When:** This will **ALWAYS** be called once per execution, except when a
+        failure occurs earlier in the request pipeline. The duration
+        between invocation of this hook and `before_serialization` is very
+        close to the amount of time spent marshalling the request.
+
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request)
+        is **ALWAYS** available. Other information **WILL NOT** be available.
+
+        **Error Behavior:** If errors are raised by this hook,
+        execution will jump to `modify_before_completion` with the raised
+        error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -170,13 +169,12 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         has the ability to modify and return a new transport request
         message of the same type, except when a failure occurs earlier in the request pipeline.
 
-        **Available Information:** The [InterceptorContext::input()]
-        and [InterceptorContext::request()] are **ALWAYS** available.
-        Other information **WILL NOT** be available.
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request)
+        is **ALWAYS** available. Other information **WILL NOT** be available.
 
         **Error Behavior:** If errors are raised by this hook,
         execution will jump to `modify_before_completion` with the raised
-        error as the [InterceptorContext::output_or_error()].
+        error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
 
         **Return Constraints:** The transport request message returned by this
         hook MUST be the same type of request message passed into this hook
@@ -195,9 +193,8 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         failure occurs earlier in the request pipeline. This method will be
         called multiple times in the event of retries.
 
-        **Available Information:** The [InterceptorContext::input()]
-        and [InterceptorContext::request()] are **ALWAYS** available.
-        Other information **WILL NOT** be available. In the event of retries,
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request)
+        is **ALWAYS** available. Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
@@ -205,7 +202,7 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         until all interceptors have had their `before_attempt` invoked.
         Other hooks will then be skipped and execution will jump to
         `modify_before_attempt_completion` with the raised error as the
-        [InterceptorContext::output_or_error()]. If multiple
+        [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error). If multiple
         `before_attempt` methods raise errors, the latest will be used
         and earlier ones will be logged and dropped.
         "
@@ -223,18 +220,16 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         failure occurs earlier in the request pipeline. This method may be
         called multiple times in the event of retries.
 
-        **Available Information:** The [InterceptorContext::input()]
-        and [InterceptorContext::request()] are **ALWAYS** available.
-        The `http::Request` may have been modified by earlier
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request)
+        is **ALWAYS** available. The `http::Request` may have been modified by earlier
         `modify_before_signing` hooks, and may be modified further by later
         hooks. Other information **WILL NOT** be available. In the event of
         retries, the `InterceptorContext` will not include changes made
-        in previous attempts
-        (e.g. by request signers or other interceptors).
+        in previous attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::output_or_error()].
+        the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
 
         **Return Constraints:** The transport request message returned by this
         hook MUST be the same type of request message passed into this hook
@@ -255,15 +250,14 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         invocation of this hook and `after_signing` is very close to
         the amount of time spent signing the request.
 
-        **Available Information:** The [InterceptorContext::input()]
-        and [InterceptorContext::request()] are **ALWAYS** available.
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request) is **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::output_or_error()].
+        the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -279,15 +273,14 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         invocation of this hook and `before_signing` is very close to
         the amount of time spent signing the request.
 
-        **Available Information:** The [InterceptorContext::input()]
-        and [InterceptorContext::request()] are **ALWAYS** available.
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request) is **ALWAYS** available.
         Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::output_or_error()].
+        the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -295,26 +288,25 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         mut modify_before_transmit,
         BeforeTransmitInterceptorContextMut,
         "
-        /// A hook called before the transport request message is sent to the
-        /// service. This method has the ability to modify and return
-        /// a new transport request message of the same type.
-        ///
-        /// **When:** This will **ALWAYS** be called once per attempt, except when a
-        /// failure occurs earlier in the request pipeline. This method may be
-        /// called multiple times in the event of retries.
-        ///
-        /// **Available Information:** The [InterceptorContext::input()]
-        /// and [InterceptorContext::request()] are **ALWAYS** available.
-        /// The `http::Request` may have been modified by earlier
-        /// `modify_before_transmit` hooks, and may be modified further by later
-        /// hooks. Other information **WILL NOT** be available.
-        /// In the event of retries, the `InterceptorContext` will not include
-        /// changes made in previous attempts (e.g. by request signers or
+        A hook called before the transport request message is sent to the
+        service. This method has the ability to modify and return
+        a new transport request message of the same type.
+
+        **When:** This will **ALWAYS** be called once per attempt, except when a
+        failure occurs earlier in the request pipeline. This method may be
+        called multiple times in the event of retries.
+
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request)
+        is **ALWAYS** available. The `http::Request` may have been modified by earlier
+        `modify_before_transmit` hooks, and may be modified further by later
+        hooks. Other information **WILL NOT** be available.
+        In the event of retries, the `InterceptorContext` will not include
+        changes made in previous attempts (e.g. by request signers or
         other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::output_or_error()].
+        the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
 
         **Return Constraints:** The transport request message returned by this
         hook MUST be the same type of request message passed into this hook
@@ -338,16 +330,15 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         Depending on the protocol, the duration may not include the
         time spent reading the response data.
 
-        **Available Information:** The [InterceptorContext::input()]
-        and [InterceptorContext::request()] are **ALWAYS** available.
-        Other information **WILL NOT** be available. In the event of retries,
+        **Available Information:** The [`InterceptorContext::request`](context::InterceptorContext::request)
+        is **ALWAYS** available. Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::output_or_error()].
+        the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -366,16 +357,14 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         Depending on the protocol, the duration may not include the time
         spent reading the response data.
 
-        **Available Information:** The [InterceptorContext::input()],
-        [InterceptorContext::request()] and
-        [InterceptorContext::response()] are **ALWAYS** available.
-        Other information **WILL NOT** be available. In the event of retries,
+        **Available Information:** The [`InterceptorContext::response`](context::InterceptorContext::response)
+        is **ALWAYS** available. Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::output_or_error()].
+        the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -391,10 +380,8 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         failure occurs earlier in the request pipeline. This method may be
         called multiple times in the event of retries.
 
-        **Available Information:** The [InterceptorContext::input()],
-        [InterceptorContext::request()] and
-        [InterceptorContext::response()] are **ALWAYS** available.
-        The transmit_response may have been modified by earlier
+        **Available Information:** The [`InterceptorContext::response`](context::InterceptorContext::response)
+        is **ALWAYS** available. The transmit_response may have been modified by earlier
         `modify_before_deserialization` hooks, and may be modified further by
         later hooks. Other information **WILL NOT** be available. In the event of
         retries, the `InterceptorContext` will not include changes made in
@@ -403,7 +390,7 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
         the raised error as the
-        [InterceptorContext::output_or_error()].
+        [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
 
         **Return Constraints:** The transport response message returned by this
         hook MUST be the same type of response message passed into
@@ -425,16 +412,14 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         Depending on the protocol and operation, the duration may include
         the time spent downloading the response data.
 
-        **Available Information:** The [InterceptorContext::input()],
-        [InterceptorContext::request()] and
-        [InterceptorContext::response()] are **ALWAYS** available.
-        Other information **WILL NOT** be available. In the event of retries,
+        **Available Information:** The [`InterceptorContext::response`](context::InterceptorContext::response)
+        is **ALWAYS** available. Other information **WILL NOT** be available. In the event of retries,
         the `InterceptorContext` will not include changes made in previous
         attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion`
-        with the raised error as the [InterceptorContext::output_or_error()].
+        with the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -452,16 +437,14 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
         the duration may include the time spent downloading
         the response data.
 
-        **Available Information:** The [InterceptorContext::input()],
-        [InterceptorContext::request()],
-        [InterceptorContext::response()] and
-        [InterceptorContext::output_or_error()] are **ALWAYS** available. In the event
-        of retries, the `InterceptorContext` will not include changes made
+        **Available Information:** The [`InterceptorContext::response`](context::InterceptorContext::response)
+        and [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error)
+        are **ALWAYS** available. In the event of retries, the `InterceptorContext` will not include changes made
         in previous attempts (e.g. by request signers or other interceptors).
 
         **Error Behavior:** If errors are raised by this
         hook, execution will jump to `modify_before_attempt_completion` with
-        the raised error as the [InterceptorContext::output_or_error()].
+        the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
         "
     );
 
@@ -473,16 +456,19 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
     /// failure occurs before `before_attempt`. This method may
     /// be called multiple times in the event of retries.
     ///
-    /// **Available Information:** The [InterceptorContext::input()],
-    /// [InterceptorContext::request()],
-    /// [InterceptorContext::response()] and
-    /// [InterceptorContext::output_or_error()] are **ALWAYS** available. In the event
-    /// of retries, the `InterceptorContext` will not include changes made
+    /// **Available Information:**
+    /// The [`InterceptorContext::input`](context::InterceptorContext::input),
+    /// [`InterceptorContext::request`](context::InterceptorContext::request),
+    /// [`InterceptorContext::response`](context::InterceptorContext::response), or
+    /// [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error) **MAY** be available.
+    /// If the operation succeeded, the `output` will be available. Otherwise, any of the other
+    /// pieces of information may be available depending on where in the operation lifecycle it failed.
+    /// In the event of retries, the `InterceptorContext` will not include changes made
     /// in previous attempts (e.g. by request signers or other interceptors).
     ///
     /// **Error Behavior:** If errors are raised by this
     /// hook, execution will jump to `after_attempt` with
-    /// the raised error as the [InterceptorContext::output_or_error()].
+    /// the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
     ///
     /// **Return Constraints:** Any output message returned by this
     /// hook MUST match the operation being invoked. Any error type can be
@@ -502,14 +488,15 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
     /// **When:** This will **ALWAYS** be called once per attempt, as long as
     /// `before_attempt` has been executed.
     ///
-    /// **Available Information:** The [InterceptorContext::input()],
-    /// [InterceptorContext::request()] and
-    /// [InterceptorContext::output_or_error()] are **ALWAYS** available.
-    /// The [InterceptorContext::response()] is available if a
-    /// response was received by the service for this attempt.
-    /// In the event of retries, the `InterceptorContext` will not include
-    /// changes made in previous attempts (e.g. by request signers or other
-    /// interceptors).
+    /// **Available Information:**
+    /// The [`InterceptorContext::input`](context::InterceptorContext::input),
+    /// [`InterceptorContext::request`](context::InterceptorContext::request),
+    /// [`InterceptorContext::response`](context::InterceptorContext::response), or
+    /// [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error) **MAY** be available.
+    /// If the operation succeeded, the `output` will be available. Otherwise, any of the other
+    /// pieces of information may be available depending on where in the operation lifecycle it failed.
+    /// In the event of retries, the `InterceptorContext` will not include changes made
+    /// in previous attempts (e.g. by request signers or other interceptors).
     ///
     /// **Error Behavior:** Errors raised by this hook will be stored
     /// until all interceptors have had their `after_attempt` invoked.
@@ -518,7 +505,7 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
     /// retry strategy determines that the execution is retryable,
     /// execution will then jump to `before_attempt`. Otherwise,
     /// execution will jump to `modify_before_attempt_completion` with the
-    /// raised error as the [InterceptorContext::output_or_error()].
+    /// raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
     fn read_after_attempt(
         &self,
         context: &FinalizerInterceptorContextRef<'_>,
@@ -536,15 +523,19 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
     ///
     /// **When:** This will **ALWAYS** be called once per execution.
     ///
-    /// **Available Information:** The [InterceptorContext::input()]
-    /// and [InterceptorContext::output_or_error()] are **ALWAYS** available. The
-    /// [InterceptorContext::request()]
-    /// and [InterceptorContext::response()] are available if the
-    /// execution proceeded far enough for them to be generated.
+    /// **Available Information:**
+    /// The [`InterceptorContext::input`](context::InterceptorContext::input),
+    /// [`InterceptorContext::request`](context::InterceptorContext::request),
+    /// [`InterceptorContext::response`](context::InterceptorContext::response), or
+    /// [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error) **MAY** be available.
+    /// If the operation succeeded, the `output` will be available. Otherwise, any of the other
+    /// pieces of information may be available depending on where in the operation lifecycle it failed.
+    /// In the event of retries, the `InterceptorContext` will not include changes made
+    /// in previous attempts (e.g. by request signers or other interceptors).
     ///
     /// **Error Behavior:** If errors are raised by this
     /// hook , execution will jump to `after_attempt` with
-    /// the raised error as the [InterceptorContext::output_or_error()].
+    /// the raised error as the [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error).
     ///
     /// **Return Constraints:** Any output message returned by this
     /// hook MUST match the operation being invoked. Any error type can be
@@ -565,17 +556,21 @@ pub trait Interceptor: fmt::Debug + Send + Sync {
     /// between invocation of this hook and `before_execution` is very
     /// close to the full duration of the execution.
     ///
-    /// **Available Information:** The [InterceptorContext::input()]
-    /// and [InterceptorContext::output_or_error()] are **ALWAYS** available. The
-    /// [InterceptorContext::request()] and
-    /// [InterceptorContext::response()] are available if the
-    /// execution proceeded far enough for them to be generated.
+    /// **Available Information:**
+    /// The [`InterceptorContext::input`](context::InterceptorContext::input),
+    /// [`InterceptorContext::request`](context::InterceptorContext::request),
+    /// [`InterceptorContext::response`](context::InterceptorContext::response), or
+    /// [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error) **MAY** be available.
+    /// If the operation succeeded, the `output` will be available. Otherwise, any of the other
+    /// pieces of information may be available depending on where in the operation lifecycle it failed.
+    /// In the event of retries, the `InterceptorContext` will not include changes made
+    /// in previous attempts (e.g. by request signers or other interceptors).
     ///
     /// **Error Behavior:** Errors raised by this hook will be stored
     /// until all interceptors have had their `after_execution` invoked.
     /// The error will then be treated as the
-    /// [InterceptorContext::output_or_error()] to the customer. If multiple
-    /// `after_execution` methods raise errors , the latest will be
+    /// [`InterceptorContext::output_or_error`](context::InterceptorContext::output_or_error)
+    /// to the customer. If multiple `after_execution` methods raise errors , the latest will be
     /// used and earlier ones will be logged and dropped.
     fn read_after_execution(
         &self,
