@@ -7,6 +7,7 @@
 #![allow(unknown_lints)]
 
 use self::auth::orchestrate_auth;
+use crate::client::interceptors::Interceptors;
 use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::http::read_body;
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
@@ -19,7 +20,6 @@ use aws_smithy_runtime_api::client::connectors::HttpConnector;
 use aws_smithy_runtime_api::client::interceptors::context::{
     Error, Input, InterceptorContext, Output, RewindResult,
 };
-use aws_smithy_runtime_api::client::interceptors::Interceptors;
 use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, LoadedRequestBody, OrchestratorError,
 };
