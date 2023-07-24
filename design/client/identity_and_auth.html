@@ -196,9 +196,9 @@ do something, sometimes referred to as AuthZ.</li>
 <ul>
 <li><strong>Data</strong>
 <ul>
-<li><strong>AuthOptionResolverParams:</strong> parameters required to resolve auth options. These parameters are allowed
+<li><strong>AuthSchemeOptionResolverParams:</strong> parameters required to resolve auth scheme options. These parameters are allowed
 to come from both the client config and the operation input structs.</li>
-<li><strong>HttpAuthSchemes:</strong> a list of auth schemes that can be used to sign HTTP requests. This information
+<li><strong>AuthSchemes:</strong> a list of auth schemes that can be used to sign HTTP requests. This information
 comes directly from the service model.</li>
 <li><strong>AuthSchemeProperties:</strong> configuration from the auth scheme for the signer.</li>
 <li><strong>IdentityResolvers:</strong> list of available identity resolvers.</li>
@@ -208,8 +208,8 @@ comes directly from the service model.</li>
 <ul>
 <li><strong>IdentityResolver:</strong> resolves an identity for use in authentication.
 There can be multiple identity resolvers that need to be selected from.</li>
-<li><strong>HttpRequestSigner:</strong> a signing implementation that signs a HTTP request.</li>
-<li><strong>AuthOptionResolver:</strong> resolves a list of auth options for a given operation and its inputs.</li>
+<li><strong>Signer:</strong> a signing implementation that signs a HTTP request.</li>
+<li><strong>AuthSchemeOptionResolver:</strong> resolves a list of auth scheme options for a given operation and its inputs.</li>
 </ul>
 </li>
 </ul>
@@ -218,23 +218,23 @@ creates one service-level runtime plugin, and an operation-level runtime plugin 
 referred to as the service runtime plugin and operation runtime plugin.</p>
 <p>The code generator emits code to add identity resolvers and HTTP auth schemes to the config bag
 in the service runtime plugin. It then emits code to register an interceptor in the operation runtime
-plugin that reads the operation input to generate the auth option resolver params (which also get added
+plugin that reads the operation input to generate the auth scheme option resolver params (which also get added
 to the config bag).</p>
 <h3 id="the-execution-stage"><a class="header" href="#the-execution-stage">The execution stage</a></h3>
 <p>At a high-level, the process of resolving an identity and signing a request looks as follows:</p>
 <ol>
-<li>Retrieve the <code>AuthOptionResolverParams</code> from the config bag. The <code>AuthOptionResolverParams</code> allow client
-config and operation inputs to play a role in which auth option is selected.</li>
-<li>Retrieve the <code>AuthOptionResolver</code> from the config bag, and use it to resolve the auth options available
-with the <code>AuthOptionResolverParams</code>. The returned auth options are in priority order.</li>
+<li>Retrieve the <code>AuthSchemeOptionResolverParams</code> from the config bag. The <code>AuthSchemeOptionResolverParams</code> allow client
+config and operation inputs to play a role in which auth scheme option is selected.</li>
+<li>Retrieve the <code>AuthSchemeOptionResolver</code> from the config bag, and use it to resolve the auth scheme options available
+with the <code>AuthSchemeOptionResolverParams</code>. The returned auth scheme options are in priority order.</li>
 <li>Retrieve the <code>IdentityResolvers</code> list from the config bag.</li>
-<li>For each auth option:
+<li>For each auth scheme option:
 <ol>
-<li>Attempt to find an HTTP auth scheme for that auth option in the config bag (from the <code>HttpAuthSchemes</code> list).</li>
+<li>Attempt to find an HTTP auth scheme for that auth scheme option in the config bag (from the <code>AuthSchemes</code> list).</li>
 <li>If an auth scheme is found:
 <ol>
 <li>Use the auth scheme to extract the correct identity resolver from the <code>IdentityResolvers</code> list.</li>
-<li>Retrieve the <code>HttpRequestSigner</code> implementation from the auth scheme.</li>
+<li>Retrieve the <code>Signer</code> implementation from the auth scheme.</li>
 <li>Use the <code>IdentityResolver</code> to resolve the identity needed for signing.</li>
 <li>Sign the request with the identity, and break out of the loop from step #4.</li>
 </ol>
@@ -242,45 +242,44 @@ with the <code>AuthOptionResolverParams</code>. The returned auth options are in
 </ol>
 </li>
 </ol>
-<p>In general, it is assumed that if an HTTP auth scheme exists for an auth option, then an identity resolver
-also exists for that auth option. Otherwise, the auth option was configured incorrectly during codegen.</p>
+<p>In general, it is assumed that if an HTTP auth scheme exists for an auth scheme option, then an identity resolver
+also exists for that auth scheme option. Otherwise, the auth option was configured incorrectly during codegen.</p>
 <h2 id="how-this-looks-in-rust"><a class="header" href="#how-this-looks-in-rust">How this looks in Rust</a></h2>
 <p>The client will use trait objects and dynamic dispatch for the <code>IdentityResolver</code>,
-<code>HttpRequestSigner</code>, and <code>AuthOptionResolver</code> implementations. Generics could potentially be used,
+<code>Signer</code>, and <code>AuthSchemeOptionResolver</code> implementations. Generics could potentially be used,
 but the number of generic arguments and trait bounds in the orchestrator would balloon to
 unmaintainable levels if each configurable implementation in it was made generic.</p>
 <p>These traits look like this:</p>
 <pre><code class="language-rust ignore">#[derive(Clone, Debug)]
-pub struct HttpAuthOption {
+pub struct AuthSchemeId {
     scheme_id: &amp;'static str,
-    properties: Arc&lt;PropertyBag&gt;,
 }
 
-pub trait AuthOptionResolver: Send + Sync + Debug {
-    fn resolve_auth_options&lt;'a&gt;(
+pub trait AuthSchemeOptionResolver: Send + Sync + Debug {
+    fn resolve_auth_scheme_options&lt;'a&gt;(
         &amp;'a self,
-        params: &amp;AuthOptionResolverParams,
-    ) -&gt; Result&lt;Cow&lt;'a, [HttpAuthOption]&gt;, BoxError&gt;;
+        params: &amp;AuthSchemeOptionResolverParams,
+    ) -&gt; Result&lt;Cow&lt;'a, [AuthSchemeId]&gt;, BoxError&gt;;
 }
 
 pub trait IdentityResolver: Send + Sync + Debug {
-    // `identity_properties` come from `HttpAuthOption::properties`
-    fn resolve_identity(&amp;self, identity_properties: &amp;PropertyBag) -&gt; BoxFallibleFut&lt;Identity&gt;;
+    fn resolve_identity(&amp;self, config: &amp;ConfigBag) -&gt; BoxFallibleFut&lt;Identity&gt;;
 }
 
-pub trait HttpRequestSigner: Send + Sync + Debug {
+pub trait Signer: Send + Sync + Debug {
     /// Return a signed version of the given request using the given identity.
     ///
     /// If the provided identity is incompatible with this signer, an error must be returned.
-    fn sign_request(
+    fn sign_http_request(
         &amp;self,
         request: &amp;mut HttpRequest,
         identity: &amp;Identity,
-        // `signing_properties` come from `HttpAuthOption::properties`
-        signing_properties: &amp;PropertyBag,
+        auth_scheme_endpoint_config: AuthSchemeEndpointConfig&lt;'_&gt;,
+        runtime_components: &amp;RuntimeComponents,
+        config_bag: &amp;ConfigBag,
     ) -&gt; Result&lt;(), BoxError&gt;;
 }</code></pre>
-<p><code>IdentityResolver</code> and <code>HttpRequestSigner</code> implementations are both given an <code>Identity</code>, but
+<p><code>IdentityResolver</code> and <code>Signer</code> implementations are both given an <code>Identity</code>, but
 will need to understand what the concrete data type underlying that identity is. The <code>Identity</code> struct
 uses a <code>Arc&lt;dyn Any&gt;</code> to represent the actual identity data so that generics are not needed in
 the traits:</p>
@@ -293,11 +292,13 @@ pub struct Identity {
 rather than <code>Box</code>. This also reduces the allocations required. The signer implementations
 will use downcasting to access the identity data types they understand. For example, with AWS SigV4,
 it might look like the following:</p>
-<pre><code class="language-rust ignore">fn sign_request(
+<pre><code class="language-rust ignore">fn sign_http_request(
     &amp;self,
     request: &amp;mut HttpRequest,
     identity: &amp;Identity,
-    signing_properties: &amp;PropertyBag
+    auth_scheme_endpoint_config: AuthSchemeEndpointConfig&lt;'_&gt;,
+    runtime_components: &amp;RuntimeComponents,
+    config_bag: &amp;ConfigBag,
 ) -&gt; Result&lt;(), BoxError&gt; {
     let aws_credentials = identity.data::&lt;Credentials&gt;()
         .ok_or_else(|| &quot;The SigV4 signer requires AWS credentials&quot;)?;
@@ -327,8 +328,8 @@ in a security critical piece of code that could otherwise be avoided.</p>
 <p>The <code>expiration</code> field is a special case that is allowed onto the <code>Identity</code> struct directly since identity
 cache implementations will always need to be aware of this piece of information, and having it as an <code>Option</code>
 still allows for non-expiring identities.</p>
-<p>Ultimately, this design constrains <code>HttpRequestSigner</code> implementations to concrete types. There is no world
-where an <code>HttpRequestSigner</code> can operate across multiple unknown identity data types via trait, and that
+<p>Ultimately, this design constrains <code>Signer</code> implementations to concrete types. There is no world
+where an <code>Signer</code> can operate across multiple unknown identity data types via trait, and that
 should be OK since the signer implementation can always be wrapped with an implementation that is aware
 of the concrete type provided by the identity resolver, and can do any necessary conversions.</p>
 
