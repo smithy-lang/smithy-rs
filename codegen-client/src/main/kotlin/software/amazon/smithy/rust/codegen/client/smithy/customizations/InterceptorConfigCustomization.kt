@@ -91,7 +91,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         /// ## }
                         /// ## }
                         /// ```
-                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + Send + Sync + 'static) -> Self {
+                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
                             self.push_interceptor(#{SharedInterceptor}::new(interceptor));
                             self
                         }

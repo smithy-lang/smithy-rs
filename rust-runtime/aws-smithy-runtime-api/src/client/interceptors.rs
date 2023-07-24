@@ -70,7 +70,7 @@ macro_rules! interceptor_trait_fn {
 ///   of the SDK ’s request execution pipeline. Hooks are either "read" hooks, which make it possible
 ///   to read in-flight request or response messages, or "read/write" hooks, which make it possible
 ///   to modify in-flight request or output messages.
-pub trait Interceptor: fmt::Debug {
+pub trait Interceptor: fmt::Debug + Send + Sync {
     /// A hook called at the start of an execution, before the SDK
     /// does anything else.
     ///
@@ -606,7 +606,7 @@ pub trait Interceptor: fmt::Debug {
 /// Interceptor wrapper that may be shared
 #[derive(Clone)]
 pub struct SharedInterceptor {
-    interceptor: Arc<dyn Interceptor + Send + Sync>,
+    interceptor: Arc<dyn Interceptor>,
     check_enabled: Arc<dyn Fn(&ConfigBag) -> bool + Send + Sync>,
 }
 
@@ -620,7 +620,7 @@ impl fmt::Debug for SharedInterceptor {
 
 impl SharedInterceptor {
     /// Create a new `SharedInterceptor` from `Interceptor`
-    pub fn new<T: Interceptor + Send + Sync + 'static>(interceptor: T) -> Self {
+    pub fn new<T: Interceptor + 'static>(interceptor: T) -> Self {
         Self {
             interceptor: Arc::new(interceptor),
             check_enabled: Arc::new(|conf: &ConfigBag| {
@@ -641,7 +641,7 @@ impl AsRef<dyn Interceptor> for SharedInterceptor {
 }
 
 impl Deref for SharedInterceptor {
-    type Target = Arc<dyn Interceptor + Send + Sync>;
+    type Target = Arc<dyn Interceptor>;
     fn deref(&self) -> &Self::Target {
         &self.interceptor
     }
