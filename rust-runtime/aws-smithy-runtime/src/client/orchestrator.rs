@@ -200,7 +200,10 @@ async fn try_op(
         debug!("loading request body into memory");
         let mut body = SdkBody::taken();
         mem::swap(&mut body, ctx.request_mut().expect("set above").body_mut());
-        let loaded_body = halt_on_err!([ctx] => ByteStream::new(body).collect().await).into_bytes();
+        let loaded_body = halt_on_err!([ctx] =>
+            ByteStream::new(body).collect().await.map_err(OrchestratorError::other)
+        )
+        .into_bytes();
         *ctx.request_mut().as_mut().expect("set above").body_mut() =
             SdkBody::from(loaded_body.clone());
         cfg.interceptor_state()

@@ -4,7 +4,6 @@
  */
 
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
 use std::borrow::Cow;
@@ -77,17 +76,18 @@ where
             Err(err) => err,
         };
 
-        match error {
-            OrchestratorError::Response { .. } | OrchestratorError::Timeout { .. } => {
+        if error.is_response_error() || error.is_timeout_error() {
+            Some(RetryReason::Error(ErrorKind::TransientError))
+        } else if let Some(error) = error.as_connector_error() {
+            if error.is_timeout() || error.is_io() {
                 Some(RetryReason::Error(ErrorKind::TransientError))
+            } else if error.is_other().is_some() {
+                error.is_other().map(RetryReason::Error)
+            } else {
+                None
             }
-            OrchestratorError::Connector { err } if err.is_timeout() || err.is_io() => {
-                Some(RetryReason::Error(ErrorKind::TransientError))
-            }
-            OrchestratorError::Connector { err } if err.is_other().is_some() => {
-                err.is_other().map(RetryReason::Error)
-            }
-            _ => None,
+        } else {
+            None
         }
     }
 
