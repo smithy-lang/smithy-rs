@@ -547,10 +547,17 @@ mod loader {
         /// This means that if you provide a region provider that does not return a region, no region will
         /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
         pub async fn load(self) -> SdkConfig {
-            let conf = self
+            let mut poisoned_conf = self
                 .provider_config
                 .unwrap_or_default()
                 .with_profile_config(self.profile_files_override, self.profile_name_override);
+            if let Some(time_source) = &self.time_source {
+                poisoned_conf = poisoned_conf.with_time_source(time_source.clone());
+            }
+            if let Some(sleep) = &self.sleep {
+                poisoned_conf = poisoned_conf.with_sleep(sleep.clone());
+            }
+            let conf = poisoned_conf;
             let region = if let Some(provider) = self.region {
                 provider.region().await
             } else {
@@ -620,9 +627,8 @@ mod loader {
 
             let credentials_cache = if credentials_provider.is_some() {
                 Some(self.credentials_cache.unwrap_or_else(|| {
-                    let mut builder = CredentialsCache::lazy_builder().time_source(
-                        aws_credential_types::time_source::TimeSource::shared(conf.time_source()),
-                    );
+                    let mut builder =
+                        CredentialsCache::lazy_builder().time_source(conf.time_source());
                     builder.set_sleep(conf.sleep());
                     builder.into_credentials_cache()
                 }))

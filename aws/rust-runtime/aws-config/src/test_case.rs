@@ -6,7 +6,7 @@
 use crate::provider_config::ProviderConfig;
 
 use aws_credential_types::provider::{self, ProvideCredentials};
-use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
+use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
 use aws_smithy_client::erase::DynConnector;
 use aws_types::os_shim_internal::{Env, Fs};
@@ -14,6 +14,7 @@ use aws_types::os_shim_internal::{Env, Fs};
 use serde::Deserialize;
 
 use crate::connector::default_connector;
+use aws_smithy_async::test_util::instant_time_and_sleep;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::collections::HashMap;
 use std::env;
@@ -229,11 +230,13 @@ impl TestEnvironment {
                 .map_err(|e| format!("failed to load test case: {}", e))?,
         )?;
         let connector = ReplayingConnection::new(network_traffic.events().clone());
+        let (timeource, sleep) = instant_time_and_sleep(UNIX_EPOCH);
         let provider_config = ProviderConfig::empty()
             .with_fs(fs.clone())
             .with_env(env.clone())
             .with_http_connector(DynConnector::new(connector.clone()))
-            .with_sleep(TokioSleep::new())
+            .with_sleep(sleep)
+            .with_time_source(timeource)
             .load_default_region()
             .await;
         Ok(TestEnvironment {
@@ -336,7 +339,6 @@ impl TestEnvironment {
         let (_guard, rx) = capture_test_logs();
         let provider = make_provider(self.provider_config.clone()).await;
         let result = provider.provide_credentials().await;
-        tokio::time::pause();
         self.log_info();
         self.check_results(result);
         // todo: validate bodies

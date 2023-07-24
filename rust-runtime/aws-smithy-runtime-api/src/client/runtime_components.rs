@@ -201,6 +201,7 @@ declare_runtime_components! {
         #[required]
         retry_strategy: Option<SharedRetryStrategy>,
 
+        #[required]
         time_source: Option<SharedTimeSource>,
 
         sleep_impl: Option<SharedAsyncSleep>,
@@ -258,7 +259,7 @@ impl RuntimeComponents {
 
     /// Returns the time source.
     pub fn time_source(&self) -> Option<SharedTimeSource> {
-        self.time_source.as_ref().map(|s| s.value.clone())
+        Some(self.time_source.value.clone())
     }
 }
 

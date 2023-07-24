@@ -68,6 +68,7 @@ impl SsoCredentialsProvider {
                 "The SSO credentials provider",
                 provider_config.connector(&Default::default()),
             ))
+            .time_source(provider_config.time_source())
             .retry_config(RetryConfig::standard());
         sso_config.set_sleep_impl(provider_config.sleep());
 

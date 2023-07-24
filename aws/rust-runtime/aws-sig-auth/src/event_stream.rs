@@ -49,7 +49,11 @@ impl SigV4MessageSigner {
             .secret_key(self.credentials.secret_access_key())
             .region(self.signing_region.as_ref())
             .service_name(self.signing_service.as_ref())
-            .time(self.time.unwrap_or_else(SystemTime::now))
+            .time(self.time.unwrap_or_else(
+                // dead code
+                #[allow(clippy::disallowed_methods)]
+                SystemTime::now,
+            ))
             .settings(());
         builder.set_security_token(self.credentials.session_token());
         builder.build().unwrap()
@@ -149,7 +153,11 @@ impl SigV4Signer {
         let time = properties
             .get::<SystemTime>()
             .copied()
-            .unwrap_or_else(SystemTime::now);
+            // dead code
+            .unwrap_or_else(
+                #[allow(clippy::disallowed_method)]
+                SystemTime::now,
+            );
         let mut builder = SigningParams::builder()
             .access_key(credentials.access_key_id())
             .secret_key(credentials.secret_access_key())

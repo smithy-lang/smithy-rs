@@ -35,6 +35,11 @@ impl ManualTimeSource {
             .unwrap()
             .as_secs_f64()
     }
+
+    /// Manually advances time by the specified duration
+    pub fn advance(&self, time: Duration) {
+        self.log.lock().unwrap().push(time);
+    }
 }
 
 impl TimeSource for ManualTimeSource {

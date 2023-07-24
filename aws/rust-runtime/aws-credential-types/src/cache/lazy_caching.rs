@@ -5,16 +5,16 @@
 
 //! Lazy, credentials cache implementation
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
+use aws_smithy_async::time::SharedTimeSource;
 use tracing::{debug, info, info_span, Instrument};
 
 use crate::cache::{ExpiringCache, ProvideCachedCredentials};
 use crate::provider::SharedCredentialsProvider;
 use crate::provider::{error::CredentialsError, future, ProvideCredentials};
-use crate::time_source::TimeSource;
 
 const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREDENTIAL_EXPIRATION: Duration = Duration::from_secs(15 * 60);
@@ -23,7 +23,7 @@ const DEFAULT_BUFFER_TIME_JITTER_FRACTION: fn() -> f64 = fastrand::f64;
 
 #[derive(Debug)]
 pub(crate) struct LazyCredentialsCache {
-    time: TimeSource,
+    time: SharedTimeSource,
     sleeper: SharedAsyncSleep,
     cache: ExpiringCache<Credentials, CredentialsError>,
     provider: SharedCredentialsProvider,
@@ -35,7 +35,7 @@ pub(crate) struct LazyCredentialsCache {
 
 impl LazyCredentialsCache {
     fn new(
-        time: TimeSource,
+        time: SharedTimeSource,
         sleeper: SharedAsyncSleep,
         provider: SharedCredentialsProvider,
         load_timeout: Duration,
@@ -61,6 +61,7 @@ impl ProvideCachedCredentials for LazyCredentialsCache {
     where
         Self: 'a,
     {
+        tracing::info!("provider: {:#?}", self);
         let now = self.time.now();
         let provider = self.provider.clone();
         let timeout_future = self.sleeper.sleep(self.load_timeout);
@@ -79,7 +80,7 @@ impl ProvideCachedCredentials for LazyCredentialsCache {
                 // since the futures are not eagerly executed, and the cache will only run one
                 // of them.
                 let future = Timeout::new(provider.provide_credentials(), timeout_future);
-                let start_time = Instant::now();
+                let start_time = self.time.now();
                 let result = cache
                     .get_or_load(|| {
                         let span = info_span!("lazy_load_credentials");
@@ -111,14 +112,14 @@ impl ProvideCachedCredentials for LazyCredentialsCache {
                             // only once for the first thread that succeeds in populating a cache value.
                             info!(
                                 "credentials cache miss occurred; added new AWS credentials (took {:?})",
-                                start_time.elapsed()
+                                self.time.now().duration_since(start_time)
                             );
 
                             Ok((credentials, expiry + jitter))
                         }
-                        // Only instrument the the actual load future so that no span
-                        // is opened if the cache decides not to execute it.
-                        .instrument(span)
+                            // Only instrument the the actual load future so that no span
+                            // is opened if the cache decides not to execute it.
+                            .instrument(span)
                     })
                     .await;
                 debug!("loaded credentials");
@@ -137,8 +138,8 @@ mod builder {
     use crate::cache::{CredentialsCache, Inner};
     use crate::provider::SharedCredentialsProvider;
     use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
+    use aws_smithy_async::time::SharedTimeSource;
 
-    use super::TimeSource;
     use super::{
         LazyCredentialsCache, DEFAULT_BUFFER_TIME, DEFAULT_BUFFER_TIME_JITTER_FRACTION,
         DEFAULT_CREDENTIAL_EXPIRATION, DEFAULT_LOAD_TIMEOUT,
@@ -159,7 +160,7 @@ mod builder {
     #[derive(Clone, Debug, Default)]
     pub struct Builder {
         sleep: Option<SharedAsyncSleep>,
-        time_source: Option<TimeSource>,
+        time_source: Option<SharedTimeSource>,
         load_timeout: Option<Duration>,
         buffer_time: Option<Duration>,
         buffer_time_jitter_fraction: Option<fn() -> f64>,
@@ -193,13 +194,13 @@ mod builder {
         }
 
         #[doc(hidden)] // because they only exist for tests
-        pub fn time_source(mut self, time_source: TimeSource) -> Self {
+        pub fn time_source(mut self, time_source: SharedTimeSource) -> Self {
             self.set_time_source(Some(time_source));
             self
         }
 
         #[doc(hidden)] // because they only exist for tests
-        pub fn set_time_source(&mut self, time_source: Option<TimeSource>) -> &mut Self {
+        pub fn set_time_source(&mut self, time_source: Option<SharedTimeSource>) -> &mut Self {
             self.time_source = time_source;
             self
         }
@@ -346,6 +347,7 @@ mod tests {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
+    use aws_smithy_async::time::SharedTimeSource;
     use tracing::info;
     use tracing_test::traced_test;
 
@@ -356,20 +358,20 @@ mod tests {
     };
 
     use super::{
-        LazyCredentialsCache, TimeSource, DEFAULT_BUFFER_TIME, DEFAULT_CREDENTIAL_EXPIRATION,
+        LazyCredentialsCache, DEFAULT_BUFFER_TIME, DEFAULT_CREDENTIAL_EXPIRATION,
         DEFAULT_LOAD_TIMEOUT,
     };
 
     const BUFFER_TIME_NO_JITTER: fn() -> f64 = || 0_f64;
 
     fn test_provider(
-        time: TimeSource,
+        time: &TestingTimeSource,
         buffer_time_jitter_fraction: fn() -> f64,
         load_list: Vec<crate::provider::Result>,
     ) -> LazyCredentialsCache {
         let load_list = Arc::new(Mutex::new(load_list));
         LazyCredentialsCache::new(
-            time,
+            SharedTimeSource::new(time.clone()),
             SharedAsyncSleep::new(TokioSleep::new()),
             SharedCredentialsProvider::new(provide_credentials_fn(move || {
                 let list = load_list.clone();
@@ -411,7 +413,7 @@ mod tests {
             Ok(credentials(1000))
         }));
         let credentials_cache = LazyCredentialsCache::new(
-            TimeSource::testing(&time),
+            SharedTimeSource::new(time),
             SharedAsyncSleep::new(TokioSleep::new()),
             provider,
             DEFAULT_LOAD_TIMEOUT,
@@ -435,7 +437,7 @@ mod tests {
     async fn reload_expired_credentials() {
         let mut time = TestingTimeSource::new(epoch_secs(100));
         let credentials_cache = test_provider(
-            TimeSource::testing(&time),
+            &time,
             BUFFER_TIME_NO_JITTER,
             vec![
                 Ok(credentials(1000)),
@@ -459,7 +461,7 @@ mod tests {
     async fn load_failed_error() {
         let mut time = TestingTimeSource::new(epoch_secs(100));
         let credentials_cache = test_provider(
-            TimeSource::testing(&time),
+            &time,
             BUFFER_TIME_NO_JITTER,
             vec![
                 Ok(credentials(1000)),
@@ -486,7 +488,7 @@ mod tests {
 
         let time = TestingTimeSource::new(epoch_secs(0));
         let credentials_cache = Arc::new(test_provider(
-            TimeSource::testing(&time),
+            &time,
             BUFFER_TIME_NO_JITTER,
             vec![
                 Ok(credentials(500)),
@@ -531,7 +533,7 @@ mod tests {
     async fn load_timeout() {
         let time = TestingTimeSource::new(epoch_secs(100));
         let credentials_cache = LazyCredentialsCache::new(
-            TimeSource::testing(&time),
+            SharedTimeSource::new(time.clone()),
             SharedAsyncSleep::new(TokioSleep::new()),
             SharedCredentialsProvider::new(provide_credentials_fn(|| async {
                 aws_smithy_async::future::never::Never::new().await;
@@ -554,7 +556,7 @@ mod tests {
         let mut time = TestingTimeSource::new(epoch_secs(100));
         let buffer_time_jitter_fraction = || 0.5_f64;
         let credentials_cache = test_provider(
-            TimeSource::testing(&time),
+            &time,
             buffer_time_jitter_fraction,
             vec![Ok(credentials(1000)), Ok(credentials(2000))],
         );

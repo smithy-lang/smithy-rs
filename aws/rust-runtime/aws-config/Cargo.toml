@@ -63,6 +63,7 @@ serde_json = "1"
 
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"] }
+aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
 
 # used for a usage example
 hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http2", "http1"] }

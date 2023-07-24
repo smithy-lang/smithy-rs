@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod http_client;
+pub(crate) mod http_client;
 
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::HttpConnector;
@@ -38,7 +38,6 @@ impl Service<http::Request<SdkBody>> for Adapter {
     fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
         println!("Adapter: sending request...");
         let res = http_client::make_request(req).unwrap();
-        println!("{:?}", res);
         Box::pin(async move { Ok(res) })
     }
 }

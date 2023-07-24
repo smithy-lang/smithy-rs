@@ -16,5 +16,5 @@ members = [
     "sts",
     "transcribestreaming",
     "timestreamquery",
-    "webassembly",
+    "webassembly-wasi",
 ]

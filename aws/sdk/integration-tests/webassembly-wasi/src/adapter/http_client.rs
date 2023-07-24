@@ -5,10 +5,7 @@
 
 use aws_smithy_http::body::SdkBody;
 
-pub(crate) fn make_request(_req: http::Request<SdkBody>) -> Result<http::Response<SdkBody>, ()> {
-    // Consumers here would pass the HTTP request to
-    // the Wasm host in order to get the response back
-    let body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+pub(crate) const RESPONSE_BODY: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>
     <ListAllMyBucketsResult>
     <Buckets>
         <Bucket>
@@ -25,5 +22,8 @@ pub(crate) fn make_request(_req: http::Request<SdkBody>) -> Result<http::Respons
         <ID>a3a42310-42d0-46d1-9745-0cee9f4fb851</ID>
     </Owner>
     </ListAllMyBucketsResult>";
-    Ok(http::Response::new(SdkBody::from(body)))
+pub(crate) fn make_request(_req: http::Request<SdkBody>) -> Result<http::Response<SdkBody>, ()> {
+    // Consumers here would pass the HTTP request to
+    // the Wasm host in order to get the response back
+    Ok(http::Response::new(SdkBody::from(RESPONSE_BODY)))
 }

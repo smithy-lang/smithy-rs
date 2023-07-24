@@ -5,9 +5,8 @@
 
 //! Configuration Options for Credential Providers
 
-use aws_credential_types::time_source::TimeSource;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::os_shim_internal::{Env, Fs};
@@ -291,8 +290,8 @@ impl ProviderConfig {
         }
     }
 
-    #[doc(hidden)]
-    pub fn with_time_source(self, time_source: TimeSource) -> Self {
+    /// Override the time source used for these credential providers
+    pub fn with_time_source(self, time_source: impl TimeSource + 'static) -> Self {
         ProviderConfig {
             time_source: SharedTimeSource::new(time_source),
             ..self
