@@ -50,10 +50,10 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             )
         }
 
-        fun registerHttpAuthScheme(writer: RustWriter, authScheme: Writable) {
+        fun registerAuthScheme(writer: RustWriter, authScheme: Writable) {
             writer.rustTemplate(
                 """
-                runtime_components.push_http_auth_scheme(#{auth_scheme});
+                runtime_components.push_auth_scheme(#{auth_scheme});
                 """,
                 "auth_scheme" to authScheme,
             )

@@ -45,7 +45,7 @@ private class HttpConnectorConfigCustomization(
         "HttpConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::HttpConnector"),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
         "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
-        "SharedConnector" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::connectors::SharedConnector"),
+        "SharedHttpConnector" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::connectors::SharedHttpConnector"),
         "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
     )
 
@@ -101,9 +101,9 @@ private class HttpConnectorConfigCustomization(
                         http_connector
                             .and_then(|c| c.connector(&connector_settings, sleep_impl.clone()))
                             .or_else(|| #{default_connector}(&connector_settings, sleep_impl))
-                            .map(|c| #{SharedConnector}::new(#{DynConnectorAdapter}::new(c)));
+                            .map(|c| #{SharedHttpConnector}::new(#{DynConnectorAdapter}::new(c)));
 
-                    resolver.runtime_components_mut().set_connector(connector);
+                    resolver.runtime_components_mut().set_http_connector(connector);
                 }
             }
             """,
@@ -124,15 +124,9 @@ private class HttpConnectorConfigCustomization(
                 if (runtimeMode.defaultToOrchestrator) {
                     rustTemplate(
                         """
-                        // TODO(enableNewSmithyRuntimeCleanup): Remove this function
-                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
-                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
-                            self.config.load::<#{HttpConnector}>()
-                        }
-
-                        /// Return the [`SharedConnector`](#{SharedConnector}) to use when making requests, if any.
-                        pub fn connector(&self) -> Option<#{SharedConnector}> {
-                            self.runtime_components.connector()
+                        /// Return the [`SharedHttpConnector`](#{SharedHttpConnector}) to use when making requests, if any.
+                        pub fn http_connector(&self) -> Option<#{SharedHttpConnector}> {
+                            self.runtime_components.http_connector()
                         }
                         """,
                         *codegenScope,
