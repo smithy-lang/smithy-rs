@@ -89,38 +89,7 @@ impl InterceptorContext<Input, Output, Error> {
     }
 }
 
-impl<I, O, E: Debug> InterceptorContext<I, O, E> {
-    /// Decomposes the context into its constituent parts.
-    #[doc(hidden)]
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        Option<I>,
-        Option<Result<O, OrchestratorError<E>>>,
-        Option<Request>,
-        Option<Response>,
-    ) {
-        (
-            self.input,
-            self.output_or_error,
-            self.request,
-            self.response,
-        )
-    }
-
-    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
-        let Self {
-            output_or_error,
-            response,
-            phase,
-            ..
-        } = self;
-        output_or_error
-            .expect("output_or_error must always be set before finalize is called.")
-            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
-    }
-
+impl<I, O, E> InterceptorContext<I, O, E> {
     /// Retrieve the input for the operation being invoked.
     pub fn input(&self) -> Option<&I> {
         self.input.as_ref()
@@ -186,6 +155,14 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     /// Returns the mutable reference to the deserialized output or error.
     pub fn output_or_error_mut(&mut self) -> Option<&mut Result<O, OrchestratorError<E>>> {
         self.output_or_error.as_mut()
+    }
+
+    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
+    pub fn is_failed(&self) -> bool {
+        self.output_or_error
+            .as_ref()
+            .map(Result::is_err)
+            .unwrap_or_default()
     }
 
     /// Advance to the Serialization phase.
@@ -314,6 +291,42 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
         self.output_or_error = None;
         RewindResult::Occurred
     }
+}
+
+impl<I, O, E> InterceptorContext<I, O, E>
+where
+    E: Debug,
+{
+    /// Decomposes the context into its constituent parts.
+    #[doc(hidden)]
+    #[allow(clippy::type_complexity)]
+    pub fn into_parts(
+        self,
+    ) -> (
+        Option<I>,
+        Option<Result<O, OrchestratorError<E>>>,
+        Option<Request>,
+        Option<Response>,
+    ) {
+        (
+            self.input,
+            self.output_or_error,
+            self.request,
+            self.response,
+        )
+    }
+
+    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
+        let Self {
+            output_or_error,
+            response,
+            phase,
+            ..
+        } = self;
+        output_or_error
+            .expect("output_or_error must always be set before finalize is called.")
+            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
+    }
 
     /// Mark this context as failed due to errors during the operation. Any errors already contained
     /// by the context will be replaced by the given error.
@@ -327,14 +340,6 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
         if let Some(Err(existing_err)) = mem::replace(&mut self.output_or_error, Some(Err(error))) {
             error!("orchestrator context received an error but one was already present; Throwing away previous error: {:?}", existing_err);
         }
-    }
-
-    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
-    pub fn is_failed(&self) -> bool {
-        self.output_or_error
-            .as_ref()
-            .map(Result::is_err)
-            .unwrap_or_default()
     }
 }
 
