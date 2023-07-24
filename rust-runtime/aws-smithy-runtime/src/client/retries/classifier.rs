@@ -81,8 +81,8 @@ where
         } else if let Some(error) = error.as_connector_error() {
             if error.is_timeout() || error.is_io() {
                 Some(RetryReason::Error(ErrorKind::TransientError))
-            } else if error.is_other().is_some() {
-                error.is_other().map(RetryReason::Error)
+            } else if let Some(other) = error.as_other() {
+                Some(RetryReason::Error(other))
             } else {
                 None
             }
