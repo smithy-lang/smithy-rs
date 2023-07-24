@@ -39,6 +39,9 @@ macro_rules! expect {
 // BeforeSerializationInterceptorContextRef
 //
 
+/// Interceptor context for the `read_before_execution` and `read_before_serialization` hooks.
+///
+/// Only the input is available at this point in the operation.
 #[derive(Debug)]
 pub struct BeforeSerializationInterceptorContextRef<'a, I = Input, O = Output, E = Error> {
     inner: &'a InterceptorContext<I, O, E>,
@@ -57,6 +60,9 @@ impl<'a, I, O, E> BeforeSerializationInterceptorContextRef<'a, I, O, E> {
 // BeforeSerializationInterceptorContextMut
 //
 
+/// Interceptor context for the `modify_before_serialization` hook.
+///
+/// Only the input is available at this point in the operation.
 #[derive(Debug)]
 pub struct BeforeSerializationInterceptorContextMut<'a, I = Input, O = Output, E = Error> {
     inner: &'a mut InterceptorContext<I, O, E>,
@@ -80,6 +86,9 @@ impl<'a, I, O, E> BeforeSerializationInterceptorContextMut<'a, I, O, E> {
 // BeforeSerializationInterceptorContextRef
 //
 
+/// Interceptor context for several hooks in between serialization and transmission.
+///
+/// Only the request is available at this point in the operation.
 #[derive(Debug)]
 pub struct BeforeTransmitInterceptorContextRef<'a, I = Input, O = Output, E = Error> {
     inner: &'a InterceptorContext<I, O, E>,
@@ -98,6 +107,9 @@ impl<'a, I, O, E> BeforeTransmitInterceptorContextRef<'a, I, O, E> {
 // BeforeSerializationInterceptorContextMut
 //
 
+/// Interceptor context for several hooks in between serialization and transmission.
+///
+/// Only the request is available at this point in the operation.
 #[derive(Debug)]
 pub struct BeforeTransmitInterceptorContextMut<'a, I = Input, O = Output, E = Error> {
     inner: &'a mut InterceptorContext<I, O, E>,
@@ -121,6 +133,9 @@ impl<'a, I, O, E> BeforeTransmitInterceptorContextMut<'a, I, O, E> {
 // BeforeDeserializationInterceptorContextRef
 //
 
+/// Interceptor context for hooks before deserializing the response.
+///
+/// Only the response is available at this point in the operation.
 #[derive(Debug)]
 pub struct BeforeDeserializationInterceptorContextRef<'a, I = Input, O = Output, E = Error> {
     inner: &'a InterceptorContext<I, O, E>,
@@ -129,16 +144,6 @@ pub struct BeforeDeserializationInterceptorContextRef<'a, I = Input, O = Output,
 impl_from_interceptor_context!(ref BeforeDeserializationInterceptorContextRef);
 
 impl<'a, I, O, E> BeforeDeserializationInterceptorContextRef<'a, I, O, E> {
-    /// Returns a reference to the input.
-    pub fn input(&self) -> &I {
-        expect!(self, input)
-    }
-
-    /// Returns a reference to the transmittable request for the operation being invoked.
-    pub fn request(&self) -> &Request {
-        expect!(self, request)
-    }
-
     /// Returns a reference to the response.
     pub fn response(&self) -> &Response {
         expect!(self, response)
@@ -149,6 +154,9 @@ impl<'a, I, O, E> BeforeDeserializationInterceptorContextRef<'a, I, O, E> {
 // BeforeDeserializationInterceptorContextMut
 //
 
+/// Interceptor context for hooks before deserializing the response.
+///
+/// Only the response is available at this point in the operation.
 pub struct BeforeDeserializationInterceptorContextMut<'a, I = Input, O = Output, E = Error> {
     inner: &'a mut InterceptorContext<I, O, E>,
 }
@@ -156,29 +164,9 @@ pub struct BeforeDeserializationInterceptorContextMut<'a, I = Input, O = Output,
 impl_from_interceptor_context!(mut BeforeDeserializationInterceptorContextMut);
 
 impl<'a, I, O, E> BeforeDeserializationInterceptorContextMut<'a, I, O, E> {
-    /// Returns a reference to the input.
-    pub fn input(&self) -> &I {
-        expect!(self, input)
-    }
-
-    /// Returns a reference to the transmittable request for the operation being invoked.
-    pub fn request(&self) -> &Request {
-        expect!(self, request)
-    }
-
     /// Returns a reference to the response.
     pub fn response(&self) -> &Response {
         expect!(self, response)
-    }
-
-    /// Returns a mutable reference to the input.
-    pub fn input_mut(&mut self) -> &mut I {
-        expect!(self, input_mut)
-    }
-
-    /// Returns a mutable reference to the transmittable request for the operation being invoked.
-    pub fn request_mut(&mut self) -> &mut Request {
-        expect!(self, request_mut)
     }
 
     /// Returns a mutable reference to the response.
@@ -199,6 +187,9 @@ impl<'a, I, O, E> BeforeDeserializationInterceptorContextMut<'a, I, O, E> {
 // AfterDeserializationInterceptorContextRef
 //
 
+/// Interceptor context for hooks after deserializing the response.
+///
+/// The response and the deserialized output or error are available at this point in the operation.
 pub struct AfterDeserializationInterceptorContextRef<'a, I = Input, O = Output, E = Error> {
     inner: &'a InterceptorContext<I, O, E>,
 }
@@ -206,16 +197,6 @@ pub struct AfterDeserializationInterceptorContextRef<'a, I = Input, O = Output, 
 impl_from_interceptor_context!(ref AfterDeserializationInterceptorContextRef);
 
 impl<'a, I, O, E> AfterDeserializationInterceptorContextRef<'a, I, O, E> {
-    /// Returns a reference to the input.
-    pub fn input(&self) -> &I {
-        expect!(self, input)
-    }
-
-    /// Returns a reference to the transmittable request for the operation being invoked.
-    pub fn request(&self) -> &Request {
-        expect!(self, request)
-    }
-
     /// Returns a reference to the response.
     pub fn response(&self) -> &Response {
         expect!(self, response)
@@ -231,6 +212,11 @@ impl<'a, I, O, E> AfterDeserializationInterceptorContextRef<'a, I, O, E> {
 // FinalizerInterceptorContextRef
 //
 
+/// Interceptor context for finalization hooks.
+///
+/// This context is used by the `read_after_attempt` and `read_after_execution` hooks
+/// that are all called upon both success and failure, and may have varying levels
+/// of context available depending on where a failure occurred if the operation failed.
 pub struct FinalizerInterceptorContextRef<'a, I = Input, O = Output, E = Error> {
     inner: &'a InterceptorContext<I, O, E>,
 }
@@ -263,6 +249,11 @@ impl<'a, I, O, E> FinalizerInterceptorContextRef<'a, I, O, E> {
 // FinalizerInterceptorContextMut
 //
 
+/// Interceptor context for finalization hooks.
+///
+/// This context is used by the `modify_before_attempt_completion` and `modify_before_completion` hooks
+/// that are all called upon both success and failure, and may have varying levels
+/// of context available depending on where a failure occurred if the operation failed.
 pub struct FinalizerInterceptorContextMut<'a, I = Input, O = Output, E = Error> {
     inner: &'a mut InterceptorContext<I, O, E>,
 }

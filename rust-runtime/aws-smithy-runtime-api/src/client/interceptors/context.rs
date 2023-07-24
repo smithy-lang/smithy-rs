@@ -37,9 +37,13 @@ use std::{fmt, mem};
 use tracing::{debug, error, trace};
 
 // TODO(enableNewSmithyRuntimeLaunch): New-type `Input`/`Output`/`Error`
+/// Type-erased operation input.
 pub type Input = TypeErasedBox;
+/// Type-erased operation output.
 pub type Output = TypeErasedBox;
+/// Type-erased operation error.
 pub type Error = TypeErasedError;
+/// Type-erased result for an operation.
 pub type OutputOrError = Result<Output, OrchestratorError<Error>>;
 
 type Request = HttpRequest;
@@ -316,6 +320,8 @@ where
         )
     }
 
+    /// Convert this context into the final operation result that is returned in client's the public API.
+    #[doc(hidden)]
     pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
         let Self {
             output_or_error,
