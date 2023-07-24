@@ -6,9 +6,6 @@
 #[macro_use]
 extern crate criterion;
 use aws_sdk_s3 as s3;
-use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
-use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_types::config_bag::ConfigBag;
 use criterion::{BenchmarkId, Criterion};
 
 macro_rules! test_connection {
@@ -92,7 +89,7 @@ async fn orchestrator(client: &s3::Client) {
         .list_objects_v2()
         .bucket("test-bucket")
         .prefix("prefix~")
-        .send_orchestrator()
+        .send()
         .await
         .expect("successful execution");
 }

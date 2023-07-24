@@ -37,10 +37,10 @@ fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = 
         settings = settings ?: testClientRustSettings(runtimeConfig = AwsTestRuntimeConfig),
     )
 
-// TODO(enableNewSmithyRuntimeCleanup): Remove defaultToOrchestrator once the runtime switches to the orchestrator
+// TODO(enableNewSmithyRuntimeCleanup): Remove generateOrchestrator once the runtime switches to the orchestrator
 fun awsSdkIntegrationTest(
     model: Model,
-    defaultToOrchestrator: Boolean = true,
+    generateOrchestrator: Boolean = true,
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) =
     clientIntegrationTest(
@@ -62,7 +62,7 @@ fun awsSdkIntegrationTest(
                     "codegen",
                     ObjectNode.builder()
                         .withMember("includeFluentClient", false)
-                        .letIf(defaultToOrchestrator) {
+                        .letIf(generateOrchestrator) {
                             it.withMember("enableNewSmithyRuntime", StringNode.from("orchestrator"))
                         }
                         .build(),

@@ -115,13 +115,13 @@ private class HttpConnectorConfigCustomization(
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
                 }
             }
 
             is ServiceConfig.ConfigImpl -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Return the [`SharedHttpConnector`](#{SharedHttpConnector}) to use when making requests, if any.
@@ -145,7 +145,7 @@ private class HttpConnectorConfigCustomization(
             }
 
             is ServiceConfig.BuilderStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
                 }
             }
@@ -229,7 +229,7 @@ private class HttpConnectorConfigCustomization(
                     """,
                     *codegenScope,
                 )
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
@@ -253,7 +253,7 @@ private class HttpConnectorConfigCustomization(
             }
 
             is ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         "#{set_connector}(&mut resolver);",
                         "set_connector" to setConnectorFn(),
@@ -264,7 +264,7 @@ private class HttpConnectorConfigCustomization(
             }
 
             is ServiceConfig.OperationConfigOverride -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         "#{set_connector}(&mut resolver);",
                         "set_connector" to setConnectorFn(),

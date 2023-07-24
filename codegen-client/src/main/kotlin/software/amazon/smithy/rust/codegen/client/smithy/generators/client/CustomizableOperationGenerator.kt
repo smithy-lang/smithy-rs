@@ -374,7 +374,7 @@ fun renderCustomizableOperationSend(codegenContext: ClientCodegenContext, generi
             """,
             *codegenScope,
         )
-    } else if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+    } else if (codegenContext.smithyRuntimeMode.generateMiddleware) {
         writer.rustTemplate(
             """
             impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}

@@ -48,7 +48,7 @@ internal class CredentialCacheConfigTest {
 
     @Test
     fun `config override for credentials`() {
-        awsSdkIntegrationTest(model, defaultToOrchestrator = true) { clientCodegenContext, rustCrate ->
+        awsSdkIntegrationTest(model, generateOrchestrator = true) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *RuntimeType.preludeScope,

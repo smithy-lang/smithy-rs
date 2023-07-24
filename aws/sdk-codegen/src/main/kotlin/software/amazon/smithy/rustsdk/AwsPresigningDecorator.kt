@@ -286,13 +286,13 @@ class AwsPresignedFluentBuilderMethod(
                     """,
                     *codegenScope,
                     "OpError" to section.operationErrorType,
-                    "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    "RawResponseType" to if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
                     } else {
                         RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
                     },
                 ) {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         renderPresignedMethodBodyMiddleware()
                     } else {
                         renderPresignedMethodBody(section)

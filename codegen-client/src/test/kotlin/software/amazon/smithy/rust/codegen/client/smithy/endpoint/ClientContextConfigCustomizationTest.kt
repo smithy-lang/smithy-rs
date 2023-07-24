@@ -41,7 +41,7 @@ class ClientContextConfigCustomizationTest {
         val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
         val context = testClientCodegenContext(model).withSmithyRuntimeMode(smithyRuntimeMode)
         project.unitTest {
-            if (smithyRuntimeMode.defaultToOrchestrator) {
+            if (smithyRuntimeMode.generateOrchestrator) {
                 rustTemplate(
                     """
                     use #{RuntimePlugin};
@@ -74,7 +74,7 @@ class ClientContextConfigCustomizationTest {
         }
         // unset fields
         project.unitTest {
-            if (smithyRuntimeMode.defaultToOrchestrator) {
+            if (smithyRuntimeMode.generateOrchestrator) {
                 rustTemplate(
                     """
                     use #{RuntimePlugin};

@@ -80,7 +80,7 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.BuilderStruct -> {
-                if (smithyRuntimeMode.defaultToMiddleware) {
+                if (smithyRuntimeMode.generateMiddleware) {
                     rustTemplate("credentials_provider: #{Option}<#{SharedCredentialsProvider}>,", *codegenScope)
                 }
             }
@@ -96,7 +96,7 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
                     *codegenScope,
                 )
 
-                if (smithyRuntimeMode.defaultToOrchestrator) {
+                if (smithyRuntimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Sets the credentials provider for this service

@@ -31,12 +31,12 @@ fun stubConfigCustomization(name: String, codegenContext: ClientCodegenContext):
         override fun section(section: ServiceConfig): Writable = writable {
             when (section) {
                 ServiceConfig.ConfigStruct -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         rust("_$name: u64,")
                     }
                 }
                 ServiceConfig.ConfigImpl -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                    if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             ##[allow(missing_docs)]
@@ -61,12 +61,12 @@ fun stubConfigCustomization(name: String, codegenContext: ClientCodegenContext):
                     }
                 }
                 ServiceConfig.BuilderStruct -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         rust("_$name: Option<u64>,")
                     }
                 }
                 ServiceConfig.BuilderImpl -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                    if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// docs!
@@ -93,7 +93,7 @@ fun stubConfigCustomization(name: String, codegenContext: ClientCodegenContext):
                     }
                 }
                 ServiceConfig.BuilderBuild -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         rust(
                             """
                             _$name: self._$name.unwrap_or(123),

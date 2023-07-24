@@ -70,7 +70,7 @@ class DefaultProtocolTestGenerator(
     override val operationShape: OperationShape,
 
     private val renderClientCreation: RustWriter.(ClientCreationParams) -> Unit = { params ->
-        if (params.codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+        if (params.codegenContext.smithyRuntimeMode.generateMiddleware) {
             rustTemplate(
                 """
                 let smithy_client = #{Builder}::new()
@@ -347,7 +347,7 @@ class DefaultProtocolTestGenerator(
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
-        if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+        if (codegenContext.smithyRuntimeMode.generateMiddleware) {
             rust(
                 "let mut op_response = #T::new(http_response);",
                 RT.operationModule(rc).resolve("Response"),
@@ -397,7 +397,7 @@ class DefaultProtocolTestGenerator(
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
-            if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 rustTemplate(
                     """let parsed: &#{Error} = parsed.as_operation_error().expect("operation error").downcast_ref().unwrap();""",
                     "Error" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
@@ -410,7 +410,7 @@ class DefaultProtocolTestGenerator(
                 rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
-            if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+            if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                 rust("let parsed = parsed.unwrap();")
             } else {
                 rustTemplate(

@@ -18,8 +18,8 @@ aws-types = { path = "../../../rust-runtime/aws-types" }
 criterion = { version = "0.4", features = ["async_tokio"] }
 http = "0.2.3"
 http-body = "0.4.5"
-last-release-smithy-client = { version = "0.55", package = "aws-smithy-client", features = ["test-util", "rustls"] }
-last-release-s3 = { version = "0.26", package = "aws-sdk-s3", features = ["test-util"] }
+last-release-smithy-client = { version = "0.55.3", package = "aws-smithy-client", features = ["test-util", "rustls"] }
+last-release-s3 = { version = "0.28", package = "aws-sdk-s3", features = ["test-util"] }
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }

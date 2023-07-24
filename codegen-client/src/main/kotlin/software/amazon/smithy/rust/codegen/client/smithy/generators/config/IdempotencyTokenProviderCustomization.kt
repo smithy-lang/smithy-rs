@@ -29,13 +29,13 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("pub (crate) idempotency_token_provider: #{IdempotencyTokenProvider},", *codegenScope)
                 }
             }
 
             ServiceConfig.ConfigImpl -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Returns a copy of the idempotency token provider.
@@ -63,7 +63,7 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
             }
 
             ServiceConfig.BuilderStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("idempotency_token_provider: #{Option}<#{IdempotencyTokenProvider}>,", *codegenScope)
                 }
             }
@@ -80,7 +80,7 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
                     *codegenScope,
                 )
 
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Sets the idempotency token provider to use for service calls that require tokens.
@@ -106,7 +106,7 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
             }
 
             ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         if !resolver.is_set::<#{IdempotencyTokenProvider}>() {
