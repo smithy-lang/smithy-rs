@@ -8,13 +8,13 @@ use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, ProvideCredentials};
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_client::dvr::{NetworkTraffic, RecordingConnection, ReplayingConnection};
-use aws_smithy_client::erase::DynConnector;
 use aws_types::os_shim_internal::{Env, Fs};
 
 use serde::Deserialize;
 
 use crate::connector::default_connector;
 use aws_smithy_async::test_util::instant_time_and_sleep;
+use aws_smithy_client::http_connector::HttpConnector;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::collections::HashMap;
 use std::env;
@@ -79,8 +79,8 @@ pub(crate) struct TestEnvironment {
 }
 
 /// Connector which expects no traffic
-pub(crate) fn no_traffic_connector() -> DynConnector {
-    DynConnector::new(ReplayingConnection::new(vec![]))
+pub(crate) fn no_traffic_connector() -> HttpConnector {
+    ReplayingConnection::new(vec![]).into()
 }
 
 #[derive(Debug)]
@@ -234,7 +234,7 @@ impl TestEnvironment {
         let provider_config = ProviderConfig::empty()
             .with_fs(fs.clone())
             .with_env(env.clone())
-            .with_http_connector(DynConnector::new(connector.clone()))
+            .with_http_connector(connector.clone())
             .with_sleep(sleep)
             .with_time_source(timeource)
             .load_default_region()
@@ -277,7 +277,7 @@ impl TestEnvironment {
         let config = self
             .provider_config
             .clone()
-            .with_http_connector(DynConnector::new(live_connector.clone()));
+            .with_http_connector(live_connector.clone());
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(
@@ -302,7 +302,7 @@ impl TestEnvironment {
         let config = self
             .provider_config
             .clone()
-            .with_http_connector(DynConnector::new(recording_connector.clone()));
+            .with_http_connector(recording_connector.clone());
         let provider = make_provider(config).await;
         let result = provider.provide_credentials().await;
         std::fs::write(

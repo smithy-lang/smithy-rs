@@ -664,3 +664,21 @@ message = "The `alb_health_check` module has been moved out of the `plugin` modu
 references = ["smithy-rs#2865"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = "Credential providers now share the HTTP connector used by the SDK. As a result, the `ConfigLoader::configure(...)` method has been removed. If you want to keep a separate connector for clients, use `<service>::ConfigBuilder::http_connector` when constructing the client."
+references = ["aws-sdk-rust#579", "aws-sdk-rust#338"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "When creating the default credentials chain with `aws_config::from_env()`, the internal providers now use the configured sleep and time source implmentation. Prior to this fix, they always used the default implementation."
+references = ["aws-sdk-rust#59"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "ProviderConfig::with_http_connector now accepts an `HttpConnector` instead of a `DynConnector`. This allows HTTP connectors to be configured which correctly respect timeouts."
+references = ["aws-sdk-rust#579", "aws-sdk-rust#338"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"

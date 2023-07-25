@@ -161,6 +161,7 @@ mod loader {
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::docs_for;
+    use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::SdkConfig;
 
     use crate::connector::default_connector;
@@ -198,13 +199,14 @@ mod loader {
         retry_config: Option<RetryConfig>,
         sleep: Option<SharedAsyncSleep>,
         timeout_config: Option<TimeoutConfig>,
-        provider_config: Option<ProviderConfig>,
         http_connector: Option<HttpConnector>,
         profile_name_override: Option<String>,
         profile_files_override: Option<ProfileFiles>,
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
+        fs: Option<Fs>,
+        env: Option<Env>,
     }
 
     impl ConfigLoader {
@@ -513,30 +515,6 @@ mod loader {
             self
         }
 
-        /// Set configuration for all sub-loaders (credentials, region etc.)
-        ///
-        /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
-        /// the HTTPs connector used by providers or to stub in an in memory `Env` or `Fs` for testing.
-        ///
-        /// # Examples
-        /// ```no_run
-        /// # #[cfg(feature = "hyper-client")]
-        /// # async fn create_config() {
-        /// use aws_config::provider_config::ProviderConfig;
-        /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        ///     .with_webpki_roots()
-        ///     .https_only()
-        ///     .enable_http1()
-        ///     .build();
-        /// let provider_config = ProviderConfig::default().with_tcp_connector(custom_https_connector);
-        /// let shared_config = aws_config::from_env().configure(provider_config).load().await;
-        /// # }
-        /// ```
-        pub fn configure(mut self, provider_config: ProviderConfig) -> Self {
-            self.provider_config = Some(provider_config);
-            self
-        }
-
         /// Load the default configuration chain
         ///
         /// If fields have been overridden during builder construction, the override values will be used.
@@ -547,17 +525,30 @@ mod loader {
         /// This means that if you provide a region provider that does not return a region, no region will
         /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
         pub async fn load(self) -> SdkConfig {
-            let mut poisoned_conf = self
-                .provider_config
-                .unwrap_or_default()
-                .with_profile_config(self.profile_files_override, self.profile_name_override);
-            if let Some(time_source) = &self.time_source {
-                poisoned_conf = poisoned_conf.with_time_source(time_source.clone());
-            }
-            if let Some(sleep) = &self.sleep {
-                poisoned_conf = poisoned_conf.with_sleep(sleep.clone());
-            }
-            let conf = poisoned_conf;
+            let sleep_impl = if self.sleep.is_some() {
+                self.sleep
+            } else {
+                if default_async_sleep().is_none() {
+                    tracing::warn!(
+                        "An implementation of AsyncSleep was requested by calling default_async_sleep \
+                         but no default was set.
+                         This happened when ConfigLoader::load was called during Config construction. \
+                         You can fix this by setting a sleep_impl on the ConfigLoader before calling \
+                         load or by enabling the rt-tokio feature"
+                    );
+                }
+                default_async_sleep()
+            };
+            let http_connector = self
+                .http_connector
+                .unwrap_or_else(|| HttpConnector::ConnectorFn(Arc::new(default_connector)));
+
+            let ts = self.time_source.unwrap_or_default();
+            let conf = ProviderConfig::init(ts.clone(), sleep_impl.clone())
+                .with_profile_config(self.profile_files_override, self.profile_name_override)
+                .with_fs(self.fs.unwrap_or_default())
+                .with_http_connector(http_connector.clone())
+                .with_env(self.env.unwrap_or_default());
             let region = if let Some(provider) = self.region {
                 provider.region().await
             } else {
@@ -586,21 +577,6 @@ mod loader {
                     .await
             };
 
-            let sleep_impl = if self.sleep.is_some() {
-                self.sleep
-            } else {
-                if default_async_sleep().is_none() {
-                    tracing::warn!(
-                        "An implementation of AsyncSleep was requested by calling default_async_sleep \
-                         but no default was set.
-                         This happened when ConfigLoader::load was called during Config construction. \
-                         You can fix this by setting a sleep_impl on the ConfigLoader before calling \
-                         load or by enabling the rt-tokio feature"
-                    );
-                }
-                default_async_sleep()
-            };
-
             let timeout_config = if let Some(timeout_config) = self.timeout_config {
                 timeout_config
             } else {
@@ -609,10 +585,6 @@ mod loader {
                     .timeout_config()
                     .await
             };
-
-            let http_connector = self
-                .http_connector
-                .unwrap_or_else(|| HttpConnector::ConnectorFn(Arc::new(default_connector)));
 
             let credentials_provider = match self.credentials_provider {
                 CredentialsProviderOption::Set(provider) => Some(provider),
@@ -648,8 +620,6 @@ mod loader {
                 use_dual_stack_provider(&conf).await
             };
 
-            let ts = self.time_source.unwrap_or_default();
-
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
@@ -669,6 +639,19 @@ mod loader {
     }
 
     #[cfg(test)]
+    impl ConfigLoader {
+        pub(crate) fn env(mut self, env: Env) -> Self {
+            self.env = Some(env);
+            self
+        }
+
+        pub(crate) fn fs(mut self, fs: Fs) -> Self {
+            self.fs = Some(fs);
+            self
+        }
+    }
+
+    #[cfg(test)]
     mod test {
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
@@ -679,7 +662,6 @@ mod loader {
         use tracing_test::traced_test;
 
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
-        use crate::provider_config::ProviderConfig;
         use crate::test_case::{no_traffic_connector, InstantSleep};
         use crate::{from_env, ConfigLoader};
 
@@ -695,13 +677,10 @@ mod loader {
             let fs =
                 Fs::from_slice(&[("test_config", "[profile custom]\nsdk-ua-app-id = correct")]);
             let loader = from_env()
-                .configure(
-                    ProviderConfig::empty()
-                        .with_sleep(TokioSleep::new())
-                        .with_env(env)
-                        .with_fs(fs)
-                        .with_http_connector(DynConnector::new(NeverConnector::new())),
-                )
+                .sleep_impl(TokioSleep::new())
+                .http_connector(DynConnector::new(NeverConnector::new()))
+                .env(env)
+                .fs(fs)
                 .profile_name("custom")
                 .profile_files(
                     ProfileFiles::builder()
@@ -741,11 +720,9 @@ mod loader {
         }
 
         fn base_conf() -> ConfigLoader {
-            from_env().configure(
-                ProviderConfig::empty()
-                    .with_sleep(InstantSleep)
-                    .with_http_connector(no_traffic_connector()),
-            )
+            from_env()
+                .sleep_impl(InstantSleep)
+                .http_connector(no_traffic_connector())
         }
 
         #[tokio::test]
