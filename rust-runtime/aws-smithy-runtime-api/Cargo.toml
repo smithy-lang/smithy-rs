@@ -11,6 +11,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 default = []
+client = []
 http-auth = ["dep:zeroize"]
 test-util = []
 

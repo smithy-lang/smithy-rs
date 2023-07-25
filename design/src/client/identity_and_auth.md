@@ -34,17 +34,17 @@ There are two stages to identity and auth:
 First, let's establish the aspects of auth that can be configured from the model at codegen time.
 
 - **Data**
-    - **AuthOptionResolverParams:** parameters required to resolve auth options. These parameters are allowed
+    - **AuthSchemeOptionResolverParams:** parameters required to resolve auth scheme options. These parameters are allowed
       to come from both the client config and the operation input structs.
-    - **HttpAuthSchemes:** a list of auth schemes that can be used to sign HTTP requests. This information
+    - **AuthSchemes:** a list of auth schemes that can be used to sign HTTP requests. This information
       comes directly from the service model.
     - **AuthSchemeProperties:** configuration from the auth scheme for the signer.
     - **IdentityResolvers:** list of available identity resolvers.
 - **Implementations**
     - **IdentityResolver:** resolves an identity for use in authentication.
       There can be multiple identity resolvers that need to be selected from.
-    - **HttpRequestSigner:** a signing implementation that signs a HTTP request.
-    - **AuthOptionResolver:** resolves a list of auth options for a given operation and its inputs.
+    - **Signer:** a signing implementation that signs a HTTP request.
+    - **AuthSchemeOptionResolver:** resolves a list of auth scheme options for a given operation and its inputs.
 
 As it is undocumented (at time of writing), this document assumes that the code generator
 creates one service-level runtime plugin, and an operation-level runtime plugin per operation, hence
@@ -52,34 +52,34 @@ referred to as the service runtime plugin and operation runtime plugin.
 
 The code generator emits code to add identity resolvers and HTTP auth schemes to the config bag
 in the service runtime plugin. It then emits code to register an interceptor in the operation runtime
-plugin that reads the operation input to generate the auth option resolver params (which also get added
+plugin that reads the operation input to generate the auth scheme option resolver params (which also get added
 to the config bag).
 
 ### The execution stage
 
 At a high-level, the process of resolving an identity and signing a request looks as follows:
 
-1. Retrieve the `AuthOptionResolverParams` from the config bag. The `AuthOptionResolverParams` allow client
-config and operation inputs to play a role in which auth option is selected.
-2. Retrieve the `AuthOptionResolver` from the config bag, and use it to resolve the auth options available
-with the `AuthOptionResolverParams`. The returned auth options are in priority order.
+1. Retrieve the `AuthSchemeOptionResolverParams` from the config bag. The `AuthSchemeOptionResolverParams` allow client
+config and operation inputs to play a role in which auth scheme option is selected.
+2. Retrieve the `AuthSchemeOptionResolver` from the config bag, and use it to resolve the auth scheme options available
+with the `AuthSchemeOptionResolverParams`. The returned auth scheme options are in priority order.
 3. Retrieve the `IdentityResolvers` list from the config bag.
-4. For each auth option:
-   1. Attempt to find an HTTP auth scheme for that auth option in the config bag (from the `HttpAuthSchemes` list).
+4. For each auth scheme option:
+   1. Attempt to find an HTTP auth scheme for that auth scheme option in the config bag (from the `AuthSchemes` list).
    2. If an auth scheme is found:
       1. Use the auth scheme to extract the correct identity resolver from the `IdentityResolvers` list.
-      2. Retrieve the `HttpRequestSigner` implementation from the auth scheme.
+      2. Retrieve the `Signer` implementation from the auth scheme.
       3. Use the `IdentityResolver` to resolve the identity needed for signing.
       4. Sign the request with the identity, and break out of the loop from step #4.
 
-In general, it is assumed that if an HTTP auth scheme exists for an auth option, then an identity resolver
-also exists for that auth option. Otherwise, the auth option was configured incorrectly during codegen.
+In general, it is assumed that if an HTTP auth scheme exists for an auth scheme option, then an identity resolver
+also exists for that auth scheme option. Otherwise, the auth option was configured incorrectly during codegen.
 
 How this looks in Rust
 ----------------------
 
 The client will use trait objects and dynamic dispatch for the `IdentityResolver`,
-`HttpRequestSigner`, and `AuthOptionResolver` implementations. Generics could potentially be used,
+`Signer`, and `AuthSchemeOptionResolver` implementations. Generics could potentially be used,
 but the number of generic arguments and trait bounds in the orchestrator would balloon to
 unmaintainable levels if each configurable implementation in it was made generic.
 
@@ -87,38 +87,37 @@ These traits look like this:
 
 ```rust,ignore
 #[derive(Clone, Debug)]
-pub struct HttpAuthOption {
+pub struct AuthSchemeId {
     scheme_id: &'static str,
-    properties: Arc<PropertyBag>,
 }
 
-pub trait AuthOptionResolver: Send + Sync + Debug {
-    fn resolve_auth_options<'a>(
+pub trait AuthSchemeOptionResolver: Send + Sync + Debug {
+    fn resolve_auth_scheme_options<'a>(
         &'a self,
-        params: &AuthOptionResolverParams,
-    ) -> Result<Cow<'a, [HttpAuthOption]>, BoxError>;
+        params: &AuthSchemeOptionResolverParams,
+    ) -> Result<Cow<'a, [AuthSchemeId]>, BoxError>;
 }
 
 pub trait IdentityResolver: Send + Sync + Debug {
-    // `identity_properties` come from `HttpAuthOption::properties`
-    fn resolve_identity(&self, identity_properties: &PropertyBag) -> BoxFallibleFut<Identity>;
+    fn resolve_identity(&self, config: &ConfigBag) -> BoxFallibleFut<Identity>;
 }
 
-pub trait HttpRequestSigner: Send + Sync + Debug {
+pub trait Signer: Send + Sync + Debug {
     /// Return a signed version of the given request using the given identity.
     ///
     /// If the provided identity is incompatible with this signer, an error must be returned.
-    fn sign_request(
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
-        // `signing_properties` come from `HttpAuthOption::properties`
-        signing_properties: &PropertyBag,
+        auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        runtime_components: &RuntimeComponents,
+        config_bag: &ConfigBag,
     ) -> Result<(), BoxError>;
 }
 ```
 
-`IdentityResolver` and `HttpRequestSigner` implementations are both given an `Identity`, but
+`IdentityResolver` and `Signer` implementations are both given an `Identity`, but
 will need to understand what the concrete data type underlying that identity is. The `Identity` struct
 uses a `Arc<dyn Any>` to represent the actual identity data so that generics are not needed in
 the traits:
@@ -137,11 +136,13 @@ will use downcasting to access the identity data types they understand. For exam
 it might look like the following:
 
 ```rust,ignore
-fn sign_request(
+fn sign_http_request(
     &self,
     request: &mut HttpRequest,
     identity: &Identity,
-    signing_properties: &PropertyBag
+    auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+    runtime_components: &RuntimeComponents,
+    config_bag: &ConfigBag,
 ) -> Result<(), BoxError> {
     let aws_credentials = identity.data::<Credentials>()
         .ok_or_else(|| "The SigV4 signer requires AWS credentials")?;
@@ -181,8 +182,8 @@ The `expiration` field is a special case that is allowed onto the `Identity` str
 cache implementations will always need to be aware of this piece of information, and having it as an `Option`
 still allows for non-expiring identities.
 
-Ultimately, this design constrains `HttpRequestSigner` implementations to concrete types. There is no world
-where an `HttpRequestSigner` can operate across multiple unknown identity data types via trait, and that
+Ultimately, this design constrains `Signer` implementations to concrete types. There is no world
+where an `Signer` can operate across multiple unknown identity data types via trait, and that
 should be OK since the signer implementation can always be wrapped with an implementation that is aware
 of the concrete type provided by the identity resolver, and can do any necessary conversions.
 

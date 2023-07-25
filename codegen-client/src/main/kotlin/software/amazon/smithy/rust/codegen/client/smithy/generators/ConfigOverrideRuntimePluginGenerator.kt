@@ -25,7 +25,6 @@ class ConfigOverrideRuntimePluginGenerator(
             *RuntimeType.preludeScope,
             "Cow" to RuntimeType.Cow,
             "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
-            "ConfigBagAccessors" to runtimeApi.resolve("client::config_bag_accessors::ConfigBagAccessors"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),

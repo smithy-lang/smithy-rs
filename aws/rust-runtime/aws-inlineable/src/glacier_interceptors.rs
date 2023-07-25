@@ -11,7 +11,6 @@ use aws_sigv4::http_request::SignableBody;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
@@ -126,7 +125,7 @@ impl Interceptor for GlacierTreeHashHeaderInterceptor {
         // Request the request body to be loaded into memory immediately after serialization
         // so that it can be checksummed before signing and transmit
         cfg.interceptor_state()
-            .set_loaded_request_body(LoadedRequestBody::Requested);
+            .store_put(LoadedRequestBody::Requested);
         Ok(())
     }
 

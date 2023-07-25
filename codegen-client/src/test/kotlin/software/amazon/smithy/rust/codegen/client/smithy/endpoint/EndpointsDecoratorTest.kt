@@ -187,7 +187,7 @@ class EndpointsDecoratorTest {
                         use aws_smithy_async::rt::sleep::TokioSleep;
                         use aws_smithy_client::never::NeverConnector;
                         use aws_smithy_runtime_api::box_error::BoxError;
-                        use aws_smithy_runtime_api::client::orchestrator::EndpointResolverParams;
+                        use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
                         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                         use aws_smithy_types::config_bag::ConfigBag;
                         use aws_smithy_types::endpoint::Endpoint;

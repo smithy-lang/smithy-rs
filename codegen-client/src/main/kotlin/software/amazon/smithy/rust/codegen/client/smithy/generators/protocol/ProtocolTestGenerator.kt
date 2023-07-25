@@ -375,7 +375,7 @@ class DefaultProtocolTestGenerator(
 
                 let op = #{Operation}::new();
                 let config = op.config().expect("the operation has config");
-                let de = config.load::<#{DynResponseDeserializer}>().expect("the config must have a deserializer");
+                let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
 
                 let parsed = de.deserialize_streaming(&mut http_response);
                 let parsed = parsed.unwrap_or_else(|| {
@@ -386,9 +386,9 @@ class DefaultProtocolTestGenerator(
                 });
                 """,
                 "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-                "DynResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::DynResponseDeserializer"),
+                "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
                 "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::ResponseDeserializer"),
+                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
                 "RuntimePlugin" to RT.runtimePlugin(rc),
                 "SdkBody" to RT.sdkBody(rc),
             )

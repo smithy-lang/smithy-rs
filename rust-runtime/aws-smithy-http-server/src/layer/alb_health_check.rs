@@ -9,14 +9,17 @@
 //! # Example
 //!
 //! ```no_run
-//! # use aws_smithy_http_server::{body, plugin::{HttpPlugins, alb_health_check::AlbHealthCheckLayer}};
-//! # use hyper::{Body, Response, StatusCode};
-//! let plugins = HttpPlugins::new()
-//!     // Handle all `/ping` health check requests by returning a `200 OK`.
-//!     .layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
-//!         StatusCode::OK
-//!     }));
+//! use aws_smithy_http_server::layer::alb_health_check::AlbHealthCheckLayer;
+//! use hyper::StatusCode;
+//! use tower::Layer;
 //!
+//! // Handle all `/ping` health check requests by returning a `200 OK`.
+//! let ping_layer = AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+//!     StatusCode::OK
+//! });
+//! # async fn handle() { }
+//! let app = tower::service_fn(handle);
+//! let app = ping_layer.layer(app);
 //! ```
 
 use std::borrow::Cow;
@@ -31,8 +34,8 @@ use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
 
 use crate::body::BoxBody;
 
-use super::either::EitherProj;
-use super::Either;
+use crate::plugin::either::Either;
+use crate::plugin::either::EitherProj;
 
 /// A [`tower::Layer`] used to apply [`AlbHealthCheckService`].
 #[derive(Clone, Debug)]
@@ -96,9 +99,7 @@ where
     H: Service<Request<Body>, Response = StatusCode, Error = Infallible> + Clone,
 {
     type Response = S::Response;
-
     type Error = S::Error;
-
     type Future = AlbHealthCheckFuture<H, S>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
@@ -133,7 +134,11 @@ pin_project! {
     }
 }
 
-impl<H: Service<Request<Body>, Response = StatusCode>, S: Service<Request<Body>>> AlbHealthCheckFuture<H, S> {
+impl<H, S> AlbHealthCheckFuture<H, S>
+where
+    H: Service<Request<Body>, Response = StatusCode>,
+    S: Service<Request<Body>>,
+{
     fn handler_future(handler_future: Oneshot<H, Request<Body>>) -> Self {
         Self {
             inner: Either::Left { value: handler_future },
@@ -147,10 +152,10 @@ impl<H: Service<Request<Body>, Response = StatusCode>, S: Service<Request<Body>>
     }
 }
 
-impl<
-        H: Service<Request<Body>, Response = StatusCode, Error = Infallible>,
-        S: Service<Request<Body>, Response = Response<BoxBody>>,
-    > Future for AlbHealthCheckFuture<H, S>
+impl<H, S> Future for AlbHealthCheckFuture<H, S>
+where
+    H: Service<Request<Body>, Response = StatusCode, Error = Infallible>,
+    S: Service<Request<Body>, Response = Response<BoxBody>>,
 {
     type Output = Result<S::Response, S::Error>;
 

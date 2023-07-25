@@ -44,7 +44,7 @@ class ResponseDeserializerGenerator(
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
-            "ResponseDeserializer" to orchestrator.resolve("ResponseDeserializer"),
+            "ResponseDeserializer" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::ser_de::ResponseDeserializer"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),

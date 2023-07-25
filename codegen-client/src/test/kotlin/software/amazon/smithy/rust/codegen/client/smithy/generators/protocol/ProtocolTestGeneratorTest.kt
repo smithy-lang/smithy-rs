@@ -102,15 +102,15 @@ private class TestOperationCustomization(
                             .map_err(|e| #{OrchestratorError}::operation(#{TypedBox}::new(e).erase_error()))
                     }
                 }
-                cfg.store_put(#{DynResponseDeserializer}::new(TestDeser));
+                cfg.store_put(#{SharedResponseDeserializer}::new(TestDeser));
                 """,
                 *preludeScope,
-                "DynResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::DynResponseDeserializer"),
+                "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
                 "Error" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Error"),
                 "HttpResponse" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
                 "Output" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Output"),
-                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::ResponseDeserializer"),
+                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
                 "TypedBox" to RT.smithyTypes(rc).resolve("type_erasure::TypedBox"),
             )
         }

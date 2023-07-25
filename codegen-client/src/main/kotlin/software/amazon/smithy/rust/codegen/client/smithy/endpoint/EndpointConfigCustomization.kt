@@ -35,7 +35,7 @@ internal class EndpointConfigCustomization(
         "OldSharedEndpointResolver" to types.sharedEndpointResolver,
         "Params" to typesGenerator.paramsStruct(),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
-        "SharedEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::SharedEndpointResolver"),
+        "SharedEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::SharedEndpointResolver"),
         "SmithyResolver" to types.resolveEndpoint,
     )
 

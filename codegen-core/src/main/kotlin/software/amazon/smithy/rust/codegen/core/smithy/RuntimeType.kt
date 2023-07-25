@@ -336,8 +336,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun configBag(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag")
-        fun configBagAccessors(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::config_bag_accessors::ConfigBagAccessors")
         fun runtimeComponents(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_components::RuntimeComponents")
         fun runtimeComponentsBuilder(runtimeConfig: RuntimeConfig) =
