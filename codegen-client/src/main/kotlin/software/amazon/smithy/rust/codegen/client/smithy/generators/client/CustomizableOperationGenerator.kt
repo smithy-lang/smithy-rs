@@ -199,7 +199,7 @@ class CustomizableOperationGenerator(
                         /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
                         /// The order in which those user-specified operation interceptors are invoked should not be relied upon
                         /// as it is an implementation detail.
-                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + #{Send} + #{Sync} + 'static) -> Self {
+                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                             self
                         }
