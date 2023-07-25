@@ -232,7 +232,8 @@ where
     }
 }
 
-/// A interceptor wrapper to conditionally enable the interceptor based on [`DisableInterceptor`]
+/// A interceptor wrapper to conditionally enable the interceptor based on
+/// [`DisableInterceptor`](aws_smithy_runtime_api::client::interceptors::DisableInterceptor)
 struct ConditionallyEnabledInterceptor(SharedInterceptor);
 impl ConditionallyEnabledInterceptor {
     fn if_enabled(&self, cfg: &ConfigBag) -> Option<&dyn Interceptor> {
