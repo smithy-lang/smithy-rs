@@ -50,6 +50,7 @@ where
     }
 }
 
+/// Classifies response, timeout, and connector errors as retryable or not.
 #[derive(Debug, Default)]
 pub struct SmithyErrorClassifier<E> {
     _inner: PhantomData<E>,

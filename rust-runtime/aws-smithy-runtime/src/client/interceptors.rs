@@ -245,6 +245,7 @@ impl ConditionallyEnabledInterceptor {
     }
 }
 
+/// Interceptor that maps the request with a given function.
 pub struct MapRequestInterceptor<F, E> {
     f: F,
     _phantom: PhantomData<E>,
@@ -257,6 +258,7 @@ impl<F, E> fmt::Debug for MapRequestInterceptor<F, E> {
 }
 
 impl<F, E> MapRequestInterceptor<F, E> {
+    /// Creates a new `MapRequestInterceptor`.
     pub fn new(f: F) -> Self {
         Self {
             f,
@@ -285,6 +287,7 @@ where
     }
 }
 
+/// Interceptor that mutates the request with a given function.
 pub struct MutateRequestInterceptor<F> {
     f: F,
 }
@@ -296,6 +299,7 @@ impl<F> fmt::Debug for MutateRequestInterceptor<F> {
 }
 
 impl<F> MutateRequestInterceptor<F> {
+    /// Creates a new `MutateRequestInterceptor`.
     pub fn new(f: F) -> Self {
         Self { f }
     }
