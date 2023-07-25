@@ -105,10 +105,6 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         renderClientCreation = { params ->
             rust("let mut ${params.configBuilderName} = ${params.configBuilderName};")
             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                // TODO(enableNewSmithyRuntimeLaunch): A builder field could not be accessed directly in the orchestrator
-                //  mode when this code change was made. smithy-rs#2792 will enable us to use getters in builders.
-                //  Make this `set_region` conditional by checking if `config_builder.region().is_none()` once the PR
-                //  has been merged to main.
                 rust("""${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));""")
             } else {
                 rust(

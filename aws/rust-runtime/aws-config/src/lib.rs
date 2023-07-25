@@ -365,8 +365,6 @@ mod loader {
             self
         }
 
-        // TODO(enableNewSmithyRuntimeLaunch): Remove the doc hidden from this function
-        #[doc(hidden)]
         /// Don't use credentials to sign requests.
         ///
         /// Turning off signing with credentials is necessary in some cases, such as using
