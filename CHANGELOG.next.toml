@@ -664,3 +664,25 @@ message = "The `alb_health_check` module has been moved out of the `plugin` modu
 references = ["smithy-rs#2865"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = """
+[RestJson1](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html#operation-error-serialization) server SDKs now serialize only the [shape name](https://smithy.io/2.0/spec/model.html#shape-id) in operation error responses. Previously (from versions 0.52.0 to 0.55.4), the full shape ID was rendered.
+Example server error response by a smithy-rs server version 0.52.0 until 0.55.4:
+```
+HTTP/1.1 400 Bad Request
+content-type: application/json
+x-amzn-errortype: com.example.service#InvalidRequestException
+...
+```
+Example server error response now:
+```
+HTTP/1.1 400 Bad Request
+content-type: application/json
+x-amzn-errortype: InvalidRequestException
+...
+```
+"""
+references = ["smithy-rs#2866"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
+author = "david-perez"
