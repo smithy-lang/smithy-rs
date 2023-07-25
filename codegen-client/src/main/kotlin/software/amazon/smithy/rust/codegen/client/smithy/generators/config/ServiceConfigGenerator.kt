@@ -196,7 +196,7 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             ServiceConfig.ConfigStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     docsOrFallback(param.getterDocs)
                     val t = when (param.optional) {
                         true -> param.type.makeOptional()
@@ -207,7 +207,7 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
             }
 
             ServiceConfig.BuilderStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rust("${param.name}: #T,", param.type.makeOptional())
                 }
             }
@@ -224,7 +224,7 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
                 )
 
                 docsOrFallback(param.setterDocs)
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         pub fn set_${param.name}(&mut self, ${param.name}: Option<#{T}>) -> &mut Self {
@@ -249,7 +249,7 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
             }
 
             ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     val default = "".letIf(!param.optional) { ".unwrap_or_default() " }
                     rust("${param.name}: self.${param.name}$default,")
                 }
@@ -334,7 +334,7 @@ class ServiceConfigGenerator(
             Attribute(Attribute.derive(RuntimeType.Debug)).render(writer)
         }
         writer.rustBlock("pub struct Config") {
-            if (runtimeMode.defaultToOrchestrator) {
+            if (runtimeMode.generateOrchestrator) {
                 rustTemplate(
                     """
                     // Both `config` and `cloneable` are the same config, but the cloneable one
@@ -353,7 +353,7 @@ class ServiceConfigGenerator(
             }
         }
 
-        if (runtimeMode.defaultToMiddleware) {
+        if (runtimeMode.generateMiddleware) {
             // Custom implementation for Debug so we don't need to enforce Debug down the chain
             writer.rustBlock("impl std::fmt::Debug for Config") {
                 writer.rustTemplate(
@@ -374,7 +374,7 @@ class ServiceConfigGenerator(
                 pub fn builder() -> Builder { Builder::default() }
                 """,
             )
-            if (runtimeMode.defaultToOrchestrator) {
+            if (runtimeMode.generateOrchestrator) {
                 writer.rustTemplate(
                     """
                     /// Converts this config back into a builder so that it can be tweaked.
@@ -394,13 +394,13 @@ class ServiceConfigGenerator(
         }
 
         writer.docs("Builder for creating a `Config`.")
-        if (runtimeMode.defaultToMiddleware) {
+        if (runtimeMode.generateMiddleware) {
             Attribute(Attribute.derive(RuntimeType.Clone, RuntimeType.Default)).render(writer)
         } else {
             Attribute(Attribute.derive(RuntimeType.Clone, RuntimeType.Debug)).render(writer)
         }
         writer.rustBlock("pub struct Builder") {
-            if (runtimeMode.defaultToOrchestrator) {
+            if (runtimeMode.generateOrchestrator) {
                 rustTemplate(
                     """
                     pub(crate) config: #{CloneableLayer},
@@ -415,7 +415,7 @@ class ServiceConfigGenerator(
             }
         }
 
-        if (runtimeMode.defaultToMiddleware) {
+        if (runtimeMode.generateMiddleware) {
             // Custom implementation for Debug so we don't need to enforce Debug down the chain
             writer.rustBlock("impl std::fmt::Debug for Builder") {
                 writer.rustTemplate(
@@ -498,7 +498,7 @@ class ServiceConfigGenerator(
             }
 
             docs("Builds a [`Config`].")
-            if (runtimeMode.defaultToOrchestrator) {
+            if (runtimeMode.generateOrchestrator) {
                 rust("##[allow(unused_mut)]")
                 rustBlock("pub fn build(mut self) -> Config") {
                     rustTemplate(

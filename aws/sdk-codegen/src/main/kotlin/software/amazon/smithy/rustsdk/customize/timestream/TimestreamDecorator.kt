@@ -33,7 +33,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
     override val order: Byte = -1
 
     private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        codegenContext.smithyRuntimeMode.defaultToOrchestrator
+        codegenContext.smithyRuntimeMode.generateOrchestrator
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         emptyList<AdHocCustomization>().letIf(applies(codegenContext)) {

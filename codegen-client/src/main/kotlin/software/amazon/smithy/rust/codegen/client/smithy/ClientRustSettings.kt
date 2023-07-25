@@ -74,36 +74,16 @@ data class ClientRustSettings(
 
 // TODO(enableNewSmithyRuntimeCleanup): Remove this mode after switching to the orchestrator
 enum class SmithyRuntimeMode {
-    Middleware, BothDefaultMiddleware, BothDefaultOrchestrator, Orchestrator,
+    Middleware, Orchestrator,
     ;
 
-    val exclusivelyGenerateMiddleware: Boolean get() = generateMiddleware && !generateOrchestrator
-
-    val generateMiddleware: Boolean
-        get() = when (this) {
-            Middleware, BothDefaultMiddleware, BothDefaultOrchestrator -> true
-            else -> false
-        }
-
-    val generateOrchestrator: Boolean
-        get() = when (this) {
-            Orchestrator, BothDefaultMiddleware, BothDefaultOrchestrator -> true
-            else -> false
-        }
-
-    val defaultToMiddleware: Boolean
-        get() = when (this) {
-            Middleware, BothDefaultMiddleware -> true
-            else -> false
-        }
-    val defaultToOrchestrator: Boolean get() = !defaultToMiddleware
+    val generateMiddleware: Boolean get() = this == Middleware
+    val generateOrchestrator: Boolean get() = this == Orchestrator
 
     companion object {
         fun fromString(value: String): SmithyRuntimeMode = when (value) {
             "middleware" -> Middleware
             "orchestrator" -> Orchestrator
-            "both_default_middleware" -> BothDefaultMiddleware
-            "both_default_orchestrator" -> BothDefaultOrchestrator
             else -> throw IllegalArgumentException("unknown runtime mode: $value")
         }
     }
@@ -123,7 +103,7 @@ data class ClientCodegenConfig(
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
-    // TODO(SmithyRuntime): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
+    // TODO(enableNewSmithyRuntimeCleanup): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
     val enableNewSmithyRuntime: SmithyRuntimeMode = defaultEnableNewSmithyRuntime,
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
     val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,

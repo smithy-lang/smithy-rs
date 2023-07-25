@@ -96,13 +96,13 @@ internal class ServiceConfigGeneratorTest {
                 return when (section) {
                     ServiceConfig.ConfigStructAdditionalDocs -> emptySection
                     ServiceConfig.ConfigStruct -> writable {
-                        if (runtimeMode.defaultToMiddleware) {
+                        if (runtimeMode.generateMiddleware) {
                             rust("config_field: u64,")
                         }
                     }
 
                     ServiceConfig.ConfigImpl -> writable {
-                        if (runtimeMode.defaultToOrchestrator) {
+                        if (runtimeMode.generateOrchestrator) {
                             rustTemplate(
                                 """
                                 ##[allow(missing_docs)]
@@ -128,12 +128,12 @@ internal class ServiceConfigGeneratorTest {
                     }
 
                     ServiceConfig.BuilderStruct -> writable {
-                        if (runtimeMode.defaultToMiddleware) {
+                        if (runtimeMode.generateMiddleware) {
                             rust("config_field: Option<u64>")
                         }
                     }
                     ServiceConfig.BuilderImpl -> writable {
-                        if (runtimeMode.defaultToOrchestrator) {
+                        if (runtimeMode.generateOrchestrator) {
                             rustTemplate(
                                 """
                                 ##[allow(missing_docs)]
@@ -150,7 +150,7 @@ internal class ServiceConfigGeneratorTest {
                         }
                     }
                     ServiceConfig.BuilderBuild -> writable {
-                        if (runtimeMode.defaultToMiddleware) {
+                        if (runtimeMode.generateMiddleware) {
                             rust("config_field: self.config_field.unwrap_or_default(),")
                         }
                     }
@@ -170,7 +170,7 @@ internal class ServiceConfigGeneratorTest {
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(ClientRustModule.config) {
             sut.render(this)
-            if (smithyRuntimeMode.defaultToOrchestrator) {
+            if (smithyRuntimeMode.generateOrchestrator) {
                 unitTest(
                     "set_config_fields",
                     """

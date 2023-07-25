@@ -45,7 +45,7 @@ internal class EndpointConfigCustomization(
             val resolverTrait = "#{SmithyResolver}<#{Params}>"
             when (section) {
                 is ServiceConfig.ConfigStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate(
                             "pub (crate) endpoint_resolver: $sharedEndpointResolver,",
                             *codegenScope,
@@ -54,7 +54,7 @@ internal class EndpointConfigCustomization(
                 }
 
                 is ServiceConfig.ConfigImpl -> {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// Returns the endpoint resolver.
@@ -78,7 +78,7 @@ internal class EndpointConfigCustomization(
                 }
 
                 is ServiceConfig.BuilderStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate(
                             "endpoint_resolver: #{Option}<$sharedEndpointResolver>,",
                             *codegenScope,
@@ -181,7 +181,7 @@ internal class EndpointConfigCustomization(
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
@@ -205,7 +205,7 @@ internal class EndpointConfigCustomization(
                 }
 
                 ServiceConfig.BuilderBuild -> {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             "#{set_endpoint_resolver}(&mut resolver);",
                             "set_endpoint_resolver" to setEndpointResolverFn(),
@@ -224,7 +224,7 @@ internal class EndpointConfigCustomization(
                 }
 
                 is ServiceConfig.OperationConfigOverride -> {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             "#{set_endpoint_resolver}(&mut resolver);",
                             "set_endpoint_resolver" to setEndpointResolverFn(),

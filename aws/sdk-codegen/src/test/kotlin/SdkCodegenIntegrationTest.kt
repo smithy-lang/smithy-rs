@@ -50,7 +50,7 @@ class SdkCodegenIntegrationTest {
     fun smokeTestSdkCodegen() {
         awsSdkIntegrationTest(
             model,
-            defaultToOrchestrator = true,
+            generateOrchestrator = true,
         ) { _, _ -> /* it should compile */ }
     }
 
@@ -58,7 +58,7 @@ class SdkCodegenIntegrationTest {
     fun smokeTestSdkCodegenMiddleware() {
         awsSdkIntegrationTest(
             model,
-            defaultToOrchestrator = false,
+            generateOrchestrator = false,
         ) { _, _ -> /* it should compile */ }
     }
 }

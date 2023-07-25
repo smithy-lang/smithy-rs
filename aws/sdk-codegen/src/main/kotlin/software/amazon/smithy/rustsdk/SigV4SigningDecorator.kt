@@ -110,7 +110,7 @@ class SigV4SigningConfig(
                 )
             }
             ServiceConfig.BuilderBuild -> {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));

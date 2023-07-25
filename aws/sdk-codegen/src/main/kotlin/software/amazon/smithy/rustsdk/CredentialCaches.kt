@@ -66,7 +66,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.ConfigStruct -> {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate(
                         """pub(crate) credentials_cache: #{SharedCredentialsCache},""",
                         *codegenScope,
@@ -75,7 +75,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
             }
 
             ServiceConfig.ConfigImpl -> {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Returns the credentials cache.
@@ -99,7 +99,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
             }
 
             ServiceConfig.BuilderStruct ->
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("credentials_cache: #{Option}<#{CredentialsCache}>,", *codegenScope)
                 }
 
@@ -116,7 +116,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                     *codegenScope,
                 )
 
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Sets the credentials cache for this service
@@ -142,7 +142,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
             }
 
             ServiceConfig.BuilderBuild -> {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         if let Some(credentials_provider) = layer.load::<#{SharedCredentialsProvider}>().cloned() {

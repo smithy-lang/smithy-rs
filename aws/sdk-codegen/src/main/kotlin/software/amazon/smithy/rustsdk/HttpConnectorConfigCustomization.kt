@@ -26,7 +26,7 @@ class HttpConnectorDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.exclusivelyGenerateMiddleware) {
+        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateMiddleware) {
             it + HttpConnectorConfigCustomization(codegenContext)
         }
 }
@@ -45,12 +45,12 @@ class HttpConnectorConfigCustomization(
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             is ServiceConfig.ConfigStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
                 }
             }
             is ServiceConfig.ConfigImpl -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
@@ -73,7 +73,7 @@ class HttpConnectorConfigCustomization(
                 }
             }
             is ServiceConfig.BuilderStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
                 }
             }
@@ -157,7 +157,7 @@ class HttpConnectorConfigCustomization(
                     """,
                     *codegenScope,
                 )
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         pub fn set_http_connector(&mut self, http_connector: #{Option}<impl #{Into}<#{HttpConnector}>>) -> &mut Self {
@@ -180,7 +180,7 @@ class HttpConnectorConfigCustomization(
                 }
             }
             is ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rust("http_connector: self.http_connector,")
                 }
             }

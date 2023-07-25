@@ -29,7 +29,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
         writable {
             when (section) {
                 is ServiceConfig.ConfigStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate(
                             """
                             pub(crate) time_source: #{SharedTimeSource},
@@ -45,7 +45,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                         "pub fn time_source(&self) -> #{Option}<#{SharedTimeSource}>",
                         *codegenScope,
                     ) {
-                        if (runtimeMode.defaultToOrchestrator) {
+                        if (runtimeMode.generateOrchestrator) {
                             rustTemplate(
                                 """self.runtime_components.time_source()""",
                                 *codegenScope,
@@ -57,7 +57,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 }
 
                 is ServiceConfig.BuilderStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate(
                             "time_source: #{Option}<#{SharedTimeSource}>,",
                             *codegenScope,
@@ -80,7 +80,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// Sets the time source used for this service
@@ -112,7 +112,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 }
 
                 ServiceConfig.BuilderBuild -> {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             if self.runtime_components.time_source().is_none() {

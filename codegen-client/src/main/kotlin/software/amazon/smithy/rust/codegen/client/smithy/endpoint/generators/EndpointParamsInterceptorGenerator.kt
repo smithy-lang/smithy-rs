@@ -106,7 +106,7 @@ class EndpointParamsInterceptorGenerator(
         val builtInParams = params.toList().filter { it.isBuiltIn }
         // first load builtins and their defaults
         builtInParams.forEach { param ->
-            val config = if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+            val config = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 "cfg"
             } else {
                 "_config"
