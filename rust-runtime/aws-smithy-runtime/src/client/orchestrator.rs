@@ -38,9 +38,6 @@ mod auth;
 pub mod endpoints;
 mod http;
 
-/// Reusable interceptor implementations.
-pub mod interceptors;
-
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
         debug!("encountered orchestrator error; halting");
