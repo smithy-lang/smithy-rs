@@ -12,7 +12,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 client = ["aws-smithy-runtime-api/client"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
-test-util = ["dep:aws-smithy-protocol-test", "dep:tracing-subscriber"]
+test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
