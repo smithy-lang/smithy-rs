@@ -1,0 +1,7 @@
+disallowed-methods = [
+    # fully qualified function/method name:
+    "std::time::SystemTime::now",
+    "std::time::SystemTime::elapsed",
+    "std::time::Instant::now",
+    "std::time::Instant::elapsed"
+]
