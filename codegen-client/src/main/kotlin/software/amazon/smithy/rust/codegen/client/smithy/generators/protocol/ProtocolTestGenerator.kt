@@ -414,7 +414,7 @@ class DefaultProtocolTestGenerator(
                 rust("let parsed = parsed.unwrap();")
             } else {
                 rustTemplate(
-                    """let parsed: #{Output} = *parsed.expect("should be successful response").downcast().unwrap();""",
+                    """let parsed = parsed.expect("should be successful response").downcast::<#{Output}>().unwrap();""",
                     "Output" to codegenContext.symbolProvider.toSymbol(expectedShape),
                 )
             }

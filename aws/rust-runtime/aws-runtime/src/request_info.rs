@@ -166,13 +166,12 @@ mod tests {
     use super::RequestInfoInterceptor;
     use crate::request_info::RequestPairs;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::interceptors::Interceptor;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
-    use aws_smithy_types::type_erasure::TypeErasedBox;
     use http::HeaderValue;
     use std::time::Duration;
 
@@ -190,7 +189,7 @@ mod tests {
     #[test]
     fn test_request_pairs_for_initial_attempt() {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
-        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
 

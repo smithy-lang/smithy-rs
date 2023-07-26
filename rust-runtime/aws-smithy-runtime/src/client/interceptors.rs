@@ -368,7 +368,11 @@ mod tests {
         );
 
         Interceptors::new(rc.interceptors())
-            .read_before_transmit(&InterceptorContext::new(Input::new(5)), &rc, &mut cfg)
+            .read_before_transmit(
+                &InterceptorContext::new(Input::doesnt_matter()),
+                &rc,
+                &mut cfg,
+            )
             .expect_err("interceptor returns error");
         cfg.interceptor_state()
             .store_put(disable_interceptor::<PanicInterceptor>("test"));
@@ -381,7 +385,11 @@ mod tests {
         );
         // shouldn't error because interceptors won't run
         Interceptors::new(rc.interceptors())
-            .read_before_transmit(&InterceptorContext::new(Input::new(5)), &rc, &mut cfg)
+            .read_before_transmit(
+                &InterceptorContext::new(Input::doesnt_matter()),
+                &rc,
+                &mut cfg,
+            )
             .expect("interceptor is now disabled");
     }
 }
