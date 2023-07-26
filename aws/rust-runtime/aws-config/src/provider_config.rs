@@ -150,6 +150,21 @@ impl ProviderConfig {
         }
     }
 
+    /// Initializer for ConfigBag to avoid possibly setting incorrect defaults.
+    pub(crate) fn init(time_source: SharedTimeSource, sleep: Option<SharedAsyncSleep>) -> Self {
+        Self {
+            parsed_profile: Default::default(),
+            profile_files: ProfileFiles::default(),
+            env: Env::default(),
+            fs: Fs::default(),
+            time_source,
+            connector: HttpConnector::Prebuilt(None),
+            sleep,
+            region: None,
+            profile_name_override: None,
+        }
+    }
+
     /// Create a default provider config with the region region automatically loaded from the default chain.
     ///
     /// # Examples
@@ -270,10 +285,7 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
-    // these setters are doc(hidden) because they only exist for tests
-
-    #[doc(hidden)]
-    pub fn with_fs(self, fs: Fs) -> Self {
+    pub(crate) fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             fs,
@@ -281,8 +293,7 @@ impl ProviderConfig {
         }
     }
 
-    #[cfg(test)]
-    pub fn with_env(self, env: Env) -> Self {
+    pub(crate) fn with_env(self, env: Env) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             env,
