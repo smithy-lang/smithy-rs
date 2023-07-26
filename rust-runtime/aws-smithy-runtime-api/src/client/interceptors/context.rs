@@ -443,7 +443,7 @@ fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
     )
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
