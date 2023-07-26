@@ -237,6 +237,10 @@ internal class EndpointTraitBindingsTest {
                             last_endpoint_prefix: Arc<Mutex<Option<EndpointPrefix>>>,
                         }
                         impl Interceptor for TestInterceptor {
+                            fn name(&self) -> &'static str {
+                                "TestInterceptor"
+                            }
+
                             fn read_before_transmit(
                                 &self,
                                 _context: &BeforeTransmitInterceptorContextRef<'_>,
