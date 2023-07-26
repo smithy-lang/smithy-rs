@@ -68,6 +68,10 @@ impl<I> GlacierAccountIdAutofillInterceptor<I> {
 impl<I: GlacierAccountId + Send + Sync + 'static> Interceptor
     for GlacierAccountIdAutofillInterceptor<I>
 {
+    fn name(&self) -> &'static str {
+        "GlacierAccountIdAutofillInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         context: &mut BeforeSerializationInterceptorContextMut<'_>,
@@ -97,6 +101,10 @@ impl GlacierApiVersionInterceptor {
 }
 
 impl Interceptor for GlacierApiVersionInterceptor {
+    fn name(&self) -> &'static str {
+        "GlacierApiVersionInterceptor"
+    }
+
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -116,6 +124,10 @@ impl Interceptor for GlacierApiVersionInterceptor {
 pub(crate) struct GlacierTreeHashHeaderInterceptor;
 
 impl Interceptor for GlacierTreeHashHeaderInterceptor {
+    fn name(&self) -> &'static str {
+        "GlacierTreeHashHeaderInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         _context: &mut BeforeSerializationInterceptorContextMut<'_>,

@@ -40,6 +40,10 @@ impl RecursionDetectionInterceptor {
 }
 
 impl Interceptor for RecursionDetectionInterceptor {
+    fn name(&self) -> &'static str {
+        "RecursionDetectionInterceptor"
+    }
+
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,

@@ -41,6 +41,10 @@ private class TestServiceRuntimePluginCustomization(
                         ##[derive(::std::fmt::Debug)]
                         struct TestInterceptor;
                         impl #{Interceptor} for TestInterceptor {
+                            fn name(&self) -> &'static str {
+                                "TestInterceptor"
+                            }
+
                             fn modify_before_retry_loop(
                                 &self,
                                 context: &mut #{BeforeTransmitInterceptorContextMut}<'_>,

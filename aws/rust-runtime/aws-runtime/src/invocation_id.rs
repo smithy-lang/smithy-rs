@@ -93,6 +93,10 @@ impl InvocationIdInterceptor {
 }
 
 impl Interceptor for InvocationIdInterceptor {
+    fn name(&self) -> &'static str {
+        "InvocationIdInterceptor"
+    }
+
     fn modify_before_retry_loop(
         &self,
         _ctx: &mut BeforeTransmitInterceptorContextMut<'_>,

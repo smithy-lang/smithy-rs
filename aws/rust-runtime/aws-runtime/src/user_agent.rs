@@ -72,6 +72,10 @@ fn header_values(
 }
 
 impl Interceptor for UserAgentInterceptor {
+    fn name(&self) -> &'static str {
+        "UserAgentInterceptor"
+    }
+
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
