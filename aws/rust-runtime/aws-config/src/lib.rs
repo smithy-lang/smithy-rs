@@ -281,35 +281,43 @@ mod loader {
             self
         }
 
-        /// Override the [`HttpConnector`] for this [`ConfigLoader`]. The connector will be used when
-        /// sending operations. This **does not set** the HTTP connector used by config providers.
-        /// To change that connector, use [ConfigLoader::configure].
+        /// Override the [`HttpConnector`] for this [`ConfigLoader`]. The connector will be used for
+        /// both AWS services and credential providers. When [`HttpConnector::ConnectorFn`] is used,
+        /// the connector will be lazily instantiated as needed based on the provided settings.
         ///
+        /// **Note**: In order to take advantage of late-configured timeout settings, you MUST use
+        /// [`HttpConnector::ConnectorFn`]
+        /// when configuring this connector.
+        ///
+        /// If you wish to use a separate connector when creating clients, use the client-specific config.
         /// ## Examples
         /// ```no_run
-        /// # #[cfg(feature = "client-hyper")]
+        /// # use aws_smithy_async::rt::sleep::SharedAsyncSleep;
+        /// use aws_smithy_client::http_connector::HttpConnector;
+        /// #[cfg(feature = "client-hyper")]
         /// # async fn create_config() {
         /// use std::time::Duration;
         /// use aws_smithy_client::{Client, hyper_ext};
         /// use aws_smithy_client::erase::DynConnector;
         /// use aws_smithy_client::http_connector::ConnectorSettings;
         ///
-        /// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        ///     .with_webpki_roots()
-        ///     .https_only()
-        ///     .enable_http1()
-        ///     .enable_http2()
-        ///     .build();
-        /// let smithy_connector = hyper_ext::Adapter::builder()
-        ///     // Optionally set things like timeouts as well
-        ///     .connector_settings(
-        ///         ConnectorSettings::builder()
-        ///             .connect_timeout(Duration::from_secs(5))
-        ///             .build()
-        ///     )
-        ///     .build(https_connector);
+        /// let connector_fn = |settings:  &ConnectorSettings, sleep: Option<SharedAsyncSleep>| {
+        ///   let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+        ///       .with_webpki_roots()
+        ///       // NOTE: setting `https_only()` will not allow this connector to work with IMDS.
+        ///       .https_only()
+        ///       .enable_http1()
+        ///       .enable_http2()
+        ///       .build();
+        ///   let mut smithy_connector = hyper_ext::Adapter::builder()
+        ///       // Optionally set things like timeouts as well
+        ///       .connector_settings(settings.clone());
+        ///   smithy_connector.set_sleep_impl(sleep);
+        ///   Some(DynConnector::new(smithy_connector.build(https_connector)))
+        /// };
+        /// let connector = HttpConnector::ConnectorFn(std::sync::Arc::new(connector_fn));
         /// let sdk_config = aws_config::from_env()
-        ///     .http_connector(smithy_connector)
+        ///     .http_connector(connector)
         ///     .load()
         ///     .await;
         /// # }
@@ -547,9 +555,14 @@ mod loader {
         /// This means that if you provide a region provider that does not return a region, no region will
         /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
         pub async fn load(self) -> SdkConfig {
+            let http_connector = self
+                .http_connector
+                .unwrap_or_else(|| HttpConnector::ConnectorFn(Arc::new(default_connector)));
+
             let conf = self
                 .provider_config
                 .unwrap_or_default()
+                .with_http_connector(http_connector.clone())
                 .with_profile_config(self.profile_files_override, self.profile_name_override);
             let region = if let Some(provider) = self.region {
                 provider.region().await
@@ -602,10 +615,6 @@ mod loader {
                     .timeout_config()
                     .await
             };
-
-            let http_connector = self
-                .http_connector
-                .unwrap_or_else(|| HttpConnector::ConnectorFn(Arc::new(default_connector)));
 
             let credentials_provider = match self.credentials_provider {
                 CredentialsProviderOption::Set(provider) => Some(provider),
@@ -667,8 +676,11 @@ mod loader {
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_client::erase::DynConnector;
         use aws_smithy_client::never::NeverConnector;
+        use aws_smithy_client::test_connection::infallible_connection_fn;
         use aws_types::app_name::AppName;
         use aws_types::os_shim_internal::{Env, Fs};
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
         use tracing_test::traced_test;
 
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
@@ -769,6 +781,25 @@ mod loader {
             let config = from_env().no_credentials().load().await;
             assert!(config.credentials_cache().is_none());
             assert!(config.credentials_provider().is_none());
+        }
+
+        #[tokio::test]
+        async fn connector_is_shared() {
+            let num_requests = Arc::new(AtomicUsize::new(0));
+            let movable = num_requests.clone();
+            let conn = infallible_connection_fn(move |_req| {
+                movable.fetch_add(1, Ordering::Relaxed);
+                http::Response::new("ok!")
+            });
+            let config = from_env().http_connector(conn.clone()).load().await;
+            config
+                .credentials_provider()
+                .unwrap()
+                .provide_credentials()
+                .await
+                .expect_err("no traffic is allowed");
+            let num_requests = num_requests.load(Ordering::Relaxed);
+            assert!(num_requests > 0, "{}", num_requests);
         }
     }
 }

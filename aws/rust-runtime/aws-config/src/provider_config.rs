@@ -303,14 +303,11 @@ impl ProviderConfig {
 
     /// Override the HTTPS connector for this configuration
     ///
-    /// **Warning**: Use of this method will prevent you from taking advantage of the HTTP connect timeouts.
-    /// Consider [`ProviderConfig::with_tcp_connector`].
-    ///
-    /// # Stability
-    /// This method is expected to change to support HTTP configuration.
-    pub fn with_http_connector(self, connector: DynConnector) -> Self {
+    /// **Note**: In order to take advantage of late-configured timeout settings, use [`HttpConnector::ConnectorFn`]
+    /// when configuring this connector.
+    pub fn with_http_connector(self, connector: impl Into<HttpConnector>) -> Self {
         ProviderConfig {
-            connector: HttpConnector::Prebuilt(Some(connector)),
+            connector: connector.into(),
             ..self
         }
     }
