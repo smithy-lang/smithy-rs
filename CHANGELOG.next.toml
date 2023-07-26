@@ -686,3 +686,15 @@ x-amzn-errortype: InvalidRequestException
 references = ["smithy-rs#2866"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
+
+[[aws-sdk-rust]]
+message = """The `doc(hidden)` `time_source` in `aws-credential-types` was removed. Use `aws_smithy_async::time` instead."""
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+references = ["smithy-rs#2877"]
+
+[[aws-sdk-rust]]
+message = """The `doc(hidden)` `with_env` in `ProviderConfig` was removed."""
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+references = ["smithy-rs#2877"]
