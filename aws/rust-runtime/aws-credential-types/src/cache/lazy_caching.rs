@@ -513,7 +513,6 @@ mod tests {
                 let credentials_cache = credentials_cache.clone();
                 let time = time.clone();
                 tasks.push(rt.spawn(async move {
-                    //let _guard = lock.lock();
                     let now = time.advance(Duration::from_secs(22));
 
                     let creds = credentials_cache
