@@ -24,6 +24,7 @@ use tracing::debug;
 // The initial attempt, plus three retries.
 const DEFAULT_MAX_ATTEMPTS: u32 = 4;
 
+/// Retry strategy with exponential backoff, max attempts, and a token bucket.
 #[derive(Debug)]
 pub struct StandardRetryStrategy {
     // Retry settings
@@ -39,13 +40,13 @@ impl Storable for StandardRetryStrategy {
 }
 
 impl StandardRetryStrategy {
+    /// Create a new standard retry strategy with the given config.
     pub fn new(retry_config: &RetryConfig) -> Self {
         let base = if retry_config.use_static_exponential_base() {
             || 1.0
         } else {
             fastrand::f64
         };
-        // TODO(enableNewSmithyRuntimeLaunch) add support for `retry_config.reconnect_mode()` here or in the orchestrator flow.
         Self::default()
             .with_base(base)
             .with_max_backoff(retry_config.max_backoff())
@@ -53,21 +54,25 @@ impl StandardRetryStrategy {
             .with_initial_backoff(retry_config.initial_backoff())
     }
 
+    /// Changes the exponential backoff base.
     pub fn with_base(mut self, base: fn() -> f64) -> Self {
         self.base = base;
         self
     }
 
+    /// Changes the max number of attempts.
     pub fn with_max_attempts(mut self, max_attempts: u32) -> Self {
         self.max_attempts = max_attempts;
         self
     }
 
+    /// Changes the initial backoff time.
     pub fn with_initial_backoff(mut self, initial_backoff: Duration) -> Self {
         self.initial_backoff = initial_backoff;
         self
     }
 
+    /// Changes the maximum backoff time.
     pub fn with_max_backoff(mut self, max_backoff: Duration) -> Self {
         self.max_backoff = max_backoff;
         self
