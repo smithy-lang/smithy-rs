@@ -219,7 +219,7 @@ mod tests {
     };
     use aws_smithy_runtime_api::client::interceptors::Interceptor;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-    use aws_smithy_types::config_bag::{ConfigBag, Layer};
+    use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::type_erasure::TypeErasedBox;
     use http::HeaderValue;
 

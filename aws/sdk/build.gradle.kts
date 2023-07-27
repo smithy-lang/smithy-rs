@@ -338,7 +338,7 @@ tasks.register("generateCargoWorkspace") {
     doFirst {
         outputDir.mkdirs()
         outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
-        rootProject.rootDir.resolve("clippy.toml").copyTo(outputDir.resolve("clippy.toml"))
+        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.resolve("clippy.toml"))
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
     if (awsServices.examples.isNotEmpty()) {
