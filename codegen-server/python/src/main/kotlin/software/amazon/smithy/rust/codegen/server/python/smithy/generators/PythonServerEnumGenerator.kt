@@ -62,7 +62,7 @@ class PythonConstrainedEnum(
             rustBlock(
                 """
                 ##[getter]
-                pub fn name(&self) -> &'static str
+                pub fn name(&self) -> &str
                 """,
             ) {
                 rustBlock("match self") {
