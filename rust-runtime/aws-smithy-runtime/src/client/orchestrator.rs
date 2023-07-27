@@ -445,7 +445,6 @@ mod tests {
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
-    use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
     use std::borrow::Cow;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -465,7 +464,7 @@ mod tests {
                 .status(StatusCode::OK)
                 .body(SdkBody::empty())
                 .map_err(|err| OrchestratorError::other(Box::new(err)))
-                .map(|res| Output::new(Box::new(res))),
+                .map(|res| Output::erase(res)),
         )
     }
 
@@ -609,7 +608,7 @@ mod tests {
                 }
             }
 
-            let input = TypeErasedBox::new(Box::new(()));
+            let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
                 .with_client_plugin(FailingInterceptorsClientRuntimePlugin::new())
                 .with_operation_plugin(TestOperationRuntimePlugin::new())
@@ -893,7 +892,7 @@ mod tests {
                 }
             }
 
-            let input = TypeErasedBox::new(Box::new(()));
+            let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
                 .with_operation_plugin(TestOperationRuntimePlugin::new())
                 .with_operation_plugin(NoAuthRuntimePlugin::new())
@@ -1145,7 +1144,7 @@ mod tests {
         let context = invoke_with_stop_point(
             "test",
             "test",
-            TypedBox::new(()).erase(),
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::None,
         )
@@ -1157,7 +1156,7 @@ mod tests {
         let context = invoke_with_stop_point(
             "test",
             "test",
-            TypedBox::new(()).erase(),
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::BeforeTransmit,
         )
@@ -1247,7 +1246,7 @@ mod tests {
         let context = invoke_with_stop_point(
             "test",
             "test",
-            TypedBox::new(()).erase(),
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::BeforeTransmit,
         )

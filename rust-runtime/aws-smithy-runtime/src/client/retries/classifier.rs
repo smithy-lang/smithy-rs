@@ -150,11 +150,10 @@ mod test {
         HttpStatusCodeClassifier, ModeledAsRetryableClassifier,
     };
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
-    use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
     use std::fmt;
 
     use super::SmithyErrorClassifier;
@@ -178,7 +177,7 @@ mod test {
             .body("error!")
             .unwrap()
             .map(SdkBody::from);
-        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
         assert_eq!(
             policy.classify_retry(&ctx),
@@ -194,7 +193,7 @@ mod test {
             .body("error!")
             .unwrap()
             .map(SdkBody::from);
-        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
         assert_eq!(policy.classify_retry(&ctx), None);
     }
@@ -224,8 +223,8 @@ mod test {
         impl std::error::Error for RetryableError {}
 
         let policy = ModeledAsRetryableClassifier::<RetryableError>::new();
-        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
-        ctx.set_output_or_error(Err(OrchestratorError::operation(TypeErasedError::new(
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(
             RetryableError,
         ))));
 
@@ -238,7 +237,7 @@ mod test {
     #[test]
     fn classify_response_error() {
         let policy = SmithyErrorClassifier::<UnmodeledError>::new();
-        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::response(
             "I am a response error".into(),
         )));
@@ -251,7 +250,7 @@ mod test {
     #[test]
     fn test_timeout_error() {
         let policy = SmithyErrorClassifier::<UnmodeledError>::new();
-        let mut ctx = InterceptorContext::new(TypeErasedBox::new("doesntmatter"));
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::timeout(
             "I am a timeout error".into(),
         )));

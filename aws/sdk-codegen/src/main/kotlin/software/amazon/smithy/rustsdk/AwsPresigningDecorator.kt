@@ -336,9 +336,7 @@ class AwsPresignedFluentBuilderMethod(
                 .await
                 .map_err(|err| {
                     err.map_service_error(|err| {
-                        #{TypedBox}::<#{OperationError}>::assume_from(err.into())
-                            .expect("correct error type")
-                            .unwrap()
+                        err.downcast::<#{OperationError}>().expect("correct error type")
                     })
                 })?;
             let request = context.take_request().expect("request set before transmit");
@@ -353,7 +351,6 @@ class AwsPresignedFluentBuilderMethod(
             "SigV4PresigningRuntimePlugin" to AwsRuntimeType.presigningInterceptor(runtimeConfig)
                 .resolve("SigV4PresigningRuntimePlugin"),
             "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
-            "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
             "USER_AGENT" to CargoDependency.Http.toType().resolve("header::USER_AGENT"),
             "alternate_presigning_serializer" to writable {
                 if (presignableOp.hasModelTransforms()) {

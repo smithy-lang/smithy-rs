@@ -215,12 +215,11 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{
-        BeforeTransmitInterceptorContextMut, InterceptorContext,
+        BeforeTransmitInterceptorContextMut, Input, InterceptorContext,
     };
     use aws_smithy_runtime_api::client::interceptors::Interceptor;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
-    use aws_smithy_types::type_erasure::TypeErasedBox;
     use http::HeaderValue;
 
     fn expect_header<'a>(
@@ -233,7 +232,7 @@ mod tests {
     #[test]
     fn default_id_generator() {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
         ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
         let _ = ctx.take_input();
@@ -260,7 +259,7 @@ mod tests {
     #[test]
     fn custom_id_generator() {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
         ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
         let _ = ctx.take_input();
