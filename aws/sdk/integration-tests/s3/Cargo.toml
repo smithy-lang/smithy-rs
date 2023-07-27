@@ -45,15 +45,3 @@ tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
 # If you're writing a test with this, take heed! `no-env-filter` means you'll be capturing
 # logs from everything that speaks, so be specific with your asserts.
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
-
-# for the middleware vs. orchestrator benchmark
-criterion = { version = "0.4", features = ["async_tokio"] }
-middleware-smithy-client = { version = "0.55.3", package = "aws-smithy-client", features = ["test-util", "rustls"] }
-middleware-s3 = { version = "0.28", package = "aws-sdk-s3", features = ["test-util"] }
-
-[profile.release]
-debug = 1
-
-[[bench]]
-name = "middleware_vs_orchestrator"
-harness = false
