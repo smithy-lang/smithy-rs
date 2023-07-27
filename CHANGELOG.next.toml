@@ -665,6 +665,12 @@ references = ["smithy-rs#2865"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
 
+[[aws-sdk-rust]]
+message = "**Behavior change**: Credential providers now share the HTTP connector used by the SDK. If you want to keep a separate connector for clients, use `<service>::ConfigBuilder::http_connector` when constructing the client."
+references = ["aws-sdk-rust#579", "aws-sdk-rust#338"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
 [[smithy-rs]]
 message = """
 [RestJson1](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html#operation-error-serialization) server SDKs now serialize only the [shape name](https://smithy.io/2.0/spec/model.html#shape-id) in operation error responses. Previously (from versions 0.52.0 to 0.55.4), the full shape ID was rendered.
