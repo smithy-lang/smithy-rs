@@ -37,7 +37,6 @@ mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
 mod http;
-pub mod interceptors;
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
@@ -83,6 +82,15 @@ macro_rules! run_interceptors {
     };
 }
 
+/// Orchestrates the execution of a request and handling of a response.
+///
+/// The given `runtime_plugins` will be used to generate a `ConfigBag` for this request,
+/// and then the given `input` will be serialized and transmitted. When a response is
+/// received, it will be deserialized and returned.
+///
+/// This orchestration handles retries, endpoint resolution, identity resolution, and signing.
+/// Each of these are configurable via the config and runtime components given by the runtime
+/// plugins.
 pub async fn invoke(
     service_name: &str,
     operation_name: &str,
@@ -111,6 +119,12 @@ pub enum StopPoint {
     BeforeTransmit,
 }
 
+/// Same as [`invoke`], but allows for returning early at different points during orchestration.
+///
+/// Orchestration will cease at the point specified by `stop_point`. This is useful for orchestrations
+/// that don't need to actually transmit requests, such as for generating presigned requests.
+///
+/// See the docs on [`invoke`] for more details.
 pub async fn invoke_with_stop_point(
     service_name: &str,
     operation_name: &str,
