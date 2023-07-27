@@ -4,25 +4,25 @@
  */
 
 use aws_http::user_agent::AwsUserAgent;
-use aws_runtime::invocation_id::InvocationId;
+use aws_runtime::invocation_id::{InvocationId, PredefinedInvocationIdGenerator};
+use aws_sdk_s3::config::interceptors::BeforeSerializationInterceptorContextMut;
+use aws_sdk_s3::config::interceptors::FinalizerInterceptorContextRef;
+use aws_sdk_s3::config::retry::RetryConfig;
+use aws_sdk_s3::config::timeout::TimeoutConfig;
 use aws_sdk_s3::config::{Credentials, Region};
-use aws_sdk_s3::endpoint::Params;
+use aws_sdk_s3::config::{Interceptor, SharedAsyncSleep};
 use aws_sdk_s3::Client;
+use aws_smithy_async::test_util::InstantSleep;
+use aws_smithy_async::test_util::ManualTimeSource;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_client::dvr;
 use aws_smithy_client::dvr::MediaType;
 use aws_smithy_client::erase::DynConnector;
-use aws_smithy_runtime::client::retries::strategy::FixedDelayRetryStrategy;
-use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
-use aws_smithy_runtime_api::client::orchestrator::ConfigBagAccessors;
-use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_types::client::orchestrator::ConfigBagAccessors;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use std::time::{Duration, UNIX_EPOCH};
-
-#[derive(Debug)]
-struct FixupPlugin {
-    client: Client,
-}
 
 // # One SDK operation invocation.
 // # Client retries 3 times, successful response on 3rd attempt.
@@ -31,25 +31,45 @@ struct FixupPlugin {
 // # Client waits 1 second between retry attempts.
 #[tokio::test]
 async fn three_retries_and_then_success() {
-    tracing_subscriber::fmt::init();
+    let _logs = capture_test_logs();
 
-    impl RuntimePlugin for FixupPlugin {
-        fn configure(
+    #[derive(Debug)]
+    struct TimeInterceptor {
+        time_source: ManualTimeSource,
+    }
+    impl Interceptor for TimeInterceptor {
+        fn name(&self) -> &'static str {
+            "TimeInterceptor"
+        }
+
+        fn modify_before_serialization(
             &self,
+            _context: &mut BeforeSerializationInterceptorContextMut<'_>,
+            _runtime_components: &RuntimeComponents,
             cfg: &mut ConfigBag,
-            _interceptors: &mut InterceptorRegistrar,
-        ) -> Result<(), aws_smithy_runtime_api::client::runtime_plugin::BoxError> {
-            let params_builder = Params::builder()
-                .set_region(self.client.conf().region().map(|c| c.as_ref().to_string()))
-                .bucket("test-bucket");
+        ) -> Result<(), BoxError> {
+            let mut layer = Layer::new("test");
+            layer.store_put(AwsUserAgent::for_tests());
+            cfg.push_layer(layer);
+            Ok(())
+        }
 
-            cfg.put(params_builder);
-            cfg.put(AwsUserAgent::for_tests());
-            cfg.put(InvocationId::for_tests());
-            cfg.set_retry_strategy(FixedDelayRetryStrategy::one_second_delay());
+        fn read_after_attempt(
+            &self,
+            _context: &FinalizerInterceptorContextRef<'_>,
+            _runtime_components: &RuntimeComponents,
+            _cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            self.time_source.advance(Duration::from_secs(1));
+            tracing::info!(
+                "################ ADVANCED TIME BY 1 SECOND, {:?}",
+                &self.time_source
+            );
             Ok(())
         }
     }
+
+    let time_source = ManualTimeSource::new(UNIX_EPOCH + Duration::from_secs(1559347200));
 
     let path = "test-data/request-information-headers/three-retries_and-then-success.json";
     let conn = dvr::ReplayingConnection::from_file(path).unwrap();
@@ -57,23 +77,28 @@ async fn three_retries_and_then_success() {
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .http_connector(DynConnector::new(conn.clone()))
-        .time_source(UNIX_EPOCH + Duration::from_secs(1624036048))
+        .time_source(SharedTimeSource::new(time_source.clone()))
+        .sleep_impl(SharedAsyncSleep::new(InstantSleep::new(Default::default())))
+        .retry_config(RetryConfig::standard())
+        .timeout_config(
+            TimeoutConfig::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .read_timeout(Duration::from_secs(10))
+                .build(),
+        )
+        .invocation_id_generator(PredefinedInvocationIdGenerator::new(vec![
+            InvocationId::new_from_str("00000000-0000-4000-8000-000000000000"),
+        ]))
+        .interceptor(TimeInterceptor { time_source })
         .build();
     let client = Client::from_conf(config);
-    let fixup = FixupPlugin {
-        client: client.clone(),
-    };
 
     let resp = dbg!(
         client
             .list_objects_v2()
             .bucket("test-bucket")
             .prefix("prefix~")
-            .customize()
-            .await
-            .unwrap()
-            .config_override(aws_sdk_s3::Config::builder().force_path_style(false))
-            .send_orchestrator_with_plugin(Some(fixup))
+            .send()
             .await
     );
 

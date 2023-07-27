@@ -370,8 +370,16 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                     if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
-                            let retry_partition = layer.load::<#{RetryPartition}>().cloned().unwrap_or_else(|| #{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
-                            let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+                            if layer.load::<#{RetryConfig}>().is_none() {
+                                layer.store_put(#{RetryConfig}::disabled());
+                            }
+                            let retry_config = layer.load::<#{RetryConfig}>().expect("set to default above").clone();
+
+                            if layer.load::<#{RetryPartition}>().is_none() {
+                                layer.store_put(#{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
+                            }
+                            let retry_partition = layer.load::<#{RetryPartition}>().expect("set to default above").clone();
+
                             if retry_config.has_retry() {
                                 #{debug}!("using retry strategy with partition '{}'", retry_partition);
                             }

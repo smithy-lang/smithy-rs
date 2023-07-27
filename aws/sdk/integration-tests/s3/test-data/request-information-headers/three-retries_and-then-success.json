@@ -11,7 +11,7 @@
                 "notarealsessiontoken"
               ],
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=e7eccf4e792113f5f17a50bfd8f1719479e89ba0b476894e6f3dba030dc87f82"
+                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20190601/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=43970cfd0324cb28a86459789b7a1c7684cf54b0b3c9842a84f3b24343fa038a"
               ],
               "x-amz-user-agent": [
                 "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0"
@@ -55,9 +55,6 @@
               "status": 500,
               "version": "HTTP/1.1",
               "headers": {
-                "server": [
-                  "AmazonS3"
-                ],
                 "x-amz-request-id": [
                   "foo-id"
                 ],
@@ -103,7 +100,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 1,
       "action": {
         "Request": {
           "request": {
@@ -113,7 +110,7 @@
                 "notarealsessiontoken"
               ],
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=e7eccf4e792113f5f17a50bfd8f1719479e89ba0b476894e6f3dba030dc87f82"
+                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20190601/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=6d0f0da831a7d3ad1bde4e98580177bc0ef0acc21064dd26394006006392cb14"
               ],
               "x-amz-user-agent": [
                 "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0"
@@ -140,7 +137,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 1,
       "action": {
         "Eof": {
           "ok": true,
@@ -149,7 +146,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 1,
       "action": {
         "Response": {
           "response": {
@@ -157,9 +154,6 @@
               "status": 500,
               "version": "HTTP/1.1",
               "headers": {
-                "server": [
-                  "AmazonS3"
-                ],
                 "x-amz-request-id": [
                   "foo-id"
                 ],
@@ -185,7 +179,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 1,
       "action": {
         "Data": {
           "data": {
@@ -196,7 +190,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 1,
       "action": {
         "Eof": {
           "ok": true,
@@ -205,7 +199,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 2,
       "action": {
         "Request": {
           "request": {
@@ -215,7 +209,7 @@
                 "notarealsessiontoken"
               ],
               "authorization": [
-                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20210618/us-east-1/s3/aws4_request, SignedHeaders=amz-sdk-invocation-id;host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=e7eccf4e792113f5f17a50bfd8f1719479e89ba0b476894e6f3dba030dc87f82"
+                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20190601/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token;x-amz-user-agent, Signature=8160b1d1200c10cde681ac6f4490c98023af9c4b3b8fd8a82e7560f87c126a53"
               ],
               "x-amz-user-agent": [
                 "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0"
@@ -242,7 +236,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 2,
       "action": {
         "Eof": {
           "ok": true,
@@ -251,7 +245,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 2,
       "action": {
         "Response": {
           "response": {
@@ -287,7 +281,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 2,
       "action": {
         "Data": {
           "data": {
@@ -298,7 +292,7 @@
       }
     },
     {
-      "connection_id": 0,
+      "connection_id": 2,
       "action": {
         "Eof": {
           "ok": true,
