@@ -229,6 +229,7 @@ tasks.register("relocateTests") {
                 }
                 into(outputDir.resolve("tests"))
                 exclude("**/target")
+                exclude("**/benches")
                 filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
             }
         }
