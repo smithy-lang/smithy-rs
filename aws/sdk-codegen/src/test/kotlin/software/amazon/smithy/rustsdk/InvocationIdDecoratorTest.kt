@@ -41,7 +41,7 @@ class InvocationIdDecoratorTest {
 
                         let client = $moduleName::Client::from_conf(config);
 
-                        let _ = client.some_operation().send().await;
+                        let _ = dbg!(client.some_operation().send().await);
                         let request = rx.expect_request();
                         assert_eq!("custom", request.headers().get("amz-sdk-invocation-id").unwrap());
                     }

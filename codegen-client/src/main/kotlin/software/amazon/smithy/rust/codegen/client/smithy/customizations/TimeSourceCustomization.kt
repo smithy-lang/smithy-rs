@@ -23,6 +23,9 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
     private val codegenScope = arrayOf(
         *preludeScope,
         "SharedTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::SharedTimeSource"),
+        "StaticTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::StaticTimeSource"),
+        "UNIX_EPOCH" to RuntimeType.std.resolve("time::UNIX_EPOCH"),
+        "Duration" to RuntimeType.std.resolve("time::Duration"),
     )
 
     override fun section(section: ServiceConfig) =
@@ -116,7 +119,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                         rustTemplate(
                             """
                             if self.runtime_components.time_source().is_none() {
-                                self.runtime_components.set_time_source(#{Default}::default());
+                                self.runtime_components.set_time_source(Some(#{Default}::default()));
                             }
                             """,
                             *codegenScope,
@@ -127,6 +130,18 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                             *codegenScope,
                         )
                     }
+                }
+
+                is ServiceConfig.DefaultForTests -> {
+                    rustTemplate(
+                        """
+                        ${section.configBuilderRef}
+                            .set_time_source(Some(#{SharedTimeSource}::new(
+                                #{StaticTimeSource}::new(#{UNIX_EPOCH} + #{Duration}::from_secs(1234567890)))
+                            ));
+                        """,
+                        *codegenScope,
+                    )
                 }
 
                 else -> emptySection
