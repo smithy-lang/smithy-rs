@@ -66,6 +66,7 @@ aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", fe
 
 # used for a usage example
 hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http2", "http1"] }
+aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

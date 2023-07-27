@@ -20,7 +20,7 @@ tracing = "0.1"
 zeroize = "1"
 
 [dev-dependencies]
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio", "test-util"] }
 
 # used to test compatibility
 async-trait = "0.1.51"
