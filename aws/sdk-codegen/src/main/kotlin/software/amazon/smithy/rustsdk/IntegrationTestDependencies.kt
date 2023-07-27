@@ -83,7 +83,7 @@ class IntegrationTestDependencies(
                 val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                    .copy(features = setOf("test-util", "wiremock"), scope = DependencyScope.Dev)
                 val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyAsync)

@@ -687,6 +687,13 @@ references = ["smithy-rs#2866"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "server" }
 author = "david-perez"
 
+
+[[smithy-rs]]
+message = "The `test-util` feature in aws-smithy-client has been split to include a separate `wiremock` feature. This allows test-util to be used without a Hyper server dependency making it usable in webassembly targets."
+meta = { "breaking" = true, "tada" = false , "bug" = false, "target" = "client" }
+author = "rcoh"
+references = ["smithy-rs#2873"]
+
 [[aws-sdk-rust]]
 message = """The `doc(hidden)` `time_source` in `aws-credential-types` was removed. Use `aws_smithy_async::time` instead."""
 meta = { "breaking" = true, "tada" = false, "bug" = false }
