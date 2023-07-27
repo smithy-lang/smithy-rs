@@ -41,6 +41,10 @@ impl ConnectionPoisoningInterceptor {
 }
 
 impl Interceptor for ConnectionPoisoningInterceptor {
+    fn name(&self) -> &'static str {
+        "ConnectionPoisoningInterceptor"
+    }
+
     fn modify_before_transmit(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,

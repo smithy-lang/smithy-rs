@@ -41,6 +41,10 @@ private class TestServiceRuntimePluginCustomization(
                         ##[derive(::std::fmt::Debug)]
                         struct TestInterceptor;
                         impl #{Interceptor} for TestInterceptor {
+                            fn name(&self) -> &'static str {
+                                "TestInterceptor"
+                            }
+
                             fn modify_before_retry_loop(
                                 &self,
                                 context: &mut #{BeforeTransmitInterceptorContextMut}<'_>,
@@ -98,8 +102,8 @@ private class TestOperationCustomization(
                             crate::operation::say_hello::SayHelloError,
                         > = $fakeOutput;
                         fake_out
-                            .map(|o| #{TypedBox}::new(o).erase())
-                            .map_err(|e| #{OrchestratorError}::operation(#{TypedBox}::new(e).erase_error()))
+                            .map(|o| #{Output}::erase(o))
+                            .map_err(|e| #{OrchestratorError}::operation(#{Error}::erase(e)))
                     }
                 }
                 cfg.store_put(#{SharedResponseDeserializer}::new(TestDeser));
@@ -111,7 +115,6 @@ private class TestOperationCustomization(
                 "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
                 "Output" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Output"),
                 "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
-                "TypedBox" to RT.smithyTypes(rc).resolve("type_erasure::TypedBox"),
             )
         }
     }

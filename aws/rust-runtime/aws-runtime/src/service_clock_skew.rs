@@ -65,6 +65,10 @@ fn extract_time_sent_from_response(
 }
 
 impl Interceptor for ServiceClockSkewInterceptor {
+    fn name(&self) -> &'static str {
+        "ServiceClockSkewInterceptor"
+    }
+
     fn modify_before_deserialization(
         &self,
         ctx: &mut BeforeDeserializationInterceptorContextMut<'_>,

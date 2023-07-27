@@ -74,6 +74,10 @@ class EndpointParamsInterceptorGenerator(
             struct $interceptorName;
 
             impl #{Interceptor} for $interceptorName {
+                fn name(&self) -> &'static str {
+                    ${interceptorName.dq()}
+                }
+
                 fn read_before_execution(
                     &self,
                     context: &#{BeforeSerializationInterceptorContextRef}<'_, #{Input}, #{Output}, #{Error}>,
