@@ -467,7 +467,7 @@ author = "rcoh"
 message = "Fourth change - client"
 references = ["smithy-rs#4"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "LukeMathWalker"
+author = "rcoh"
 "#;
     let tmp_dir = TempDir::new().unwrap();
     let source_path = tmp_dir.path().join("source.toml");
