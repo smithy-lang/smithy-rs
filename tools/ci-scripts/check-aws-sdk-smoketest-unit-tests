@@ -7,3 +7,10 @@
 set -eux
 cd aws-sdk-smoketest
 cargo test --all-features
+
+for test_dir in tests/*; do
+    if [ -f "${test_dir}/Cargo.toml" ]; then
+        echo "#### Testing ${test_dir}..."
+        cargo test --all-features --manifest-path "${test_dir}/Cargo.toml"
+    fi
+done
