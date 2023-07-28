@@ -711,3 +711,15 @@ message = """The `doc(hidden)` `with_env` in `ProviderConfig` was removed."""
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
 references = ["smithy-rs#2877"]
+
+[[aws-sdk-rust]]
+message = "The underlying architecture of the SDK clients has been overhauled. This shouldn't require any changes for most projects, but will affect projects that customize the SDK middleware. More details are available in the [upgrade guide](https://github.com/awslabs/aws-sdk-rust/discussions/853) if you are effected by these changes."
+references = []
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The entire architecture of generated clients has been overhauled. See the [upgrade guide](https://github.com/awslabs/smithy-rs/discussions/2887) to get your code working again."
+references = []
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
