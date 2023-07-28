@@ -174,6 +174,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                     .resolve("client::retries::AlwaysRetry"),
                 "ConfigBag" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag"),
                 "ErrorKind" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::ErrorKind"),
+                "Input" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Input"),
                 "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                 "Layer" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Layer"),
                 "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -188,7 +189,6 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                 "ShouldAttempt" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::retries::ShouldAttempt"),
-                "TypeErasedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypeErasedBox"),
             )
             rustCrate.testModule {
                 unitTest("test_operation_overrides_retry_strategy") {
@@ -201,7 +201,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                             .retry_config(#{RetryConfig}::standard().with_max_attempts(3))
                             .build();
 
-                        let mut ctx = #{InterceptorContext}::new(#{TypeErasedBox}::new(()));
+                        let mut ctx = #{InterceptorContext}::new(#{Input}::doesnt_matter());
                         ctx.set_output_or_error(#{Err}(#{OrchestratorError}::other("doesn't matter")));
 
                         let mut layer = #{Layer}::new("test");

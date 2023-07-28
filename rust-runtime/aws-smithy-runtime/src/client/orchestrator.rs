@@ -37,7 +37,6 @@ mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
 mod http;
-pub mod interceptors;
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
@@ -83,6 +82,15 @@ macro_rules! run_interceptors {
     };
 }
 
+/// Orchestrates the execution of a request and handling of a response.
+///
+/// The given `runtime_plugins` will be used to generate a `ConfigBag` for this request,
+/// and then the given `input` will be serialized and transmitted. When a response is
+/// received, it will be deserialized and returned.
+///
+/// This orchestration handles retries, endpoint resolution, identity resolution, and signing.
+/// Each of these are configurable via the config and runtime components given by the runtime
+/// plugins.
 pub async fn invoke(
     service_name: &str,
     operation_name: &str,
@@ -111,6 +119,12 @@ pub enum StopPoint {
     BeforeTransmit,
 }
 
+/// Same as [`invoke`], but allows for returning early at different points during orchestration.
+///
+/// Orchestration will cease at the point specified by `stop_point`. This is useful for orchestrations
+/// that don't need to actually transmit requests, such as for generating presigned requests.
+///
+/// See the docs on [`invoke`] for more details.
 pub async fn invoke_with_stop_point(
     service_name: &str,
     operation_name: &str,
@@ -445,7 +459,6 @@ mod tests {
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
-    use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
     use std::borrow::Cow;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
@@ -465,7 +478,7 @@ mod tests {
                 .status(StatusCode::OK)
                 .body(SdkBody::empty())
                 .map_err(|err| OrchestratorError::other(Box::new(err)))
-                .map(|res| Output::new(Box::new(res))),
+                .map(|res| Output::erase(res)),
         )
     }
 
@@ -609,7 +622,7 @@ mod tests {
                 }
             }
 
-            let input = TypeErasedBox::new(Box::new(()));
+            let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
                 .with_client_plugin(FailingInterceptorsClientRuntimePlugin::new())
                 .with_operation_plugin(TestOperationRuntimePlugin::new())
@@ -893,7 +906,7 @@ mod tests {
                 }
             }
 
-            let input = TypeErasedBox::new(Box::new(()));
+            let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
                 .with_operation_plugin(TestOperationRuntimePlugin::new())
                 .with_operation_plugin(NoAuthRuntimePlugin::new())
@@ -1145,7 +1158,7 @@ mod tests {
         let context = invoke_with_stop_point(
             "test",
             "test",
-            TypedBox::new(()).erase(),
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::None,
         )
@@ -1157,7 +1170,7 @@ mod tests {
         let context = invoke_with_stop_point(
             "test",
             "test",
-            TypedBox::new(()).erase(),
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::BeforeTransmit,
         )
@@ -1247,7 +1260,7 @@ mod tests {
         let context = invoke_with_stop_point(
             "test",
             "test",
-            TypedBox::new(()).erase(),
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::BeforeTransmit,
         )

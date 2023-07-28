@@ -22,8 +22,8 @@ aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-tower = { path = "../../../rust-runtime/aws-smithy-http-tower" }
-aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
-aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-types = { path = "../aws-types" }

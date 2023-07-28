@@ -280,6 +280,7 @@ impl ConditionallyEnabledInterceptor {
     }
 }
 
+/// Interceptor that maps the request with a given function.
 pub struct MapRequestInterceptor<F, E> {
     f: F,
     _phantom: PhantomData<E>,
@@ -292,6 +293,7 @@ impl<F, E> fmt::Debug for MapRequestInterceptor<F, E> {
 }
 
 impl<F, E> MapRequestInterceptor<F, E> {
+    /// Creates a new `MapRequestInterceptor`.
     pub fn new(f: F) -> Self {
         Self {
             f,
@@ -324,6 +326,7 @@ where
     }
 }
 
+/// Interceptor that mutates the request with a given function.
 pub struct MutateRequestInterceptor<F> {
     f: F,
 }
@@ -335,6 +338,7 @@ impl<F> fmt::Debug for MutateRequestInterceptor<F> {
 }
 
 impl<F> MutateRequestInterceptor<F> {
+    /// Creates a new `MutateRequestInterceptor`.
     pub fn new(f: F) -> Self {
         Self { f }
     }
@@ -419,7 +423,11 @@ mod tests {
         );
 
         Interceptors::new(rc.interceptors())
-            .read_before_transmit(&InterceptorContext::new(Input::new(5)), &rc, &mut cfg)
+            .read_before_transmit(
+                &InterceptorContext::new(Input::doesnt_matter()),
+                &rc,
+                &mut cfg,
+            )
             .expect_err("interceptor returns error");
         cfg.interceptor_state()
             .store_put(disable_interceptor::<PanicInterceptor>("test"));
@@ -432,7 +440,11 @@ mod tests {
         );
         // shouldn't error because interceptors won't run
         Interceptors::new(rc.interceptors())
-            .read_before_transmit(&InterceptorContext::new(Input::new(5)), &rc, &mut cfg)
+            .read_before_transmit(
+                &InterceptorContext::new(Input::doesnt_matter()),
+                &rc,
+                &mut cfg,
+            )
             .expect("interceptor is now disabled");
     }
 }

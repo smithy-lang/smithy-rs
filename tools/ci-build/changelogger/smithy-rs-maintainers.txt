@@ -1,15 +1,7 @@
 82marbag
 aws-sdk-rust-ci
-crisidev
 david-perez
-drganjoo
-hlbarber
 jdisanti
-jjant
-LukeMathWalker
-pose
 rcoh
-unexge
 velfi
-weihanglo
 ysaito1001
