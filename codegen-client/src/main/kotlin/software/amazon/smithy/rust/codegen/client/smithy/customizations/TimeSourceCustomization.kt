@@ -116,7 +116,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                         rustTemplate(
                             """
                             if self.runtime_components.time_source().is_none() {
-                                self.runtime_components.set_time_source(#{Default}::default());
+                                self.runtime_components.set_time_source(#{Some}(#{Default}::default()));
                             }
                             """,
                             *codegenScope,
