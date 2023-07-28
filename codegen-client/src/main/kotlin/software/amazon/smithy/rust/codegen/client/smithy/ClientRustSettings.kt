@@ -135,7 +135,7 @@ data class ClientCodegenConfig(
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
                     enableNewSmithyRuntime = SmithyRuntimeMode.fromString(node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware")),
                     includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
-                    enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("userConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
+                    enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
                 )
             } else {
                 ClientCodegenConfig(
