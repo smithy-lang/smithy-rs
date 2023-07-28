@@ -46,6 +46,7 @@ fun awsSdkIntegrationTest(
     clientIntegrationTest(
         model,
         IntegrationTestParams(
+            cargoCommand = "cargo test --features test-util",
             runtimeConfig = AwsTestRuntimeConfig,
             additionalSettings = ObjectNode.builder().withMember(
                 "customizationConfig",
