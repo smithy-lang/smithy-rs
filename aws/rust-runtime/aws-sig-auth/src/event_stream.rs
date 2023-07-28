@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// TODO(enableNewSmithyRuntimeCleanup): Remove this blanket allow once the old implementations are deleted
-#![allow(deprecated)]
 // this code is dead
-#[allow(clippy::disallowed_methods)]
+#![allow(deprecated)]
+#![allow(clippy::disallowed_methods)]
+
 use crate::middleware::Signature;
 use aws_credential_types::Credentials;
 use aws_sigv4::event_stream::{sign_empty_message, sign_message};
