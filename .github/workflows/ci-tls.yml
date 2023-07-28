@@ -31,7 +31,7 @@ jobs:
           script: |
             core.setFailed("This workflow can only be ran on main (current branch: ${{ github.ref_name }})")
 
-  tls:
+  verify-tls-config:
     name: Verify TLS configuration
     needs:
       - main-branch-check
