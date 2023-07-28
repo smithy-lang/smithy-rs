@@ -1,0 +1,132 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This workflow claims the names of the unpublished crates in this repository
+# on crates.io (by publishing a dummy empty package)
+
+# Allow only one crate claim workflow to run at a time
+concurrency:
+  group: tls-configuration-smithy-rs
+  cancel-in-progress: true
+
+env:
+  rust_version: 1.68.2
+
+name: Verify client TLS configuration
+run-name: ${{ github.workflow }}
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  main-branch-check:
+    name: Check that workflow is running in main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Main branch check
+        if: ${{ github.ref_name != 'main' }}
+        uses: actions/github-script@v6
+        with:
+          script: |
+            core.setFailed("This workflow can only be ran on main (current branch: ${{ github.ref_name }})")
+
+  tls:
+    name: Verify TLS configuration
+    needs:
+      - main-branch-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install packages
+        shell: bash
+        env:
+          RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+        run: |
+          apt -y install gcc make python3-pip docker docker.io nginx git
+          pip3 install certbuilder crlbuilder
+      - name: Checkout smithy-rs
+        uses: actions/checkout@v3
+        with:
+          path: smithy-rs
+      - name: Checkout trytls
+        uses: actions/checkout@v3
+        with:
+          repository: ouspg/trytls
+          path: trytls
+      - name: Checkout badtls
+        uses: actions/checkout@v3
+        with:
+          repository: wbond/badtls.io
+          path: badtls.io
+      - name: Checkout badssl
+        uses: actions/checkout@v3
+        with:
+          repository: chromium/badssl.com
+          path: badssl.com
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.rust_version }}
+      - name: Build badssl.com
+        shell: bash
+        env:
+          DOCKER_BUILDKIT: 1
+        run: |
+          cd
+          service docker start
+          cd badssl.com
+          perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
+          grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts >>/etc/hosts
+          make serve || true
+          ls certs/sets/test/gen/crt/ca-root.crt
+      - name: Build trytls
+        shell: bash
+        run: |
+          cd
+          cd trytls
+          perl -p -i -e 's!\./runners!runners!' setup.py
+          sed -i '/import platform/a import distro' runners/trytls/utils.py
+          sed -i 's/platform.linux_distribution()/distro.name(), distro.version(), distro.id()/' runners/trytls/utils.py
+          pip3 install -e .
+      - name: Build badtls.io
+        shell: bash
+        run: |
+          cd badtls.io
+          python3 scripts/generate.py badtls.test
+          mkdir /etc/nginx/tls || true
+          mkdir /var/www || true
+          python3 scripts/install.py /etc/nginx/conf.d /etc/nginx/tls /var/www
+          timeout 2m bash ./scripts/local.sh || true
+          echo '#### start of badtls.test hosts ####' >>/etc/hosts
+          echo '127.0.0.1 domain-match.badtls.test wildcard-match.badtls.test san-match.badtls.test dh1024.badtls.test expired-1963.badtls.test future.badtls.test domain-mismatch.badtls.test san-mismatch.badtls.test bad-key-usage.badtls.test expired.badtls.test wildcard.mismatch.badtls.test rc4.badtls.test weak-sig.badtls.test rc4-md5.badtls.test' >>/etc/hosts
+          echo '#### end of badtls.test hosts ####' >>/etc/hosts
+      - name: Create TLS stub
+        shell: bash
+        run: |
+          cargo new stub
+          cd stub
+          cargo add rustls
+          cargo add aws-config
+          cargo add aws-sdk-sts
+          cargo add tokio -F full
+          cargo add rustls-pemfile
+          cargo add exitcode
+          cargo add rustls-native-certs
+          cargo add x509-parser
+          cargo add hyper-rustls -F 'rustls-native-certs,http2'
+          cargo add aws-credential-types -F hardcoded-credentials
+          cargo add aws-smithy-client -F rustls
+          cp smithy-rs/tools/ci-resources/tls-stub.rs stub/src/main.rs
+      - name: Update TLS configuration
+        shell: bash
+        run: |
+          sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' trytls/runners/trytls/bundles/https.py
+          sed -i -e 's/break//' trytls/runners/trytls/bundles/https.py
+          perl -p -i -e 's/badssl\.com/badssl.test/g; s/badtls\.io/badtls.test/g;' trytls/runners/trytls/bundles/https.py
+          sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r ../badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' src/main.rs
+      - name: Test TLS configuration
+        shell: bash
+        run: |
+          cd stub
+          cargo build
+          trytls https target/debug/stub
