@@ -73,7 +73,7 @@ mod tests {
 
         let time_source = ManualTimeSource::new(UNIX_EPOCH + Duration::from_secs(1559347200));
 
-        let path = "test-data/request-information-headers/three-retries_and-then-success.json";
+        let path = "tests/data/request-information-headers/three-retries_and-then-success.json";
         let conn = dvr::ReplayingConnection::from_file(path).unwrap();
         let config = aws_sdk_s3::Config::builder()
             .credentials_provider(Credentials::for_tests())
