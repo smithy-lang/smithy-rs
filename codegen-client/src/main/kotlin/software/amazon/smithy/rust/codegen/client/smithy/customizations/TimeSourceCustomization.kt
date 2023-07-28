@@ -119,7 +119,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                         rustTemplate(
                             """
                             if self.runtime_components.time_source().is_none() {
-                                self.runtime_components.set_time_source(Some(#{Default}::default()));
+                                self.runtime_components.set_time_source(#{Some}(#{Default}::default()));
                             }
                             """,
                             *codegenScope,
@@ -136,7 +136,7 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                     rustTemplate(
                         """
                         ${section.configBuilderRef}
-                            .set_time_source(Some(#{SharedTimeSource}::new(
+                            .set_time_source(#{Some}(#{SharedTimeSource}::new(
                                 #{StaticTimeSource}::new(#{UNIX_EPOCH} + #{Duration}::from_secs(1234567890)))
                             ));
                         """,
