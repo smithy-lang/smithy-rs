@@ -9,11 +9,9 @@ use aws_smithy_http::endpoint::{
     SharedEndpointResolver,
 };
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
+use aws_smithy_runtime_api::client::endpoint::{EndpointResolver, EndpointResolverParams};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::{
-    EndpointResolver, EndpointResolverParams, Future, HttpRequest,
-};
+use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
@@ -23,12 +21,14 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use tracing::trace;
 
-#[derive(Debug, Clone)]
+/// An endpoint resolver that uses a static URI.
+#[derive(Clone, Debug)]
 pub struct StaticUriEndpointResolver {
     endpoint: Uri,
 }
 
 impl StaticUriEndpointResolver {
+    /// Create a resolver that resolves to `http://localhost:{port}`.
     pub fn http_localhost(port: u16) -> Self {
         Self {
             endpoint: Uri::from_str(&format!("http://localhost:{port}"))
@@ -36,6 +36,7 @@ impl StaticUriEndpointResolver {
         }
     }
 
+    /// Create a resolver that resolves to the given URI.
     pub fn uri(endpoint: Uri) -> Self {
         Self { endpoint }
     }
@@ -66,7 +67,13 @@ impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
     }
 }
 
-#[derive(Debug, Clone)]
+/// Default implementation of [`EndpointResolver`].
+///
+/// This default endpoint resolver implements the `EndpointResolver` trait by
+/// converting the type-erased [`EndpointResolverParams`] into the concrete
+/// endpoint params for the service. It then delegates endpoint resolution
+/// to an underlying resolver that is aware of the concrete type.
+#[derive(Clone, Debug)]
 pub struct DefaultEndpointResolver<Params> {
     inner: SharedEndpointResolver<Params>,
 }
@@ -79,6 +86,7 @@ where
 }
 
 impl<Params> DefaultEndpointResolver<Params> {
+    /// Creates a new `DefaultEndpointResolver`.
     pub fn new(resolve_endpoint: SharedEndpointResolver<Params>) -> Self {
         Self {
             inner: resolve_endpoint,
@@ -109,7 +117,9 @@ pub(super) async fn orchestrate_endpoint(
 ) -> Result<(), BoxError> {
     trace!("orchestrating endpoint resolution");
 
-    let params = cfg.endpoint_resolver_params();
+    let params = cfg
+        .load::<EndpointResolverParams>()
+        .expect("endpoint resolver params must be set");
     let endpoint_prefix = cfg.load::<EndpointPrefix>();
     let request = ctx.request_mut().expect("set during serialization");
 

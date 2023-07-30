@@ -93,7 +93,7 @@ class SigV4SigningConfig(
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
             ServiceConfig.ConfigImpl -> {
-                if (serviceHasEventStream) {
+                if (runtimeMode.generateMiddleware && serviceHasEventStream) {
                     // enable the aws-sig-auth `sign-eventstream` feature
                     addDependency(AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).toSymbol())
                 }
@@ -110,7 +110,7 @@ class SigV4SigningConfig(
                 )
             }
             ServiceConfig.BuilderBuild -> {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));

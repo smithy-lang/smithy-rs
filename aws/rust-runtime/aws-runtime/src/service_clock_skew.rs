@@ -10,21 +10,18 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
+/// Amount of clock skew between the client and the service.
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct ServiceClockSkew {
+pub(crate) struct ServiceClockSkew {
     inner: Duration,
 }
 
 impl ServiceClockSkew {
     fn new(inner: Duration) -> Self {
         Self { inner }
-    }
-
-    pub fn skew(&self) -> Duration {
-        self.inner
     }
 }
 
@@ -38,11 +35,13 @@ impl From<ServiceClockSkew> for Duration {
     }
 }
 
+/// Interceptor that determines the clock skew between the client and service.
 #[derive(Debug, Default)]
 #[non_exhaustive]
-pub struct ServiceClockSkewInterceptor {}
+pub struct ServiceClockSkewInterceptor;
 
 impl ServiceClockSkewInterceptor {
+    /// Creates a new `ServiceClockSkewInterceptor`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -66,13 +65,22 @@ fn extract_time_sent_from_response(
 }
 
 impl Interceptor for ServiceClockSkewInterceptor {
+    fn name(&self) -> &'static str {
+        "ServiceClockSkewInterceptor"
+    }
+
     fn modify_before_deserialization(
         &self,
         ctx: &mut BeforeDeserializationInterceptorContextMut<'_>,
-        _runtime_components: &RuntimeComponents,
+        runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let time_received = DateTime::from(SystemTime::now());
+        let time_received = DateTime::from(
+            runtime_components
+                .time_source()
+                .ok_or("a time source is required (service clock skew)")?
+                .now(),
+        );
         let time_sent = match extract_time_sent_from_response(ctx) {
             Ok(time_sent) => time_sent,
             Err(e) => {

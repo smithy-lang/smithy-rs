@@ -5,10 +5,10 @@
 
 use crate::fs::Fs;
 use crate::package::discover_and_validate_package_batches;
+use crate::subcommand::fix_manifests::Versions;
 use anyhow::{anyhow, bail, Result};
 use semver::Version;
 use smithy_rs_tool_common::package::PackageCategory;
-use std::collections::BTreeMap;
 use std::path::Path;
 use tracing::info;
 
@@ -17,7 +17,7 @@ use tracing::info;
 /// For now, this validates:
 /// - `aws-smithy-` prefixed versions match `aws-` (NOT `aws-sdk-`) prefixed versions
 pub(super) fn validate_before_fixes(
-    versions: &BTreeMap<String, Version>,
+    versions: &Versions,
     disable_version_number_validation: bool,
 ) -> Result<()> {
     // Later when we only generate independently versioned SDK crates, this flag can become permanent.
@@ -30,7 +30,7 @@ pub(super) fn validate_before_fixes(
         .get("aws-smithy-types")
         .ok_or_else(|| anyhow!("`aws-smithy-types` crate missing"))?;
 
-    for (name, version) in versions {
+    for (name, version) in versions.published_crates() {
         let category = PackageCategory::from_package_name(name);
         if category == PackageCategory::SmithyRuntime || category == PackageCategory::AwsRuntime {
             confirm_version(name, expected_runtime_version, version)?;
@@ -63,14 +63,22 @@ pub(super) async fn validate_after_fixes(location: &Path) -> Result<()> {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::subcommand::fix_manifests::VersionWithMetadata;
+    use std::collections::BTreeMap;
     use std::str::FromStr;
 
-    fn versions(versions: &[(&'static str, &'static str)]) -> BTreeMap<String, Version> {
+    fn versions(versions: &[(&'static str, &'static str)]) -> Versions {
         let mut map = BTreeMap::new();
         for (name, version) in versions {
-            map.insert((*name).into(), Version::from_str(version).unwrap());
+            map.insert(
+                (*name).into(),
+                VersionWithMetadata {
+                    version: Version::from_str(version).unwrap(),
+                    publish: true,
+                },
+            );
         }
-        map
+        Versions(map)
     }
 
     #[track_caller]

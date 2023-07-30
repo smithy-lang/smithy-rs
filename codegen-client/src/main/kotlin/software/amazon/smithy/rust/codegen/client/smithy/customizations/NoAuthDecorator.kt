@@ -8,7 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -28,9 +28,9 @@ class NoAuthDecorator : ClientCodegenDecorator {
     override fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
-        baseAuthOptions: List<AuthOption>,
-    ): List<AuthOption> = baseAuthOptions +
-        AuthOption.StaticAuthOption(noAuthSchemeShapeId) {
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> = baseAuthSchemeOptions +
+        AuthSchemeOption.StaticAuthSchemeOption(noAuthSchemeShapeId) {
             rustTemplate(
                 "#{NO_AUTH_SCHEME_ID},",
                 "NO_AUTH_SCHEME_ID" to noAuthModule(codegenContext).resolve("NO_AUTH_SCHEME_ID"),

@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.withEnableUserConfigurableRuntimePlugins
 import software.amazon.smithy.rust.codegen.client.testutil.withSmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -95,13 +96,13 @@ internal class ServiceConfigGeneratorTest {
                 return when (section) {
                     ServiceConfig.ConfigStructAdditionalDocs -> emptySection
                     ServiceConfig.ConfigStruct -> writable {
-                        if (runtimeMode.defaultToMiddleware) {
+                        if (runtimeMode.generateMiddleware) {
                             rust("config_field: u64,")
                         }
                     }
 
                     ServiceConfig.ConfigImpl -> writable {
-                        if (runtimeMode.defaultToOrchestrator) {
+                        if (runtimeMode.generateOrchestrator) {
                             rustTemplate(
                                 """
                                 ##[allow(missing_docs)]
@@ -127,12 +128,12 @@ internal class ServiceConfigGeneratorTest {
                     }
 
                     ServiceConfig.BuilderStruct -> writable {
-                        if (runtimeMode.defaultToMiddleware) {
+                        if (runtimeMode.generateMiddleware) {
                             rust("config_field: Option<u64>")
                         }
                     }
                     ServiceConfig.BuilderImpl -> writable {
-                        if (runtimeMode.defaultToOrchestrator) {
+                        if (runtimeMode.generateOrchestrator) {
                             rustTemplate(
                                 """
                                 ##[allow(missing_docs)]
@@ -149,7 +150,7 @@ internal class ServiceConfigGeneratorTest {
                         }
                     }
                     ServiceConfig.BuilderBuild -> writable {
-                        if (runtimeMode.defaultToMiddleware) {
+                        if (runtimeMode.generateMiddleware) {
                             rust("config_field: self.config_field.unwrap_or_default(),")
                         }
                     }
@@ -161,19 +162,43 @@ internal class ServiceConfigGeneratorTest {
 
         val model = "namespace empty".asSmithyModel()
         val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
-        val codegenContext = testClientCodegenContext(model).withSmithyRuntimeMode(smithyRuntimeMode)
+        val codegenContext = testClientCodegenContext(model)
+            .withSmithyRuntimeMode(smithyRuntimeMode)
+            .withEnableUserConfigurableRuntimePlugins(true)
         val sut = ServiceConfigGenerator(codegenContext, listOf(ServiceCustomizer(codegenContext)))
         val symbolProvider = codegenContext.symbolProvider
         val project = TestWorkspace.testProject(symbolProvider)
         project.withModule(ClientRustModule.config) {
             sut.render(this)
-            if (smithyRuntimeMode.defaultToOrchestrator) {
+            if (smithyRuntimeMode.generateOrchestrator) {
                 unitTest(
                     "set_config_fields",
                     """
                     let builder = Config::builder().config_field(99);
                     let config = builder.build();
                     assert_eq!(config.config_field(), 99);
+                    """,
+                )
+
+                unitTest(
+                    "set_runtime_plugin",
+                    """
+                    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+                    use aws_smithy_types::config_bag::FrozenLayer;
+
+                    #[derive(Debug)]
+                    struct TestRuntimePlugin;
+
+                    impl RuntimePlugin for TestRuntimePlugin {
+                        fn config(&self) -> Option<FrozenLayer> {
+                            todo!("ExampleRuntimePlugin.config")
+                        }
+                    }
+
+                    let config = Config::builder()
+                        .runtime_plugin(TestRuntimePlugin)
+                        .build();
+                    assert_eq!(config.runtime_plugins.len(), 1);
                     """,
                 )
             } else {

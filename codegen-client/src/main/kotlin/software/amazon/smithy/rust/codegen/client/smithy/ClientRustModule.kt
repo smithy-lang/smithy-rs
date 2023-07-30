@@ -78,7 +78,7 @@ object ClientRustModule {
     val Endpoint = RustModule.public("endpoint")
 
     // TODO(enableNewSmithyRuntimeCleanup): Just use Config.endpoint directly and delete this function
-    fun endpoint(codegenContext: ClientCodegenContext): RustModule.LeafModule = if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+    fun endpoint(codegenContext: ClientCodegenContext): RustModule.LeafModule = if (codegenContext.smithyRuntimeMode.generateMiddleware) {
         Endpoint
     } else {
         Config.endpoint

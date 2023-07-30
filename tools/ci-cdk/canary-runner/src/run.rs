@@ -21,8 +21,8 @@ use std::{env, path::Path};
 
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use cloudwatch::model::StandardUnit;
-use s3::types::ByteStream;
+use cloudwatch::types::StandardUnit;
+use s3::primitives::ByteStream;
 use serde::Deserialize;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
@@ -202,7 +202,7 @@ pub async fn run(opt: RunArgs) -> Result<()> {
         .namespace("aws-sdk-rust-canary");
     for metric in metrics {
         request_builder = request_builder.metric_data(
-            cloudwatch::model::MetricDatum::builder()
+            cloudwatch::types::MetricDatum::builder()
                 .metric_name(metric.0)
                 .value(metric.1)
                 .timestamp(SystemTime::now().into())
@@ -337,7 +337,7 @@ async fn create_lambda_fn(
     code_s3_bucket: &str,
     test_s3_bucket: &str,
 ) -> Result<()> {
-    use lambda::model::*;
+    use lambda::types::*;
 
     let env_builder = match expected_speech_text_by_transcribe {
         Some(expected_speech_text_by_transcribe) => Environment::builder()
@@ -394,8 +394,8 @@ async fn create_lambda_fn(
 }
 
 async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Result<()> {
-    use lambda::model::*;
-    use lambda::types::Blob;
+    use lambda::primitives::Blob;
+    use lambda::types::*;
 
     let response = lambda_client
         .invoke()

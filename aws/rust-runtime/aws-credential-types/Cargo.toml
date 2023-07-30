@@ -14,13 +14,13 @@ test-util = []
 [dependencies]
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-fastrand = "1.4.0"
+fastrand = "2.0.0"
 tokio = { version = "1.23.1", features = ["sync"] }
 tracing = "0.1"
 zeroize = "1"
 
 [dev-dependencies]
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio", "test-util"] }
 
 # used to test compatibility
 async-trait = "0.1.51"

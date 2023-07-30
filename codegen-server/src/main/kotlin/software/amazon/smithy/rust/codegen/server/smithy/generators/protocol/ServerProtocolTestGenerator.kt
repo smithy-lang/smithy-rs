@@ -921,15 +921,6 @@ class ServerProtocolTestGenerator(
                 ).asObjectNode().get(),
             ).build()
 
-        private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#InvalidGreeting").build()
-
-        private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
-
-        private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
-
         // TODO(https://github.com/awslabs/smithy/issues/1506)
         private fun fixRestJsonMalformedPatternReDOSString(testCase: HttpMalformedRequestTestCase): HttpMalformedRequestTestCase {
             val brokenResponse = testCase.response
@@ -962,12 +953,7 @@ class ServerProtocolTestGenerator(
         )
 
         private val BrokenResponseTests: Map<Pair<String, String>, KFunction1<HttpResponseTestCase, HttpResponseTestCase>> =
-            // TODO(https://github.com/awslabs/smithy/issues/1494)
-            mapOf(
-                Pair(RestJson, "RestJsonInvalidGreetingError") to ::fixRestJsonInvalidGreetingError,
-                Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
-                Pair(RestJson, "RestJsonComplexErrorWithNoMessage") to ::fixRestJsonComplexErrorWithNoMessage,
-            )
+            mapOf()
 
         private val BrokenMalformedRequestTests: Map<Pair<String, String>, KFunction1<HttpMalformedRequestTestCase, HttpMalformedRequestTestCase>> =
             // TODO(https://github.com/awslabs/smithy/issues/1506)

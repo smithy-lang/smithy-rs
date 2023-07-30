@@ -34,12 +34,8 @@ def main(skip_generation=False):
     os.chdir(sdk_directory)
 
     failed = False
-    # TODO(enableNewSmithyRuntimeLaunch): Remove the deny list below
     deny_list = [
-        "aws-runtime",
-        "aws-runtime-api",
-        "aws-smithy-runtime",
-        "aws-smithy-runtime-api",
+        # add crate names here to exclude them from the semver checks
     ]
     for path in os.listdir():
         eprint(f'checking {path}...', end='')

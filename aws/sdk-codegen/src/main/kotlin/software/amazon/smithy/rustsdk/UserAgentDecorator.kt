@@ -154,7 +154,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         override fun section(section: ServiceConfig): Writable =
             when (section) {
                 is ServiceConfig.BuilderStruct -> writable {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate("app_name: #{Option}<#{AppName}>,", *codegenScope)
                     }
                 }
@@ -174,7 +174,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// Sets the name of the app that is using the client.
@@ -206,7 +206,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 }
 
                 is ServiceConfig.BuilderBuild -> writable {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
                     } else {
                         rust("app_name: self.app_name,")
@@ -214,13 +214,13 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 }
 
                 is ServiceConfig.ConfigStruct -> writable {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate("app_name: #{Option}<#{AppName}>,", *codegenScope)
                     }
                 }
 
                 is ServiceConfig.ConfigImpl -> writable {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// Returns the name of the app that is using the client, if it was provided.

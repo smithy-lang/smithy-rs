@@ -51,7 +51,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
         writable {
             when (section) {
                 is ServiceConfig.ConfigStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate(
                             """
                             retry_config: #{Option}<#{RetryConfig}>,
@@ -64,7 +64,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                 }
 
                 is ServiceConfig.ConfigImpl -> {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// Return a reference to the retry configuration contained in this config, if any.
@@ -117,7 +117,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                 }
 
                 is ServiceConfig.BuilderStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate(
                             """
                             retry_config: #{Option}<#{RetryConfig}>,
@@ -167,7 +167,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
@@ -245,7 +245,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
@@ -313,7 +313,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
@@ -335,7 +335,7 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         )
                     }
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         Attribute.DocHidden.render(this)
                         rustTemplate(
                             """
@@ -367,11 +367,19 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                 }
 
                 is ServiceConfig.BuilderBuild -> {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
-                            let retry_partition = layer.load::<#{RetryPartition}>().cloned().unwrap_or_else(|| #{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
-                            let retry_config = layer.load::<#{RetryConfig}>().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+                            if layer.load::<#{RetryConfig}>().is_none() {
+                                layer.store_put(#{RetryConfig}::disabled());
+                            }
+                            let retry_config = layer.load::<#{RetryConfig}>().expect("set to default above").clone();
+
+                            if layer.load::<#{RetryPartition}>().is_none() {
+                                layer.store_put(#{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
+                            }
+                            let retry_partition = layer.load::<#{RetryPartition}>().expect("set to default above").clone();
+
                             if retry_config.has_retry() {
                                 #{debug}!("using retry strategy with partition '{}'", retry_partition);
                             }

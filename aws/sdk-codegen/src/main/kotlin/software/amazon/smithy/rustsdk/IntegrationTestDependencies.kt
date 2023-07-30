@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
+import software.amazon.smithy.rustsdk.AwsCargoDependency.awsRuntime
 import java.nio.file.Files
 import java.nio.file.Paths
 import kotlin.io.path.absolute
@@ -83,7 +84,7 @@ class IntegrationTestDependencies(
                 val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                    .copy(features = setOf("test-util", "wiremock"), scope = DependencyScope.Dev)
                 val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
                 addDependency(smithyAsync)
@@ -99,6 +100,7 @@ class IntegrationTestDependencies(
                 if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                     addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
                     addDependency(smithyRuntimeApi(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
+                    addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
                 }
             }
             if (hasBenches) {
@@ -148,12 +150,5 @@ class S3TestDependencies(private val codegenContext: ClientCodegenContext) : Lib
             addDependency(TempFile)
             addDependency(TracingAppender)
             addDependency(TracingTest)
-
-            // TODO(enableNewSmithyRuntimeCleanup): These additional dependencies may not be needed anymore when removing this flag
-            // depending on if the sra-test is kept around or not.
-            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                addDependency(CargoDependency.smithyRuntime(codegenContext.runtimeConfig).toDevDependency())
-                addDependency(CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toDevDependency())
-            }
         }
 }

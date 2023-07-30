@@ -189,19 +189,19 @@ private class ApiKeyConfigCustomization(codegenContext: ClientCodegenContext) : 
                 )
             }
             is ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rust("layer.store_or_unset(self.api_key);")
                 } else {
                     rust("api_key: self.api_key,")
                 }
             }
             is ServiceConfig.ConfigStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("api_key: #{Option}<#{ApiKey}>,", *codegenScope)
                 }
             }
             is ServiceConfig.ConfigImpl -> writable {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Returns API key used by the client, if it was provided.

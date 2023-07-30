@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
@@ -85,7 +85,7 @@ open class OperationGenerator(
     private fun renderOperationStruct(
         operationWriter: RustWriter,
         operationShape: OperationShape,
-        authOptions: List<AuthOption>,
+        authSchemeOptions: List<AuthSchemeOption>,
         operationCustomizations: List<OperationCustomization>,
     ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
@@ -111,7 +111,8 @@ open class OperationGenerator(
             val codegenScope = arrayOf(
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
-                "Input" to symbolProvider.toSymbol(operationShape.inputShape(model)),
+                "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
+                "Input" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Input"),
                 "Operation" to symbolProvider.toSymbol(operationShape),
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
@@ -129,28 +130,26 @@ open class OperationGenerator(
                     """
                     pub(crate) async fn orchestrate(
                         runtime_plugins: &#{RuntimePlugins},
-                        input: #{Input},
+                        input: #{ConcreteInput},
                     ) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                         let map_err = |err: #{SdkError}<#{Error}, #{HttpResponse}>| {
                             err.map_service_error(|err| {
-                                #{TypedBox}::<#{OperationError}>::assume_from(err.into())
-                                    .expect("correct error type")
-                                    .unwrap()
+                                err.downcast::<#{OperationError}>().expect("correct error type")
                             })
                         };
                         let context = Self::orchestrate_with_stop_point(runtime_plugins, input, #{StopPoint}::None)
                             .await
                             .map_err(map_err)?;
                         let output = context.finalize().map_err(map_err)?;
-                        #{Ok}(#{TypedBox}::<#{OperationOutput}>::assume_from(output).expect("correct output type").unwrap())
+                        #{Ok}(output.downcast::<#{OperationOutput}>().expect("correct output type"))
                     }
 
                     pub(crate) async fn orchestrate_with_stop_point(
                         runtime_plugins: &#{RuntimePlugins},
-                        input: #{Input},
+                        input: #{ConcreteInput},
                         stop_point: #{StopPoint},
                     ) -> #{Result}<#{InterceptorContext}, #{SdkError}<#{Error}, #{HttpResponse}>> {
-                        let input = #{TypedBox}::new(input).erase();
+                        let input = #{Input}::erase(input);
                         #{invoke_with_stop_point}(
                             ${codegenContext.serviceShape.sdkId().dq()},
                             ${operationName.dq()},
@@ -167,7 +166,7 @@ open class OperationGenerator(
                     ) -> #{RuntimePlugins} {
                         let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
                         #{additional_runtime_plugins}
-                        if let Some(config_override) = config_override {
+                        if let #{Some}(config_override) = config_override {
                             for plugin in config_override.runtime_plugins.iter().cloned() {
                                 runtime_plugins = runtime_plugins.with_operation_plugin(plugin);
                             }
@@ -180,7 +179,6 @@ open class OperationGenerator(
                     """,
                     *codegenScope,
                     "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
-                    "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
                     "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
                     "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::error::OrchestratorError"),
                     "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
@@ -213,7 +211,7 @@ open class OperationGenerator(
                 operationWriter,
                 operationShape,
                 operationName,
-                authOptions,
+                authSchemeOptions,
                 operationCustomizations,
             )
 

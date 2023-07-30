@@ -6,10 +6,10 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 // ./gradlew codegen-client:test --tests software.amazon.smithy.rust.codegen.client.HttpVersionListGeneratorTest --info
 // ```
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete this test (incomplete http version support wasn't ported to orchestrator)
 internal class HttpVersionListGeneratorTest {
     @Test
     fun `http version list integration test (no preferred version)`() {
@@ -44,7 +45,7 @@ internal class HttpVersionListGeneratorTest {
                 greeting: String
             }
         """.asSmithyModel()
-        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("http_version_list") {
                 Attribute.TokioTest.render(this)
@@ -95,7 +96,7 @@ internal class HttpVersionListGeneratorTest {
                 greeting: String
             }
         """.asSmithyModel()
-        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("validate_http") {
                 Attribute.TokioTest.render(this)
@@ -161,7 +162,7 @@ internal class HttpVersionListGeneratorTest {
 
         clientIntegrationTest(
             model,
-            IntegrationTestParams(addModuleToEventStreamAllowList = true),
+            TestCodegenSettings.middlewareModeTestParams.copy(addModuleToEventStreamAllowList = true),
         ) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("validate_eventstream_http") {

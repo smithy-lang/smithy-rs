@@ -63,6 +63,10 @@ class MetadataCustomizationTest {
                         );
 
                         impl #{Interceptor} for ExtractMetadataInterceptor {
+                            fn name(&self) -> &'static str {
+                                "ExtractMetadataInterceptor"
+                            }
+
                             fn modify_before_signing(
                                 &self,
                                 _context: &mut #{BeforeTransmitInterceptorContextMut}<'_>,

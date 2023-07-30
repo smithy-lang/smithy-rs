@@ -39,7 +39,7 @@ class DisabledAuthDecorator() : ClientCodegenDecorator {
         val optionalOperations = optionalAuth[service.id]!!
         return ModelTransformer.create().mapShapes(model) {
             if (optionalOperations.contains(it.id) && it is OperationShape) {
-                if (settings.codegenConfig.enableNewSmithyRuntime.defaultToOrchestrator) {
+                if (settings.codegenConfig.enableNewSmithyRuntime.generateOrchestrator) {
                     it.toBuilder().addTrait(OptionalAuthTrait()).build()
                 } else {
                     // In middleware, having an empty @auth trait completely disabled

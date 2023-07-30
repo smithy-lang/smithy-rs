@@ -16,6 +16,7 @@ pub mod body;
 pub(crate) mod error;
 pub mod extension;
 pub mod instrumentation;
+pub mod layer;
 pub mod operation;
 pub mod plugin;
 #[doc(hidden)]
