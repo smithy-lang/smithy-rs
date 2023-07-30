@@ -20,7 +20,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
-import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -99,19 +98,7 @@ class BaseSymbolMetadataProvider(
 
     override fun memberMeta(memberShape: MemberShape): RustMetadata =
         when (val container = model.expectShape(memberShape.container)) {
-            is StructureShape -> {
-                // TODO(https://github.com/awslabs/smithy-rs/issues/943): Once streaming accessors are usable,
-                // then also make streaming members `#[doc(hidden)]`
-                if (memberShape.getMemberTrait(model, StreamingTrait::class.java).isPresent) {
-                    RustMetadata(visibility = Visibility.PUBLIC)
-                } else {
-                    RustMetadata(
-                        // At some point, visibility _may_ be made `PRIVATE`, so make these `#[doc(hidden)]` for now.
-                        visibility = Visibility.PUBLIC,
-                        additionalAttributes = listOf(Attribute.DocHidden),
-                    )
-                }
-            }
+            is StructureShape -> RustMetadata(visibility = Visibility.PUBLIC)
 
             is UnionShape, is CollectionShape, is MapShape -> RustMetadata(visibility = Visibility.PUBLIC)
 

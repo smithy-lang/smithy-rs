@@ -7,12 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
 
 /**
  * Decorator that adds the `serde-serialize` and `serde-deserialize` features.
@@ -29,13 +24,7 @@ class SerdeDecorator : ClientCodegenDecorator {
         rustCrate.mergeFeature(feature("serde-deserialize"))
     }
 
-    override fun libRsCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations + SerdeDocGenerator(codegenContext)
-}
-
-class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
+    // I initially tried to implement with LibRsCustomization but it didn't work some how.
     companion object {
         const val SerdeInfoText = """## How to enable `Serialize` and `Deserialize`
 
@@ -57,12 +46,5 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
             compilation will fail with warning.
 
         """
-    }
-    override fun section(section: LibRsSection): Writable {
-        return if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.UnstableFeature) {
-            writable { SerdeInfoText.trimIndent() }
-        } else {
-            emptySection
-        }
     }
 }
