@@ -26,6 +26,7 @@ jobs:
         env:
           RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
         run: |
+          for pkg in docker.io docker-doc docker-compose podman-docker containerd runc; do sudo apt-get -y remove $pkg || true; done
           sudo apt -y install gcc make python3-pip docker docker.io nginx git
           pip3 install certbuilder crlbuilder
       - name: Checkout smithy-rs
