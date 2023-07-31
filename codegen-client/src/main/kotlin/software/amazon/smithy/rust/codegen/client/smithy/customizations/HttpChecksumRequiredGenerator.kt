@@ -40,7 +40,7 @@ class HttpChecksumRequiredGenerator(
             is OperationSection.AdditionalRuntimePlugins -> writable {
                 section.addOperationRuntimePlugin(this) {
                     rustTemplate(
-                        "#{HttpChecksumRequiredRuntimePlugin}",
+                        "#{HttpChecksumRequiredRuntimePlugin}::new()",
                         "HttpChecksumRequiredRuntimePlugin" to
                             InlineDependency.forRustFile(
                                 RustModule.pubCrate("client_http_checksum_required", parent = ClientRustModule.root),

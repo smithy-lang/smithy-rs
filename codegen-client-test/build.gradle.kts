@@ -15,7 +15,7 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "middleware"
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
 val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
@@ -113,6 +113,8 @@ val allCodegenTests = listOf(
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+
+tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")

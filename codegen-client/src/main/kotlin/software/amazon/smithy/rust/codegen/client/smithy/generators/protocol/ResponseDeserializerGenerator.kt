@@ -44,10 +44,9 @@ class ResponseDeserializerGenerator(
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
-            "ResponseDeserializer" to orchestrator.resolve("ResponseDeserializer"),
+            "ResponseDeserializer" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::ser_de::ResponseDeserializer"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
             "type_erase_result" to typeEraseResult(),
         )
@@ -162,8 +161,8 @@ class ResponseDeserializerGenerator(
                 O: ::std::fmt::Debug + #{Send} + #{Sync} + 'static,
                 E: ::std::error::Error + std::fmt::Debug + #{Send} + #{Sync} + 'static,
             {
-                result.map(|output| #{TypedBox}::new(output).erase())
-                    .map_err(|error| #{TypedBox}::new(error).erase_error())
+                result.map(|output| #{Output}::erase(output))
+                    .map_err(|error| #{Error}::erase(error))
                     .map_err(#{Into}::into)
             }
             """,

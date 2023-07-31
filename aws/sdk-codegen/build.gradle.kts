@@ -87,12 +87,11 @@ if (isTestingEnabled.toBoolean()) {
     tasks.test {
         useJUnitPlatform()
         testLogging {
-            events("passed", "skipped", "failed")
+            events("failed")
             exceptionFormat = TestExceptionFormat.FULL
             showCauses = true
             showExceptions = true
             showStackTraces = true
-            showStandardStreams = true
         }
     }
 

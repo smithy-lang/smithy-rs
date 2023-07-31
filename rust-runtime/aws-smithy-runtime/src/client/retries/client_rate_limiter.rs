@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::debug;
 
-/// A [RuntimePlugin] to provide a client rate limiter, usable by a retry strategy.
+/// A [`RuntimePlugin`] to provide a client rate limiter, usable by a retry strategy.
 #[non_exhaustive]
 #[derive(Debug)]
 pub struct ClientRateLimiterRuntimePlugin {
@@ -24,6 +24,7 @@ pub struct ClientRateLimiterRuntimePlugin {
 }
 
 impl ClientRateLimiterRuntimePlugin {
+    /// Create a new [`ClientRateLimiterRuntimePlugin`].
     pub fn new(seconds_since_unix_epoch: f64) -> Self {
         Self {
             rate_limiter: ClientRateLimiter::new(seconds_since_unix_epoch),
@@ -65,6 +66,7 @@ const BETA: f64 = 0.7;
 /// Controls how aggressively we scale up after being throttled
 const SCALE_CONSTANT: f64 = 0.4;
 
+/// Rate limiter for adaptive retry.
 #[derive(Clone, Debug)]
 pub struct ClientRateLimiter {
     inner: Arc<Mutex<Inner>>,
@@ -107,6 +109,7 @@ impl Storable for ClientRateLimiter {
 }
 
 impl ClientRateLimiter {
+    /// Creates a new [`ClientRateLimiter`].
     pub fn new(seconds_since_unix_epoch: f64) -> Self {
         Self::builder()
             .tokens_retrieved_per_second(MIN_FILL_RATE)
@@ -298,11 +301,8 @@ mod tests {
     use super::{cubic_throttle, ClientRateLimiter};
     use crate::client::retries::client_rate_limiter::RequestReason;
     use approx::assert_relative_eq;
-    use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
+    use aws_smithy_async::rt::sleep::AsyncSleep;
     use aws_smithy_async::test_util::instant_time_and_sleep;
-    use aws_smithy_async::time::SharedTimeSource;
-    use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
-    use aws_smithy_types::config_bag::ConfigBag;
     use std::time::{Duration, SystemTime};
 
     const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -325,12 +325,6 @@ mod tests {
 
     #[tokio::test]
     async fn throttling_is_enabled_once_throttling_error_is_received() {
-        let mut cfg = ConfigBag::base();
-        let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
-        cfg.interceptor_state()
-            .set_request_time(SharedTimeSource::new(time_source));
-        cfg.interceptor_state()
-            .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl)));
         let rate_limiter = ClientRateLimiter::builder()
             .previous_time_bucket(0.0)
             .time_of_last_throttle(0.0)
@@ -349,13 +343,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_calculated_rate_with_successes() {
-        let mut cfg = ConfigBag::base();
-        let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
-        sleep_impl.sleep(Duration::from_secs(5)).await;
-        cfg.interceptor_state()
-            .set_request_time(SharedTimeSource::new(time_source));
-        cfg.interceptor_state()
-            .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
         let rate_limiter = ClientRateLimiter::builder()
             .time_of_last_throttle(5.0)
             .tokens_retrieved_per_second_at_time_of_last_throttle(10.0)
@@ -414,13 +401,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_calculated_rate_with_throttles() {
-        let mut cfg = ConfigBag::base();
-        let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
-        sleep_impl.sleep(Duration::from_secs(5)).await;
-        cfg.interceptor_state()
-            .set_request_time(SharedTimeSource::new(time_source));
-        cfg.interceptor_state()
-            .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
         let rate_limiter = ClientRateLimiter::builder()
             .tokens_retrieved_per_second_at_time_of_last_throttle(10.0)
             .time_of_last_throttle(5.0)
@@ -496,12 +476,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_sending_rates() {
-        let mut cfg = ConfigBag::base();
-        let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
-        cfg.interceptor_state()
-            .set_request_time(SharedTimeSource::new(time_source));
-        cfg.interceptor_state()
-            .set_sleep_impl(Some(SharedAsyncSleep::new(sleep_impl.clone())));
+        let (_, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
         let rate_limiter = ClientRateLimiter::builder().build();
 
         struct Attempt {

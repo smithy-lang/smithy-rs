@@ -10,13 +10,11 @@ use aws_sigv4::http_request::{
 };
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
-    AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpRequestSigner,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
 };
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
-use aws_smithy_runtime_api::client::identity::{
-    Identity, IdentityResolvers, SharedIdentityResolver,
-};
+use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::Document;
 use aws_types::region::{Region, SigningRegion};
@@ -81,30 +79,30 @@ impl StdError for SigV4SigningError {
 
 /// SigV4 auth scheme.
 #[derive(Debug, Default)]
-pub struct SigV4HttpAuthScheme {
-    signer: SigV4HttpRequestSigner,
+pub struct SigV4AuthScheme {
+    signer: SigV4Signer,
 }
 
-impl SigV4HttpAuthScheme {
-    /// Creates a new `SigV4HttpAuthScheme`.
+impl SigV4AuthScheme {
+    /// Creates a new `SigV4AuthScheme`.
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl HttpAuthScheme for SigV4HttpAuthScheme {
+impl AuthScheme for SigV4AuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         SCHEME_ID
     }
 
     fn identity_resolver(
         &self,
-        identity_resolvers: &IdentityResolvers,
+        identity_resolvers: &dyn GetIdentityResolver,
     ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -176,11 +174,11 @@ impl Storable for SigV4OperationSigningConfig {
     type Storer = StoreReplace<Self>;
 }
 
-/// SigV4 HTTP request signer.
+/// SigV4 signer.
 #[derive(Debug, Default)]
-pub struct SigV4HttpRequestSigner;
+pub struct SigV4Signer;
 
-impl SigV4HttpRequestSigner {
+impl SigV4Signer {
     /// Creates a new signer instance.
     pub fn new() -> Self {
         Self
@@ -293,7 +291,7 @@ impl SigV4HttpRequestSigner {
         endpoint_config: AuthSchemeEndpointConfig<'_>,
     ) -> Result<EndpointAuthSchemeConfig, SigV4SigningError> {
         let (mut signing_region_override, mut signing_service_override) = (None, None);
-        if let Some(config) = endpoint_config.config().and_then(Document::as_object) {
+        if let Some(config) = endpoint_config.as_document().and_then(Document::as_object) {
             use SigV4SigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
             signing_region_override = match config.get("signingRegion") {
                 Some(Document::String(s)) => Some(SigningRegion::from(Region::new(s.clone()))),
@@ -313,17 +311,18 @@ impl SigV4HttpRequestSigner {
     }
 }
 
-impl HttpRequestSigner for SigV4HttpRequestSigner {
-    fn sign_request(
+impl Signer for SigV4Signer {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        runtime_components: &RuntimeComponents,
         config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let operation_config =
             Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-        let request_time = config_bag.request_time().unwrap_or_default().now();
+        let request_time = runtime_components.time_source().unwrap_or_default().now();
 
         let credentials = if let Some(creds) = identity.data::<Credentials>() {
             creds
@@ -373,7 +372,7 @@ impl HttpRequestSigner for SigV4HttpRequestSigner {
             use event_stream::SigV4MessageSigner;
 
             if let Some(signer_sender) = config_bag.load::<DeferredSignerSender>() {
-                let time_source = config_bag.request_time().unwrap_or_default();
+                let time_source = runtime_components.time_source().unwrap_or_default();
                 signer_sender
                     .send(Box::new(SigV4MessageSigner::new(
                         _signature,
@@ -551,15 +550,13 @@ mod tests {
                 payload_override: None,
             },
         };
-        SigV4HttpRequestSigner::signing_params(settings, &credentials, &operation_config, now)
-            .unwrap();
+        SigV4Signer::signing_params(settings, &credentials, &operation_config, now).unwrap();
         assert!(!logs_contain(EXPIRATION_WARNING));
 
         let mut settings = SigningSettings::default();
         settings.expires_in = Some(creds_expire_in + Duration::from_secs(10));
 
-        SigV4HttpRequestSigner::signing_params(settings, &credentials, &operation_config, now)
-            .unwrap();
+        SigV4Signer::signing_params(settings, &credentials, &operation_config, now).unwrap();
         assert!(logs_contain(EXPIRATION_WARNING));
     }
 
@@ -584,11 +581,10 @@ mod tests {
             );
             out
         });
-        let config = AuthSchemeEndpointConfig::new(Some(&config));
+        let config = AuthSchemeEndpointConfig::from(Some(&config));
 
         let cfg = ConfigBag::of_layers(vec![layer]);
-        let result =
-            SigV4HttpRequestSigner::extract_operation_config(config, &cfg).expect("success");
+        let result = SigV4Signer::extract_operation_config(config, &cfg).expect("success");
 
         assert_eq!(
             result.region,
@@ -612,8 +608,7 @@ mod tests {
         let cfg = ConfigBag::of_layers(vec![layer]);
         let config = AuthSchemeEndpointConfig::empty();
 
-        let result =
-            SigV4HttpRequestSigner::extract_operation_config(config, &cfg).expect("success");
+        let result = SigV4Signer::extract_operation_config(config, &cfg).expect("success");
 
         assert_eq!(
             result.region,

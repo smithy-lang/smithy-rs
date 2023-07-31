@@ -36,4 +36,5 @@ data class ClientCodegenContext(
     model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
 ) {
     val smithyRuntimeMode: SmithyRuntimeMode get() = settings.codegenConfig.enableNewSmithyRuntime
+    val enableUserConfigurableRuntimePlugins: Boolean get() = settings.codegenConfig.enableUserConfigurableRuntimePlugins
 }

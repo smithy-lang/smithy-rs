@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/// Smithy auth scheme implementations.
 pub mod auth;
 
 /// Smithy code related to connectors and connections.
@@ -13,6 +14,9 @@ pub mod auth;
 /// "Connections" refers to the actual transport layer implementation of the connector.
 /// By default, the orchestrator uses a connector provided by `hyper`.
 pub mod connectors;
+
+/// Utility to simplify config building for config and config overrides.
+pub mod config_override;
 
 /// The client orchestrator implementation
 pub mod orchestrator;

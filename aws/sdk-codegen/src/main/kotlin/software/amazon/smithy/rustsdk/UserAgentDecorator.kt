@@ -104,7 +104,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
             when (section) {
-                is ServiceRuntimePluginSection.RegisterInterceptor -> {
+                is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                     section.registerInterceptor(runtimeConfig, this) {
                         rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
                     }
@@ -154,7 +154,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         override fun section(section: ServiceConfig): Writable =
             when (section) {
                 is ServiceConfig.BuilderStruct -> writable {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate("app_name: #{Option}<#{AppName}>,", *codegenScope)
                     }
                 }
@@ -174,7 +174,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// Sets the name of the app that is using the client.
@@ -182,7 +182,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                             /// This _optional_ name is used to identify the application in the user agent that
                             /// gets sent along with requests.
                             pub fn set_app_name(&mut self, app_name: #{Option}<#{AppName}>) -> &mut Self {
-                                self.inner.store_or_unset(app_name);
+                                self.config.store_or_unset(app_name);
                                 self
                             }
                             """,
@@ -206,7 +206,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 }
 
                 is ServiceConfig.BuilderBuild -> writable {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
                     } else {
                         rust("app_name: self.app_name,")
@@ -214,13 +214,13 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 }
 
                 is ServiceConfig.ConfigStruct -> writable {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate("app_name: #{Option}<#{AppName}>,", *codegenScope)
                     }
                 }
 
                 is ServiceConfig.ConfigImpl -> writable {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// Returns the name of the app that is using the client, if it was provided.
@@ -228,7 +228,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                             /// This _optional_ name is used to identify the application in the user agent that
                             /// gets sent along with requests.
                             pub fn app_name(&self) -> #{Option}<&#{AppName}> {
-                               self.inner.load::<#{AppName}>()
+                               self.config.load::<#{AppName}>()
                             }
                             """,
                             *codegenScope,

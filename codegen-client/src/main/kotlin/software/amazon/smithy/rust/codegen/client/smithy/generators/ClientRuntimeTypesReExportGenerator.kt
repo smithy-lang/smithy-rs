@@ -28,10 +28,23 @@ class ClientRuntimeTypesReExportGenerator(
                 """
                 pub use #{ConfigBag};
                 pub use #{Interceptor};
+                pub use #{SharedInterceptor};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
                 "Interceptor" to RuntimeType.interceptor(rc),
+                "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
             )
+
+            if (codegenContext.enableUserConfigurableRuntimePlugins) {
+                rustTemplate(
+                    """
+                    pub use #{runtime_plugin}::{RuntimePlugin, SharedRuntimePlugin};
+                    pub use #{config_bag}::FrozenLayer;
+                    """,
+                    "runtime_plugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin"),
+                    "config_bag" to RuntimeType.smithyTypes(rc).resolve("config_bag"),
+                )
+            }
         }
         rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
             rustTemplate(

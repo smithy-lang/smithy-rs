@@ -31,17 +31,17 @@ fun stubConfigCustomization(name: String, codegenContext: ClientCodegenContext):
         override fun section(section: ServiceConfig): Writable = writable {
             when (section) {
                 ServiceConfig.ConfigStruct -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         rust("_$name: u64,")
                     }
                 }
                 ServiceConfig.ConfigImpl -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                    if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             ##[allow(missing_docs)]
                             pub fn $name(&self) -> u64 {
-                                self.inner.load::<#{T}>().map(|u| u.0).unwrap()
+                                self.config.load::<#{T}>().map(|u| u.0).unwrap()
                             }
                             """,
                             "T" to configParamNewtype(
@@ -61,17 +61,17 @@ fun stubConfigCustomization(name: String, codegenContext: ClientCodegenContext):
                     }
                 }
                 ServiceConfig.BuilderStruct -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         rust("_$name: Option<u64>,")
                     }
                 }
                 ServiceConfig.BuilderImpl -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                    if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
                             /// docs!
                             pub fn $name(mut self, $name: u64) -> Self {
-                                self.inner.store_put(#{T}($name));
+                                self.config.store_put(#{T}($name));
                                 self
                             }
                             """,
@@ -93,7 +93,7 @@ fun stubConfigCustomization(name: String, codegenContext: ClientCodegenContext):
                     }
                 }
                 ServiceConfig.BuilderBuild -> {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         rust(
                             """
                             _$name: self._$name.unwrap_or(123),
@@ -129,9 +129,6 @@ fun stubConfigProject(codegenContext: ClientCodegenContext, customization: Confi
     val generator = ServiceConfigGenerator(codegenContext, customizations = customizations.toList())
     project.withModule(ClientRustModule.config) {
         generator.render(this)
-        if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
-            generator.renderRuntimePluginImplForSelf(this)
-        }
         unitTest(
             "config_send_sync",
             """

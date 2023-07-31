@@ -4,33 +4,35 @@
  */
 
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::Input;
-use aws_smithy_runtime_api::client::orchestrator::SharedRequestSerializer;
-use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, RequestSerializer};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_runtime_api::client::ser_de::{RequestSerializer, SharedRequestSerializer};
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 use std::sync::Mutex;
 
+/// Test [`RequestSerializer`] that returns a canned request.
 #[derive(Default, Debug)]
 pub struct CannedRequestSerializer {
     inner: Mutex<Option<Result<HttpRequest, BoxError>>>,
 }
 
 impl CannedRequestSerializer {
+    /// Create a new [`CannedRequestSerializer`] with a successful canned request.
     pub fn success(request: HttpRequest) -> Self {
         Self {
             inner: Mutex::new(Some(Ok(request))),
         }
     }
 
+    /// Create a new [`CannedRequestSerializer`] with a canned error.
     pub fn failure(error: BoxError) -> Self {
         Self {
             inner: Mutex::new(Some(Err(error))),
         }
     }
 
-    pub fn take(&self) -> Option<Result<HttpRequest, BoxError>> {
+    fn take(&self) -> Option<Result<HttpRequest, BoxError>> {
         match self.inner.lock() {
             Ok(mut guard) => guard.take(),
             Err(_) => None,
@@ -52,7 +54,7 @@ impl RequestSerializer for CannedRequestSerializer {
 impl RuntimePlugin for CannedRequestSerializer {
     fn config(&self) -> Option<FrozenLayer> {
         let mut cfg = Layer::new("CannedRequest");
-        cfg.set_request_serializer(SharedRequestSerializer::new(Self {
+        cfg.store_put(SharedRequestSerializer::new(Self {
             inner: Mutex::new(self.take()),
         }));
         Some(cfg.freeze())

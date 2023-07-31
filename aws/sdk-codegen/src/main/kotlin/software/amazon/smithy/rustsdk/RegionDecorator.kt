@@ -131,7 +131,7 @@ class RegionDecorator : ClientCodegenDecorator {
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
                         Builtins.REGION.builtIn -> writable {
-                            if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                                 rustTemplate(
                                     "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
                                     "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
@@ -171,17 +171,17 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.ConfigStruct -> {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("pub(crate) region: #{Option}<#{Region}>,", *codegenScope)
                 }
             }
             ServiceConfig.ConfigImpl -> {
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Returns the AWS region, if it was provided.
                         pub fn region(&self) -> #{Option}<&#{Region}> {
-                            self.inner.load::<#{Region}>()
+                            self.config.load::<#{Region}>()
                         }
                         """,
                         *codegenScope,
@@ -200,7 +200,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
             }
 
             ServiceConfig.BuilderStruct -> {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rustTemplate("pub(crate) region: #{Option}<#{Region}>,", *codegenScope)
                 }
             }
@@ -227,12 +227,12 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                     *codegenScope,
                 )
 
-                if (runtimeMode.defaultToOrchestrator) {
+                if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
                         /// Sets the AWS region to use when making requests.
                         pub fn set_region(&mut self, region: #{Option}<#{Region}>) -> &mut Self {
-                            self.inner.store_or_unset(region);
+                            self.config.store_or_unset(region);
                             self
                         }
                         """,
@@ -253,7 +253,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
             }
 
             ServiceConfig.BuilderBuild -> {
-                if (runtimeMode.defaultToMiddleware) {
+                if (runtimeMode.generateMiddleware) {
                     rust("region: self.region,")
                 }
             }

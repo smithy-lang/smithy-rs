@@ -1,0 +1,24 @@
+[package]
+name = "orchestrator-vs-middleware"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
+aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
+aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "wiremock"] }
+criterion = { version = "0.4", features = ["async_tokio"] }
+http = "0.2.3"
+middleware-s3 = { version = "0.28", package = "aws-sdk-s3", features = ["test-util"] }
+middleware-smithy-client = { version = "0.55.3", package = "aws-smithy-client", features = ["test-util", "rustls"] }
+tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
+
+[profile.release]
+debug = 1
+
+[[bench]]
+name = "middleware_vs_orchestrator"
+harness = false

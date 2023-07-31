@@ -39,6 +39,7 @@ impl ReloadEndpoint {
     pub async fn reload_once(&self) {
         match (self.loader)().await {
             Ok((endpoint, expiry)) => {
+                tracing::debug!("caching resolved endpoint: {:?}", (&endpoint, &expiry));
                 *self.endpoint.lock().unwrap() = Some(ExpiringEndpoint { endpoint, expiry })
             }
             Err(err) => *self.error.lock().unwrap() = Some(err),
@@ -128,6 +129,7 @@ where
         sleep,
         time,
     };
+    tracing::debug!("populating initial endpoint discovery cache");
     reloader.reload_once().await;
     // if we didn't successfully get an endpoint, bail out so the client knows
     // configuration failed to work
@@ -137,6 +139,7 @@ where
 
 impl EndpointCache {
     fn resolve_endpoint(&self) -> aws_smithy_http::endpoint::Result {
+        tracing::trace!("resolving endpoint from endpoint discovery cache");
         self.endpoint
             .lock()
             .unwrap()

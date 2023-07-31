@@ -209,4 +209,7 @@ ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
 RUN pip3 install --no-cache-dir mypy==0.991
 WORKDIR /home/build
 COPY sanity-test /home/build/sanity-test
+# RUSTUP_TOOLCHAIN takes precedence over everything except `+<toolchain>` args. This will allow us to ignore the toolchain
+# file during CI, avoiding issues during Rust version upgrades.
+ENV RUSTUP_TOOLCHAIN=${rust_stable_version}
 RUN /home/build/sanity-test

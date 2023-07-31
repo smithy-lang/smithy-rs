@@ -62,6 +62,7 @@ class FluentClientGeneratorTest {
                     }
                     """,
                     "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
+                        .toDevDependency()
                         .withFeature("test-util").toType()
                         .resolve("test_connection::TestConnection"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
@@ -108,6 +109,7 @@ class FluentClientGeneratorTest {
                     }
                     """,
                     "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
+                        .toDevDependency()
                         .withFeature("test-util").toType()
                         .resolve("test_connection::TestConnection"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),

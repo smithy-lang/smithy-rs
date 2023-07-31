@@ -94,6 +94,9 @@ fun testClientCodegenContext(
 fun ClientCodegenContext.withSmithyRuntimeMode(smithyRuntimeMode: SmithyRuntimeMode): ClientCodegenContext =
     copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableNewSmithyRuntime = smithyRuntimeMode)))
 
+fun ClientCodegenContext.withEnableUserConfigurableRuntimePlugins(enableUserConfigurableRuntimePlugins: Boolean): ClientCodegenContext =
+    copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableUserConfigurableRuntimePlugins = enableUserConfigurableRuntimePlugins)))
+
 fun TestWriterDelegator.clientRustSettings() =
     testClientRustSettings(
         service = ShapeId.from("fake#Fake"),

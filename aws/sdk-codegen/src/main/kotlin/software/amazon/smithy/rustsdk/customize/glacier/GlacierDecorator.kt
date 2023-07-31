@@ -101,7 +101,7 @@ private class GlacierAccountIdCustomization(private val codegenContext: ClientCo
 private class GlacierApiVersionCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterInterceptor) {
+        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             val apiVersion = codegenContext.serviceShape.version
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rustTemplate(
