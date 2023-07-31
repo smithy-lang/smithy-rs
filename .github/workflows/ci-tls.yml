@@ -15,9 +15,7 @@ env:
 name: Verify client TLS configuration
 run-name: ${{ github.workflow }}
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+  pull_request:
 
 jobs:
   main-branch-check:
