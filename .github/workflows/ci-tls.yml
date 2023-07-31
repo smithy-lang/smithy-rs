@@ -23,8 +23,6 @@ jobs:
     steps:
       - name: Install packages
         shell: bash
-        env:
-          RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
         run: |
           sudo apt -y install gcc make python3-pip nginx git
           pip3 install certbuilder crlbuilder
@@ -57,7 +55,6 @@ jobs:
           DOCKER_BUILDKIT: 1
         run: |
           cd
-          service docker start
           cd badssl.com
           perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
           grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts >>/etc/hosts
