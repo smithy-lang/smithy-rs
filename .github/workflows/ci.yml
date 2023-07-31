@@ -111,6 +111,8 @@ jobs:
           runner: ubuntu-latest
         - action: check-style-and-lints
           runner: ubuntu-latest
+        - action: verify-tls-config
+          runner: ubuntu-latest
         - action: check-book
           runner: ubuntu-latest
         - action: check-tools
