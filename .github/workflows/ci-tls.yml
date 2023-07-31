@@ -13,15 +13,12 @@ env:
   rust_version: 1.68.2
 
 name: Verify client TLS configuration
-run-name: ${{ github.workflow }}
 on:
   pull_request:
 
 jobs:
   verify-tls-config:
     name: Verify TLS configuration
-    needs:
-      - main-branch-check
     runs-on: ubuntu-latest
     steps:
       - name: Install packages
