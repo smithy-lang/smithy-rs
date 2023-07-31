@@ -18,17 +18,6 @@ on:
   pull_request:
 
 jobs:
-  main-branch-check:
-    name: Check that workflow is running in main
-    runs-on: ubuntu-latest
-    steps:
-      - name: Main branch check
-        if: ${{ github.ref_name != 'main' }}
-        uses: actions/github-script@v6
-        with:
-          script: |
-            core.setFailed("This workflow can only be ran on main (current branch: ${{ github.ref_name }})")
-
   verify-tls-config:
     name: Verify TLS configuration
     needs:
