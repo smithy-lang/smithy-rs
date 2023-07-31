@@ -279,7 +279,6 @@ fun rewritePathDependency(line: String): String {
 }
 
 tasks.register<Copy>("copyAllRuntimes") {
-    dependsOn("smithyBuildJar")
     from("$rootDir/aws/rust-runtime") {
         CrateSet.AWS_SDK_RUNTIME.forEach { include("$it/**") }
     }

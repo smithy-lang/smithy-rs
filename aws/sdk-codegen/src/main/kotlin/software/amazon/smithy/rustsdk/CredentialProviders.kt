@@ -140,20 +140,35 @@ class CredentialsIdentityResolverRegistration(
         when (section) {
             is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 rustBlockTemplate("if let Some(credentials_cache) = ${section.serviceConfigName}.credentials_cache()") {
+                    rustTemplate(
+                        """
+                        let shared_identity_resolver = #{SharedIdentityResolver}::new(
+                            #{CredentialsIdentityResolver}::new(credentials_cache)
+                        );
+                        """,
+                        "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                            .resolve("identity::credentials::CredentialsIdentityResolver"),
+                        "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::identity::SharedIdentityResolver"),
+                    )
                     section.registerIdentityResolver(this) {
                         rustTemplate(
                             """
                             #{SIGV4_SCHEME_ID},
-                            #{SharedIdentityResolver}::new(
-                                #{CredentialsIdentityResolver}::new(credentials_cache),
-                            ),
+                            shared_identity_resolver.clone(),
                             """,
                             "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
                                 .resolve("auth::sigv4::SCHEME_ID"),
-                            "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                                .resolve("identity::credentials::CredentialsIdentityResolver"),
-                            "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                                .resolve("client::identity::SharedIdentityResolver"),
+                        )
+                    }
+                    section.registerIdentityResolver(this) {
+                        rustTemplate(
+                            """
+                            #{SIGV4A_SCHEME_ID},
+                            shared_identity_resolver,
+                            """,
+                            "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                                .resolve("auth::sigv4a::SCHEME_ID"),
                         )
                     }
                 }

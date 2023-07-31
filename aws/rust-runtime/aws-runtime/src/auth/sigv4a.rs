@@ -8,6 +8,7 @@ use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignableBody,
     SignableRequest, SignatureLocation, SigningParams, SigningSettings, UriPathNormalizationMode,
 };
+use aws_sigv4::SignatureVersion;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
@@ -17,43 +18,45 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::Document;
-use aws_types::region::{Region, SigningRegion};
+use aws_smithy_types::Document::Array;
+use aws_types::region::SigningRegionSet;
 use aws_types::SigningService;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
 use std::time::{Duration, SystemTime};
+use tracing::error;
 
 const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
         `expires_in` duration because the credentials used to sign it will expire first.";
 
-/// Auth scheme ID for SigV4.
-pub const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4");
+/// Auth scheme ID for SigV4a.
+pub const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4a");
 
 struct EndpointAuthSchemeConfig {
-    signing_region_override: Option<SigningRegion>,
+    signing_region_set_override: Option<SigningRegionSet>,
     signing_service_override: Option<SigningService>,
 }
 
 #[derive(Debug)]
-enum SigV4SigningError {
+enum SigV4aSigningError {
     MissingOperationSigningConfig,
-    MissingSigningRegion,
+    MissingSigningRegionSet,
     MissingSigningService,
     WrongIdentityType(Identity),
     BadTypeInEndpointAuthSchemeConfig(&'static str),
 }
 
-impl fmt::Display for SigV4SigningError {
+impl fmt::Display for SigV4aSigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use SigV4SigningError::*;
+        use SigV4aSigningError::*;
         let mut w = |s| f.write_str(s);
         match self {
-            MissingOperationSigningConfig => w("missing operation signing config for SigV4"),
-            MissingSigningRegion => w("missing signing region for SigV4 signing"),
-            MissingSigningService => w("missing signing service for SigV4 signing"),
+            MissingOperationSigningConfig => w("missing operation signing config for SigV4a"),
+            MissingSigningRegionSet => w("missing signing region for SigV4a signing"),
+            MissingSigningService => w("missing signing service for SigV4a signing"),
             WrongIdentityType(identity) => {
-                write!(f, "wrong identity type for SigV4: {identity:?}")
+                write!(f, "wrong identity type for SigV4a: {identity:?}")
             }
             BadTypeInEndpointAuthSchemeConfig(field_name) => {
                 write!(
@@ -65,11 +68,11 @@ impl fmt::Display for SigV4SigningError {
     }
 }
 
-impl StdError for SigV4SigningError {
+impl StdError for SigV4aSigningError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Self::MissingOperationSigningConfig => None,
-            Self::MissingSigningRegion => None,
+            Self::MissingSigningRegionSet => None,
             Self::MissingSigningService => None,
             Self::WrongIdentityType(_) => None,
             Self::BadTypeInEndpointAuthSchemeConfig(_) => None,
@@ -77,20 +80,20 @@ impl StdError for SigV4SigningError {
     }
 }
 
-/// SigV4 auth scheme.
+/// SigV4a auth scheme.
 #[derive(Debug, Default)]
-pub struct SigV4AuthScheme {
-    signer: SigV4Signer,
+pub struct SigV4aAuthScheme {
+    signer: SigV4aSigner,
 }
 
-impl SigV4AuthScheme {
-    /// Creates a new `SigV4AuthScheme`.
+impl SigV4aAuthScheme {
+    /// Creates a new `SigV4aHttpAuthScheme`.
     pub fn new() -> Self {
         Default::default()
     }
 }
 
-impl AuthScheme for SigV4AuthScheme {
+impl AuthScheme for SigV4aAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         SCHEME_ID
     }
@@ -107,7 +110,7 @@ impl AuthScheme for SigV4AuthScheme {
     }
 }
 
-/// Type of SigV4 signature.
+/// Type of SigV4a signature.
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 pub enum HttpSignatureType {
     /// A signature for a full http request should be computed, with header updates applied to the signing result.
@@ -119,7 +122,7 @@ pub enum HttpSignatureType {
     HttpRequestQueryParams,
 }
 
-/// Signing options for SigV4.
+/// Signing options for SigV4a.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub struct SigningOptions {
@@ -156,35 +159,35 @@ impl Default for SigningOptions {
     }
 }
 
-/// SigV4 signing configuration for an operation
+/// SigV4a signing configuration for an operation
 ///
 /// Although these fields MAY be customized on a per request basis, they are generally static
 /// for a given operation
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SigV4OperationSigningConfig {
+pub struct SigV4aOperationSigningConfig {
     /// AWS Region to sign for.
-    pub region: Option<SigningRegion>,
+    pub region_set: Option<SigningRegionSet>,
     /// AWS Service to sign for.
     pub service: Option<SigningService>,
     /// Signing options.
     pub signing_options: SigningOptions,
 }
 
-impl Storable for SigV4OperationSigningConfig {
+impl Storable for SigV4aOperationSigningConfig {
     type Storer = StoreReplace<Self>;
 }
 
-/// SigV4 signer.
+/// SigV4a HTTP request signer.
 #[derive(Debug, Default)]
-pub struct SigV4Signer;
+pub struct SigV4aSigner;
 
-impl SigV4Signer {
+impl SigV4aSigner {
     /// Creates a new signer instance.
     pub fn new() -> Self {
         Self
     }
 
-    fn settings(operation_config: &SigV4OperationSigningConfig) -> SigningSettings {
+    fn settings(operation_config: &SigV4aOperationSigningConfig) -> SigningSettings {
         let mut settings = SigningSettings::default();
         settings.percent_encoding_mode = if operation_config.signing_options.double_uri_encode {
             PercentEncodingMode::Double
@@ -218,9 +221,9 @@ impl SigV4Signer {
     fn signing_params<'a>(
         settings: SigningSettings,
         credentials: &'a Credentials,
-        operation_config: &'a SigV4OperationSigningConfig,
+        operation_config: &'a SigV4aOperationSigningConfig,
         request_timestamp: SystemTime,
-    ) -> Result<SigningParams<'a>, SigV4SigningError> {
+    ) -> Result<SigningParams<'a>, SigV4aSigningError> {
         if let Some(expires_in) = settings.expires_in {
             if let Some(creds_expires_time) = credentials.expiry() {
                 let presigned_expires_time = request_timestamp + expires_in;
@@ -231,20 +234,21 @@ impl SigV4Signer {
         }
 
         let mut builder = SigningParams::builder()
+            .signature_version(SignatureVersion::V4a)
             .access_key(credentials.access_key_id())
             .secret_key(credentials.secret_access_key())
             .region(
                 operation_config
-                    .region
+                    .region_set
                     .as_ref()
-                    .ok_or(SigV4SigningError::MissingSigningRegion)?
+                    .ok_or(SigV4aSigningError::MissingSigningRegionSet)?
                     .as_ref(),
             )
             .service_name(
                 operation_config
                     .service
                     .as_ref()
-                    .ok_or(SigV4SigningError::MissingSigningService)?
+                    .ok_or(SigV4aSigningError::MissingSigningService)?
                     .as_ref(),
             )
             .time(request_timestamp)
@@ -256,28 +260,28 @@ impl SigV4Signer {
     fn extract_operation_config<'a>(
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'a>,
         config_bag: &'a ConfigBag,
-    ) -> Result<Cow<'a, SigV4OperationSigningConfig>, SigV4SigningError> {
+    ) -> Result<Cow<'a, SigV4aOperationSigningConfig>, SigV4aSigningError> {
         let operation_config = config_bag
-            .load::<SigV4OperationSigningConfig>()
-            .ok_or(SigV4SigningError::MissingOperationSigningConfig)?;
+            .load::<SigV4aOperationSigningConfig>()
+            .ok_or(SigV4aSigningError::MissingOperationSigningConfig)?;
 
-        let signing_region = config_bag.load::<SigningRegion>();
+        let signing_region_set = config_bag.load::<SigningRegionSet>();
         let signing_service = config_bag.load::<SigningService>();
 
         let EndpointAuthSchemeConfig {
-            signing_region_override,
+            signing_region_set_override,
             signing_service_override,
         } = Self::extract_endpoint_auth_scheme_config(auth_scheme_endpoint_config)?;
 
         match (
-            signing_region_override.or_else(|| signing_region.cloned()),
+            signing_region_set_override.or_else(|| signing_region_set.cloned()),
             signing_service_override.or_else(|| signing_service.cloned()),
         ) {
             (None, None) => Ok(Cow::Borrowed(operation_config)),
-            (region, service) => {
+            (region_set, service) => {
                 let mut operation_config = operation_config.clone();
-                if region.is_some() {
-                    operation_config.region = region;
+                if region_set.is_some() {
+                    operation_config.region_set = region_set;
                 }
                 if service.is_some() {
                     operation_config.service = service;
@@ -289,14 +293,25 @@ impl SigV4Signer {
 
     fn extract_endpoint_auth_scheme_config(
         endpoint_config: AuthSchemeEndpointConfig<'_>,
-    ) -> Result<EndpointAuthSchemeConfig, SigV4SigningError> {
-        let (mut signing_region_override, mut signing_service_override) = (None, None);
+    ) -> Result<EndpointAuthSchemeConfig, SigV4aSigningError> {
+        let (mut signing_region_set_override, mut signing_service_override) = (None, None);
         if let Some(config) = endpoint_config.as_document().and_then(Document::as_object) {
-            use SigV4SigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
-            signing_region_override = match config.get(SigningRegion::type_name()) {
-                Some(Document::String(s)) => Some(SigningRegion::from(Region::new(s.clone()))),
+            use SigV4aSigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
+            signing_region_set_override = match config.get(SigningRegionSet::type_name()) {
+                Some(Array(docs)) => {
+                    // The service defines the region set as a string array. Here, we convert it to a comma separated list.
+                    let regions: Vec<String> = docs
+                        .iter()
+                        .filter_map(|doc| doc.as_string())
+                        .map(ToString::to_string)
+                        .collect();
+                    Some(SigningRegionSet::from_vec(regions))
+                }
                 None => None,
-                _ => return Err(UnexpectedType(SigningRegion::type_name())),
+                it => {
+                    error!("Unexpected type in endpoint auth scheme config: {:#?}", it);
+                    return Err(UnexpectedType(SigningRegionSet::type_name()));
+                }
             };
             signing_service_override = match config.get(SigningService::type_name()) {
                 Some(Document::String(s)) => Some(SigningService::from(s.to_string())),
@@ -305,13 +320,13 @@ impl SigV4Signer {
             };
         }
         Ok(EndpointAuthSchemeConfig {
-            signing_region_override,
+            signing_region_set_override,
             signing_service_override,
         })
     }
 }
 
-impl Signer for SigV4Signer {
+impl Signer for SigV4aSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,
@@ -327,10 +342,10 @@ impl Signer for SigV4Signer {
         let credentials = if let Some(creds) = identity.data::<Credentials>() {
             creds
         } else if operation_config.signing_options.signing_optional {
-            tracing::debug!("skipped SigV4 signing since signing is optional for this operation and there are no credentials");
+            tracing::debug!("skipped SigV4a signing since signing is optional for this operation and there are no credentials");
             return Ok(());
         } else {
-            return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
+            return Err(SigV4aSigningError::WrongIdentityType(identity.clone()).into());
         };
 
         let settings = Self::settings(&operation_config);
@@ -365,157 +380,25 @@ impl Signer for SigV4Signer {
         }
         .into_parts();
 
-        // If this is an event stream operation, set up the event stream signer
-        #[cfg(feature = "event-stream")]
-        {
-            use aws_smithy_eventstream::frame::DeferredSignerSender;
-            use event_stream::SigV4MessageSigner;
-
-            if let Some(signer_sender) = config_bag.load::<DeferredSignerSender>() {
-                let time_source = runtime_components.time_source().unwrap_or_default();
-                signer_sender
-                    .send(Box::new(SigV4MessageSigner::new(
-                        _signature,
-                        credentials.clone(),
-                        Region::new(signing_params.region().to_string()).into(),
-                        signing_params.service_name().to_string().into(),
-                        time_source,
-                    )) as _)
-                    .expect("failed to send deferred signer");
-            }
-        }
-
         signing_instructions.apply_to_request(request);
         Ok(())
     }
 }
 
-#[cfg(feature = "event-stream")]
-mod event_stream {
-    use aws_credential_types::Credentials;
-    use aws_sigv4::event_stream::{sign_empty_message, sign_message};
-    use aws_sigv4::SigningParams;
-    use aws_smithy_async::time::SharedTimeSource;
-    use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
-    use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
-
-    /// Event Stream SigV4 signing implementation.
-    #[derive(Debug)]
-    pub(super) struct SigV4MessageSigner {
-        last_signature: String,
-        credentials: Credentials,
-        signing_region: SigningRegion,
-        signing_service: SigningService,
-        time: SharedTimeSource,
-    }
-
-    impl SigV4MessageSigner {
-        pub(super) fn new(
-            last_signature: String,
-            credentials: Credentials,
-            signing_region: SigningRegion,
-            signing_service: SigningService,
-            time: SharedTimeSource,
-        ) -> Self {
-            Self {
-                last_signature,
-                credentials,
-                signing_region,
-                signing_service,
-                time,
-            }
-        }
-
-        fn signing_params(&self) -> SigningParams<'_, ()> {
-            let mut builder = SigningParams::builder()
-                .access_key(self.credentials.access_key_id())
-                .secret_key(self.credentials.secret_access_key())
-                .region(self.signing_region.as_ref())
-                .service_name(self.signing_service.as_ref())
-                .time(self.time.now())
-                .settings(());
-            builder.set_security_token(self.credentials.session_token());
-            builder.build().unwrap()
-        }
-    }
-
-    impl SignMessage for SigV4MessageSigner {
-        fn sign(&mut self, message: Message) -> Result<Message, SignMessageError> {
-            let (signed_message, signature) = {
-                let params = self.signing_params();
-                sign_message(&message, &self.last_signature, &params).into_parts()
-            };
-            self.last_signature = signature;
-            Ok(signed_message)
-        }
-
-        fn sign_empty(&mut self) -> Option<Result<Message, SignMessageError>> {
-            let (signed_message, signature) = {
-                let params = self.signing_params();
-                sign_empty_message(&self.last_signature, &params).into_parts()
-            };
-            self.last_signature = signature;
-            Some(Ok(signed_message))
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use aws_credential_types::Credentials;
-        use aws_smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
-        use aws_types::region::Region;
-        use aws_types::region::SigningRegion;
-        use aws_types::SigningService;
-        use std::time::{Duration, UNIX_EPOCH};
-
-        fn check_send_sync<T: Send + Sync>(value: T) -> T {
-            value
-        }
-
-        #[test]
-        fn sign_message() {
-            let region = Region::new("us-east-1");
-            let mut signer = check_send_sync(SigV4MessageSigner::new(
-                "initial-signature".into(),
-                Credentials::for_tests(),
-                SigningRegion::from(region),
-                SigningService::from_static("transcribe"),
-                SharedTimeSource::new(UNIX_EPOCH + Duration::new(1611160427, 0)),
-            ));
-            let mut signatures = Vec::new();
-            for _ in 0..5 {
-                let signed = signer
-                    .sign(Message::new(&b"identical message"[..]))
-                    .unwrap();
-                if let HeaderValue::ByteArray(signature) = signed
-                    .headers()
-                    .iter()
-                    .find(|h| h.name().as_str() == ":chunk-signature")
-                    .unwrap()
-                    .value()
-                {
-                    signatures.push(signature.clone());
-                } else {
-                    panic!("failed to get the :chunk-signature")
-                }
-            }
-            for i in 1..signatures.len() {
-                assert_ne!(signatures[i - 1], signatures[i]);
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{
+        HttpSignatureType, SigV4aOperationSigningConfig, SigV4aSigner, SigningOptions,
+        EXPIRATION_WARNING,
+    };
     use aws_credential_types::Credentials;
     use aws_sigv4::http_request::SigningSettings;
-    use aws_smithy_types::config_bag::Layer;
-    use aws_types::region::SigningRegion;
+    use aws_smithy_runtime_api::client::auth::AuthSchemeEndpointConfig;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
+    use aws_smithy_types::Document;
+    use aws_types::region::SigningRegionSet;
     use aws_types::SigningService;
+    use std::borrow::Cow;
     use std::collections::HashMap;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
@@ -536,8 +419,8 @@ mod tests {
             Some(now + creds_expire_in),
             "test",
         );
-        let operation_config = SigV4OperationSigningConfig {
-            region: Some(SigningRegion::from_static("test")),
+        let operation_config = SigV4aOperationSigningConfig {
+            region_set: Some(SigningRegionSet::from_static("test")),
             service: Some(SigningService::from_static("test")),
             signing_options: SigningOptions {
                 double_uri_encode: true,
@@ -550,45 +433,45 @@ mod tests {
                 payload_override: None,
             },
         };
-        SigV4Signer::signing_params(settings, &credentials, &operation_config, now).unwrap();
+        SigV4aSigner::signing_params(settings, &credentials, &operation_config, now).unwrap();
         assert!(!logs_contain(EXPIRATION_WARNING));
 
         let mut settings = SigningSettings::default();
         settings.expires_in = Some(creds_expire_in + Duration::from_secs(10));
 
-        SigV4Signer::signing_params(settings, &credentials, &operation_config, now).unwrap();
+        SigV4aSigner::signing_params(settings, &credentials, &operation_config, now).unwrap();
         assert!(logs_contain(EXPIRATION_WARNING));
     }
 
     #[test]
     fn endpoint_config_overrides_region_and_service() {
         let mut layer = Layer::new("test");
-        layer.store_put(SigV4OperationSigningConfig {
-            region: Some(SigningRegion::from(Region::new("override-this-region"))),
+        layer.store_put(SigV4aOperationSigningConfig {
+            region_set: Some(SigningRegionSet::from_static("override-this-region")),
             service: Some(SigningService::from_static("override-this-service")),
             signing_options: Default::default(),
         });
         let config = Document::Object({
             let mut out = HashMap::new();
-            out.insert("name".to_string(), "sigv4".to_string().into());
+            out.insert("name".to_string(), "sigv4a".to_string().into());
             out.insert(
                 SigningService::type_name().to_string(),
                 "qldb-override".to_string().into(),
             );
             out.insert(
-                SigningRegion::type_name().to_string(),
-                "us-east-override".to_string().into(),
+                SigningRegionSet::type_name().to_string(),
+                Document::Array(vec!["us-east-override".to_string().into()]),
             );
             out
         });
         let config = AuthSchemeEndpointConfig::from(Some(&config));
 
         let cfg = ConfigBag::of_layers(vec![layer]);
-        let result = SigV4Signer::extract_operation_config(config, &cfg).expect("success");
+        let result = SigV4aSigner::extract_operation_config(config, &cfg).expect("success");
 
         assert_eq!(
-            result.region,
-            Some(SigningRegion::from(Region::new("us-east-override")))
+            result.region_set,
+            Some(SigningRegionSet::from("us-east-override"))
         );
         assert_eq!(
             result.service,
@@ -600,19 +483,19 @@ mod tests {
     #[test]
     fn endpoint_config_supports_fallback_when_region_or_service_are_unset() {
         let mut layer = Layer::new("test");
-        layer.store_put(SigV4OperationSigningConfig {
-            region: Some(SigningRegion::from(Region::new("us-east-1"))),
+        layer.store_put(SigV4aOperationSigningConfig {
+            region_set: Some(SigningRegionSet::from_static("us-east-1")),
             service: Some(SigningService::from_static("qldb")),
             signing_options: Default::default(),
         });
         let cfg = ConfigBag::of_layers(vec![layer]);
         let config = AuthSchemeEndpointConfig::empty();
 
-        let result = SigV4Signer::extract_operation_config(config, &cfg).expect("success");
+        let result = SigV4aSigner::extract_operation_config(config, &cfg).expect("success");
 
         assert_eq!(
-            result.region,
-            Some(SigningRegion::from(Region::new("us-east-1")))
+            result.region_set,
+            Some(SigningRegionSet::from_static("us-east-1"))
         );
         assert_eq!(result.service, Some(SigningService::from_static("qldb")));
         assert!(matches!(result, Cow::Borrowed(_)));

@@ -85,6 +85,16 @@ pub enum UriPathNormalizationMode {
     Disabled,
 }
 
+impl From<bool> for UriPathNormalizationMode {
+    fn from(value: bool) -> Self {
+        if value {
+            UriPathNormalizationMode::Enabled
+        } else {
+            UriPathNormalizationMode::Disabled
+        }
+    }
+}
+
 /// Config value to specify whether X-Amz-Security-Token should be part of the canonical request.
 /// <http://docs.aws.amazon.com/general/latest/gr/sigv4-add-signature-to-request.html#temporary-security-credentials>
 #[non_exhaustive]

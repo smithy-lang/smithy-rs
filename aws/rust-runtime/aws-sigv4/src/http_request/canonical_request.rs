@@ -10,9 +10,11 @@ use crate::http_request::settings::UriPathNormalizationMode;
 use crate::http_request::sign::SignableRequest;
 use crate::http_request::uri_path_normalization::normalize_uri_path;
 use crate::http_request::url_escape::percent_encode_path;
-use crate::http_request::PercentEncodingMode;
-use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
-use crate::sign::sha256_hex_string;
+use crate::http_request::{
+    PayloadChecksumKind, PercentEncodingMode, SignableBody, SignatureLocation, SigningParams,
+};
+use crate::sign::v4;
+use crate::{SignatureVersion, ECDSA_256, HMAC_256};
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Method, Uri};
@@ -20,7 +22,6 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::fmt::Formatter;
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -29,6 +30,7 @@ pub(crate) mod header {
     pub(crate) const X_AMZ_DATE: &str = "x-amz-date";
     pub(crate) const X_AMZ_SECURITY_TOKEN: &str = "x-amz-security-token";
     pub(crate) const X_AMZ_USER_AGENT: &str = "x-amz-user-agent";
+    pub(crate) const X_AMZ_REGION_SET: &str = "x-amz-region-set";
 }
 
 pub(crate) mod param {
@@ -39,40 +41,41 @@ pub(crate) mod param {
     pub(crate) const X_AMZ_SECURITY_TOKEN: &str = "X-Amz-Security-Token";
     pub(crate) const X_AMZ_SIGNED_HEADERS: &str = "X-Amz-SignedHeaders";
     pub(crate) const X_AMZ_SIGNATURE: &str = "X-Amz-Signature";
+    pub(crate) const X_AMZ_REGION_SET: &str = "X-Amz-Region-Set";
 }
-
-pub(crate) const HMAC_256: &str = "AWS4-HMAC-SHA256";
 
 const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD-TRAILER";
 
 #[derive(Debug, PartialEq)]
-pub(super) struct HeaderValues<'a> {
-    pub(super) content_sha256: Cow<'a, str>,
-    pub(super) date_time: String,
-    pub(super) security_token: Option<&'a str>,
-    pub(super) signed_headers: SignedHeaders,
+pub(crate) struct HeaderValues<'a> {
+    pub(crate) content_sha256: Cow<'a, str>,
+    pub(crate) date_time: String,
+    pub(crate) security_token: Option<&'a str>,
+    pub(crate) signed_headers: SignedHeaders,
+    pub(crate) region_set: Option<&'a str>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) struct QueryParamValues<'a> {
-    pub(super) algorithm: &'static str,
-    pub(super) content_sha256: Cow<'a, str>,
-    pub(super) credential: String,
-    pub(super) date_time: String,
-    pub(super) expires: String,
-    pub(super) security_token: Option<&'a str>,
-    pub(super) signed_headers: SignedHeaders,
+pub(crate) struct QueryParamValues<'a> {
+    pub(crate) algorithm: &'static str,
+    pub(crate) content_sha256: Cow<'a, str>,
+    pub(crate) credential: String,
+    pub(crate) date_time: String,
+    pub(crate) expires: String,
+    pub(crate) security_token: Option<&'a str>,
+    pub(crate) signed_headers: SignedHeaders,
+    pub(crate) region_set: Option<&'a str>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum SignatureValues<'a> {
+pub(crate) enum SignatureValues<'a> {
     Headers(HeaderValues<'a>),
     QueryParams(QueryParamValues<'a>),
 }
 
 impl<'a> SignatureValues<'a> {
-    pub(super) fn signed_headers(&self) -> &SignedHeaders {
+    pub(crate) fn signed_headers(&self) -> &SignedHeaders {
         match self {
             SignatureValues::Headers(values) => &values.signed_headers,
             SignatureValues::QueryParams(values) => &values.signed_headers,
@@ -86,14 +89,14 @@ impl<'a> SignatureValues<'a> {
         }
     }
 
-    pub(super) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
+    pub(crate) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
         match self {
             SignatureValues::Headers(values) => Some(values),
             _ => None,
         }
     }
 
-    pub(super) fn into_query_params(self) -> Result<QueryParamValues<'a>, Self> {
+    pub(crate) fn into_query_params(self) -> Result<QueryParamValues<'a>, Self> {
         match self {
             SignatureValues::QueryParams(values) => Ok(values),
             _ => Err(self),
@@ -102,12 +105,12 @@ impl<'a> SignatureValues<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) struct CanonicalRequest<'a> {
-    pub(super) method: &'a Method,
-    pub(super) path: Cow<'a, str>,
-    pub(super) params: Option<String>,
-    pub(super) headers: HeaderMap,
-    pub(super) values: SignatureValues<'a>,
+pub(crate) struct CanonicalRequest<'a> {
+    pub(crate) method: &'a Method,
+    pub(crate) path: Cow<'a, str>,
+    pub(crate) params: Option<String>,
+    pub(crate) headers: HeaderMap,
+    pub(crate) values: SignatureValues<'a>,
 }
 
 impl<'a> CanonicalRequest<'a> {
@@ -127,7 +130,7 @@ impl<'a> CanonicalRequest<'a> {
     ///   included before calculating the signature, add it, otherwise omit it.
     /// - `settings.signature_location` determines where the signature will be placed in a request,
     ///   and also alters the kinds of signing values that go along with it in the request.
-    pub(super) fn from<'b>(
+    pub(crate) fn from<'b>(
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
     ) -> Result<CanonicalRequest<'b>, CanonicalRequestError> {
@@ -161,27 +164,48 @@ impl<'a> CanonicalRequest<'a> {
                 date_time,
                 security_token,
                 signed_headers,
+                region_set: params
+                    .signature_version
+                    .is_sigv4a()
+                    .then_some(params.region),
             }),
-            SignatureLocation::QueryParams => SignatureValues::QueryParams(QueryParamValues {
-                algorithm: "AWS4-HMAC-SHA256",
-                content_sha256: payload_hash,
-                credential: format!(
-                    "{}/{}/{}/{}/aws4_request",
-                    params.access_key,
-                    format_date(params.time),
-                    params.region,
-                    params.service_name,
-                ),
-                date_time,
-                expires: params
-                    .settings
-                    .expires_in
-                    .expect("presigning requires expires_in")
-                    .as_secs()
-                    .to_string(),
-                security_token,
-                signed_headers,
-            }),
+            SignatureLocation::QueryParams => {
+                let credential = if params.signature_version.is_sigv4a() {
+                    format!(
+                        "{}/{}/{}/aws4_request",
+                        params.access_key,
+                        format_date(params.time),
+                        params.service_name,
+                    )
+                } else {
+                    format!(
+                        "{}/{}/{}/{}/aws4_request",
+                        params.access_key,
+                        format_date(params.time),
+                        params.region,
+                        params.service_name,
+                    )
+                };
+
+                SignatureValues::QueryParams(QueryParamValues {
+                    algorithm: params.algorithm(),
+                    content_sha256: payload_hash,
+                    credential,
+                    date_time,
+                    expires: params
+                        .settings
+                        .expires_in
+                        .expect("presigning requires expires_in")
+                        .as_secs()
+                        .to_string(),
+                    security_token,
+                    signed_headers,
+                    region_set: params
+                        .signature_version
+                        .is_sigv4a()
+                        .then_some(params.region),
+                })
+            }
         };
 
         let creq = CanonicalRequest {
@@ -232,6 +256,11 @@ impl<'a> CanonicalRequest<'a> {
                 let header = HeaderValue::from_str(payload_hash)?;
                 canonical_headers.insert(header::X_AMZ_CONTENT_SHA_256, header);
             }
+
+            if params.signature_version.is_sigv4a() {
+                let header = HeaderValue::from_str(params.region)?;
+                canonical_headers.insert(header::X_AMZ_REGION_SET, header);
+            }
         }
 
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
@@ -271,7 +300,7 @@ impl<'a> CanonicalRequest<'a> {
         // - use `UnsignedPayload` for streaming requests
         // - use `StreamingUnsignedPayloadTrailer` for streaming requests with trailers
         match body {
-            SignableBody::Bytes(data) => Cow::Owned(sha256_hex_string(data)),
+            SignableBody::Bytes(data) => Cow::Owned(v4::sha256_hex_string(data)),
             SignableBody::Precomputed(digest) => Cow::Borrowed(digest.as_str()),
             SignableBody::UnsignedPayload => Cow::Borrowed(UNSIGNED_PAYLOAD),
             SignableBody::StreamingUnsignedPayloadTrailer => {
@@ -290,6 +319,11 @@ impl<'a> CanonicalRequest<'a> {
         if let SignatureValues::QueryParams(values) = values {
             add_param(&mut params, param::X_AMZ_DATE, &values.date_time);
             add_param(&mut params, param::X_AMZ_EXPIRES, &values.expires);
+
+            if let Some(regions) = values.region_set {
+                add_param(&mut params, param::X_AMZ_REGION_SET, regions);
+            }
+
             add_param(&mut params, param::X_AMZ_ALGORITHM, values.algorithm);
             add_param(&mut params, param::X_AMZ_CREDENTIAL, &values.credential);
             add_param(
@@ -418,7 +452,7 @@ fn normalize_header_value(
 }
 
 #[derive(Debug, PartialEq, Default)]
-pub(super) struct SignedHeaders {
+pub(crate) struct SignedHeaders {
     headers: Vec<CanonicalHeaderName>,
     formatted: String,
 }
@@ -442,7 +476,7 @@ impl SignedHeaders {
         value
     }
 
-    pub(super) fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.formatted
     }
 }
@@ -469,10 +503,16 @@ impl Ord for CanonicalHeaderName {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub(super) struct SigningScope<'a> {
-    pub(super) time: SystemTime,
-    pub(super) region: &'a str,
-    pub(super) service: &'a str,
+pub(crate) struct SigningScope<'a> {
+    pub(crate) time: SystemTime,
+    pub(crate) region: &'a str,
+    pub(crate) service: &'a str,
+}
+
+impl<'a> SigningScope<'a> {
+    pub(crate) fn v4a_display(&self) -> String {
+        format!("{}/{}/aws4_request", format_date(self.time), self.service)
+    }
 }
 
 impl<'a> fmt::Display for SigningScope<'a> {
@@ -487,17 +527,19 @@ impl<'a> fmt::Display for SigningScope<'a> {
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub(super) struct StringToSign<'a> {
-    pub(super) scope: SigningScope<'a>,
-    pub(super) time: SystemTime,
-    pub(super) region: &'a str,
-    pub(super) service: &'a str,
-    pub(super) hashed_creq: &'a str,
+#[derive(PartialEq, Debug, Clone)]
+pub(crate) struct StringToSign<'a> {
+    pub(crate) algorithm: &'static str,
+    pub(crate) scope: SigningScope<'a>,
+    pub(crate) time: SystemTime,
+    pub(crate) region: &'a str,
+    pub(crate) service: &'a str,
+    pub(crate) hashed_creq: &'a str,
+    signature_version: SignatureVersion,
 }
 
 impl<'a> StringToSign<'a> {
-    pub(crate) fn new(
+    pub(crate) fn new_v4(
         time: SystemTime,
         region: &'a str,
         service: &'a str,
@@ -509,23 +551,51 @@ impl<'a> StringToSign<'a> {
             service,
         };
         Self {
+            algorithm: HMAC_256,
             scope,
             time,
             region,
             service,
             hashed_creq,
+            signature_version: SignatureVersion::V4,
+        }
+    }
+
+    pub(crate) fn new_v4a(
+        time: SystemTime,
+        region: &'a str,
+        service: &'a str,
+        hashed_creq: &'a str,
+    ) -> Self {
+        let scope = SigningScope {
+            time,
+            region,
+            service,
+        };
+        Self {
+            algorithm: ECDSA_256,
+            scope,
+            time,
+            region,
+            service,
+            hashed_creq,
+            signature_version: SignatureVersion::V4a,
         }
     }
 }
 
 impl<'a> fmt::Display for StringToSign<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}\n{}\n{}\n{}",
-            HMAC_256,
+            self.algorithm,
             format_date_time(self.time),
-            self.scope,
+            if self.signature_version.is_sigv4a() {
+                self.scope.v4a_display()
+            } else {
+                self.scope.to_string()
+            },
             self.hashed_creq
         )
     }
@@ -537,12 +607,13 @@ mod tests {
     use crate::http_request::canonical_request::{
         normalize_header_value, trim_all, CanonicalRequest, SigningScope, StringToSign,
     };
-    use crate::http_request::test::{test_canonical_request, test_request, test_sts};
+    use crate::http_request::test_v4::{test_canonical_request, test_request, test_sts};
     use crate::http_request::{
-        PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SigningSettings,
+        PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SignatureLocation,
+        SigningParams, SigningSettings,
     };
-    use crate::http_request::{SignatureLocation, SigningParams};
-    use crate::sign::sha256_hex_string;
+    use crate::sign::v4;
+    use crate::SignatureVersion;
     use aws_smithy_http::query_writer::QueryWriter;
     use http::Uri;
     use http::{header::HeaderName, HeaderValue};
@@ -559,6 +630,7 @@ mod tests {
             service_name: "testservicename",
             time: parse_date_time("20210511T154045Z").unwrap(),
             settings,
+            signature_version: SignatureVersion::V4,
         }
     }
 
@@ -671,9 +743,9 @@ mod tests {
         let time = parse_date_time("20150830T123600Z").unwrap();
         let creq = test_canonical_request("get-vanilla-query-order-key-case");
         let expected_sts = test_sts("get-vanilla-query-order-key-case");
-        let encoded = sha256_hex_string(creq.as_bytes());
+        let encoded = v4::sha256_hex_string(creq.as_bytes());
 
-        let actual = StringToSign::new(time, "us-east-1", "service", &encoded);
+        let actual = StringToSign::new_v4(time, "us-east-1", "service", &encoded);
         assert_eq!(expected_sts, actual.to_string());
     }
 
@@ -681,7 +753,7 @@ mod tests {
     fn test_digest_of_canonical_request() {
         let creq = test_canonical_request("get-vanilla-query-order-key-case");
         let expected = "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0";
-        let actual = sha256_hex_string(creq.as_bytes());
+        let actual = v4::sha256_hex_string(creq.as_bytes());
         assert_eq!(expected, actual);
     }
 

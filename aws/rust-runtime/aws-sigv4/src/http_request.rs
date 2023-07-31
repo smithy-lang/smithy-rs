@@ -41,7 +41,7 @@
 //! ```
 //!
 
-mod canonical_request;
+pub(crate) mod canonical_request;
 mod error;
 mod settings;
 mod sign;
@@ -49,7 +49,10 @@ mod uri_path_normalization;
 mod url_escape;
 
 #[cfg(test)]
-pub(crate) mod test;
+pub(crate) mod test_v4;
+
+#[cfg(test)]
+pub(crate) mod test_v4a;
 
 pub use error::SigningError;
 pub use settings::{

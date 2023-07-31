@@ -52,7 +52,7 @@ impl Region {
     }
 }
 
-/// The region to use when signing requests
+/// The region to use when signing sigv4 requests
 ///
 /// Generally, user code will not need to interact with `SigningRegion`. See `[Region](crate::Region)`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,8 +81,64 @@ impl SigningRegion {
     pub const fn from_static(region: &'static str) -> Self {
         SigningRegion(Cow::Borrowed(region))
     }
+
+    /// Get the "type name" of this struct. Useful for debugging errors with the endpoint property bag.
+    pub fn type_name() -> &'static str {
+        "signingRegion"
+    }
 }
 
 impl Storable for SigningRegion {
     type Storer = StoreReplace<Self>;
+}
+
+/// The region to use when signing Sigv4a requests
+///
+/// Generally, user code will not need to interact with `SigningRegionSet`. See `[Region](crate::Region)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SigningRegionSet(Cow<'static, str>);
+
+impl From<Region> for SigningRegionSet {
+    fn from(inp: Region) -> Self {
+        SigningRegionSet(inp.0)
+    }
+}
+
+impl From<&'static str> for SigningRegionSet {
+    fn from(region: &'static str) -> Self {
+        Self::from_static(region)
+    }
+}
+
+impl SigningRegionSet {
+    /// Create a `SigningRegionSet` from a static str.
+    pub const fn from_static(region_set: &'static str) -> Self {
+        SigningRegionSet(Cow::Borrowed(region_set))
+    }
+
+    /// Create a new `SigningRegionSet` that's valid for all regions.
+    pub fn wildcard() -> Self {
+        Self(Cow::Borrowed("*"))
+    }
+
+    /// Create a new `SigningRegionSet` from a list of regions.
+    pub fn from_vec(vec: Vec<String>) -> Self {
+        let set = vec.join(", ");
+        Self(Cow::Owned(set))
+    }
+
+    /// Get the "type name" of this struct. Useful for debugging errors with the endpoint property bag.
+    pub fn type_name() -> &'static str {
+        "signingRegionSet"
+    }
+}
+
+impl Storable for SigningRegionSet {
+    type Storer = StoreReplace<Self>;
+}
+
+impl AsRef<str> for SigningRegionSet {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
 }

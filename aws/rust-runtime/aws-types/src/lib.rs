@@ -33,6 +33,7 @@ use std::borrow::Cow;
 /// Generally, user code should never interact with `SigningService` directly
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SigningService(Cow<'static, str>);
+
 impl AsRef<str> for SigningService {
     fn as_ref(&self) -> &str {
         &self.0
@@ -43,6 +44,11 @@ impl SigningService {
     /// Creates a `SigningService` from a static str.
     pub fn from_static(service: &'static str) -> Self {
         SigningService(Cow::Borrowed(service))
+    }
+
+    /// Get the "type name" of this struct. Useful for debugging errors with the endpoint property bag.
+    pub fn type_name() -> &'static str {
+        "signingService"
     }
 }
 

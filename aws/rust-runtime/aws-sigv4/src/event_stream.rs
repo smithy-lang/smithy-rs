@@ -37,7 +37,7 @@
 //! ```
 
 use crate::date_time::{format_date, format_date_time, truncate_subsecs};
-use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
+use crate::sign::v4::{calculate_signature, generate_signing_key, sha256_hex_string};
 use crate::SigningOutput;
 use aws_smithy_eventstream::frame::{write_headers_to, Header, HeaderValue, Message};
 use bytes::Bytes;
@@ -143,6 +143,7 @@ fn sign_payload<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::SignatureVersion;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -162,6 +163,7 @@ mod tests {
             service_name: "testservice",
             time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
             settings: (),
+            signature_version: SignatureVersion::V4,
         };
 
         let expected = "\
@@ -200,6 +202,7 @@ mod tests {
             service_name: "testservice",
             time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
             settings: (),
+            signature_version: SignatureVersion::V4,
         };
 
         let last_signature = sha256_hex_string(b"last message sts");

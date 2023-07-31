@@ -134,3 +134,5 @@ fn test_parse() {
 fn test_read_query_params() {
     test_request("get-vanilla-query-order-key-case");
 }
+
+mod v4a {}

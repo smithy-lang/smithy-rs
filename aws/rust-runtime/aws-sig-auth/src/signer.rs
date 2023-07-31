@@ -107,8 +107,8 @@ pub struct RequestConfig<'a> {
 
 #[derive(Clone, Default)]
 pub struct SigV4Signer {
-    // In the future, the SigV4Signer will use the CRT signer. This will require constructing
-    // and holding an instance of the signer, so prevent people from constructing a SigV4Signer without
+    // In the future, the SigV4Signer may use the CRT signer. This will require constructing
+    // and holding an instance of the signer. Therefore, we must prevent people from constructing a SigV4Signer without
     // going through the constructor.
     _private: (),
 }

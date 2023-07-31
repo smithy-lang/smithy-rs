@@ -28,6 +28,31 @@ pub mod event_stream;
 #[cfg(feature = "sign-http")]
 pub mod http_request;
 
+/// The version of the signing algorithm to use
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
+#[non_exhaustive]
+pub enum SignatureVersion {
+    /// The SigV4 signing algorithm.
+    V4,
+    /// The SigV4a signing algorithm.
+    V4a,
+}
+
+impl SignatureVersion {
+    pub(crate) fn is_sigv4a(&self) -> bool {
+        matches!(self, SignatureVersion::V4a)
+    }
+}
+
+impl fmt::Display for SignatureVersion {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SignatureVersion::V4 => write!(f, "SigV4"),
+            SignatureVersion::V4a => write!(f, "SigV4a"),
+        }
+    }
+}
+
 /// Parameters to use when signing.
 #[non_exhaustive]
 pub struct SigningParams<'a, S> {
@@ -45,9 +70,15 @@ pub struct SigningParams<'a, S> {
     /// Timestamp to use in the signature (should be `SystemTime::now()` unless testing).
     pub(crate) time: SystemTime,
 
+    /// Which version of the signing algorithm to use.
+    pub(crate) signature_version: SignatureVersion,
+
     /// Additional signing settings. These differ between HTTP and Event Stream.
     pub(crate) settings: S,
 }
+
+pub(crate) const HMAC_256: &str = "AWS4-HMAC-SHA256";
+pub(crate) const ECDSA_256: &str = "AWS4-ECDSA-P256-SHA256";
 
 impl<'a, S> SigningParams<'a, S> {
     /// Returns the region that will be used to sign
@@ -58,6 +89,13 @@ impl<'a, S> SigningParams<'a, S> {
     /// Returns the service name that will be used to sign
     pub fn service_name(&self) -> &str {
         self.service_name
+    }
+
+    fn algorithm(&self) -> &'static str {
+        match self.signature_version {
+            SignatureVersion::V4 => HMAC_256,
+            SignatureVersion::V4a => ECDSA_256,
+        }
     }
 }
 
@@ -84,7 +122,7 @@ impl<'a, S: Default> SigningParams<'a, S> {
 
 /// Builder and error for creating [`SigningParams`]
 pub mod signing_params {
-    use super::SigningParams;
+    use super::{SignatureVersion, SigningParams};
     use std::error::Error;
     use std::fmt;
     use std::time::SystemTime;
@@ -117,6 +155,7 @@ pub mod signing_params {
         region: Option<&'a str>,
         service_name: Option<&'a str>,
         time: Option<SystemTime>,
+        signature_version: Option<SignatureVersion>,
         settings: Option<S>,
     }
 
@@ -181,6 +220,16 @@ pub mod signing_params {
             self.time = time;
         }
 
+        /// Sets the signature version (optional)
+        pub fn signature_version(mut self, signature_version: SignatureVersion) -> Self {
+            self.signature_version = Some(signature_version);
+            self
+        }
+        /// Sets the signature version (optional)
+        pub fn set_signature_version(&mut self, signature_version: Option<SignatureVersion>) {
+            self.signature_version = signature_version;
+        }
+
         /// Sets additional signing settings (required)
         pub fn settings(mut self, settings: S) -> Self {
             self.settings = Some(settings);
@@ -214,6 +263,7 @@ pub mod signing_params {
                 settings: self
                     .settings
                     .ok_or_else(|| BuildError::new("settings are required"))?,
+                signature_version: self.signature_version.unwrap_or(SignatureVersion::V4),
             })
         }
     }

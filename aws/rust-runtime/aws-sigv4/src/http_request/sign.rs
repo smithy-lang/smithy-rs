@@ -5,15 +5,12 @@
 
 use super::error::SigningError;
 use super::{PayloadChecksumKind, SignatureLocation};
-use crate::http_request::canonical_request::header;
-use crate::http_request::canonical_request::param;
-use crate::http_request::canonical_request::{CanonicalRequest, StringToSign, HMAC_256};
+use crate::http_request::canonical_request::{header, param, CanonicalRequest, StringToSign};
 use crate::http_request::SigningParams;
-use crate::sign::{calculate_signature, generate_signing_key, sha256_hex_string};
-use crate::SigningOutput;
+use crate::sign::{v4, v4a};
+use crate::{SignatureVersion, SigningOutput};
 use aws_smithy_http::query_writer::QueryWriter;
-use http::header::HeaderValue;
-use http::{HeaderMap, Method, Uri};
+use http::{HeaderMap, HeaderValue, Method, Uri};
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::str;
@@ -188,23 +185,45 @@ fn calculate_signing_params<'a>(
     params: &'a SigningParams<'a>,
 ) -> Result<(CalculatedParams, String), SigningError> {
     let creq = CanonicalRequest::from(request, params)?;
+    let encoded_creq = &v4::sha256_hex_string(creq.to_string().as_bytes());
 
-    let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-    let string_to_sign = StringToSign::new(
-        params.time,
-        params.region,
-        params.service_name,
-        encoded_creq,
-    )
-    .to_string();
-    let signing_key = generate_signing_key(
-        params.secret_key,
-        params.time,
-        params.region,
-        params.service_name,
+    let signature = match params.signature_version {
+        SignatureVersion::V4 => {
+            let string_to_sign = StringToSign::new_v4(
+                params.time,
+                params.region,
+                params.service_name,
+                encoded_creq,
+            )
+            .to_string();
+            let signing_key = v4::generate_signing_key(
+                params.secret_key,
+                params.time,
+                params.region,
+                params.service_name,
+            );
+            v4::calculate_signature(signing_key, string_to_sign.as_bytes())
+        }
+        SignatureVersion::V4a => {
+            let string_to_sign = StringToSign::new_v4a(
+                params.time,
+                params.region,
+                params.service_name,
+                encoded_creq,
+            )
+            .to_string();
+
+            // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
+            let secret_key = v4a::generate_signing_key(params.access_key, params.secret_key);
+            v4a::calculate_signature(&secret_key, string_to_sign.as_bytes())
+        }
+    };
+
+    tracing::trace!(
+        canonical_request = %creq,
+        // string_to_sign = %string_to_sign,
+        "calculated signing parameters"
     );
-    let signature = calculate_signature(signing_key, string_to_sign.as_bytes());
-    tracing::trace!(canonical_request = %creq, string_to_sign = %string_to_sign, "calculated signing parameters");
 
     let values = creq.values.into_query_params().expect("signing with query");
     let mut signing_params = vec![
@@ -218,6 +237,13 @@ fn calculate_signing_params<'a>(
         ),
         (param::X_AMZ_SIGNATURE, Cow::Owned(signature.clone())),
     ];
+
+    if params.signature_version.is_sigv4a() {
+        signing_params.push((
+            param::X_AMZ_REGION_SET,
+            Cow::Owned(params.region.to_owned()),
+        ));
+    }
 
     if let Some(security_token) = params.security_token {
         signing_params.push((
@@ -241,51 +267,107 @@ fn calculate_signing_headers<'a>(
 ) -> Result<SigningOutput<HeaderMap<HeaderValue>>, SigningError> {
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
     let creq = CanonicalRequest::from(request, params)?;
-    tracing::trace!(canonical_request = %creq);
-
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
-    let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-    let sts = StringToSign::new(
-        params.time,
-        params.region,
-        params.service_name,
-        encoded_creq,
-    );
-
-    // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
-    let signing_key = generate_signing_key(
-        params.secret_key,
-        params.time,
-        params.region,
-        params.service_name,
-    );
-    let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
-
-    // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
-    let values = creq.values.as_headers().expect("signing with headers");
+    let encoded_creq = v4::sha256_hex_string(creq.to_string().as_bytes());
+    tracing::trace!(canonical_request = %creq);
     let mut headers = HeaderMap::new();
-    add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
-    headers.insert(
-        "authorization",
-        build_authorization_header(params.access_key, &creq, sts, &signature),
-    );
-    if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
-        add_header(
-            &mut headers,
-            header::X_AMZ_CONTENT_SHA_256,
-            &values.content_sha256,
-            false,
-        );
-    }
 
-    if let Some(security_token) = params.security_token {
-        add_header(
-            &mut headers,
-            header::X_AMZ_SECURITY_TOKEN,
-            security_token,
-            true,
-        );
-    }
+    let signature = match params.signature_version {
+        SignatureVersion::V4 => {
+            let sts = StringToSign::new_v4(
+                params.time,
+                params.region,
+                params.service_name,
+                encoded_creq.as_str(),
+            );
+
+            // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
+            let signing_key = v4::generate_signing_key(
+                params.secret_key,
+                params.time,
+                params.region,
+                params.service_name,
+            );
+            let signature = v4::calculate_signature(signing_key, sts.to_string().as_bytes());
+
+            // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
+            let values = creq.values.as_headers().expect("signing with headers");
+            add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
+            headers.insert(
+                "authorization",
+                build_authorization_header(
+                    params.access_key,
+                    &creq,
+                    sts,
+                    &signature,
+                    params.signature_version,
+                ),
+            );
+            if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
+                add_header(
+                    &mut headers,
+                    header::X_AMZ_CONTENT_SHA_256,
+                    &values.content_sha256,
+                    false,
+                );
+            }
+
+            if let Some(security_token) = params.security_token {
+                add_header(
+                    &mut headers,
+                    header::X_AMZ_SECURITY_TOKEN,
+                    security_token,
+                    true,
+                );
+            }
+            signature
+        }
+        SignatureVersion::V4a => {
+            let sts = StringToSign::new_v4a(
+                params.time,
+                params.region,
+                params.service_name,
+                encoded_creq.as_str(),
+            );
+
+            // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
+            let signing_key = v4a::generate_signing_key(params.access_key, params.secret_key);
+            let signature = v4a::calculate_signature(&signing_key, sts.to_string().as_bytes());
+
+            // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
+            let values = creq.values.as_headers().expect("signing with headers");
+            add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
+            add_header(&mut headers, header::X_AMZ_REGION_SET, params.region, false);
+            headers.insert(
+                "authorization",
+                build_authorization_header(
+                    params.access_key,
+                    &creq,
+                    sts,
+                    &signature,
+                    params.signature_version,
+                ),
+            );
+            if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
+                add_header(
+                    &mut headers,
+                    header::X_AMZ_CONTENT_SHA_256,
+                    &values.content_sha256,
+                    false,
+                );
+            }
+
+            if let Some(security_token) = params.security_token {
+                add_header(
+                    &mut headers,
+                    header::X_AMZ_SECURITY_TOKEN,
+                    security_token,
+                    true,
+                );
+            }
+            signature
+        }
+    };
 
     Ok(SigningOutput::new(headers, signature))
 }
@@ -303,12 +385,18 @@ fn build_authorization_header(
     creq: &CanonicalRequest<'_>,
     sts: StringToSign<'_>,
     signature: &str,
+    signature_version: SignatureVersion,
 ) -> HeaderValue {
+    let scope = if signature_version.is_sigv4a() {
+        sts.scope.v4a_display()
+    } else {
+        sts.scope.to_string()
+    };
     let mut value = HeaderValue::try_from(format!(
         "{} Credential={}/{}, SignedHeaders={}, Signature={}",
-        HMAC_256,
+        sts.algorithm,
         access_key,
-        sts.scope,
+        scope,
         creq.values.signed_headers().as_str(),
         signature
     ))
@@ -321,25 +409,34 @@ fn build_authorization_header(
 mod tests {
     use super::{sign, SigningInstructions};
     use crate::date_time::test_parsers::parse_date_time;
+    use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
     use crate::http_request::sign::SignableRequest;
-    use crate::http_request::test::{
+    use crate::http_request::test_v4::{
         make_headers_comparable, test_request, test_signed_request,
         test_signed_request_query_params,
     };
+    use crate::http_request::test_v4a;
+    use crate::http_request::test_v4a::TestContext;
     use crate::http_request::{
         SessionTokenMode, SignatureLocation, SigningParams, SigningSettings,
     };
+    use crate::sign::v4;
+    use crate::sign::v4a;
+    use crate::SignatureVersion;
     use http::{HeaderMap, HeaderValue};
     use pretty_assertions::assert_eq;
     use proptest::proptest;
+    use ring::signature::KeyPair;
     use std::borrow::Cow;
     use std::time::Duration;
+    use time::format_description::well_known::Rfc3339;
+    use time::OffsetDateTime;
 
     macro_rules! assert_req_eq {
         ($a:tt, $b:tt) => {
             make_headers_comparable(&mut $a);
             make_headers_comparable(&mut $b);
-            assert_eq!(format!("{:?}", $a), format!("{:?}", $b))
+            assert_eq!(format!("{:#?}", $a), format!("{:#?}", $b))
         };
     }
 
@@ -354,6 +451,7 @@ mod tests {
             service_name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
+            signature_version: SignatureVersion::V4,
         };
 
         let original = test_request("get-vanilla-query-order-key-case");
@@ -371,6 +469,275 @@ mod tests {
         assert_req_eq!(expected, signed);
     }
 
+    fn new_v4a_signing_params_from_context<'a>(
+        test_context: &'a TestContext,
+        signature_location: SignatureLocation,
+    ) -> SigningParams<'a> {
+        SigningParams {
+            access_key: &test_context.credentials.access_key_id,
+            secret_key: &test_context.credentials.secret_access_key,
+            security_token: None,
+            region: &test_context.region,
+            service_name: &test_context.service,
+            time: OffsetDateTime::parse(&test_context.timestamp, &Rfc3339)
+                .unwrap()
+                .into(),
+            settings: SigningSettings {
+                // payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+                expires_in: Some(Duration::from_secs(test_context.expiration_in_seconds)),
+                uri_path_normalization_mode: test_context.normalize.into(),
+                signature_location,
+                ..Default::default()
+            },
+            signature_version: SignatureVersion::V4a,
+        }
+    }
+
+    fn run_v4a_test_suite(test_name: &str, signature_location: SignatureLocation) {
+        let tc = test_v4a::test_context(test_name);
+        let params = new_v4a_signing_params_from_context(&tc, signature_location);
+
+        let req = test_v4a::test_request(test_name);
+        let expected_creq = test_v4a::test_canonical_request(test_name, signature_location);
+        let signable_req = SignableRequest::from(&req);
+        let actual_creq = CanonicalRequest::from(&signable_req, &params).unwrap();
+
+        assert_eq!(expected_creq, actual_creq.to_string(), "creq didn't match");
+
+        let expected_string_to_sign = test_v4a::test_string_to_sign(test_name, signature_location);
+        let hashed_creq = &v4::sha256_hex_string(actual_creq.to_string().as_bytes());
+        let actual_string_to_sign =
+            StringToSign::new_v4a(params.time, params.region, params.service_name, hashed_creq)
+                .to_string();
+
+        assert_eq!(
+            expected_string_to_sign, actual_string_to_sign,
+            "'string to sign' didn't match"
+        );
+
+        let out = sign(signable_req, &params).unwrap();
+
+        let mut signed = req;
+        // Sigv4a signatures are non-deterministic, so we can't compare the signature directly.
+        out.output.apply_to_request(&mut signed);
+
+        let keypair = v4a::generate_signing_key(params.access_key, params.secret_key);
+        let sig = hex::decode(out.signature).unwrap();
+
+        let peer_public_key = ring::signature::UnparsedPublicKey::new(
+            &ring::signature::ECDSA_P256_SHA256_ASN1,
+            keypair.public_key().as_ref(),
+        );
+        let sts = actual_string_to_sign.as_bytes();
+        peer_public_key.verify(&sts, &sig).unwrap();
+    }
+
+    #[test]
+    fn test_get_header_key_duplicate() {
+        run_v4a_test_suite("get-header-key-duplicate", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_header_value_order() {
+        run_v4a_test_suite("get-header-value-order", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_header_value_trim() {
+        run_v4a_test_suite("get-header-value-trim", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_relative_normalized() {
+        run_v4a_test_suite("get-relative-normalized", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_relative_relative_normalized() {
+        run_v4a_test_suite(
+            "get-relative-relative-normalized",
+            SignatureLocation::Headers,
+        );
+    }
+
+    #[test]
+    fn test_get_relative_relative_unnormalized() {
+        run_v4a_test_suite(
+            "get-relative-relative-unnormalized",
+            SignatureLocation::Headers,
+        );
+    }
+
+    #[test]
+    fn test_get_relative_unnormalized() {
+        run_v4a_test_suite("get-relative-unnormalized", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_slash_dot_slash_normalized() {
+        run_v4a_test_suite("get-slash-dot-slash-normalized", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_slash_dot_slash_unnormalized() {
+        run_v4a_test_suite(
+            "get-slash-dot-slash-unnormalized",
+            SignatureLocation::Headers,
+        );
+    }
+
+    #[test]
+    fn test_get_slash_normalized() {
+        run_v4a_test_suite("get-slash-normalized", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_slash_pointless_dot_normalized() {
+        run_v4a_test_suite(
+            "get-slash-pointless-dot-normalized",
+            SignatureLocation::Headers,
+        );
+    }
+
+    #[test]
+    fn test_get_slash_pointless_dot_unnormalized() {
+        run_v4a_test_suite(
+            "get-slash-pointless-dot-unnormalized",
+            SignatureLocation::Headers,
+        );
+    }
+
+    #[test]
+    fn test_get_slash_unnormalized() {
+        run_v4a_test_suite("get-slash-unnormalized", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_slashes_normalized() {
+        run_v4a_test_suite("get-slashes-normalized", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_slashes_unnormalized() {
+        run_v4a_test_suite("get-slashes-unnormalized", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_unreserved() {
+        run_v4a_test_suite("get-unreserved", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_vanilla() {
+        run_v4a_test_suite("get-vanilla", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_get_vanilla_empty_query_key() {
+        run_v4a_test_suite(
+            "get-vanilla-empty-query-key",
+            SignatureLocation::QueryParams,
+        );
+    }
+
+    #[test]
+    fn test_get_vanilla_query() {
+        run_v4a_test_suite("get-vanilla-query", SignatureLocation::QueryParams);
+    }
+
+    #[test]
+    fn test_get_vanilla_query_order_encoded() {
+        run_v4a_test_suite(
+            "get-vanilla-query-order-encoded",
+            SignatureLocation::QueryParams,
+        );
+    }
+
+    #[test]
+    fn test_get_vanilla_query_order_key_case() {
+        run_v4a_test_suite(
+            "get-vanilla-query-order-key-case",
+            SignatureLocation::QueryParams,
+        );
+    }
+
+    #[test]
+    fn test_get_vanilla_query_order_value() {
+        run_v4a_test_suite(
+            "get-vanilla-query-order-value",
+            SignatureLocation::QueryParams,
+        );
+    }
+
+    #[test]
+    fn test_get_vanilla_query_unreserved() {
+        run_v4a_test_suite(
+            "get-vanilla-query-unreserved",
+            SignatureLocation::QueryParams,
+        );
+    }
+
+    #[test]
+    fn test_get_vanilla_with_session_token() {
+        run_v4a_test_suite("get-vanilla-with-session-token", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_header_key_case() {
+        run_v4a_test_suite("post-header-key-case", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_header_key_sort() {
+        run_v4a_test_suite("post-header-key-sort", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_header_value_case() {
+        run_v4a_test_suite("post-header-value-case", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_sts_header_after() {
+        run_v4a_test_suite("post-sts-header-after", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_sts_header_before() {
+        run_v4a_test_suite("post-sts-header-before", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_vanilla() {
+        run_v4a_test_suite("post-vanilla", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_vanilla_empty_query_value() {
+        run_v4a_test_suite(
+            "post-vanilla-empty-query-value",
+            SignatureLocation::QueryParams,
+        );
+    }
+
+    #[test]
+    fn test_post_vanilla_query() {
+        run_v4a_test_suite("post-vanilla-query", SignatureLocation::QueryParams);
+    }
+
+    #[test]
+    fn test_post_x_www_form_urlencoded() {
+        run_v4a_test_suite("post-x-www-form-urlencoded", SignatureLocation::Headers);
+    }
+
+    #[test]
+    fn test_post_x_www_form_urlencoded_parameters() {
+        run_v4a_test_suite(
+            "post-x-www-form-urlencoded-parameters",
+            SignatureLocation::Headers,
+        );
+    }
+
     #[test]
     fn test_sign_url_escape() {
         let test = "double-encode-path";
@@ -383,6 +750,7 @@ mod tests {
             service_name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
+            signature_version: SignatureVersion::V4,
         };
 
         let original = test_request(test);
@@ -415,6 +783,7 @@ mod tests {
             service_name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
+            signature_version: SignatureVersion::V4,
         };
 
         let original = test_request("get-vanilla-query-order-key-case");
@@ -443,6 +812,7 @@ mod tests {
             service_name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
+            signature_version: SignatureVersion::V4,
         };
 
         let original = http::Request::builder()
@@ -496,6 +866,7 @@ mod tests {
             service_name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
+            signature_version: SignatureVersion::V4,
         };
 
         let original = http::Request::builder()
@@ -557,6 +928,7 @@ mod tests {
             service_name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
+            signature_version: SignatureVersion::V4,
         };
 
         let original = http::Request::builder()
@@ -613,6 +985,7 @@ mod tests {
             service_name: "foo",
             time: std::time::SystemTime::now(),
             settings,
+            signature_version: SignatureVersion::V4,
         };
 
         let req = http::Request::builder()
@@ -621,7 +994,7 @@ mod tests {
             .body(&[])
             .unwrap();
 
-        let creq = crate::http_request::sign(SignableRequest::from(&req), &params);
+        let creq = sign(SignableRequest::from(&req), &params);
         assert!(creq.is_err());
     }
 
@@ -642,6 +1015,7 @@ mod tests {
                 service_name: "foo",
                 time: std::time::SystemTime::now(),
                 settings,
+                signature_version: SignatureVersion::V4,
             };
 
             let bytes = left.iter().chain(right.iter()).cloned().collect::<Vec<_>>();

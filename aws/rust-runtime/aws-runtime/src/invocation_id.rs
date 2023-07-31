@@ -212,7 +212,10 @@ mod test_util {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::invocation_id::{
+        InvocationId, InvocationIdInterceptor, PredefinedInvocationIdGenerator,
+        SharedInvocationIdGenerator,
+    };
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{
         BeforeTransmitInterceptorContextMut, Input, InterceptorContext,

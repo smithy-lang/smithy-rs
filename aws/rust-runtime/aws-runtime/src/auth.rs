@@ -5,3 +5,6 @@
 
 /// Auth implementations for SigV4.
 pub mod sigv4;
+
+/// Auth implementations for SigV4a.
+pub mod sigv4a;

@@ -26,20 +26,20 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-class SigV4AuthDecorator : ClientCodegenDecorator {
-    override val name: String get() = "SigV4AuthDecorator"
+class SigV4aAuthDecorator : ClientCodegenDecorator {
+    override val name: String get() = "SigV4aAuthDecorator"
     override val order: Byte = 0
 
     override fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
-        baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> = baseAuthSchemeOptions.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
+        baseAuthOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> = baseAuthOptions.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
         it + AuthSchemeOption.StaticAuthSchemeOption(SigV4Trait.ID) {
             rustTemplate(
                 "#{scheme_id},",
                 "scheme_id" to AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-                    .resolve("auth::sigv4::SCHEME_ID"),
+                    .resolve("auth::sigv4a::SCHEME_ID"),
             )
         }
     }
@@ -49,7 +49,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
         baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthServiceRuntimePluginCustomization(codegenContext))
+            it + listOf(V4aAuthServiceRuntimePluginCustomization(codegenContext))
         }
 
     override fun operationCustomizations(
@@ -58,17 +58,17 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> =
         baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthOperationCustomization(codegenContext))
+            it + listOf(V4aAuthOperationCustomization(codegenContext))
         }
 }
 
-private class AuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
+private class V4aAuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
-            "SigV4AuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4AuthScheme"),
+            "SigV4aAuthScheme" to awsRuntime.resolve("auth::sigv4a::SigV4aAuthScheme"),
             "SharedAuthScheme" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
         )
     }
@@ -82,7 +82,7 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
                     addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
                 }
                 section.registerAuthScheme(this) {
-                    rustTemplate("#{SharedAuthScheme}::new(#{SigV4AuthScheme}::new())", *codegenScope)
+                    rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)
                 }
             }
 
@@ -91,13 +91,13 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
     }
 }
 
-private class AuthOperationCustomization(private val codegenContext: ClientCodegenContext) : OperationCustomization() {
+private class V4aAuthOperationCustomization(private val codegenContext: ClientCodegenContext) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
-            "SigV4OperationSigningConfig" to awsRuntime.resolve("auth::sigv4::SigV4OperationSigningConfig"),
-            "SigningOptions" to awsRuntime.resolve("auth::sigv4::SigningOptions"),
+            "SigV4aOperationSigningConfig" to awsRuntime.resolve("auth::sigv4a::SigV4aOperationSigningConfig"),
+            "SigningOptions" to awsRuntime.resolve("auth::sigv4a::SigningOptions"),
             "SignableBody" to AwsRuntimeType.awsSigv4(runtimeConfig).resolve("http_request::SignableBody"),
         )
     }
@@ -120,8 +120,8 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                         signing_options.normalize_uri_path = $normalizeUrlPath;
                         signing_options.payload_override = #{payload_override};
 
-                        ${section.newLayerName}.store_put(#{SigV4OperationSigningConfig} {
-                            region: None,
+                        ${section.newLayerName}.store_put(#{SigV4aOperationSigningConfig} {
+                            region_set: None,
                             service: None,
                             signing_options,
                         });
