@@ -8,15 +8,15 @@ use std::fs::File;
 use std::io::BufReader;
 use std::time::Duration;
 
-use aws_config::timeout::TimeoutConfig;
 use aws_config::provider_config::ProviderConfig;
+use aws_config::timeout::TimeoutConfig;
 use aws_credential_types::Credentials;
 use aws_sdk_sts::error::SdkError;
 
 #[cfg(debug_assertions)]
 use x509_parser::prelude::*;
 
-const OPERATION_TIMEOUT:u64 = 5;
+const OPERATION_TIMEOUT: u64 = 5;
 
 fn unsupported() {
     println!("UNSUPPORTED");
@@ -120,7 +120,7 @@ async fn create_client(
         .timeout_config(
             TimeoutConfig::builder()
                 .operation_timeout(Duration::from_secs(OPERATION_TIMEOUT))
-                .build()
+                .build(),
         )
         .load()
         .await;
@@ -156,7 +156,7 @@ async fn main() -> Result<(), aws_sdk_sts::Error> {
         Err(e) => {
             println!("Unexpected error: {e:#?}");
             std::process::exit(exitcode::SOFTWARE);
-        },
+        }
     }
     Ok(())
 }
