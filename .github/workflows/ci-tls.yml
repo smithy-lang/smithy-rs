@@ -26,7 +26,7 @@ jobs:
         env:
           RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
         run: |
-          apt -y install gcc make python3-pip docker docker.io nginx git
+          sudo apt -y install gcc make python3-pip docker docker.io nginx git
           pip3 install certbuilder crlbuilder
       - name: Checkout smithy-rs
         uses: actions/checkout@v3
@@ -77,9 +77,9 @@ jobs:
         run: |
           cd badtls.io
           python3 scripts/generate.py badtls.test
-          mkdir /etc/nginx/tls || true
-          mkdir /var/www || true
-          python3 scripts/install.py /etc/nginx/conf.d /etc/nginx/tls /var/www
+          sudo mkdir /etc/nginx/tls || true
+          sudo mkdir /var/www || true
+          sudo python3 scripts/install.py /etc/nginx/conf.d /etc/nginx/tls /var/www
           timeout 2m bash ./scripts/local.sh || true
           echo '#### start of badtls.test hosts ####' >>/etc/hosts
           echo '127.0.0.1 domain-match.badtls.test wildcard-match.badtls.test san-match.badtls.test dh1024.badtls.test expired-1963.badtls.test future.badtls.test domain-mismatch.badtls.test san-mismatch.badtls.test bad-key-usage.badtls.test expired.badtls.test wildcard.mismatch.badtls.test rc4.badtls.test weak-sig.badtls.test rc4-md5.badtls.test' >>/etc/hosts
