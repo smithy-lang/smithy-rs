@@ -29,22 +29,22 @@ jobs:
       - name: Checkout smithy-rs
         uses: actions/checkout@v3
         with:
-          path: smithy-rs
+          path: ~/smithy-rs
       - name: Checkout trytls
         uses: actions/checkout@v3
         with:
           repository: ouspg/trytls
-          path: trytls
+          path: ~/trytls
       - name: Checkout badtls
         uses: actions/checkout@v3
         with:
           repository: wbond/badtls.io
-          path: badtls.io
+          path: ~/badtls.io
       - name: Checkout badssl
         uses: actions/checkout@v3
         with:
           repository: chromium/badssl.com
-          path: badssl.com
+          path: ~/badssl.com
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
@@ -54,8 +54,7 @@ jobs:
         env:
           DOCKER_BUILDKIT: 1
         run: |
-          cd
-          cd badssl.com
+          cd ~/badssl.com
           perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
           grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts >>/etc/hosts
           make serve || true
@@ -63,8 +62,7 @@ jobs:
       - name: Build trytls
         shell: bash
         run: |
-          cd
-          cd trytls
+          cd ~/trytls
           perl -p -i -e 's!\./runners!runners!' setup.py
           sed -i '/import platform/a import distro' runners/trytls/utils.py
           sed -i 's/platform.linux_distribution()/distro.name(), distro.version(), distro.id()/' runners/trytls/utils.py
@@ -72,7 +70,7 @@ jobs:
       - name: Build badtls.io
         shell: bash
         run: |
-          cd badtls.io
+          cd ~/badtls.io
           python3 scripts/generate.py badtls.test
           sudo mkdir /etc/nginx/tls || true
           sudo mkdir /var/www || true
