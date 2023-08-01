@@ -1,13 +1,7 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow claims the names of the unpublished crates in this repository
-# on crates.io (by publishing a dummy empty package)
-
-# Allow only one crate claim workflow to run at a time
-concurrency:
-  group: tls-configuration-smithy-rs
-  cancel-in-progress: true
+# This workflow tests the TLS configuration of the smithy-rs client
 
 env:
   rust_version: 1.68.2
@@ -54,31 +48,15 @@ jobs:
         working-directory: badssl.com
         env:
           DOCKER_BUILDKIT: 1
-        run: |
-          perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
-          grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts | sudo tee -a /etc/hosts
-          make serve || true
-          ls certs/sets/test/gen/crt/ca-root.crt
+        run: smithy-rs/tools/ci-scripts/configure-tls/configure-badssl
       - name: Build trytls
         shell: bash
         working-directory: trytls
-        run: |
-          perl -p -i -e 's!\./runners!runners!' setup.py
-          sed -i '/import platform/a import distro' runners/trytls/utils.py
-          sed -i 's/platform.linux_distribution()/distro.name(), distro.version(), distro.id()/' runners/trytls/utils.py
-          pip3 install -e .
+        run: smithy-rs/tools/ci-scripts/configure-tls/configure-trytls
       - name: Build badtls.io
         working-directory: badtls.io
         shell: bash
-        run: |
-          python3 scripts/generate.py badtls.test
-          sudo mkdir /etc/nginx/tls || true
-          sudo mkdir /var/www || true
-          sudo python3 scripts/install.py /etc/nginx/conf.d /etc/nginx/tls /var/www
-          timeout 2m bash ./scripts/local.sh || true
-          echo '#### start of badtls.test hosts ####' | sudo tee -a /etc/hosts
-          echo '127.0.0.1 domain-match.badtls.test wildcard-match.badtls.test san-match.badtls.test dh1024.badtls.test expired-1963.badtls.test future.badtls.test domain-mismatch.badtls.test san-mismatch.badtls.test bad-key-usage.badtls.test expired.badtls.test wildcard.mismatch.badtls.test rc4.badtls.test weak-sig.badtls.test rc4-md5.badtls.test' | sudo tee -a /etc/hosts
-          echo '#### end of badtls.test hosts ####' | sudo tee -a /etc/hosts
+        run: smithy-rs/tools/ci-scripts/configure-tls/configure-badtls
       - name: Create TLS stub
         shell: bash
         run: |
@@ -98,11 +76,7 @@ jobs:
           cp ../smithy-rs/tools/ci-resources/tls-stub.rs src/main.rs
       - name: Update TLS configuration
         shell: bash
-        run: |
-          sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' trytls/runners/trytls/bundles/https.py
-          sed -i -e 's/break//' trytls/runners/trytls/bundles/https.py
-          perl -p -i -e 's/badssl\.com/badssl.test/g; s/badtls\.io/badtls.test/g;' trytls/runners/trytls/bundles/https.py
-          sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r ../badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' stub/src/main.rs
+        run: smithy-rs/tools/ci-scripts/configure-tls/update-certs
       - name: Test TLS configuration
         working-directory: stub
         shell: bash

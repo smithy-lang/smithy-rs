@@ -1,0 +1,10 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
+grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts | sudo tee -a /etc/hosts
+make serve || true
+ls certs/sets/test/gen/crt/ca-root.crt
