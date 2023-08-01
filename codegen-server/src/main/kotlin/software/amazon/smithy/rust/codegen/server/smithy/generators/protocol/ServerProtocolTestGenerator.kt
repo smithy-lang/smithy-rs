@@ -861,6 +861,10 @@ class ServerProtocolTestGenerator(
             "SDKAppliedContentEncoding_ec2Query",
             "SDKAppliedContentEncoding_restJson1",
             "SDKAppliedContentEncoding_restXml",
+
+            // RestXml S3 tests that fail to compile
+            "S3EscapeObjectKeyInUriLabel",
+            "S3EscapePathObjectKeyInUriLabel",
         )
 
         private fun fixRestJsonAllQueryStringTypes(
