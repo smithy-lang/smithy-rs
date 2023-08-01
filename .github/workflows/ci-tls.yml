@@ -57,28 +57,11 @@ jobs:
         working-directory: badtls.io
         shell: bash
         run: ../smithy-rs/tools/ci-scripts/configure-tls/configure-badtls
-      - name: Create TLS stub
-        shell: bash
-        run: |
-          cargo new stub
-          cd stub
-          cargo add rustls
-          cargo add aws-config
-          cargo add aws-sdk-sts
-          cargo add tokio -F full
-          cargo add rustls-pemfile
-          cargo add exitcode
-          cargo add rustls-native-certs
-          cargo add x509-parser
-          cargo add hyper-rustls -F 'rustls-native-certs,http2'
-          cargo add aws-credential-types -F hardcoded-credentials
-          cargo add aws-smithy-client -F rustls
-          cp ../smithy-rs/tools/ci-resources/tls-stub.rs src/main.rs
       - name: Update TLS configuration
         shell: bash
         run: smithy-rs/tools/ci-scripts/configure-tls/update-certs
       - name: Test TLS configuration
-        working-directory: stub
+        working-directory: smithy-rs/tools/ci-resources/tls-stub
         shell: bash
         run: |
           cargo build
