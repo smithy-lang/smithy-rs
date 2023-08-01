@@ -146,10 +146,16 @@ impl HandAuthoredEntry {
         if !self.author.chars().all(|c| c.is_alphanumeric() || c == '-') {
             bail!("Author must be valid GitHub username: [a-zA-Z0-9\\-]")
         }
-        // TODO(enableNewSmithyRuntimeCleanup): Re-add this validation
-        // if self.references.is_empty() {
-        //     bail!("Changelog entry must refer to at least one pull request or issue");
-        // }
+        if self.references.is_empty() {
+            bail!("Changelog entry must refer to at least one pull request or issue");
+        }
+        if self.message.len() > 800 {
+            bail!(
+                "Your changelog entry is too long. Post long-form change log entries in \
+                the GitHub Discussions under the Changelog category, and link to them from \
+                the changelog."
+            );
+        }
 
         Ok(())
     }
