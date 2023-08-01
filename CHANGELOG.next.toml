@@ -159,16 +159,16 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[aws-sdk-rust]]
-message = "Update MSRV to Rust 1.68.2"
-references = ["smithy-rs#2745"]
+message = "Update MSRV to Rust 1.69.0"
+references = ["smithy-rs#2893"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "jdisanti"
+author = "Velfi"
 
 [[smithy-rs]]
-message = "Update MSRV to Rust 1.68.2"
-references = ["smithy-rs#2745"]
+message = "Update MSRV to Rust 1.69.0"
+references = ["smithy-rs#2893"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
-author = "jdisanti"
+author = "Velfi"
 
 [[smithy-rs]]
 message = """`ShapeId` is the new structure used to represent a shape, with its absolute name, namespace and name.
