@@ -70,7 +70,7 @@ fn load_vcs_files() -> Result<Vec<PathBuf>> {
     let vcs_files = Command::new("git")
         .arg("ls-files")
         .arg("--cached")
-        .arg("--others")
+        //.arg("--others")
         .arg("--exclude-standard")
         .current_dir(load_repo_root()?)
         .output()

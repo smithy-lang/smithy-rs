@@ -41,8 +41,7 @@ pub mod adapter {
 
     impl HttpConnector for DynConnectorAdapter {
         fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
-            let future = self.dyn_connector.lock().unwrap().call_lite(request);
-            future
+            self.dyn_connector.lock().unwrap().call_lite(request)
         }
     }
 }
