@@ -56,7 +56,7 @@ jobs:
           DOCKER_BUILDKIT: 1
         run: |
           perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
-          grep -q 'start of badssl\.test hosts' /etc/hosts || sudo make list-hosts >>/etc/hosts
+          sudo grep -q 'start of badssl\.test hosts' /etc/hosts || sudo make list-hosts >>/etc/hosts
           make serve || true
           ls certs/sets/test/gen/crt/ca-root.crt
       - name: Build trytls
