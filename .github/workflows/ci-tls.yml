@@ -76,7 +76,7 @@ jobs:
           cp ../smithy-rs/tools/ci-resources/tls-stub.rs src/main.rs
       - name: Update TLS configuration
         shell: bash
-        run: ../smithy-rs/tools/ci-scripts/configure-tls/update-certs
+        run: smithy-rs/tools/ci-scripts/configure-tls/update-certs
       - name: Test TLS configuration
         working-directory: stub
         shell: bash
