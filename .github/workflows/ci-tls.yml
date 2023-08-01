@@ -29,48 +29,48 @@ jobs:
       - name: Checkout smithy-rs
         uses: actions/checkout@v3
         with:
-          path: ~/smithy-rs
+          path: smithy-rs
       - name: Checkout trytls
         uses: actions/checkout@v3
         with:
           repository: ouspg/trytls
-          path: ~/trytls
+          path: ./trytls
       - name: Checkout badtls
         uses: actions/checkout@v3
         with:
           repository: wbond/badtls.io
-          path: ~/badtls.io
+          path: ./badtls.io
       - name: Checkout badssl
         uses: actions/checkout@v3
         with:
           repository: chromium/badssl.com
-          path: ~/badssl.com
+          path: ./badssl.com
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.rust_version }}
       - name: Build badssl.com
         shell: bash
+        working-directory: badssl.com
         env:
           DOCKER_BUILDKIT: 1
         run: |
-          cd ~/badssl.com
           perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
           grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts >>/etc/hosts
           make serve || true
           ls certs/sets/test/gen/crt/ca-root.crt
       - name: Build trytls
         shell: bash
+        working-directory: trytls
         run: |
-          cd ~/trytls
           perl -p -i -e 's!\./runners!runners!' setup.py
           sed -i '/import platform/a import distro' runners/trytls/utils.py
           sed -i 's/platform.linux_distribution()/distro.name(), distro.version(), distro.id()/' runners/trytls/utils.py
           pip3 install -e .
       - name: Build badtls.io
+        working-directory: badtls.io
         shell: bash
         run: |
-          cd ~/badtls.io
           python3 scripts/generate.py badtls.test
           sudo mkdir /etc/nginx/tls || true
           sudo mkdir /var/www || true
@@ -104,8 +104,8 @@ jobs:
           perl -p -i -e 's/badssl\.com/badssl.test/g; s/badtls\.io/badtls.test/g;' trytls/runners/trytls/bundles/https.py
           sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r ../badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' src/main.rs
       - name: Test TLS configuration
+        working-directory: stub
         shell: bash
         run: |
-          cd stub
           cargo build
           trytls https target/debug/stub
