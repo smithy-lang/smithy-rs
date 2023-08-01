@@ -102,7 +102,7 @@ jobs:
           sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' trytls/runners/trytls/bundles/https.py
           sed -i -e 's/break//' trytls/runners/trytls/bundles/https.py
           perl -p -i -e 's/badssl\.com/badssl.test/g; s/badtls\.io/badtls.test/g;' trytls/runners/trytls/bundles/https.py
-          sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r ../badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' src/main.rs
+          sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r ../badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' stub/src/main.rs
       - name: Test TLS configuration
         working-directory: stub
         shell: bash
