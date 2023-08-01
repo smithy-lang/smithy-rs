@@ -29,7 +29,7 @@ jobs:
       - name: Checkout smithy-rs
         uses: actions/checkout@v3
         with:
-          path: smithy-rs
+          path: ./smithy-rs
       - name: Checkout trytls
         uses: actions/checkout@v3
         with:
@@ -95,7 +95,7 @@ jobs:
           cargo add hyper-rustls -F 'rustls-native-certs,http2'
           cargo add aws-credential-types -F hardcoded-credentials
           cargo add aws-smithy-client -F rustls
-          cp smithy-rs/tools/ci-resources/tls-stub.rs stub/src/main.rs
+          cp ../smithy-rs/tools/ci-resources/tls-stub.rs stub/src/main.rs
       - name: Update TLS configuration
         shell: bash
         run: |
