@@ -83,7 +83,7 @@ One key property here is that although converting to/from an `http::Request` **c
 
 **Challenges**
 1. Creating an HTTP API which is forwards compatible, idiomatic and "truthful" without relying on existing types from Hyper—e.g. when adding a header, we need to account for the possibility that a header is invalid.
-2. Allow for future forwards-compatible evolution in the API—A lot of thought went into the `http` crate API w.r.t method parameters, types, and generics. Although we can aim for a simpler solution in some cases (e.g. accepting `&str` instead of `HeaderName`), we need to be careful that we do so while allowing to API evolution.
+2. Allow for future forwards-compatible evolution in the API—A lot of thought went into the `http` crate API w.r.t method parameters, types, and generics. Although we can aim for a simpler solution in some cases (e.g. accepting `&str` instead of `HeaderName`), we need to be careful that we do so while allowing API evolution.
 
 ### Removing the SigV4 HTTP dependency
 The SigV4 crate signs a number of `HTTP` types directly. We should change it to accept strings, and when appropriate, iterators of strings for headers.
