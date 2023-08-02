@@ -144,7 +144,11 @@ fn apply_endpoint(
         ResolveEndpointError::from_source("endpoint did not have a valid uri", err)
     })?;
 
-    apply_endpoint_to_request_uri(request.uri_mut(), &uri, endpoint_prefix).map_err(|err| {
+    let complete_endpoint = match endpoint_prefix {
+        Some(prefix) => format!("{}.{}", prefix.as_str(), uri),
+        None => uri.to_string(),
+    };
+    request.apply_endpoint(&complete_endpoint).map_err(|err| {
         ResolveEndpointError::message(format!(
             "failed to apply endpoint `{:?}` to request `{:?}`",
             uri, request,
@@ -153,13 +157,10 @@ fn apply_endpoint(
     })?;
 
     for (header_name, header_values) in endpoint.headers() {
-        request.headers_mut().remove(header_name);
+        request.remove_header(header_name);
         for value in header_values {
-            request.headers_mut().insert(
-                HeaderName::from_str(header_name).map_err(|err| {
-                    ResolveEndpointError::message("invalid header name")
-                        .with_source(Some(err.into()))
-                })?,
+            request.add_header(
+                header_name.to_string(),
                 HeaderValue::from_str(value).map_err(|err| {
                     ResolveEndpointError::message("invalid header value")
                         .with_source(Some(err.into()))

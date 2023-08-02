@@ -54,8 +54,7 @@ impl Interceptor for ConnectionPoisoningInterceptor {
         let capture_smithy_connection = CaptureSmithyConnectionWrapper::new();
         context
             .request_mut()
-            .extensions_mut()
-            .insert(capture_smithy_connection.clone_inner());
+            .add_extension(capture_smithy_connection.clone_inner());
         cfg.interceptor_state().store_put(capture_smithy_connection);
 
         Ok(())

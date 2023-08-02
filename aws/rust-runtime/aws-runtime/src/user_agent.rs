@@ -17,7 +17,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
-const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
+const X_AMZ_USER_AGENT: &str = "x-amz-user-agent";
 
 #[derive(Debug)]
 enum UserAgentInterceptorError {
@@ -102,9 +102,9 @@ impl Interceptor for UserAgentInterceptor {
                 Cow::Owned(ua)
             });
 
-        let headers = context.request_mut().headers_mut();
+        let mut headers = context.request_mut().headers_mut();
         let (user_agent, x_amz_user_agent) = header_values(&ua)?;
-        headers.append(USER_AGENT, user_agent);
+        headers.append(USER_AGENT.as_str(), user_agent);
         headers.append(X_AMZ_USER_AGENT, x_amz_user_agent);
         Ok(())
     }

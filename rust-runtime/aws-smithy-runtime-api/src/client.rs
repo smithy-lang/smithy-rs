@@ -23,4 +23,5 @@ pub mod auth;
 /// Smithy connectors and related code.
 pub mod connectors;
 
+pub mod http;
 pub mod ser_de;

@@ -16,8 +16,8 @@ use std::sync::{Arc, Mutex};
 #[cfg(feature = "test-util")]
 pub use test_util::{NoInvocationIdGenerator, PredefinedInvocationIdGenerator};
 
-#[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
-const AMZ_SDK_INVOCATION_ID: HeaderName = HeaderName::from_static("amz-sdk-invocation-id");
+// #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
+const AMZ_SDK_INVOCATION_ID: &str = "amz-sdk-invocation-id";
 
 /// A generator for returning new invocation IDs on demand.
 pub trait InvocationIdGenerator: Debug + Send + Sync {
@@ -120,9 +120,9 @@ impl Interceptor for InvocationIdInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let headers = ctx.request_mut().headers_mut();
         if let Some(id) = cfg.load::<InvocationId>() {
-            headers.append(AMZ_SDK_INVOCATION_ID, id.0.clone());
+            ctx.request_mut()
+                .add_header(AMZ_SDK_INVOCATION_ID, id.0.clone());
         }
         Ok(())
     }

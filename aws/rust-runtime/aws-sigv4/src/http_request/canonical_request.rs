@@ -207,12 +207,12 @@ impl<'a> CanonicalRequest<'a> {
         // - x-amz-date
         // - x-amz-security-token (if provided)
         // - x-amz-content-sha256 (if requested by signing settings)
-        let mut canonical_headers = HeaderMap::with_capacity(req.headers().len());
-        for (name, value) in req.headers().iter() {
+        let mut canonical_headers = HeaderMap::with_capacity(req.headers().count());
+        for (name, value) in req.headers() {
             // Header names and values need to be normalized according to Step 4 of https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
-                HeaderName::from_str(&name.as_str().to_lowercase())?,
+                HeaderName::from_str(&name.to_lowercase())?,
                 normalize_header_value(value)?,
             );
         }
@@ -406,10 +406,8 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
 
 /// Works just like [trim_all] but acts on HeaderValues instead of bytes.
 /// Will ensure that the underlying bytes are valid UTF-8.
-fn normalize_header_value(
-    header_value: &HeaderValue,
-) -> Result<HeaderValue, CanonicalRequestError> {
-    let trimmed_value = trim_all(header_value.as_bytes());
+fn normalize_header_value(header_value: &[u8]) -> Result<HeaderValue, CanonicalRequestError> {
+    let trimmed_value = trim_all(header_value);
     HeaderValue::from_str(
         std::str::from_utf8(&trimmed_value)
             .map_err(CanonicalRequestError::invalid_utf8_in_header_value)?,
@@ -909,7 +907,7 @@ mod tests {
         #[test]
         fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
             if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
-                assert!(normalize_header_value(&header_value).is_ok());
+                assert!(normalize_header_value(header_value.as_bytes()).is_ok());
             }
         }
 
@@ -922,6 +920,6 @@ mod tests {
     #[test]
     fn test_normalize_header_value_returns_expected_error_on_invalid_utf8() {
         let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
-        assert!(normalize_header_value(&header_value).is_err());
+        assert!(normalize_header_value(&header_value.as_bytes()).is_err());
     }
 }

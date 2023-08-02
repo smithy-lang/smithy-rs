@@ -20,7 +20,7 @@ use std::borrow::Cow;
 use std::time::Duration;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
-const AMZ_SDK_REQUEST: HeaderName = HeaderName::from_static("amz-sdk-request");
+const AMZ_SDK_REQUEST: &str = "amz-sdk-request";
 
 /// Generates and attaches a request header that communicates request-related metadata.
 /// Examples include:
@@ -118,8 +118,8 @@ impl Interceptor for RequestInfoInterceptor {
             pairs = pairs.with_pair(pair);
         }
 
-        let headers = context.request_mut().headers_mut();
-        headers.insert(AMZ_SDK_REQUEST, pairs.try_into_header_value()?);
+        let request = context.request_mut();
+        request.add_header(AMZ_SDK_REQUEST, pairs.try_into_header_value()?);
 
         Ok(())
     }

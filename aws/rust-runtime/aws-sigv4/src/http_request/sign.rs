@@ -16,16 +16,17 @@ use http::header::HeaderValue;
 use http::{HeaderMap, Method, Uri};
 use std::borrow::Cow;
 use std::convert::TryFrom;
+use std::fmt::{Debug, Formatter};
 use std::str;
 
 /// Represents all of the information necessary to sign an HTTP request.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct SignableRequest<'a> {
-    method: &'a Method,
-    uri: &'a Uri,
-    headers: &'a HeaderMap<HeaderValue>,
+    method: &'a str,
+    uri: String,
     body: SignableBody<'a>,
+    headers: Vec<(&'a str, &'a [u8])>,
 }
 
 impl<'a> SignableRequest<'a> {
@@ -37,27 +38,32 @@ impl<'a> SignableRequest<'a> {
         headers: &'a HeaderMap<HeaderValue>,
         body: SignableBody<'a>,
     ) -> Self {
+        let headers = headers
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_bytes()))
+            .collect();
+
         Self {
-            method,
-            uri,
-            headers,
+            method: method.as_ref(),
+            uri: uri.to_string(),
             body,
+            headers,
         }
     }
 
     /// Returns the signable URI
-    pub fn uri(&self) -> &Uri {
-        self.uri
+    pub fn uri(&self) -> &str {
+        &self.uri
     }
 
     /// Returns the signable HTTP method
-    pub fn method(&self) -> &Method {
+    pub fn method(&self) -> &str {
         self.method
     }
 
     /// Returns the request headers
-    pub fn headers(&self) -> &HeaderMap<HeaderValue> {
-        self.headers
+    pub fn headers(&self) -> impl Iterator<Item = &(&str, &[u8])> {
+        self.headers.iter()
     }
 
     /// Returns the signable body
