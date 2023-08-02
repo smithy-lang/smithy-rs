@@ -43,6 +43,9 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.rust_version }}
+      - name: Build SDK
+        working-directory: smithy-rs
+        run: ./gradlew :aws:sdk:assemble -Paws.services=+sts,+sso
       - name: Build badssl.com
         shell: bash
         working-directory: badssl.com

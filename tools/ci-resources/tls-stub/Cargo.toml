@@ -9,10 +9,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-aws-config = "*"
-aws-credential-types = { version = "*", features = ["hardcoded-credentials"] }
-aws-sdk-sts = "*"
-aws-smithy-client = { version = "*", features = ["rustls"] }
+aws-config = {path = "../../../aws/sdk/build/aws-sdk/sdk/aws-config", features = ["client-hyper"] }
+aws-credential-types = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
+aws-sdk-sts = { path = "../../../aws/sdk/build/aws-sdk/sdk/sts" }
+aws-smithy-client = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["client-hyper", "rustls"] }
 exitcode = "1"
 hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
 rustls = "0.21"

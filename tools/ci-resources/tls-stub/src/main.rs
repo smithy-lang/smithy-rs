@@ -110,10 +110,9 @@ async fn create_client(
         .enable_http1()
         .enable_http2()
         .build();
-    let provider_config = ProviderConfig::default().with_tcp_connector(https_connector.clone());
+    let smithy_connector = aws_smithy_client::hyper_ext::Adapter::builder().build(https_connector);
     let sdk_config = aws_config::from_env()
-        .configure(provider_config)
-        .http_connector(aws_smithy_client::hyper_ext::Adapter::builder().build(https_connector))
+        .http_connector(smithy_connector)
         .credentials_provider(credentials)
         .region("us-nether-1")
         .endpoint_url(format!("https://{host}:{port}"))
