@@ -68,4 +68,4 @@ jobs:
         shell: bash
         run: |
           cargo build
-          trytls https target/debug/stub || true
+          trytls https target/debug/stub

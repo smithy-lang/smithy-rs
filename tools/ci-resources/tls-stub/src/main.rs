@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::time::Duration;
 
-use aws_config::provider_config::ProviderConfig;
 use aws_config::timeout::TimeoutConfig;
 use aws_credential_types::Credentials;
 use aws_sdk_sts::error::SdkError;
