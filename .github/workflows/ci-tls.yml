@@ -63,10 +63,11 @@ jobs:
       - name: Update TLS configuration
         shell: bash
         run: smithy-rs/tools/ci-scripts/configure-tls/update-certs
-      - name: Test TLS configuration
+      - name: Build TLS stub
         working-directory: smithy-rs/tools/ci-resources/tls-stub
         shell: bash
-        run: |
-          cargo build
-          find .
-          trytls https target/debug/tls-stub
+        run: cargo build
+      - name: Test TLS configuration
+        working-directory: smithy-rs/tools
+        shell: bash
+        run: trytls https target/debug/stub
