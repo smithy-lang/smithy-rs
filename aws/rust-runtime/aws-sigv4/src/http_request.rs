@@ -51,7 +51,7 @@ mod url_escape;
 #[cfg(test)]
 pub(crate) mod test_v4;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sigv4a"))]
 pub(crate) mod test_v4a;
 
 pub use error::SigningError;

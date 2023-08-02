@@ -235,7 +235,7 @@ mod tests {
 
     // The CRT does this so I figured we should too.
     #[test]
-    fn normalize_uri_path_should_merge_mulitple_subsequent_slashes_into_one() {
+    fn normalize_uri_path_should_merge_multiple_subsequent_slashes_into_one() {
         assert_eq!(
             normalize_uri_path("//foo//"),
             Cow::<'_, str>::Owned("/foo/".to_owned())

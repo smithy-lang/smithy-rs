@@ -5,35 +5,40 @@
 
 use bytes::{BufMut, BytesMut};
 use num_bigint::BigInt;
+use once_cell::sync::Lazy;
 use p256::ecdsa::SigningKey;
+use ring::rand::SystemRandom;
 use ring::signature::EcdsaKeyPair;
 use std::io::Write;
+use std::sync::Mutex;
 
-const ORDER: &[u32] = &[
-    0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xBCE6FAAD, 0xA7179E84, 0xF3B9CAC2, 0xFC632551,
-];
 const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
+static SYSTEM_RANDOM: Lazy<Mutex<SystemRandom>> = Lazy::new(|| Mutex::new(SystemRandom::new()));
+static BIG_N_MINUS_2: Lazy<BigInt> = Lazy::new(|| {
+    const ORDER: &[u32] = &[
+        0xFFFFFFFF, 0x00000000, 0xFFFFFFFF, 0xFFFFFFFF, 0xBCE6FAAD, 0xA7179E84, 0xF3B9CAC2,
+        0xFC632551,
+    ];
+    let big_n = BigInt::from_slice(num_bigint::Sign::Plus, ORDER);
+    big_n - BigInt::from(2i32)
+});
 
 /// Calculates a Sigv4a signature
 pub(crate) fn calculate_signature(signing_key: &EcdsaKeyPair, string_to_sign: &[u8]) -> String {
-    // TODO make this a lazy_static
-    let mut rng = ring::rand::SystemRandom::new();
+    let mut rng = SYSTEM_RANDOM.lock().unwrap();
     let signature = signing_key.sign(&mut rng, string_to_sign).unwrap();
     hex::encode(signature.as_ref())
 }
 
 /// Generates a signing key for Sigv4a.
 pub(crate) fn generate_signing_key(access_key: &str, secret_access_key: &str) -> EcdsaKeyPair {
-    // TODO can this be made into a constant?
-    let big_n = BigInt::from_slice(num_bigint::Sign::Plus, ORDER);
-    let big_n_minus_2 = big_n - BigInt::from(2i32);
     // Capacity is the secret access key length plus the length of "AWS4A"
     let mut input_key = Vec::with_capacity(secret_access_key.len() + 5);
     write!(input_key, "AWS4A{secret_access_key}").unwrap();
 
     // Capacity is the access key length plus the counter byte
     let mut kdf_context = Vec::with_capacity(access_key.len() + 1);
-    let mut counter: u8 = 0x01;
+    let mut counter = 1u8;
     let key = loop {
         write!(kdf_context, "{access_key}").unwrap();
         kdf_context.push(counter);
@@ -54,7 +59,7 @@ pub(crate) fn generate_signing_key(access_key: &str, secret_access_key: &str) ->
         let k0 = BigInt::from_bytes_be(num_bigint::Sign::Plus, tag);
 
         // TODO can this be made into a constant-time comparison?
-        if k0 <= big_n_minus_2 {
+        if k0 <= *BIG_N_MINUS_2 {
             let pk = k0 + BigInt::from(1i32);
             let d = pk.to_bytes_be().1;
             // TODO Can I derive the verifying key without relying on the `p256` crate?

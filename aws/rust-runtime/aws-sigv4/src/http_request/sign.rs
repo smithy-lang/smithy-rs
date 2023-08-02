@@ -187,7 +187,7 @@ fn calculate_signing_params<'a>(
     let creq = CanonicalRequest::from(request, params)?;
     let encoded_creq = &v4::sha256_hex_string(creq.to_string().as_bytes());
 
-    let signature = match params.signature_version {
+    let (signature, string_to_sign) = match params.signature_version {
         SignatureVersion::V4 => {
             let string_to_sign = StringToSign::new_v4(
                 params.time,
@@ -202,7 +202,8 @@ fn calculate_signing_params<'a>(
                 params.region,
                 params.service_name,
             );
-            v4::calculate_signature(signing_key, string_to_sign.as_bytes())
+            let signature = v4::calculate_signature(signing_key, string_to_sign.as_bytes());
+            (signature, string_to_sign)
         }
         SignatureVersion::V4a => {
             let string_to_sign = StringToSign::new_v4a(
@@ -215,13 +216,14 @@ fn calculate_signing_params<'a>(
 
             // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
             let secret_key = v4a::generate_signing_key(params.access_key, params.secret_key);
-            v4a::calculate_signature(&secret_key, string_to_sign.as_bytes())
+            let signature = v4a::calculate_signature(&secret_key, string_to_sign.as_bytes());
+            (signature, string_to_sign)
         }
     };
 
     tracing::trace!(
         canonical_request = %creq,
-        // string_to_sign = %string_to_sign,
+        string_to_sign = %string_to_sign,
         "calculated signing parameters"
     );
 
