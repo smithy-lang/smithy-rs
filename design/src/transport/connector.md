@@ -5,7 +5,7 @@ The client had previously supported `native-tls`. You can use your custom connec
 
 Create your connector:
 
-```rust
+```rust,ignore
 /// A `hyper` connector that uses the `native-tls` crate for TLS. To use this in a smithy client,
 /// wrap it in a [hyper_ext::Adapter](crate::hyper_ext::Adapter).
 pub type NativeTls = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
@@ -23,7 +23,7 @@ pub fn native_tls() -> NativeTls {
 ```
 
 Plug the connector in the client:
-```rust
+```rust,ignore
 let mut builder = hyper::client::Builder::default();
 builder.pool_max_idle_per_host(70);
 let connector = aws_smithy_client::erase::DynConnector::new(
