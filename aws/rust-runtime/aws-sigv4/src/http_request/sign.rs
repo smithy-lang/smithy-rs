@@ -983,7 +983,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "foo",
-            time: std::time::SystemTime::now(),
+            time: std::time::SystemTime::UNIX_EPOCH,
             settings,
             signature_version: SignatureVersion::V4,
         };
@@ -1013,7 +1013,7 @@ mod tests {
                 security_token: None,
                 region: "us-east-1",
                 service_name: "foo",
-                time: std::time::SystemTime::now(),
+                time: std::time::SystemTime::UNIX_EPOCH,
                 settings,
                 signature_version: SignatureVersion::V4,
             };
