@@ -23,22 +23,22 @@ class UnconstrainedMapGeneratorTest {
         val model =
             """
             namespace test
-            
+
             use aws.protocols#restJson1
             use smithy.framework#ValidationException
-            
+
             @restJson1
             service TestService {
                 operations: ["Operation"]
             }
-            
+
             @http(uri: "/operation", method: "POST")
             operation Operation {
                 input: OperationInputOutput
                 output: OperationInputOutput
                 errors: [ValidationException]
             }
-            
+
             structure OperationInputOutput {
                 map: MapA
             }

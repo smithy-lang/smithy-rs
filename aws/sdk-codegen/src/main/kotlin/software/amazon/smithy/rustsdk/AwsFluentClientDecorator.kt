@@ -103,13 +103,21 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         baseGenerator.protocolSupport,
         baseGenerator.operationShape,
         renderClientCreation = { params ->
+            rust("let mut ${params.configBuilderName} = ${params.configBuilderName};")
+            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                rust("""${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));""")
+            } else {
+                rust(
+                    """
+                    // If the test case was missing endpoint parameters, default a region so it doesn't fail
+                    if ${params.configBuilderName}.region.is_none() {
+                        ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
+                    }
+                    """,
+                )
+            }
             rustTemplate(
                 """
-                // If the test case was missing endpoint parameters, default a region so it doesn't fail
-                let mut ${params.configBuilderName} = ${params.configBuilderName};
-                if ${params.configBuilderName}.region.is_none() {
-                    ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
-                }
                 let config = ${params.configBuilderName}.http_connector(${params.connectorName}).build();
                 let ${params.clientName} = #{Client}::from_conf(config);
                 """,

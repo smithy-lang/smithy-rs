@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::client::interceptors::error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::{
-    BeforeTransmitInterceptorContextMut, Interceptor,
-};
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use fastrand::Rng;
 use http::{HeaderName, HeaderValue};
 use std::fmt::Debug;
-use uuid::Uuid;
+use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "test-util")]
 pub use test_util::{NoInvocationIdGenerator, PredefinedInvocationIdGenerator};
@@ -25,10 +26,64 @@ pub trait InvocationIdGenerator: Debug + Send + Sync {
     fn generate(&self) -> Result<Option<InvocationId>, BoxError>;
 }
 
+/// Dynamic dispatch implementation of [`InvocationIdGenerator`]
+#[derive(Clone, Debug)]
+pub struct SharedInvocationIdGenerator(Arc<dyn InvocationIdGenerator>);
+
+impl SharedInvocationIdGenerator {
+    /// Creates a new [`SharedInvocationIdGenerator`].
+    pub fn new(gen: impl InvocationIdGenerator + 'static) -> Self {
+        Self(Arc::new(gen))
+    }
+}
+
+impl InvocationIdGenerator for SharedInvocationIdGenerator {
+    fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
+        self.0.generate()
+    }
+}
+
+impl Storable for SharedInvocationIdGenerator {
+    type Storer = StoreReplace<Self>;
+}
+
+/// An invocation ID generator that uses random UUIDs for the invocation ID.
+#[derive(Debug, Default)]
+pub struct DefaultInvocationIdGenerator {
+    rng: Mutex<Rng>,
+}
+
+impl DefaultInvocationIdGenerator {
+    /// Creates a new [`DefaultInvocationIdGenerator`].
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Creates a [`DefaultInvocationIdGenerator`] with the given seed.
+    pub fn with_seed(seed: u64) -> Self {
+        Self {
+            rng: Mutex::new(Rng::with_seed(seed)),
+        }
+    }
+}
+
+impl InvocationIdGenerator for DefaultInvocationIdGenerator {
+    fn generate(&self) -> Result<Option<InvocationId>, BoxError> {
+        let mut rng = self.rng.lock().unwrap();
+        let mut random_bytes = [0u8; 16];
+        rng.fill(&mut random_bytes);
+
+        let id = uuid::Builder::from_random_bytes(random_bytes).into_uuid();
+        Ok(Some(InvocationId::new(id.to_string())))
+    }
+}
+
 /// This interceptor generates a UUID and attaches it to all request attempts made as part of this operation.
 #[non_exhaustive]
 #[derive(Debug, Default)]
-pub struct InvocationIdInterceptor {}
+pub struct InvocationIdInterceptor {
+    default: DefaultInvocationIdGenerator,
+}
 
 impl InvocationIdInterceptor {
     /// Creates a new `InvocationIdInterceptor`
@@ -38,18 +93,23 @@ impl InvocationIdInterceptor {
 }
 
 impl Interceptor for InvocationIdInterceptor {
+    fn name(&self) -> &'static str {
+        "InvocationIdInterceptor"
+    }
+
     fn modify_before_retry_loop(
         &self,
         _ctx: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let id = cfg
-            .get::<Box<dyn InvocationIdGenerator>>()
-            .map(|gen| gen.generate())
-            .transpose()?
-            .flatten();
-        cfg.interceptor_state()
-            .put::<InvocationId>(id.unwrap_or_default());
+        let gen = cfg
+            .load::<SharedInvocationIdGenerator>()
+            .map(|gen| gen as &dyn InvocationIdGenerator)
+            .unwrap_or(&self.default);
+        if let Some(id) = gen.generate()? {
+            cfg.interceptor_state().store_put::<InvocationId>(id);
+        }
 
         Ok(())
     }
@@ -57,13 +117,13 @@ impl Interceptor for InvocationIdInterceptor {
     fn modify_before_transmit(
         &self,
         ctx: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let headers = ctx.request_mut().headers_mut();
-        let id = cfg
-            .get::<InvocationId>()
-            .ok_or("Expected an InvocationId in the ConfigBag but none was present")?;
-        headers.append(AMZ_SDK_INVOCATION_ID, id.0.clone());
+        if let Some(id) = cfg.load::<InvocationId>() {
+            headers.append(AMZ_SDK_INVOCATION_ID, id.0.clone());
+        }
         Ok(())
     }
 }
@@ -73,22 +133,20 @@ impl Interceptor for InvocationIdInterceptor {
 pub struct InvocationId(HeaderValue);
 
 impl InvocationId {
-    /// Create a new, random, invocation ID.
-    pub fn new() -> Self {
-        Self::default()
+    /// Create an invocation ID with the given value.
+    ///
+    /// # Panics
+    /// This constructor will panic if the given invocation ID is not a valid HTTP header value.
+    pub fn new(invocation_id: String) -> Self {
+        Self(
+            HeaderValue::try_from(invocation_id)
+                .expect("invocation ID must be a valid HTTP header value"),
+        )
     }
 }
 
-/// Defaults to a random UUID.
-impl Default for InvocationId {
-    fn default() -> Self {
-        let id = Uuid::new_v4();
-        let id = id
-            .to_string()
-            .parse()
-            .expect("UUIDs always produce a valid header value");
-        Self(id)
-    }
+impl Storable for InvocationId {
+    type Storer = StoreReplace<Self>;
 }
 
 #[cfg(feature = "test-util")]
@@ -154,13 +212,14 @@ mod test_util {
 
 #[cfg(test)]
 mod tests {
-    use crate::invocation_id::{InvocationId, InvocationIdInterceptor};
+    use super::*;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::{
-        BeforeTransmitInterceptorContextMut, Interceptor, InterceptorContext,
+    use aws_smithy_runtime_api::client::interceptors::context::{
+        BeforeTransmitInterceptorContextMut, Input, InterceptorContext,
     };
-    use aws_smithy_types::config_bag::ConfigBag;
-    use aws_smithy_types::type_erasure::TypeErasedBox;
+    use aws_smithy_runtime_api::client::interceptors::Interceptor;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use http::HeaderValue;
 
     fn expect_header<'a>(
@@ -171,8 +230,9 @@ mod tests {
     }
 
     #[test]
-    fn test_id_is_generated_and_set() {
-        let mut ctx = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+    fn default_id_generator() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
         ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
         let _ = ctx.take_input();
@@ -182,16 +242,48 @@ mod tests {
         let interceptor = InvocationIdInterceptor::new();
         let mut ctx = Into::into(&mut ctx);
         interceptor
-            .modify_before_retry_loop(&mut ctx, &mut cfg)
+            .modify_before_retry_loop(&mut ctx, &rc, &mut cfg)
             .unwrap();
         interceptor
-            .modify_before_transmit(&mut ctx, &mut cfg)
+            .modify_before_transmit(&mut ctx, &rc, &mut cfg)
             .unwrap();
 
-        let expected = cfg.get::<InvocationId>().expect("invocation ID was set");
+        let expected = cfg.load::<InvocationId>().expect("invocation ID was set");
         let header = expect_header(&ctx, "amz-sdk-invocation-id");
         assert_eq!(expected.0, header, "the invocation ID in the config bag must match the invocation ID in the request header");
         // UUID should include 32 chars and 4 dashes
         assert_eq!(header.len(), 36);
+    }
+
+    #[cfg(feature = "test-util")]
+    #[test]
+    fn custom_id_generator() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        ctx.enter_serialization_phase();
+        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        let _ = ctx.take_input();
+        ctx.enter_before_transmit_phase();
+
+        let mut cfg = ConfigBag::base();
+        let mut layer = Layer::new("test");
+        layer.store_put(SharedInvocationIdGenerator::new(
+            PredefinedInvocationIdGenerator::new(vec![InvocationId::new(
+                "the-best-invocation-id".into(),
+            )]),
+        ));
+        cfg.push_layer(layer);
+
+        let interceptor = InvocationIdInterceptor::new();
+        let mut ctx = Into::into(&mut ctx);
+        interceptor
+            .modify_before_retry_loop(&mut ctx, &rc, &mut cfg)
+            .unwrap();
+        interceptor
+            .modify_before_transmit(&mut ctx, &rc, &mut cfg)
+            .unwrap();
+
+        let header = expect_header(&ctx, "amz-sdk-invocation-id");
+        assert_eq!("the-best-invocation-id", header);
     }
 }

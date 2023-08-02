@@ -106,7 +106,8 @@ open class ServerRootGenerator(
             //! #### Plugins
             //!
             //! The [`$serviceName::builder_with_plugins`] method, returning [`$builderName`],
-            //! accepts a [`Plugin`](aws_smithy_http_server::plugin::Plugin).
+            //! accepts a plugin marked with [`HttpMarker`](aws_smithy_http_server::plugin::HttpMarker) and a 
+            //! plugin marked with [`ModelMarker`](aws_smithy_http_server::plugin::ModelMarker).
             //! Plugins allow you to build middleware which is aware of the operation it is being applied to.
             //!
             //! ```rust
@@ -114,13 +115,13 @@ open class ServerRootGenerator(
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
             //! ## use #{Hyper}::Body;
-            //! use #{SmithyHttpServer}::plugin::PluginPipeline;
+            //! use #{SmithyHttpServer}::plugin::HttpPlugins;
             //! use $crateName::{$serviceName, $builderName};
             //!
-            //! let plugins = PluginPipeline::new()
+            //! let http_plugins = HttpPlugins::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
-            //! let builder: $builderName<Body, _, _> = $serviceName::builder_with_plugins(plugins, IdentityPlugin);
+            //! let builder: $builderName<Body, _, _> = $serviceName::builder_with_plugins(http_plugins, IdentityPlugin);
             //! ```
             //!
             //! Check out [`#{SmithyHttpServer}::plugin`] to learn more about plugins.

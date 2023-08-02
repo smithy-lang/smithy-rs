@@ -8,23 +8,27 @@ use aws_smithy_http::endpoint::{
     apply_endpoint as apply_endpoint_to_request_uri, EndpointPrefix, ResolveEndpoint,
     SharedEndpointResolver,
 };
-use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, EndpointResolver, EndpointResolverParams, HttpRequest,
-};
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::endpoint::{EndpointResolver, EndpointResolverParams};
+use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
 use http::{HeaderValue, Uri};
 use std::fmt::Debug;
 use std::str::FromStr;
+use tracing::trace;
 
-#[derive(Debug, Clone)]
+/// An endpoint resolver that uses a static URI.
+#[derive(Clone, Debug)]
 pub struct StaticUriEndpointResolver {
     endpoint: Uri,
 }
 
 impl StaticUriEndpointResolver {
+    /// Create a resolver that resolves to `http://localhost:{port}`.
     pub fn http_localhost(port: u16) -> Self {
         Self {
             endpoint: Uri::from_str(&format!("http://localhost:{port}"))
@@ -32,14 +36,17 @@ impl StaticUriEndpointResolver {
         }
     }
 
+    /// Create a resolver that resolves to the given URI.
     pub fn uri(endpoint: Uri) -> Self {
         Self { endpoint }
     }
 }
 
 impl EndpointResolver for StaticUriEndpointResolver {
-    fn resolve_endpoint(&self, _params: &EndpointResolverParams) -> Result<Endpoint, BoxError> {
-        Ok(Endpoint::builder().url(self.endpoint.to_string()).build())
+    fn resolve_endpoint(&self, _params: &EndpointResolverParams) -> Future<Endpoint> {
+        Future::ready(Ok(Endpoint::builder()
+            .url(self.endpoint.to_string())
+            .build()))
     }
 }
 
@@ -60,12 +67,26 @@ impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
     }
 }
 
-#[derive(Debug, Clone)]
+/// Default implementation of [`EndpointResolver`].
+///
+/// This default endpoint resolver implements the `EndpointResolver` trait by
+/// converting the type-erased [`EndpointResolverParams`] into the concrete
+/// endpoint params for the service. It then delegates endpoint resolution
+/// to an underlying resolver that is aware of the concrete type.
+#[derive(Clone, Debug)]
 pub struct DefaultEndpointResolver<Params> {
     inner: SharedEndpointResolver<Params>,
 }
 
+impl<Params> Storable for DefaultEndpointResolver<Params>
+where
+    Params: Debug + Send + Sync + 'static,
+{
+    type Storer = StoreReplace<Self>;
+}
+
 impl<Params> DefaultEndpointResolver<Params> {
+    /// Creates a new `DefaultEndpointResolver`.
     pub fn new(resolve_endpoint: SharedEndpointResolver<Params>) -> Self {
         Self {
             inner: resolve_endpoint,
@@ -77,30 +98,40 @@ impl<Params> EndpointResolver for DefaultEndpointResolver<Params>
 where
     Params: Debug + Send + Sync + 'static,
 {
-    fn resolve_endpoint(&self, params: &EndpointResolverParams) -> Result<Endpoint, BoxError> {
-        match params.get::<Params>() {
-            Some(params) => Ok(self.inner.resolve_endpoint(params)?),
+    fn resolve_endpoint(&self, params: &EndpointResolverParams) -> Future<Endpoint> {
+        let ep = match params.get::<Params>() {
+            Some(params) => self.inner.resolve_endpoint(params).map_err(Box::new),
             None => Err(Box::new(ResolveEndpointError::message(
                 "params of expected type was not present",
             ))),
         }
+        .map_err(|e| e as _);
+        Future::ready(ep)
     }
 }
 
-pub(super) fn orchestrate_endpoint(
+pub(super) async fn orchestrate_endpoint(
     ctx: &mut InterceptorContext,
+    runtime_components: &RuntimeComponents,
     cfg: &mut ConfigBag,
 ) -> Result<(), BoxError> {
-    let params = cfg.endpoint_resolver_params();
-    let endpoint_prefix = cfg.get::<EndpointPrefix>();
+    trace!("orchestrating endpoint resolution");
+
+    let params = cfg
+        .load::<EndpointResolverParams>()
+        .expect("endpoint resolver params must be set");
+    let endpoint_prefix = cfg.load::<EndpointPrefix>();
     let request = ctx.request_mut().expect("set during serialization");
 
-    let endpoint_resolver = cfg.endpoint_resolver();
-    let endpoint = endpoint_resolver.resolve_endpoint(params)?;
+    let endpoint = runtime_components
+        .endpoint_resolver()
+        .resolve_endpoint(params)
+        .await?;
+    tracing::debug!("will use endpoint {:?}", endpoint);
     apply_endpoint(request, &endpoint, endpoint_prefix)?;
 
     // Make the endpoint config available to interceptors
-    cfg.interceptor_state().put(endpoint);
+    cfg.interceptor_state().store_put(endpoint);
     Ok(())
 }
 

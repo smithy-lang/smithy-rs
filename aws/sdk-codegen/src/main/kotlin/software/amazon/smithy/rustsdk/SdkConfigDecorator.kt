@@ -105,7 +105,7 @@ class SdkConfigDecorator : ClientCodegenDecorator {
         val codegenScope = arrayOf(
             "SdkConfig" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("sdk_config::SdkConfig"),
         )
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
                 """
                 impl From<&#{SdkConfig}> for Builder {

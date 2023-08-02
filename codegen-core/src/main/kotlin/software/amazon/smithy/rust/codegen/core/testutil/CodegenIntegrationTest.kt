@@ -24,6 +24,7 @@ data class IntegrationTestParams(
     val additionalSettings: ObjectNode = ObjectNode.builder().build(),
     val overrideTestDir: File? = null,
     val command: ((Path) -> Unit)? = null,
+    val cargoCommand: String? = null,
 )
 
 /**
@@ -40,6 +41,6 @@ fun codegenIntegrationTest(model: Model, params: IntegrationTestParams, invokePl
     )
     invokePlugin(ctx)
     ctx.fileManifest.printGeneratedFiles()
-    params.command?.invoke(testDir) ?: "cargo test".runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
+    params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test").runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
     return testDir
 }

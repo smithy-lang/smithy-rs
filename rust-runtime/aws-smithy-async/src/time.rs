@@ -4,7 +4,6 @@
  */
 
 //! Time source abstraction to support WASM and testing
-use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -29,6 +28,8 @@ impl SystemTimeSource {
 
 impl TimeSource for SystemTimeSource {
     fn now(&self) -> SystemTime {
+        // this is the one OK usage
+        #[allow(clippy::disallowed_methods)]
         SystemTime::now()
     }
 }
@@ -86,8 +87,4 @@ impl TimeSource for SharedTimeSource {
     fn now(&self) -> SystemTime {
         self.0.now()
     }
-}
-
-impl Storable for SharedTimeSource {
-    type Storer = StoreReplace<SharedTimeSource>;
 }

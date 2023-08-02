@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCod
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ValidationResult
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
@@ -21,7 +22,7 @@ typealias ServerProtocolMap = ProtocolMap<ServerProtocolGenerator, ServerCodegen
 /**
  * [ServerCodegenDecorator] allows downstream users to customize code generation.
  */
-interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext> {
+interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, ServerRustSettings> {
     fun protocols(serviceId: ShapeId, currentProtocols: ServerProtocolMap): ServerProtocolMap = currentProtocols
     fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator? = null
 
@@ -38,7 +39,7 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext> {
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
 class CombinedServerCodegenDecorator(private val decorators: List<ServerCodegenDecorator>) :
-    CombinedCoreCodegenDecorator<ServerCodegenContext, ServerCodegenDecorator>(decorators),
+    CombinedCoreCodegenDecorator<ServerCodegenContext, ServerRustSettings, ServerCodegenDecorator>(decorators),
     ServerCodegenDecorator {
 
     private val orderedDecorators = decorators.sortedBy { it.order }

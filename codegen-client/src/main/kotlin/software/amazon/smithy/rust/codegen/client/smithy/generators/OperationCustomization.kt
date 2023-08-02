@@ -107,14 +107,17 @@ sealed class OperationSection(name: String) : Section(name) {
 
     data class AdditionalInterceptors(
         override val customizations: List<OperationCustomization>,
-        val interceptorRegistrarName: String,
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalInterceptors") {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
             val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
                 """
-                $interceptorRegistrarName.register(#{SharedInterceptor}::new(#{interceptor}) as _);
+                .with_interceptor(
+                    #{SharedInterceptor}::new(
+                        #{interceptor}
+                    ) as _
+                )
                 """,
                 "interceptor" to interceptor,
                 "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
@@ -155,11 +158,11 @@ sealed class OperationSection(name: String) : Section(name) {
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalRuntimePlugins") {
         fun addServiceRuntimePlugin(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_service_runtime_plugin(#{plugin})", "plugin" to plugin)
+            writer.rustTemplate(".with_service_plugin(#{plugin})", "plugin" to plugin)
         }
 
         fun addOperationRuntimePlugin(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_operation_runtime_plugin(#{plugin})", "plugin" to plugin)
+            writer.rustTemplate(".with_operation_plugin(#{plugin})", "plugin" to plugin)
         }
     }
 }

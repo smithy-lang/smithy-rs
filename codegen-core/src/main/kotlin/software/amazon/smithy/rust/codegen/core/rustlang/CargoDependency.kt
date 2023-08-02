@@ -13,11 +13,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import java.nio.file.Path
 
-sealed class DependencyScope {
-    object Dev : DependencyScope()
-    object Compile : DependencyScope()
-    object CfgUnstable : DependencyScope()
-    object Build : DependencyScope()
+enum class DependencyScope {
+    Build,
+    CfgUnstable,
+    Compile,
+    Dev,
 }
 
 sealed class DependencyLocation
@@ -124,6 +124,7 @@ class InlineDependency(
             "serialization_settings",
             CargoDependency.Http,
             CargoDependency.smithyHttp(runtimeConfig),
+            CargoDependency.smithyTypes(runtimeConfig),
         )
 
         fun constrained(): InlineDependency =
@@ -134,6 +135,8 @@ class InlineDependency(
 fun InlineDependency.toType() = RuntimeType(module.fullyQualifiedPath(), this)
 
 data class Feature(val name: String, val default: Boolean, val deps: List<String>)
+
+val DEV_ONLY_FEATURES = setOf("test-util")
 
 /**
  * A dependency on an internal or external Cargo Crate
@@ -148,6 +151,12 @@ data class CargoDependency(
     val rustName: String = name.replace("-", "_"),
 ) : RustDependency(name) {
     val key: Triple<String, DependencyLocation, DependencyScope> get() = Triple(name, location, scope)
+
+    init {
+        if (scope != DependencyScope.Dev && DEV_ONLY_FEATURES.any { features.contains(it) }) {
+            throw IllegalArgumentException("The `test-util` feature cannot be used outside of DependencyScope.Dev")
+        }
+    }
 
     fun withFeature(feature: String): CargoDependency {
         return copy(features = features.toMutableSet().apply { add(feature) })
@@ -204,7 +213,8 @@ data class CargoDependency(
                 attribs.add("features = [${joinToString(",") { it.dq() }}]")
             }
         }
-        return "$name = { ${attribs.joinToString(",")} }"
+        attribs.add("scope = $scope")
+        return "$name = { ${attribs.joinToString(", ")} }"
     }
 
     fun toType(): RuntimeType {
@@ -216,7 +226,7 @@ data class CargoDependency(
         val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.0.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
-        val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("1.8.0"))
+        val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("2.0.0"))
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
         val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
@@ -232,6 +242,7 @@ data class CargoDependency(
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
 
         // Test-only dependencies
+        val Approx: CargoDependency = CargoDependency("approx", CratesIo("0.5.1"), DependencyScope.Dev)
         val AsyncStd: CargoDependency = CargoDependency("async-std", CratesIo("1.12.0"), DependencyScope.Dev)
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
         val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
@@ -286,7 +297,11 @@ data class CargoDependency(
 
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
+            .withFeature("client")
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
+            .withFeature("client")
+        fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
         fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
 

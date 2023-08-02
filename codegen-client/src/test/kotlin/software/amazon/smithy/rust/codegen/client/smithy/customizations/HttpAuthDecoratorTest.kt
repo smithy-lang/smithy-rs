@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 class HttpAuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
         "TestConnection" to CargoDependency.smithyClient(runtimeConfig)
-            .withFeature("test-util").toType()
+            .toDevDependency().withFeature("test-util").toType()
             .resolve("test_connection::TestConnection"),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
@@ -57,7 +57,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -91,7 +91,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -136,7 +136,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -182,7 +182,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -228,7 +228,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -274,7 +274,49 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
+                            .await
+                            .expect("success");
+                        connector.assert_requests_match(&[]);
+                    }
+                    """,
+                    *codegenScope(codegenContext.runtimeConfig),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun optionalAuth() {
+        clientIntegrationTest(
+            TestModels.optionalAuth,
+            TestCodegenSettings.orchestratorModeTestParams,
+        ) { codegenContext, rustCrate ->
+            rustCrate.integrationTest("optional_auth") {
+                val moduleName = codegenContext.moduleUseName()
+                Attribute.TokioTest.render(this)
+                rustTemplate(
+                    """
+                    async fn optional_auth() {
+                        let connector = #{TestConnection}::new(vec![(
+                            http::Request::builder()
+                                .uri("http://localhost:1234/SomeOperation")
+                                .body(#{SdkBody}::empty())
+                                .unwrap(),
+                            http::Response::builder().status(200).body("").unwrap(),
+                        )]);
+
+                        let config = $moduleName::Config::builder()
+                            .endpoint_resolver("http://localhost:1234")
+                            .http_connector(connector.clone())
+                            .build();
+                        let smithy_client = aws_smithy_client::Builder::new()
+                            .connector(connector.clone())
+                            .middleware_fn(|r| r)
+                            .build_dyn();
+                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let _ = client.some_operation()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -416,6 +458,33 @@ private object TestModels {
         }
 
         @http(uri: "/SomeOperation", method: "GET")
+        operation SomeOperation {
+            output: SomeOutput
+        }
+    """.asSmithyModel()
+
+    val optionalAuth = """
+        namespace test
+
+        use aws.api#service
+        use aws.protocols#restJson1
+
+        @service(sdkId: "Test Api Key Auth")
+        @restJson1
+        @httpBearerAuth
+        @auth([httpBearerAuth])
+        service TestService {
+            version: "2023-01-01",
+            operations: [SomeOperation]
+        }
+
+        structure SomeOutput {
+            someAttribute: Long,
+            someVal: String
+        }
+
+        @http(uri: "/SomeOperation", method: "GET")
+        @optionalAuth
         operation SomeOperation {
             output: SomeOutput
         }

@@ -14,6 +14,7 @@ import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
 /**
@@ -34,7 +35,7 @@ class AddInternalServerErrorToInfallibleOperationsDecorator : ServerCodegenDecor
     override val name: String = "AddInternalServerErrorToInfallibleOperations"
     override val order: Byte = 0
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    override fun transformModel(service: ServiceShape, model: Model, settings: ServerRustSettings): Model =
         addErrorShapeToModelOperations(service, model) { shape -> shape.allErrors(model).isEmpty() }
 }
 
@@ -60,7 +61,7 @@ class AddInternalServerErrorToAllOperationsDecorator : ServerCodegenDecorator {
     override val name: String = "AddInternalServerErrorToAllOperations"
     override val order: Byte = 0
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    override fun transformModel(service: ServiceShape, model: Model, settings: ServerRustSettings): Model =
         addErrorShapeToModelOperations(service, model) { true }
 }
 

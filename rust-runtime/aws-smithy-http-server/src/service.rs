@@ -6,7 +6,7 @@
 //! The shape of a [Smithy service] is modelled by the [`ServiceShape`] trait. Its associated types
 //! [`ServiceShape::ID`], [`ServiceShape::VERSION`], [`ServiceShape::Protocol`], and [`ServiceShape::Operations`] map
 //! to the services [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id), the version field, the applied
-//! [protocol trait](https://smithy.io/2.0/aws/protocols/index.html) (see [`proto`](crate::proto) module), and the
+//! [protocol trait](https://smithy.io/2.0/aws/protocols/index.html) (see [`protocol`](crate::protocol) module), and the
 //! operations field.
 //!
 //! We generate an implementation on this for every service struct (exported from the root of the generated crate).
@@ -32,7 +32,7 @@
 //! ```rust,no_run
 //! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # use aws_smithy_http_server::service::{ServiceShape, ContainsOperation};
-//! # use aws_smithy_http_server::proto::rest_json_1::RestJson1;
+//! # use aws_smithy_http_server::protocol::rest_json_1::RestJson1;
 //! # pub struct Shopping;
 //! // For more information on these marker structs see `OperationShape`
 //! struct GetShopping;

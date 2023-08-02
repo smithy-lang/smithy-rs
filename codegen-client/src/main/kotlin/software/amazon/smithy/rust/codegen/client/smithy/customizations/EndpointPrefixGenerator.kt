@@ -17,6 +17,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete this file
+
 class EndpointPrefixGenerator(private val codegenContext: ClientCodegenContext, private val shape: OperationShape) :
     OperationCustomization() {
     companion object {

@@ -30,6 +30,7 @@ internal class SigV4SigningDecoratorTest {
             codegenContext,
             SigV4SigningConfig(
                 codegenContext.runtimeConfig,
+                codegenContext.smithyRuntimeMode,
                 true,
                 SigV4Trait.builder().name("test-service").build(),
             ),

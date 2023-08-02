@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -19,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -35,28 +35,27 @@ class RequestSerializerGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenScope by lazy {
-        val runtimeApi = CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig).toType()
+        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
         val interceptorContext = runtimeApi.resolve("client::interceptors::context")
-        val orchestrator = runtimeApi.resolve("client::orchestrator")
-        val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig).toType()
+        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         arrayOf(
-            "BoxError" to orchestrator.resolve("BoxError"),
-            "config" to ClientRustModule.Config,
-            "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),
+            *preludeScope,
+            "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
+            "config" to ClientRustModule.config,
+            "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "header_util" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("header"),
             "http" to RuntimeType.Http,
-            "HttpRequest" to orchestrator.resolve("HttpRequest"),
+            "HttpRequest" to runtimeApi.resolve("client::orchestrator::HttpRequest"),
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
             "Input" to interceptorContext.resolve("Input"),
             "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
-            "RequestSerializer" to orchestrator.resolve("RequestSerializer"),
+            "RequestSerializer" to runtimeApi.resolve("client::ser_de::RequestSerializer"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "HeaderSerializationSettings" to RuntimeType.forInlineDependency(
                 InlineDependency.serializationSettings(
                     codegenContext.runtimeConfig,
                 ),
             ).resolve("HeaderSerializationSettings"),
-            "TypedBox" to smithyTypes.resolve("type_erasure::TypedBox"),
         )
     }
 
@@ -71,15 +70,15 @@ class RequestSerializerGenerator(
             struct $serializerName;
             impl #{RequestSerializer} for $serializerName {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
-                fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> Result<#{HttpRequest}, #{BoxError}> {
-                    let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
-                    let _header_serialization_settings = _cfg.get::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
+                fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
+                    let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
+                    let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
                     };
                     let body = #{generate_body};
                     #{add_content_length}
-                    Ok(request_builder.body(body).expect("valid request"))
+                    #{Ok}(request_builder.body(body).expect("valid request"))
                 }
             }
             """,

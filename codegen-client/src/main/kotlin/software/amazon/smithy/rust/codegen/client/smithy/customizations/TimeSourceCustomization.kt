@@ -23,13 +23,16 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
     private val codegenScope = arrayOf(
         *preludeScope,
         "SharedTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::SharedTimeSource"),
+        "StaticTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::StaticTimeSource"),
+        "UNIX_EPOCH" to RuntimeType.std.resolve("time::UNIX_EPOCH"),
+        "Duration" to RuntimeType.std.resolve("time::Duration"),
     )
 
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
                 is ServiceConfig.ConfigStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
+                    if (runtimeMode.generateMiddleware) {
                         rustTemplate(
                             """
                             pub(crate) time_source: #{SharedTimeSource},
@@ -42,29 +45,30 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 is ServiceConfig.ConfigImpl -> {
                     rust("/// Return time source used for this service.")
                     rustBlockTemplate(
-                        "pub fn time_source(&self) -> #{SharedTimeSource}",
+                        "pub fn time_source(&self) -> #{Option}<#{SharedTimeSource}>",
                         *codegenScope,
                     ) {
-                        if (runtimeMode.defaultToOrchestrator) {
+                        if (runtimeMode.generateOrchestrator) {
                             rustTemplate(
-                                """self.inner.load::<#{SharedTimeSource}>().expect("time source should be set").clone()""",
+                                """self.runtime_components.time_source()""",
                                 *codegenScope,
                             )
                         } else {
-                            rust("self.time_source.clone()")
+                            rustTemplate("#{Some}(self.time_source.clone())", *codegenScope)
                         }
                     }
                 }
 
-                is ServiceConfig.BuilderStruct ->
-                    rustTemplate(
-                        """
-                        time_source: #{Option}<#{SharedTimeSource}>,
-                        """,
-                        *codegenScope,
-                    )
+                is ServiceConfig.BuilderStruct -> {
+                    if (runtimeMode.generateMiddleware) {
+                        rustTemplate(
+                            "time_source: #{Option}<#{SharedTimeSource}>,",
+                            *codegenScope,
+                        )
+                    }
+                }
 
-                ServiceConfig.BuilderImpl ->
+                ServiceConfig.BuilderImpl -> {
                     rustTemplate(
                         """
                         /// Sets the time source used for this service
@@ -72,37 +76,72 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                             mut self,
                             time_source: impl #{Into}<#{SharedTimeSource}>,
                         ) -> Self {
-                            self.time_source = Some(time_source.into());
-                            self
-                        }
-                        /// Sets the time source used for this service
-                        pub fn set_time_source(
-                            &mut self,
-                            time_source: #{Option}<#{SharedTimeSource}>,
-                        ) -> &mut Self {
-                            self.time_source = time_source;
+                            self.set_time_source(#{Some}(time_source.into()));
                             self
                         }
                         """,
                         *codegenScope,
                     )
 
-                ServiceConfig.BuilderBuild -> {
-                    if (runtimeMode.defaultToOrchestrator) {
+                    if (runtimeMode.generateOrchestrator) {
                         rustTemplate(
                             """
-                            layer.store_put(self.time_source.unwrap_or_default());
+                            /// Sets the time source used for this service
+                            pub fn set_time_source(
+                                &mut self,
+                                time_source: #{Option}<#{SharedTimeSource}>,
+                            ) -> &mut Self {
+                                self.runtime_components.set_time_source(time_source);
+                                self
+                            }
                             """,
                             *codegenScope,
                         )
                     } else {
                         rustTemplate(
                             """
-                            time_source: self.time_source.unwrap_or_default(),
+                            /// Sets the time source used for this service
+                            pub fn set_time_source(
+                                &mut self,
+                                time_source: #{Option}<#{SharedTimeSource}>,
+                            ) -> &mut Self {
+                                self.time_source = time_source;
+                                self
+                            }
                             """,
                             *codegenScope,
                         )
                     }
+                }
+
+                ServiceConfig.BuilderBuild -> {
+                    if (runtimeMode.generateOrchestrator) {
+                        rustTemplate(
+                            """
+                            if self.runtime_components.time_source().is_none() {
+                                self.runtime_components.set_time_source(#{Some}(#{Default}::default()));
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            "time_source: self.time_source.unwrap_or_default(),",
+                            *codegenScope,
+                        )
+                    }
+                }
+
+                is ServiceConfig.DefaultForTests -> {
+                    rustTemplate(
+                        """
+                        ${section.configBuilderRef}
+                            .set_time_source(#{Some}(#{SharedTimeSource}::new(
+                                #{StaticTimeSource}::new(#{UNIX_EPOCH} + #{Duration}::from_secs(1234567890)))
+                            ));
+                        """,
+                        *codegenScope,
+                    )
                 }
 
                 else -> emptySection

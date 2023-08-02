@@ -87,7 +87,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
                 if (propertyBagAvailable) {
                     rust("properties.acquire_mut().insert(signer_sender);")
                 } else {
-                    rust("_cfg.interceptor_state().put(signer_sender);")
+                    rust("_cfg.interceptor_state().store_put(signer_sender);")
                 }
             },
         )

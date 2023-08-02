@@ -115,7 +115,7 @@ class PythonServerOperationHandlerGenerator(
                     };
                     #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;
-                result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
+                result.await.and_then(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))
                 """,
                 *codegenScope,
             )

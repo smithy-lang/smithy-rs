@@ -146,9 +146,10 @@ impl HandAuthoredEntry {
         if !self.author.chars().all(|c| c.is_alphanumeric() || c == '-') {
             bail!("Author must be valid GitHub username: [a-zA-Z0-9\\-]")
         }
-        if self.references.is_empty() {
-            bail!("Changelog entry must refer to at least one pull request or issue");
-        }
+        // TODO(enableNewSmithyRuntimeCleanup): Re-add this validation
+        // if self.references.is_empty() {
+        //     bail!("Changelog entry must refer to at least one pull request or issue");
+        // }
 
         Ok(())
     }

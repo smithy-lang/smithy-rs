@@ -3,31 +3,40 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// TODO(msrvUpgrade): This can be removed once we upgrade the MSRV to Rust 1.69
+#![allow(unknown_lints)]
+
 use self::auth::orchestrate_auth;
+use crate::client::interceptors::Interceptors;
 use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::http::read_body;
-use crate::client::timeout::{MaybeTimeout, ProvideMaybeTimeoutConfig, TimeoutKind};
+use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream::ByteStream;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output, RewindResult};
-use aws_smithy_runtime_api::client::interceptors::{InterceptorContext, Interceptors};
-use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, HttpResponse, LoadedRequestBody, OrchestratorError,
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::connectors::HttpConnector;
+use aws_smithy_runtime_api::client::interceptors::context::{
+    Error, Input, InterceptorContext, Output, RewindResult,
 };
-use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
-use aws_smithy_runtime_api::client::retries::ShouldAttempt;
+use aws_smithy_runtime_api::client::orchestrator::{
+    HttpResponse, LoadedRequestBody, OrchestratorError,
+};
+use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
+use aws_smithy_runtime_api::client::ser_de::{
+    RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
+};
 use aws_smithy_types::config_bag::ConfigBag;
 use std::mem;
-use tracing::{debug, debug_span, instrument, Instrument};
+use tracing::{debug, debug_span, instrument, trace, Instrument};
 
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
 mod http;
-pub mod interceptors;
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
@@ -49,19 +58,54 @@ macro_rules! halt_on_err {
 macro_rules! continue_on_err {
     ([$ctx:ident] => $expr:expr) => {
         if let Err(err) = $expr {
-            debug!("encountered orchestrator error; continuing");
+            debug!(err = ?err, "encountered orchestrator error; continuing");
             $ctx.fail(err.into());
         }
     };
 }
 
+macro_rules! run_interceptors {
+    (continue_on_err: { $($interceptor:ident($ctx:ident, $rc:ident, $cfg:ident);)+ }) => {
+        $(run_interceptors!(continue_on_err: $interceptor($ctx, $rc, $cfg));)+
+    };
+    (continue_on_err: $interceptor:ident($ctx:ident, $rc:ident, $cfg:ident)) => {
+        continue_on_err!([$ctx] => run_interceptors!(__private $interceptor($ctx, $rc, $cfg)))
+    };
+    (halt_on_err: { $($interceptor:ident($ctx:ident, $rc:ident, $cfg:ident);)+ }) => {
+        $(run_interceptors!(halt_on_err: $interceptor($ctx, $rc, $cfg));)+
+    };
+    (halt_on_err: $interceptor:ident($ctx:ident, $rc:ident, $cfg:ident)) => {
+        halt_on_err!([$ctx] => run_interceptors!(__private $interceptor($ctx, $rc, $cfg)))
+    };
+    (__private $interceptor:ident($ctx:ident, $rc:ident, $cfg:ident)) => {
+        Interceptors::new($rc.interceptors()).$interceptor($ctx, $rc, $cfg)
+    };
+}
+
+/// Orchestrates the execution of a request and handling of a response.
+///
+/// The given `runtime_plugins` will be used to generate a `ConfigBag` for this request,
+/// and then the given `input` will be serialized and transmitted. When a response is
+/// received, it will be deserialized and returned.
+///
+/// This orchestration handles retries, endpoint resolution, identity resolution, and signing.
+/// Each of these are configurable via the config and runtime components given by the runtime
+/// plugins.
 pub async fn invoke(
+    service_name: &str,
+    operation_name: &str,
     input: Input,
     runtime_plugins: &RuntimePlugins,
 ) -> Result<Output, SdkError<Error, HttpResponse>> {
-    invoke_with_stop_point(input, runtime_plugins, StopPoint::None)
-        .await?
-        .finalize()
+    invoke_with_stop_point(
+        service_name,
+        operation_name,
+        input,
+        runtime_plugins,
+        StopPoint::None,
+    )
+    .await?
+    .finalize()
 }
 
 /// Allows for returning early at different points during orchestration.
@@ -75,32 +119,45 @@ pub enum StopPoint {
     BeforeTransmit,
 }
 
-#[tracing::instrument(skip_all, name = "invoke")]
+/// Same as [`invoke`], but allows for returning early at different points during orchestration.
+///
+/// Orchestration will cease at the point specified by `stop_point`. This is useful for orchestrations
+/// that don't need to actually transmit requests, such as for generating presigned requests.
+///
+/// See the docs on [`invoke`] for more details.
 pub async fn invoke_with_stop_point(
+    service_name: &str,
+    operation_name: &str,
     input: Input,
     runtime_plugins: &RuntimePlugins,
     stop_point: StopPoint,
 ) -> Result<InterceptorContext, SdkError<Error, HttpResponse>> {
-    let mut cfg = ConfigBag::base();
-    let cfg = &mut cfg;
+    async move {
+        let mut cfg = ConfigBag::base();
+        let cfg = &mut cfg;
 
-    let mut interceptors = Interceptors::new();
-    let mut ctx = InterceptorContext::new(input);
+        let mut ctx = InterceptorContext::new(input);
 
-    if let Err(err) = apply_configuration(&mut ctx, cfg, &mut interceptors, runtime_plugins) {
-        return Err(SdkError::construction_failure(err));
-    }
-    let operation_timeout_config = cfg.maybe_timeout_config(TimeoutKind::Operation);
-    async {
-        // If running the pre-execution interceptors failed, then we skip running the op and run the
-        // final interceptors instead.
-        if !ctx.is_failed() {
-            try_op(&mut ctx, cfg, &interceptors, stop_point).await;
+        let runtime_components = apply_configuration(&mut ctx, cfg, runtime_plugins)
+            .map_err(SdkError::construction_failure)?;
+        trace!(runtime_components = ?runtime_components);
+
+        let operation_timeout_config =
+            MaybeTimeoutConfig::new(&runtime_components, cfg, TimeoutKind::Operation);
+        trace!(operation_timeout_config = ?operation_timeout_config);
+        async {
+            // If running the pre-execution interceptors failed, then we skip running the op and run the
+            // final interceptors instead.
+            if !ctx.is_failed() {
+                try_op(&mut ctx, cfg, &runtime_components, stop_point).await;
+            }
+            finally_op(&mut ctx, cfg, &runtime_components).await;
+            Ok(ctx)
         }
-        finally_op(&mut ctx, cfg, &interceptors).await;
-        Ok(ctx)
+        .maybe_timeout(operation_timeout_config)
+        .await
     }
-    .maybe_timeout_with_config(operation_timeout_config)
+    .instrument(debug_span!("invoke", service = %service_name, operation = %operation_name))
     .await
 }
 
@@ -111,63 +168,77 @@ pub async fn invoke_with_stop_point(
 fn apply_configuration(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
-    interceptors: &mut Interceptors,
     runtime_plugins: &RuntimePlugins,
-) -> Result<(), BoxError> {
-    runtime_plugins.apply_client_configuration(cfg, interceptors.client_interceptors_mut())?;
-    continue_on_err!([ctx] => interceptors.client_read_before_execution(ctx, cfg));
-    runtime_plugins
-        .apply_operation_configuration(cfg, interceptors.operation_interceptors_mut())?;
-    continue_on_err!([ctx] => interceptors.operation_read_before_execution(ctx, cfg));
+) -> Result<RuntimeComponents, BoxError> {
+    let client_rc_builder = runtime_plugins.apply_client_configuration(cfg)?;
+    continue_on_err!([ctx] => Interceptors::new(client_rc_builder.interceptors()).read_before_execution(false, ctx, cfg));
 
-    Ok(())
+    let operation_rc_builder = runtime_plugins.apply_operation_configuration(cfg)?;
+    continue_on_err!([ctx] => Interceptors::new(operation_rc_builder.interceptors()).read_before_execution(true, ctx, cfg));
+
+    // The order below is important. Client interceptors must run before operation interceptors.
+    Ok(RuntimeComponents::builder("merged orchestrator components")
+        .merge_from(&client_rc_builder)
+        .merge_from(&operation_rc_builder)
+        .build()?)
 }
 
 #[instrument(skip_all)]
 async fn try_op(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
-    interceptors: &Interceptors,
+    runtime_components: &RuntimeComponents,
     stop_point: StopPoint,
 ) {
     // Before serialization
-    halt_on_err!([ctx] => interceptors.read_before_serialization(ctx, cfg));
-    halt_on_err!([ctx] => interceptors.modify_before_serialization(ctx, cfg));
+    run_interceptors!(halt_on_err: {
+        read_before_serialization(ctx, runtime_components, cfg);
+        modify_before_serialization(ctx, runtime_components, cfg);
+    });
 
     // Serialization
     ctx.enter_serialization_phase();
     {
-        let request_serializer = cfg.request_serializer();
+        let _span = debug_span!("serialization").entered();
+        let request_serializer = cfg
+            .load::<SharedRequestSerializer>()
+            .expect("request serializer must be in the config bag")
+            .clone();
         let input = ctx.take_input().expect("input set at this point");
         let request = halt_on_err!([ctx] => request_serializer.serialize_input(input, cfg).map_err(OrchestratorError::other));
         ctx.set_request(request);
     }
 
     // Load the request body into memory if configured to do so
-    if let LoadedRequestBody::Requested = cfg.loaded_request_body() {
+    if let Some(&LoadedRequestBody::Requested) = cfg.load::<LoadedRequestBody>() {
+        debug!("loading request body into memory");
         let mut body = SdkBody::taken();
         mem::swap(&mut body, ctx.request_mut().expect("set above").body_mut());
-        let loaded_body = halt_on_err!([ctx] => ByteStream::new(body).collect().await).into_bytes();
+        let loaded_body = halt_on_err!([ctx] =>
+            ByteStream::new(body).collect().await.map_err(OrchestratorError::other)
+        )
+        .into_bytes();
         *ctx.request_mut().as_mut().expect("set above").body_mut() =
             SdkBody::from(loaded_body.clone());
         cfg.interceptor_state()
-            .set_loaded_request_body(LoadedRequestBody::Loaded(loaded_body));
+            .store_put(LoadedRequestBody::Loaded(loaded_body));
     }
 
     // Before transmit
     ctx.enter_before_transmit_phase();
-    halt_on_err!([ctx] => interceptors.read_after_serialization(ctx, cfg));
-    halt_on_err!([ctx] => interceptors.modify_before_retry_loop(ctx, cfg));
+    run_interceptors!(halt_on_err: {
+        read_after_serialization(ctx, runtime_components, cfg);
+        modify_before_retry_loop(ctx, runtime_components, cfg);
+    });
 
-    let retry_strategy = cfg.retry_strategy();
     // If we got a retry strategy from the bag, ask it what to do.
     // Otherwise, assume we should attempt the initial request.
-    let should_attempt = retry_strategy
-        .map(|rs| rs.should_attempt_initial_request(cfg))
-        .unwrap_or(Ok(ShouldAttempt::Yes));
+    let should_attempt = runtime_components
+        .retry_strategy()
+        .should_attempt_initial_request(runtime_components, cfg);
     match should_attempt {
         // Yes, let's make a request
-        Ok(ShouldAttempt::Yes) => debug!("retry strategy has OK'd initial request"),
+        Ok(ShouldAttempt::Yes) => debug!("retry strategy has OKed initial request"),
         // No, this request shouldn't be sent
         Ok(ShouldAttempt::No) => {
             let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
@@ -175,60 +246,70 @@ async fn try_op(
         }
         // No, we shouldn't make a request because...
         Err(err) => halt!([ctx] => OrchestratorError::other(err)),
-        Ok(ShouldAttempt::YesAfterDelay(_)) => {
-            unreachable!("Delaying the initial request is currently unsupported. If this feature is important to you, please file an issue in GitHub.")
+        Ok(ShouldAttempt::YesAfterDelay(delay)) => {
+            let sleep_impl = halt_on_err!([ctx] => runtime_components.sleep_impl().ok_or_else(|| OrchestratorError::other(
+                "the retry strategy requested a delay before sending the initial request, but no 'async sleep' implementation was set"
+            )));
+            debug!("retry strategy has OKed initial request after a {delay:?} delay");
+            sleep_impl.sleep(delay).await;
         }
     }
 
     // Save a request checkpoint before we make the request. This will allow us to "rewind"
     // the request in the case of retry attempts.
     ctx.save_checkpoint();
-    for i in 1usize.. {
-        debug!("beginning attempt #{i}");
+    let mut retry_delay = None;
+    for i in 1u32.. {
         // Break from the loop if we can't rewind the request's state. This will always succeed the
         // first time, but will fail on subsequent iterations if the request body wasn't retryable.
+        trace!("checking if context can be rewound for attempt #{i}");
         if let RewindResult::Impossible = ctx.rewind(cfg) {
             debug!("request cannot be retried since the request body cannot be cloned");
             break;
         }
         // Track which attempt we're currently on.
-        cfg.interceptor_state().put::<RequestAttempts>(i.into());
-        let attempt_timeout_config = cfg.maybe_timeout_config(TimeoutKind::OperationAttempt);
+        cfg.interceptor_state()
+            .store_put::<RequestAttempts>(i.into());
+        // Backoff time should not be included in the attempt timeout
+        if let Some((delay, sleep)) = retry_delay.take() {
+            debug!("delaying for {delay:?}");
+            sleep.await;
+        }
+        let attempt_timeout_config =
+            MaybeTimeoutConfig::new(runtime_components, cfg, TimeoutKind::OperationAttempt);
+        trace!(attempt_timeout_config = ?attempt_timeout_config);
         let maybe_timeout = async {
-            try_attempt(ctx, cfg, interceptors, stop_point).await;
-            finally_attempt(ctx, cfg, interceptors).await;
+            debug!("beginning attempt #{i}");
+            try_attempt(ctx, cfg, runtime_components, stop_point).await;
+            finally_attempt(ctx, cfg, runtime_components).await;
             Result::<_, SdkError<Error, HttpResponse>>::Ok(())
         }
-        .maybe_timeout_with_config(attempt_timeout_config)
+        .maybe_timeout(attempt_timeout_config)
         .await
         .map_err(|err| OrchestratorError::timeout(err.into_source().unwrap()));
 
         // We continue when encountering a timeout error. The retry classifier will decide what to do with it.
         continue_on_err!([ctx] => maybe_timeout);
 
-        let retry_strategy = cfg.retry_strategy();
-
         // If we got a retry strategy from the bag, ask it what to do.
         // If no strategy was set, we won't retry.
-        let should_attempt = match retry_strategy {
-            Some(retry_strategy) => halt_on_err!(
-                [ctx] => retry_strategy.should_attempt_retry(ctx, cfg).map_err(OrchestratorError::other)
-            ),
-            None => ShouldAttempt::No,
-        };
+        let should_attempt = halt_on_err!([ctx] => runtime_components
+            .retry_strategy()
+            .should_attempt_retry(ctx, runtime_components, cfg)
+            .map_err(OrchestratorError::other));
         match should_attempt {
             // Yes, let's retry the request
             ShouldAttempt::Yes => continue,
             // No, this request shouldn't be retried
             ShouldAttempt::No => {
-                debug!("this error is not retryable, exiting attempt loop");
+                debug!("a retry is either unnecessary or not possible, exiting attempt loop");
                 break;
             }
             ShouldAttempt::YesAfterDelay(delay) => {
-                let sleep_impl = halt_on_err!([ctx] => cfg.sleep_impl().ok_or(OrchestratorError::other(
-                    "the retry strategy requested a delay before sending the next request, but no 'async sleep' implementation was set"
+                let sleep_impl = halt_on_err!([ctx] => runtime_components.sleep_impl().ok_or_else(|| OrchestratorError::other(
+                    "the retry strategy requested a delay before sending the retry request, but no 'async sleep' implementation was set"
                 )));
-                sleep_impl.sleep(delay).await;
+                retry_delay = Some((delay, sleep_impl.sleep(delay)));
                 continue;
             }
         }
@@ -239,123 +320,153 @@ async fn try_op(
 async fn try_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
-    interceptors: &Interceptors,
+    runtime_components: &RuntimeComponents,
     stop_point: StopPoint,
 ) {
-    halt_on_err!([ctx] => interceptors.read_before_attempt(ctx, cfg));
-    halt_on_err!([ctx] => orchestrate_endpoint(ctx, cfg).map_err(OrchestratorError::other));
-    halt_on_err!([ctx] => interceptors.modify_before_signing(ctx, cfg));
-    halt_on_err!([ctx] => interceptors.read_before_signing(ctx, cfg));
+    run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
-    halt_on_err!([ctx] => orchestrate_auth(ctx, cfg).await.map_err(OrchestratorError::other));
+    halt_on_err!([ctx] => orchestrate_endpoint(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
 
-    halt_on_err!([ctx] => interceptors.read_after_signing(ctx, cfg));
-    halt_on_err!([ctx] => interceptors.modify_before_transmit(ctx, cfg));
-    halt_on_err!([ctx] => interceptors.read_before_transmit(ctx, cfg));
+    run_interceptors!(halt_on_err: {
+        modify_before_signing(ctx, runtime_components, cfg);
+        read_before_signing(ctx, runtime_components, cfg);
+    });
+
+    halt_on_err!([ctx] => orchestrate_auth(ctx, runtime_components, cfg).await.map_err(OrchestratorError::other));
+
+    run_interceptors!(halt_on_err: {
+        read_after_signing(ctx, runtime_components, cfg);
+        modify_before_transmit(ctx, runtime_components, cfg);
+        read_before_transmit(ctx, runtime_components, cfg);
+    });
 
     // Return early if a stop point is set for before transmit
     if let StopPoint::BeforeTransmit = stop_point {
+        debug!("ending orchestration early because the stop point is `BeforeTransmit`");
         return;
     }
 
     // The connection consumes the request but we need to keep a copy of it
     // within the interceptor context, so we clone it here.
     ctx.enter_transmit_phase();
-    let call_result = halt_on_err!([ctx] => {
+    let response = halt_on_err!([ctx] => {
         let request = ctx.take_request().expect("set during serialization");
-        cfg.connection().call(request).await.map_err(|err| {
+        trace!(request = ?request, "transmitting request");
+        let connector = halt_on_err!([ctx] => runtime_components.http_connector().ok_or_else(||
+            OrchestratorError::other("No HTTP connector was available to send this request. \
+                Enable the `rustls` crate feature or set a connector to fix this.")
+        ));
+        connector.call(request).await.map_err(|err| {
             match err.downcast() {
                 Ok(connector_error) => OrchestratorError::connector(*connector_error),
                 Err(box_err) => OrchestratorError::other(box_err)
             }
         })
     });
-    ctx.set_response(call_result);
+    trace!(response = ?response, "received response from service");
+    ctx.set_response(response);
     ctx.enter_before_deserialization_phase();
 
-    halt_on_err!([ctx] => interceptors.read_after_transmit(ctx, cfg));
-    halt_on_err!([ctx] => interceptors.modify_before_deserialization(ctx, cfg));
-    halt_on_err!([ctx] => interceptors.read_before_deserialization(ctx, cfg));
+    run_interceptors!(halt_on_err: {
+        read_after_transmit(ctx, runtime_components, cfg);
+        modify_before_deserialization(ctx, runtime_components, cfg);
+        read_before_deserialization(ctx, runtime_components, cfg);
+    });
 
     ctx.enter_deserialization_phase();
     let output_or_error = async {
         let response = ctx.response_mut().expect("set during transmit");
-        let response_deserializer = cfg.response_deserializer();
-        match response_deserializer.deserialize_streaming(response) {
+        let response_deserializer = cfg
+            .load::<SharedResponseDeserializer>()
+            .expect("a request deserializer must be in the config bag");
+        let maybe_deserialized = {
+            let _span = debug_span!("deserialize_streaming").entered();
+            response_deserializer.deserialize_streaming(response)
+        };
+        match maybe_deserialized {
             Some(output_or_error) => output_or_error,
             None => read_body(response)
                 .instrument(debug_span!("read_body"))
                 .await
                 .map_err(OrchestratorError::response)
-                .and_then(|_| response_deserializer.deserialize_nonstreaming(response)),
+                .and_then(|_| {
+                    let _span = debug_span!("deserialize_nonstreaming").entered();
+                    response_deserializer.deserialize_nonstreaming(response)
+                }),
         }
     }
+    .instrument(debug_span!("deserialization"))
     .await;
+    trace!(output_or_error = ?output_or_error);
     ctx.set_output_or_error(output_or_error);
 
     ctx.enter_after_deserialization_phase();
-    halt_on_err!([ctx] => interceptors.read_after_deserialization(ctx, cfg));
+    run_interceptors!(halt_on_err: read_after_deserialization(ctx, runtime_components, cfg));
 }
 
 #[instrument(skip_all)]
 async fn finally_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
-    interceptors: &Interceptors,
+    runtime_components: &RuntimeComponents,
 ) {
-    continue_on_err!([ctx] => interceptors.modify_before_attempt_completion(ctx, cfg));
-    continue_on_err!([ctx] => interceptors.read_after_attempt(ctx, cfg));
+    run_interceptors!(continue_on_err: {
+        modify_before_attempt_completion(ctx, runtime_components, cfg);
+        read_after_attempt(ctx, runtime_components, cfg);
+    });
 }
 
 #[instrument(skip_all)]
 async fn finally_op(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
-    interceptors: &Interceptors,
+    runtime_components: &RuntimeComponents,
 ) {
-    continue_on_err!([ctx] => interceptors.modify_before_completion(ctx, cfg));
-    continue_on_err!([ctx] => interceptors.read_after_execution(ctx, cfg));
+    run_interceptors!(continue_on_err: {
+        modify_before_completion(ctx, runtime_components, cfg);
+        read_after_execution(ctx, runtime_components, cfg);
+    });
 }
 
-#[cfg(all(test, feature = "test-util", feature = "anonymous-auth"))]
+#[cfg(all(test, feature = "test-util"))]
 mod tests {
-    use super::invoke;
-    use crate::client::orchestrator::endpoints::{
-        StaticUriEndpointResolver, StaticUriEndpointResolverParams,
-    };
-    use crate::client::orchestrator::{invoke_with_stop_point, StopPoint};
+    use super::*;
+    use crate::client::auth::no_auth::{NoAuthRuntimePlugin, NO_AUTH_SCHEME_ID};
+    use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
     use crate::client::retries::strategy::NeverRetryStrategy;
-    use crate::client::runtime_plugin::anonymous_auth::AnonymousAuthRuntimePlugin;
     use crate::client::test_util::{
-        connector::OkConnector, deserializer::CannedResponseDeserializer,
-        serializer::CannedRequestSerializer,
+        deserializer::CannedResponseDeserializer, serializer::CannedRequestSerializer,
     };
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::context::wrappers::{
-        FinalizerInterceptorContextMut, FinalizerInterceptorContextRef,
+    use ::http::{Request, Response, StatusCode};
+    use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
+    use aws_smithy_runtime_api::client::auth::{
+        AuthSchemeOptionResolverParams, SharedAuthSchemeOptionResolver,
     };
-    use aws_smithy_runtime_api::client::interceptors::context::Output;
-    use aws_smithy_runtime_api::client::interceptors::{
+    use aws_smithy_runtime_api::client::connectors::{HttpConnector, SharedHttpConnector};
+    use aws_smithy_runtime_api::client::endpoint::{
+        EndpointResolverParams, SharedEndpointResolver,
+    };
+    use aws_smithy_runtime_api::client::interceptors::context::{
         AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
         BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
         BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
-        BeforeTransmitInterceptorContextRef,
+        BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
+        FinalizerInterceptorContextRef,
     };
-    use aws_smithy_runtime_api::client::interceptors::{
-        Interceptor, InterceptorRegistrar, SharedInterceptor,
-    };
-    use aws_smithy_runtime_api::client::orchestrator::{ConfigBagAccessors, OrchestratorError};
-    use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin, RuntimePlugins};
+    use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
+    use aws_smithy_runtime_api::client::orchestrator::{BoxFuture, Future, HttpRequest};
+    use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
-    use aws_smithy_types::type_erasure::{TypeErasedBox, TypedBox};
-    use http::StatusCode;
+    use std::borrow::Cow;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
     use tracing_test::traced_test;
 
     fn new_request_serializer() -> CannedRequestSerializer {
         CannedRequestSerializer::success(
-            http::Request::builder()
+            Request::builder()
                 .body(SdkBody::empty())
                 .expect("request is valid"),
         )
@@ -363,37 +474,87 @@ mod tests {
 
     fn new_response_deserializer() -> CannedResponseDeserializer {
         CannedResponseDeserializer::new(
-            http::Response::builder()
+            Response::builder()
                 .status(StatusCode::OK)
                 .body(SdkBody::empty())
                 .map_err(|err| OrchestratorError::other(Box::new(err)))
-                .map(|res| Output::new(Box::new(res))),
+                .map(Output::erase),
         )
     }
 
+    #[derive(Debug, Default)]
+    struct OkConnector {}
+
+    impl OkConnector {
+        fn new() -> Self {
+            Self::default()
+        }
+    }
+
+    impl HttpConnector for OkConnector {
+        fn call(&self, _request: HttpRequest) -> BoxFuture<HttpResponse> {
+            Box::pin(Future::ready(Ok(::http::Response::builder()
+                .status(200)
+                .body(SdkBody::empty())
+                .expect("OK response is valid"))))
+        }
+    }
+
     #[derive(Debug)]
-    struct TestOperationRuntimePlugin;
+    struct TestOperationRuntimePlugin {
+        builder: RuntimeComponentsBuilder,
+    }
+
+    impl TestOperationRuntimePlugin {
+        fn new() -> Self {
+            Self {
+                builder: RuntimeComponentsBuilder::new("TestOperationRuntimePlugin")
+                    .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())))
+                    .with_endpoint_resolver(Some(SharedEndpointResolver::new(
+                        StaticUriEndpointResolver::http_localhost(8080),
+                    )))
+                    .with_http_connector(Some(SharedHttpConnector::new(OkConnector::new())))
+                    .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
+                        StaticAuthSchemeOptionResolver::new(vec![NO_AUTH_SCHEME_ID]),
+                    ))),
+            }
+        }
+    }
 
     impl RuntimePlugin for TestOperationRuntimePlugin {
         fn config(&self) -> Option<FrozenLayer> {
-            let mut cfg = Layer::new("test operation");
-            cfg.set_request_serializer(new_request_serializer());
-            cfg.set_response_deserializer(new_response_deserializer());
-            cfg.set_retry_strategy(NeverRetryStrategy::new());
-            cfg.set_endpoint_resolver(StaticUriEndpointResolver::http_localhost(8080));
-            cfg.set_endpoint_resolver_params(StaticUriEndpointResolverParams::new().into());
-            cfg.set_connection(OkConnector::new());
+            let mut layer = Layer::new("TestOperationRuntimePlugin");
+            layer.store_put(AuthSchemeOptionResolverParams::new("idontcare"));
+            layer.store_put(EndpointResolverParams::new("dontcare"));
+            layer.store_put(SharedRequestSerializer::new(new_request_serializer()));
+            layer.store_put(SharedResponseDeserializer::new(new_response_deserializer()));
+            Some(layer.freeze())
+        }
 
-            Some(cfg.freeze())
+        fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+            Cow::Borrowed(&self.builder)
         }
     }
 
     macro_rules! interceptor_error_handling_test {
+        (read_before_execution, $ctx:ty, $expected:expr,) => {
+            interceptor_error_handling_test!(__private read_before_execution, $ctx, $expected,);
+        };
         ($interceptor:ident, $ctx:ty, $expected:expr) => {
+            interceptor_error_handling_test!(__private $interceptor, $ctx, $expected, _rc: &RuntimeComponents,);
+        };
+        (__private $interceptor:ident, $ctx:ty, $expected:expr, $($rc_arg:tt)*) => {
             #[derive(Debug)]
             struct FailingInterceptorA;
             impl Interceptor for FailingInterceptorA {
-                fn $interceptor(&self, _ctx: $ctx, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+                fn name(&self) -> &'static str { "FailingInterceptorA" }
+
+                fn $interceptor(
+                    &self,
+                    _ctx: $ctx,
+                    $($rc_arg)*
+                    _cfg: &mut ConfigBag,
+                ) -> Result<(), BoxError> {
                     tracing::debug!("FailingInterceptorA called!");
                     Err("FailingInterceptorA".into())
                 }
@@ -402,7 +563,14 @@ mod tests {
             #[derive(Debug)]
             struct FailingInterceptorB;
             impl Interceptor for FailingInterceptorB {
-                fn $interceptor(&self, _ctx: $ctx, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+                fn name(&self) -> &'static str { "FailingInterceptorB" }
+
+                fn $interceptor(
+                    &self,
+                    _ctx: $ctx,
+                    $($rc_arg)*
+                    _cfg: &mut ConfigBag,
+                ) -> Result<(), BoxError> {
                     tracing::debug!("FailingInterceptorB called!");
                     Err("FailingInterceptorB".into())
                 }
@@ -411,38 +579,56 @@ mod tests {
             #[derive(Debug)]
             struct FailingInterceptorC;
             impl Interceptor for FailingInterceptorC {
-                fn $interceptor(&self, _ctx: $ctx, _cfg: &mut ConfigBag) -> Result<(), BoxError> {
+                fn name(&self) -> &'static str { "FailingInterceptorC" }
+
+                fn $interceptor(
+                    &self,
+                    _ctx: $ctx,
+                    $($rc_arg)*
+                    _cfg: &mut ConfigBag,
+                ) -> Result<(), BoxError> {
                     tracing::debug!("FailingInterceptorC called!");
                     Err("FailingInterceptorC".into())
                 }
             }
 
             #[derive(Debug)]
-            struct FailingInterceptorsClientRuntimePlugin;
-
+            struct FailingInterceptorsClientRuntimePlugin(RuntimeComponentsBuilder);
+            impl FailingInterceptorsClientRuntimePlugin {
+                fn new() -> Self {
+                    Self(RuntimeComponentsBuilder::new("test").with_interceptor(SharedInterceptor::new(FailingInterceptorA)))
+                }
+            }
             impl RuntimePlugin for FailingInterceptorsClientRuntimePlugin {
-                fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-                    interceptors.register(SharedInterceptor::new(FailingInterceptorA));
+                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                    Cow::Borrowed(&self.0)
                 }
             }
 
             #[derive(Debug)]
-            struct FailingInterceptorsOperationRuntimePlugin;
-
+            struct FailingInterceptorsOperationRuntimePlugin(RuntimeComponentsBuilder);
+            impl FailingInterceptorsOperationRuntimePlugin {
+                fn new() -> Self {
+                    Self(
+                        RuntimeComponentsBuilder::new("test")
+                            .with_interceptor(SharedInterceptor::new(FailingInterceptorB))
+                            .with_interceptor(SharedInterceptor::new(FailingInterceptorC))
+                    )
+                }
+            }
             impl RuntimePlugin for FailingInterceptorsOperationRuntimePlugin {
-                fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-                    interceptors.register(SharedInterceptor::new(FailingInterceptorB));
-                    interceptors.register(SharedInterceptor::new(FailingInterceptorC));
+                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                    Cow::Borrowed(&self.0)
                 }
             }
 
-            let input = TypeErasedBox::new(Box::new(()));
+            let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
-                .with_client_plugin(FailingInterceptorsClientRuntimePlugin)
-                .with_operation_plugin(TestOperationRuntimePlugin)
-                .with_operation_plugin(AnonymousAuthRuntimePlugin::new())
-                .with_operation_plugin(FailingInterceptorsOperationRuntimePlugin);
-            let actual = invoke(input, &runtime_plugins)
+                .with_client_plugin(FailingInterceptorsClientRuntimePlugin::new())
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
+                .with_operation_plugin(FailingInterceptorsOperationRuntimePlugin::new());
+            let actual = invoke("test", "test", input, &runtime_plugins)
                 .await
                 .expect_err("should error");
             let actual = format!("{:?}", actual);
@@ -457,18 +643,18 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_execution_error_handling() {
-        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeExecution, source: Some(\"FailingInterceptorC\") } })""#.to_string();
+        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeExecution, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_execution,
             &BeforeSerializationInterceptorContextRef<'_>,
-            expected
+            expected,
         );
     }
 
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_serialization_error_handling() {
-        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeSerialization, source: Some(\"FailingInterceptorC\") } })""#.to_string();
+        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeSerialization, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_serialization,
             &mut BeforeSerializationInterceptorContextMut<'_>,
@@ -479,7 +665,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_serialization_error_handling() {
-        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeSerialization, source: Some(\"FailingInterceptorC\") } })""#.to_string();
+        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ReadBeforeSerialization, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_serialization,
             &BeforeSerializationInterceptorContextRef<'_>,
@@ -490,7 +676,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_serialization_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSerialization, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSerialization, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_serialization,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -501,7 +687,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_retry_loop_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeRetryLoop, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeRetryLoop, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_retry_loop,
             &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -512,7 +698,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_attempt_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeAttempt, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeAttempt, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_attempt,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -523,7 +709,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_signing_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeSigning, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_signing,
             &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -534,7 +720,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_signing_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeSigning, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_signing,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -545,7 +731,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_signing_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSigning, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadAfterSigning, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_signing,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -556,7 +742,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_transmit_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeTransmit, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeTransmit, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_transmit,
             &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -567,7 +753,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_transmit_error_handling() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeTransmit, source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ReadBeforeTransmit, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, connection: Unknown } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_transmit,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -578,7 +764,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_transmit_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterTransmit, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterTransmit, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_transmit,
             &BeforeDeserializationInterceptorContextRef<'_>,
@@ -589,7 +775,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_deserialization_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeDeserialization, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_deserialization,
             &mut BeforeDeserializationInterceptorContextMut<'_>,
@@ -600,7 +786,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_deserialization_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadBeforeDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadBeforeDeserialization, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_before_deserialization,
             &BeforeDeserializationInterceptorContextRef<'_>,
@@ -611,7 +797,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_deserialization_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterDeserialization, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterDeserialization, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_deserialization,
             &AfterDeserializationInterceptorContextRef<'_>,
@@ -622,7 +808,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_attempt_completion_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_attempt_completion,
             &mut FinalizerInterceptorContextMut<'_>,
@@ -633,7 +819,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_attempt_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_attempt,
             &FinalizerInterceptorContextRef<'_>,
@@ -644,7 +830,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_completion_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeCompletion, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             modify_before_completion,
             &mut FinalizerInterceptorContextMut<'_>,
@@ -655,7 +841,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_execution_error_handling() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, interceptor_name: Some(\"FailingInterceptorC\"), source: Some(\"FailingInterceptorC\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_handling_test!(
             read_after_execution,
             &FinalizerInterceptorContextRef<'_>,
@@ -664,13 +850,22 @@ mod tests {
     }
 
     macro_rules! interceptor_error_redirection_test {
+        (read_before_execution, $origin_ctx:ty, $destination_interceptor:ident, $destination_ctx:ty, $expected:expr) => {
+            interceptor_error_redirection_test!(__private read_before_execution, $origin_ctx, $destination_interceptor, $destination_ctx, $expected,);
+        };
         ($origin_interceptor:ident, $origin_ctx:ty, $destination_interceptor:ident, $destination_ctx:ty, $expected:expr) => {
+            interceptor_error_redirection_test!(__private $origin_interceptor, $origin_ctx, $destination_interceptor, $destination_ctx, $expected, _rc: &RuntimeComponents,);
+        };
+        (__private $origin_interceptor:ident, $origin_ctx:ty, $destination_interceptor:ident, $destination_ctx:ty, $expected:expr, $($rc_arg:tt)*) => {
             #[derive(Debug)]
             struct OriginInterceptor;
             impl Interceptor for OriginInterceptor {
+                fn name(&self) -> &'static str { "OriginInterceptor" }
+
                 fn $origin_interceptor(
                     &self,
                     _ctx: $origin_ctx,
+                    $($rc_arg)*
                     _cfg: &mut ConfigBag,
                 ) -> Result<(), BoxError> {
                     tracing::debug!("OriginInterceptor called!");
@@ -681,9 +876,12 @@ mod tests {
             #[derive(Debug)]
             struct DestinationInterceptor;
             impl Interceptor for DestinationInterceptor {
+                fn name(&self) -> &'static str { "DestinationInterceptor" }
+
                 fn $destination_interceptor(
                     &self,
                     _ctx: $destination_ctx,
+                    _runtime_components: &RuntimeComponents,
                     _cfg: &mut ConfigBag,
                 ) -> Result<(), BoxError> {
                     tracing::debug!("DestinationInterceptor called!");
@@ -692,21 +890,28 @@ mod tests {
             }
 
             #[derive(Debug)]
-            struct InterceptorsTestOperationRuntimePlugin;
-
+            struct InterceptorsTestOperationRuntimePlugin(RuntimeComponentsBuilder);
+            impl InterceptorsTestOperationRuntimePlugin {
+                fn new() -> Self {
+                    Self(
+                        RuntimeComponentsBuilder::new("test")
+                            .with_interceptor(SharedInterceptor::new(OriginInterceptor))
+                            .with_interceptor(SharedInterceptor::new(DestinationInterceptor))
+                    )
+                }
+            }
             impl RuntimePlugin for InterceptorsTestOperationRuntimePlugin {
-                fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-                    interceptors.register(SharedInterceptor::new(OriginInterceptor));
-                    interceptors.register(SharedInterceptor::new(DestinationInterceptor));
+                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                    Cow::Borrowed(&self.0)
                 }
             }
 
-            let input = TypeErasedBox::new(Box::new(()));
+            let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
-                .with_operation_plugin(TestOperationRuntimePlugin)
-                .with_operation_plugin(AnonymousAuthRuntimePlugin::new())
-                .with_operation_plugin(InterceptorsTestOperationRuntimePlugin);
-            let actual = invoke(input, &runtime_plugins)
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
+                .with_operation_plugin(InterceptorsTestOperationRuntimePlugin::new());
+            let actual = invoke("test", "test", input, &runtime_plugins)
                 .await
                 .expect_err("should error");
             let actual = format!("{:?}", actual);
@@ -720,7 +925,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_execution_error_causes_jump_to_modify_before_completion() {
-        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") } })""#.to_string();
+        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_execution,
             &BeforeSerializationInterceptorContextRef<'_>,
@@ -733,7 +938,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_serialization_error_causes_jump_to_modify_before_completion() {
-        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") } })""#.to_string();
+        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_serialization,
             &mut BeforeSerializationInterceptorContextMut<'_>,
@@ -746,7 +951,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_serialization_error_causes_jump_to_modify_before_completion() {
-        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") } })""#.to_string();
+        let expected = r#""ConstructionFailure(ConstructionFailure { source: InterceptorError { kind: ModifyBeforeCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_serialization,
             &BeforeSerializationInterceptorContextRef<'_>,
@@ -759,7 +964,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_serialization_error_causes_jump_to_modify_before_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_serialization,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -772,7 +977,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_retry_loop_error_causes_jump_to_modify_before_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_retry_loop,
             &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -785,7 +990,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_attempt_error_causes_jump_to_modify_before_attempt_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_attempt,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -798,7 +1003,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_signing_error_causes_jump_to_modify_before_attempt_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_signing,
             &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -811,7 +1016,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_signing_error_causes_jump_to_modify_before_attempt_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_signing,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -824,7 +1029,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_signing_error_causes_jump_to_modify_before_attempt_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_signing,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -837,7 +1042,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_transmit_error_causes_jump_to_modify_before_attempt_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_transmit,
             &mut BeforeTransmitInterceptorContextMut<'_>,
@@ -850,7 +1055,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_before_transmit_error_causes_jump_to_modify_before_attempt_completion() {
-        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
+        let expected = r#""DispatchFailure(DispatchFailure { source: ConnectorError { kind: Other(None), source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, connection: Unknown } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_transmit,
             &BeforeTransmitInterceptorContextRef<'_>,
@@ -863,7 +1068,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_read_after_transmit_error_causes_jump_to_modify_before_attempt_completion() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_transmit,
             &BeforeDeserializationInterceptorContextRef<'_>,
@@ -877,7 +1082,7 @@ mod tests {
     #[traced_test]
     async fn test_modify_before_deserialization_error_causes_jump_to_modify_before_attempt_completion(
     ) {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_deserialization,
             &mut BeforeDeserializationInterceptorContextMut<'_>,
@@ -891,7 +1096,7 @@ mod tests {
     #[traced_test]
     async fn test_read_before_deserialization_error_causes_jump_to_modify_before_attempt_completion(
     ) {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(None), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             read_before_deserialization,
             &BeforeDeserializationInterceptorContextRef<'_>,
@@ -905,7 +1110,7 @@ mod tests {
     #[traced_test]
     async fn test_read_after_deserialization_error_causes_jump_to_modify_before_attempt_completion()
     {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ModifyBeforeAttemptCompletion, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             read_after_deserialization,
             &AfterDeserializationInterceptorContextRef<'_>,
@@ -918,7 +1123,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_attempt_completion_error_causes_jump_to_read_after_attempt() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterAttempt, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_attempt_completion,
             &mut FinalizerInterceptorContextMut<'_>,
@@ -928,16 +1133,10 @@ mod tests {
         );
     }
 
-    // #[tokio::test]
-    // #[traced_test]
-    // async fn test_read_after_attempt_error_causes_jump_to_modify_before_attempt_completion() {
-    //     todo!("I'm confused by the behavior described in the spec")
-    // }
-
     #[tokio::test]
     #[traced_test]
     async fn test_modify_before_completion_error_causes_jump_to_read_after_execution() {
-        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
+        let expected = r#""ResponseError(ResponseError { source: InterceptorError { kind: ReadAfterExecution, interceptor_name: Some(\"DestinationInterceptor\"), source: Some(\"DestinationInterceptor\") }, raw: Response { status: 200, version: HTTP/1.1, headers: {}, body: SdkBody { inner: Once(Some(b\"\")), retryable: true } } })""#.to_string();
         interceptor_error_redirection_test!(
             modify_before_completion,
             &mut FinalizerInterceptorContextMut<'_>,
@@ -951,13 +1150,15 @@ mod tests {
     async fn test_stop_points() {
         let runtime_plugins = || {
             RuntimePlugins::new()
-                .with_operation_plugin(TestOperationRuntimePlugin)
-                .with_operation_plugin(AnonymousAuthRuntimePlugin::new())
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
         };
 
         // StopPoint::None should result in a response getting set since orchestration doesn't stop
         let context = invoke_with_stop_point(
-            TypedBox::new(()).erase(),
+            "test",
+            "test",
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::None,
         )
@@ -967,7 +1168,9 @@ mod tests {
 
         // StopPoint::BeforeTransmit will exit right before sending the request, so there should be no response
         let context = invoke_with_stop_point(
-            TypedBox::new(()).erase(),
+            "test",
+            "test",
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::BeforeTransmit,
         )
@@ -991,9 +1194,14 @@ mod tests {
         }
 
         impl Interceptor for TestInterceptor {
+            fn name(&self) -> &'static str {
+                "TestInterceptor"
+            }
+
             fn modify_before_retry_loop(
                 &self,
                 _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+                _rc: &RuntimeComponents,
                 _cfg: &mut ConfigBag,
             ) -> Result<(), BoxError> {
                 self.inner
@@ -1005,6 +1213,7 @@ mod tests {
             fn modify_before_completion(
                 &self,
                 _context: &mut FinalizerInterceptorContextMut<'_>,
+                _rc: &RuntimeComponents,
                 _cfg: &mut ConfigBag,
             ) -> Result<(), BoxError> {
                 self.inner
@@ -1016,6 +1225,7 @@ mod tests {
             fn read_after_execution(
                 &self,
                 _context: &FinalizerInterceptorContextRef<'_>,
+                _rc: &RuntimeComponents,
                 _cfg: &mut ConfigBag,
             ) -> Result<(), BoxError> {
                 self.inner
@@ -1027,33 +1237,30 @@ mod tests {
 
         #[derive(Debug)]
         struct TestInterceptorRuntimePlugin {
-            interceptor: TestInterceptor,
+            builder: RuntimeComponentsBuilder,
         }
         impl RuntimePlugin for TestInterceptorRuntimePlugin {
-            fn config(&self) -> Option<FrozenLayer> {
-                let mut layer = Layer::new("test");
-                layer.put(self.interceptor.clone());
-                Some(layer.freeze())
-            }
-
-            fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-                interceptors.register(SharedInterceptor::new(self.interceptor.clone()));
+            fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                Cow::Borrowed(&self.builder)
             }
         }
 
         let interceptor = TestInterceptor::default();
         let runtime_plugins = || {
             RuntimePlugins::new()
-                .with_operation_plugin(TestOperationRuntimePlugin)
-                .with_operation_plugin(AnonymousAuthRuntimePlugin::new())
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
                 .with_operation_plugin(TestInterceptorRuntimePlugin {
-                    interceptor: interceptor.clone(),
+                    builder: RuntimeComponentsBuilder::new("test")
+                        .with_interceptor(SharedInterceptor::new(interceptor.clone())),
                 })
         };
 
         // StopPoint::BeforeTransmit will exit right before sending the request, so there should be no response
         let context = invoke_with_stop_point(
-            TypedBox::new(()).erase(),
+            "test",
+            "test",
+            Input::doesnt_matter(),
             &runtime_plugins(),
             StopPoint::BeforeTransmit,
         )

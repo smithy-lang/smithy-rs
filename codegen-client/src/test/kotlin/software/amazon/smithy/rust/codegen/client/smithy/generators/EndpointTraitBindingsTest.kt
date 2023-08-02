@@ -12,13 +12,16 @@ import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
+import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -120,9 +123,10 @@ internal class EndpointTraitBindingsTest {
         project.compileAndTest()
     }
 
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this test (replaced by the @Test below it)
     @ExperimentalPathApi
     @Test
-    fun `endpoint integration test`() {
+    fun `endpoint integration test middleware`() {
         val model = """
             namespace com.example
             use aws.protocols#awsJson1_0
@@ -142,7 +146,7 @@ internal class EndpointTraitBindingsTest {
                 greeting: String
             }
         """.asSmithyModel()
-        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("test_endpoint_prefix") {
                 Attribute.TokioTest.render(this)
@@ -164,6 +168,142 @@ internal class EndpointTraitBindingsTest {
                         assert_eq!(prefix, "test123.hello.");
                     }
                     """,
+                )
+            }
+        }
+    }
+
+    @ExperimentalPathApi
+    @Test
+    fun `endpoint integration test`() {
+        val model = """
+            namespace com.example
+            use aws.protocols#awsJson1_0
+            use smithy.rules#endpointRuleSet
+
+            @awsJson1_0
+            @aws.api#service(sdkId: "Test", endpointPrefix: "differentprefix")
+            @endpointRuleSet({
+                "version": "1.0",
+                "rules": [{
+                    "conditions": [],
+                    "type": "endpoint",
+                    "endpoint": {
+                        "url": "https://example.com",
+                        "properties": {}
+                    }
+                }],
+                "parameters": {}
+            })
+            service TestService {
+                operations: [SayHello],
+                version: "1"
+            }
+            @endpoint(hostPrefix: "test123.{greeting}.")
+            operation SayHello {
+                input: SayHelloInput
+            }
+            structure SayHelloInput {
+                @required
+                @hostLabel
+                greeting: String
+            }
+        """.asSmithyModel()
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+            val moduleName = clientCodegenContext.moduleUseName()
+            rustCrate.integrationTest("test_endpoint_prefix") {
+                Attribute.TokioTest.render(this)
+                rustTemplate(
+                    """
+                    async fn test_endpoint_prefix() {
+                        use #{aws_smithy_client}::test_connection::capture_request;
+                        use aws_smithy_http::body::SdkBody;
+                        use aws_smithy_http::endpoint::EndpointPrefix;
+                        use aws_smithy_runtime_api::box_error::BoxError;
+                        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                        use aws_smithy_types::config_bag::ConfigBag;
+                        use std::sync::atomic::{AtomicU32, Ordering};
+                        use std::sync::{Arc, Mutex};
+                        use $moduleName::{
+                            config::interceptors::BeforeTransmitInterceptorContextRef,
+                            config::Interceptor,
+                            error::DisplayErrorContext,
+                            {Client, Config},
+                        };
+
+                        ##[derive(Clone, Debug, Default)]
+                        struct TestInterceptor {
+                            called: Arc<AtomicU32>,
+                            last_endpoint_prefix: Arc<Mutex<Option<EndpointPrefix>>>,
+                        }
+                        impl Interceptor for TestInterceptor {
+                            fn name(&self) -> &'static str {
+                                "TestInterceptor"
+                            }
+
+                            fn read_before_transmit(
+                                &self,
+                                _context: &BeforeTransmitInterceptorContextRef<'_>,
+                                _runtime_components: &RuntimeComponents,
+                                cfg: &mut ConfigBag,
+                            ) -> Result<(), BoxError> {
+                                self.called.fetch_add(1, Ordering::Relaxed);
+                                if let Some(prefix) = cfg.load::<EndpointPrefix>() {
+                                    self.last_endpoint_prefix
+                                        .lock()
+                                        .unwrap()
+                                        .replace(prefix.clone());
+                                }
+                                Ok(())
+                            }
+                        }
+
+                        let (conn, _r) = capture_request(Some(
+                            http::Response::builder()
+                                .status(200)
+                                .body(SdkBody::from(""))
+                                .unwrap(),
+                        ));
+                        let interceptor = TestInterceptor::default();
+                        let config = Config::builder()
+                            .http_connector(conn)
+                            .interceptor(interceptor.clone())
+                            .build();
+                        let client = Client::from_conf(config);
+                        let err = dbg!(client.say_hello().greeting("hey there!").send().await)
+                            .expect_err("the endpoint should be invalid since it has an exclamation mark in it");
+                        let err_fmt = format!("{}", DisplayErrorContext(err));
+                        assert!(
+                            err_fmt.contains("endpoint prefix could not be built"),
+                            "expected '{}' to contain 'endpoint prefix could not be built'",
+                            err_fmt
+                        );
+
+                        assert!(
+                            interceptor.called.load(Ordering::Relaxed) == 0,
+                            "the interceptor should not have been called since endpoint resolution failed"
+                        );
+
+                        dbg!(client.say_hello().greeting("hello").send().await)
+                            .expect("hello is a valid endpoint prefix");
+                        assert!(
+                            interceptor.called.load(Ordering::Relaxed) == 1,
+                            "the interceptor should have been called"
+                        );
+                        assert_eq!(
+                            "test123.hello.",
+                            interceptor
+                                .last_endpoint_prefix
+                                .lock()
+                                .unwrap()
+                                .clone()
+                                .unwrap()
+                                .as_str()
+                        );
+                    }
+                    """,
+                    "aws_smithy_client" to CargoDependency.smithyClient(clientCodegenContext.runtimeConfig)
+                        .toDevDependency().withFeature("test-util").toType(),
                 )
             }
         }

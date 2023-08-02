@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -54,6 +55,7 @@ class SigV4SigningDecorator : ClientCodegenDecorator {
         return baseCustomizations.extendIf(applies(codegenContext)) {
             SigV4SigningConfig(
                 codegenContext.runtimeConfig,
+                codegenContext.smithyRuntimeMode,
                 codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model),
                 codegenContext.serviceShape.expectTrait(),
             )
@@ -78,26 +80,48 @@ class SigV4SigningDecorator : ClientCodegenDecorator {
 
 class SigV4SigningConfig(
     private val runtimeConfig: RuntimeConfig,
+    private val runtimeMode: SmithyRuntimeMode,
     private val serviceHasEventStream: Boolean,
     private val sigV4Trait: SigV4Trait,
 ) : ConfigCustomization() {
+    private val codegenScope = arrayOf(
+        "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
+        "SigningService" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningService"),
+        "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
+    )
+
     override fun section(section: ServiceConfig): Writable = writable {
-        if (section is ServiceConfig.ConfigImpl) {
-            if (serviceHasEventStream) {
-                // enable the aws-sig-auth `sign-eventstream` feature
-                addDependency(AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).toSymbol())
-            }
-            rust(
-                """
-                /// The signature version 4 service signing name to use in the credential scope when signing requests.
-                ///
-                /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
-                /// [`SigningService`](aws_types::SigningService) during operation construction
-                pub fn signing_service(&self) -> &'static str {
-                    ${sigV4Trait.name.dq()}
+        when (section) {
+            ServiceConfig.ConfigImpl -> {
+                if (runtimeMode.generateMiddleware && serviceHasEventStream) {
+                    // enable the aws-sig-auth `sign-eventstream` feature
+                    addDependency(AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).toSymbol())
                 }
-                """,
-            )
+                rust(
+                    """
+                    /// The signature version 4 service signing name to use in the credential scope when signing requests.
+                    ///
+                    /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
+                    /// [`SigningService`](aws_types::SigningService) during operation construction
+                    pub fn signing_service(&self) -> &'static str {
+                        ${sigV4Trait.name.dq()}
+                    }
+                    """,
+                )
+            }
+            ServiceConfig.BuilderBuild -> {
+                if (runtimeMode.generateOrchestrator) {
+                    rustTemplate(
+                        """
+                        layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
+                        layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+
+            else -> emptySection
         }
     }
 }

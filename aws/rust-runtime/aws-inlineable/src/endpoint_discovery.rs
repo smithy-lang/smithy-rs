@@ -39,6 +39,7 @@ impl ReloadEndpoint {
     pub async fn reload_once(&self) {
         match (self.loader)().await {
             Ok((endpoint, expiry)) => {
+                tracing::debug!("caching resolved endpoint: {:?}", (&endpoint, &expiry));
                 *self.endpoint.lock().unwrap() = Some(ExpiringEndpoint { endpoint, expiry })
             }
             Err(err) => *self.error.lock().unwrap() = Some(err),
@@ -128,6 +129,7 @@ where
         sleep,
         time,
     };
+    tracing::debug!("populating initial endpoint discovery cache");
     reloader.reload_once().await;
     // if we didn't successfully get an endpoint, bail out so the client knows
     // configuration failed to work
@@ -137,6 +139,7 @@ where
 
 impl EndpointCache {
     fn resolve_endpoint(&self) -> aws_smithy_http::endpoint::Result {
+        tracing::trace!("resolving endpoint from endpoint discovery cache");
         self.endpoint
             .lock()
             .unwrap()
@@ -157,11 +160,11 @@ mod test {
     use crate::endpoint_discovery::create_cache;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
     use aws_smithy_async::test_util::controlled_time_and_sleep;
-    use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource};
+    use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource, TimeSource};
     use aws_smithy_types::endpoint::Endpoint;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, UNIX_EPOCH};
     use tokio::time::timeout;
 
     fn check_send_v<T: Send>(t: T) -> T {
@@ -175,7 +178,7 @@ mod test {
             || async {
                 Ok((
                     Endpoint::builder().url("http://foo.com").build(),
-                    SystemTime::now(),
+                    SystemTimeSource::new().now(),
                 ))
             },
             SharedAsyncSleep::new(TokioSleep::new()),

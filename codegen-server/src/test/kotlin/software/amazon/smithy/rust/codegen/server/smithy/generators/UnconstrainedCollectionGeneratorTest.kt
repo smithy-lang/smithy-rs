@@ -18,22 +18,22 @@ class UnconstrainedCollectionGeneratorTest {
         val model =
             """
             namespace test
-            
+
             use aws.protocols#restJson1
             use smithy.framework#ValidationException
-            
+
             @restJson1
             service TestService {
                 operations: ["Operation"]
             }
-            
+
             @http(uri: "/operation", method: "POST")
             operation Operation {
                 input: OperationInputOutput
                 output: OperationInputOutput
                 errors: [ValidationException]
             }
-            
+
             structure OperationInputOutput {
                 list: ListA
             }
@@ -103,7 +103,7 @@ class UnconstrainedCollectionGeneratorTest {
                         let c_builder = crate::model::StructureC::builder();
                         let list_b_unconstrained = crate::unconstrained::list_b_unconstrained::ListBUnconstrained(vec![c_builder]);
                         let list_a_unconstrained = crate::unconstrained::list_a_unconstrained::ListAUnconstrained(vec![list_b_unconstrained]);
-  
+
                         let _list_a: crate::constrained::MaybeConstrained<crate::constrained::list_a_constrained::ListAConstrained> = list_a_unconstrained.into();
                         """,
                     )

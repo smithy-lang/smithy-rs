@@ -11,10 +11,11 @@ use std::{
 };
 
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http_server::plugin::{IdentityPlugin, Plugin, PluginPipeline};
+use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, IdentityPlugin, Plugin};
 use tower::{Layer, Service};
 
-use pokemon_service_client::{operation::do_nothing::DoNothingInput, Config};
+use aws_smithy_client::test_connection::capture_request;
+use pokemon_service_client::{Client, Config};
 use pokemon_service_common::do_nothing;
 
 trait OperationExt {
@@ -34,20 +35,26 @@ async fn plugin_layers_are_executed_in_registration_order() {
     // We can then check the vector content to verify the invocation order
     let output = Arc::new(Mutex::new(Vec::new()));
 
-    let pipeline = PluginPipeline::new()
+    let http_plugins = HttpPlugins::new()
         .push(SentinelPlugin::new("first", output.clone()))
         .push(SentinelPlugin::new("second", output.clone()));
-    let mut app =
-        pokemon_service_server_sdk::PokemonService::builder_with_plugins(pipeline, IdentityPlugin)
-            .do_nothing(do_nothing)
-            .build_unchecked();
-    let request = DoNothingInput::builder()
-        .build()
-        .unwrap()
-        .make_operation(&Config::builder().build())
-        .await
-        .unwrap()
-        .into_http();
+    let mut app = pokemon_service_server_sdk::PokemonService::builder_with_plugins(
+        http_plugins,
+        IdentityPlugin,
+    )
+    .do_nothing(do_nothing)
+    .build_unchecked();
+
+    let request = {
+        let (conn, rcvr) = capture_request(None);
+        let config = Config::builder()
+            .http_connector(conn)
+            .endpoint_url("http://localhost:1234")
+            .build();
+        Client::from_conf(config).do_nothing().send().await.unwrap();
+        rcvr.expect_request()
+    };
+
     app.call(request).await.unwrap();
 
     let output_guard = output.lock().unwrap();
@@ -76,6 +83,8 @@ impl<Ser, Op, T> Plugin<Ser, Op, T> for SentinelPlugin {
         }
     }
 }
+
+impl HttpMarker for SentinelPlugin {}
 
 /// A [`Service`] that adds a print log.
 #[derive(Clone, Debug)]

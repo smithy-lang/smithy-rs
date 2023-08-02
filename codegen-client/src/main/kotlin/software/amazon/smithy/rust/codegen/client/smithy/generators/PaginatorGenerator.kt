@@ -165,7 +165,7 @@ class PaginatorGenerator private constructor(
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
-                    #{runtime_plugin_init};
+                    #{runtime_plugin_init}
                     #{fn_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
                         let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
@@ -204,14 +204,14 @@ class PaginatorGenerator private constructor(
             "items_fn" to itemsFn(),
             "output_token" to outputTokenLens,
             "item_type" to writable {
-                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                     rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}>>", *codegenScope)
                 } else {
                     rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
                 }
             },
             "orchestrate" to writable {
-                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                     rustTemplate(
                         """
                         {
@@ -237,18 +237,17 @@ class PaginatorGenerator private constructor(
                 }
             },
             "runtime_plugin_init" to writable {
-                if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
+                if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
-                        let runtime_plugins = #{operation}::register_runtime_plugins(
-                            #{RuntimePlugins}::new(),
-                            handle,
-                            None
+                        let runtime_plugins = #{operation}::operation_runtime_plugins(
+                            handle.runtime_plugins.clone(),
+                            &handle.conf,
+                            #{None},
                         );
                         """,
                         *codegenScope,
-                        "RuntimePlugins" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                            .resolve("client::runtime_plugin::RuntimePlugins"),
+                        "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                     )
                 }
             },
@@ -318,7 +317,7 @@ class PaginatorGenerator private constructor(
                     paginationInfo.itemsMemberPath,
                 ),
                 "item_type" to writable {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
                         rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}>>", *codegenScope)
                     } else {
                         rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)

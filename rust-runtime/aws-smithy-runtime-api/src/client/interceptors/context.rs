@@ -7,29 +7,25 @@
 //!
 //! Interceptors have access to varying pieces of context during the course of an operation.
 //!
-//! An operation is composed of multiple phases. The initial phase is [`Phase::BeforeSerialization`], which
-//! has the original input as context. The next phase is [`Phase::BeforeTransmit`], which has the serialized
+//! An operation is composed of multiple phases. The initial phase is "before serialization", which
+//! has the original input as context. The next phase is "before transmit", which has the serialized
 //! request as context. Depending on which hook is being called with the dispatch context,
 //! the serialized request may or may not be signed (which should be apparent from the hook name).
-//! Following the [`Phase::BeforeTransmit`] phase is the [`Phase::BeforeDeserialization`] phase, which has
-//! the raw response available as context. Finally, the [`Phase::AfterDeserialization`] phase
+//! Following the "before transmit" phase is the "before deserialization" phase, which has
+//! the raw response available as context. Finally, the "after deserialization" phase
 //! has both the raw and parsed response available.
 //!
 //! To summarize:
-//! 1. [`Phase::BeforeSerialization`]: Only has the operation input.
-//! 2. [`Phase::BeforeTransmit`]: Only has the serialized request.
-//! 3. [`Phase::BeforeDeserialization`]: Has the raw response.
-//! 3. [`Phase::AfterDeserialization`]: Has the raw response and the parsed response.
+//! 1. Before serialization: Only has the operation input.
+//! 2. Before transmit: Only has the serialized request.
+//! 3. Before deserialization: Has the raw response.
+//! 3. After deserialization: Has the raw response and the parsed response.
 //!
 //! When implementing hooks, if information from a previous phase is required, then implement
 //! an earlier hook to examine that context, and save off any necessary information into the
 //! [`ConfigBag`] for later hooks to examine.  Interior mutability is **NOT**
 //! recommended for storing request-specific information in your interceptor implementation.
 //! Use the [`ConfigBag`] instead.
-
-/// Operation phases.
-pub mod phase;
-pub mod wrappers;
 
 use crate::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
 use aws_smithy_http::result::SdkError;
@@ -40,19 +36,89 @@ use std::fmt::Debug;
 use std::{fmt, mem};
 use tracing::{debug, error, trace};
 
-pub type Input = TypeErasedBox;
-pub type Output = TypeErasedBox;
-pub type Error = TypeErasedError;
+macro_rules! new_type_box {
+    ($name:ident, $doc:literal) => {
+        new_type_box!($name, TypeErasedBox, $doc, Send, Sync, fmt::Debug,);
+    };
+    ($name:ident, $underlying:ident, $doc:literal, $($additional_bound:path,)*) => {
+        #[doc = $doc]
+        #[derive(Debug)]
+        pub struct $name($underlying);
+
+        impl $name {
+            #[doc = concat!("Creates a new `", stringify!($name), "` with the provided concrete input value.")]
+            pub fn erase<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(input: T) -> Self {
+                Self($underlying::new(input))
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast_ref<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(&self) -> Option<&T> {
+                self.0.downcast_ref()
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast_mut<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(&mut self) -> Option<&mut T> {
+                self.0.downcast_mut()
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(self) -> Result<T, Self> {
+                self.0.downcast::<T>().map(|v| *v).map_err(Self)
+            }
+
+            #[doc = concat!("Returns a `", stringify!($name), "` with a fake/test value with the expectation that it won't be downcast in the test.")]
+            #[cfg(feature = "test-util")]
+            pub fn doesnt_matter() -> Self {
+                Self($underlying::doesnt_matter())
+            }
+        }
+    };
+}
+
+new_type_box!(Input, "Type-erased operation input.");
+new_type_box!(Output, "Type-erased operation output.");
+new_type_box!(
+    Error,
+    TypeErasedError,
+    "Type-erased operation error.",
+    std::error::Error,
+);
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
+/// Type-erased result for an operation.
 pub type OutputOrError = Result<Output, OrchestratorError<Error>>;
 
 type Request = HttpRequest;
 type Response = HttpResponse;
 
+pub use wrappers::{
+    AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
+    BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
+    BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
+    BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
+    FinalizerInterceptorContextRef,
+};
+
+mod wrappers;
+
+/// Operation phases.
+pub(crate) mod phase;
+
 /// A container for the data currently available to an interceptor.
 ///
 /// Different context is available based on which phase the operation is currently in. For example,
-/// context in the [`Phase::BeforeSerialization`] phase won't have a `request` yet since the input hasn't been
-/// serialized at that point. But once it gets into the [`Phase::BeforeTransmit`] phase, the `request` will be set.
+/// context in the "before serialization" phase won't have a `request` yet since the input hasn't been
+/// serialized at that point. But once it gets into the "before transmit" phase, the `request` will be set.
 #[derive(Debug)]
 pub struct InterceptorContext<I = Input, O = Output, E = Error> {
     pub(crate) input: Option<I>,
@@ -65,7 +131,7 @@ pub struct InterceptorContext<I = Input, O = Output, E = Error> {
 }
 
 impl InterceptorContext<Input, Output, Error> {
-    /// Creates a new interceptor context in the [`Phase::BeforeSerialization`] phase.
+    /// Creates a new interceptor context in the "before serialization" phase.
     pub fn new(input: Input) -> InterceptorContext<Input, Output, Error> {
         InterceptorContext {
             input: Some(input),
@@ -79,38 +145,7 @@ impl InterceptorContext<Input, Output, Error> {
     }
 }
 
-impl<I, O, E: Debug> InterceptorContext<I, O, E> {
-    /// Decomposes the context into its constituent parts.
-    #[doc(hidden)]
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        Option<I>,
-        Option<Result<O, OrchestratorError<E>>>,
-        Option<Request>,
-        Option<Response>,
-    ) {
-        (
-            self.input,
-            self.output_or_error,
-            self.request,
-            self.response,
-        )
-    }
-
-    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
-        let Self {
-            output_or_error,
-            response,
-            phase,
-            ..
-        } = self;
-        output_or_error
-            .expect("output_or_error must always be set before finalize is called.")
-            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
-    }
-
+impl<I, O, E> InterceptorContext<I, O, E> {
     /// Retrieve the input for the operation being invoked.
     pub fn input(&self) -> Option<&I> {
         self.input.as_ref()
@@ -176,6 +211,14 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     /// Returns the mutable reference to the deserialized output or error.
     pub fn output_or_error_mut(&mut self) -> Option<&mut Result<O, OrchestratorError<E>>> {
         self.output_or_error.as_mut()
+    }
+
+    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
+    pub fn is_failed(&self) -> bool {
+        self.output_or_error
+            .as_ref()
+            .map(Result::is_err)
+            .unwrap_or_default()
     }
 
     /// Advance to the Serialization phase.
@@ -304,6 +347,44 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
         self.output_or_error = None;
         RewindResult::Occurred
     }
+}
+
+impl<I, O, E> InterceptorContext<I, O, E>
+where
+    E: Debug,
+{
+    /// Decomposes the context into its constituent parts.
+    #[doc(hidden)]
+    #[allow(clippy::type_complexity)]
+    pub fn into_parts(
+        self,
+    ) -> (
+        Option<I>,
+        Option<Result<O, OrchestratorError<E>>>,
+        Option<Request>,
+        Option<Response>,
+    ) {
+        (
+            self.input,
+            self.output_or_error,
+            self.request,
+            self.response,
+        )
+    }
+
+    /// Convert this context into the final operation result that is returned in client's the public API.
+    #[doc(hidden)]
+    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
+        let Self {
+            output_or_error,
+            response,
+            phase,
+            ..
+        } = self;
+        output_or_error
+            .expect("output_or_error must always be set before finalize is called.")
+            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
+    }
 
     /// Mark this context as failed due to errors during the operation. Any errors already contained
     /// by the context will be replaced by the given error.
@@ -317,14 +398,6 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
         if let Some(Err(existing_err)) = mem::replace(&mut self.output_or_error, Some(Err(error))) {
             error!("orchestrator context received an error but one was already present; Throwing away previous error: {:?}", existing_err);
         }
-    }
-
-    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
-    pub fn is_failed(&self) -> bool {
-        self.output_or_error
-            .as_ref()
-            .map(Result::is_err)
-            .unwrap_or_default()
     }
 }
 
@@ -370,27 +443,20 @@ fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
     )
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_types::type_erasure::TypedBox;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
 
     #[test]
     fn test_success_transitions() {
-        let input = TypedBox::new("input".to_string()).erase();
-        let output = TypedBox::new("output".to_string()).erase();
+        let input = Input::doesnt_matter();
+        let output = Output::erase("output".to_string());
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!(
-            "input",
-            context
-                .input()
-                .and_then(|i| i.downcast_ref::<String>())
-                .unwrap()
-        );
+        assert!(context.input().is_some());
         context.input_mut();
 
         context.enter_serialization_phase();
@@ -426,29 +492,13 @@ mod tests {
 
     #[test]
     fn test_rewind_for_retry() {
-        use std::fmt;
-        #[derive(Debug)]
-        struct Error;
-        impl fmt::Display for Error {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("don't care")
-            }
-        }
-        impl std::error::Error for Error {}
-
         let mut cfg = ConfigBag::base();
-        let input = TypedBox::new("input".to_string()).erase();
-        let output = TypedBox::new("output".to_string()).erase();
-        let error = TypedBox::new(Error).erase_error();
+        let input = Input::doesnt_matter();
+        let output = Output::erase("output".to_string());
+        let error = Error::doesnt_matter();
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!(
-            "input",
-            context
-                .input()
-                .and_then(|i| i.downcast_ref::<String>())
-                .unwrap()
-        );
+        assert!(context.input().is_some());
 
         context.enter_serialization_phase();
         let _ = context.take_input();

@@ -1,4 +1,454 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 1st, 2023
+================
+**Breaking Changes:**
+- ⚠🎉 (server, [smithy-rs#2740](https://github.com/awslabs/smithy-rs/issues/2740), [smithy-rs#2759](https://github.com/awslabs/smithy-rs/issues/2759), [smithy-rs#2779](https://github.com/awslabs/smithy-rs/issues/2779), [smithy-rs#2827](https://github.com/awslabs/smithy-rs/issues/2827), @hlbarber) The middleware system has been reworked as we push for a unified, simple, and consistent API. The following changes have been made in service of this goal:
+
+    - A `ServiceShape` trait has been added.
+    - The `Plugin` trait has been simplified.
+    - The `HttpMarker` and `ModelMarker` marker traits have been added to better distinguish when plugins run and what they have access to.
+    - The `Operation` structure has been removed.
+    - A `Scoped` `Plugin` has been added.
+
+    The `Plugin` trait has now been simplified and the `Operation` struct has been removed.
+
+    ## Addition of `ServiceShape`
+
+    Since the [0.52 release](https://github.com/awslabs/smithy-rs/releases/tag/release-2022-12-12) the `OperationShape` has existed.
+
+    ```rust
+    /// Models the [Smithy Operation shape].
+    ///
+    /// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
+    pub trait OperationShape {
+        /// The ID of the operation.
+        const ID: ShapeId;
+
+        /// The operation input.
+        type Input;
+        /// The operation output.
+        type Output;
+        /// The operation error. [`Infallible`](std::convert::Infallible) in the case where no error
+        /// exists.
+        type Error;
+    }
+    ```
+
+    This allowed `Plugin` authors to access these associated types and constants. See the [`PrintPlugin`](https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs) as an example.
+
+    We continue with this approach and introduce the following trait:
+
+    ```rust
+    /// Models the [Smithy Service shape].
+    ///
+    /// [Smithy Service shape]: https://smithy.io/2.0/spec/service-types.html
+    pub trait ServiceShape {
+        /// The [`ShapeId`] of the service.
+        const ID: ShapeId;
+
+        /// The version of the service.
+        const VERSION: Option<&'static str>;
+
+        /// The [Protocol] applied to this service.
+        ///
+        /// [Protocol]: https://smithy.io/2.0/spec/protocol-traits.html
+        type Protocol;
+
+        /// An enumeration of all operations contained in this service.
+        type Operations;
+    }
+    ```
+
+    With the changes to `Plugin`, described below, middleware authors now have access to this information at compile time.
+
+    ## Simplication of the `Plugin` trait
+
+    Previously,
+
+    ```rust
+    trait Plugin<P, Op, S, L> {
+        type Service;
+        type Layer;
+
+        fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer>;
+    }
+    ```
+
+    modified an `Operation`.
+
+    Now,
+
+    ```rust
+    trait Plugin<Service, Operation, T> {
+        type Output;
+
+        fn apply(&self, input: T) -> Self::Output;
+    }
+    ```
+
+    maps a `tower::Service` to a `tower::Service`. This is equivalent to `tower::Layer` with two extra type parameters: `Service` and `Operation`, which implement `ServiceShape` and `OperationShape` respectively.
+
+    Having both `Service` and `Operation` as type parameters also provides an even surface for advanced users to extend the codegenerator in a structured way. See [this issue](https://github.com/awslabs/smithy-rs/issues/2777) for more context.
+
+    The following middleware setup
+
+    ```rust
+    pub struct PrintService<S> {
+        inner: S,
+        name: &'static str,
+    }
+
+    impl<R, S> Service<R> for PrintService<S>
+    where
+        S: Service<R>,
+    {
+        async fn call(&mut self, req: R) -> Self::Future {
+            println!("Hi {}", self.name);
+            self.inner.call(req)
+        }
+    }
+
+    pub struct PrintLayer {
+        name: &'static str,
+    }
+
+    impl<S> Layer<S> for PrintLayer {
+        type Service = PrintService<S>;
+
+        fn layer(&self, service: S) -> Self::Service {
+            PrintService {
+                inner: service,
+                name: self.name,
+            }
+        }
+    }
+
+    pub struct PrintPlugin;
+
+    impl<P, Op, S, L> Plugin<P, Op, S, L> for PrintPlugin
+    where
+        Op: OperationShape,
+    {
+        type Service = S;
+        type Layer = Stack<L, PrintLayer>;
+
+        fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+            input.layer(PrintLayer { name: Op::NAME })
+        }
+    }
+    ```
+
+    now becomes
+
+    ```rust
+    pub struct PrintService<S> {
+        inner: S,
+        name: &'static str,
+    }
+
+    impl<R, S> Service<R> for PrintService<S>
+    where
+        S: Service<R>,
+    {
+        async fn call(&mut self, req: R) -> Self::Future {
+            println!("Hi {}", self.name);
+            self.inner.call(req)
+        }
+    }
+
+    pub struct PrintPlugin;
+
+    impl<Service, Op, T> Plugin<Service, Operation, T> for PrintPlugin
+    where
+        Op: OperationShape,
+    {
+        type Output = PrintService<S>;
+
+        fn apply(&self, inner: T) -> Self::Output {
+            PrintService { inner, name: Op::ID.name() }
+        }
+    }
+
+    impl HttpMarker for PrintPlugin { }
+    ```
+
+    Alternatively, using the new `ServiceShape`, implemented on `Ser`:
+
+    ```rust
+    impl<Service, Operation, T> Plugin<Service, Operation, T> for PrintPlugin
+    where
+        Ser: ServiceShape,
+    {
+        type Service = PrintService<S>;
+
+        fn apply(&self, inner: T) -> Self::Service {
+            PrintService { inner, name: Ser::ID.name() }
+        }
+    }
+    ```
+
+    A single `Plugin` can no longer apply a `tower::Layer` on HTTP requests/responses _and_ modelled structures at the same time (see middleware positions [C](https://awslabs.github.io/smithy-rs/design/server/middleware.html#c-operation-specific-http-middleware) and [D](https://awslabs.github.io/smithy-rs/design/server/middleware.html#d-operation-specific-model-middleware). Instead one `Plugin` must be specified for each and passed to the service builder constructor separately:
+
+    ```rust
+    let app = PokemonService::builder_with_plugins(/* HTTP plugins */, /* model plugins */)
+        /* setters */
+        .build()
+        .unwrap();
+    ```
+
+    To better distinguish when a plugin runs and what it has access to, `Plugin`s now have to additionally implement the `HttpMarker` marker trait, the `ModelMarker` marker trait, or both:
+
+    - A HTTP plugin acts on the HTTP request before it is deserialized, and acts on the HTTP response after it is serialized.
+    - A model plugin acts on the modeled operation input after it is deserialized, and acts on the modeled operation output or the modeled operation error before it is serialized.
+
+    The motivation behind this change is to simplify the job of middleware authors, separate concerns, accomodate common cases better, and to improve composition internally.
+
+    Because `Plugin` is now closer to `tower::Layer` we have two canonical converters:
+
+    ```rust
+    use aws_smithy_http_server::plugin::{PluginLayer, LayerPlugin};
+
+    // Convert from `Layer` to `Plugin` which applies uniformly across all operations
+    let layer = /* some layer */;
+    let plugin = PluginLayer(layer);
+
+    // Convert from `Plugin` to `Layer` for some fixed protocol and operation
+    let plugin = /* some plugin */;
+    let layer = LayerPlugin::new::<SomeProtocol, SomeOperation>(plugin);
+    ```
+
+    ## Removal of `PluginPipeline`
+
+    Since plugins now come in two flavors (those marked with `HttpMarker` and those marked with `ModelMarker`) that shouldn't be mixed in a collection of plugins, the primary way of concatenating plugins, `PluginPipeline` has been removed in favor of the `HttpPlugins` and `ModelPlugins` types, which eagerly check that whenever a plugin is pushed, it is of the expected type.
+
+    This worked before, but you wouldn't be able to do apply this collection of plugins anywhere; if you tried to, the compilation error messages would not be very helpful:
+
+    ```rust
+    use aws_smithy_http_server::plugin::PluginPipeline;
+
+    let pipeline = PluginPipeline::new().push(http_plugin).push(model_plugin);
+    ```
+
+    Now collections of plugins must contain plugins of the same flavor:
+
+    ```rust
+    use aws_smithy_http_server::plugin::{HttpPlugins, ModelPlugins};
+
+    let http_plugins = HttpPlugins::new()
+        .push(http_plugin)
+        // .push(model_plugin) // This fails to compile with a helpful error message.
+        .push(&http_and_model_plugin);
+    let model_plugins = ModelPlugins::new()
+        .push(model_plugin)
+        .push(&http_and_model_plugin);
+    ```
+
+    In the above example, `&http_and_model_plugin` implements both `HttpMarker` and `ModelMarker`, so we can add it to both collections.
+
+    ## Removal of `Operation`
+
+    The `aws_smithy_http_server::operation::Operation` structure has now been removed. Previously, there existed a `{operation_name}_operation` setter on the service builder, which accepted an `Operation`. This allowed users to
+
+    ```rust
+    let operation /* : Operation<_, _> */ = GetPokemonSpecies::from_service(/* tower::Service */);
+
+    let app = PokemonService::builder_without_plugins()
+        .get_pokemon_species_operation(operation)
+        /* other setters */
+        .build()
+        .unwrap();
+    ```
+
+    to set an operation with a `tower::Service`, and
+
+    ```rust
+    let operation /* : Operation<_, _> */ = GetPokemonSpecies::from_service(/* tower::Service */).layer(/* layer */);
+    let operation /* : Operation<_, _> */ = GetPokemonSpecies::from_handler(/* closure */).layer(/* layer */);
+
+    let app = PokemonService::builder_without_plugins()
+        .get_pokemon_species_operation(operation)
+        /* other setters */
+        .build()
+        .unwrap();
+    ```
+
+    to add a `tower::Layer` (acting on HTTP requests/responses post-routing) to a single operation.
+
+    We have seen little adoption of this API and for this reason we have opted instead to introduce a new setter, accepting a `tower::Service`, on the service builder:
+
+    ```rust
+    let app = PokemonService::builder_without_plugins()
+        .get_pokemon_species_service(/* tower::Service */)
+        /* other setters */
+        .build()
+        .unwrap();
+    ```
+
+    Applying a `tower::Layer` to a _subset_ of operations is should now be done through the `Plugin` API via `filter_by_operation_id`
+
+    ```rust
+    use aws_smithy_http_server::plugin::{PluginLayer, filter_by_operation_name, IdentityPlugin};
+
+    let plugin = PluginLayer(/* layer */);
+    let scoped_plugin = filter_by_operation_name(plugin, |id| id == GetPokemonSpecies::ID);
+
+    let app = PokemonService::builder_with_plugins(scoped_plugin, IdentityPlugin)
+        .get_pokemon_species(/* handler */)
+        /* other setters */
+        .build()
+        .unwrap();
+    ```
+
+    or the new `Scoped` `Plugin` introduced below.
+
+    # Addition of `Scoped`
+
+    Currently, users can selectively apply a `Plugin` via the `filter_by_operation_id` function
+
+    ```rust
+    use aws_smithy_http_server::plugin::filter_by_operation_id;
+    // Only apply `plugin` to `CheckHealth` and `GetStorage` operation
+    let filtered_plugin = filter_by_operation_id(plugin, |name| name == CheckHealth::ID || name == GetStorage::ID);
+    ```
+
+    In addition to this, we now provide `Scoped`, which selectively applies a `Plugin` at _compiletime_. Users should prefer this to `filter_by_operation_id` when applicable.
+
+    ```rust
+    use aws_smithy_http_server::plugin::Scoped;
+    use pokemon_service_server_sdk::scoped;
+
+    scope! {
+        /// Includes only the `CheckHealth` and `GetStorage` operation.
+        struct SomeScope {
+            includes: [CheckHealth, GetStorage]
+        }
+    }
+    let scoped_plugin = Scoped::new::<SomeScope>(plugin);
+    ```
+
+- ⚠ (all, [smithy-rs#2675](https://github.com/awslabs/smithy-rs/issues/2675)) Remove native-tls and add a migration guide.
+- ⚠ (client, [smithy-rs#2671](https://github.com/awslabs/smithy-rs/issues/2671)) <details>
+    <summary>Breaking change in how event stream signing works (click to expand more details)</summary>
+
+    This change will only impact you if you are wiring up their own event stream signing/authentication scheme. If you're using `aws-sig-auth` to use AWS SigV4 event stream signing, then this change will **not** impact you.
+
+    Previously, event stream signing was configured at codegen time by placing a `new_event_stream_signer` method on the `Config`. This function was called at serialization time to connect the signer to the streaming body. Now, instead, a special `DeferredSigner` is wired up at serialization time that relies on a signing implementation to be sent on a channel by the HTTP request signer. To do this, a `DeferredSignerSender` must be pulled out of the property bag, and its `send()` method called with the desired event stream signing implementation.
+
+    See the changes in https://github.com/awslabs/smithy-rs/pull/2671 for an example of how this was done for SigV4.
+    </details>
+- ⚠ (all, [smithy-rs#2673](https://github.com/awslabs/smithy-rs/issues/2673)) For event stream operations, the `EventStreamSender` in inputs/outputs now requires the passed in `Stream` impl to implement `Sync`.
+- ⚠ (server, [smithy-rs#2539](https://github.com/awslabs/smithy-rs/issues/2539)) Code generation will abort if the `ignoreUnsupportedConstraints` codegen flag has no effect, that is, if all constraint traits used in your model are well-supported. Please remove the flag in such case.
+- ⚠ (client, [smithy-rs#2728](https://github.com/awslabs/smithy-rs/issues/2728), [smithy-rs#2262](https://github.com/awslabs/smithy-rs/issues/2262), [aws-sdk-rust#2087](https://github.com/awslabs/aws-sdk-rust/issues/2087)) The property bag type for Time is now `SharedTimeSource`, not `SystemTime`. If your code relies on setting request time, use `aws_smithy_async::time::SharedTimeSource`.
+- ⚠ (server, [smithy-rs#2676](https://github.com/awslabs/smithy-rs/issues/2676), [smithy-rs#2685](https://github.com/awslabs/smithy-rs/issues/2685)) Bump dependency on `lambda_http` by `aws-smithy-http-server` to 0.8.0. This version of `aws-smithy-http-server` is only guaranteed to be compatible with 0.8.0, or semver-compatible versions of 0.8.0 of the `lambda_http` crate. It will not work with versions prior to 0.8.0 _at runtime_, making requests to your smithy-rs service unroutable, so please make sure you're running your service in a compatible configuration
+- ⚠ (server, [smithy-rs#2457](https://github.com/awslabs/smithy-rs/issues/2457), @hlbarber) Remove `PollError` from an operations `Service::Error`.
+
+    Any [`tower::Service`](https://docs.rs/tower/latest/tower/trait.Service.html) provided to
+    [`Operation::from_service`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/struct.Operation.html#method.from_service)
+    no longer requires `Service::Error = OperationError<Op::Error, PollError>`, instead requiring just `Service::Error = Op::Error`.
+- ⚠ (client, [smithy-rs#2742](https://github.com/awslabs/smithy-rs/issues/2742)) A newtype wrapper `SharedAsyncSleep` has been introduced and occurrences of `Arc<dyn AsyncSleep>` that appear in public APIs have been replaced with it.
+- ⚠ (all, [smithy-rs#2893](https://github.com/awslabs/smithy-rs/issues/2893)) Update MSRV to Rust 1.69.0
+- ⚠ (server, [smithy-rs#2678](https://github.com/awslabs/smithy-rs/issues/2678)) `ShapeId` is the new structure used to represent a shape, with its absolute name, namespace and name.
+    `OperationExtension`'s members are replaced by the `ShapeId` and operations' names are now replced by a `ShapeId`.
+
+    Before you had an operation and an absolute name as its `NAME` member. You could apply a plugin only to some selected operation:
+
+    ```
+    filter_by_operation_name(plugin, |name| name != Op::ID);
+    ```
+
+    Your new filter selects on an operation's absolute name, namespace or name.
+
+    ```
+    filter_by_operation_id(plugin, |id| id.name() != Op::ID.name());
+    ```
+
+    The above filter is applied to an operation's name, the one you use to specify the operation in the Smithy model.
+
+    You can filter all operations in a namespace or absolute name:
+
+    ```
+    filter_by_operation_id(plugin, |id| id.namespace() != "namespace");
+    filter_by_operation_id(plugin, |id| id.absolute() != "namespace#name");
+    ```
+- ⚠ (client, [smithy-rs#2758](https://github.com/awslabs/smithy-rs/issues/2758)) The occurrences of `Arc<dyn ResolveEndpoint>` have now been replaced with `SharedEndpointResolver` in public APIs.
+- ⚠ (server, [smithy-rs#2740](https://github.com/awslabs/smithy-rs/issues/2740), [smithy-rs#2759](https://github.com/awslabs/smithy-rs/issues/2759), [smithy-rs#2779](https://github.com/awslabs/smithy-rs/issues/2779), @hlbarber) Remove `filter_by_operation_id` and `plugin_from_operation_id_fn` in favour of `filter_by_operation` and `plugin_from_operation_fn`.
+
+    Previously, we provided `filter_by_operation_id` which filtered `Plugin` application via a predicate over the Shape ID.
+
+    ```rust
+    use aws_smithy_http_server::plugin::filter_by_operation_id;
+    use pokemon_service_server_sdk::operation_shape::CheckHealth;
+
+    let filtered = filter_by_operation_id(plugin, |name| name != CheckHealth::NAME);
+    ```
+
+    This had the problem that the user is unable to exhaustively match over a `&'static str`. To remedy this we have switched to `filter_by_operation` which is a predicate over an enum containing all operations contained in the service.
+
+    ```rust
+    use aws_smithy_http_server::plugin::filter_by_operation_id;
+    use pokemon_service_server_sdk::service::Operation;
+
+    let filtered = filter_by_operation(plugin, |op: Operation| op != Operation::CheckHealth);
+    ```
+
+    Similarly, `plugin_from_operation_fn` now allows for
+
+    ```rust
+    use aws_smithy_http_server::plugin::plugin_from_operation_fn;
+    use pokemon_service_server_sdk::service::Operation;
+
+    fn map<S>(op: Operation, inner: S) -> PrintService<S> {
+        match op {
+            Operation::CheckHealth => PrintService { name: op.shape_id().name(), inner },
+            Operation::GetPokemonSpecies => PrintService { name: "hello world", inner },
+            _ => todo!()
+        }
+    }
+
+    let plugin = plugin_from_operation_fn(map);
+    ```
+- ⚠ (client, [smithy-rs#2783](https://github.com/awslabs/smithy-rs/issues/2783)) The naming `make_token` for fields and the API of `IdempotencyTokenProvider` in service configs and their builders has now been updated to `idempotency_token_provider`.
+- ⚠ (client, [smithy-rs#2845](https://github.com/awslabs/smithy-rs/issues/2845)) `aws_smithy_async::future::rendezvous::Sender::send` no longer exposes `tokio::sync::mpsc::error::SendError` for the error of its return type and instead exposes a new-type wrapper called `aws_smithy_async::future::rendezvous::error::SendError`. In addition, the `aws_smithy_xml` crate no longer exposes types from `xmlparser`.
+- ⚠ (client, [smithy-rs#2848](https://github.com/awslabs/smithy-rs/issues/2848)) The implementation `From<bytes_utils::segmented::SegmentedBuf>` for `aws_smithy_http::event_stream::RawMessage` has been removed.
+- ⚠ (server, [smithy-rs#2865](https://github.com/awslabs/smithy-rs/issues/2865)) The `alb_health_check` module has been moved out of the `plugin` module into a new `layer` module. ALB health checks should be enacted before routing, and plugins run after routing, so the module location was misleading. Examples have been corrected to reflect the intended application of the layer.
+- ⚠ (client, [smithy-rs#2873](https://github.com/awslabs/smithy-rs/issues/2873)) The `test-util` feature in aws-smithy-client has been split to include a separate `wiremock` feature. This allows test-util to be used without a Hyper server dependency making it usable in webassembly targets.
+- ⚠ (client) The entire architecture of generated clients has been overhauled. See the [upgrade guide](https://github.com/awslabs/smithy-rs/discussions/2887) to get your code working again.
+
+**New this release:**
+- 🎉 (all, [smithy-rs#2647](https://github.com/awslabs/smithy-rs/issues/2647), [smithy-rs#2645](https://github.com/awslabs/smithy-rs/issues/2645), [smithy-rs#2646](https://github.com/awslabs/smithy-rs/issues/2646), [smithy-rs#2616](https://github.com/awslabs/smithy-rs/issues/2616), @thomas-k-cameron) Implement unstable serde support for the `Number`, `Blob`, `Document`, `DateTime` primitives
+- 🎉 (client, [smithy-rs#2652](https://github.com/awslabs/smithy-rs/issues/2652), @thomas-k-cameron) Add a `send_with` function on `-Input` types for sending requests without fluent builders
+- (client, [smithy-rs#2791](https://github.com/awslabs/smithy-rs/issues/2791), @davidsouther) Add accessors to Builders
+- (all, [smithy-rs#2786](https://github.com/awslabs/smithy-rs/issues/2786), @yotamofek) Avoid intermediate vec allocations in AggregatedBytes::to_vec.
+- 🐛 (server, [smithy-rs#2733](https://github.com/awslabs/smithy-rs/issues/2733), @thor-bjorgvinsson) Fix bug in AWS JSON 1.x routers where, if a service had more than 14 operations, the router was created without the route for the 15th operation.
+- (client, [smithy-rs#2728](https://github.com/awslabs/smithy-rs/issues/2728), [smithy-rs#2262](https://github.com/awslabs/smithy-rs/issues/2262), [aws-sdk-rust#2087](https://github.com/awslabs/aws-sdk-rust/issues/2087)) Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported.
+- 🐛 (client, [smithy-rs#2767](https://github.com/awslabs/smithy-rs/issues/2767), @mcmasn-amzn) Fix bug in client generation when using smithy.rules#endpointTests and operation and service shapes are in different namespaces.
+- (client, [smithy-rs#2854](https://github.com/awslabs/smithy-rs/issues/2854)) Public fields in structs are no longer marked as `#[doc(hidden)]`, and they are now visible.
+- (server, [smithy-rs#2866](https://github.com/awslabs/smithy-rs/issues/2866)) [RestJson1](https://awslabs.github.io/smithy/2.0/aws/protocols/aws-restjson1-protocol.html#operation-error-serialization) server SDKs now serialize only the [shape name](https://smithy.io/2.0/spec/model.html#shape-id) in operation error responses. Previously (from versions 0.52.0 to 0.55.4), the full shape ID was rendered.
+    Example server error response by a smithy-rs server version 0.52.0 until 0.55.4:
+    ```
+    HTTP/1.1 400 Bad Request
+    content-type: application/json
+    x-amzn-errortype: com.example.service#InvalidRequestException
+    ...
+    ```
+    Example server error response now:
+    ```
+    HTTP/1.1 400 Bad Request
+    content-type: application/json
+    x-amzn-errortype: InvalidRequestException
+    ...
+    ```
+
+**Contributors**
+Thank you for your contributions! ❤
+- @davidsouther ([smithy-rs#2791](https://github.com/awslabs/smithy-rs/issues/2791))
+- @hlbarber ([smithy-rs#2457](https://github.com/awslabs/smithy-rs/issues/2457), [smithy-rs#2740](https://github.com/awslabs/smithy-rs/issues/2740), [smithy-rs#2759](https://github.com/awslabs/smithy-rs/issues/2759), [smithy-rs#2779](https://github.com/awslabs/smithy-rs/issues/2779), [smithy-rs#2827](https://github.com/awslabs/smithy-rs/issues/2827))
+- @mcmasn-amzn ([smithy-rs#2767](https://github.com/awslabs/smithy-rs/issues/2767))
+- @thomas-k-cameron ([smithy-rs#2616](https://github.com/awslabs/smithy-rs/issues/2616), [smithy-rs#2645](https://github.com/awslabs/smithy-rs/issues/2645), [smithy-rs#2646](https://github.com/awslabs/smithy-rs/issues/2646), [smithy-rs#2647](https://github.com/awslabs/smithy-rs/issues/2647), [smithy-rs#2652](https://github.com/awslabs/smithy-rs/issues/2652))
+- @thor-bjorgvinsson ([smithy-rs#2733](https://github.com/awslabs/smithy-rs/issues/2733))
+- @yotamofek ([smithy-rs#2786](https://github.com/awslabs/smithy-rs/issues/2786))
+
+
 May 23rd, 2023
 ==============
 **New this release:**

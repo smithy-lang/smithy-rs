@@ -47,10 +47,17 @@ pub mod glacier_interceptors;
 pub mod middleware;
 
 /// Strip prefixes from IDs returned by Route53 operations when those IDs are used to construct requests
+pub mod route53_resource_id_preprocessor_middleware;
+
+/// Strip prefixes from IDs returned by Route53 operations when those IDs are used to construct requests
 pub mod route53_resource_id_preprocessor;
 
+pub mod http_request_checksum;
+pub mod http_response_checksum;
+
+// TODO(enableNewSmithyRuntimeCleanup): Delete this module
 /// Convert a streaming `SdkBody` into an aws-chunked streaming body with checksum trailers
-pub mod http_body_checksum;
+pub mod http_body_checksum_middleware;
 
 #[allow(dead_code)]
 pub mod endpoint_discovery;

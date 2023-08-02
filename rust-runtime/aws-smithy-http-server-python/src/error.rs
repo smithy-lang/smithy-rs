@@ -7,7 +7,7 @@
 
 use aws_smithy_http_server::{
     body::{to_boxed, BoxBody},
-    proto::{
+    protocol::{
         aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
     },
     response::IntoResponse,

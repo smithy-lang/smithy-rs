@@ -14,6 +14,7 @@ import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
 import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
@@ -33,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -119,7 +119,11 @@ class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {
  *
  */
 
-internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, runtimeConfig: RuntimeConfig) {
+internal class EndpointResolverGenerator(
+    private val codegenContext: ClientCodegenContext,
+    stdlib: List<CustomRuntimeFunction>,
+) {
+    private val runtimeConfig = codegenContext.runtimeConfig
     private val registry: FunctionRegistry = FunctionRegistry(stdlib)
     private val types = Types(runtimeConfig)
     private val codegenScope = arrayOf(
@@ -164,7 +168,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
 
         // Now that we rendered the rules once (and then threw it away) we can see what functions we actually used!
         val fnsUsed = registry.fnsUsed()
-        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Endpoint) {
+        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.endpoint(codegenContext)) {
             rustTemplate(
                 """
                 /// The default endpoint resolver
@@ -190,7 +194,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
                 """,
                 "custom_fields" to fnsUsed.mapNotNull { it.structField() }.join(","),
                 "custom_fields_init" to fnsUsed.mapNotNull { it.structFieldInit() }.join(","),
-                "Params" to EndpointParamsGenerator(endpointRuleSet.parameters).paramsStruct(),
+                "Params" to EndpointParamsGenerator(codegenContext, endpointRuleSet.parameters).paramsStruct(),
                 "additional_args" to fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }.join(","),
                 "resolver_fn" to resolverFn(endpointRuleSet, fnsUsed),
                 *codegenScope,
@@ -202,7 +206,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
         endpointRuleSet: EndpointRuleSet,
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
-        return RuntimeType.forInlineFun("resolve_endpoint", EndpointImpl) {
+        return RuntimeType.forInlineFun("resolve_endpoint", endpointImplModule(codegenContext)) {
             Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
@@ -212,7 +216,7 @@ internal class EndpointResolverGenerator(stdlib: List<CustomRuntimeFunction>, ru
 
                 """,
                 *codegenScope,
-                "Params" to EndpointParamsGenerator(endpointRuleSet.parameters).paramsStruct(),
+                "Params" to EndpointParamsGenerator(codegenContext, endpointRuleSet.parameters).paramsStruct(),
                 "additional_args" to fnsUsed.mapNotNull { it.additionalArgsSignature() }.join(","),
                 "body" to resolverFnBody(endpointRuleSet),
             )

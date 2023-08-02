@@ -66,11 +66,11 @@ This is enabled via the `instrument` method provided by the `aws_smithy_http_ser
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 use aws_smithy_http_server::{
   instrumentation::InstrumentExt,
-  plugin::{IdentityPlugin, PluginPipeline}
+  plugin::{IdentityPlugin, HttpPlugins}
 };
 use pokemon_service_server_sdk::PokemonService;
 
-let http_plugins = PluginPipeline::new().instrument();
+let http_plugins = HttpPlugins::new().instrument();
 let app = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
   .get_pokemon_species(handler)
   /* ... */

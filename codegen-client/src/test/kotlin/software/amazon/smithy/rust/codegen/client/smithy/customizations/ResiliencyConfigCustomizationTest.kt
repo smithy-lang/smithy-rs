@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenConfig
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginGenerator
 import software.amazon.smithy.rust.codegen.client.testutil.clientRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.stubConfigProject
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
@@ -40,7 +42,13 @@ internal class ResiliencyConfigCustomizationTest {
         val codegenContext = testClientCodegenContext(model, settings = project.clientRustSettings())
 
         stubConfigProject(codegenContext, ResiliencyConfigCustomization(codegenContext), project)
-        ResiliencyReExportCustomization(codegenContext.runtimeConfig).extras(project)
+        project.withModule(ClientRustModule.config) {
+            ServiceRuntimePluginGenerator(codegenContext).render(
+                this,
+                listOf(ResiliencyServiceRuntimePluginCustomization(codegenContext)),
+            )
+        }
+        ResiliencyReExportCustomization(codegenContext).extras(project)
         project.compileAndTest()
     }
 }

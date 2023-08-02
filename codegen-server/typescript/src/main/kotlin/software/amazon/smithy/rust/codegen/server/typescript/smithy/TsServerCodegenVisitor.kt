@@ -70,7 +70,7 @@ class TsServerCodegenVisitor(
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
 
-        model = codegenDecorator.transformModel(service, baseModel)
+        model = codegenDecorator.transformModel(service, baseModel, settings)
 
         // `publicConstrainedTypes` must always be `false` for the Typescript server, since Typescript generates its own
         // wrapper newtypes.

@@ -35,23 +35,21 @@ class CustomizableOperationGenerator(
 
     fun render(crate: RustCrate) {
         crate.withModule(ClientRustModule.Client.customize) {
-            rustTemplate(
-                // TODO(enableNewSmithyRuntimeCleanup): Stop exporting `Operation` when removing middleware
-                // TODO(enableNewSmithyRuntimeLaunch): Re-export orchestrator equivalents for retry types when defaulting to orchestrator
-                """
-                pub use #{Operation};
-                pub use #{Request};
-                pub use #{Response};
-                pub use #{ClassifyRetry};
-                pub use #{RetryKind};
-                """,
-                "Operation" to smithyHttp.resolve("operation::Operation"),
-                "Request" to smithyHttp.resolve("operation::Request"),
-                "Response" to smithyHttp.resolve("operation::Response"),
-                "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-                "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
-            )
             if (codegenContext.smithyRuntimeMode.generateMiddleware) {
+                rustTemplate(
+                    """
+                    pub use #{Operation};
+                    pub use #{Request};
+                    pub use #{Response};
+                    pub use #{ClassifyRetry};
+                    pub use #{RetryKind};
+                    """,
+                    "Operation" to smithyHttp.resolve("operation::Operation"),
+                    "Request" to smithyHttp.resolve("operation::Request"),
+                    "Response" to smithyHttp.resolve("operation::Response"),
+                    "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
+                    "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
+                )
                 renderCustomizableOperationModule(this)
             }
         }
@@ -158,6 +156,7 @@ class CustomizableOperationGenerator(
             "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::interceptors::MutateRequestInterceptor"),
             "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+            "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
             "SendResult" to ClientRustModule.Client.customize.toType()
                 .resolve("internal::SendResult"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
@@ -190,6 +189,7 @@ class CustomizableOperationGenerator(
                         pub(crate) customizable_send: #{Box}<dyn #{CustomizableSend}<T, E>>,
                         pub(crate) config_override: #{Option}<crate::config::Builder>,
                         pub(crate) interceptors: Vec<#{SharedInterceptor}>,
+                        pub(crate) runtime_plugins: Vec<#{SharedRuntimePlugin}>,
                     }
 
                     impl<T, E> CustomizableOperation<T, E> {
@@ -199,8 +199,15 @@ class CustomizableOperationGenerator(
                         /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
                         /// The order in which those user-specified operation interceptors are invoked should not be relied upon
                         /// as it is an implementation detail.
-                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + #{Send} + #{Sync} + 'static) -> Self {
+                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                            self
+                        }
+
+                        /// Adds a runtime plugin.
+                        ##[allow(unused)]
+                        pub(crate) fn runtime_plugin(mut self, runtime_plugin: impl #{RuntimePlugin} + 'static) -> Self {
+                            self.runtime_plugins.push(#{SharedRuntimePlugin}::new(runtime_plugin));
                             self
                         }
 
@@ -266,7 +273,10 @@ class CustomizableOperationGenerator(
                             };
 
                             self.interceptors.into_iter().for_each(|interceptor| {
-                                config_override.add_interceptor(interceptor);
+                                config_override.push_interceptor(interceptor);
+                            });
+                            self.runtime_plugins.into_iter().for_each(|plugin| {
+                                config_override.push_runtime_plugin(plugin);
                             });
 
                             (self.customizable_send)(config_override).await
@@ -364,7 +374,7 @@ fun renderCustomizableOperationSend(codegenContext: ClientCodegenContext, generi
             """,
             *codegenScope,
         )
-    } else if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
+    } else if (codegenContext.smithyRuntimeMode.generateMiddleware) {
         writer.rustTemplate(
             """
             impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
