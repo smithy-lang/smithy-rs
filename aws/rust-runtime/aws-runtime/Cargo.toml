@@ -14,7 +14,7 @@ test-util = []
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
 aws-http = { path = "../aws-http" }
-aws-sigv4 = { path = "../aws-sigv4" }
+aws-sigv4 = { path = "../aws-sigv4", features = ["sigv4a"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }

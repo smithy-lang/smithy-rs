@@ -7,7 +7,9 @@ use super::error::SigningError;
 use super::{PayloadChecksumKind, SignatureLocation};
 use crate::http_request::canonical_request::{header, param, CanonicalRequest, StringToSign};
 use crate::http_request::SigningParams;
-use crate::sign::{v4, v4a};
+use crate::sign::v4;
+#[cfg(feature = "sigv4a")]
+use crate::sign::v4a;
 use crate::{SignatureVersion, SigningOutput};
 use aws_smithy_http::query_writer::QueryWriter;
 use http::{HeaderMap, HeaderValue, Method, Uri};
@@ -205,6 +207,7 @@ fn calculate_signing_params<'a>(
             let signature = v4::calculate_signature(signing_key, string_to_sign.as_bytes());
             (signature, string_to_sign)
         }
+        #[cfg(feature = "sigv4a")]
         SignatureVersion::V4a => {
             let string_to_sign = StringToSign::new_v4a(
                 params.time,
@@ -219,6 +222,8 @@ fn calculate_signing_params<'a>(
             let signature = v4a::calculate_signature(&secret_key, string_to_sign.as_bytes());
             (signature, string_to_sign)
         }
+        #[cfg(not(feature = "sigv4a"))]
+        SignatureVersion::V4a => unreachable!(),
     };
 
     tracing::trace!(
@@ -324,6 +329,7 @@ fn calculate_signing_headers<'a>(
             }
             signature
         }
+        #[cfg(feature = "sigv4a")]
         SignatureVersion::V4a => {
             let sts = StringToSign::new_v4a(
                 params.time,
@@ -369,6 +375,8 @@ fn calculate_signing_headers<'a>(
             }
             signature
         }
+        #[cfg(not(feature = "sigv4a"))]
+        SignatureVersion::V4a => unreachable!(),
     };
 
     Ok(SigningOutput::new(headers, signature))
@@ -411,28 +419,20 @@ fn build_authorization_header(
 mod tests {
     use super::{sign, SigningInstructions};
     use crate::date_time::test_parsers::parse_date_time;
-    use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
     use crate::http_request::sign::SignableRequest;
     use crate::http_request::test_v4::{
         make_headers_comparable, test_request, test_signed_request,
         test_signed_request_query_params,
     };
-    use crate::http_request::test_v4a;
-    use crate::http_request::test_v4a::TestContext;
     use crate::http_request::{
         SessionTokenMode, SignatureLocation, SigningParams, SigningSettings,
     };
-    use crate::sign::v4;
-    use crate::sign::v4a;
     use crate::SignatureVersion;
     use http::{HeaderMap, HeaderValue};
     use pretty_assertions::assert_eq;
     use proptest::proptest;
-    use ring::signature::KeyPair;
     use std::borrow::Cow;
     use std::time::Duration;
-    use time::format_description::well_known::Rfc3339;
-    use time::OffsetDateTime;
 
     macro_rules! assert_req_eq {
         ($a:tt, $b:tt) => {
@@ -471,273 +471,282 @@ mod tests {
         assert_req_eq!(expected, signed);
     }
 
-    fn new_v4a_signing_params_from_context<'a>(
-        test_context: &'a TestContext,
-        signature_location: SignatureLocation,
-    ) -> SigningParams<'a> {
-        SigningParams {
-            access_key: &test_context.credentials.access_key_id,
-            secret_key: &test_context.credentials.secret_access_key,
-            security_token: None,
-            region: &test_context.region,
-            service_name: &test_context.service,
-            time: OffsetDateTime::parse(&test_context.timestamp, &Rfc3339)
-                .unwrap()
-                .into(),
-            settings: SigningSettings {
-                // payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
-                expires_in: Some(Duration::from_secs(test_context.expiration_in_seconds)),
-                uri_path_normalization_mode: test_context.normalize.into(),
-                signature_location,
-                ..Default::default()
-            },
-            signature_version: SignatureVersion::V4a,
+    #[cfg(feature = "sigv4a")]
+    mod sigv4a_tests {
+        use super::*;
+        use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
+        use crate::http_request::{test_v4a, PayloadChecksumKind};
+        use crate::sign::{v4, v4a};
+        use p256::ecdsa::signature::Verifier;
+        use p256::ecdsa::DerSignature;
+        use pretty_assertions::assert_eq;
+        use time::format_description::well_known::Rfc3339;
+        use time::OffsetDateTime;
+
+        fn new_v4a_signing_params_from_context<'a>(
+            test_context: &'a test_v4a::TestContext,
+            signature_location: SignatureLocation,
+        ) -> SigningParams<'a> {
+            SigningParams {
+                access_key: &test_context.credentials.access_key_id,
+                secret_key: &test_context.credentials.secret_access_key,
+                security_token: test_context
+                    .credentials
+                    .token
+                    .as_ref()
+                    .map(|it| it.as_str()),
+                region: &test_context.region,
+                service_name: &test_context.service,
+                time: OffsetDateTime::parse(&test_context.timestamp, &Rfc3339)
+                    .unwrap()
+                    .into(),
+                settings: SigningSettings {
+                    // payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+                    expires_in: Some(Duration::from_secs(test_context.expiration_in_seconds)),
+                    uri_path_normalization_mode: test_context.normalize.into(),
+                    signature_location,
+                    session_token_mode: if test_context.omit_session_token {
+                        SessionTokenMode::Exclude
+                    } else {
+                        SessionTokenMode::Include
+                    },
+                    payload_checksum_kind: if test_context.sign_body {
+                        PayloadChecksumKind::XAmzSha256
+                    } else {
+                        PayloadChecksumKind::NoHeader
+                    },
+                    ..Default::default()
+                },
+                signature_version: SignatureVersion::V4a,
+            }
         }
-    }
 
-    fn run_v4a_test_suite(test_name: &str, signature_location: SignatureLocation) {
-        let tc = test_v4a::test_context(test_name);
-        let params = new_v4a_signing_params_from_context(&tc, signature_location);
+        fn run_v4a_test_suite(test_name: &str, signature_location: SignatureLocation) {
+            let tc = test_v4a::test_context(test_name);
+            let params = new_v4a_signing_params_from_context(&tc, signature_location);
 
-        let req = test_v4a::test_request(test_name);
-        let expected_creq = test_v4a::test_canonical_request(test_name, signature_location);
-        let signable_req = SignableRequest::from(&req);
-        let actual_creq = CanonicalRequest::from(&signable_req, &params).unwrap();
+            let req = test_v4a::test_request(test_name);
+            let expected_creq = test_v4a::test_canonical_request(test_name, signature_location);
+            let signable_req = SignableRequest::from(&req);
+            let actual_creq = CanonicalRequest::from(&signable_req, &params).unwrap();
 
-        assert_eq!(expected_creq, actual_creq.to_string(), "creq didn't match");
+            assert_eq!(expected_creq, actual_creq.to_string(), "creq didn't match");
 
-        let expected_string_to_sign = test_v4a::test_string_to_sign(test_name, signature_location);
-        let hashed_creq = &v4::sha256_hex_string(actual_creq.to_string().as_bytes());
-        let actual_string_to_sign =
-            StringToSign::new_v4a(params.time, params.region, params.service_name, hashed_creq)
-                .to_string();
+            let expected_string_to_sign =
+                test_v4a::test_string_to_sign(test_name, signature_location);
+            let hashed_creq = &v4::sha256_hex_string(actual_creq.to_string().as_bytes());
+            let actual_string_to_sign =
+                StringToSign::new_v4a(params.time, params.region, params.service_name, hashed_creq)
+                    .to_string();
 
-        assert_eq!(
-            expected_string_to_sign, actual_string_to_sign,
-            "'string to sign' didn't match"
-        );
+            assert_eq!(
+                expected_string_to_sign, actual_string_to_sign,
+                "'string to sign' didn't match"
+            );
 
-        let out = sign(signable_req, &params).unwrap();
+            let out = sign(signable_req, &params).unwrap();
 
-        let mut signed = req;
-        // Sigv4a signatures are non-deterministic, so we can't compare the signature directly.
-        out.output.apply_to_request(&mut signed);
+            let mut signed = req;
+            // Sigv4a signatures are non-deterministic, so we can't compare the signature directly.
+            out.output.apply_to_request(&mut signed);
 
-        let keypair = v4a::generate_signing_key(params.access_key, params.secret_key);
-        let sig = hex::decode(out.signature).unwrap();
+            let keypair = v4a::generate_signing_key(params.access_key, params.secret_key);
+            let sig = DerSignature::from_bytes(&hex::decode(out.signature).unwrap()).unwrap();
 
-        let peer_public_key = ring::signature::UnparsedPublicKey::new(
-            &ring::signature::ECDSA_P256_SHA256_ASN1,
-            keypair.public_key().as_ref(),
-        );
-        let sts = actual_string_to_sign.as_bytes();
-        peer_public_key.verify(&sts, &sig).unwrap();
-    }
+            let peer_public_key = keypair.verifying_key();
+            let sts = actual_string_to_sign.as_bytes();
+            peer_public_key.verify(&sts, &sig).unwrap();
+        }
 
-    #[test]
-    fn test_get_header_key_duplicate() {
-        run_v4a_test_suite("get-header-key-duplicate", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_header_key_duplicate() {
+            run_v4a_test_suite("get-header-key-duplicate", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_header_value_order() {
-        run_v4a_test_suite("get-header-value-order", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_header_value_order() {
+            run_v4a_test_suite("get-header-value-order", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_header_value_trim() {
-        run_v4a_test_suite("get-header-value-trim", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_header_value_trim() {
+            run_v4a_test_suite("get-header-value-trim", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_relative_normalized() {
-        run_v4a_test_suite("get-relative-normalized", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_relative_normalized() {
+            run_v4a_test_suite("get-relative-normalized", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_relative_relative_normalized() {
-        run_v4a_test_suite(
-            "get-relative-relative-normalized",
-            SignatureLocation::Headers,
-        );
-    }
+        #[test]
+        fn test_get_relative_relative_normalized() {
+            run_v4a_test_suite(
+                "get-relative-relative-normalized",
+                SignatureLocation::Headers,
+            );
+        }
 
-    #[test]
-    fn test_get_relative_relative_unnormalized() {
-        run_v4a_test_suite(
-            "get-relative-relative-unnormalized",
-            SignatureLocation::Headers,
-        );
-    }
+        #[test]
+        fn test_get_relative_relative_unnormalized() {
+            run_v4a_test_suite(
+                "get-relative-relative-unnormalized",
+                SignatureLocation::Headers,
+            );
+        }
 
-    #[test]
-    fn test_get_relative_unnormalized() {
-        run_v4a_test_suite("get-relative-unnormalized", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_relative_unnormalized() {
+            run_v4a_test_suite("get-relative-unnormalized", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_slash_dot_slash_normalized() {
-        run_v4a_test_suite("get-slash-dot-slash-normalized", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_slash_dot_slash_normalized() {
+            run_v4a_test_suite("get-slash-dot-slash-normalized", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_slash_dot_slash_unnormalized() {
-        run_v4a_test_suite(
-            "get-slash-dot-slash-unnormalized",
-            SignatureLocation::Headers,
-        );
-    }
+        #[test]
+        fn test_get_slash_dot_slash_unnormalized() {
+            run_v4a_test_suite(
+                "get-slash-dot-slash-unnormalized",
+                SignatureLocation::Headers,
+            );
+        }
 
-    #[test]
-    fn test_get_slash_normalized() {
-        run_v4a_test_suite("get-slash-normalized", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_slash_normalized() {
+            run_v4a_test_suite("get-slash-normalized", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_slash_pointless_dot_normalized() {
-        run_v4a_test_suite(
-            "get-slash-pointless-dot-normalized",
-            SignatureLocation::Headers,
-        );
-    }
+        #[test]
+        fn test_get_slash_pointless_dot_normalized() {
+            run_v4a_test_suite(
+                "get-slash-pointless-dot-normalized",
+                SignatureLocation::Headers,
+            );
+        }
 
-    #[test]
-    fn test_get_slash_pointless_dot_unnormalized() {
-        run_v4a_test_suite(
-            "get-slash-pointless-dot-unnormalized",
-            SignatureLocation::Headers,
-        );
-    }
+        #[test]
+        fn test_get_slash_pointless_dot_unnormalized() {
+            run_v4a_test_suite(
+                "get-slash-pointless-dot-unnormalized",
+                SignatureLocation::Headers,
+            );
+        }
 
-    #[test]
-    fn test_get_slash_unnormalized() {
-        run_v4a_test_suite("get-slash-unnormalized", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_slash_unnormalized() {
+            run_v4a_test_suite("get-slash-unnormalized", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_slashes_normalized() {
-        run_v4a_test_suite("get-slashes-normalized", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_slashes_normalized() {
+            run_v4a_test_suite("get-slashes-normalized", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_slashes_unnormalized() {
-        run_v4a_test_suite("get-slashes-unnormalized", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_slashes_unnormalized() {
+            run_v4a_test_suite("get-slashes-unnormalized", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_unreserved() {
-        run_v4a_test_suite("get-unreserved", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_unreserved() {
+            run_v4a_test_suite("get-unreserved", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_vanilla() {
-        run_v4a_test_suite("get-vanilla", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_get_vanilla() {
+            run_v4a_test_suite("get-vanilla", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_vanilla_empty_query_key() {
-        run_v4a_test_suite(
-            "get-vanilla-empty-query-key",
-            SignatureLocation::QueryParams,
-        );
-    }
+        #[test]
+        fn test_get_vanilla_empty_query_key() {
+            run_v4a_test_suite(
+                "get-vanilla-empty-query-key",
+                SignatureLocation::QueryParams,
+            );
+        }
 
-    #[test]
-    fn test_get_vanilla_query() {
-        run_v4a_test_suite("get-vanilla-query", SignatureLocation::QueryParams);
-    }
+        #[test]
+        fn test_get_vanilla_query() {
+            run_v4a_test_suite("get-vanilla-query", SignatureLocation::QueryParams);
+        }
 
-    #[test]
-    fn test_get_vanilla_query_order_encoded() {
-        run_v4a_test_suite(
-            "get-vanilla-query-order-encoded",
-            SignatureLocation::QueryParams,
-        );
-    }
+        #[test]
+        fn test_get_vanilla_query_order_key_case() {
+            run_v4a_test_suite(
+                "get-vanilla-query-order-key-case",
+                SignatureLocation::QueryParams,
+            );
+        }
 
-    #[test]
-    fn test_get_vanilla_query_order_key_case() {
-        run_v4a_test_suite(
-            "get-vanilla-query-order-key-case",
-            SignatureLocation::QueryParams,
-        );
-    }
+        #[test]
+        fn test_get_vanilla_query_unreserved() {
+            run_v4a_test_suite(
+                "get-vanilla-query-unreserved",
+                SignatureLocation::QueryParams,
+            );
+        }
 
-    #[test]
-    fn test_get_vanilla_query_order_value() {
-        run_v4a_test_suite(
-            "get-vanilla-query-order-value",
-            SignatureLocation::QueryParams,
-        );
-    }
+        #[test]
+        fn test_get_vanilla_with_session_token() {
+            run_v4a_test_suite("get-vanilla-with-session-token", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_vanilla_query_unreserved() {
-        run_v4a_test_suite(
-            "get-vanilla-query-unreserved",
-            SignatureLocation::QueryParams,
-        );
-    }
+        #[test]
+        fn test_post_header_key_case() {
+            run_v4a_test_suite("post-header-key-case", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_get_vanilla_with_session_token() {
-        run_v4a_test_suite("get-vanilla-with-session-token", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_post_header_key_sort() {
+            run_v4a_test_suite("post-header-key-sort", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_post_header_key_case() {
-        run_v4a_test_suite("post-header-key-case", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_post_header_value_case() {
+            run_v4a_test_suite("post-header-value-case", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_post_header_key_sort() {
-        run_v4a_test_suite("post-header-key-sort", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_post_sts_header_after() {
+            run_v4a_test_suite("post-sts-header-after", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_post_header_value_case() {
-        run_v4a_test_suite("post-header-value-case", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_post_sts_header_before() {
+            run_v4a_test_suite("post-sts-header-before", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_post_sts_header_after() {
-        run_v4a_test_suite("post-sts-header-after", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_post_vanilla() {
+            run_v4a_test_suite("post-vanilla", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_post_sts_header_before() {
-        run_v4a_test_suite("post-sts-header-before", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_post_vanilla_empty_query_value() {
+            run_v4a_test_suite(
+                "post-vanilla-empty-query-value",
+                SignatureLocation::QueryParams,
+            );
+        }
 
-    #[test]
-    fn test_post_vanilla() {
-        run_v4a_test_suite("post-vanilla", SignatureLocation::Headers);
-    }
+        #[test]
+        fn test_post_vanilla_query() {
+            run_v4a_test_suite("post-vanilla-query", SignatureLocation::QueryParams);
+        }
 
-    #[test]
-    fn test_post_vanilla_empty_query_value() {
-        run_v4a_test_suite(
-            "post-vanilla-empty-query-value",
-            SignatureLocation::QueryParams,
-        );
-    }
+        #[test]
+        fn test_post_x_www_form_urlencoded() {
+            run_v4a_test_suite("post-x-www-form-urlencoded", SignatureLocation::Headers);
+        }
 
-    #[test]
-    fn test_post_vanilla_query() {
-        run_v4a_test_suite("post-vanilla-query", SignatureLocation::QueryParams);
-    }
-
-    #[test]
-    fn test_post_x_www_form_urlencoded() {
-        run_v4a_test_suite("post-x-www-form-urlencoded", SignatureLocation::Headers);
-    }
-
-    #[test]
-    fn test_post_x_www_form_urlencoded_parameters() {
-        run_v4a_test_suite(
-            "post-x-www-form-urlencoded-parameters",
-            SignatureLocation::Headers,
-        );
+        #[test]
+        fn test_post_x_www_form_urlencoded_parameters() {
+            run_v4a_test_suite(
+                "post-x-www-form-urlencoded-parameters",
+                SignatureLocation::QueryParams,
+            );
+        }
     }
 
     #[test]

@@ -14,7 +14,7 @@ use crate::http_request::{
     PayloadChecksumKind, PercentEncodingMode, SignableBody, SignatureLocation, SigningParams,
 };
 use crate::sign::v4;
-use crate::{SignatureVersion, ECDSA_256, HMAC_256};
+use crate::{SignatureVersion, HMAC_256};
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Method, Uri};
@@ -561,6 +561,7 @@ impl<'a> StringToSign<'a> {
         }
     }
 
+    #[cfg(feature = "sigv4a")]
     pub(crate) fn new_v4a(
         time: SystemTime,
         region: &'a str,
@@ -573,7 +574,7 @@ impl<'a> StringToSign<'a> {
             service,
         };
         Self {
-            algorithm: ECDSA_256,
+            algorithm: crate::ECDSA_256,
             scope,
             time,
             region,

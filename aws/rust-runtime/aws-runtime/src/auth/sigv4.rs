@@ -28,7 +28,12 @@ const EXPIRATION_WARNING: &str = "Presigned request will expire before the given
         `expires_in` duration because the credentials used to sign it will expire first.";
 
 /// Auth scheme ID for SigV4.
-pub const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4");
+pub const SCHEME_ID_V4: AuthSchemeId = AuthSchemeId::new("sigv4");
+// TODO(enableNewSmithyRuntimeCleanup) Created to avoid a breaking change.
+/// Auth scheme ID for SigV4.
+pub const SCHEME_ID: AuthSchemeId = SCHEME_ID_V4;
+/// Auth scheme ID for SigV4a.
+pub const SCHEME_ID_V4A: AuthSchemeId = AuthSchemeId::new("sigv4a");
 
 struct EndpointAuthSchemeConfig {
     signing_region_override: Option<SigningRegion>,

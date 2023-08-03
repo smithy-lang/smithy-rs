@@ -99,6 +99,11 @@ pub(crate) fn test_context(test_name: &str) -> TestContext {
     serde_json::from_str(&context).unwrap()
 }
 
+// I can't figure out how to default to `true` otherwise. Please help :(
+fn why_serde_why() -> bool {
+    true
+}
+
 #[derive(Deserialize)]
 pub(crate) struct TestContext {
     pub(crate) credentials: TestContextCreds,
@@ -107,10 +112,15 @@ pub(crate) struct TestContext {
     pub(crate) region: String,
     pub(crate) service: String,
     pub(crate) timestamp: String,
+    #[serde(default)]
+    pub(crate) omit_session_token: bool,
+    #[serde(default = "why_serde_why")]
+    pub(crate) sign_body: bool,
 }
 
 #[derive(Deserialize)]
 pub(crate) struct TestContextCreds {
     pub(crate) access_key_id: String,
     pub(crate) secret_access_key: String,
+    pub(crate) token: Option<String>,
 }
