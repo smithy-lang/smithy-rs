@@ -105,3 +105,4 @@ Changes checklist
   ensure it works with Hyper.
 - [ ] Remove `http::Response` and `Uri` from the public exposed types in `aws-config`: 1-4 days.
 - [ ] Long tail of other usages: 1 week
+- [ ] Implement `~` versions for SDK Crate => runtime crate dependencies: 1 week
