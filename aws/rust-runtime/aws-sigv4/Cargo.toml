@@ -14,6 +14,7 @@ sign-eventstream = ["aws-smithy-eventstream"]
 default = ["sign-http"]
 sigv4a = ["p256", "num-bigint", "zeroize", "aws-smithy-types"]
 
+
 [dependencies]
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
@@ -44,7 +45,7 @@ proptest = "1.2"
 serde = "1.0.180"
 serde_derive = "1.0.180"
 serde_json = "1.0.104"
-time = { version = "0.3.4", features = ["parsing"] }
+time = { version = "0.3.5", features = ["parsing"] }
 
 [target.'cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))'.dev-dependencies]
 ring = "0.16"
