@@ -70,7 +70,7 @@ How to actually implement this RFC
 In order to implement this feature, we need update the code generate accessors for lists and maps to add `.unwrap_or_default()`. Because we are returning slices `unwrap_or_default()` does not produce any additional allocations for empty collection.
 
 ### Could this be implemented for `HashMap`?
-This works for lists because we are returning a slice (allowing a statically owned `&[]` to be returned.) If we want to support HashMaps in the future this _is_ possible by using `OnceCell` to crate empty HashMaps for requisite types. This would allow us to return references to those empty maps.
+This works for lists because we are returning a slice (allowing a statically owned `&[]` to be returned.) If we want to support HashMaps in the future this _is_ possible by using `OnceCell` to create empty HashMaps for requisite types. This would allow us to return references to those empty maps.
 
 ### Isn't this handled by the default trait?
 No, many existing APIs don't have the default trait.
