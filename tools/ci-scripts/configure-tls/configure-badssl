@@ -8,5 +8,11 @@ set -euxo pipefail
 
 perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
 grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts | sudo tee -a /etc/hosts
-make serve || true
-ls certs/sets/test/gen/crt/ca-root.crt
+sed -i '/ 480/c \\ttrue' certs/Makefile
+sed -i '/CMD /i \
+RUN echo "-----BEGIN DH PARAMETERS-----" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "MEICPQDZ/YFp3iEs3/k9iRGoC/5/To2+5pUF/C6GkO6VjXHHyRVy68I0rI0q7IAq" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "-----END DH PARAMETERS-----" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+' Dockerfile
+screen -dmS badssl sudo make serve

@@ -18,8 +18,10 @@ jobs:
       - name: Install packages
         shell: bash
         run: |
-          sudo apt -y install gcc make python3-pip nginx git
+          sudo apt -y install gcc make python3-pip nginx git ruby openjdk-17-jre pkg-config libssl-dev
           pip3 install certbuilder crlbuilder
+      - name: Stop nginx
+        run: sudo systemctl stop nginx
       - name: Checkout smithy-rs
         uses: actions/checkout@v3
         with:
