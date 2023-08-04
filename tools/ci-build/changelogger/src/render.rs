@@ -178,7 +178,7 @@ fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
         meta.push_str(":bug:");
     }
     if entry.meta.breaking {
-        meta.push_str(':warning:');
+        meta.push_str(":warning:");
     }
     if entry.meta.tada {
         meta.push_str(":tada:");
