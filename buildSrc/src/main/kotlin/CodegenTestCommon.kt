@@ -7,6 +7,7 @@ import org.gradle.api.Project
 import org.gradle.api.tasks.Exec
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
+import org.gradle.kotlin.dsl.setEnvironment
 import java.io.File
 
 /**
@@ -246,29 +247,33 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
+
+        this.commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
+        this.setEnvironment("RUSTFLAGS" to "--cfg aws_sdk_unstable")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "test", "--all-features", "--no-fail-fast")
+
+        this.commandLine("cargo", "test", "--all-features", "--no-fail-fast")
+        this.setEnvironment("RUSTFLAGS" to "--cfg aws_sdk_unstable")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTDOCFLAGS", defaultRustDocFlags)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "doc", "--no-deps", "--document-private-items")
+
+        this.commandLine("cargo", "doc", "--no-deps", "--document-private-items")
+        this.setEnvironment("RUSTFLAGS" to "--cfg aws_sdk_unstable")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "clippy")
+
+        this.commandLine("cargo", "clippy")
+        this.setEnvironment("RUSTFLAGS" to "--cfg aws_sdk_unstable")
     }
 }
