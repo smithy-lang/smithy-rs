@@ -11,6 +11,7 @@ import org.jsoup.nodes.TextNode
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.SerdeDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -133,6 +134,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
         val compileExample = AwsDocs.canRelyOnAwsConfig(codegenContext)
         val exampleMode = if (compileExample) "no_run" else "ignore"
+
         val serdeInfoText = "##" + SerdeDecorator.SerdeInfoText
         template(
             asComments,
