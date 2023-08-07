@@ -145,8 +145,7 @@ pub async fn discover_and_validate_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
-    let manifest_paths = discover_package_manifests(path.as_ref().into()).await?;
-    let packages = read_packages(fs, manifest_paths)
+    let packages = discover_packages(fs, path.as_ref().into())
         .await?
         .into_iter()
         .filter(|package| package.publish == Publish::Allowed)
@@ -176,7 +175,7 @@ pub enum Error {
 
 /// Discovers all Cargo.toml files under the given path recursively
 #[async_recursion::async_recursion]
-pub async fn discover_package_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
+pub async fn discover_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
     let mut manifests = Vec::new();
     let mut read_dir = fs::read_dir(&path).await?;
     while let Some(entry) = read_dir.next_entry().await? {
@@ -185,12 +184,17 @@ pub async fn discover_package_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
             let manifest_path = package_path.join("Cargo.toml");
             if manifest_path.exists() {
                 manifests.push(manifest_path);
-            } else {
-                manifests.extend(discover_package_manifests(package_path).await?.into_iter());
             }
+            manifests.extend(discover_manifests(package_path).await?.into_iter());
         }
     }
     Ok(manifests)
+}
+
+/// Discovers and parses all Cargo.toml files that are packages (as opposed to being exclusively workspaces)
+pub async fn discover_packages(fs: Fs, path: PathBuf) -> Result<Vec<Package>> {
+    let manifest_paths = discover_manifests(path).await?;
+    read_packages(fs, manifest_paths).await
 }
 
 /// Parses a semver version number and adds additional error context when parsing fails.
@@ -219,26 +223,33 @@ fn read_dependencies(path: &Path, dependencies: &DepsSet) -> Result<Vec<PackageH
     Ok(result)
 }
 
-fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Package> {
+/// Returns `Ok(None)` when the Cargo.toml is a workspace rather than a package
+fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Option<Package>> {
     let manifest = Manifest::from_slice(manifest_bytes)
         .with_context(|| format!("failed to load package manifest for {:?}", path))?;
-    let package = manifest
-        .package
-        .ok_or_else(|| Error::InvalidManifest(path.into()))
-        .context("crate manifest doesn't have a `[package]` section")?;
-    let name = package.name;
-    let version = parse_version(path, &package.version)?;
-    let handle = PackageHandle { name, version };
-    let publish = match package.publish {
-        cargo_toml::Publish::Flag(true) => Publish::Allowed,
-        _ => Publish::NotAllowed,
-    };
+    if let Some(package) = manifest.package {
+        let name = package.name;
+        let version = parse_version(path, &package.version)?;
+        let handle = PackageHandle { name, version };
+        let publish = match package.publish {
+            cargo_toml::Publish::Flag(true) => Publish::Allowed,
+            _ => Publish::NotAllowed,
+        };
 
-    let mut local_dependencies = BTreeSet::new();
-    local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?.into_iter());
-    local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?.into_iter());
-    local_dependencies.extend(read_dependencies(path, &manifest.build_dependencies)?.into_iter());
-    Ok(Package::new(handle, path, local_dependencies, publish))
+        let mut local_dependencies = BTreeSet::new();
+        local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?.into_iter());
+        local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?.into_iter());
+        local_dependencies
+            .extend(read_dependencies(path, &manifest.build_dependencies)?.into_iter());
+        Ok(Some(Package::new(
+            handle,
+            path,
+            local_dependencies,
+            publish,
+        )))
+    } else {
+        Ok(None)
+    }
 }
 
 /// Validates that all of the publishable crates use consistent version numbers
@@ -275,7 +286,9 @@ pub async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<P
     let mut result = Vec::new();
     for path in &manifest_paths {
         let contents: Vec<u8> = fs.read_file(path).await?;
-        result.push(read_package(path, &contents)?);
+        if let Some(package) = read_package(path, &contents)? {
+            result.push(package);
+        }
     }
     Ok(result)
 }
@@ -350,7 +363,9 @@ mod tests {
         "#;
         let path: PathBuf = "test/Cargo.toml".into();
 
-        let package = read_package(&path, manifest).expect("parse success");
+        let package = read_package(&path, manifest)
+            .expect("parse success")
+            .expect("is a package");
         assert_eq!("test", package.handle.name);
         assert_eq!(version("1.2.0-preview"), package.handle.version);
 
@@ -521,6 +536,7 @@ mod tests {
         let server_packages = vec![
             package("aws-smithy-http-server", &[]),
             package("aws-smithy-http-server-python", &[]),
+            package("aws-smithy-http-server-typescript", &[]),
         ];
         for pkg in server_packages {
             assert_eq!(

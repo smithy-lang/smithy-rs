@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -72,17 +73,18 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
                 ""
             }
             if (path.isEmpty()) {
-                rust("Some(input)")
+                rustTemplate("#{Some}(input)", *preludeScope)
             } else {
                 val head = path.first()
                 if (symbolProvider.toSymbol(head).isOptional()) {
-                    rust(
+                    rustTemplate(
                         """
                         let input = match ${ref}input.${symbolProvider.toMemberName(head)} {
-                            None => return None,
-                            Some(t) => t
+                            #{None} => return #{None},
+                            #{Some}(t) => t
                         };
                         """,
+                        *preludeScope,
                     )
                 } else {
                     rust("let input = input.${symbolProvider.toMemberName(head)};")

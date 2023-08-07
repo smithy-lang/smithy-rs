@@ -11,8 +11,13 @@ use smithy.framework#ValidationException
 service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
+        // See https://github.com/awslabs/smithy-rs/issues/2760 for why testing operations reaching
+        // constrained shapes that only lie in the output is important.
+        ConstrainedShapesOnlyInOutputOperation,
         ConstrainedHttpBoundShapesOperation,
+        ConstrainedHttpPayloadBoundShapeOperation,
         ConstrainedRecursiveShapesOperation,
+
         // `httpQueryParams` and `httpPrefixHeaders` are structurually
         // exclusive, so we need one operation per target shape type
         // combination.
@@ -49,6 +54,11 @@ operation ConstrainedShapesOperation {
     errors: [ValidationException]
 }
 
+@http(uri: "/constrained-shapes-only-in-output-operation", method: "POST")
+operation ConstrainedShapesOnlyInOutputOperation {
+    output: ConstrainedShapesOnlyInOutputOperationOutput,
+}
+
 @http(
     uri: "/constrained-http-bound-shapes-operation/{rangeIntegerLabel}/{rangeShortLabel}/{rangeLongLabel}/{rangeByteLabel}/{lengthStringLabel}/{enumStringLabel}",
     method: "POST"
@@ -56,6 +66,13 @@ operation ConstrainedShapesOperation {
 operation ConstrainedHttpBoundShapesOperation {
     input: ConstrainedHttpBoundShapesOperationInputOutput,
     output: ConstrainedHttpBoundShapesOperationInputOutput,
+    errors: [ValidationException]
+}
+
+@http(uri: "/constrained-http-payload-bound-shape-operation", method: "POST")
+operation ConstrainedHttpPayloadBoundShapeOperation {
+    input: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
+    output: ConstrainedHttpPayloadBoundShapeOperationInputOutput,
     errors: [ValidationException]
 }
 
@@ -311,6 +328,12 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     enumStringListQuery: ListOfEnumString,
 }
 
+structure ConstrainedHttpPayloadBoundShapeOperationInputOutput {
+    @required
+    @httpPayload
+    httpPayloadBoundConstrainedShape: ConA
+}
+
 structure QueryParamsTargetingMapOfPatternStringOperationInputOutput {
     @httpQueryParams
     mapOfPatternString: MapOfPatternString
@@ -454,6 +477,7 @@ structure ConA {
 
     conBList: ConBList,
     lengthList: LengthList,
+    sensitiveLengthList: SensitiveLengthList,
 
     conBSet: ConBSet,
 
@@ -866,6 +890,14 @@ list LengthList {
     member: String
 }
 
+@length(max: 69)
+list SensitiveLengthList {
+    member: SensitiveStructure
+}
+
+@sensitive
+structure SensitiveStructure { }
+
 set ConBSet {
     member: ConBSetInner
 }
@@ -910,4 +942,32 @@ map MapOfMapOfListOfListOfConB {
 map MapOfListOfListOfConB {
     key: String,
     value: ConBList
+}
+
+structure ConstrainedShapesOnlyInOutputOperationOutput {
+    list: ConstrainedListInOutput
+    map: ConstrainedMapInOutput
+    // Unions were not affected by
+    // https://github.com/awslabs/smithy-rs/issues/2760, but testing anyway for
+    // good measure.
+    union: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+list ConstrainedListInOutput {
+    member: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+map ConstrainedMapInOutput {
+    key: String
+    value: TransitivelyConstrainedStructureInOutput
+}
+
+union ConstrainedUnionInOutput {
+    structure: TransitivelyConstrainedStructureInOutput
+}
+
+structure TransitivelyConstrainedStructureInOutput {
+    lengthString: LengthString
 }

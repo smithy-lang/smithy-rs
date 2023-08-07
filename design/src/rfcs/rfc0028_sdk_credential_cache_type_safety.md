@@ -33,7 +33,7 @@ and wrapping the given (or default) credentials provider.
 
 The `CredentialsCache` would look as follows:
 
-```rust
+```rust,ignore
 enum Inner {
     Lazy(LazyConfig),
     // Eager doesn't exist today, so this is purely for illustration
@@ -89,7 +89,7 @@ the `impl ProvideCredentials + 'static`. A sealed trait could be added to facili
 Customers that don't care about credential caching can configure credential providers
 without needing to think about it:
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::from_env()
     .credentials_provider(ImdsCredentialsProvider::builder().build())
     .load()
@@ -99,7 +99,7 @@ let sdk_config = aws_config::from_env()
 However, if they want to customize the caching, they can do so without modifying
 the credentials provider at all (in case they want to use the default):
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::from_env()
     .credentials_cache(CredentialsCache::default_eager())
     .load()
@@ -141,7 +141,7 @@ without any caching logic, although this wouldn't be recommended and this provid
 in `aws-config`.
 
 Example configuration:
-```rust
+```rust,ignore
 // Compiles
 let sdk_config = aws_config::from_env()
     .credentials(
@@ -162,7 +162,7 @@ let sdk_config = aws_config::from_env()
 
 Another method could be added to `ConfigLoader` that makes it easier to use the default cache:
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::from_env()
     .credentials_with_default_cache(ImdsCredentialsProvider::new())
     .load()
@@ -187,7 +187,7 @@ This alternative is similar to alternative A, except that the cache trait is dis
 that it's more apparent when mistakenly implementing the wrong trait for a custom credentials provider.
 
 A `CacheCredentials` trait would be added that looks as follows:
-```rust
+```rust,ignore
 pub trait CacheCredentials: Send + Sync + Debug {
     async fn cached(&self, now: SystemTime) -> Result<Credentials, CredentialsError>;
 }
@@ -216,7 +216,7 @@ but at the same time, doesn't make it impossible to add custom caching later.
 The idea is that there would be a struct called `CredentialsCache` that specifies the desired
 caching approach for a given credentials provider:
 
-```rust
+```rust,ignore
 pub struct LazyCache {
     credentials_provider: Arc<dyn ProvideCredentials>,
     // ...
@@ -280,7 +280,7 @@ than `impl ProvideCredentials + 'static`. A sealed trait could be added to facil
 
 Configuration would look as follows:
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::from_env()
     .credentials(CredentialsCache::default_lazy(ImdsCredentialsProvider::builder().build()))
     .load()
@@ -293,7 +293,7 @@ a use case, then a `CredentialsCache::NoCache` variant could be made.
 
 Like alternative A, a convenience method can be added to make using the default cache easier:
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::from_env()
     .credentials_with_default_cache(ImdsCredentialsProvider::builder().build())
     .load()
@@ -302,7 +302,7 @@ let sdk_config = aws_config::from_env()
 
 In the future if custom caching is added, it would look as follows:
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::from_env()
     .credentials(
         CredentialsCache::custom(ImdsCredentialsProvider::builder().build(), MyCache::new())
@@ -316,7 +316,7 @@ from the config are needed to construct the cache (such as `sleep_impl`). Thus, 
 setter would merely save off the `CredentialsCache` instance, and then when `load` is called,
 the complete `SharedCredentialsProvider` would be constructed:
 
-```rust
+```rust,ignore
 pub async fn load(self) -> SdkConfig {
     // ...
     let credentials_provider = self.credentials_cache.create_cache(sleep_impl);

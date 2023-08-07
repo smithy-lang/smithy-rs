@@ -80,7 +80,16 @@ class ServiceErrorGenerator(
                         errors.map { it.id },
                     )
                 }
-            rust("impl #T for Error {}", RuntimeType.StdError)
+            rustBlock("impl #T for Error", RuntimeType.StdError) {
+                rustBlock("fn source(&self) -> std::option::Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
+                    rustBlock("match self") {
+                        allErrors.forEach {
+                            rust("Error::${symbolProvider.toSymbol(it).name}(inner) => inner.source(),")
+                        }
+                        rust("Error::Unhandled(inner) => inner.source()")
+                    }
+                }
+            }
             writeCustomizations(customizations, ErrorSection.ServiceErrorAdditionalTraitImpls(allErrors))
         }
         crate.lib { rust("pub use error_meta::Error;") }

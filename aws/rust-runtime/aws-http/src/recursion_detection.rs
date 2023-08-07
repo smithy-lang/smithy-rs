@@ -11,6 +11,8 @@ use http::HeaderValue;
 use percent_encoding::{percent_encode, CONTROLS};
 use std::borrow::Cow;
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete this module
+
 /// Recursion Detection Middleware
 ///
 /// This middleware inspects the value of the `AWS_LAMBDA_FUNCTION_NAME` and `_X_AMZN_TRACE_ID` environment

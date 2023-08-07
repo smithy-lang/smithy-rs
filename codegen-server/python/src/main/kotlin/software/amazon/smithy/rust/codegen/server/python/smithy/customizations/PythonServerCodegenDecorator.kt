@@ -194,6 +194,28 @@ class PyTypedMarkerDecorator : ServerCodegenDecorator {
     }
 }
 
+/**
+ * Copies the stubgen scripts to the generated crate root.
+ *
+ * The shell script `stubgen.sh` runs a quick build and uses `stubgen.py` to generate mypy compatibile
+ * types stubs for the project.
+ */
+class AddStubgenScriptDecorator : ServerCodegenDecorator {
+    override val name: String = "AddStubgenScriptDecorator"
+    override val order: Byte = 0
+
+    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        val stubgenPythonContent = this::class.java.getResource("/stubgen.py").readText()
+        rustCrate.withFile("stubgen.py") {
+            writeWithNoFormatting("$stubgenPythonContent")
+        }
+        val stubgenShellContent = this::class.java.getResource("/stubgen.sh").readText()
+        rustCrate.withFile("stubgen.sh") {
+            writeWithNoFormatting("$stubgenShellContent")
+        }
+    }
+}
+
 val DECORATORS = arrayOf(
     /**
      * Add the [InternalServerError] error to all operations.
@@ -214,4 +236,6 @@ val DECORATORS = arrayOf(
     InitPyDecorator(),
     // Generate `py.typed` for the Python source.
     PyTypedMarkerDecorator(),
+    // Generate scripts for stub generation.
+    AddStubgenScriptDecorator(),
 )

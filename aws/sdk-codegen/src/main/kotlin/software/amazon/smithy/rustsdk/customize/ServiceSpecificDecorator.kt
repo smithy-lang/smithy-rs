@@ -11,13 +11,18 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientProtocolMap
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
@@ -54,6 +59,14 @@ class ServiceSpecificDecorator(
 
     // This kind of decorator gets explicitly added to the root sdk-codegen decorator
     override fun classpathDiscoverable(): Boolean = false
+
+    override fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> = baseAuthSchemeOptions.maybeApply(codegenContext.serviceShape) {
+        delegateTo.authOptions(codegenContext, operationShape, baseAuthSchemeOptions)
+    }
 
     override fun builderCustomizations(
         codegenContext: ClientCodegenContext,
@@ -126,8 +139,27 @@ class ServiceSpecificDecorator(
         delegateTo.structureCustomizations(codegenContext, baseCustomizations)
     }
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
         model.maybeApply(service) {
-            delegateTo.transformModel(service, model)
+            delegateTo.transformModel(service, model, settings)
+        }
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
+        delegateTo.serviceRuntimePluginCustomizations(codegenContext, baseCustomizations)
+    }
+
+    override fun protocolTestGenerator(
+        codegenContext: ClientCodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator = baseGenerator.maybeApply(codegenContext.serviceShape) {
+        delegateTo.protocolTestGenerator(codegenContext, baseGenerator)
+    }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        listOf<AdHocCustomization>().maybeApply(codegenContext.serviceShape) {
+            delegateTo.extraSections(codegenContext)
         }
 }

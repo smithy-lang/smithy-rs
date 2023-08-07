@@ -7,59 +7,150 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.util.dq
+
+sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
+    /**
+     * Hook for declaring singletons that store cross-operation state.
+     *
+     * Examples include token buckets, ID generators, etc.
+     */
+    class DeclareSingletons : ServiceRuntimePluginSection("DeclareSingletons")
+
+    /**
+     * Hook for adding additional things to config inside service runtime plugins.
+     */
+    data class AdditionalConfig(val newLayerName: String, val serviceConfigName: String) : ServiceRuntimePluginSection("AdditionalConfig") {
+        /** Adds a value to the config bag */
+        fun putConfigValue(writer: RustWriter, value: Writable) {
+            writer.rust("$newLayerName.store_put(#T);", value)
+        }
+    }
+
+    data class RegisterRuntimeComponents(val serviceConfigName: String) : ServiceRuntimePluginSection("RegisterRuntimeComponents") {
+        /** Generates the code to register an interceptor */
+        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
+            writer.rustTemplate(
+                """
+                runtime_components.push_interceptor(#{SharedInterceptor}::new(#{interceptor}) as _);
+                """,
+                "interceptor" to interceptor,
+                "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
+            )
+        }
+
+        fun registerAuthScheme(writer: RustWriter, authScheme: Writable) {
+            writer.rustTemplate(
+                """
+                runtime_components.push_auth_scheme(#{auth_scheme});
+                """,
+                "auth_scheme" to authScheme,
+            )
+        }
+
+        fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
+            writer.rustTemplate(
+                """
+                runtime_components.push_identity_resolver(#{identity_resolver});
+                """,
+                "identity_resolver" to identityResolver,
+            )
+        }
+    }
+}
+typealias ServiceRuntimePluginCustomization = NamedCustomization<ServiceRuntimePluginSection>
 
 /**
  * Generates the service-level runtime plugin
  */
 class ServiceRuntimePluginGenerator(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
 ) {
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
+        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
-            "BoxError" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin::BoxError"),
-            "NeverRetryStrategy" to RuntimeType.smithyRuntimeApi(rc).resolve("client::retries::NeverRetryStrategy"),
-            "ConfigBag" to RuntimeType.smithyRuntimeApi(rc).resolve("config_bag::ConfigBag"),
-            "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::ConfigBagAccessors"),
-            "TestConnection" to RuntimeType.smithyRuntimeApi(rc).resolve("client::connections::test_connection::TestConnection"),
-            "RuntimePlugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin::RuntimePlugin"),
-            "StaticUriEndpointResolver" to RuntimeType.smithyRuntimeApi(rc).resolve("client::endpoints::StaticUriEndpointResolver"),
-            "StubAuthOptionResolver" to RuntimeType.smithyRuntimeApi(rc).resolve("client::auth::option_resolver::StubAuthOptionResolver"),
-            "StubAuthOptionResolverParams" to RuntimeType.smithyRuntimeApi(rc).resolve("client::auth::option_resolver::StubAuthOptionResolverParams"),
-            "AuthOptionResolverParams" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::AuthOptionResolverParams"),
-            "IdentityResolvers" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::IdentityResolvers"),
+            *preludeScope,
+            "Arc" to RuntimeType.Arc,
+            "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
+            "Cow" to RuntimeType.Cow,
+            "Layer" to smithyTypes.resolve("config_bag::Layer"),
+            "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+            "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
+            "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
         )
     }
 
-    fun render(writer: RustWriter) {
+    fun render(
+        writer: RustWriter,
+        customizations: List<ServiceRuntimePluginCustomization>,
+    ) {
+        val additionalConfig = writable {
+            writeCustomizations(customizations, ServiceRuntimePluginSection.AdditionalConfig("cfg", "_service_config"))
+        }
         writer.rustTemplate(
             """
+            ##[derive(::std::fmt::Debug)]
             pub(crate) struct ServiceRuntimePlugin {
-                handle: std::sync::Arc<crate::client::Handle>,
+                config: #{Option}<#{FrozenLayer}>,
+                runtime_components: #{RuntimeComponentsBuilder},
             }
 
             impl ServiceRuntimePlugin {
-                pub fn new(handle: std::sync::Arc<crate::client::Handle>) -> Self { Self { handle } }
+                pub fn new(_service_config: crate::config::Config) -> Self {
+                    let config = { #{config} };
+                    let mut runtime_components = #{RuntimeComponentsBuilder}::new("ServiceRuntimePlugin");
+                    #{runtime_components}
+                    Self { config, runtime_components }
+                }
             }
 
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
-                fn configure(&self, cfg: &mut #{ConfigBag}) -> Result<(), #{BoxError}> {
-                    use #{ConfigBagAccessors};
+                fn config(&self) -> #{Option}<#{FrozenLayer}> {
+                    self.config.clone()
+                }
 
-                    cfg.set_identity_resolvers(#{IdentityResolvers}::builder().build());
-                    cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{StubAuthOptionResolverParams}::new()));
-                    cfg.set_auth_option_resolver(#{StubAuthOptionResolver}::new());
-                    cfg.set_endpoint_resolver(#{StaticUriEndpointResolver}::default());
-                    cfg.set_retry_strategy(#{NeverRetryStrategy}::new());
-                    cfg.set_connection(#{TestConnection}::new(vec![]));
-                    // TODO(RuntimePlugins): Add the HttpAuthSchemes to the config bag
-                    // TODO(RuntimePlugins): Add the TraceProbe to the config bag
-                    Ok(())
+                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                    #{Cow}::Borrowed(&self.runtime_components)
                 }
             }
+
+            /// Cross-operation shared-state singletons
+            #{declare_singletons}
             """,
             *codegenScope,
+            "config" to writable {
+                if (additionalConfig.isNotEmpty()) {
+                    rustTemplate(
+                        """
+                        let mut cfg = #{Layer}::new(${codegenContext.serviceShape.id.name.dq()});
+                        #{additional_config}
+                        #{Some}(cfg.freeze())
+                        """,
+                        *codegenScope,
+                        "additional_config" to additionalConfig,
+                    )
+                } else {
+                    rust("None")
+                }
+            },
+            "runtime_components" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.RegisterRuntimeComponents("_service_config"))
+            },
+            "declare_singletons" to writable {
+                writeCustomizations(customizations, ServiceRuntimePluginSection.DeclareSingletons())
+            },
         )
     }
 }

@@ -8,7 +8,7 @@ use flate2::read::GzDecoder;
 use std::fs::File;
 use std::process::Command;
 use tar::Archive;
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 use crate_hasher::file_list::FileList;
 
@@ -25,32 +25,32 @@ fn assert_correct_aws_smithy_async_hash(file_list: &FileList) {
 
 #[test]
 fn test_against_aws_smithy_async() -> Result<()> {
-    let dir = TempDir::new("test_against_aws_smithy_async")?;
+    let dir = TempDir::new()?.path().join("test_against_aws_smithy_async");
 
     let tar = GzDecoder::new(File::open("tests/aws-smithy-async-2022-04-08.tar.gz")?);
     let mut archive = Archive::new(tar);
     archive.unpack(&dir)?;
 
-    let file_list = FileList::discover(&dir.as_ref().join("aws-smithy-async"))?;
+    let file_list = FileList::discover(&dir.as_path().join("aws-smithy-async"))?;
     assert_correct_aws_smithy_async_hash(&file_list);
     Ok(())
 }
 
 #[test]
 fn test_against_aws_smithy_async_with_ignored_files() -> Result<()> {
-    let dir = TempDir::new("test_against_aws_smithy_async")?;
+    let dir = TempDir::new()?.path().join("test_against_aws_smithy_async");
 
     let tar = GzDecoder::new(File::open("tests/aws-smithy-async-2022-04-08.tar.gz")?);
     let mut archive = Archive::new(tar);
     archive.unpack(&dir)?;
 
-    std::fs::create_dir(dir.as_ref().join("target"))?;
+    std::fs::create_dir(&dir.as_path().join("target"))?;
     std::fs::write(
-        dir.as_ref().join("target/something"),
+        &dir.as_path().join("target/something"),
         b"some data that should be excluded",
     )?;
 
-    let file_list = FileList::discover(&dir.as_ref().join("aws-smithy-async"))?;
+    let file_list = FileList::discover(&dir.as_path().join("aws-smithy-async"))?;
     assert_correct_aws_smithy_async_hash(&file_list);
 
     Ok(())
@@ -58,7 +58,7 @@ fn test_against_aws_smithy_async_with_ignored_files() -> Result<()> {
 
 #[test]
 fn test_against_aws_smithy_async_with_git_repo() -> Result<()> {
-    let dir = TempDir::new("test_against_aws_smithy_async")?;
+    let dir = TempDir::new()?.path().join("test_against_aws_smithy_async");
 
     let tar = GzDecoder::new(File::open("tests/aws-smithy-async-2022-04-08.tar.gz")?);
     let mut archive = Archive::new(tar);
@@ -68,10 +68,10 @@ fn test_against_aws_smithy_async_with_git_repo() -> Result<()> {
     Command::new("git")
         .arg("init")
         .arg(".")
-        .current_dir(dir.as_ref().join("aws-smithy-async"))
+        .current_dir(&dir.as_path().join("aws-smithy-async"))
         .output()?;
 
-    let file_list = FileList::discover(&dir.as_ref().join("aws-smithy-async"))?;
+    let file_list = FileList::discover(&dir.as_path().join("aws-smithy-async"))?;
     assert_correct_aws_smithy_async_hash(&file_list);
 
     Ok(())

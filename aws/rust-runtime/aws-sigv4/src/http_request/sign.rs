@@ -103,6 +103,7 @@ pub enum SignableBody<'a> {
     StreamingUnsignedPayloadTrailer,
 }
 
+/// Instructions for applying a signature to an HTTP request.
 #[derive(Debug)]
 pub struct SigningInstructions {
     headers: Option<HeaderMap<HeaderValue>>,
@@ -117,20 +118,27 @@ impl SigningInstructions {
         Self { headers, params }
     }
 
+    /// Returns a reference to the headers that should be added to the request.
     pub fn headers(&self) -> Option<&HeaderMap<HeaderValue>> {
         self.headers.as_ref()
     }
+
+    /// Returns the headers and sets the internal value to `None`.
     pub fn take_headers(&mut self) -> Option<HeaderMap<HeaderValue>> {
         self.headers.take()
     }
 
+    /// Returns a reference to the query parameters that should be added to the request.
     pub fn params(&self) -> Option<&Vec<(&'static str, Cow<'static, str>)>> {
         self.params.as_ref()
     }
+
+    /// Returns the query parameters and sets the internal value to `None`.
     pub fn take_params(&mut self) -> Option<Vec<(&'static str, Cow<'static, str>)>> {
         self.params.take()
     }
 
+    /// Applies the instructions to the given `request`.
     pub fn apply_to_request<B>(mut self, request: &mut http::Request<B>) {
         if let Some(new_headers) = self.take_headers() {
             for (name, value) in new_headers.into_iter() {
@@ -256,7 +264,7 @@ fn calculate_signing_headers<'a>(
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
     let values = creq.values.as_headers().expect("signing with headers");
     let mut headers = HeaderMap::new();
-    add_header(&mut headers, header::X_AMZ_DATE, &values.date_time);
+    add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
     headers.insert(
         "authorization",
         build_authorization_header(params.access_key, &creq, sts, &signature),
@@ -266,18 +274,26 @@ fn calculate_signing_headers<'a>(
             &mut headers,
             header::X_AMZ_CONTENT_SHA_256,
             &values.content_sha256,
+            false,
         );
     }
 
     if let Some(security_token) = params.security_token {
-        add_header(&mut headers, header::X_AMZ_SECURITY_TOKEN, security_token);
+        add_header(
+            &mut headers,
+            header::X_AMZ_SECURITY_TOKEN,
+            security_token,
+            true,
+        );
     }
 
     Ok(SigningOutput::new(headers, signature))
 }
 
-fn add_header(map: &mut HeaderMap<HeaderValue>, key: &'static str, value: &str) {
-    map.insert(key, HeaderValue::try_from(value).expect(key));
+fn add_header(map: &mut HeaderMap<HeaderValue>, key: &'static str, value: &str, sensitive: bool) {
+    let mut value = HeaderValue::try_from(value).expect(key);
+    value.set_sensitive(sensitive);
+    map.insert(key, value);
 }
 
 // add signature to authorization header
@@ -595,7 +611,7 @@ mod tests {
             security_token: None,
             region: "us-east-1",
             service_name: "foo",
-            time: std::time::SystemTime::now(),
+            time: std::time::SystemTime::UNIX_EPOCH,
             settings,
         };
 
@@ -624,7 +640,7 @@ mod tests {
                 security_token: None,
                 region: "us-east-1",
                 service_name: "foo",
-                time: std::time::SystemTime::now(),
+                time: std::time::SystemTime::UNIX_EPOCH,
                 settings,
             };
 

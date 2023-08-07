@@ -21,6 +21,8 @@ use tracing::{debug_span, trace, Instrument};
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
+const LOG_SENSITIVE_BODIES: &str = "LOG_SENSITIVE_BODIES";
+
 /// [`AsyncMapRequest`] defines an asynchronous middleware that transforms an [`operation::Request`].
 ///
 /// Typically, these middleware will read configuration from the `PropertyBag` and use it to
@@ -110,7 +112,7 @@ where
     O: ParseHttpResponse<Output = Result<T, E>>,
 {
     if let Some(parsed_response) =
-        debug_span!("parse_unloaded").in_scope(&mut || handler.parse_unloaded(&mut response))
+        debug_span!("parse_unloaded").in_scope(|| handler.parse_unloaded(&mut response))
     {
         trace!(response = ?response, "read HTTP headers for streaming response");
         return sdk_result(parsed_response, response);
@@ -132,7 +134,15 @@ where
     };
 
     let http_response = http::Response::from_parts(parts, Bytes::from(body));
-    trace!(http_response = ?http_response, "read HTTP response body");
+    if !handler.sensitive()
+        || std::env::var(LOG_SENSITIVE_BODIES)
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or_default()
+    {
+        trace!(http_response = ?http_response, "read HTTP response body");
+    } else {
+        trace!(http_response = "** REDACTED **. To print, set LOG_SENSITIVE_BODIES=true")
+    }
     debug_span!("parse_loaded").in_scope(move || {
         let parsed = handler.parse_loaded(&http_response);
         sdk_result(

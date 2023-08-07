@@ -15,6 +15,7 @@ aws-credential-types = { path = "../aws-credential-types" }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-types = { path = "../aws-types" }
 http = "0.2.2"
 tracing = "0.1"
@@ -22,8 +23,9 @@ tracing = "0.1"
 [dev-dependencies]
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-endpoint = { path = "../aws-endpoint" }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types"}
-tracing-test = "0.2.1"
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+tracing-test = "0.2.4"
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

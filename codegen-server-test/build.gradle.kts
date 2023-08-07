@@ -84,12 +84,12 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest("com.amazonaws.ebs#Ebs", "ebs", imports = listOf("$commonModels/ebs.json")),
         CodegenTest("com.amazonaws.s3#AmazonS3", "s3"),
         CodegenTest(
-            "com.aws.example.rust#PokemonService",
+            "com.aws.example#PokemonService",
             "pokemon-service-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
         ),
         CodegenTest(
-            "com.aws.example.rust#PokemonService",
+            "com.aws.example#PokemonService",
             "pokemon-service-awsjson-server-sdk",
             imports = listOf("$commonModels/pokemon-awsjson.smithy", "$commonModels/pokemon-common.smithy"),
         ),

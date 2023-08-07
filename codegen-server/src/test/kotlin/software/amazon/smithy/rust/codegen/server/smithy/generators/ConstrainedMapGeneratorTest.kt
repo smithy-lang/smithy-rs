@@ -128,7 +128,7 @@ class ConstrainedMapGeneratorTest {
     }
 
     @Test
-    fun `type should not be constructible without using a constructor`() {
+    fun `type should not be constructable without using a constructor`() {
         val model = """
             namespace test
 
@@ -146,7 +146,7 @@ class ConstrainedMapGeneratorTest {
         render(codegenContext, writer, constrainedMapShape)
 
         // Check that the wrapped type is `pub(crate)`.
-        writer.toString() shouldContain "pub struct ConstrainedMap(pub(crate) std::collections::HashMap<std::string::String, std::string::String>);"
+        writer.toString() shouldContain "pub struct ConstrainedMap(pub(crate) ::std::collections::HashMap<::std::string::String, ::std::string::String>);"
     }
 
     private fun render(

@@ -3,6 +3,7 @@ allowed_external_types = [
     "aws_smithy_http::*",
     "aws_smithy_http_tower::*",
     "aws_smithy_types::*",
+    "aws_smithy_protocol_test::MediaType",
     "http::header::name::HeaderName",
     "http::request::Request",
     "http::response::Response",
@@ -10,7 +11,7 @@ allowed_external_types = [
     "tower::retry::policy::Policy",
     "tower_service::Service",
 
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Move `rustls`/`native-tls` features into separate crates
+    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Move `rustls` feature into separate crates
     "hyper::client::connect::http::HttpConnector",
     "hyper_rustls::connector::HttpsConnector",
     "hyper_tls::client::HttpsConnector",
@@ -22,7 +23,7 @@ allowed_external_types = [
     "tokio::io::async_write::AsyncWrite",
 
 
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `test-utils` feature
+    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `test-util` feature
     "bytes::bytes::Bytes",
     "serde::ser::Serialize",
     "serde::de::Deserialize",

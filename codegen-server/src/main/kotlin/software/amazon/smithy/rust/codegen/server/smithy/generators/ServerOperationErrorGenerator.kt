@@ -43,7 +43,7 @@ open class ServerOperationErrorGenerator(
         (operationOrEventStream as UnionShape).eventStreamErrors()
             .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
 
-    fun render(writer: RustWriter) {
+    open fun render(writer: RustWriter) {
         val (errorSymbol, errors) = when (operationOrEventStream) {
             is OperationShape -> symbolProvider.symbolForOperationError(operationOrEventStream) to operationErrors()
             is UnionShape -> symbolProvider.symbolForEventStreamError(operationOrEventStream) to eventStreamErrors()

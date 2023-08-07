@@ -7,13 +7,14 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
@@ -36,15 +37,16 @@ class ResponseDeserializerGenerator(
         val orchestrator =
             CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator")
         arrayOf(
+            *preludeScope,
             "Error" to interceptorContext.resolve("Error"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Instrument" to CargoDependency.Tracing.toType().resolve("Instrument"),
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
-            "ResponseDeserializer" to orchestrator.resolve("ResponseDeserializer"),
+            "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
+            "ResponseDeserializer" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::ser_de::ResponseDeserializer"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "TypedBox" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("type_erasure::TypedBox"),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
             "type_erase_result" to typeEraseResult(),
         )
@@ -91,14 +93,14 @@ class ResponseDeserializerGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-            fn deserialize_streaming(&self, response: &mut #{HttpResponse}) -> Option<#{OutputOrError}> {
+            fn deserialize_streaming(&self, response: &mut #{HttpResponse}) -> #{Option}<#{OutputOrError}> {
                 #{BeforeParseResponse}
 
                 // If this is an error, defer to the non-streaming parser
                 if !response.status().is_success() && response.status().as_u16() != $successCode {
-                    return None;
+                    return #{None};
                 }
-                Some(#{type_erase_result}(#{parse_streaming_response}(response)))
+                #{Some}(#{type_erase_result}(#{parse_streaming_response}(response)))
             }
             """,
             *codegenScope,
@@ -134,7 +136,7 @@ class ResponseDeserializerGenerator(
             let (success, status) = (response.status().is_success(), response.status().as_u16());
             let headers = response.headers();
             let body = response.body().bytes().expect("body loaded");
-             #{BeforeParseResponse}
+            #{BeforeParseResponse}
             let parse_result = if !success && status != $successCode {
                 #{parse_error}(status, headers, body)
             } else {
@@ -144,7 +146,7 @@ class ResponseDeserializerGenerator(
             """,
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
-            "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
+            "parse_response" to parserGenerator.parseResponseFn(operationShape, false, customizations),
             "BeforeParseResponse" to writable {
                 writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
             },
@@ -154,13 +156,14 @@ class ResponseDeserializerGenerator(
     private fun typeEraseResult(): RuntimeType = ProtocolFunctions.crossOperationFn("type_erase_result") { fnName ->
         rustTemplate(
             """
-            pub(crate) fn $fnName<O, E>(result: Result<O, E>) -> Result<#{Output}, #{Error}>
+            pub(crate) fn $fnName<O, E>(result: #{Result}<O, E>) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>>
             where
-                O: Send + Sync + 'static,
-                E: Send + Sync + 'static,
+                O: ::std::fmt::Debug + #{Send} + #{Sync} + 'static,
+                E: ::std::error::Error + std::fmt::Debug + #{Send} + #{Sync} + 'static,
             {
-                result.map(|output| #{TypedBox}::new(output).erase())
-                    .map_err(|error| #{TypedBox}::new(error).erase())
+                result.map(|output| #{Output}::erase(output))
+                    .map_err(|error| #{Error}::erase(error))
+                    .map_err(#{Into}::into)
             }
             """,
             *codegenScope,

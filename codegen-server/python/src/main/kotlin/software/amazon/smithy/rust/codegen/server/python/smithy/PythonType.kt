@@ -90,45 +90,63 @@ sealed class PythonType {
         override val namespace: String = "typing"
     }
 
-    data class Opaque(override val name: String, val rustNamespace: String? = null) : PythonType() {
-        // Since Python doesn't have a something like Rust's `crate::` we are using a custom placeholder here
-        // and in our stub generation script we will replace placeholder with the real root module name.
-        private val pythonRootModulePlaceholder = "__root_module_name__"
+    data class AsyncIterator(override val member: PythonType) : PythonType(), Container {
+        override val name: String = "AsyncIterator"
+        override val namespace: String = "typing"
+    }
+
+    data class Application(val type: PythonType, val args: kotlin.collections.List<PythonType>) : PythonType() {
+        override val name = type.name
+        override val namespace = type.namespace
+    }
+
+    data class Opaque(override val name: String, val pythonRootModuleName: String, val rustNamespace: String? = null) : PythonType() {
 
         override val namespace: String? = rustNamespace?.split("::")?.joinToString(".") {
             when (it) {
-                "crate" -> pythonRootModulePlaceholder
+                "crate" -> pythonRootModuleName
                 // In Python, we expose submodules from `aws_smithy_http_server_python`
-                // like `types`, `middleware`, `tls` etc. from `__root_module__name`
-                "aws_smithy_http_server_python" -> pythonRootModulePlaceholder
+                // like `types`, `middleware`, `tls` etc. from Python root module
+                "aws_smithy_http_server_python" -> pythonRootModuleName
                 else -> it
             }
         }
+            // Most opaque types have a leading `::`, so strip that for Python as needed
+            .let {
+                when (it?.startsWith(".")) {
+                    true -> it.substring(1)
+                    else -> it
+                }
+            }
     }
 }
 
 /**
  * Return corresponding [PythonType] for a [RustType].
  */
-fun RustType.pythonType(): PythonType =
+fun RustType.pythonType(pythonRootModuleName: String): PythonType =
     when (this) {
         is RustType.Unit -> PythonType.None
         is RustType.Bool -> PythonType.Bool
         is RustType.Float -> PythonType.Float
         is RustType.Integer -> PythonType.Int
         is RustType.String -> PythonType.Str
-        is RustType.Vec -> PythonType.List(this.member.pythonType())
-        is RustType.Slice -> PythonType.List(this.member.pythonType())
-        is RustType.HashMap -> PythonType.Dict(this.key.pythonType(), this.member.pythonType())
-        is RustType.HashSet -> PythonType.Set(this.member.pythonType())
-        is RustType.Reference -> this.member.pythonType()
-        is RustType.Option -> PythonType.Optional(this.member.pythonType())
-        is RustType.Box -> this.member.pythonType()
-        is RustType.Dyn -> this.member.pythonType()
-        is RustType.Opaque -> PythonType.Opaque(this.name, this.namespace)
-        // TODO(Constraints): How to handle this?
-        // Revisit as part of https://github.com/awslabs/smithy-rs/issues/2114
-        is RustType.MaybeConstrained -> this.member.pythonType()
+        is RustType.Vec -> PythonType.List(this.member.pythonType(pythonRootModuleName))
+        is RustType.Slice -> PythonType.List(this.member.pythonType(pythonRootModuleName))
+        is RustType.HashMap -> PythonType.Dict(this.key.pythonType(pythonRootModuleName), this.member.pythonType(pythonRootModuleName))
+        is RustType.HashSet -> PythonType.Set(this.member.pythonType(pythonRootModuleName))
+        is RustType.Reference -> this.member.pythonType(pythonRootModuleName)
+        is RustType.Option -> PythonType.Optional(this.member.pythonType(pythonRootModuleName))
+        is RustType.Box -> this.member.pythonType(pythonRootModuleName)
+        is RustType.Dyn -> this.member.pythonType(pythonRootModuleName)
+        is RustType.Application -> PythonType.Application(
+            this.type.pythonType(pythonRootModuleName),
+            this.args.map {
+                it.pythonType(pythonRootModuleName)
+            },
+        )
+        is RustType.Opaque -> PythonType.Opaque(this.name, pythonRootModuleName, rustNamespace = this.namespace)
+        is RustType.MaybeConstrained -> this.member.pythonType(pythonRootModuleName)
     }
 
 /**
@@ -154,6 +172,11 @@ fun PythonType.render(fullyQualified: Boolean = true): String {
         is PythonType.Set -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Awaitable -> "${this.name}[${this.member.render(fullyQualified)}]"
         is PythonType.Optional -> "${this.name}[${this.member.render(fullyQualified)}]"
+        is PythonType.AsyncIterator -> "${this.name}[${this.member.render(fullyQualified)}]"
+        is PythonType.Application -> {
+            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+            "${this.name}[$args]"
+        }
         is PythonType.Callable -> {
             val args = this.args.joinToString(", ") { it.render(fullyQualified) }
             val rtype = this.rtype.render(fullyQualified)

@@ -15,12 +15,15 @@ use std::{
 };
 
 use async_stream::stream;
-use aws_smithy_http::operation::Request;
+use aws_smithy_client::{conns, hyper_ext::Adapter};
+use aws_smithy_http::{body::SdkBody, byte_stream::ByteStream};
 use aws_smithy_http_server::Extension;
+use http::Uri;
 use pokemon_service_server_sdk::{
     error, input, model, model::CapturingPayload, output, types::Blob,
 };
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
+use tower::Service;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -31,16 +34,6 @@ const PIKACHU_ITALIAN_FLAVOR_TEXT: &str =
     "Quando vari Pokémon di questo tipo si radunano, la loro energia può causare forti tempeste.";
 const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
     "ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。";
-
-/// Rewrites the base URL of a request
-pub fn rewrite_base_url(base_url: String) -> impl Fn(Request) -> Request + Clone {
-    move |mut req| {
-        let http_req = req.http_mut();
-        let uri = format!("{base_url}{}", http_req.uri().path());
-        *http_req.uri_mut() = uri.parse().unwrap();
-        req
-    }
-}
 
 /// Kills [`Child`] process when dropped.
 #[derive(Debug)]
@@ -316,6 +309,37 @@ pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutpu
 /// Operation used to show the service is running.
 pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
     output::CheckHealthOutput {}
+}
+
+const RADIO_STREAMS: [&str; 2] = [
+    "https://ia800107.us.archive.org/33/items/299SoundEffectCollection/102%20Palette%20Town%20Theme.mp3",
+    "https://ia600408.us.archive.org/29/items/PocketMonstersGreenBetaLavenderTownMusicwwwFlvtoCom/Pocket%20Monsters%20Green%20Beta-%20Lavender%20Town%20Music-%5Bwww_flvto_com%5D.mp3",
+];
+
+/// Streams a random Pokémon song.
+pub async fn stream_pokemon_radio(
+    _input: input::StreamPokemonRadioInput,
+) -> output::StreamPokemonRadioOutput {
+    let radio_stream_url = RADIO_STREAMS
+        .choose(&mut rand::thread_rng())
+        .expect("`RADIO_STREAMS` is empty")
+        .parse::<Uri>()
+        .expect("Invalid url in `RADIO_STREAMS`");
+
+    let mut connector = Adapter::builder().build(conns::https());
+    let result = connector
+        .call(
+            http::Request::builder()
+                .uri(radio_stream_url)
+                .body(SdkBody::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    output::StreamPokemonRadioOutput {
+        data: ByteStream::new(result.into_body()),
+    }
 }
 
 #[cfg(test)]

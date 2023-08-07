@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -71,6 +72,7 @@ class RequestBindingGenerator(
     private val encoder = RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder")
 
     private val codegenScope = arrayOf(
+        *preludeScope,
         "BuildError" to runtimeConfig.operationBuildError(),
         "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
         "Input" to symbolProvider.toSymbol(inputShape),
@@ -90,11 +92,11 @@ class RequestBindingGenerator(
             fn update_http_builder(
                 input: &#{Input},
                 builder: #{HttpRequestBuilder}
-            ) -> std::result::Result<#{HttpRequestBuilder}, #{BuildError}>
+            ) -> #{Result}<#{HttpRequestBuilder}, #{BuildError}>
             """,
             *codegenScope,
         ) {
-            write("let mut uri = String::new();")
+            rustTemplate("let mut uri = #{String}::new();", *preludeScope)
             write("uri_base(input, &mut uri)?;")
             if (hasQuery) {
                 write("uri_query(input, &mut uri)?;")
@@ -107,7 +109,7 @@ class RequestBindingGenerator(
                     addHeadersFn,
                 )
             }
-            write("Ok(builder.method(${httpTrait.method.dq()}).uri(uri))")
+            rustTemplate("#{Ok}(builder.method(${httpTrait.method.dq()}).uri(uri))", *preludeScope)
         }
     }
 
@@ -126,7 +128,7 @@ class RequestBindingGenerator(
         }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.rustBlockTemplate(
-            "fn uri_base(_input: &#{Input}, output: &mut String) -> std::result::Result<(), #{BuildError}>",
+            "fn uri_base(_input: &#{Input}, output: &mut #{String}) -> #{Result}<(), #{BuildError}>",
             *codegenScope,
         ) {
             rust("use #T as _;", RuntimeType.stdFmt.resolve("Write"))
@@ -134,8 +136,8 @@ class RequestBindingGenerator(
                 val member = inputShape.expectMember(label.content)
                 serializeLabel(member, label, local(member))
             }
-            rust("""write!(output, ${combinedArgs.joinToString(", ")}).expect("formatting should succeed");""")
-            rust("Ok(())")
+            rust("""::std::write!(output, ${combinedArgs.joinToString(", ")}).expect("formatting should succeed");""")
+            rustTemplate("#{Ok}(())", *codegenScope)
         }
     }
 
@@ -165,7 +167,7 @@ class RequestBindingGenerator(
         }
         val preloadedParams = literalParams.keys + dynamicParams.map { it.locationName }
         writer.rustBlockTemplate(
-            "fn uri_query(_input: &#{Input}, mut output: &mut String) -> Result<(), #{BuildError}>",
+            "fn uri_query(_input: &#{Input}, mut output: &mut #{String}) -> #{Result}<(), #{BuildError}>",
             *codegenScope,
         ) {
             write("let mut query = #T::new(output);", RuntimeType.queryFormat(runtimeConfig, "Writer"))
@@ -212,6 +214,7 @@ class RequestBindingGenerator(
 
                 if (memberShape.isRequired) {
                     val codegenScope = arrayOf(
+                        *preludeScope,
                         "BuildError" to OperationBuildError(runtimeConfig).missingField(
                             memberName,
                             "cannot be empty or unset",
@@ -229,7 +232,7 @@ class RequestBindingGenerator(
                     // Strings that aren't enums must be checked to see if they're empty
                     if (target.isStringShape && !target.hasTrait<EnumTrait>()) {
                         rustBlock("if $derefName.is_empty()") {
-                            rustTemplate("return Err(#{BuildError:W});", *codegenScope)
+                            rustTemplate("return #{Err}(#{BuildError:W});", *codegenScope)
                         }
                     }
 
@@ -241,7 +244,7 @@ class RequestBindingGenerator(
                     }
                 }
             }
-            writer.rust("Ok(())")
+            writer.rustTemplate("#{Ok}(())", *codegenScope)
         }
         return true
     }
@@ -329,9 +332,10 @@ class RequestBindingGenerator(
         rustTemplate(
             """
             if $outputVar.is_empty() {
-                return Err(#{buildError:W})
+                return #{Err}(#{buildError:W})
             }
             """,
+            *preludeScope,
             "buildError" to buildError,
         )
     }

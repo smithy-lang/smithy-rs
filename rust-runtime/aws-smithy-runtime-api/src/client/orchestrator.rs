@@ -3,368 +3,252 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::identity::Identity;
-use crate::client::interceptors::context::{Input, OutputOrError};
-use crate::client::interceptors::InterceptorContext;
-use crate::config_bag::ConfigBag;
-use crate::type_erasure::{TypeErasedBox, TypedBox};
+//! Client request orchestration.
+//!
+//! The orchestrator handles the full request/response lifecycle including:
+//! - Request serialization
+//! - Endpoint resolution
+//! - Identity resolution
+//! - Signing
+//! - Request transmission with retry and timeouts
+//! - Response deserialization
+//!
+//! There are several hook points in the orchestration where [interceptors](crate::client::interceptors)
+//! can read and modify the input, request, response, or output/error.
+
+use crate::box_error::BoxError;
+use crate::client::interceptors::context::phase::Phase;
+use crate::client::interceptors::context::Error;
+use crate::client::interceptors::InterceptorError;
+use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::property_bag::PropertyBag;
-use std::any::Any;
+use aws_smithy_http::result::{ConnectorError, SdkError};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
+use bytes::Bytes;
 use std::fmt::Debug;
-use std::future::Future;
+use std::future::Future as StdFuture;
 use std::pin::Pin;
-use std::sync::Arc;
 
+/// Type alias for the HTTP request type that the orchestrator uses.
 pub type HttpRequest = http::Request<SdkBody>;
+
+/// Type alias for the HTTP response type that the orchestrator uses.
 pub type HttpResponse = http::Response<SdkBody>;
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-pub type BoxFallibleFut<T> = Pin<Box<dyn Future<Output = Result<T, BoxError>>>>;
 
-pub trait TraceProbe: Send + Sync + Debug {
-    fn dispatch_events(&self) -> BoxFallibleFut<()>;
-}
+/// Type alias for boxed futures that are returned from several traits since async trait functions are not stable yet (as of 2023-07-21).
+///
+/// See [the Rust blog](https://blog.rust-lang.org/inside-rust/2023/05/03/stabilizing-async-fn-in-trait.html) for
+/// more information on async functions in traits.
+pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>> + Send>>;
 
-pub trait RequestSerializer: Send + Sync + Debug {
-    fn serialize_input(&self, input: Input) -> Result<HttpRequest, BoxError>;
-}
+/// Type alias for futures that are returned from several traits since async trait functions are not stable yet (as of 2023-07-21).
+///
+/// See [the Rust blog](https://blog.rust-lang.org/inside-rust/2023/05/03/stabilizing-async-fn-in-trait.html) for
+/// more information on async functions in traits.
+pub type Future<T> = NowOrLater<Result<T, BoxError>, BoxFuture<T>>;
 
-pub trait ResponseDeserializer: Send + Sync + Debug {
-    fn deserialize_streaming(&self, response: &mut HttpResponse) -> Option<OutputOrError> {
-        let _ = response;
-        None
-    }
-
-    fn deserialize_nonstreaming(&self, response: &HttpResponse) -> OutputOrError;
-}
-
-pub trait Connection: Send + Sync + Debug {
-    fn call(&self, request: &mut HttpRequest, cfg: &ConfigBag) -> BoxFallibleFut<HttpResponse>;
-}
-
-pub trait RetryStrategy: Send + Sync + Debug {
-    fn should_attempt_initial_request(&self, cfg: &ConfigBag) -> Result<(), BoxError>;
-
-    fn should_attempt_retry(
-        &self,
-        context: &InterceptorContext<HttpRequest, HttpResponse>,
-        cfg: &ConfigBag,
-    ) -> Result<bool, BoxError>;
-}
-
-#[derive(Debug)]
-pub struct AuthOptionResolverParams(TypeErasedBox);
-
-impl AuthOptionResolverParams {
-    pub fn new<T: Any + Send + Sync + 'static>(params: T) -> Self {
-        Self(TypedBox::new(params).erase())
-    }
-
-    pub fn get<T: 'static>(&self) -> Option<&T> {
-        self.0.downcast_ref()
-    }
-}
-
-pub trait AuthOptionResolver: Send + Sync + Debug {
-    fn resolve_auth_options(
-        &self,
-        params: &AuthOptionResolverParams,
-    ) -> Result<Vec<HttpAuthOption>, BoxError>;
-}
-
+/// Informs the orchestrator on whether or not the request body needs to be loaded into memory before transmit.
+///
+/// This enum gets placed into the `ConfigBag` to change the orchestrator behavior.
+/// Immediately after serialization (before the `read_after_serialization` interceptor hook),
+/// if it was set to `Requested` in the config bag, it will be replaced back into the config bag as
+/// `Loaded` with the request body contents for use in later interceptors.
+///
+/// This all happens before the attempt loop, so the loaded request body will remain available
+/// for interceptors that run in any subsequent retry attempts.
+#[non_exhaustive]
 #[derive(Clone, Debug)]
-pub struct HttpAuthOption {
-    scheme_id: &'static str,
-    properties: Arc<PropertyBag>,
+pub enum LoadedRequestBody {
+    /// Don't attempt to load the request body into memory.
+    NotNeeded,
+    /// Attempt to load the request body into memory.
+    Requested,
+    /// The request body is already loaded.
+    Loaded(Bytes),
 }
 
-impl HttpAuthOption {
-    pub fn new(scheme_id: &'static str, properties: Arc<PropertyBag>) -> Self {
+impl Storable for LoadedRequestBody {
+    type Storer = StoreReplace<Self>;
+}
+
+#[derive(Debug)]
+enum ErrorKind<E> {
+    /// An error occurred within an interceptor.
+    Interceptor { source: InterceptorError },
+    /// An error returned by a service.
+    Operation { err: E },
+    /// An error that occurs when a request times out.
+    Timeout { source: BoxError },
+    /// An error that occurs when request dispatch fails.
+    Connector { source: ConnectorError },
+    /// An error that occurs when a response can't be deserialized.
+    Response { source: BoxError },
+    /// A general orchestrator error.
+    Other { source: BoxError },
+}
+
+/// Errors that can occur while running the orchestrator.
+#[derive(Debug)]
+pub struct OrchestratorError<E> {
+    kind: ErrorKind<E>,
+}
+
+impl<E> OrchestratorError<E> {
+    /// Create a new `OrchestratorError` from the given source.
+    pub fn other(source: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>) -> Self {
         Self {
-            scheme_id,
-            properties,
+            kind: ErrorKind::Other {
+                source: source.into(),
+            },
         }
     }
 
-    pub fn scheme_id(&self) -> &'static str {
-        self.scheme_id
-    }
-
-    pub fn properties(&self) -> &PropertyBag {
-        &self.properties
-    }
-}
-
-pub trait IdentityResolver: Send + Sync + Debug {
-    fn resolve_identity(&self, cfg: &ConfigBag) -> Result<Identity, BoxError>;
-}
-
-#[derive(Debug)]
-pub struct IdentityResolvers {
-    identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
-}
-
-impl IdentityResolvers {
-    pub fn builder() -> builders::IdentityResolversBuilder {
-        builders::IdentityResolversBuilder::new()
-    }
-
-    pub fn identity_resolver(&self, identity_type: &'static str) -> Option<&dyn IdentityResolver> {
-        self.identity_resolvers
-            .iter()
-            .find(|resolver| resolver.0 == identity_type)
-            .map(|resolver| &*resolver.1)
-    }
-}
-
-#[derive(Debug)]
-struct HttpAuthSchemesInner {
-    schemes: Vec<(&'static str, Box<dyn HttpAuthScheme>)>,
-}
-#[derive(Debug)]
-pub struct HttpAuthSchemes {
-    inner: Arc<HttpAuthSchemesInner>,
-}
-
-impl HttpAuthSchemes {
-    pub fn builder() -> builders::HttpAuthSchemesBuilder {
-        Default::default()
-    }
-
-    pub fn scheme(&self, name: &'static str) -> Option<&dyn HttpAuthScheme> {
-        self.inner
-            .schemes
-            .iter()
-            .find(|scheme| scheme.0 == name)
-            .map(|scheme| &*scheme.1)
-    }
-}
-
-pub trait HttpAuthScheme: Send + Sync + Debug {
-    fn scheme_id(&self) -> &'static str;
-
-    fn identity_resolver(&self, identity_resolvers: &IdentityResolvers) -> &dyn IdentityResolver;
-
-    fn request_signer(&self) -> &dyn HttpRequestSigner;
-}
-
-pub trait HttpRequestSigner: Send + Sync + Debug {
-    /// Return a signed version of the given request using the given identity.
-    ///
-    /// If the provided identity is incompatible with this signer, an error must be returned.
-    fn sign_request(
-        &self,
-        request: &HttpRequest,
-        identity: &Identity,
-        cfg: &ConfigBag,
-    ) -> Result<HttpRequest, BoxError>;
-}
-
-pub trait EndpointResolver: Send + Sync + Debug {
-    fn resolve_and_apply_endpoint(&self, request: &mut HttpRequest) -> Result<(), BoxError>;
-}
-
-pub trait ConfigBagAccessors {
-    fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams;
-    fn set_auth_option_resolver_params(
-        &mut self,
-        auth_option_resolver_params: AuthOptionResolverParams,
-    );
-
-    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver;
-    fn set_auth_option_resolver(&mut self, auth_option_resolver: impl AuthOptionResolver + 'static);
-
-    fn endpoint_resolver(&self) -> &dyn EndpointResolver;
-    fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static);
-
-    fn identity_resolvers(&self) -> &IdentityResolvers;
-    fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers);
-
-    fn connection(&self) -> &dyn Connection;
-    fn set_connection(&mut self, connection: impl Connection + 'static);
-
-    fn http_auth_schemes(&self) -> &HttpAuthSchemes;
-    fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes);
-
-    fn request_serializer(&self) -> &dyn RequestSerializer;
-    fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static);
-
-    fn response_deserializer(&self) -> &dyn ResponseDeserializer;
-    fn set_response_deserializer(
-        &mut self,
-        response_serializer: impl ResponseDeserializer + 'static,
-    );
-
-    fn retry_strategy(&self) -> &dyn RetryStrategy;
-    fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static);
-
-    fn trace_probe(&self) -> &dyn TraceProbe;
-    fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static);
-}
-
-impl ConfigBagAccessors for ConfigBag {
-    fn auth_option_resolver_params(&self) -> &AuthOptionResolverParams {
-        self.get::<AuthOptionResolverParams>()
-            .expect("auth option resolver params must be set")
-    }
-
-    fn set_auth_option_resolver_params(
-        &mut self,
-        auth_option_resolver_params: AuthOptionResolverParams,
-    ) {
-        self.put::<AuthOptionResolverParams>(auth_option_resolver_params);
-    }
-
-    fn auth_option_resolver(&self) -> &dyn AuthOptionResolver {
-        &**self
-            .get::<Box<dyn AuthOptionResolver>>()
-            .expect("an auth option resolver must be set")
-    }
-
-    fn set_auth_option_resolver(
-        &mut self,
-        auth_option_resolver: impl AuthOptionResolver + 'static,
-    ) {
-        self.put::<Box<dyn AuthOptionResolver>>(Box::new(auth_option_resolver));
-    }
-
-    fn http_auth_schemes(&self) -> &HttpAuthSchemes {
-        self.get::<HttpAuthSchemes>()
-            .expect("auth schemes must be set")
-    }
-
-    fn set_http_auth_schemes(&mut self, http_auth_schemes: HttpAuthSchemes) {
-        self.put::<HttpAuthSchemes>(http_auth_schemes);
-    }
-
-    fn retry_strategy(&self) -> &dyn RetryStrategy {
-        &**self
-            .get::<Box<dyn RetryStrategy>>()
-            .expect("a retry strategy must be set")
-    }
-
-    fn set_retry_strategy(&mut self, retry_strategy: impl RetryStrategy + 'static) {
-        self.put::<Box<dyn RetryStrategy>>(Box::new(retry_strategy));
-    }
-
-    fn endpoint_resolver(&self) -> &dyn EndpointResolver {
-        &**self
-            .get::<Box<dyn EndpointResolver>>()
-            .expect("an endpoint resolver must be set")
-    }
-
-    fn set_endpoint_resolver(&mut self, endpoint_resolver: impl EndpointResolver + 'static) {
-        self.put::<Box<dyn EndpointResolver>>(Box::new(endpoint_resolver));
-    }
-
-    fn identity_resolvers(&self) -> &IdentityResolvers {
-        self.get::<IdentityResolvers>()
-            .expect("identity resolvers must be configured")
-    }
-
-    fn set_identity_resolvers(&mut self, identity_resolvers: IdentityResolvers) {
-        self.put::<IdentityResolvers>(identity_resolvers);
-    }
-
-    fn connection(&self) -> &dyn Connection {
-        &**self
-            .get::<Box<dyn Connection>>()
-            .expect("missing connector")
-    }
-
-    fn set_connection(&mut self, connection: impl Connection + 'static) {
-        self.put::<Box<dyn Connection>>(Box::new(connection));
-    }
-
-    fn request_serializer(&self) -> &dyn RequestSerializer {
-        &**self
-            .get::<Box<dyn RequestSerializer>>()
-            .expect("missing request serializer")
-    }
-
-    fn set_request_serializer(&mut self, request_serializer: impl RequestSerializer + 'static) {
-        self.put::<Box<dyn RequestSerializer>>(Box::new(request_serializer));
-    }
-
-    fn response_deserializer(&self) -> &dyn ResponseDeserializer {
-        &**self
-            .get::<Box<dyn ResponseDeserializer>>()
-            .expect("missing response deserializer")
-    }
-
-    fn set_response_deserializer(
-        &mut self,
-        response_deserializer: impl ResponseDeserializer + 'static,
-    ) {
-        self.put::<Box<dyn ResponseDeserializer>>(Box::new(response_deserializer));
-    }
-
-    fn trace_probe(&self) -> &dyn TraceProbe {
-        &**self
-            .get::<Box<dyn TraceProbe>>()
-            .expect("missing trace probe")
-    }
-
-    fn set_trace_probe(&mut self, trace_probe: impl TraceProbe + 'static) {
-        self.put::<Box<dyn TraceProbe>>(Box::new(trace_probe));
-    }
-}
-
-pub mod builders {
-    use super::*;
-
-    #[derive(Debug, Default)]
-    pub struct IdentityResolversBuilder {
-        identity_resolvers: Vec<(&'static str, Box<dyn IdentityResolver>)>,
-    }
-
-    impl IdentityResolversBuilder {
-        pub fn new() -> Self {
-            Default::default()
+    /// Create an operation error.
+    pub fn operation(err: E) -> Self {
+        Self {
+            kind: ErrorKind::Operation { err },
         }
+    }
 
-        pub fn identity_resolver(
-            mut self,
-            name: &'static str,
-            resolver: impl IdentityResolver + 'static,
-        ) -> Self {
-            self.identity_resolvers
-                .push((name, Box::new(resolver) as _));
-            self
+    /// True if the underlying error is an operation error.
+    pub fn is_operation_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::Operation { .. })
+    }
+
+    /// Return this orchestrator error as an operation error if possible.
+    pub fn as_operation_error(&self) -> Option<&E> {
+        match &self.kind {
+            ErrorKind::Operation { err } => Some(err),
+            _ => None,
         }
+    }
 
-        pub fn build(self) -> IdentityResolvers {
-            IdentityResolvers {
-                identity_resolvers: self.identity_resolvers,
+    /// Create an interceptor error with the given source.
+    pub fn interceptor(source: InterceptorError) -> Self {
+        Self {
+            kind: ErrorKind::Interceptor { source },
+        }
+    }
+
+    /// True if the underlying error is an interceptor error.
+    pub fn is_interceptor_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::Interceptor { .. })
+    }
+
+    /// Create a timeout error with the given source.
+    pub fn timeout(source: BoxError) -> Self {
+        Self {
+            kind: ErrorKind::Timeout { source },
+        }
+    }
+
+    /// True if the underlying error is a timeout error.
+    pub fn is_timeout_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::Timeout { .. })
+    }
+
+    /// Create a response error with the given source.
+    pub fn response(source: BoxError) -> Self {
+        Self {
+            kind: ErrorKind::Response { source },
+        }
+    }
+
+    /// True if the underlying error is a response error.
+    pub fn is_response_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::Response { .. })
+    }
+
+    /// Create a connector error with the given source.
+    pub fn connector(source: ConnectorError) -> Self {
+        Self {
+            kind: ErrorKind::Connector { source },
+        }
+    }
+
+    /// True if the underlying error is a [`ConnectorError`].
+    pub fn is_connector_error(&self) -> bool {
+        matches!(self.kind, ErrorKind::Connector { .. })
+    }
+
+    /// Return this orchestrator error as a connector error if possible.
+    pub fn as_connector_error(&self) -> Option<&ConnectorError> {
+        match &self.kind {
+            ErrorKind::Connector { source } => Some(source),
+            _ => None,
+        }
+    }
+
+    /// Convert the `OrchestratorError` into an [`SdkError`].
+    pub(crate) fn into_sdk_error(
+        self,
+        phase: &Phase,
+        response: Option<HttpResponse>,
+    ) -> SdkError<E, HttpResponse> {
+        match self.kind {
+            ErrorKind::Interceptor { source } => {
+                use Phase::*;
+                match phase {
+                    BeforeSerialization | Serialization => SdkError::construction_failure(source),
+                    BeforeTransmit | Transmit => match response {
+                        Some(response) => SdkError::response_error(source, response),
+                        None => {
+                            SdkError::dispatch_failure(ConnectorError::other(source.into(), None))
+                        }
+                    },
+                    BeforeDeserialization | Deserialization | AfterDeserialization => {
+                        SdkError::response_error(source, response.expect("phase has a response"))
+                    }
+                }
+            }
+            ErrorKind::Operation { err } => {
+                debug_assert!(phase.is_after_deserialization(), "operation errors are a result of successfully receiving and parsing a response from the server. Therefore, we must be in the 'After Deserialization' phase.");
+                SdkError::service_error(err, response.expect("phase has a response"))
+            }
+            ErrorKind::Connector { source } => SdkError::dispatch_failure(source),
+            ErrorKind::Timeout { source } => SdkError::timeout_error(source),
+            ErrorKind::Response { source } => SdkError::response_error(source, response.unwrap()),
+            ErrorKind::Other { source } => {
+                use Phase::*;
+                match phase {
+                    BeforeSerialization | Serialization => SdkError::construction_failure(source),
+                    BeforeTransmit | Transmit => convert_dispatch_error(source, response),
+                    BeforeDeserialization | Deserialization | AfterDeserialization => {
+                        SdkError::response_error(source, response.expect("phase has a response"))
+                    }
+                }
             }
         }
     }
+}
 
-    #[derive(Debug, Default)]
-    pub struct HttpAuthSchemesBuilder {
-        schemes: Vec<(&'static str, Box<dyn HttpAuthScheme>)>,
+fn convert_dispatch_error<O>(
+    err: BoxError,
+    response: Option<HttpResponse>,
+) -> SdkError<O, HttpResponse> {
+    let err = match err.downcast::<ConnectorError>() {
+        Ok(connector_error) => {
+            return SdkError::dispatch_failure(*connector_error);
+        }
+        Err(e) => e,
+    };
+    match response {
+        Some(response) => SdkError::response_error(err, response),
+        None => SdkError::dispatch_failure(ConnectorError::other(err, None)),
     }
+}
 
-    impl HttpAuthSchemesBuilder {
-        pub fn new() -> Self {
-            Default::default()
-        }
+impl<E> From<InterceptorError> for OrchestratorError<E>
+where
+    E: Debug + std::error::Error + 'static,
+{
+    fn from(err: InterceptorError) -> Self {
+        Self::interceptor(err)
+    }
+}
 
-        pub fn auth_scheme(
-            mut self,
-            name: &'static str,
-            auth_scheme: impl HttpAuthScheme + 'static,
-        ) -> Self {
-            self.schemes.push((name, Box::new(auth_scheme) as _));
-            self
-        }
-
-        pub fn build(self) -> HttpAuthSchemes {
-            HttpAuthSchemes {
-                inner: Arc::new(HttpAuthSchemesInner {
-                    schemes: self.schemes,
-                }),
-            }
-        }
+impl From<Error> for OrchestratorError<Error> {
+    fn from(err: Error) -> Self {
+        Self::operation(err)
     }
 }

@@ -64,11 +64,11 @@ class AwsQueryCompatible(
 
     override val defaultTimestampFormat = awsJson.defaultTimestampFormat
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
-        awsJson.structuredDataParser(operationShape)
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        awsJson.structuredDataParser()
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
-        awsJson.structuredDataSerializer(operationShape)
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
+        awsJson.structuredDataSerializer()
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->

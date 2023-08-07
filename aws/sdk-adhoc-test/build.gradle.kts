@@ -37,6 +37,8 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
+
 val allCodegenTests = listOf(
     CodegenTest(
         "com.amazonaws.apigateway#BackplaneControlService",
@@ -46,7 +48,7 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewCrateOrganizationScheme": true
+                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
             },
             "customizationConfig": {
                 "awsSdk": {
@@ -63,7 +65,7 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewCrateOrganizationScheme": true
+                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
             },
             "customizationConfig": {
                 "awsSdk": {

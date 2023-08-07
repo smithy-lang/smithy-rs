@@ -12,8 +12,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.EventStreamSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.server.python.smithy.customizations.DECORATORS
 import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolMetadataProvider
@@ -88,7 +86,7 @@ class RustServerCodegenPythonPlugin : SmithyBuildPlugin {
                     if (includeConstrainedShapeProvider) PythonConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
                 }
                 // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
+                .let { PythonEventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it) }
                 // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
                 .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
                 // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.

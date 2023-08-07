@@ -1,3 +1,7 @@
 [build]
 # Share one `target` directory at the project root for all Cargo projects and workspaces in smithy-rs
 target-dir = "target"
+
+# TODO(https://github.com/awslabs/smithy-rs/issues/2766): The sparse registry config can be removed when upgrading to Rust 1.70
+[registries.crates-io]
+protocol = "sparse"

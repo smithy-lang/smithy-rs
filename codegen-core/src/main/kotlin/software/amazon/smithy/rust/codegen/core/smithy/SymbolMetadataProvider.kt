@@ -20,7 +20,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SensitiveTrait
-import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -99,19 +98,7 @@ class BaseSymbolMetadataProvider(
 
     override fun memberMeta(memberShape: MemberShape): RustMetadata =
         when (val container = model.expectShape(memberShape.container)) {
-            is StructureShape -> {
-                // TODO(https://github.com/awslabs/smithy-rs/issues/943): Once streaming accessors are usable,
-                // then also make streaming members `#[doc(hidden)]`
-                if (memberShape.getMemberTrait(model, StreamingTrait::class.java).isPresent) {
-                    RustMetadata(visibility = Visibility.PUBLIC)
-                } else {
-                    RustMetadata(
-                        // At some point, visibility _may_ be made `PRIVATE`, so make these `#[doc(hidden)]` for now.
-                        visibility = Visibility.PUBLIC,
-                        additionalAttributes = listOf(Attribute.DocHidden),
-                    )
-                }
-            }
+            is StructureShape -> RustMetadata(visibility = Visibility.PUBLIC)
 
             is UnionShape, is CollectionShape, is MapShape -> RustMetadata(visibility = Visibility.PUBLIC)
 
@@ -137,13 +124,13 @@ class BaseSymbolMetadataProvider(
 
     // Only the server subproject uses these, so we provide a sane and conservative default implementation here so that
     // the rest of symbol metadata providers can just delegate to it.
-    private val defaultRustMetadata = RustMetadata(visibility = Visibility.PRIVATE)
+    private fun defaultRustMetadata() = RustMetadata(visibility = Visibility.PRIVATE)
 
-    override fun listMeta(listShape: ListShape) = defaultRustMetadata
-    override fun mapMeta(mapShape: MapShape) = defaultRustMetadata
-    override fun stringMeta(stringShape: StringShape) = defaultRustMetadata
-    override fun numberMeta(numberShape: NumberShape) = defaultRustMetadata
-    override fun blobMeta(blobShape: BlobShape) = defaultRustMetadata
+    override fun listMeta(listShape: ListShape) = defaultRustMetadata()
+    override fun mapMeta(mapShape: MapShape) = defaultRustMetadata()
+    override fun stringMeta(stringShape: StringShape) = defaultRustMetadata()
+    override fun numberMeta(numberShape: NumberShape) = defaultRustMetadata()
+    override fun blobMeta(blobShape: BlobShape) = defaultRustMetadata()
 }
 
 private const val META_KEY = "meta"

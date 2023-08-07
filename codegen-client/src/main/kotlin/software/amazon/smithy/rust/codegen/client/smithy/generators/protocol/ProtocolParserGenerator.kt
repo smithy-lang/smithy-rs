@@ -10,6 +10,8 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -23,8 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -55,15 +55,21 @@ class ProtocolParserGenerator(
         "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-        // TODO(enableNewSmithyRuntime): Remove the `PropertyBag` below
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `PropertyBag` below
         "PropertyBag" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("property_bag::PropertyBag"),
     )
 
-    fun parseResponseFn(operationShape: OperationShape, customizations: List<OperationCustomization>): RuntimeType {
+    fun parseResponseFn(
+        operationShape: OperationShape,
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        propertyBagAvailable: Boolean,
+        customizations: List<OperationCustomization>,
+    ): RuntimeType {
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
-        return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
+        val fnNameSuffix = if (propertyBagAvailable) "http_response_with_props" else "http_response"
+        return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = fnNameSuffix) { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(_response_status: u16, _response_headers: &#{http}::header::HeaderMap, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
@@ -77,6 +83,7 @@ class ProtocolParserGenerator(
                         outputShape,
                         httpBindingResolver.responseBindings(operationShape),
                         errorSymbol,
+                        propertyBagAvailable,
                         customizations,
                     )
                 }
@@ -84,7 +91,10 @@ class ProtocolParserGenerator(
         }
     }
 
-    fun parseErrorFn(operationShape: OperationShape, customizations: List<OperationCustomization>): RuntimeType {
+    fun parseErrorFn(
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ): RuntimeType {
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
@@ -143,6 +153,7 @@ class ProtocolParserGenerator(
                                             errorShape,
                                             httpBindingResolver.errorResponseBindings(errorShape),
                                             errorSymbol,
+                                            false,
                                             listOf(
                                                 object : OperationCustomization() {
                                                     override fun section(section: OperationSection): Writable = {
@@ -178,17 +189,17 @@ class ProtocolParserGenerator(
 
     fun parseStreamingResponseFn(
         operationShape: OperationShape,
-        // TODO(enableNewSmithyRuntime): Remove the `includeProperties` flag as if it were always set to `false`
-        includeProperties: Boolean,
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ): RuntimeType {
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
-        val fnNameSuffix = if (includeProperties) "http_response_with_props" else "http_response"
+        val fnNameSuffix = if (propertyBagAvailable) "http_response_with_props" else "http_response"
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = fnNameSuffix) { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
-            val propertiesArg = if (includeProperties) {
+            val propertiesArg = if (propertyBagAvailable) {
                 Attribute.AllowUnusedVariables.render(this)
                 ", properties: &#{PropertyBag}"
             } else {
@@ -217,6 +228,7 @@ class ProtocolParserGenerator(
                         outputShape,
                         httpBindingResolver.responseBindings(operationShape),
                         errorSymbol,
+                        propertyBagAvailable,
                         customizations,
                     )
                 }
@@ -229,10 +241,12 @@ class ProtocolParserGenerator(
         outputShape: StructureShape,
         bindings: List<HttpBindingDescriptor>,
         errorSymbol: Symbol,
+        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
+        propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ) {
         val httpBindingGenerator = ResponseBindingGenerator(protocol, codegenContext, operationShape)
-        val structuredDataParser = protocol.structuredDataParser(operationShape)
+        val structuredDataParser = protocol.structuredDataParser()
         Attribute.AllowUnusedMut.render(this)
         rust("let mut output = #T::default();", symbolProvider.symbolForBuilder(outputShape))
         if (outputShape.id == operationShape.output.get()) {
@@ -270,7 +284,7 @@ class ProtocolParserGenerator(
 
         writeCustomizations(
             customizations,
-            OperationSection.MutateOutput(customizations, operationShape, "_response_headers"),
+            OperationSection.MutateOutput(customizations, operationShape, "_response_headers", propertyBagAvailable),
         )
 
         rust("output.build()$err")

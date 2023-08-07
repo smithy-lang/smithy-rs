@@ -16,10 +16,11 @@ pub mod body;
 pub(crate) mod error;
 pub mod extension;
 pub mod instrumentation;
+pub mod layer;
 pub mod operation;
 pub mod plugin;
 #[doc(hidden)]
-pub mod protocols;
+pub mod protocol;
 #[doc(hidden)]
 pub mod rejection;
 pub mod request;
@@ -28,6 +29,8 @@ pub mod response;
 pub mod routing;
 #[doc(hidden)]
 pub mod runtime_error;
+pub mod service;
+pub mod shape_id;
 
 #[doc(inline)]
 pub(crate) use self::error::Error;
@@ -38,6 +41,3 @@ pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]
 mod test_helpers;
-
-#[doc(hidden)]
-pub mod proto;

@@ -22,7 +22,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.RangeTrait
-import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.model.traits.UniqueItemsTrait
@@ -62,10 +61,11 @@ private sealed class UnsupportedConstraintMessageKind {
             shape: Shape,
             constraintTrait: Trait,
             trackingIssue: String,
+            willSupport: Boolean = true,
         ) =
             buildMessage(
                 "The ${shape.type} shape `${shape.id}` has the constraint trait `${constraintTrait.toShapeId()}` attached.",
-                willSupport = true,
+                willSupport,
                 trackingIssue,
             )
 
@@ -105,7 +105,12 @@ private sealed class UnsupportedConstraintMessageKind {
 
             is UnsupportedRangeTraitOnShape -> LogMessage(
                 level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, rangeTrait, constraintTraitsUberIssue),
+                buildMessageShapeHasUnsupportedConstraintTrait(
+                    shape,
+                    rangeTrait,
+                    willSupport = false,
+                    trackingIssue = "https://github.com/awslabs/smithy-rs/issues/2007",
+                ),
             )
 
             is UnsupportedUniqueItemsTraitOnShape -> LogMessage(
@@ -157,8 +162,6 @@ private data class UnsupportedMapShapeReachableFromUniqueItemsList(
 data class LogMessage(val level: Level, val message: String)
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>) :
     Throwable(message = messages.joinToString("\n") { it.message })
-
-private val unsupportedConstraintsOnMemberShapes = allConstraintTraits - RequiredTrait::class.java
 
 /**
  * Validate that all constrained operations have the shape [validationExceptionShapeId] shape attached to their errors.
@@ -253,7 +256,7 @@ fun validateUnsupportedConstraints(
         unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet + unsupportedConstraintErrorShapeReachableViaAnEventStreamSet
 
     // 3. Range trait used on unsupported shapes.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401)
+    // TODO(https://github.com/awslabs/smithy-rs/issues/2007)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
         .asSequence()
@@ -280,16 +283,28 @@ fun validateUnsupportedConstraints(
         .toSet()
 
     val messages =
-        unsupportedLengthTraitOnStreamingBlobShapeSet.map {
-            it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
-        } +
-            unsupportedConstraintShapeReachableViaAnEventStreamSet.map {
+        (
+            unsupportedLengthTraitOnStreamingBlobShapeSet.map {
                 it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
             } +
-            unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
-            mapShapeReachableFromUniqueItemsListShapeSet.map {
-                it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
-            }
+                unsupportedConstraintShapeReachableViaAnEventStreamSet.map {
+                    it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
+                } +
+                unsupportedRangeTraitOnShapeSet.map { it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints) } +
+                mapShapeReachableFromUniqueItemsListShapeSet.map {
+                    it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
+                }
+            ).toMutableList()
+
+    if (messages.isEmpty() && codegenConfig.ignoreUnsupportedConstraints) {
+        messages += LogMessage(
+            Level.SEVERE,
+            """
+            The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
+            effect. All the constraint traits used in the model are well-supported, please remove this flag.
+            """.trimIndent().replace("\n", " "),
+        )
+    }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }

@@ -43,7 +43,21 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 object AwsRuntimeType {
     fun presigning(): RuntimeType =
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
+    fun presigningInterceptor(runtimeConfig: RuntimeConfig): RuntimeType =
+        RuntimeType.forInlineDependency(
+            InlineAwsDependency.forRustFile(
+                "presigning_interceptors",
+                visibility = Visibility.PUBCRATE,
+                AwsCargoDependency.awsSigv4(runtimeConfig),
+                CargoDependency.smithyRuntimeApi(runtimeConfig),
+            ),
+        )
 
+    // TODO(enableNewSmithyRuntimeCleanup): Delete the `presigning_service.rs` inlineable when cleaning up middleware
+    fun presigningService(): RuntimeType =
+        RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning_service", visibility = Visibility.PUBCRATE))
+
+    // TODO(enableNewSmithyRuntimeCleanup): Delete defaultMiddleware and middleware.rs, and remove tower dependency from inlinables, when cleaning up middleware
     fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "middleware", visibility = Visibility.PUBLIC,
@@ -70,4 +84,7 @@ object AwsRuntimeType {
 
     fun awsSigv4(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigv4(runtimeConfig).toType()
     fun awsTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsTypes(runtimeConfig).toType()
+
+    fun awsRuntime(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsRuntime(runtimeConfig).toType()
+    fun awsRuntimeApi(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsRuntimeApi(runtimeConfig).toType()
 }

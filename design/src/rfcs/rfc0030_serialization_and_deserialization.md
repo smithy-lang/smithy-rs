@@ -170,7 +170,7 @@ Serde can distinguish each variant without a tag as each variant's content is di
 Builder types and non Builder types implement `Serialize` and `Deserialize` with derive macro.
 
 Example:
-```rust
+```rust,ignore
 #[cfg_attr(
     all(aws-sdk-unstable, feature = "serialize"),
     derive(serde::Serialize)
@@ -220,7 +220,7 @@ Here is an example of data types affected by this decision:
 We considered serializing them as bytes, however, it could take some time for a stream to reach the end, and the resulting serialized data may be too big for itself to fit into the ram.
 
 Here is an example snippet.
-```rust
+```rust,ignore
 #[allow(missing_docs)]
 #[cfg_attr(
     all(aws-sdk-unstable, feature = "serde-serialize"),
@@ -272,7 +272,7 @@ SDK does not have a method that allows users to use deserialized `Input`.
 Thus, we add a new method `fn set_fields` to `Client` types.
 This method accepts inputs and replaces all parameters that `Client` has with the new one.
 
-```rust
+```rust,ignore
 pub fn set_fields(mut self, input_type: path::to::input_type) -> path::to::input_type {
     self.inner = input_type;
     self
@@ -310,7 +310,7 @@ To clarify, this is the same approach we took on `Data Type to skip` section.
 Either way, we will mention this on the generated docs to avoid surprising users.
 
 e.g.
-```rust
+```rust,ignore
 #[derive(serde::Serialize, serde::Deserialize)]
 struct OutputV1 {
   string_field: Option<String>
@@ -389,7 +389,7 @@ We believe that features implemented as part of this RFC do not produce a mislea
 
 # Appendix
 ## [Use Case Examples](UseCaseExamples)
-```rust
+```rust,ignore
 use aws_sdk_dynamodb::{Client, Error};
 
 async fn example(read_builder: bool) -> Result<(), Error> {

@@ -10,13 +10,10 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures_util::{
-    future::{Map, MapErr},
-    FutureExt, TryFutureExt,
-};
+use futures_util::{future::Map, FutureExt};
 use tower::Service;
 
-use super::{OperationError, OperationShape};
+use super::OperationShape;
 
 /// A utility trait used to provide an even interface for all operation handlers.
 ///
@@ -121,8 +118,8 @@ where
 
 /// A [`Service`] provided for every [`Handler`].
 pub struct IntoService<Op, H> {
-    handler: H,
-    _operation: PhantomData<Op>,
+    pub(crate) handler: H,
+    pub(crate) _operation: PhantomData<Op>,
 }
 
 impl<Op, H> Clone for IntoService<Op, H>
@@ -143,14 +140,14 @@ where
     H: Handler<Op, Exts>,
 {
     type Response = Op::Output;
-    type Error = OperationError<Op::Error, Infallible>;
-    type Future = MapErr<H::Future, fn(Op::Error) -> Self::Error>;
+    type Error = Op::Error;
+    type Future = H::Future;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, (input, exts): (Op::Input, Exts)) -> Self::Future {
-        self.handler.call(input, exts).map_err(OperationError::Model)
+        self.handler.call(input, exts)
     }
 }

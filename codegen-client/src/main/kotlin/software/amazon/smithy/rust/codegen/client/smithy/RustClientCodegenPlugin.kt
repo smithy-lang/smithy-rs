@@ -11,10 +11,13 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ApiKeyAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpAuthDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpConnectorConfigDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointParamsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.ClientDecoratableBuildPlugin
@@ -58,8 +61,11 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 RequiredCustomizations(),
                 FluentClientDecorator(),
                 EndpointsDecorator(),
-                NoOpEventStreamSigningDecorator(),
+                EndpointParamsDecorator(),
+                NoAuthDecorator(),
                 ApiKeyAuthDecorator(),
+                HttpAuthDecorator(),
+                HttpConnectorConfigDecorator(),
                 *decorator,
             )
 

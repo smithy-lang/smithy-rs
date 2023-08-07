@@ -18,6 +18,7 @@ data class CodegenTest(
     val service: String,
     val module: String,
     val extraConfig: String? = null,
+    val extraCodegenConfig: String? = null,
     val imports: List<String> = emptyList(),
 )
 
@@ -38,6 +39,7 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                         "relativePath": "$projectDir/rust-runtime"
                     },
                     "codegen": {
+                        ${it.extraCodegenConfig ?: ""}
                     },
                     "service": "${it.service}",
                     "module": "${it.module}",
@@ -244,25 +246,29 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        commandLine("cargo", "test", "--all-features")
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+        commandLine("cargo", "test", "--all-features", "--no-fail-fast")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTDOCFLAGS", defaultRustDocFlags)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "clippy")
     }
 }

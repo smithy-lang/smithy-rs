@@ -335,7 +335,9 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
             inlineWriter
         } else {
             check(inlineModuleAndWriter.inlineModule == lookForModule) {
-                "The two inline modules have the same name but different attributes on them."
+                """The two inline modules have the same name but different attributes on them:
+                1) ${inlineModuleAndWriter.inlineModule}
+                2) $lookForModule"""
             }
 
             inlineModuleAndWriter.writer

@@ -1,0 +1,23 @@
+[package]
+name = "aws-smithy-http-server-typescript"
+version = "0.0.0-smithy-rs-head"
+authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+keywords = ["smithy", "framework", "web", "api", "aws", "typescript"]
+categories = ["asynchronous", "web-programming", "api-bindings"]
+description = """
+Typescript server runtime for Smithy Rust Server Framework.
+"""
+publish = false
+
+[dependencies]
+
+[build-dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

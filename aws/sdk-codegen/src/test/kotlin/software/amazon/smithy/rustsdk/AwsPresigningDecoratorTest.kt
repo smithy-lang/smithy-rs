@@ -14,6 +14,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -27,9 +28,10 @@ class AwsPresigningDecoratorTest {
     }
 
     private fun testTransform(namespace: String, name: String, presignable: Boolean) {
+        val settings = testClientRustSettings()
         val decorator = AwsPresigningDecorator()
         val model = testOperation(namespace, name)
-        val transformed = decorator.transformModel(serviceShape(model), model)
+        val transformed = decorator.transformModel(serviceShape(model), model, settings)
         hasPresignableTrait(transformed, namespace, name) shouldBe presignable
     }
 
@@ -65,6 +67,7 @@ class AwsPresigningDecoratorTest {
 class OverrideHttpMethodTransformTest {
     @Test
     fun `it should override the HTTP method for the listed operations`() {
+        val settings = testClientRustSettings()
         val model = """
             namespace test
             use aws.protocols#restJson1
@@ -105,7 +108,7 @@ class OverrideHttpMethodTransformTest {
                 ShapeId.from("test#One") to presignableOp,
                 ShapeId.from("test#Two") to presignableOp,
             ),
-        ).transformModel(serviceShape, model)
+        ).transformModel(serviceShape, model, settings)
 
         val synthNamespace = "test.synthetic.aws.presigned"
         transformed.expectShape(ShapeId.from("$synthNamespace#One")).expectTrait<HttpTrait>().method shouldBe "GET"
@@ -115,8 +118,10 @@ class OverrideHttpMethodTransformTest {
 }
 
 class MoveDocumentMembersToQueryParamsTransformTest {
+
     @Test
     fun `it should move document members to query parameters for the listed operations`() {
+        val settings = testClientRustSettings()
         val model = """
             namespace test
             use aws.protocols#restJson1
@@ -164,7 +169,7 @@ class MoveDocumentMembersToQueryParamsTransformTest {
         )
         val transformed = AwsPresigningDecorator(
             mapOf(ShapeId.from("test#One") to presignableOp),
-        ).transformModel(serviceShape, model)
+        ).transformModel(serviceShape, model, settings)
 
         val index = HttpBindingIndex(transformed)
         index.getRequestBindings(ShapeId.from("test.synthetic.aws.presigned#One")).map { (key, value) ->

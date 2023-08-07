@@ -51,10 +51,10 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator =
+    override fun structuredDataParser(): StructuredDataParserGenerator =
         AwsQueryParserGenerator(codegenContext, awsQueryErrors)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         AwsQuerySerializerGenerator(codegenContext)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =

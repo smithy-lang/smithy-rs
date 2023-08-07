@@ -26,12 +26,14 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait.Format.EPOCH_SECONDS
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -312,21 +314,25 @@ class JsonSerializerGenerator(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
     ) {
-        val structureSymbol = symbolProvider.toSymbol(context.shape)
         val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
+            val inner = context.copy(objectName = "object", localName = "input")
+            val members = includedMembers ?: inner.shape.members()
+            val allowUnusedVariables = writable {
+                if (members.isEmpty()) { Attribute.AllowUnusedVariables.render(this) }
+            }
             rustBlockTemplate(
-                "pub fn $fnName(object: &mut #{JsonObjectWriter}, input: &#{Input}) -> Result<(), #{Error}>",
-                "Input" to structureSymbol,
+                """
+                pub fn $fnName(
+                    #{AllowUnusedVariables:W} object: &mut #{JsonObjectWriter},
+                    #{AllowUnusedVariables:W} input: &#{StructureSymbol},
+                ) -> Result<(), #{Error}>
+                """,
+                "StructureSymbol" to symbolProvider.toSymbol(context.shape),
+                "AllowUnusedVariables" to allowUnusedVariables,
                 *codegenScope,
             ) {
-                context.copy(objectName = "object", localName = "input").also { inner ->
-                    val members = includedMembers ?: inner.shape.members()
-                    if (members.isEmpty()) {
-                        rust("let (_, _) = (object, input);") // Suppress unused argument warnings
-                    }
-                    for (member in members) {
-                        serializeMember(MemberContext.structMember(inner, member, symbolProvider, jsonName))
-                    }
+                for (member in members) {
+                    serializeMember(MemberContext.structMember(inner, member, symbolProvider, jsonName))
                 }
                 rust("Ok(())")
             }

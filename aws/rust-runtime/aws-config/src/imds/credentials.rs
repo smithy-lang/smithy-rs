@@ -14,8 +14,8 @@ use crate::imds::client::LazyClient;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
-use aws_credential_types::time_source::TimeSource;
 use aws_credential_types::Credentials;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::os_shim_internal::Env;
 use std::borrow::Cow;
 use std::error::Error as StdError;
@@ -23,7 +23,10 @@ use std::fmt;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, SystemTime};
 
-const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(15 * 60);
+const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(10 * 60);
+const WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY: &str =
+    "Attempting credential expiration extension due to a credential service availability issue. \
+    A refresh of these credentials will be attempted again within the next";
 
 #[derive(Debug)]
 struct ImdsCommunicationError {
@@ -50,7 +53,7 @@ pub struct ImdsCredentialsProvider {
     client: LazyClient,
     env: Env,
     profile: Option<String>,
-    time_source: TimeSource,
+    time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
 }
 
@@ -192,25 +195,26 @@ impl ImdsCredentialsProvider {
     //
     // This allows continued use of the credentials even when IMDS returns expired ones.
     fn maybe_extend_expiration(&self, expiration: SystemTime) -> SystemTime {
-        let rng = fastrand::Rng::with_seed(
-            self.time_source
-                .now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .expect("now should be after UNIX EPOCH")
-                .as_secs(),
-        );
-        // calculate credentials' refresh offset with jitter
-        let refresh_offset =
-            CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(120..=600));
-        let new_expiry = self.time_source.now() + refresh_offset;
-
-        if new_expiry < expiration {
+        let now = self.time_source.now();
+        // If credentials from IMDS are not stale, use them as they are.
+        if now < expiration {
             return expiration;
         }
 
+        let mut rng = fastrand::Rng::with_seed(
+            now.duration_since(SystemTime::UNIX_EPOCH)
+                .expect("now should be after UNIX EPOCH")
+                .as_secs(),
+        );
+        // Calculate credentials' refresh offset with jitter, which should be less than 15 minutes
+        // the smallest amount of time credentials are valid for.
+        // Setting it to something longer than that may have the risk of the credentials expiring
+        // before the next refresh.
+        let refresh_offset = CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(0..=300));
+        let new_expiry = now + refresh_offset;
+
         tracing::warn!(
-            "Attempting credential expiration extension due to a credential service availability issue. \
-            A refresh of these credentials will be attempted again within the next {:.2} minutes.",
+            "{WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY} {:.2} minutes.",
             refresh_offset.as_secs_f64() / 60.0,
         );
 
@@ -297,11 +301,12 @@ mod test {
     use crate::imds::client::test::{
         imds_request, imds_response, make_client, token_request, token_response,
     };
-    use crate::imds::credentials::ImdsCredentialsProvider;
+    use crate::imds::credentials::{
+        ImdsCredentialsProvider, WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY,
+    };
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
-    use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
-    use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::TestConnection;
     use tracing_test::traced_test;
@@ -344,6 +349,53 @@ mod test {
 
     #[tokio::test]
     #[traced_test]
+    async fn credentials_not_stale_should_be_used_as_they_are() {
+        let connection = TestConnection::new(vec![
+            (
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, TOKEN_A),
+            ),
+            (
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_response(r#"profile-name"#),
+            ),
+            (
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+            ),
+        ]);
+
+        // set to 2021-09-21T04:16:50Z that makes returned credentials' expiry (2021-09-21T04:16:53Z)
+        // not stale
+        let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632197810);
+        let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
+
+        let provider_config = ProviderConfig::no_configuration()
+            .with_http_connector(DynConnector::new(connection.clone()))
+            .with_sleep(sleep)
+            .with_time_source(time_source);
+        let client = crate::imds::Client::builder()
+            .configure(&provider_config)
+            .build()
+            .await
+            .expect("valid client");
+        let provider = ImdsCredentialsProvider::builder()
+            .configure(&provider_config)
+            .imds_client(client)
+            .build();
+        let creds = provider.provide_credentials().await.expect("valid creds");
+        // The expiry should be equal to what is originally set (==2021-09-21T04:16:53Z).
+        assert_eq!(
+            creds.expiry(),
+            UNIX_EPOCH.checked_add(Duration::from_secs(1632197813))
+        );
+        connection.assert_requests_match(&[]);
+
+        // There should not be logs indicating credentials are extended for stability.
+        assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
+    }
+    #[tokio::test]
+    #[traced_test]
     async fn expired_credentials_should_be_extended() {
         let connection = TestConnection::new(vec![
                 (
@@ -362,16 +414,12 @@ mod test {
 
         // set to 2021-09-21T17:41:25Z that renders fetched credentials already expired (2021-09-21T04:16:53Z)
         let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632246085);
-        let time_source = TimeSource::testing(&TestingTimeSource::new(
-            time_of_request_to_fetch_credentials,
-        ));
-
-        tokio::time::pause();
+        let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
 
         let provider_config = ProviderConfig::no_configuration()
             .with_http_connector(DynConnector::new(connection.clone()))
-            .with_time_source(time_source)
-            .with_sleep(TokioSleep::new());
+            .with_sleep(sleep)
+            .with_time_source(time_source);
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
             .build()
@@ -386,11 +434,11 @@ mod test {
         connection.assert_requests_match(&[]);
 
         // We should inform customers that expired credentials are being used for stability.
-        assert!(logs_contain("Attempting credential expiration extension"));
+        assert!(logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
@@ -409,7 +457,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
     ) {
         let client = crate::imds::Client::builder()
@@ -430,7 +478,7 @@ mod test {
     }
 
     #[tokio::test]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "rustls")]
     async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
         use aws_smithy_async::rt::sleep::AsyncSleep;
         let client = crate::imds::Client::builder()

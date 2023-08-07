@@ -42,11 +42,10 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 
-    override fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator {
-        return Ec2QueryParserGenerator(codegenContext, ec2QueryErrors)
-    }
+    override fun structuredDataParser(): StructuredDataParserGenerator =
+        Ec2QueryParserGenerator(codegenContext, ec2QueryErrors)
 
-    override fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator =
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         Ec2QuerySerializerGenerator(codegenContext)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =

@@ -10,7 +10,7 @@ than building out an entire polling mechanism manually.
 
 At the highest level, a waiter is a simple polling loop (pseudo-Rust):
 
-```rust
+```rust,ignore
 // Track state that contains the number of attempts made and the previous delay
 let mut state = initial_state();
 
@@ -74,7 +74,7 @@ Waiter API
 To invoke a waiter, customers will only need to invoke a single function on the AWS Client. For example,
 if waiting for a S3 bucket to exist, it would look like the following:
 
-```rust
+```rust,ignore
 // Request bucket creation
 client.create_bucket()
     .bucket_name("my-bucket")
@@ -93,7 +93,7 @@ that will start the polling and return a future.
 
 To avoid name conflicts with other API methods, the waiter functions can be added to the client via trait:
 
-```rust
+```rust,ignore
 pub trait WaitUntilBucketExists {
     fn wait_until_bucket_exists(&self) -> crate::waiter::bucket_exists::Builder;
 }
@@ -107,7 +107,7 @@ Waiter Implementation
 
 A waiter trait implementation will merely return a fluent builder:
 
-```rust
+```rust,ignore
 impl WaitUntilBucketExists for Client {
     fn wait_until_bucket_exists(&self) -> crate::waiter::bucket_exists::Builder {
         crate::waiter::bucket_exists::Builder::new()
@@ -117,7 +117,7 @@ impl WaitUntilBucketExists for Client {
 
 This builder will have a short `send()` function to kick off the actual waiter implementation:
 
-```rust
+```rust,ignore
 impl Builder {
     // ... existing fluent builder codegen can be reused to create all the setters and constructor
 
@@ -134,7 +134,7 @@ This wait function needs to, in a loop similar to the pseudo-code in the beginni
 convert the given input into an operation, replace the default response classifier on it
 with a no-retry classifier, and then determine what to do next based on that classification:
 
-```rust
+```rust,ignore
 pub async fn wait(
     handle: Arc<Handle<DynConnector, DynMiddleware<DynConnector>, retry::Standard>>,
     input: HeadBucketInput,

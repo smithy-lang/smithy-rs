@@ -7,9 +7,8 @@
 set -eux
 cd aws-sdk
 
-# Remove examples from workspace
-sed -i '/"examples\//d' Cargo.toml
-
+# Invoking `cargo test` at the root directory implicitly checks for the validity
+# of the top-level `Cargo.toml`
 cargo test --all-features
 
 for test_dir in tests/*; do

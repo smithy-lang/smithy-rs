@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
@@ -49,12 +50,13 @@ class ServerOperationGenerator(
         val requestFmt = generator.requestFmt()
         val responseFmt = generator.responseFmt()
 
+        val operationIdAbsolute = operationId.toString().replace("#", "##")
         writer.rustTemplate(
             """
             pub struct $operationName;
 
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
-                const NAME: &'static str = "${operationId.toString().replace("#", "##")}";
+                const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new(${operationIdAbsolute.dq()}, ${operationId.namespace.dq()}, ${operationId.name.dq()});
 
                 type Input = crate::input::${operationName}Input;
                 type Output = crate::output::${operationName}Output;

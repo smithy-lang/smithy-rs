@@ -14,6 +14,8 @@ import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -23,11 +25,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+
+// TODO(enableNewSmithyRuntimeCleanup): Delete this decorator when switching to the orchestrator
 
 /**
  * Inserts a ApiKeyAuth configuration into the operation
@@ -37,14 +39,15 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
     override val order: Byte = 10
 
     private fun applies(codegenContext: ClientCodegenContext) =
-        isSupportedApiKeyAuth(codegenContext)
+        codegenContext.smithyRuntimeMode.generateMiddleware &&
+            isSupportedApiKeyAuth(codegenContext)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations.letIf(applies(codegenContext)) { customizations ->
-            customizations + ApiKeyConfigCustomization(codegenContext.runtimeConfig)
+            customizations + ApiKeyConfigCustomization(codegenContext)
         }
     }
 
@@ -63,7 +66,7 @@ class ApiKeyAuthDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (applies(codegenContext)) {
-            rustCrate.withModule(ClientRustModule.Config) {
+            rustCrate.withModule(ClientRustModule.config) {
                 rust("pub use #T;", apiKey(codegenContext.runtimeConfig))
             }
         }
@@ -154,15 +157,18 @@ private class ApiKeyOperationCustomization(private val runtimeConfig: RuntimeCon
     }
 }
 
-private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+private class ApiKeyConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+    val runtimeMode = codegenContext.smithyRuntimeMode
+    val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
+        *preludeScope,
         "ApiKey" to apiKey(runtimeConfig),
     )
 
     override fun section(section: ServiceConfig): Writable =
         when (section) {
             is ServiceConfig.BuilderStruct -> writable {
-                rustTemplate("api_key: Option<#{ApiKey}>,", *codegenScope)
+                rustTemplate("api_key: #{Option}<#{ApiKey}>,", *codegenScope)
             }
             is ServiceConfig.BuilderImpl -> writable {
                 rustTemplate(
@@ -174,7 +180,7 @@ private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCu
                     }
 
                     /// Sets the API key that will be used by the client.
-                    pub fn set_api_key(&mut self, api_key: Option<#{ApiKey}>) -> &mut Self {
+                    pub fn set_api_key(&mut self, api_key: #{Option}<#{ApiKey}>) -> &mut Self {
                         self.api_key = api_key;
                         self
                     }
@@ -183,21 +189,39 @@ private class ApiKeyConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCu
                 )
             }
             is ServiceConfig.BuilderBuild -> writable {
-                rust("api_key: self.api_key,")
+                if (runtimeMode.generateOrchestrator) {
+                    rust("layer.store_or_unset(self.api_key);")
+                } else {
+                    rust("api_key: self.api_key,")
+                }
             }
             is ServiceConfig.ConfigStruct -> writable {
-                rustTemplate("api_key: Option<#{ApiKey}>,", *codegenScope)
+                if (runtimeMode.generateMiddleware) {
+                    rustTemplate("api_key: #{Option}<#{ApiKey}>,", *codegenScope)
+                }
             }
             is ServiceConfig.ConfigImpl -> writable {
-                rustTemplate(
-                    """
-                    /// Returns API key used by the client, if it was provided.
-                    pub fn api_key(&self) -> Option<&#{ApiKey}> {
-                        self.api_key.as_ref()
-                    }
-                    """,
-                    *codegenScope,
-                )
+                if (runtimeMode.generateOrchestrator) {
+                    rustTemplate(
+                        """
+                        /// Returns API key used by the client, if it was provided.
+                        pub fn api_key(&self) -> #{Option}<&#{ApiKey}> {
+                            self.config.load::<#{ApiKey}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        /// Returns API key used by the client, if it was provided.
+                        pub fn api_key(&self) -> #{Option}<&#{ApiKey}> {
+                            self.api_key.as_ref()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
             else -> emptySection
         }

@@ -20,20 +20,28 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointRulesetIndex
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.symbol
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigParam
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.configParamNewtype
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.loadFromConfigBag
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.standardConfigParam
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.util.Optional
 
 /** load a builtIn parameter from a ruleset by name */
@@ -48,14 +56,25 @@ fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
     return rules.getBuiltIn(builtIn)
 }
 
-private fun toConfigParam(parameter: Parameter): ConfigParam = ConfigParam(
-    parameter.name.rustName(),
-    when (parameter.type!!) {
-        ParameterType.STRING -> RuntimeType.String.toSymbol()
-        ParameterType.BOOLEAN -> RuntimeType.Bool.toSymbol()
-    },
-    parameter.documentation.orNull()?.let { writable { docs(it) } },
-)
+private fun promotedBuiltins(parameter: Parameter) =
+    parameter == Builtins.FIPS || parameter == Builtins.DUALSTACK || parameter == Builtins.SDK_ENDPOINT
+
+private fun configParamNewtype(parameter: Parameter, name: String, runtimeConfig: RuntimeConfig): RuntimeType {
+    val type = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
+    return when (promotedBuiltins(parameter)) {
+        true -> AwsRuntimeType.awsTypes(runtimeConfig)
+            .resolve("endpoint_config::${name.toPascalCase()}")
+
+        false -> configParamNewtype(name.toPascalCase(), type, runtimeConfig)
+    }
+}
+
+private fun ConfigParam.Builder.toConfigParam(parameter: Parameter, runtimeConfig: RuntimeConfig): ConfigParam =
+    this.name(this.name ?: parameter.name.rustName())
+        .type(parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() })
+        .newtype(configParamNewtype(parameter, this.name!!, runtimeConfig))
+        .setterDocs(this.setterDocs ?: parameter.documentation.orNull()?.let { writable { docs(it) } })
+        .build()
 
 fun Model.loadBuiltIn(serviceId: ShapeId, builtInSrc: Parameter): Parameter? {
     val model = this
@@ -82,14 +101,14 @@ fun Model.sdkConfigSetter(
 }
 
 /**
- * Create a client codegen decorator that creates bindings for a builtIn parameter. Optionally, you can provide [clientParam]
- * which allows control over the config parameter that will be generated.
+ * Create a client codegen decorator that creates bindings for a builtIn parameter. Optionally, you can provide
+ * [clientParam.Builder] which allows control over the config parameter that will be generated.
  */
 fun decoratorForBuiltIn(
     builtIn: Parameter,
-    clientParam: ConfigParam? = null,
+    clientParamBuilder: ConfigParam.Builder? = null,
 ): ClientCodegenDecorator {
-    val nameOverride = clientParam?.name
+    val nameOverride = clientParamBuilder?.name
     val name = nameOverride ?: builtIn.name.rustName()
     return object : ClientCodegenDecorator {
         override val name: String = "Auto${builtIn.builtIn.get()}"
@@ -100,7 +119,7 @@ fun decoratorForBuiltIn(
 
         override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
             return listOfNotNull(
-                codegenContext.model.sdkConfigSetter(codegenContext.serviceShape.id, builtIn, clientParam?.name),
+                codegenContext.model.sdkConfigSetter(codegenContext.serviceShape.id, builtIn, clientParamBuilder?.name),
             )
         }
 
@@ -110,7 +129,9 @@ fun decoratorForBuiltIn(
         ): List<ConfigCustomization> {
             return baseCustomizations.extendIf(rulesetContainsBuiltIn(codegenContext)) {
                 standardConfigParam(
-                    clientParam ?: toConfigParam(builtIn),
+                    clientParamBuilder?.toConfigParam(builtIn, codegenContext.runtimeConfig) ?: ConfigParam.Builder()
+                        .toConfigParam(builtIn, codegenContext.runtimeConfig),
+                    codegenContext,
                 )
             }
         }
@@ -120,11 +141,21 @@ fun decoratorForBuiltIn(
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? =
                     when (parameter.builtIn) {
                         builtIn.builtIn -> writable {
-                            rust("$configRef.$name")
-                            if (parameter.type == ParameterType.STRING) {
+                            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                                val newtype = configParamNewtype(parameter, name, codegenContext.runtimeConfig)
+                                val symbol = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
+                                rustTemplate(
+                                    """$configRef.#{load_from_service_config_layer}""",
+                                    "load_from_service_config_layer" to loadFromConfigBag(symbol.name, newtype),
+                                )
+                            } else {
+                                rust("$configRef.$name")
+                            }
+                            if (codegenContext.smithyRuntimeMode.generateMiddleware && parameter.type == ParameterType.STRING) {
                                 rust(".clone()")
                             }
                         }
+
                         else -> null
                     }
 
@@ -147,7 +178,7 @@ fun decoratorForBuiltIn(
 private val endpointUrlDocs = writable {
     rust(
         """
-        /// Sets the endpoint url used to communicate with this service
+        /// Sets the endpoint URL used to communicate with this service
 
         /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
         /// will be prefixed onto this URL. To fully override the endpoint resolver, use
@@ -173,6 +204,6 @@ val PromotedBuiltInsDecorators =
         decoratorForBuiltIn(Builtins.DUALSTACK),
         decoratorForBuiltIn(
             Builtins.SDK_ENDPOINT,
-            ConfigParam("endpoint_url", RuntimeType.String.toSymbol(), endpointUrlDocs),
+            ConfigParam.Builder().name("endpoint_url").type(RuntimeType.String.toSymbol()).setterDocs(endpointUrlDocs),
         ),
     ).toTypedArray()

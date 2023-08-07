@@ -7,7 +7,7 @@ import os
 import sys
 
 from diff_lib import eprint, run, get_cmd_status, get_cmd_output, generate_and_commit_generated_code, make_diffs, \
-    write_to_file, HEAD_BRANCH_NAME, BASE_BRANCH_NAME, OUTPUT_PATH
+    write_to_file, HEAD_BRANCH_NAME, BASE_BRANCH_NAME, OUTPUT_PATH, running_in_docker_build
 
 
 # This script can be run and tested locally. To do so, you should check out
@@ -20,7 +20,7 @@ from diff_lib import eprint, run, get_cmd_status, get_cmd_output, generate_and_c
 #
 # ```
 # $ cd test/smithy-rs
-# $ ../../smithy-rs/tools/ci-scripts/codegen-diff-revisions.py . <some commit hash to diff against>
+# $ ../../smithy-rs/tools/ci-scripts/codegen-diff/codegen-diff-revisions.py . <some commit hash to diff against>
 # ```
 #
 # It will diff the generated code from HEAD against any commit hash you feed it. If you want to test
@@ -32,8 +32,6 @@ from diff_lib import eprint, run, get_cmd_status, get_cmd_output, generate_and_c
 # ```
 # Make sure the local version matches the version referenced from the GitHub Actions workflow.
 
-def running_in_docker_build():
-    return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
 
 
 def main():

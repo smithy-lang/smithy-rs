@@ -99,7 +99,7 @@ Timeouts are achieved by racing a future against a `tokio::time::Sleep` future. 
 
 _View [AwsMiddleware] in GitHub_
 
-```rust
+```rust,ignore
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct AwsMiddleware;
@@ -127,7 +127,7 @@ The above code is only included for context. This RFC doesn't define any timeout
 
 _View [aws_smithy_client::Client::call_raw] in GitHub_
 
-```rust
+```rust,ignore
 impl<C, M, R> Client<C, M, R>
   where
           C: bounds::SmithyConnector,
@@ -175,7 +175,7 @@ The **HTTP Request Timeout For A Single Attempt** and **HTTP Request Timeout For
 
 The resulting code would look like this:
 
-```rust
+```rust,ignore
 impl<C, M, R> Client<C, M, R>
   where
           C: bounds::SmithyConnector,

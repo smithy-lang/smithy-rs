@@ -65,6 +65,7 @@ impl RetrieveReleases for GitHubRetrieveReleases {
             .repos()
             .list_tags(owner, repo, 100, page_num)
             .await?
+            .body
             .into_iter()
             .filter_map(|tag| ReleaseTag::from_str(&tag.name).ok())
             .collect();

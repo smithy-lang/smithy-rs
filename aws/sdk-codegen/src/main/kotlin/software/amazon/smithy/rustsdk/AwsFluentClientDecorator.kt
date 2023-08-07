@@ -5,19 +5,19 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.NoClientGenerics
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.renderCustomizableOperationSend
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
-import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
-import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -40,7 +40,6 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val awsTypes = AwsRuntimeType.awsTypes(runtimeConfig)
     val connectorError = smithyHttp.resolve("result::ConnectorError")
     val connectorSettings = smithyClient.resolve("http_connector::ConnectorSettings")
-    val defaultMiddleware = runtimeConfig.defaultMiddleware()
     val dynConnector = smithyClient.resolve("erase::DynConnector")
     val dynMiddleware = smithyClient.resolve("erase::DynMiddleware")
     val retryConfig = smithyTypes.resolve("retry::RetryConfig")
@@ -48,37 +47,6 @@ private class Types(runtimeConfig: RuntimeConfig) {
     val smithyClientRetry = smithyClient.resolve("retry")
     val smithyConnector = smithyClient.resolve("bounds::SmithyConnector")
     val timeoutConfig = smithyTypes.resolve("timeout::TimeoutConfig")
-}
-
-private class AwsClientGenerics(private val types: Types) : FluentClientGenerics {
-    /** Declaration with defaults set */
-    override val decl = writable { }
-
-    /** Instantiation of the Smithy client generics */
-    override val smithyInst = writable {
-        rustTemplate(
-            "<#{DynConnector}, #{DynMiddleware}<#{DynConnector}>>",
-            "DynConnector" to types.dynConnector,
-            "DynMiddleware" to types.dynMiddleware,
-        )
-    }
-
-    /** Instantiation */
-    override val inst = ""
-
-    /** Trait bounds */
-    override val bounds = writable { }
-
-    /** Bounds for generated `send()` functions */
-    override fun sendBounds(
-        operation: Symbol,
-        operationOutput: Symbol,
-        operationError: Symbol,
-        retryClassifier: RuntimeType,
-    ): Writable =
-        writable { }
-
-    override fun toRustGenerics() = RustGenerics()
 }
 
 class AwsFluentClientDecorator : ClientCodegenDecorator {
@@ -90,26 +58,25 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val runtimeConfig = codegenContext.runtimeConfig
         val types = Types(runtimeConfig)
-        val generics = AwsClientGenerics(types)
+        val generics = NoClientGenerics(runtimeConfig)
         FluentClientGenerator(
             codegenContext,
             reexportSmithyClientBuilder = false,
             generics = generics,
             customizations = listOf(
-                AwsPresignedFluentBuilderMethod(runtimeConfig),
+                AwsPresignedFluentBuilderMethod(codegenContext),
                 AwsFluentClientDocs(codegenContext),
             ),
             retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
-        ).render(rustCrate)
+        ).render(rustCrate, listOf(CustomizableOperationTestHelpers(runtimeConfig)))
         rustCrate.withModule(ClientRustModule.Client.customize) {
-            renderCustomizableOperationSendMethod(runtimeConfig, generics, this)
+            renderCustomizableOperationSend(codegenContext, generics, this)
         }
         rustCrate.withModule(ClientRustModule.client) {
-            AwsFluentClientExtensions(types).render(this)
+            AwsFluentClientExtensions(codegenContext, types).render(this)
         }
         val awsSmithyClient = "aws-smithy-client"
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsSmithyClient/rustls")))
-        rustCrate.mergeFeature(Feature("native-tls", default = false, listOf("$awsSmithyClient/native-tls")))
     }
 
     override fun libRsCustomizations(
@@ -127,15 +94,46 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
             }
         }
     }
+
+    override fun protocolTestGenerator(
+        codegenContext: ClientCodegenContext,
+        baseGenerator: ProtocolTestGenerator,
+    ): ProtocolTestGenerator = DefaultProtocolTestGenerator(
+        codegenContext,
+        baseGenerator.protocolSupport,
+        baseGenerator.operationShape,
+        renderClientCreation = { params ->
+            rust("let mut ${params.configBuilderName} = ${params.configBuilderName};")
+            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                rust("""${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));""")
+            } else {
+                rust(
+                    """
+                    // If the test case was missing endpoint parameters, default a region so it doesn't fail
+                    if ${params.configBuilderName}.region.is_none() {
+                        ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
+                    }
+                    """,
+                )
+            }
+            rustTemplate(
+                """
+                let config = ${params.configBuilderName}.http_connector(${params.connectorName}).build();
+                let ${params.clientName} = #{Client}::from_conf(config);
+                """,
+                "Client" to ClientRustModule.root.toType().resolve("Client"),
+            )
+        },
+    )
 }
 
-private class AwsFluentClientExtensions(types: Types) {
+private class AwsFluentClientExtensions(private val codegenContext: ClientCodegenContext, private val types: Types) {
     private val codegenScope = arrayOf(
+        "Arc" to RuntimeType.Arc,
         "ConnectorError" to types.connectorError,
+        "ConnectorSettings" to types.connectorSettings,
         "DynConnector" to types.dynConnector,
         "DynMiddleware" to types.dynMiddleware,
-        "ConnectorSettings" to types.connectorSettings,
-        "Middleware" to types.defaultMiddleware,
         "RetryConfig" to types.retryConfig,
         "SmithyConnector" to types.smithyConnector,
         "TimeoutConfig" to types.timeoutConfig,
@@ -159,65 +157,72 @@ private class AwsFluentClientExtensions(types: Types) {
                 pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
                     Self::from_conf(sdk_config.into())
                 }
-
-                /// Creates a new client from the service [`Config`](crate::Config).
-                ///
-                /// ## Panics
-                ///
-                /// - This method will panic if the `conf` is missing an async sleep implementation. If you experience this panic, set
-                ///     the `sleep_impl` on the Config passed into this function to fix it.
-                /// - This method will panic if the `conf` is missing an HTTP connector. If you experience this panic, set the
-                ///     `http_connector` on the Config passed into this function to fix it.
-                pub fn from_conf(conf: crate::Config) -> Self {
-                    let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                    let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
-                    let sleep_impl = conf.sleep_impl();
-                    if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
-                        panic!("An async sleep implementation is required for retries or timeouts to work. \
-                                Set the `sleep_impl` on the Config passed into this function to fix this panic.");
-                    }
-
-                    let connector = conf.http_connector().and_then(|c| {
-                        let timeout_config = conf
-                            .timeout_config()
-                            .cloned()
-                            .unwrap_or_else(#{TimeoutConfig}::disabled);
-                        let connector_settings = #{ConnectorSettings}::from_timeout_config(
-                            &timeout_config,
-                        );
-                        c.connector(&connector_settings, conf.sleep_impl())
-                    });
-
-                    let builder = #{SmithyClientBuilder}::new();
-
-                    let builder = match connector {
-                        // Use provided connector
-                        Some(c) => builder.connector(c),
-                        None =>{
-                            ##[cfg(any(feature = "rustls", feature = "native-tls"))]
-                            {
-                                // Use default connector based on enabled features
-                                builder.dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
-                            }
-                            ##[cfg(not(any(feature = "rustls", feature = "native-tls")))]
-                            {
-                                panic!("No HTTP connector was available. Enable the `rustls` or `native-tls` crate feature or set a connector to fix this.");
-                            }
-                        }
-                    };
-                    let mut builder = builder
-                        .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
-                        .reconnect_mode(retry_config.reconnect_mode())
-                        .retry_config(retry_config.into())
-                        .operation_timeout_config(timeout_config.into());
-                    builder.set_sleep_impl(sleep_impl);
-                    let client = builder.build();
-
-                    Self { handle: std::sync::Arc::new(Handle { client, conf }) }
-                }
                 """,
                 *codegenScope,
             )
+            if (codegenContext.smithyRuntimeMode.generateMiddleware) {
+                rustTemplate(
+                    """
+                    /// Creates a new client from the service [`Config`](crate::Config).
+                    ///
+                    /// ## Panics
+                    ///
+                    /// - This method will panic if the `conf` is missing an async sleep implementation. If you experience this panic, set
+                    ///     the `sleep_impl` on the Config passed into this function to fix it.
+                    /// - This method will panic if the `conf` is missing an HTTP connector. If you experience this panic, set the
+                    ///     `http_connector` on the Config passed into this function to fix it.
+                    pub fn from_conf(conf: crate::Config) -> Self {
+                        let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
+                        let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
+                        let sleep_impl = conf.sleep_impl();
+                        if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
+                            panic!("An async sleep implementation is required for retries or timeouts to work. \
+                                    Set the `sleep_impl` on the Config passed into this function to fix this panic.");
+                        }
+
+                        let connector = conf.http_connector().and_then(|c| {
+                            let timeout_config = conf
+                                .timeout_config()
+                                .cloned()
+                                .unwrap_or_else(#{TimeoutConfig}::disabled);
+                            let connector_settings = #{ConnectorSettings}::from_timeout_config(
+                                &timeout_config,
+                            );
+                            c.connector(&connector_settings, conf.sleep_impl())
+                        });
+
+                        let builder = #{SmithyClientBuilder}::new();
+
+                        let builder = match connector {
+                            // Use provided connector
+                            Some(c) => builder.connector(c),
+                            None =>{
+                                ##[cfg(feature = "rustls")]
+                                {
+                                    // Use default connector based on enabled features
+                                    builder.dyn_https_connector(#{ConnectorSettings}::from_timeout_config(&timeout_config))
+                                }
+                                ##[cfg(not(feature = "rustls"))]
+                                {
+                                    panic!("No HTTP connector was available. Enable the `rustls` crate feature or set a connector to fix this.");
+                                }
+                            }
+                        };
+                        let mut builder = builder
+                            .middleware(#{DynMiddleware}::new(#{Middleware}::new()))
+                            .reconnect_mode(retry_config.reconnect_mode())
+                            .retry_config(retry_config.into())
+                            .operation_timeout_config(timeout_config.into());
+                        builder.set_sleep_impl(sleep_impl);
+                        let client = builder.build();
+
+                        Self { handle: #{Arc}::new(Handle { client, conf }) }
+                    }
+                    """,
+                    *codegenScope,
+                    "Middleware" to codegenContext.runtimeConfig.defaultMiddleware(),
+                )
+            }
         }
     }
 }
@@ -242,43 +247,4 @@ private class AwsFluentClientDocs(private val codegenContext: ClientCodegenConte
             else -> emptySection
         }
     }
-}
-
-private fun renderCustomizableOperationSendMethod(
-    runtimeConfig: RuntimeConfig,
-    generics: FluentClientGenerics,
-    writer: RustWriter,
-) {
-    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toRustGenerics()
-    val combinedGenerics = operationGenerics + handleGenerics
-
-    val codegenScope = arrayOf(
-        "combined_generics_decl" to combinedGenerics.declaration(),
-        "handle_generics_bounds" to handleGenerics.bounds(),
-        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-        "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-        "ParseHttpResponse" to RuntimeType.parseHttpResponse(runtimeConfig),
-    )
-
-    writer.rustTemplate(
-        """
-        impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
-        where
-            #{handle_generics_bounds:W}
-        {
-            /// Sends this operation's request
-            pub async fn send<T, E>(self) -> Result<T, SdkError<E>>
-            where
-                E: std::error::Error + Send + Sync + 'static,
-                O: #{ParseHttpResponse}<Output = Result<T, E>> + Send + Sync + Clone + 'static,
-                Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + Send + Sync + Clone,
-            {
-                self.handle.client.call(self.operation).await
-            }
-        }
-        """,
-        *codegenScope,
-    )
 }

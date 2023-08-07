@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
@@ -208,14 +209,15 @@ open class EnumGenerator(
                 }
             },
         )
-        rust(
+        rustTemplate(
             """
-            impl AsRef<str> for ${context.enumName} {
+            impl #{AsRef}<str> for ${context.enumName} {
                 fn as_ref(&self) -> &str {
                     self.as_str()
                 }
             }
             """,
+            *preludeScope,
         )
     }
 
@@ -238,8 +240,7 @@ open class EnumGenerator(
                 }
             }
             """,
-            "From" to RuntimeType.From,
-            "AsRef" to RuntimeType.AsRef,
+            *preludeScope,
         )
     }
 
@@ -295,7 +296,7 @@ open class EnumGenerator(
             """
             impl #{Debug} for ${context.enumName} {
                 fn fmt(&self, f: &mut #{StdFmt}::Formatter<'_>) -> #{StdFmt}::Result {
-                    write!(f, $REDACTION)
+                    ::std::write!(f, $REDACTION)
                 }
             }
             """,

@@ -41,7 +41,7 @@ fun executePythonServerCodegenVisitor(pluginCtx: PluginContext) {
 fun cargoTest(workdir: Path) =
     // `--no-default-features` is required to disable `pyo3/extension-module` which causes linking errors
     // see `PyO3ExtensionModuleDecorator`'s comments fore more detail.
-    "cargo test --no-default-features".runCommand(
+    "cargo test --no-default-features --no-fail-fast".runCommand(
         workdir,
         mapOf(
             // Those are required to run tests on macOS, see: https://pyo3.rs/main/building_and_distribution#macos

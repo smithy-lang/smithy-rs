@@ -51,7 +51,7 @@ When a smithy client communicates with a smithy service, messages are handled by
 
 For many users, the changes described by this RFC will be invisible. Making a request with an orchestrator-based SDK client looks very similar to the way requests were made pre-RFC:
 
-```rust
+```rust,ignore
 let sdk_config = aws_config::load_from_env().await;
 let client = aws_sdk_s3::Client::new(&sdk_config);
 let res = client.get_object()
@@ -111,7 +111,7 @@ Interceptors are similar to middlewares, in that they are functions that can rea
 
 As mentioned above, interceptors may read/write a context object that is shared between all interceptors:
 
-```rust
+```rust,ignore
 pub struct InterceptorContext<ModReq, TxReq, TxRes, ModRes> {
     // a.k.a. the input message
     modeled_request: ModReq,
@@ -134,7 +134,7 @@ The optional request and response types in the interceptor context can only be a
 
 Imagine we have some sort of request signer. This signer doesn't refer to any orchestrator types. All it needs is a `HeaderMap` along with two strings, and will return a signature in string form.
 
-```rust
+```rust,ignore
 struct Signer;
 
 impl Signer {
@@ -147,7 +147,7 @@ impl Signer {
 Now imagine things from the orchestrator's point of view. It requires something that implements an `AuthOrchestrator` which will be responsible for resolving the correct auth
 scheme, identity, and signer for an operation, as well as signing the request
 
-```rust
+```rust,ignore
 pub trait AuthOrchestrator<Req>: Send + Sync + Debug {
     fn auth_request(&self, req: &mut Req, cfg: &ConfigBag) -> Result<(), BoxError>;
 }
@@ -171,7 +171,7 @@ fn invoke() {
 
 The specific implementation of the `AuthOrchestrator` is what brings these two things together:
 
-```rust
+```rust,ignore
 struct Sigv4AuthOrchestrator;
 
 impl AuthOrchestrator for Sigv4AuthOrchestrator {
@@ -201,7 +201,7 @@ This intermediate code should be free from as much logic as possible. Whenever p
 >
 > *See [typemap](https://docs.rs/typemap), [type-map](https://docs.rs/crate/type-map), [http::Extensions](https://docs.rs/http/latest/http/struct.Extensions.html), and [actix_http::Extensions](https://docs.rs/actix-http/latest/actix_http/struct.Extensions.html) for examples.*
 
-```rust
+```rust,ignore
  let conf: ConfigBag = aws_config::from_env()
     // Configuration can be common to all smithy clients
     .with(RetryConfig::builder().disable_retries().build())
@@ -229,7 +229,7 @@ Setting configuration that will not be used wastes memory and can make debugging
 
 Configuration has precedence. Configuration set on an operation will override configuration set on a client, and configuration set on a client will override default configuration. However, configuration with a higher precedence can also augment configuration with a lower precedence. For example:
 
-```rust
+```rust,ignore
 let conf: ConfigBag = aws_config::from_env()
     .with(
         SomeConfig::builder()
@@ -269,7 +269,7 @@ Config values are wrapped in a special enum called `Value` with three variants:
 
 Builders are defined like this:
 
-```rust
+```rust,ignore
 struct SomeBuilder {
     value: Value<T>,
 }
@@ -316,7 +316,7 @@ Configuration is resolved in a fixed manner by reading the "lowest level" of con
 
 *I've omitted some of the error conversion to shorten this example and make it easier to understand. The real version will be messier.*
 
-```rust
+```rust,ignore
 /// `In`: The input message e.g. `ListObjectsRequest`
 /// `Req`: The transport request message e.g. `http::Request<SmithyBody>`
 /// `Res`: The transport response message e.g. `http::Response<SmithyBody>`
@@ -452,7 +452,7 @@ async fn make_an_attempt<In, Req, Res, T>(
 
 At various points in the execution of `invoke`, trait objects are fetched from the `ConfigBag`. These are preliminary definitions of those traits:
 
-```rust
+```rust,ignore
 pub trait TraceProbe: Send + Sync + Debug {
     fn dispatch_events(&self, cfg: &ConfigBag) -> BoxFallibleFut<()>;
 }

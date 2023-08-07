@@ -81,16 +81,12 @@ service RestJsonExtras {
         appliesTo: "client",
     },
     {
-        documentation: """
-            Upper case error modeled lower case.
-            Servers render the full shape ID (including namespace), since some
-            existing clients rely on it to deserialize the error shape and fail
-            if only the shape name is present.""",
+        documentation: "Upper case error modeled lower case.",
         id: "ServiceLevelErrorServer",
         protocol: "aws.protocols#restJson1",
         code: 500,
         body: "{}",
-        headers: { "X-Amzn-Errortype": "aws.protocoltests.restjson#ExtraError" },
+        headers: { "X-Amzn-Errortype": "ExtraError" },
         params: {},
         appliesTo: "server",
     }

@@ -12,8 +12,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete this client generics on/off switch headache
 interface FluentClientGenerics {
     /** Declaration with defaults set */
     val decl: Writable
@@ -32,6 +34,42 @@ interface FluentClientGenerics {
 
     /** Convert this `FluentClientGenerics` into the more general `RustGenerics` */
     fun toRustGenerics(): RustGenerics
+
+    /** bounds without where clause. If bounds does is not prefixed with `where\n`, then it gets the same value. **/
+    val boundsWithoutWhereClause: Writable
+}
+
+class NoClientGenerics(private val runtimeConfig: RuntimeConfig) : FluentClientGenerics {
+    /** Declaration with defaults set */
+    override val decl = writable { }
+
+    /** Instantiation of the Smithy client generics */
+    override val smithyInst = writable {
+        rustTemplate(
+            "<#{DynConnector}, #{DynMiddleware}<#{DynConnector}>>",
+            "DynConnector" to RuntimeType.smithyClient(runtimeConfig).resolve("erase::DynConnector"),
+            "DynMiddleware" to RuntimeType.smithyClient(runtimeConfig).resolve("erase::DynMiddleware"),
+        )
+    }
+
+    /** Instantiation */
+    override val inst = ""
+
+    /** Trait bounds */
+    override val bounds = writable { }
+
+    override val boundsWithoutWhereClause = writable {}
+
+    /** Bounds for generated `send()` functions */
+    override fun sendBounds(
+        operation: Symbol,
+        operationOutput: Symbol,
+        operationError: Symbol,
+        retryClassifier: RuntimeType,
+    ): Writable =
+        writable { }
+
+    override fun toRustGenerics() = RustGenerics()
 }
 
 data class FlexibleClientGenerics(
@@ -61,9 +99,18 @@ data class FlexibleClientGenerics(
         rustTemplate(
             """
             where
-                C: #{client}::bounds::SmithyConnector,
-                M: #{client}::bounds::SmithyMiddleware<C>,
-                R: #{client}::retry::NewRequestPolicy,
+                #{bounds}
+            """,
+            "bounds" to boundsWithoutWhereClause,
+        )
+    }
+
+    override val boundsWithoutWhereClause = writable {
+        rustTemplate(
+            """
+            C: #{client}::bounds::SmithyConnector,
+            M: #{client}::bounds::SmithyMiddleware<C>,
+            R: #{client}::retry::NewRequestPolicy,
             """,
             "client" to client,
         )
@@ -79,7 +126,7 @@ data class FlexibleClientGenerics(
                 #{OperationOutput},
                 #{OperationError},
                 #{RetryClassifier}
-            >
+            >,
             """,
             "client" to client,
             "Operation" to operation,

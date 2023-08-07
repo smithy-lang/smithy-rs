@@ -114,7 +114,7 @@ values and perform the _validation_ at request deserialization, we can
 wrapper [tuple struct] that _parses_ the string's value and is "tight" in the
 set of values it can accept:
 
-```rust
+```rust,ignore
 pub struct NiceString(String);
 
 impl TryFrom<String> for NiceString {
@@ -145,7 +145,7 @@ the [`?` operator for error propagation]. Each constrained struct will have a
 related `std::error::Error` enum type to signal the _first_ parsing failure,
 with one enum variant per applied constraint trait:
 
-```rust
+```rust,ignore
 pub mod nice_string {
     pub enum ConstraintViolation {
         /// Validation error holding the number of Unicode code points found, when a value between `1` and
@@ -161,7 +161,7 @@ pub mod nice_string {
 `#[derive(Debug)]`, unless the shape also has the [`sensitive` trait], in which
 case we will just print the name of the struct:
 
-```rust
+```rust,ignore
 impl std::fmt::Debug for ConstraintViolation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut formatter = f.debug_struct("ConstraintViolation");
@@ -207,7 +207,7 @@ string Language
 the code the client generates when deserializing a string from a JSON document
 into the `Language` enum is (excerpt):
 
-```rust
+```rust,ignore
 ...
 match key.to_unescaped()?.as_ref() {
     "language" => {
@@ -229,7 +229,7 @@ match key.to_unescaped()?.as_ref() {
 
 Note how the `String` gets converted to the enum via `Language::from()`.
 
-```rust
+```rust,ignore
 impl std::convert::From<&str> for Language {
     fn from(s: &str) -> Self {
         match s {

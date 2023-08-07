@@ -14,7 +14,7 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
@@ -30,8 +30,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
-class ClientProtocolLoader(supportedProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>) :
-    ProtocolLoader<ClientProtocolGenerator, ClientCodegenContext>(supportedProtocols) {
+class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>) :
+    ProtocolLoader<OperationGenerator, ClientCodegenContext>(supportedProtocols) {
 
     companion object {
         val DefaultProtocols = mapOf(

@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProvider
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleProviderContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -53,9 +54,37 @@ object ClientRustModule {
         val customize = RustModule.public("customize", parent = self)
     }
 
-    val Config = RustModule.public("config")
-    val Error = RustModule.public("error")
+    /** crate::config */
+    val config = Config.self
+    object Config {
+        /** crate::client */
+        val self = RustModule.public("config")
+
+        /** crate::config::endpoint */
+        val endpoint = RustModule.public("endpoint", parent = self)
+
+        /** crate::config::retry */
+        val retry = RustModule.public("retry", parent = self)
+
+        /** crate::config::timeout */
+        val timeout = RustModule.public("timeout", parent = self)
+
+        /** crate::config::interceptors */
+        val interceptors = RustModule.public("interceptors", parent = self)
+    }
+
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this root endpoint module
+    @Deprecated(message = "use the endpoint() method to get the endpoint module for now")
     val Endpoint = RustModule.public("endpoint")
+
+    // TODO(enableNewSmithyRuntimeCleanup): Just use Config.endpoint directly and delete this function
+    fun endpoint(codegenContext: ClientCodegenContext): RustModule.LeafModule = if (codegenContext.smithyRuntimeMode.generateMiddleware) {
+        Endpoint
+    } else {
+        Config.endpoint
+    }
+
+    val Error = RustModule.public("error")
     val Operation = RustModule.public("operation")
     val Meta = RustModule.public("meta")
     val Input = RustModule.public("input")
@@ -82,7 +111,11 @@ class ClientModuleDocProvider(
         return when (module) {
             ClientRustModule.client -> clientModuleDoc()
             ClientRustModule.Client.customize -> customizeModuleDoc()
-            ClientRustModule.Config -> strDoc("Configuration for $serviceName.")
+            ClientRustModule.config -> strDoc("Configuration for $serviceName.")
+            ClientRustModule.Config.endpoint -> strDoc("Types needed to configure endpoint resolution.")
+            ClientRustModule.Config.retry -> strDoc("Retry configuration.")
+            ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")
+            ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Interceptor`](crate::config::Interceptor).")
             ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
             ClientRustModule.Endpoint -> strDoc("Endpoint resolution functionality.")
             ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
@@ -122,7 +155,7 @@ class ClientModuleDocProvider(
                 operation call. For example, this can be used to add an additional HTTP header:
 
                 ```ignore
-                ## async fn wrapper() -> Result<(), $moduleUseName::Error> {
+                ## async fn wrapper() -> #{Result}<(), $moduleUseName::Error> {
                 ## let client: $moduleUseName::Client = unimplemented!();
                 use #{http}::header::{HeaderName, HeaderValue};
 
@@ -142,6 +175,7 @@ class ClientModuleDocProvider(
                 ## }
                 ```
                 """.trimIndent(),
+                *RuntimeType.preludeScope,
                 "http" to CargoDependency.Http.toDevDependency().toType(),
             )
         }
@@ -194,6 +228,10 @@ object ClientModuleProvider : ModuleProvider {
             operationModuleName,
             parent = ClientRustModule.Operation,
             documentationOverride = "Types for the `$contextName` operation.",
+            // TODO(https://github.com/tokio-rs/tokio/issues/5683): Uncomment the NoImplicitPrelude attribute once this Tokio issue is resolved
+            // // Disable the Rust prelude since every prelude type should be referenced with its
+            // // fully qualified name to avoid name collisions with the generated operation shapes.
+            // additionalAttributes = listOf(Attribute.NoImplicitPrelude)
         )
     }
 }

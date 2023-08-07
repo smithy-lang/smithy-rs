@@ -9,6 +9,7 @@ import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ServiceErrorGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -22,31 +23,39 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
  */
 class ServiceGenerator(
     private val rustCrate: RustCrate,
-    private val clientCodegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
     private val decorator: ClientCodegenDecorator,
 ) {
-    private val index = TopDownIndex.of(clientCodegenContext.model)
+    private val index = TopDownIndex.of(codegenContext.model)
 
     /**
      * Render Service-specific code. Code will end up in different files via `useShapeWriter`. See `SymbolVisitor.kt`
      * which assigns a symbol location to each shape.
      */
     fun render() {
-        val operations = index.getContainedOperations(clientCodegenContext.serviceShape).sortedBy { it.id }
+        val operations = index.getContainedOperations(codegenContext.serviceShape).sortedBy { it.id }
         ServiceErrorGenerator(
-            clientCodegenContext,
+            codegenContext,
             operations,
-            decorator.errorCustomizations(clientCodegenContext, emptyList()),
+            decorator.errorCustomizations(codegenContext, emptyList()),
         ).render(rustCrate)
 
-        rustCrate.withModule(ClientRustModule.Config) {
-            ServiceConfigGenerator.withBaseBehavior(
-                clientCodegenContext,
-                extraCustomizations = decorator.configCustomizations(clientCodegenContext, listOf()),
-            ).render(this)
+        rustCrate.withModule(ClientRustModule.config) {
+            val serviceConfigGenerator = ServiceConfigGenerator.withBaseBehavior(
+                codegenContext,
+                extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
+            )
+            serviceConfigGenerator.render(this)
 
-            if (clientCodegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
-                ServiceRuntimePluginGenerator(clientCodegenContext).render(this)
+            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                // Enable users to opt in to the test-utils in the runtime crate
+                rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-smithy-runtime/test-util")))
+
+                ServiceRuntimePluginGenerator(codegenContext)
+                    .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
+
+                ConfigOverrideRuntimePluginGenerator(codegenContext)
+                    .render(this, decorator.configCustomizations(codegenContext, listOf()))
             }
         }
 
@@ -54,5 +63,7 @@ class ServiceGenerator(
             Attribute.DocInline.render(this)
             write("pub use config::Config;")
         }
+
+        ClientRuntimeTypesReExportGenerator(codegenContext, rustCrate).render()
     }
 }

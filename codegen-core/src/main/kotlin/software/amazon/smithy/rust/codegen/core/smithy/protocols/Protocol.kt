@@ -38,10 +38,10 @@ interface Protocol {
     fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> = emptyList()
 
     /** Returns a deserialization code generator for this protocol */
-    fun structuredDataParser(operationShape: OperationShape): StructuredDataParserGenerator
+    fun structuredDataParser(): StructuredDataParserGenerator
 
     /** Returns a serialization code generator for this protocol */
-    fun structuredDataSerializer(operationShape: OperationShape): StructuredDataSerializerGenerator
+    fun structuredDataSerializer(): StructuredDataSerializerGenerator
 
     /**
      * Generates a function signature like the following:

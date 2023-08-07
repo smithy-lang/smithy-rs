@@ -28,6 +28,7 @@ use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::region::SigningRegion;
 use aws_types::SigningService;
 
@@ -94,7 +95,9 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
         conf.insert(SigningRegion::from_static("test-region"));
         conf.insert(OperationSigningConfig::default_config());
         conf.insert(SigningService::from_static("test-service-signing"));
-        conf.insert(UNIX_EPOCH + Duration::from_secs(1613414417));
+        conf.insert(SharedTimeSource::new(
+            UNIX_EPOCH + Duration::from_secs(1613414417),
+        ));
         conf.insert(AwsUserAgent::for_tests());
         Result::<_, Infallible>::Ok(req)
     })
@@ -104,7 +107,7 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
         .with_metadata(operation::Metadata::new("test-op", "test-service"))
 }
 
-#[cfg(any(feature = "native-tls", feature = "rustls"))]
+#[cfg(feature = "rustls")]
 #[test]
 fn test_default_client() {
     let client = Client::builder()
