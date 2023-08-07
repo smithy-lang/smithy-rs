@@ -483,18 +483,14 @@ mod tests {
         use time::format_description::well_known::Rfc3339;
         use time::OffsetDateTime;
 
-        fn new_v4a_signing_params_from_context<'a>(
-            test_context: &'a test_v4a::TestContext,
+        fn new_v4a_signing_params_from_context(
+            test_context: &'_ test_v4a::TestContext,
             signature_location: SignatureLocation,
-        ) -> SigningParams<'a> {
+        ) -> SigningParams<'_> {
             SigningParams {
                 access_key: &test_context.credentials.access_key_id,
                 secret_key: &test_context.credentials.secret_access_key,
-                security_token: test_context
-                    .credentials
-                    .token
-                    .as_ref()
-                    .map(|it| it.as_str()),
+                security_token: test_context.credentials.token.as_deref(),
                 region: &test_context.region,
                 service_name: &test_context.service,
                 time: OffsetDateTime::parse(&test_context.timestamp, &Rfc3339)
@@ -555,7 +551,7 @@ mod tests {
 
             let peer_public_key = keypair.verifying_key();
             let sts = actual_string_to_sign.as_bytes();
-            peer_public_key.verify(&sts, &sig).unwrap();
+            peer_public_key.verify(sts, &sig).unwrap();
         }
 
         #[test]
