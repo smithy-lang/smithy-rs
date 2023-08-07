@@ -704,7 +704,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocol::content_type_header_classifier(&parts.headers, Some("application/json"))?;
+                    #{SmithyHttpServer}::protocol::content_type_header_classifier(&parts.headers, Some("$expectedRequestContentType"))?;
+                    input = #{parser}(bytes.as_ref(), input)?;
                     """,
                     *codegenScope,
                     "parser" to parser,
