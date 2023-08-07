@@ -28,10 +28,12 @@ class ClientRuntimeTypesReExportGenerator(
                 """
                 pub use #{ConfigBag};
                 pub use #{Interceptor};
+                pub use #{RuntimeComponents};
                 pub use #{SharedInterceptor};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
                 "Interceptor" to RuntimeType.interceptor(rc),
+                "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
                 "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
             )
 
@@ -40,9 +42,11 @@ class ClientRuntimeTypesReExportGenerator(
                     """
                     pub use #{runtime_plugin}::{RuntimePlugin, SharedRuntimePlugin};
                     pub use #{config_bag}::FrozenLayer;
+                    pub use #{RuntimeComponentsBuilder};
                     """,
                     "runtime_plugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin"),
                     "config_bag" to RuntimeType.smithyTypes(rc).resolve("config_bag"),
+                    "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
                 )
             }
         }

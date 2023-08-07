@@ -252,7 +252,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
                         rustTemplate(
                             """
-                            #{SmithyHttpServer}::protocol::content_type_header_classifier(request.headers(), $expectedRequestContentType)?;
+                            #{SmithyHttpServer}::protocol::content_type_header_classifier(
+                                request.headers(),
+                                Some("$expectedRequestContentType"),
+                            )?;
                             """,
                             *codegenScope,
                         )
@@ -704,7 +707,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocol::content_type_header_classifier(&parts.headers, Some("$expectedRequestContentType"))?;
+                    #{SmithyHttpServer}::protocol::content_type_header_classifier(
+                        &parts.headers, 
+                        Some("$expectedRequestContentType"),
+                    )?;
                     input = #{parser}(bytes.as_ref(), input)?;
                     """,
                     *codegenScope,
