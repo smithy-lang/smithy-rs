@@ -17,17 +17,6 @@ pub fn generate_signing_key(c: &mut Criterion) {
     });
 }
 
-// pub fn calculate_signature(c: &mut Criterion) {
-//     c.bench_function("calculate_signature", |b| {
-//         b.iter(|| {
-//             let _ = v4a::calculate_signature(
-//                 "AKIAIOSFODNN7EXAMPLE",
-//                 "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-//             );
-//         })
-//     });
-// }
-
 criterion_group! {
     name = benches;
 

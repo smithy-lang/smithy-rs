@@ -21,13 +21,13 @@ static BIG_N_MINUS_2: Lazy<BigInt> = Lazy::new(|| {
 });
 
 /// Calculates a Sigv4a signature
-pub(crate) fn calculate_signature(signing_key: &SigningKey, string_to_sign: &[u8]) -> String {
+pub fn calculate_signature(signing_key: &SigningKey, string_to_sign: &[u8]) -> String {
     let signature: DerSignature = signing_key.sign(string_to_sign);
     hex::encode(signature.as_ref())
 }
 
 /// Generates a signing key for Sigv4a.
-pub(crate) fn generate_signing_key(access_key: &str, secret_access_key: &str) -> SigningKey {
+pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> SigningKey {
     // Capacity is the secret access key length plus the length of "AWS4A"
     let mut input_key = Zeroizing::new(Vec::with_capacity(secret_access_key.len() + 5));
     write!(input_key, "AWS4A{secret_access_key}").unwrap();

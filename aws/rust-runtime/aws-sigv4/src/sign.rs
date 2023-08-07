@@ -5,8 +5,8 @@
 
 //! Functions to create signing keys and calculate signatures.
 
-pub(crate) mod v4;
+pub mod v4;
 #[cfg(feature = "sigv4a")]
-pub(crate) mod v4a;
+pub mod v4a;
 
 pub use v4::{calculate_signature, generate_signing_key};

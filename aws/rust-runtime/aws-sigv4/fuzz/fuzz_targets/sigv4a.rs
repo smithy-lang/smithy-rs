@@ -10,8 +10,8 @@ use libfuzzer_sys::fuzz_target;
 
 #[derive(derive_arbitrary::Arbitrary, Debug)]
 struct Input {
-    access_key_id: Vec<u8>,
-    secret_access_key: Vec<u8>,
+    access_key_id: String,
+    secret_access_key: String,
 }
 
 fuzz_target!(|input: Input| {

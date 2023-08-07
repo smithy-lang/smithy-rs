@@ -14,7 +14,6 @@ sign-eventstream = ["aws-smithy-eventstream"]
 default = ["sign-http"]
 sigv4a = ["p256", "num-bigint", "zeroize", "aws-smithy-types"]
 
-
 [dependencies]
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
@@ -52,6 +51,10 @@ ring = "0.16"
 
 [[bench]]
 name = "hmac"
+harness = false
+
+[[bench]]
+name = "sigv4a"
 harness = false
 
 [package.metadata.docs.rs]
