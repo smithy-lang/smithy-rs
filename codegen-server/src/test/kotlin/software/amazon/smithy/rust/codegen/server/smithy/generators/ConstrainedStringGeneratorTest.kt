@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
@@ -131,7 +131,7 @@ class ConstrainedStringGeneratorTest {
     }
 
     @Test
-    fun `type should not be constructible without using a constructor`() {
+    fun `type should not be constructable without using a constructor`() {
         val model = """
             namespace test
 
@@ -153,7 +153,7 @@ class ConstrainedStringGeneratorTest {
         ).render()
 
         // Check that the wrapped type is `pub(crate)`.
-        writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) std::string::String);"
+        writer.toString() shouldContain "pub struct ConstrainedString(pub(crate) ::std::string::String);"
     }
 
     @Test
@@ -237,7 +237,7 @@ class ConstrainedStringGeneratorTest {
             ).render()
         }
 
-        assertThrows<CommandFailed> {
+        assertThrows<CommandError> {
             project.compileAndTest()
         }
     }

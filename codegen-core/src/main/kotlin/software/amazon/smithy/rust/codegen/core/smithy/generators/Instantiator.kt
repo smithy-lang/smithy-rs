@@ -38,7 +38,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -48,6 +48,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -209,21 +210,23 @@ open class Instantiator(
             check(symbol.isOptional()) {
                 "A null node was provided for $memberShape but the symbol was not optional. This is invalid input data."
             }
-            writer.rust("None")
+            writer.rustTemplate("#{None}", *preludeScope)
         } else {
             // Structure builder setters for structure shape members _always_ take in `Option<T>`.
             // Other aggregate shapes' members are optional only when their symbol is.
-            writer.conditionalBlock(
-                "Some(",
+            writer.conditionalBlockTemplate(
+                "#{Some}(",
                 ")",
                 // The conditions are not commutative: note client builders always take in `Option<T>`.
                 conditional = symbol.isOptional() ||
                     (model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(memberShape)),
+                *preludeScope,
             ) {
-                writer.conditionalBlock(
-                    "Box::new(",
+                writer.conditionalBlockTemplate(
+                    "#{Box}::new(",
                     ")",
                     conditional = symbol.rustType().stripOuter<RustType.Option>() is RustType.Box,
+                    *preludeScope,
                 ) {
                     render(
                         this,
@@ -335,6 +338,23 @@ open class Instantiator(
      * ```
      */
     private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, headers: Map<String, String>, ctx: Ctx) {
+        writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
+
+        renderStructureMembers(writer, shape, data, headers, ctx)
+
+        writer.rust(".build()")
+        if (builderKindBehavior.hasFallibleBuilder(shape)) {
+            writer.rust(".unwrap()")
+        }
+    }
+
+    protected fun renderStructureMembers(
+        writer: RustWriter,
+        shape: StructureShape,
+        data: ObjectNode,
+        headers: Map<String, String>,
+        ctx: Ctx,
+    ) {
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
             val setterName = builderKindBehavior.setterName(memberShape)
             writer.withBlock(".$setterName(", ")") {
@@ -342,7 +362,6 @@ open class Instantiator(
             }
         }
 
-        writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
         if (defaultsForRequiredFields) {
             shape.allMembers.entries
                 .filter { (name, memberShape) ->
@@ -376,11 +395,6 @@ open class Instantiator(
             ?.let {
                 renderMemberHelper(it.value, fillDefaultValue(model.expectShape(it.value.target)))
             }
-
-        writer.rust(".build()")
-        if (builderKindBehavior.hasFallibleBuilder(shape)) {
-            writer.rust(".unwrap()")
-        }
     }
 
     /**

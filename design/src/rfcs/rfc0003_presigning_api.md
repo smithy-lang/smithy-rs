@@ -37,7 +37,7 @@ default to `SystemTime::now()`.
 Construction `PresigningConfig` can be done with a builder, but a `PresigningConfig::expires_in`
 convenience function will be provided to bypass the builder for the most frequent use-case.
 
-```rust
+```rust,ignore
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub struct PresigningConfig {
@@ -85,7 +85,7 @@ The generated fluent builders for operations that support presigning will have a
 in addition to `send()` that will return a presigned URL rather than sending the request. For S3's GetObject,
 the usage of this will look as follows:
 
-```rust
+```rust,ignore
 let config = aws_config::load_config_from_environment().await;
 let client = s3::Client::new(&config);
 let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
@@ -123,7 +123,7 @@ Even though generating a presigned URL through the fluent client doesn't necessi
 it will be clearer that this is the case by allowing the creation of presigned URLs directly from an input.
 This would look as follows:
 
-```rust
+```rust,ignore
 let config = aws_config::load_config_from_environment().await;
 let presigning_config = PresigningConfig::expires_in(Duration::from_secs(86400));
 let presigned: PresignedRequest = GetObjectInput::builder()

@@ -201,7 +201,7 @@ class JsonSerializerGenerator(
             ) {
                 rustTemplate(
                     """
-                    let mut out = String::new(); 
+                    let mut out = String::new();
                     let mut object = #{JsonObjectWriter}::new(&mut out);
                     """,
                     *codegenScope,
@@ -325,13 +325,15 @@ class JsonSerializerGenerator(
         val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
             val inner = context.copy(objectName = "object", localName = "input")
             val members = includedMembers ?: inner.shape.members()
-            val allowUnusedVariables = writable { if (members.isEmpty()) { Attribute.AllowUnusedVariables.render(this) } }
+            val allowUnusedVariables = writable {
+                if (members.isEmpty()) { Attribute.AllowUnusedVariables.render(this) }
+            }
             rustBlockTemplate(
                 """
                 pub fn $fnName(
                     #{AllowUnusedVariables:W} object: &mut #{JsonObjectWriter},
                     #{AllowUnusedVariables:W} input: &#{StructureSymbol},
-                ) -> Result<(), #{Error}>  
+                ) -> Result<(), #{Error}>
                 """,
                 "StructureSymbol" to symbolProvider.toSymbol(context.shape),
                 "AllowUnusedVariables" to allowUnusedVariables,

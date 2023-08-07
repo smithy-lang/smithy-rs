@@ -16,6 +16,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.containerDefaultMetadata
@@ -46,6 +47,11 @@ class ConstrainedShapeSymbolMetadataProvider(
         if (shape.canReachConstrainedShape(model, base)) {
             derives += containerDefaultMetadata(shape, model).derives
         }
+
+        // We should _always_ be able to `#[derive(Debug)]`: all constrained shapes' types are simply tuple newtypes
+        // wrapping a single type which always implements `Debug`.
+        // The wrapped type may not _derive_ `Debug` though, hence why this line is required; see https://github.com/awslabs/smithy-rs/issues/2582.
+        derives += RuntimeType.Debug
 
         val visibility = Visibility.publicIf(constrainedTypes, Visibility.PUBCRATE)
         return RustMetadata(derives, additionalAttributes, visibility)

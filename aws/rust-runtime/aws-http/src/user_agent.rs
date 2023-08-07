@@ -5,6 +5,7 @@
 
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_types::app_name::AppName;
 use aws_types::build_metadata::{OsFamily, BUILD_METADATA};
 use aws_types::os_shim_internal::Env;
@@ -211,6 +212,10 @@ impl AwsUserAgent {
     }
 }
 
+impl Storable for AwsUserAgent {
+    type Storer = StoreReplace<Self>;
+}
+
 #[derive(Clone, Copy, Debug)]
 struct SdkMetadata {
     name: &'static str,
@@ -244,6 +249,10 @@ impl fmt::Display for ApiMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "api/{}/{}", self.service_id, self.version)
     }
+}
+
+impl Storable for ApiMetadata {
+    type Storer = StoreReplace<Self>;
 }
 
 /// Error for when an user agent metadata doesn't meet character requirements.
@@ -513,6 +522,8 @@ impl fmt::Display for ExecEnvMetadata {
     }
 }
 
+// TODO(enableNewSmithyRuntimeCleanup): Delete the user agent Tower middleware and consider moving all the remaining code into aws-runtime
+
 /// User agent middleware
 #[non_exhaustive]
 #[derive(Default, Clone, Debug)]
@@ -537,6 +548,16 @@ enum UserAgentStageErrorKind {
 #[derive(Debug)]
 pub struct UserAgentStageError {
     kind: UserAgentStageErrorKind,
+}
+
+impl UserAgentStageError {
+    // `pub(crate)` method instead of implementing `From<InvalidHeaderValue>` so that we
+    // don't have to expose `InvalidHeaderValue` in public API.
+    pub(crate) fn from_invalid_header(value: InvalidHeaderValue) -> Self {
+        Self {
+            kind: UserAgentStageErrorKind::InvalidHeader(value),
+        }
+    }
 }
 
 impl Error for UserAgentStageError {
@@ -567,17 +588,8 @@ impl From<UserAgentStageErrorKind> for UserAgentStageError {
     }
 }
 
-impl From<InvalidHeaderValue> for UserAgentStageError {
-    fn from(value: InvalidHeaderValue) -> Self {
-        Self {
-            kind: UserAgentStageErrorKind::InvalidHeader(value),
-        }
-    }
-}
-
-lazy_static::lazy_static! {
-    static ref X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
-}
+#[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
+const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
 
 impl MapRequest for UserAgentStage {
     type Error = UserAgentStageError;
@@ -591,13 +603,16 @@ impl MapRequest for UserAgentStage {
             let ua = conf
                 .get::<AwsUserAgent>()
                 .ok_or(UserAgentStageErrorKind::UserAgentMissing)?;
-            req.headers_mut()
-                .append(USER_AGENT, HeaderValue::try_from(ua.ua_header())?);
             req.headers_mut().append(
-                X_AMZ_USER_AGENT.clone(),
-                HeaderValue::try_from(ua.aws_ua_header())?,
+                USER_AGENT,
+                HeaderValue::try_from(ua.ua_header())
+                    .map_err(UserAgentStageError::from_invalid_header)?,
             );
-
+            req.headers_mut().append(
+                X_AMZ_USER_AGENT,
+                HeaderValue::try_from(ua.aws_ua_header())
+                    .map_err(UserAgentStageError::from_invalid_header)?,
+            );
             Ok(req)
         })
     }
@@ -779,7 +794,7 @@ mod test {
             .get(USER_AGENT)
             .expect("UA header should be set");
         req.headers()
-            .get(&*X_AMZ_USER_AGENT)
+            .get(X_AMZ_USER_AGENT)
             .expect("UA header should be set");
     }
 }

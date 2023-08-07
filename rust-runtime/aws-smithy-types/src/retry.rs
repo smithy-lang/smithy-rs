@@ -5,6 +5,7 @@
 
 //! This module defines types that describe when to retry given a response.
 
+use crate::config_bag::{Storable, StoreReplace};
 use std::fmt;
 use std::str::FromStr;
 use std::time::Duration;
@@ -98,12 +99,12 @@ impl FromStr for RetryMode {
 
     fn from_str(string: &str) -> Result<Self, Self::Err> {
         let string = string.trim();
+
         // eq_ignore_ascii_case is OK here because the only strings we need to check for are ASCII
         if string.eq_ignore_ascii_case("standard") {
             Ok(RetryMode::Standard)
-        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247): adaptive retries
-        // } else if string.eq_ignore_ascii_case("adaptive") {
-        //     Ok(RetryMode::Adaptive)
+        } else if string.eq_ignore_ascii_case("adaptive") {
+            Ok(RetryMode::Adaptive)
         } else {
             Err(RetryModeParseError::new(string))
         }
@@ -143,6 +144,7 @@ pub struct RetryConfigBuilder {
     mode: Option<RetryMode>,
     max_attempts: Option<u32>,
     initial_backoff: Option<Duration>,
+    max_backoff: Option<Duration>,
     reconnect_mode: Option<ReconnectMode>,
 }
 
@@ -212,6 +214,18 @@ impl RetryConfigBuilder {
         self
     }
 
+    /// Set the max_backoff duration. This duration should be non-zero.
+    pub fn set_max_backoff(&mut self, max_backoff: Option<Duration>) -> &mut Self {
+        self.max_backoff = max_backoff;
+        self
+    }
+
+    /// Set the max_backoff duration. This duration should be non-zero.
+    pub fn max_backoff(mut self, max_backoff: Duration) -> Self {
+        self.set_max_backoff(Some(max_backoff));
+        self
+    }
+
     /// Merge two builders together. Values from `other` will only be used as a fallback for values
     /// from `self` Useful for merging configs from different sources together when you want to
     /// handle "precedence" per value instead of at the config level
@@ -233,6 +247,7 @@ impl RetryConfigBuilder {
             mode: self.mode.or(other.mode),
             max_attempts: self.max_attempts.or(other.max_attempts),
             initial_backoff: self.initial_backoff.or(other.initial_backoff),
+            max_backoff: self.max_backoff.or(other.max_backoff),
             reconnect_mode: self.reconnect_mode.or(other.reconnect_mode),
         }
     }
@@ -248,6 +263,8 @@ impl RetryConfigBuilder {
             reconnect_mode: self
                 .reconnect_mode
                 .unwrap_or(ReconnectMode::ReconnectOnTransientError),
+            max_backoff: self.max_backoff.unwrap_or_else(|| Duration::from_secs(20)),
+            use_static_exponential_base: false,
         }
     }
 }
@@ -259,7 +276,13 @@ pub struct RetryConfig {
     mode: RetryMode,
     max_attempts: u32,
     initial_backoff: Duration,
+    max_backoff: Duration,
     reconnect_mode: ReconnectMode,
+    use_static_exponential_base: bool,
+}
+
+impl Storable for RetryConfig {
+    type Storer = StoreReplace<RetryConfig>;
 }
 
 /// Mode for connection re-establishment
@@ -278,6 +301,10 @@ pub enum ReconnectMode {
     ReuseAllConnections,
 }
 
+impl Storable for ReconnectMode {
+    type Storer = StoreReplace<ReconnectMode>;
+}
+
 impl RetryConfig {
     /// Creates a default `RetryConfig` with `RetryMode::Standard` and max attempts of three.
     pub fn standard() -> Self {
@@ -286,6 +313,20 @@ impl RetryConfig {
             max_attempts: 3,
             initial_backoff: Duration::from_secs(1),
             reconnect_mode: ReconnectMode::ReconnectOnTransientError,
+            max_backoff: Duration::from_secs(20),
+            use_static_exponential_base: false,
+        }
+    }
+
+    /// Creates a default `RetryConfig` with `RetryMode::Adaptive` and max attempts of three.
+    pub fn adaptive() -> Self {
+        Self {
+            mode: RetryMode::Adaptive,
+            max_attempts: 3,
+            initial_backoff: Duration::from_secs(1),
+            reconnect_mode: ReconnectMode::ReconnectOnTransientError,
+            max_backoff: Duration::from_secs(20),
+            use_static_exponential_base: false,
         }
     }
 
@@ -341,6 +382,20 @@ impl RetryConfig {
         self
     }
 
+    /// Hint to the retry strategy whether to use a static exponential base.
+    ///
+    /// When a retry strategy uses exponential backoff, it calculates a random base. This causes the
+    /// retry delay to be slightly random, and helps prevent "thundering herd" scenarios. However,
+    /// it's often useful during testing to know exactly how long the delay will be.
+    ///
+    /// Therefore, if you're writing a test and asserting an expected retry delay,
+    /// set this to `true`.
+    #[cfg(feature = "test-util")]
+    pub fn with_use_static_exponential_base(mut self, use_static_exponential_base: bool) -> Self {
+        self.use_static_exponential_base = use_static_exponential_base;
+        self
+    }
+
     /// Returns the retry mode.
     pub fn mode(&self) -> RetryMode {
         self.mode
@@ -361,9 +416,22 @@ impl RetryConfig {
         self.initial_backoff
     }
 
+    /// Returns the max backoff duration.
+    pub fn max_backoff(&self) -> Duration {
+        self.max_backoff
+    }
+
     /// Returns true if retry is enabled with this config
     pub fn has_retry(&self) -> bool {
         self.max_attempts > 1
+    }
+
+    /// Returns `true` if retry strategies should use a static exponential base instead of the
+    /// default random base.
+    ///
+    /// To set this value, the `test-util` feature must be enabled.
+    pub fn use_static_exponential_base(&self) -> bool {
+        self.use_static_exponential_base
     }
 }
 

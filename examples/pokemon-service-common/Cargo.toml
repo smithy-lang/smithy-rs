@@ -13,12 +13,15 @@ rand = "0.8"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.16", features = ["env-filter", "json"] }
 tokio = { version = "1", default-features = false, features = ["time"] }
+tower = "0.4"
 
 # Local paths
+aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client" }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 pokemon-service-client = { path = "../pokemon-service-client" }
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk" }
 
 [dev-dependencies]
-tower = "0.4"
+aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }

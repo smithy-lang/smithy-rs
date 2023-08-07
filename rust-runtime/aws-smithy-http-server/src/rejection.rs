@@ -3,17 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use strum_macros::Display;
-
 use crate::response::IntoResponse;
+use thiserror::Error;
 
 // This is used across different protocol-specific `rejection` modules.
-#[derive(Debug, Display)]
+#[derive(Debug, Error)]
 pub enum MissingContentTypeReason {
+    #[error("headers taken by another extractor")]
     HeadersTakenByAnotherExtractor,
+    #[error("no `Content-Type` header")]
     NoContentTypeHeader,
+    #[error("`Content-Type` header value is not a valid HTTP header value: {0}")]
     ToStrError(http::header::ToStrError),
+    #[error("invalid `Content-Type` header value mime type: {0}")]
     MimeParseError(mime::FromStrError),
+    #[error("unexpected `Content-Type` header value; expected {expected_mime:?}, found {found_mime:?}")]
     UnexpectedMimeType {
         expected_mime: Option<mime::Mime>,
         found_mime: Option<mime::Mime>,

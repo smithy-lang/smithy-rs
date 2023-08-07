@@ -6,6 +6,7 @@
 - [Transport](transport/overview.md)
   - [HTTP Operations](transport/operation.md)
   - [HTTP Middleware](transport/middleware.md)
+  - [TLS Connector](transport/connector.md)
 
 - [Smithy](./smithy/overview.md)
   - [Simple Shapes](./smithy/simple_shapes.md)
@@ -14,13 +15,16 @@
   - [Endpoint Resolution](smithy/endpoint.md)
   - [Backwards Compatibility](smithy/backwards-compat.md)
 
+- [Client](./client/overview.md)
+  - [What is the 'orchestrator' and why does it exist?](./client/orchestrator.md)
+  - [Identity and Auth](./client/identity_and_auth.md)
+
 - [Server](./server/overview.md)
   - [Middleware](./server/middleware.md)
   - [Instrumentation](./server/instrumentation.md)
   - [Accessing Un-modelled Data](./server/from_parts.md)
   - [The Anatomy of a Service](./server/anatomy.md)
   - [Generating Common Service Code](./server/code_generation.md)
-  - [Generating the Pokémon Service](./server/pokemon_service.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)

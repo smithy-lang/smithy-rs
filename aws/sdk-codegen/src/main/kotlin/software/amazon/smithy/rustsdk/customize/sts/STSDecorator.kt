@@ -7,10 +7,13 @@ package software.amazon.smithy.rustsdk.customize.sts
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.RetryableTrait
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -25,7 +28,9 @@ class STSDecorator : ClientCodegenDecorator {
         shape is StructureShape && shape.hasTrait<ErrorTrait>() &&
             shape.id.namespace == "com.amazonaws.sts" && shape.id.name == "IDPCommunicationErrorException"
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    private fun isAwsCredentials(shape: Shape): Boolean = shape.id == ShapeId.from("com.amazonaws.sts#Credentials")
+
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isIdpCommunicationError(shape)) {
                 logger.info("Adding @retryable trait to $shape and setting its error type to 'server'")
@@ -33,6 +38,8 @@ class STSDecorator : ClientCodegenDecorator {
                     .removeTrait(ErrorTrait.ID)
                     .addTrait(ErrorTrait("server"))
                     .addTrait(RetryableTrait.builder().build()).build()
+            }.letIf(isAwsCredentials(shape)) {
+                (shape as StructureShape).toBuilder().addTrait(SensitiveTrait()).build()
             }
         }
 }

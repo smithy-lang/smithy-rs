@@ -8,12 +8,12 @@ description = "A smithy Rust service to retrieve information about Pokémon."
 
 [dependencies]
 clap = { version = "4.1.11", features = ["derive"] }
-hyper = { version = "0.14.25", features = ["server"] }
+hyper = { version = "0.14.26", features = ["server"] }
 tokio = "1.26.0"
 
 # These dependencies are only required for the `pokemon-service-tls` program.
-tls-listener = { version = "0.6.0", features = ["rustls", "hyper-h2"] }
-tokio-rustls = "0.23.4"
+tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
+tokio-rustls = "0.24.0"
 rustls-pemfile = "1.0.2"
 futures-util = { version = "0.3.27", default-features = false }
 
@@ -26,8 +26,9 @@ pokemon-service-common = { path = "../pokemon-service-common/" }
 assert_cmd = "2.0"
 serial_test = "1.0.0"
 
-# This dependency is only required for testing the `pokemon-service-tls` program.
-hyper-rustls = { version = "0.23.2", features = ["http2"] }
+# These dependencies are only required for testing the `pokemon-service-tls` program.
+hyper-rustls = { version = "0.24", features = ["http2"] }
+hyper-tls = { version = "0.5" }
 
 # Local paths
 aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client/", features = ["rustls"] }

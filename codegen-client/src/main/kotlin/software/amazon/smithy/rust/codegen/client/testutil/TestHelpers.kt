@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientModuleProvider
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
+import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -23,6 +24,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 fun testClientRustSettings(
     service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
@@ -72,7 +74,7 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
     )
 
 fun testClientCodegenContext(
-    model: Model,
+    model: Model = "namespace empty".asSmithyModel(),
     symbolProvider: RustSymbolProvider? = null,
     serviceShape: ServiceShape? = null,
     settings: ClientRustSettings = testClientRustSettings(),
@@ -88,6 +90,12 @@ fun testClientCodegenContext(
     settings,
     rootDecorator ?: CombinedClientCodegenDecorator(emptyList()),
 )
+
+fun ClientCodegenContext.withSmithyRuntimeMode(smithyRuntimeMode: SmithyRuntimeMode): ClientCodegenContext =
+    copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableNewSmithyRuntime = smithyRuntimeMode)))
+
+fun ClientCodegenContext.withEnableUserConfigurableRuntimePlugins(enableUserConfigurableRuntimePlugins: Boolean): ClientCodegenContext =
+    copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableUserConfigurableRuntimePlugins = enableUserConfigurableRuntimePlugins)))
 
 fun TestWriterDelegator.clientRustSettings() =
     testClientRustSettings(

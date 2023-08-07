@@ -104,11 +104,11 @@ pub trait Git: Send + Sync {
     /// Returns a list of commit hashes in reverse chronological order starting with
     /// `start_inclusive_revision` and ending before `end_exclusive_revision`. Both of
     /// these arguments can be any kind of Git revision (e.g., HEAD, HEAD~2, commit hash, etc).
-    fn rev_list<'a>(
+    fn rev_list(
         &self,
         start_inclusive_revision: &str,
         end_exclusive_revision: &str,
-        path: Option<&'a Path>,
+        path: Option<&Path>,
     ) -> Result<Vec<CommitHash>>;
 
     /// Returns information about a given revision.
@@ -295,7 +295,6 @@ impl Git for GitCLI {
         let (stdout, _) = output_text(&output);
         Ok(stdout
             .split_ascii_whitespace()
-            .into_iter()
             .map(CommitHash::from)
             .collect())
     }

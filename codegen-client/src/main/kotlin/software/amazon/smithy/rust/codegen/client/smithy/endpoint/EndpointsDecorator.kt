@@ -18,16 +18,17 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTests
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -133,8 +134,8 @@ class EndpointsDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val generator = EndpointTypesGenerator.fromContext(codegenContext)
-        rustCrate.withModule(ClientRustModule.Endpoint) {
-            withInlineModule(EndpointTests, rustCrate.moduleDocProvider) {
+        rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
+            withInlineModule(endpointTestsModule(codegenContext), rustCrate.moduleDocProvider) {
                 generator.testGenerator()(this)
             }
         }
@@ -153,6 +154,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
      *     .build();
      * ```
      */
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this customization
     class InjectEndpointInMakeOperation(
         private val ctx: ClientCodegenContext,
         private val typesGenerator: EndpointTypesGenerator,
@@ -165,18 +167,21 @@ class EndpointsDecorator : ClientCodegenDecorator {
 
         override fun section(section: OperationSection): Writable {
             val codegenScope = arrayOf(
+                *RuntimeType.preludeScope,
                 "Params" to typesGenerator.paramsStruct(),
+                "ResolveEndpoint" to types.resolveEndpoint,
                 "ResolveEndpointError" to types.resolveEndpointError,
             )
             return when (section) {
                 is OperationSection.MutateInput -> writable {
                     rustTemplate(
                         """
+                        use #{ResolveEndpoint};
                         let params_result = #{Params}::builder()#{builderFields:W}.build()
-                            .map_err(|err|#{ResolveEndpointError}::from_source("could not construct endpoint parameters", err));
+                            .map_err(|err| #{ResolveEndpointError}::from_source("could not construct endpoint parameters", err));
                         let (endpoint_result, params) = match params_result {
-                            Ok(params) => (${section.config}.endpoint_resolver.resolve_endpoint(&params), Some(params)),
-                            Err(e) => (Err(e), None)
+                            #{Ok}(params) => (${section.config}.endpoint_resolver.resolve_endpoint(&params), #{Some}(params)),
+                            #{Err}(e) => (#{Err}(e), #{None})
                         };
                         """,
                         "builderFields" to builderFields(typesGenerator.params, section),
@@ -187,7 +192,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
                 is OperationSection.MutateRequest -> writable {
                     // insert the endpoint the bag
                     rustTemplate("${section.request}.properties_mut().insert(endpoint_result);")
-                    rustTemplate("""if let Some(params) = params { ${section.request}.properties_mut().insert(params); }""")
+                    rustTemplate("""if let #{Some}(params) = params { ${section.request}.properties_mut().insert(params); }""", *codegenScope)
                 }
 
                 else -> emptySection
@@ -198,8 +203,8 @@ class EndpointsDecorator : ClientCodegenDecorator {
             val node = this
             return writable {
                 when (node) {
-                    is StringNode -> rust("Some(${node.value.dq()}.to_string())")
-                    is BooleanNode -> rust("Some(${node.value})")
+                    is StringNode -> rustTemplate("#{Some}(${node.value.dq()}.to_string())", *RuntimeType.preludeScope)
+                    is BooleanNode -> rustTemplate("#{Some}(${node.value})", *RuntimeType.preludeScope)
                     else -> PANIC("unsupported default value: $node")
                 }
             }

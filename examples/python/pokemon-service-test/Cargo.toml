@@ -1,0 +1,23 @@
+[package]
+name = "pokemon-service-test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
+description = "Run tests against the Python server implementation"
+
+[dev-dependencies]
+rand = "0.8"
+async-stream = "0.3"
+command-group = "2.1.0"
+tokio = { version = "1.20.1", features = ["full"] }
+serial_test = "2.0.0"
+rustls-pemfile = "1.0.1"
+tokio-rustls = "0.24.0"
+hyper-rustls = { version = "0.24", features = ["http2"] }
+
+# Local paths
+aws-smithy-client  = { path = "../../../rust-runtime/aws-smithy-client/", features = ["rustls"] }
+aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http/" }
+aws-smithy-types  = { path = "../../../rust-runtime/aws-smithy-types/" }
+pokemon-service-client = { path = "../pokemon-service-client/" }

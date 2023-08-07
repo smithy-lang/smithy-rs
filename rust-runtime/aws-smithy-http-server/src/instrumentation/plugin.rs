@@ -3,47 +3,43 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use tower::layer::util::Stack;
+use crate::plugin::{HttpMarker, HttpPlugins, PluginStack};
+use crate::{operation::OperationShape, plugin::Plugin};
 
-use crate::plugin::{PluginPipeline, PluginStack};
-use crate::{
-    operation::{Operation, OperationShape},
-    plugin::Plugin,
-};
+use super::sensitivity::Sensitivity;
+use super::InstrumentOperation;
 
-use super::{layer::InstrumentLayer, sensitivity::Sensitivity};
-
-/// A [`Plugin`] which applies [`InstrumentLayer`] to all operations in the builder.
+/// A [`Plugin`] which applies [`InstrumentOperation`] to every operation.
 #[derive(Debug)]
 pub struct InstrumentPlugin;
 
-impl<P, Op, S, L> Plugin<P, Op, S, L> for InstrumentPlugin
+impl<Ser, Op, T> Plugin<Ser, Op, T> for InstrumentPlugin
 where
     Op: OperationShape,
     Op: Sensitivity,
 {
-    type Service = S;
-    type Layer = Stack<L, InstrumentLayer<Op::RequestFmt, Op::ResponseFmt>>;
+    type Output = InstrumentOperation<T, Op::RequestFmt, Op::ResponseFmt>;
 
-    fn map(&self, operation: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        let layer = InstrumentLayer::new(Op::NAME)
+    fn apply(&self, input: T) -> Self::Output {
+        InstrumentOperation::new(input, Op::ID)
             .request_fmt(Op::request_fmt())
-            .response_fmt(Op::response_fmt());
-        operation.layer(layer)
+            .response_fmt(Op::response_fmt())
     }
 }
 
-/// An extension trait for applying [`InstrumentLayer`] to all operations in a service.
-pub trait InstrumentExt<CurrentPlugins> {
-    /// Applies an [`InstrumentLayer`] to all operations which respects the [@sensitive] trait given on the input and
+impl HttpMarker for InstrumentPlugin {}
+
+/// An extension trait for applying [`InstrumentPlugin`].
+pub trait InstrumentExt<CurrentPlugin> {
+    /// Applies an [`InstrumentOperation`] to every operation, respecting the [@sensitive] trait given on the input and
     /// output models. See [`InstrumentOperation`](super::InstrumentOperation) for more information.
     ///
     /// [@sensitive]: https://awslabs.github.io/smithy/2.0/spec/documentation-traits.html#sensitive-trait
-    fn instrument(self) -> PluginPipeline<PluginStack<InstrumentPlugin, CurrentPlugins>>;
+    fn instrument(self) -> HttpPlugins<PluginStack<InstrumentPlugin, CurrentPlugin>>;
 }
 
-impl<CurrentPlugins> InstrumentExt<CurrentPlugins> for PluginPipeline<CurrentPlugins> {
-    fn instrument(self) -> PluginPipeline<PluginStack<InstrumentPlugin, CurrentPlugins>> {
+impl<CurrentPlugin> InstrumentExt<CurrentPlugin> for HttpPlugins<CurrentPlugin> {
+    fn instrument(self) -> HttpPlugins<PluginStack<InstrumentPlugin, CurrentPlugin>> {
         self.push(InstrumentPlugin)
     }
 }

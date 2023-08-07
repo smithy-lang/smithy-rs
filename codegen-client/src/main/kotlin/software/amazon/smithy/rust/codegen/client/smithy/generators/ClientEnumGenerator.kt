@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGeneratorContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumMemberModel
@@ -60,16 +61,17 @@ data class InfallibleEnumType(
     }
 
     override fun implFromStr(context: EnumGeneratorContext): Writable = writable {
-        rust(
+        rustTemplate(
             """
-            impl std::str::FromStr for ${context.enumName} {
-                type Err = std::convert::Infallible;
+            impl ::std::str::FromStr for ${context.enumName} {
+                type Err = ::std::convert::Infallible;
 
-                fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-                    Ok(${context.enumName}::from(s))
+                fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
+                    #{Ok}(${context.enumName}::from(s))
                 }
             }
             """,
+            *preludeScope,
         )
     }
 
@@ -98,7 +100,7 @@ data class InfallibleEnumType(
                 """.trimIndent(),
             )
             context.enumMeta.render(this)
-            rust("struct $UnknownVariantValue(pub(crate) String);")
+            rustTemplate("struct $UnknownVariantValue(pub(crate) #{String});", *preludeScope)
             rustBlock("impl $UnknownVariantValue") {
                 // The generated as_str is not pub as we need to prevent users from calling it on this opaque struct.
                 rustBlock("pub(crate) fn as_str(&self) -> &str") {

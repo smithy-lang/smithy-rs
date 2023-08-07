@@ -6,6 +6,10 @@
 #[allow(dead_code)]
 mod aws_query_compatible_errors;
 #[allow(unused)]
+mod client_http_checksum_required;
+#[allow(dead_code)]
+mod client_idempotency_token;
+#[allow(unused)]
 mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
@@ -17,6 +21,8 @@ mod json_errors;
 mod rest_xml_unwrapped_errors;
 #[allow(unused)]
 mod rest_xml_wrapped_errors;
+#[allow(unused)]
+mod serialization_settings;
 
 #[allow(unused)]
 mod endpoint_lib;

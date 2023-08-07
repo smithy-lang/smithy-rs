@@ -5,14 +5,16 @@
 
 //! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
 
-use crate::connection::ConnectionMetadata;
-use crate::operation;
-use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
-use aws_smithy_types::error::ErrorMetadata;
-use aws_smithy_types::retry::ErrorKind;
 use std::error::Error;
 use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
+
+use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
+use aws_smithy_types::error::ErrorMetadata;
+use aws_smithy_types::retry::ErrorKind;
+
+use crate::connection::ConnectionMetadata;
+use crate::operation;
 
 type BoxError = Box<dyn Error + Send + Sync>;
 
@@ -230,9 +232,14 @@ impl DispatchFailure {
         self.source.is_user()
     }
 
-    /// Returns the optional error kind associated with an unclassified error
-    pub fn is_other(&self) -> Option<ErrorKind> {
+    /// Returns true if the error is an unclassified error.
+    pub fn is_other(&self) -> bool {
         self.source.is_other()
+    }
+
+    /// Returns the optional error kind associated with an unclassified error
+    pub fn as_other(&self) -> Option<ErrorKind> {
+        self.source.as_other()
     }
 
     /// Returns the inner error if it is a connector error
@@ -434,6 +441,15 @@ impl<E, R> SdkError<E, R> {
         }
     }
 
+    /// Return a reference to this error's raw response, if it contains one. Otherwise, return `None`.
+    pub fn raw_response(&self) -> Option<&R> {
+        match self {
+            Self::ServiceError(inner) => Some(inner.raw()),
+            Self::ResponseError(inner) => Some(inner.raw()),
+            _ => None,
+        }
+    }
+
     /// Maps the service error type in `SdkError::ServiceError`
     #[doc(hidden)]
     pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
@@ -622,8 +638,13 @@ impl ConnectorError {
         matches!(self.kind, ConnectorErrorKind::User)
     }
 
+    /// Returns true if the error is an unclassified error.
+    pub fn is_other(&self) -> bool {
+        matches!(self.kind, ConnectorErrorKind::Other(..))
+    }
+
     /// Returns the optional error kind associated with an unclassified error
-    pub fn is_other(&self) -> Option<ErrorKind> {
+    pub fn as_other(&self) -> Option<ErrorKind> {
         match &self.kind {
             ConnectorErrorKind::Other(ek) => *ek,
             _ => None,

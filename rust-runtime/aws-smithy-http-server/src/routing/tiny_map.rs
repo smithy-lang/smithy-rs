@@ -78,13 +78,13 @@ where
 
         // Populate the `Vec`
         while let Some((index, pair)) = iter.next() {
+            vec.push(pair);
+
             // If overflow `CUTOFF` then return a `HashMap` instead
             if index == CUTOFF {
                 let inner = TinyMapInner::HashMap(vec.into_iter().chain(iter.map(|(_, pair)| pair)).collect());
                 return TinyMap { inner };
             }
-
-            vec.push(pair);
         }
 
         TinyMap {
@@ -158,19 +158,25 @@ mod tests {
     #[test]
     fn get_small_success() {
         let tiny_map: TinyMap<_, _, CUTOFF> = SMALL_VALUES.into_iter().collect();
-        assert_eq!(tiny_map.get("a"), Some(&0))
+        SMALL_VALUES.into_iter().for_each(|(op, val)| {
+            assert_eq!(tiny_map.get(op), Some(&val));
+        });
     }
 
     #[test]
     fn get_medium_success() {
         let tiny_map: TinyMap<_, _, CUTOFF> = MEDIUM_VALUES.into_iter().collect();
-        assert_eq!(tiny_map.get("d"), Some(&3))
+        MEDIUM_VALUES.into_iter().for_each(|(op, val)| {
+            assert_eq!(tiny_map.get(op), Some(&val));
+        });
     }
 
     #[test]
     fn get_large_success() {
         let tiny_map: TinyMap<_, _, CUTOFF> = LARGE_VALUES.into_iter().collect();
-        assert_eq!(tiny_map.get("h"), Some(&7))
+        LARGE_VALUES.into_iter().for_each(|(op, val)| {
+            assert_eq!(tiny_map.get(op), Some(&val));
+        });
     }
 
     #[test]

@@ -100,7 +100,10 @@ impl Builder {
                 .read_timeout(DEFAULT_READ_TIMEOUT)
                 .build()
         });
-        let connector = expect_connector(provider_config.connector(&connector_settings));
+        let connector = expect_connector(
+            "The HTTP credentials provider",
+            provider_config.connector(&connector_settings),
+        );
         let mut client_builder = aws_smithy_client::Client::builder()
             .connector(connector)
             .middleware(Identity::new());
@@ -148,6 +151,10 @@ impl ParseStrictResponse for CredentialsResponseParser {
                 format!("failed to load credentials [{}]: {}", code, message),
             )),
         }
+    }
+
+    fn sensitive(&self) -> bool {
+        true
     }
 }
 

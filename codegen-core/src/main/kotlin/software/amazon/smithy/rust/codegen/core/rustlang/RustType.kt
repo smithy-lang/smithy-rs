@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.rustlang
 
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.serde
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 
@@ -172,6 +173,18 @@ sealed class RustType {
     }
 
     data class Opaque(override val name: kotlin.String, override val namespace: kotlin.String? = null) : RustType()
+
+    /**
+     * Represents application of a Rust type with the given arguments.
+     *
+     * For example, we can represent `HashMap<String, i64>` as
+     * `RustType.Application(RustType.Opaque("HashMap"), listOf(RustType.String, RustType.Integer(64)))`.
+     * This helps us to separate the type and the arguments which is useful in methods like [qualifiedName].
+     */
+    data class Application(val type: RustType, val args: List<RustType>) : RustType() {
+        override val name = type.name
+        override val namespace = type.namespace
+    }
 }
 
 /**
@@ -187,7 +200,7 @@ fun RustType.qualifiedName(): String {
 
 /** Format this Rust type as an `impl Into<T>` */
 fun RustType.implInto(fullyQualified: Boolean = true): String {
-    return "impl Into<${this.render(fullyQualified)}>"
+    return "impl ${RuntimeType.Into.fullyQualifiedName()}<${this.render(fullyQualified)}>"
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */
@@ -242,7 +255,10 @@ fun RustType.render(fullyQualified: Boolean = true): String {
                 "&${this.lifetime?.let { "'$it" } ?: ""} ${this.member.render(fullyQualified)}"
             }
         }
-
+        is RustType.Application -> {
+            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+            "${this.name}<$args>"
+        }
         is RustType.Option -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Box -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Dyn -> "${this.name} ${this.member.render(fullyQualified)}"
@@ -370,11 +386,17 @@ data class RustMetadata(
         this.copy(derives = derives - withoutDerives.toSet())
 
     fun renderAttributes(writer: RustWriter): RustMetadata {
-        additionalAttributes.forEach {
+        val (deriveHelperAttrs, otherAttrs) = additionalAttributes.partition { it.isDeriveHelper }
+        otherAttrs.forEach {
             it.render(writer)
         }
+
         Attribute(derive(derives)).render(writer)
 
+        // Derive helper attributes must come after derive, see https://github.com/rust-lang/rust/issues/79202
+        deriveHelperAttrs.forEach {
+            it.render(writer)
+        }
         return this
     }
 
@@ -401,15 +423,6 @@ data class RustMetadata(
     fun hasDebugDerive(): Boolean {
         return derives.contains(RuntimeType.Debug)
     }
-
-    companion object {
-        val TestModule = RustMetadata(
-            visibility = Visibility.PRIVATE,
-            additionalAttributes = listOf(
-                Attribute.CfgTest,
-            ),
-        )
-    }
 }
 
 data class Argument(val argument: String, val value: String, val type: String)
@@ -435,17 +448,22 @@ enum class AttributeKind {
  * [Attributes](https://doc.rust-lang.org/reference/attributes.html) are general free form metadata
  * that are interpreted by the compiler.
  *
+ * If the attribute is a "derive helper", such as  `#[serde]`, set `isDeriveHelper` to `true` so it is sorted correctly after
+ * the derive attribute is rendered. (See https://github.com/rust-lang/rust/issues/79202 for why sorting matters.)
+ *
  * For example:
  * ```rust
+ * #[allow(missing_docs)] // <-- this is an attribute, and it is not a derive helper
  * #[derive(Clone, PartialEq, Serialize)] // <-- this is an attribute
- * #[serde(serialize_with = "abc")] // <-- this is an attribute
+ * #[serde(serialize_with = "abc")] // <-- this attribute is a derive helper because the `Serialize` derive uses it
  * struct Abc {
  *   a: i64
  * }
  * ```
  */
-class Attribute(val inner: Writable) {
+class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     constructor(str: String) : this(writable(str))
+    constructor(str: String, isDeriveHelper: Boolean) : this(writable(str), isDeriveHelper)
     constructor(runtimeType: RuntimeType) : this(runtimeType.writable)
 
     fun render(writer: RustWriter, attributeKind: AttributeKind = AttributeKind.Outer) {
@@ -456,6 +474,23 @@ class Attribute(val inner: Writable) {
                 AttributeKind.Outer -> writer.rust("##[#W]", inner)
             }
         }
+    }
+
+    // These were supposed to be a part of companion object but we decided to move it out to here to avoid NPE
+    // You can find the discussion here.
+    // https://github.com/awslabs/smithy-rs/discussions/2248
+    public fun SerdeSerialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
+    }
+    public fun SerdeDeserialize(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
+    }
+    public fun SerdeSkip(): Attribute {
+        return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize"))), serde("skip")))
+    }
+
+    public fun SerdeSerializeOrDeserialize(): Attribute {
+        return Attribute(cfg(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize")))))
     }
 
     companion object {
@@ -474,6 +509,7 @@ class Attribute(val inner: Writable) {
         val AllowNonSnakeCase = Attribute(allow("non_snake_case"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
         val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
+        val AllowUnused = Attribute(allow("unused"))
         val AllowUnusedImports = Attribute(allow("unused_imports"))
         val AllowUnusedMut = Attribute(allow("unused_mut"))
         val AllowUnusedVariables = Attribute(allow("unused_variables"))
@@ -481,11 +517,13 @@ class Attribute(val inner: Writable) {
         val DenyMissingDocs = Attribute(deny("missing_docs"))
         val DocHidden = Attribute(doc("hidden"))
         val DocInline = Attribute(doc("inline"))
+        val NoImplicitPrelude = Attribute("no_implicit_prelude")
         fun shouldPanic(expectedMessage: String) =
             Attribute(macroWithArgs("should_panic", "expected = ${expectedMessage.dq()}"))
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
+        val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**
          * [non_exhaustive](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute)
@@ -514,10 +552,12 @@ class Attribute(val inner: Writable) {
         }
 
         fun all(vararg attrMacros: Writable): Writable = macroWithArgs("all", *attrMacros)
+        fun cfgAttr(vararg attrMacros: Writable): Writable = macroWithArgs("cfg_attr", *attrMacros)
 
         fun allow(lints: Collection<String>): Writable = macroWithArgs("allow", *lints.toTypedArray())
         fun allow(vararg lints: String): Writable = macroWithArgs("allow", *lints)
         fun deny(vararg lints: String): Writable = macroWithArgs("deny", *lints)
+        fun serde(vararg lints: String): Writable = macroWithArgs("serde", *lints)
         fun any(vararg attrMacros: Writable): Writable = macroWithArgs("any", *attrMacros)
         fun cfg(vararg attrMacros: Writable): Writable = macroWithArgs("cfg", *attrMacros)
         fun cfg(vararg attrMacros: String): Writable = macroWithArgs("cfg", *attrMacros)

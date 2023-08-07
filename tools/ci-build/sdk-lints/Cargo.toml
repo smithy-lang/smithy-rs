@@ -14,7 +14,7 @@ opt-level = 0
 anyhow = "1"
 cargo_toml = "0.10.1"
 clap = { version = "~3.1.18", features = ["derive"]}
-toml = "0.5.8"
-serde = { version = "1", features = ["derive"]}
 lazy_static = "1.4.0"
+serde = { version = "1", features = ["derive"]}
 smithy-rs-tool-common = { path = "../smithy-rs-tool-common" }
+toml = "0.5.8"

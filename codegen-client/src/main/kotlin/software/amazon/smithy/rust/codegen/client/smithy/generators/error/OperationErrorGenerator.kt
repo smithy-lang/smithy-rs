@@ -22,10 +22,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.errorMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -107,14 +109,16 @@ class OperationErrorGenerator(
             )
         }
         writer.rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {
-            rustBlock(
+            rustBlockTemplate(
                 """
                 fn create_unhandled_error(
-                    source: Box<dyn std::error::Error + Send + Sync + 'static>,
-                    meta: std::option::Option<#T>
+                    source: #{Box}<dyn #{StdError} + #{Send} + #{Sync} + 'static>,
+                    meta: #{Option}<#{ErrorMeta}>
                 ) -> Self
                 """,
-                errorMetadata,
+                *preludeScope,
+                "StdError" to RuntimeType.StdError,
+                "ErrorMeta" to errorMetadata,
             ) {
                 rust(
                     """
@@ -129,7 +133,7 @@ class OperationErrorGenerator(
             }
         }
         writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
-            rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
+            rustBlock("fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result") {
                 delegateToVariants(errors) {
                     writable { rust("_inner.fmt(f)") }
                 }
@@ -152,21 +156,28 @@ class OperationErrorGenerator(
             "impl #T for ${errorSymbol.name}",
             RuntimeType.provideErrorKind(symbolProvider.config.runtimeConfig),
         ) {
-            rustBlock("fn code(&self) -> std::option::Option<&str>") {
+            rustBlockTemplate("fn code(&self) -> #{Option}<&str>", *preludeScope) {
                 rust("#T::code(self)", RuntimeType.provideErrorMetadataTrait(runtimeConfig))
             }
 
-            rustBlock("fn retryable_error_kind(&self) -> std::option::Option<#T>", retryErrorKindT) {
+            rustBlockTemplate(
+                "fn retryable_error_kind(&self) -> #{Option}<#{ErrorKind}>",
+                "ErrorKind" to retryErrorKindT,
+                *preludeScope,
+            ) {
                 val retryableVariants = errors.filter { it.hasTrait<RetryableTrait>() }
                 if (retryableVariants.isEmpty()) {
-                    rust("None")
+                    rustTemplate("#{None}", *preludeScope)
                 } else {
                     rustBlock("match self") {
                         retryableVariants.forEach {
                             val errorVariantSymbol = symbolProvider.toSymbol(it)
-                            rust("Self::${errorVariantSymbol.name}(inner) => Some(inner.retryable_error_kind()),")
+                            rustTemplate(
+                                "Self::${errorVariantSymbol.name}(inner) => #{Some}(inner.retryable_error_kind()),",
+                                *preludeScope,
+                            )
                         }
-                        rust("_ => None")
+                        rustTemplate("_ => #{None}", *preludeScope)
                     }
                 }
             }
@@ -176,7 +187,7 @@ class OperationErrorGenerator(
             writer.rustTemplate(
                 """
                 /// Creates the `${errorSymbol.name}::Unhandled` variant from any error type.
-                pub fn unhandled(err: impl Into<Box<dyn #{std_error} + Send + Sync + 'static>>) -> Self {
+                pub fn unhandled(err: impl #{Into}<#{Box}<dyn #{StdError} + #{Send} + #{Sync} + 'static>>) -> Self {
                     Self::Unhandled(#{Unhandled}::builder().source(err).build())
                 }
 
@@ -185,8 +196,9 @@ class OperationErrorGenerator(
                     Self::Unhandled(#{Unhandled}::builder().source(err.clone()).meta(err).build())
                 }
                 """,
+                *preludeScope,
                 "error_metadata" to errorMetadata,
-                "std_error" to RuntimeType.StdError,
+                "StdError" to RuntimeType.StdError,
                 "Unhandled" to unhandledError(runtimeConfig),
             )
             writer.docs(
@@ -216,10 +228,14 @@ class OperationErrorGenerator(
         }
 
         writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
-            rustBlock("fn source(&self) -> std::option::Option<&(dyn #T + 'static)>", RuntimeType.StdError) {
+            rustBlockTemplate(
+                "fn source(&self) -> #{Option}<&(dyn #{StdError} + 'static)>",
+                *preludeScope,
+                "StdError" to RuntimeType.StdError,
+            ) {
                 delegateToVariants(errors) {
                     writable {
-                        rust("Some(_inner)")
+                        rustTemplate("#{Some}(_inner)", *preludeScope)
                     }
                 }
             }

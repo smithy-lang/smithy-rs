@@ -45,7 +45,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
@@ -63,6 +63,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedT
 import software.amazon.smithy.rust.codegen.server.smithy.generators.MapConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.PubCrateConstrainedMapGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ScopeMacroGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGeneratorWithoutPublicConstrainedTypes
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerEnumGenerator
@@ -128,7 +129,7 @@ open class ServerCodegenVisitor(
                 .protocolFor(context.model, service)
         this.protocolGeneratorFactory = protocolGeneratorFactory
 
-        model = codegenDecorator.transformModel(service, baseModel)
+        model = codegenDecorator.transformModel(service, baseModel, settings)
 
         val serverSymbolProviders = ServerSymbolProviders.from(
             settings,
@@ -265,7 +266,7 @@ open class ServerCodegenVisitor(
                 fileManifest.baseDir,
                 timeout = settings.codegenConfig.formatTimeoutSeconds.toLong(),
             )
-        } catch (err: CommandFailed) {
+        } catch (err: CommandError) {
             logger.info(
                 "[rust-server-codegen] Failed to run cargo fmt: [${service.id}]\n${err.output}",
             )
@@ -610,6 +611,8 @@ open class ServerCodegenVisitor(
                 codegenContext,
                 serverProtocol,
             ).render(this)
+
+            ScopeMacroGenerator(codegenContext).render(this)
         }
     }
 

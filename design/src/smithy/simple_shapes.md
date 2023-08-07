@@ -51,7 +51,7 @@ Current models represent strings as `String`.
 Smithy defines the concept of "Document Types":
 > [Documents represent] protocol-agnostic open content that is accessed like JSON data. Open content is useful for modeling unstructured data that has no schema, data that can't be modeled using rigid types, or data that has a schema that evolves outside of the purview of a model. The serialization format of a document is an implementation detail of a protocol and MUST NOT have any effect on the types exposed by tooling to represent a document value.
 
-```rust
+```rust,ignore
 {{#include ../../../rust-runtime/aws-smithy-types/src/lib.rs:document}}
 ```
 

@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rawTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.ManifestCustomizations
@@ -83,6 +84,10 @@ class AwsCrateDocsDecorator : ClientCodegenDecorator {
 
     private fun generateReadme(codegenContext: ClientCodegenContext) =
         SdkSettings.from(codegenContext.settings).generateReadme
+}
+
+sealed class DocSection(name: String) : AdHocSection(name) {
+    data class CreateClient(val crateName: String, val clientName: String = "client", val indent: String) : DocSection("CustomExample")
 }
 
 internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenContext) {
@@ -154,8 +159,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
             ##[#{tokio}::main]
             async fn main() -> Result<(), $shortModuleName::Error> {
-                let config = #{aws_config}::load_from_env().await;
-                let client = $shortModuleName::Client::new(&config);
+                #{constructClient}
 
                 // ... make some calls with the client
 
@@ -171,6 +175,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
                 true -> AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency().toType()
                 else -> writable { rust("aws_config") }
             },
+            "constructClient" to AwsDocs.constructClient(codegenContext, indent = "    "),
         )
 
         template(

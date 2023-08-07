@@ -98,6 +98,6 @@ class UnconstrainedShapeSymbolProviderTest {
         val structureBShape = model.lookup<StructureShape>("test#StructureB")
 
         unconstrainedShapeSymbolProvider.toSymbol(structureBShape).rustType().render() shouldBe "crate::model::StructureB"
-        unconstrainedShapeSymbolProvider.toSymbol(listAShape).rustType().render() shouldBe "std::vec::Vec<crate::model::StructureB>"
+        unconstrainedShapeSymbolProvider.toSymbol(listAShape).rustType().render() shouldBe "::std::vec::Vec<crate::model::StructureB>"
     }
 }

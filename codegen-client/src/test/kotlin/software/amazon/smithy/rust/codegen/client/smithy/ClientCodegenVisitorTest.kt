@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.customize.NoOpEventStreamSigningDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -52,7 +51,6 @@ class ClientCodegenVisitorTest {
                 ClientCustomizations(),
                 RequiredCustomizations(),
                 FluentClientDecorator(),
-                NoOpEventStreamSigningDecorator(),
             )
         val visitor = ClientCodegenVisitor(ctx, codegenDecorator)
         val baselineModel = visitor.baselineTransform(model)

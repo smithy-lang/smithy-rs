@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamN
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
+import java.io.File
 import java.util.logging.Level
 
 internal class ValidateUnsupportedConstraintsAreNotUsedTest {
@@ -37,7 +38,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         """
 
     private fun validateModel(model: Model, serverCodegenConfig: ServerCodegenConfig = ServerCodegenConfig()): ValidationResult {
-        val service = model.lookup<ServiceShape>("test#TestService")
+        val service = model.serviceShapes.first()
         return validateUnsupportedConstraints(model, service, serverCodegenConfig)
     }
 
@@ -100,7 +101,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         """.trimIndent().replace("\n", " ")
     }
 
-    val constrainedShapesInEventStreamModel =
+    private val constrainedShapesInEventStreamModel =
         """
         $baseModel
 
@@ -241,5 +242,26 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
         validationResult.messages shouldHaveAtLeastSize 1
         validationResult.messages.shouldForAll { it.level shouldBe Level.WARNING }
+    }
+
+    @Test
+    fun `it should abort when ignoreUnsupportedConstraints is true and all used constraints are supported`() {
+        val allConstraintTraitsAreSupported = File("../codegen-core/common-test-models/constraints.smithy")
+            .readText()
+            .asSmithyModel()
+
+        val validationResult = validateModel(
+            allConstraintTraitsAreSupported,
+            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+        )
+
+        validationResult.messages shouldHaveSize 1
+        validationResult.shouldAbort shouldBe true
+        validationResult.messages[0].message shouldContain(
+            """
+            The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
+            effect. All the constraint traits used in the model are well-supported, please remove this flag.
+            """.trimIndent().replace("\n", " ")
+            )
     }
 }

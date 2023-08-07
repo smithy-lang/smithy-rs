@@ -6,8 +6,8 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-ARG rust_stable_version=1.66.1
-ARG rust_nightly_version=nightly-2022-11-16
+ARG rust_stable_version=1.69.0
+ARG rust_nightly_version=nightly-2023-05-31
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
@@ -80,53 +80,46 @@ RUN set -eux; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/publisher; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/changelogger; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/crate-hasher; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/difftags; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/sdk-lints; \
-    cargo +${rust_nightly_version} -Z sparse-registry install --locked --path tools/ci-build/sdk-versioner; \
+    cargo install --locked --path tools/ci-build/publisher; \
+    cargo install --locked --path tools/ci-build/changelogger; \
+    cargo install --locked --path tools/ci-build/crate-hasher; \
+    cargo install --locked --path tools/ci-build/difftags; \
+    cargo install --locked --path tools/ci-build/sdk-lints; \
+    cargo install --locked --path tools/ci-build/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
 
 FROM install_rust AS cargo_deny
 ARG cargo_deny_version=0.13.5
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-deny --locked --version ${cargo_deny_version}
+RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
 ARG cargo_udeps_version=0.1.35
 ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-udeps --locked --version ${cargo_udeps_version}
+RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
 
 FROM install_rust AS cargo_hack
 ARG cargo_hack_version=0.5.23
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-hack --locked --version ${cargo_hack_version}
+RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
 ARG cargo_minimal_versions_version=0.1.8
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
+RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.6
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
+ARG cargo_check_external_types_version=0.1.7
+RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
 ARG maturin_version=0.14.1
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install maturin --locked --version ${maturin_version}
+RUN cargo install maturin --locked --version ${maturin_version}
 
 FROM install_rust AS wasm_pack
 ARG wasm_pack_version=0.11.0
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install wasm-pack --locked --version ${wasm_pack_version}
+RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
 ARG wasmtime_precompiled_url=https://github.com/bytecodealliance/wasmtime/releases/download/v7.0.0/wasmtime-v7.0.0-x86_64-linux.tar.xz
 ARG wasmtime_precompiled_sha256=b8a1c97f9107c885ea73a5c38677d0d340a7c26879d366e8a5f3dce84cffec99
-ARG rust_nightly_version
 RUN set -eux; \
     curl "${wasmtime_precompiled_url}" -L -o wasmtime.xz; \
     echo "${wasmtime_precompiled_sha256} wasmtime.xz" | sha256sum --check; \
@@ -135,13 +128,23 @@ RUN set -eux; \
 
 FROM install_rust AS cargo_wasi
 ARG cargo_wasi_version=0.1.27
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-wasi --locked --version ${cargo_wasi_version}
+RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.19.0
+ARG cargo_semver_checks_version=0.20.0
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
+
+FROM install_rust AS cargo_mdbook
+ARG cargo_mdbook_version=0.4.30
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook --locked --version ${cargo_mdbook_version}
+
+FROM install_rust AS cargo_mdbook_mermaid
+ARG cargo_mdbook_mermaid_version=0.12.6
+ARG rust_nightly_version
+RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
+
 #
 # Final image
 #
@@ -179,8 +182,11 @@ COPY --chown=build:build --from=wasmtime /opt/wasmtime /opt/cargo/bin/wasmtime
 COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
+COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
+COPY --chown=build:build --from=cargo_mdbook_mermaid /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=$PATH:/usr/local/musl/bin/
+# TODO(Rust 1.70): The sparse registry config (`CARGO_REGISTRIES_CRATES_IO_PROTOCOL`) can be removed when upgrading to Rust 1.70
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
@@ -188,6 +194,7 @@ ENV PATH=/opt/cargo/bin:$PATH \
     GRADLE_USER_HOME=/home/build/.gradle \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
+    CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \
@@ -200,4 +207,7 @@ ENV SMITHY_RS_DOCKER_BUILD_IMAGE=1
 RUN pip3 install --no-cache-dir mypy==0.991
 WORKDIR /home/build
 COPY sanity-test /home/build/sanity-test
+# RUSTUP_TOOLCHAIN takes precedence over everything except `+<toolchain>` args. This will allow us to ignore the toolchain
+# file during CI, avoiding issues during Rust version upgrades.
+ENV RUSTUP_TOOLCHAIN=${rust_stable_version}
 RUN /home/build/sanity-test

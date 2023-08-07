@@ -13,18 +13,19 @@ use std::{
 };
 use tower::{Layer, Service};
 
-use crate::operation::Operation;
-
 use super::Plugin;
 
+// TODO(https://github.com/awslabs/smithy-rs/pull/2441#pullrequestreview-1331345692): Seems like
+// this type should land in `tower-0.5`.
 pin_project! {
-    /// Combine two different [`Future`]/[`Service`]/[`Layer`]/[`Plugin`] types into a single type.
+    /// Combine two different [`Futures`](std::future::Future)/[`Services`](tower::Service)/
+    /// [`Layers`](tower::Layer)/[`Plugins`](super::Plugin) into a single type.
     ///
-    /// # Notes on [`Future`]
+    /// # Notes on [`Future`](std::future::Future)
     ///
     /// The [`Future::Output`] must be identical.
     ///
-    /// # Notes on [`Service`]
+    /// # Notes on [`Service`](tower::Service)
     ///
     /// The [`Service::Response`] and [`Service::Error`] must be identical.
     #[derive(Clone, Debug)]
@@ -103,30 +104,21 @@ where
     }
 }
 
-impl<P, Op, S, L, Le, Ri> Plugin<P, Op, S, L> for Either<Le, Ri>
+impl<Ser, Op, T, Le, Ri> Plugin<Ser, Op, T> for Either<Le, Ri>
 where
-    Le: Plugin<P, Op, S, L>,
-    Ri: Plugin<P, Op, S, L>,
+    Le: Plugin<Ser, Op, T>,
+    Ri: Plugin<Ser, Op, T>,
 {
-    type Service = Either<Le::Service, Ri::Service>;
-    type Layer = Either<Le::Layer, Ri::Layer>;
+    type Output = Either<Le::Output, Ri::Output>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
+    fn apply(&self, input: T) -> Self::Output {
         match self {
-            Either::Left { value } => {
-                let Operation { inner, layer } = value.map(input);
-                Operation {
-                    inner: Either::Left { value: inner },
-                    layer: Either::Left { value: layer },
-                }
-            }
-            Either::Right { value } => {
-                let Operation { inner, layer } = value.map(input);
-                Operation {
-                    inner: Either::Right { value: inner },
-                    layer: Either::Right { value: layer },
-                }
-            }
+            Either::Left { value } => Either::Left {
+                value: value.apply(input),
+            },
+            Either::Right { value } => Either::Right {
+                value: value.apply(input),
+            },
         }
     }
 }

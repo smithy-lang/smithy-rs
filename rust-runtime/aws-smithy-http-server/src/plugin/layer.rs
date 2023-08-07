@@ -3,23 +3,56 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use tower::layer::util::Stack;
+use std::marker::PhantomData;
 
-use crate::operation::Operation;
+use tower::Layer;
 
-use super::Plugin;
+use super::{HttpMarker, ModelMarker, Plugin};
 
-/// A [`Plugin`] which appends a HTTP [`Layer`](tower::Layer) `L` to the existing `Layer` in [`Operation<S, Layer>`](Operation).
-pub struct HttpLayer<L>(pub L);
+/// A [`Plugin`] which acts as a [`Layer`] `L`.
+pub struct LayerPlugin<L>(pub L);
 
-impl<P, Op, S, ExistingLayer, NewLayer> Plugin<P, Op, S, ExistingLayer> for HttpLayer<NewLayer>
+impl<Ser, Op, S, L> Plugin<Ser, Op, S> for LayerPlugin<L>
 where
-    NewLayer: Clone,
+    L: Layer<S>,
 {
-    type Service = S;
-    type Layer = Stack<ExistingLayer, NewLayer>;
+    type Output = L::Service;
 
-    fn map(&self, input: Operation<S, ExistingLayer>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(self.0.clone())
+    fn apply(&self, svc: S) -> Self::Output {
+        self.0.layer(svc)
+    }
+}
+
+// Without more information about what the layer `L` does, we can't know whether it's appropriate
+// to run this plugin as a HTTP plugin or a model plugin, so we implement both marker traits.
+
+impl<L> HttpMarker for LayerPlugin<L> {}
+impl<L> ModelMarker for LayerPlugin<L> {}
+
+/// A [`Layer`] which acts as a [`Plugin`] `Pl` for specific protocol `P` and operation `Op`.
+pub struct PluginLayer<Ser, Op, Pl> {
+    plugin: Pl,
+    _ser: PhantomData<Ser>,
+    _op: PhantomData<Op>,
+}
+
+impl<S, Ser, Op, Pl> Layer<S> for PluginLayer<Ser, Op, Pl>
+where
+    Pl: Plugin<Ser, Op, S>,
+{
+    type Service = Pl::Output;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        self.plugin.apply(inner)
+    }
+}
+
+impl<Pl> PluginLayer<(), (), Pl> {
+    pub fn new<Ser, Op>(plugin: Pl) -> PluginLayer<Ser, Op, Pl> {
+        PluginLayer {
+            plugin,
+            _ser: PhantomData,
+            _op: PhantomData,
+        }
     }
 }

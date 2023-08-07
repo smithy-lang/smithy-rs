@@ -8,19 +8,26 @@ mod plugin;
 use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server::{
-    extension::OperationExtensionExt, instrumentation::InstrumentExt, plugin::PluginPipeline,
-    request::request_id::ServerRequestIdProviderLayer, AddExtensionLayer,
+    extension::OperationExtensionExt,
+    instrumentation::InstrumentExt,
+    layer::alb_health_check::AlbHealthCheckLayer,
+    plugin::{HttpPlugins, IdentityPlugin, Scoped},
+    request::request_id::ServerRequestIdProviderLayer,
+    AddExtensionLayer,
 };
 use clap::Parser;
 
+use hyper::StatusCode;
 use plugin::PrintExt;
+
 use pokemon_service::{
     do_nothing_but_log_request_ids, get_storage_with_local_approved, DEFAULT_ADDRESS, DEFAULT_PORT,
 };
 use pokemon_service_common::{
-    capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing, State,
+    capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing,
+    stream_pokemon_radio, State,
 };
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_server_sdk::{scope, PokemonService};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -38,16 +45,26 @@ pub async fn main() {
     let args = Args::parse();
     setup_tracing();
 
-    let plugins = PluginPipeline::new()
-        // Apply the `PrintPlugin` defined in `plugin.rs`
-        .print()
+    scope! {
+        /// A scope containing `GetPokemonSpecies` and `GetStorage`
+        struct PrintScope {
+            includes: [GetPokemonSpecies, GetStorage]
+        }
+    }
+    // Scope the `PrintPlugin`, defined in `plugin.rs`, to `PrintScope`
+    let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
+
+    let plugins = HttpPlugins::new()
+        // Apply the scoped `PrintPlugin`
+        .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
         // plugins or tests to access a `aws_smithy_http_server::extension::OperationExtension` from
         // `Response::extensions`, or infer routing failure when it's missing.
         .insert_operation_extension()
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument();
-    let app = PokemonService::builder_with_plugins(plugins)
+
+    let app = PokemonService::builder_with_plugins(plugins, IdentityPlugin)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -57,13 +74,18 @@ pub async fn main() {
         .capture_pokemon(capture_pokemon)
         .do_nothing(do_nothing_but_log_request_ids)
         .check_health(check_health)
+        .stream_pokemon_radio(stream_pokemon_radio)
         .build()
         .expect("failed to build an instance of PokemonService");
 
     let app = app
         // Setup shared state and middlewares.
         .layer(&AddExtensionLayer::new(Arc::new(State::default())))
-        // Add request IDs
+        // Handle `/ping` health check requests.
+        .layer(&AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+            StatusCode::OK
+        }))
+        // Add server request IDs.
         .layer(&ServerRequestIdProviderLayer::new());
 
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `SocketAddr`

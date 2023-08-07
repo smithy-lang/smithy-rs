@@ -14,7 +14,7 @@ import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.clientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.AttributeKind
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
@@ -120,10 +120,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private val moduleName = ctx.moduleUseName()
     private val endpointCustomizations = ctx.rootDecorator.endpointCustomizations(ctx)
     private val model = ctx.model
-    private val instantiator = clientInstantiator(ctx)
-
-    private fun EndpointTestOperationInput.operationId() =
-        ShapeId.fromOptionalNamespace(ctx.serviceShape.id.namespace, operationName)
+    private val instantiator = ClientInstantiator(ctx)
 
     /** the Rust SDK doesn't support SigV4a — search  endpoint.properties.authSchemes[].name */
     private fun EndpointTestCase.isSigV4a() =
@@ -183,7 +180,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private fun operationInvocation(testOperationInput: EndpointTestOperationInput) = writable {
         rust("client.${testOperationInput.operationName.toSnakeCase()}()")
         val operationInput =
-            model.expectShape(testOperationInput.operationId(), OperationShape::class.java).inputShape(model)
+            model.expectShape(ctx.operationId(testOperationInput), OperationShape::class.java).inputShape(model)
         testOperationInput.operationParams.members.forEach { (key, value) ->
             val member = operationInput.expectMember(key.value)
             rustTemplate(
@@ -217,3 +214,6 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
         }
     }
 }
+
+fun ClientCodegenContext.operationId(testOperationInput: EndpointTestOperationInput): ShapeId =
+    this.serviceShape.allOperations.first { it.name == testOperationInput.operationName }

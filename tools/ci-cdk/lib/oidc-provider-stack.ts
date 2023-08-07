@@ -17,7 +17,13 @@ import { Construct } from "constructs";
 ///
 /// This was done with the initial Idp URL of:
 /// https://token.actions.githubusercontent.com/.well-known/openid-configuration
-export const GITHUB_CERTIFICATE_THUMBPRINT = "6938FD4D98BAB03FAADB97B34396831E3780AEA1";
+///
+/// Note: as of June 27, 2023, there are now two possible thumbprints from GitHub:
+/// https://github.blog/changelog/2023-06-27-github-actions-update-on-oidc-integration-with-aws/
+export const GITHUB_CERTIFICATE_THUMBPRINTS = [
+    "6938FD4D98BAB03FAADB97B34396831E3780AEA1",
+    "1C58A3A8518E8759BF075B76B750D4F2DF264FCD",
+];
 
 // There can only be one OIDC provider for a given URL per AWS account,
 // so put these in their own stack to be shared with other stacks.
@@ -32,7 +38,7 @@ export class OidcProviderStack extends Stack {
 
         this.githubActionsOidcProvider = new OpenIdConnectProvider(this, "oidc-provider", {
             url: "https://token.actions.githubusercontent.com",
-            thumbprints: [GITHUB_CERTIFICATE_THUMBPRINT],
+            thumbprints: GITHUB_CERTIFICATE_THUMBPRINTS,
             clientIds: ["sts.amazonaws.com"],
         });
     }

@@ -45,7 +45,7 @@ around the underlying connector. When constructing operation builders, this hand
 given to the new builder instances so that their `send()` calls can initiate a request.
 
 The generated fluent client code ends up looking like this:
-```rust
+```rust,ignore
 struct Handle<C, M, R> {
     client: aws_smithy_client::Client<C, M, R>,
     conf: crate::Config,
@@ -59,7 +59,7 @@ pub struct Client<C, M, R = Standard> {
 Functions are generated per operation on the fluent client to gain access to the individual operation builders.
 For example:
 
-```rust
+```rust,ignore
 pub fn assume_role(&self) -> fluent_builders::AssumeRole<C, M, R> {
     fluent_builders::AssumeRole::new(self.handle.clone())
 }
@@ -68,7 +68,7 @@ pub fn assume_role(&self) -> fluent_builders::AssumeRole<C, M, R> {
 The fluent operation builders ultimately implement `send()`, which chooses the one and only Smithy client out
 of the handle to make the request with:
 
-```rust
+```rust,ignore
 pub struct AssumeRole<C, M, R> {
     handle: std::sync::Arc<super::Handle<C, M, R>>,
     inner: crate::input::assume_role_input::Builder,
@@ -86,7 +86,7 @@ impl<C, M, R> AssumeRole<C, M, R> where ...{
 
 Smithy clients are constructed from a connector, as shown:
 
-```rust
+```rust,ignore
 let connector = Builder::new()
     .https()
     .middleware(...)
@@ -117,7 +117,7 @@ so that alternate HTTP implementations can be used, or so that a fake implementa
 To accomplish this, `SharedConfig` will have a `make_connector` member. A customer would configure
 it as such:
 
-```rust
+```rust,ignore
 let config = some_shared_config_loader()
     .with_http_settings(my_http_settings)
     .with_make_connector(|reqs: &MakeConnectorRequirements| {
@@ -170,7 +170,7 @@ Smithy client. This cache needs to be adjusted to:
 
 To accomplish this, the `Handle` will hold a cache that is optimized for many reads and few writes:
 
-```rust
+```rust,ignore
 #[derive(Debug, Hash, Eq, PartialEq)]
 struct ConnectorKey {
     http_settings: HttpSettings,
@@ -194,7 +194,7 @@ For cases where it is not, the custom connector type can host its own `dyn Trait
 The `HttpRequirements` struct will hold `HttpSettings` as copy-on-write so that it can be used
 for cache lookup without having to clone `HttpSettings`:
 
-```rust
+```rust,ignore
 struct HttpRequirements<'a> {
     http_settings: Cow<'a, HttpSettings>,
     http_version: HttpVersion,
@@ -223,7 +223,7 @@ HTTP setting overrides are implemented. This doc is not attempting to solve that
 
 In the fluent client, this will look as follows:
 
-```rust
+```rust,ignore
 impl<C, M, R> AssumeRole<C, M, R> where ... {
     pub async fn send(self) -> Result<AssumeRoleOutput, SdkError<AssumeRoleError>> where ... {
         let input = self.create_input()?;

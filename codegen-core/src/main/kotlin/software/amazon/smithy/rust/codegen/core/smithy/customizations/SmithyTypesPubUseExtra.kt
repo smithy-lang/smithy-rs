@@ -58,6 +58,7 @@ private fun pubUseTypesThatShouldBeExported(codegenContext: CodegenContext, mode
         listOf(
             PubUseType(RuntimeType.blob(runtimeConfig), ::hasBlobs),
             PubUseType(RuntimeType.dateTime(runtimeConfig), ::hasDateTimes),
+            PubUseType(RuntimeType.format(runtimeConfig), ::hasDateTimes, "DateTimeFormat"),
         ) + RuntimeType.smithyHttp(runtimeConfig).let { http ->
             listOf(
                 PubUseType(http.resolve("byte_stream::ByteStream"), ::hasStreamingOperations),

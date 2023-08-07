@@ -9,7 +9,6 @@ use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
 use aws_smithy_client::test_connection::{capture_request, CaptureRequestReceiver};
-use std::convert::Infallible;
 use std::time::{Duration, UNIX_EPOCH};
 
 fn test_client(update_builder: fn(Builder) -> Builder) -> (CaptureRequestReceiver, Client) {
@@ -63,6 +62,29 @@ async fn dual_stack() {
     );
 }
 
+#[cfg(not(aws_sdk_middleware_mode))]
+#[tokio::test]
+async fn multi_region_access_points() {
+    let (_captured_request, client) = test_client(|b| b);
+    let response = client
+        .get_object()
+        .bucket("arn:aws:s3::123456789012:accesspoint/mfzwi23gnjvgw.mrap")
+        .key("blah")
+        .send()
+        .await;
+    let error = response.expect_err("should fail—sigv4a is not supported");
+    assert!(
+        dbg!(format!(
+            "{}",
+            aws_smithy_types::error::display::DisplayErrorContext(&error)
+        ))
+        .contains("selected auth scheme / endpoint config mismatch"),
+        "message should contain the correct error, found: {:?}",
+        error
+    );
+}
+
+#[cfg(aws_sdk_middleware_mode)]
 #[tokio::test]
 async fn multi_region_access_points() {
     let (_captured_request, client) = test_client(|b| b);
@@ -90,12 +112,7 @@ async fn s3_object_lambda() {
         .customize()
         .await
         .unwrap()
-        .map_operation(|mut op| {
-            op.properties_mut()
-                .insert(UNIX_EPOCH + Duration::from_secs(1234567890));
-            Result::<_, Infallible>::Ok(op)
-        })
-        .unwrap()
+        .request_time_for_tests(UNIX_EPOCH + Duration::from_secs(1234567890))
         .send()
         .await
         .unwrap();
@@ -133,5 +150,24 @@ async fn s3_object_lambda_no_cross_region() {
         ),
         "{}",
         err
+    );
+}
+
+#[tokio::test]
+async fn write_get_object_response() {
+    let (req, client) = test_client(|b| b);
+    let _write = client
+        .write_get_object_response()
+        .request_route("req-route")
+        .request_token("token")
+        .status_code(200)
+        .body(vec![1, 2, 3].into())
+        .send()
+        .await;
+
+    let captured_request = req.expect_request();
+    assert_eq!(
+        captured_request.uri().to_string(),
+        "https://req-route.s3-object-lambda.us-west-4.amazonaws.com/WriteGetObjectResponse?x-id=WriteGetObjectResponse"
     );
 }
