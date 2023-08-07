@@ -57,7 +57,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtoc
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
