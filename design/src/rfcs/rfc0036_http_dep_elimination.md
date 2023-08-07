@@ -42,6 +42,20 @@ If we're still on `http = 0.*` and a vulnerability is identified, we may end up 
 **API Friendliness**
 If we ship with an API that public exposes customers to `http = 0.*`, we have the API forever. We have to consider that we aren't shipping the Rust SDK for this month or even this year but probably the Rust SDK for the next 5-10 years.
 
+**Future CRT Usage**
+If we make this change, we enable a future where we can use the CRT HTTP request type natively without needing a last minute conversion to the CRT HTTP Request type.
+```rust
+struct HttpRequest {
+  inner: Inner
+}
+
+enum Inner {
+  Httpv0(http_0::Request),
+  Httpv1(http_1::Request),
+  Crt(aws_crt_http::Request)
+}
+```
+
 The user experience if this RFC is implemented
 ----------------------------------------------
 Customers are impacted in 3 main locations:
@@ -91,8 +105,6 @@ The SigV4 crate signs a number of `HTTP` types directly. We should change it to 
 ### Removing the HTTP dependency from generated clients
 Generated clients currently include a public HTTP dependency in `customize`. This should be changed to accept our `HTTP` wrapper type instead or be restricted to a subset of operations (e.g. `add_header`) while forcing users to add an interceptor if they need full control.
 
-
-In order to implement this feature, we need to add X and update Y...
 
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 Changes checklist
