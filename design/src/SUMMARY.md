@@ -6,6 +6,7 @@
 - [Transport](transport/overview.md)
   - [HTTP Operations](transport/operation.md)
   - [HTTP Middleware](transport/middleware.md)
+  - [TLS Connector](transport/connector.md)
 
 - [Smithy](./smithy/overview.md)
   - [Simple Shapes](./smithy/simple_shapes.md)
