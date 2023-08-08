@@ -634,7 +634,7 @@ mod tests {
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
         let creds = Credentials::for_tests();
-        let expiry = creds.expiry().clone();
+        let expiry = creds.expiry();
 
         v4::signing_params::Builder::default()
             .identity(Identity::new(creds, expiry))
@@ -776,8 +776,10 @@ mod tests {
     fn test_double_url_encode_path() {
         let req = test_request("double-encode-path");
         let req = SignableRequest::from(&req);
-        let mut settings = SigningSettings::default();
-        settings.session_token_mode = SessionTokenMode::Exclude;
+        let settings = SigningSettings {
+            session_token_mode: SessionTokenMode::Exclude,
+            ..Default::default()
+        };
         let signing_params = signing_params(settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
@@ -790,8 +792,10 @@ mod tests {
     fn test_double_url_encode() {
         let req = test_request("double-url-encode");
         let req = SignableRequest::from(&req);
-        let mut settings = SigningSettings::default();
-        settings.session_token_mode = SessionTokenMode::Exclude;
+        let settings = SigningSettings {
+            session_token_mode: SessionTokenMode::Exclude,
+            ..Default::default()
+        };
         let signing_params = signing_params(settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 

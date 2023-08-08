@@ -147,7 +147,7 @@ impl<'a> SigningParams<'a> {
             Self::V4a(v4a::SigningParams { identity, .. }) => identity,
         };
 
-        let expiry = credentials.expiry().clone();
+        let expiry = credentials.expiry();
         *id = Identity::new(credentials, expiry);
     }
 
