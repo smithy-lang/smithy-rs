@@ -24,7 +24,6 @@ use crate::signer::{
 use crate::event_stream::SigV4MessageSigner as EventStreamSigV4Signer;
 #[cfg(feature = "sign-eventstream")]
 use aws_smithy_eventstream::frame::DeferredSignerSender;
-use aws_smithy_runtime_api::client::identity::Identity;
 
 // TODO(enableNewSmithyRuntimeCleanup): Delete `Signature` when switching to the orchestrator
 /// Container for the request signature for use in the property bag.
@@ -194,7 +193,10 @@ impl MapRequest for SigV4SigningStage {
                 signer_sender
                     .send(Box::new(EventStreamSigV4Signer::new(
                         signature.as_ref().into(),
-                        Identity::new(creds.clone(), creds.expiry()),
+                        aws_smithy_runtime_api::client::identity::Identity::new(
+                            creds.clone(),
+                            creds.expiry(),
+                        ),
                         request_config.region.clone(),
                         request_config.service.clone(),
                         time_override,
