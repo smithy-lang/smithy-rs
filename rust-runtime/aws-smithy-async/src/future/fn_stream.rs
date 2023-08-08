@@ -6,12 +6,14 @@
 //! Utility to drive a stream with an async function and a channel.
 
 use crate::future::rendezvous;
-use futures_util::StreamExt;
 use pin_project_lite::pin_project;
+use std::fmt;
+use std::future::poll_fn;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tokio_stream::{Iter, Once, Stream};
+
+pub mod collect;
 
 pin_project! {
     /// Utility to drive a stream with an async function and a channel.
@@ -26,10 +28,9 @@ pin_project! {
     ///
     /// # Examples
     /// ```no_run
-    /// use tokio_stream::StreamExt;
     /// # async fn docs() {
     /// use aws_smithy_async::future::fn_stream::FnStream;
-    /// let stream = FnStream::new(|tx| Box::pin(async move {
+    /// let mut stream = FnStream::new(|tx| Box::pin(async move {
     ///     if let Err(_) = tx.send("Hello!").await {
     ///         return;
     ///     }
@@ -39,51 +40,85 @@ pin_project! {
     /// }));
     /// assert_eq!(stream.collect::<Vec<_>>().await, vec!["Hello!", "Goodbye!"]);
     /// # }
-    pub struct FnStream<Item, F> {
+    pub struct FnStream<Item> {
         #[pin]
         rx: rendezvous::Receiver<Item>,
-        #[pin]
-        generator: Option<F>,
+        generator: Option<Pin<Box<dyn Future<Output = ()> + Send + 'static>>>,
     }
 }
 
-impl<Item, F> FnStream<Item, F> {
+impl<Item> fmt::Debug for FnStream<Item> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let item_typename = std::any::type_name::<Item>();
+        write!(f, "FnStream<{item_typename}>")
+    }
+}
+
+impl<Item> FnStream<Item> {
     /// Creates a new function based stream driven by `generator`.
     ///
     /// For examples, see the documentation for [`FnStream`]
     pub fn new<T>(generator: T) -> Self
     where
-        T: FnOnce(rendezvous::Sender<Item>) -> F,
+        T: FnOnce(rendezvous::Sender<Item>) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>>,
     {
         let (tx, rx) = rendezvous::channel::<Item>();
         Self {
             rx,
-            generator: Some(generator(tx)),
+            generator: Some(Box::pin(generator(tx))),
         }
     }
-}
 
-impl<Item, F> Stream for FnStream<Item, F>
-where
-    F: Future<Output = ()>,
-{
-    type Item = Item;
+    /// Creates unreadable `FnStream` but useful to pass to `std::mem::swap` when extracting an
+    /// owned `FnStream` from a mutable reference.
+    pub fn taken() -> Self {
+        Self::new(|_tx| Box::pin(async move {}))
+    }
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    /// Consumes and returns the next `Item` from this stream.
+    pub async fn next(&mut self) -> Option<Item>
+    where
+        Self: Unpin,
+    {
+        let mut me = Pin::new(self);
+        poll_fn(|cx| me.as_mut().poll_next(cx)).await
+    }
+
+    /// Attempts to pull out the next value of this stream, returning `None` if the stream is
+    /// exhausted.
+    pub fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Item>> {
         let mut me = self.project();
         match me.rx.poll_recv(cx) {
             Poll::Ready(item) => Poll::Ready(item),
             Poll::Pending => {
-                if let Some(generator) = me.generator.as_mut().as_pin_mut() {
-                    if generator.poll(cx).is_ready() {
+                if let Some(generator) = me.generator {
+                    if generator.as_mut().poll(cx).is_ready() {
                         // if the generator returned ready we MUST NOT poll it again—doing so
                         // will cause a panic.
-                        me.generator.set(None);
+                        *me.generator = None;
                     }
                 }
                 Poll::Pending
             }
         }
+    }
+
+    /// Consumes this stream and gathers elements into a collection.
+    pub async fn collect<T: collect::Collectable<Item>>(mut self) -> T {
+        let mut collection = T::initialize();
+        while let Some(item) = self.next().await {
+            if !T::extend(&mut collection, item) {
+                break;
+            }
+        }
+        T::finalize(&mut collection)
+    }
+}
+
+impl<T, E> FnStream<Result<T, E>> {
+    /// Yields the next item in the stream or returns an error if an error is encountered.
+    pub async fn try_next(&mut self) -> Result<Option<T>, E> {
+        self.next().await.transpose()
     }
 }
 
@@ -93,53 +128,42 @@ where
 /// is present in each item. This provides `items()` which can wrap an stream of `Result<Page, Err>`
 /// and produce a stream of `Result<Item, Err>`.
 #[derive(Debug)]
-pub struct TryFlatMap<I>(I);
+pub struct TryFlatMap<Page, Err>(FnStream<Result<Page, Err>>);
 
-impl<I> TryFlatMap<I> {
-    /// Create a `TryFlatMap` that wraps the input
-    pub fn new(i: I) -> Self {
-        Self(i)
+impl<Page, Err> TryFlatMap<Page, Err> {
+    /// Creates a `TryFlatMap` that wraps the input.
+    pub fn new(stream: FnStream<Result<Page, Err>>) -> Self {
+        Self(stream)
     }
 
-    /// Produce a new [`Stream`] by mapping this stream with `map` then flattening the result
-    pub fn flat_map<M, Item, Iter, Page, Err>(self, map: M) -> impl Stream<Item = Result<Item, Err>>
+    /// Produces a new [`FnStream`] by mapping this stream with `map` then flattening the result.
+    pub fn flat_map<M, Item, Iter>(mut self, map: M) -> FnStream<Result<Item, Err>>
     where
-        I: Stream<Item = Result<Page, Err>>,
-        M: Fn(Page) -> Iter,
-        Iter: IntoIterator<Item = Item>,
+        Page: Send + 'static,
+        Err: Send + 'static,
+        M: Fn(Page) -> Iter + Send + 'static,
+        Item: Send + 'static,
+        Iter: IntoIterator<Item = Item> + Send,
+        <Iter as IntoIterator>::IntoIter: Send,
     {
-        self.0.flat_map(move |page| match page {
-            Ok(page) => OnceOrMany::Many {
-                many: tokio_stream::iter(map(page).into_iter().map(Ok)),
-            },
-            Err(e) => OnceOrMany::Once {
-                once: tokio_stream::once(Err(e)),
-            },
+        FnStream::new(|tx| {
+            Box::pin(async move {
+                while let Some(page) = self.0.next().await {
+                    match page {
+                        Ok(page) => {
+                            let mapped = map(page);
+                            for item in mapped.into_iter() {
+                                let _ = tx.send(Ok(item)).await;
+                            }
+                        }
+                        Err(e) => {
+                            let _ = tx.send(Err(e)).await;
+                            break;
+                        }
+                    }
+                }
+            }) as Pin<Box<dyn Future<Output = ()> + Send>>
         })
-    }
-}
-
-pin_project! {
-    /// Helper enum to to support returning `Once` and `Iter` from `Items::items`
-    #[project = OnceOrManyProj]
-    enum OnceOrMany<Item, Many> {
-        Many { #[pin] many: Iter<Many> },
-        Once { #[pin] once: Once<Item> },
-    }
-}
-
-impl<Item, Iter> Stream for OnceOrMany<Item, Iter>
-where
-    Iter: Iterator<Item = Item>,
-{
-    type Item = Item;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let me = self.project();
-        match me {
-            OnceOrManyProj::Many { many } => many.poll_next(cx),
-            OnceOrManyProj::Once { once } => once.poll_next(cx),
-        }
     }
 }
 
@@ -148,7 +172,6 @@ mod test {
     use crate::future::fn_stream::{FnStream, TryFlatMap};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
-    use tokio_stream::StreamExt;
 
     /// basic test of FnStream functionality
     #[tokio::test]
@@ -168,7 +191,24 @@ mod test {
         while let Some(value) = stream.next().await {
             out.push(value);
         }
-        assert_eq!(out, vec!["1", "2", "3"]);
+        assert_eq!(vec!["1", "2", "3"], out);
+    }
+
+    #[tokio::test]
+    async fn fn_stream_try_next() {
+        tokio::time::pause();
+        let mut stream = FnStream::new(|tx| {
+            Box::pin(async move {
+                tx.send(Ok(1)).await.unwrap();
+                tx.send(Ok(2)).await.unwrap();
+                tx.send(Err("err")).await.unwrap();
+            })
+        });
+        let mut out = vec![];
+        while let Ok(value) = stream.try_next().await {
+            out.push(value);
+        }
+        assert_eq!(vec![Some(1), Some(2)], out);
     }
 
     // smithy-rs#1902: there was a bug where we could continue to poll the generator after it
@@ -183,10 +223,16 @@ mod test {
                 Box::leak(Box::new(tx));
             })
         });
-        assert_eq!(stream.next().await, Some("blah"));
+        assert_eq!(Some("blah"), stream.next().await);
         let mut test_stream = tokio_test::task::spawn(stream);
-        assert!(test_stream.poll_next().is_pending());
-        assert!(test_stream.poll_next().is_pending());
+        let _ = test_stream.enter(|ctx, pin| {
+            let polled = pin.poll_next(ctx);
+            assert!(polled.is_pending());
+        });
+        let _ = test_stream.enter(|ctx, pin| {
+            let polled = pin.poll_next(ctx);
+            assert!(polled.is_pending());
+        });
     }
 
     /// Tests that the generator will not advance until demand exists
@@ -209,13 +255,13 @@ mod test {
         stream.next().await.expect("ready");
         assert_eq!(*progress.lock().unwrap(), 1);
 
-        assert_eq!(stream.next().await.expect("ready"), "2");
-        assert_eq!(*progress.lock().unwrap(), 2);
+        assert_eq!("2", stream.next().await.expect("ready"));
+        assert_eq!(2, *progress.lock().unwrap());
 
         let _ = stream.next().await.expect("ready");
-        assert_eq!(*progress.lock().unwrap(), 3);
-        assert_eq!(stream.next().await, None);
-        assert_eq!(*progress.lock().unwrap(), 4);
+        assert_eq!(3, *progress.lock().unwrap());
+        assert_eq!(None, stream.next().await);
+        assert_eq!(4, *progress.lock().unwrap());
     }
 
     #[tokio::test]
@@ -238,7 +284,7 @@ mod test {
         while let Some(Ok(value)) = stream.next().await {
             out.push(value);
         }
-        assert_eq!(out, vec![0, 1]);
+        assert_eq!(vec![0, 1], out);
     }
 
     #[tokio::test]
@@ -262,12 +308,12 @@ mod test {
             })
         });
         assert_eq!(
-            TryFlatMap(stream)
+            Ok(vec![1, 2, 3, 4, 5, 6]),
+            TryFlatMap::new(stream)
                 .flat_map(|output| output.items.into_iter())
                 .collect::<Result<Vec<_>, &str>>()
                 .await,
-            Ok(vec![1, 2, 3, 4, 5, 6])
-        )
+        );
     }
 
     #[tokio::test]
@@ -287,11 +333,11 @@ mod test {
             })
         });
         assert_eq!(
-            TryFlatMap(stream)
+            Err("bummer"),
+            TryFlatMap::new(stream)
                 .flat_map(|output| output.items.into_iter())
                 .collect::<Result<Vec<_>, &str>>()
-                .await,
-            Err("bummer")
+                .await
         )
     }
 }
