@@ -4,20 +4,25 @@
  */
 
 use crate::result::SdkError;
+use aws_smithy_async::future::fn_stream::FnStream;
 use aws_smithy_eventstream::frame::{MarshallMessage, SignMessage};
 use bytes::Bytes;
-use futures_core::Stream;
 use std::error::Error as StdError;
 use std::fmt;
 use std::fmt::Debug;
+use std::future::poll_fn;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::sync::Mutex;
 use std::task::{Context, Poll};
 use tracing::trace;
 
 /// Input type for Event Streams.
 pub struct EventStreamSender<T, E> {
-    input_stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send + Sync>>,
+    // `FnStream` does not have a `Sync` bound but this struct needs to be `Sync`
+    // as demonstrated by a unit test `event_stream_sender_send`.
+    // Wrapping `input_stream` with a `Mutex` will make `EventStreamSender` `Sync`.
+    input_stream: Mutex<FnStream<Result<T, E>>>,
 }
 
 impl<T, E> Debug for EventStreamSender<T, E> {
@@ -36,17 +41,19 @@ impl<T, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
         error_marshaller: impl MarshallMessage<Input = E> + Send + Sync + 'static,
         signer: impl SignMessage + Send + Sync + 'static,
     ) -> MessageStreamAdapter<T, E> {
-        MessageStreamAdapter::new(marshaller, error_marshaller, signer, self.input_stream)
+        MessageStreamAdapter::new(
+            marshaller,
+            error_marshaller,
+            signer,
+            std::mem::replace(&mut *self.input_stream.lock().unwrap(), FnStream::taken()),
+        )
     }
 }
 
-impl<T, E, S> From<S> for EventStreamSender<T, E>
-where
-    S: Stream<Item = Result<T, E>> + Send + Sync + 'static,
-{
-    fn from(stream: S) -> Self {
+impl<T, E> From<FnStream<Result<T, E>>> for EventStreamSender<T, E> {
+    fn from(stream: FnStream<Result<T, E>>) -> Self {
         EventStreamSender {
-            input_stream: Box::pin(stream),
+            input_stream: Mutex::new(stream),
         }
     }
 }
@@ -109,24 +116,24 @@ impl fmt::Display for MessageStreamError {
 /// This will yield an `Err(SdkError::ConstructionFailure)` if a message can't be
 /// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
 #[allow(missing_debug_implementations)]
-pub struct MessageStreamAdapter<T, E: StdError + Send + Sync + 'static> {
+pub struct MessageStreamAdapter<T, E> {
     marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
     error_marshaller: Box<dyn MarshallMessage<Input = E> + Send + Sync>,
     signer: Box<dyn SignMessage + Send + Sync>,
-    stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+    stream: FnStream<Result<T, E>>,
     end_signal_sent: bool,
     _phantom: PhantomData<E>,
 }
 
 impl<T, E: StdError + Send + Sync + 'static> Unpin for MessageStreamAdapter<T, E> {}
 
-impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
+impl<T, E> MessageStreamAdapter<T, E> {
     /// Create a new `MessageStreamAdapter`.
     pub fn new(
         marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
         error_marshaller: impl MarshallMessage<Input = E> + Send + Sync + 'static,
         signer: impl SignMessage + Send + Sync + 'static,
-        stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+        stream: FnStream<Result<T, E>>,
     ) -> Self {
         MessageStreamAdapter {
             marshaller: Box::new(marshaller),
@@ -139,11 +146,20 @@ impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
     }
 }
 
-impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
-    type Item = Result<Bytes, SdkError<E>>;
+impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
+    /// Consumes and returns the next item from this stream.
+    pub async fn next(&mut self) -> Option<Result<Bytes, SdkError<E>>> {
+        let mut me = Pin::new(self);
+        poll_fn(|cx| me.as_mut().poll_next(cx)).await
+    }
 
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        match self.stream.as_mut().poll_next(cx) {
+    /// Attempts to pull out the next value of this stream, returning `None` if the stream is
+    /// exhausted.
+    pub fn poll_next(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Bytes, SdkError<E>>>> {
+        match Pin::new(&mut self.stream).as_mut().poll_next(cx) {
             Poll::Ready(message_option) => {
                 if let Some(message_result) = message_option {
                     let message = match message_result {
@@ -196,14 +212,11 @@ mod tests {
     use super::MarshallMessage;
     use crate::event_stream::{EventStreamSender, MessageStreamAdapter};
     use crate::result::SdkError;
-    use async_stream::stream;
+    use aws_smithy_async::future::fn_stream::FnStream;
     use aws_smithy_eventstream::error::Error as EventStreamError;
     use aws_smithy_eventstream::frame::{
         Header, HeaderValue, Message, NoOpSigner, SignMessage, SignMessageError,
     };
-    use bytes::Bytes;
-    use futures_core::Stream;
-    use futures_util::stream::StreamExt;
     use std::error::Error as StdError;
 
     #[derive(Debug)]
@@ -267,35 +280,29 @@ mod tests {
     }
 
     #[test]
-    fn event_stream_sender_send_sync() {
-        check_send_sync(EventStreamSender::from(stream! {
-            yield Result::<_, SignMessageError>::Ok(TestMessage("test".into()));
-        }));
-    }
-
-    fn check_compatible_with_hyper_wrap_stream<S, O, E>(stream: S) -> S
-    where
-        S: Stream<Item = Result<O, E>> + Send + 'static,
-        O: Into<Bytes> + 'static,
-        E: Into<Box<dyn StdError + Send + Sync + 'static>> + 'static,
-    {
-        stream
+    fn event_stream_sender_send() {
+        check_send_sync(EventStreamSender::from(FnStream::new(|tx| {
+            Box::pin(async move {
+                let message = Result::<_, TestServiceError>::Ok(TestMessage("test".into()));
+                tx.send(message).await.expect("failed to send");
+            })
+        })));
     }
 
     #[tokio::test]
     async fn message_stream_adapter_success() {
-        let stream = stream! {
-            yield Ok(TestMessage("test".into()));
-        };
-        let mut adapter = check_compatible_with_hyper_wrap_stream(MessageStreamAdapter::<
-            TestMessage,
-            TestServiceError,
-        >::new(
+        let stream = FnStream::new(|tx| {
+            Box::pin(async move {
+                let message = Ok(TestMessage("test".into()));
+                tx.send(message).await.expect("failed to send");
+            })
+        });
+        let mut adapter = MessageStreamAdapter::<TestMessage, _>::new(
             Marshaller,
             ErrorMarshaller,
             TestSigner,
-            Box::pin(stream),
-        ));
+            stream,
+        );
 
         let mut sent_bytes = adapter.next().await.unwrap().unwrap();
         let sent = Message::read_from(&mut sent_bytes).unwrap();
@@ -313,18 +320,19 @@ mod tests {
 
     #[tokio::test]
     async fn message_stream_adapter_construction_failure() {
-        let stream = stream! {
-            yield Err(TestServiceError);
-        };
-        let mut adapter = check_compatible_with_hyper_wrap_stream(MessageStreamAdapter::<
-            TestMessage,
-            TestServiceError,
-        >::new(
+        let stream = FnStream::new(|tx| {
+            Box::pin(async move {
+                tx.send(Err(TestServiceError))
+                    .await
+                    .expect("failed to send");
+            })
+        });
+        let mut adapter = MessageStreamAdapter::<TestMessage, TestServiceError>::new(
             Marshaller,
             ErrorMarshaller,
             NoOpSigner {},
-            Box::pin(stream),
-        ));
+            stream,
+        );
 
         let result = adapter.next().await.unwrap();
         assert!(result.is_err());
@@ -332,19 +340,5 @@ mod tests {
             result.err().unwrap(),
             SdkError::ConstructionFailure(_)
         ));
-    }
-
-    // Verify the developer experience for this compiles
-    #[allow(unused)]
-    fn event_stream_input_ergonomics() {
-        fn check(input: impl Into<EventStreamSender<TestMessage, TestServiceError>>) {
-            let _: EventStreamSender<TestMessage, TestServiceError> = input.into();
-        }
-        check(stream! {
-            yield Ok(TestMessage("test".into()));
-        });
-        check(stream! {
-            yield Err(TestServiceError);
-        });
     }
 }

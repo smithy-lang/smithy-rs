@@ -20,9 +20,6 @@ allowed_external_types = [
     # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Feature gate Tokio `AsyncRead`
     "tokio::io::async_read::AsyncRead",
 
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Switch to AsyncIterator once standardized
-    "futures_core::stream::Stream",
-
     # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Feature gate references to Tokio `File`
     "tokio::fs::file::File",
 
@@ -31,4 +28,5 @@ allowed_external_types = [
 
     # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
     "aws_smithy_eventstream::*",
+    "aws_smithy_async::*",
 ]
