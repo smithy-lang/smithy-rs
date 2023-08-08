@@ -213,8 +213,7 @@ mod test_util {
 #[cfg(test)]
 mod tests {
     use crate::invocation_id::{
-        InvocationId, InvocationIdInterceptor, PredefinedInvocationIdGenerator,
-        SharedInvocationIdGenerator,
+        InvocationId, InvocationIdInterceptor, SharedInvocationIdGenerator,
     };
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{
@@ -271,7 +270,7 @@ mod tests {
         let mut cfg = ConfigBag::base();
         let mut layer = Layer::new("test");
         layer.store_put(SharedInvocationIdGenerator::new(
-            PredefinedInvocationIdGenerator::new(vec![InvocationId::new(
+            crate::invocation_id::PredefinedInvocationIdGenerator::new(vec![InvocationId::new(
                 "the-best-invocation-id".into(),
             )]),
         ));

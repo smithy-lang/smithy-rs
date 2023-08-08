@@ -161,7 +161,7 @@ pub fn sign<'a>(
     params: &'a SigningParams<'a>,
 ) -> Result<SigningOutput<SigningInstructions>, SigningError> {
     tracing::trace!(request = ?request, params = ?params, "signing request");
-    match params.settings.signature_location {
+    match params.settings().signature_location {
         SignatureLocation::Headers => {
             let (signing_headers, signature) =
                 calculate_signing_headers(&request, params)?.into_parts();
@@ -188,42 +188,38 @@ fn calculate_signing_params<'a>(
 ) -> Result<(CalculatedParams, String), SigningError> {
     let creq = CanonicalRequest::from(request, params)?;
     let encoded_creq = &v4::sha256_hex_string(creq.to_string().as_bytes());
+    let creds = params.credentials()?;
 
-    let (signature, string_to_sign) = match params.signature_version {
-        SignatureVersion::V4 => {
-            let string_to_sign = StringToSign::new_v4(
-                params.time,
-                params.region,
-                params.service_name,
-                encoded_creq,
-            )
-            .to_string();
+    let (signature, string_to_sign) = match params {
+        SigningParams::V4(params) => {
+            let string_to_sign =
+                StringToSign::new_v4(params.time, params.region, params.name, encoded_creq)
+                    .to_string();
             let signing_key = v4::generate_signing_key(
-                params.secret_key,
+                creds.secret_access_key(),
                 params.time,
                 params.region,
-                params.service_name,
+                params.name,
             );
             let signature = v4::calculate_signature(signing_key, string_to_sign.as_bytes());
             (signature, string_to_sign)
         }
         #[cfg(feature = "sigv4a")]
-        SignatureVersion::V4a => {
+        SigningParams::V4a(params) => {
             let string_to_sign = StringToSign::new_v4a(
                 params.time,
-                params.region,
+                params.region_set,
                 params.service_name,
                 encoded_creq,
             )
             .to_string();
 
             // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
-            let secret_key = v4a::generate_signing_key(params.access_key, params.secret_key);
+            let secret_key =
+                v4a::generate_signing_key(creds.access_key_id(), creds.secret_access_key());
             let signature = v4a::calculate_signature(&secret_key, string_to_sign.as_bytes());
             (signature, string_to_sign)
         }
-        #[cfg(not(feature = "sigv4a"))]
-        SignatureVersion::V4a => unreachable!(),
     };
 
     tracing::trace!(
@@ -245,14 +241,12 @@ fn calculate_signing_params<'a>(
         (param::X_AMZ_SIGNATURE, Cow::Owned(signature.clone())),
     ];
 
-    if params.signature_version.is_sigv4a() {
-        signing_params.push((
-            param::X_AMZ_REGION_SET,
-            Cow::Owned(params.region.to_owned()),
-        ));
+    #[cfg(feature = "sigv4a")]
+    if let Some(region_set) = params.region_set() {
+        signing_params.push((param::X_AMZ_REGION_SET, Cow::Owned(region_set.to_owned())));
     }
 
-    if let Some(security_token) = params.security_token {
+    if let Some(security_token) = creds.session_token() {
         signing_params.push((
             param::X_AMZ_SECURITY_TOKEN,
             Cow::Owned(security_token.to_string()),
@@ -272,6 +266,8 @@ fn calculate_signing_headers<'a>(
     request: &'a SignableRequest<'a>,
     params: &'a SigningParams<'a>,
 ) -> Result<SigningOutput<HeaderMap<HeaderValue>>, SigningError> {
+    let creds = params.credentials()?;
+
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
     let creq = CanonicalRequest::from(request, params)?;
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
@@ -279,21 +275,21 @@ fn calculate_signing_headers<'a>(
     tracing::trace!(canonical_request = %creq);
     let mut headers = HeaderMap::new();
 
-    let signature = match params.signature_version {
-        SignatureVersion::V4 => {
+    let signature = match params {
+        SigningParams::V4(params) => {
             let sts = StringToSign::new_v4(
                 params.time,
                 params.region,
-                params.service_name,
+                params.name,
                 encoded_creq.as_str(),
             );
 
             // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
             let signing_key = v4::generate_signing_key(
-                params.secret_key,
+                creds.secret_access_key(),
                 params.time,
                 params.region,
-                params.service_name,
+                params.name,
             );
             let signature = v4::calculate_signature(signing_key, sts.to_string().as_bytes());
 
@@ -303,11 +299,11 @@ fn calculate_signing_headers<'a>(
             headers.insert(
                 "authorization",
                 build_authorization_header(
-                    params.access_key,
+                    creds.access_key_id(),
                     &creq,
                     sts,
                     &signature,
-                    params.signature_version,
+                    SignatureVersion::V4,
                 ),
             );
             if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
@@ -319,7 +315,7 @@ fn calculate_signing_headers<'a>(
                 );
             }
 
-            if let Some(security_token) = params.security_token {
+            if let Some(security_token) = creds.session_token() {
                 add_header(
                     &mut headers,
                     header::X_AMZ_SECURITY_TOKEN,
@@ -330,30 +326,36 @@ fn calculate_signing_headers<'a>(
             signature
         }
         #[cfg(feature = "sigv4a")]
-        SignatureVersion::V4a => {
+        SigningParams::V4a(params) => {
             let sts = StringToSign::new_v4a(
                 params.time,
-                params.region,
+                params.region_set,
                 params.service_name,
                 encoded_creq.as_str(),
             );
 
             // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
-            let signing_key = v4a::generate_signing_key(params.access_key, params.secret_key);
+            let signing_key =
+                v4a::generate_signing_key(creds.access_key_id(), creds.secret_access_key());
             let signature = v4a::calculate_signature(&signing_key, sts.to_string().as_bytes());
 
             // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
             let values = creq.values.as_headers().expect("signing with headers");
             add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
-            add_header(&mut headers, header::X_AMZ_REGION_SET, params.region, false);
+            add_header(
+                &mut headers,
+                header::X_AMZ_REGION_SET,
+                params.region_set,
+                false,
+            );
             headers.insert(
                 "authorization",
                 build_authorization_header(
-                    params.access_key,
+                    creds.access_key_id(),
                     &creq,
                     sts,
                     &signature,
-                    params.signature_version,
+                    SignatureVersion::V4a,
                 ),
             );
             if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
@@ -365,7 +367,7 @@ fn calculate_signing_headers<'a>(
                 );
             }
 
-            if let Some(security_token) = params.security_token {
+            if let Some(security_token) = creds.session_token() {
                 add_header(
                     &mut headers,
                     header::X_AMZ_SECURITY_TOKEN,
@@ -375,8 +377,6 @@ fn calculate_signing_headers<'a>(
             }
             signature
         }
-        #[cfg(not(feature = "sigv4a"))]
-        SignatureVersion::V4a => unreachable!(),
     };
 
     Ok(SigningOutput::new(headers, signature))
@@ -397,10 +397,9 @@ fn build_authorization_header(
     signature: &str,
     signature_version: SignatureVersion,
 ) -> HeaderValue {
-    let scope = if signature_version.is_sigv4a() {
-        sts.scope.v4a_display()
-    } else {
-        sts.scope.to_string()
+    let scope = match signature_version {
+        SignatureVersion::V4a => sts.scope.v4a_display(),
+        SignatureVersion::V4 => sts.scope.to_string(),
     };
     let mut value = HeaderValue::try_from(format!(
         "{} Credential={}/{}, SignedHeaders={}, Signature={}",
@@ -424,10 +423,10 @@ mod tests {
         make_headers_comparable, test_request, test_signed_request,
         test_signed_request_query_params,
     };
-    use crate::http_request::{
-        SessionTokenMode, SignatureLocation, SigningParams, SigningSettings,
-    };
-    use crate::SignatureVersion;
+    use crate::http_request::{SessionTokenMode, SignatureLocation, SigningSettings};
+    use crate::sign::v4;
+    use aws_credential_types::Credentials;
+    use aws_smithy_runtime_api::client::identity::Identity;
     use http::{HeaderMap, HeaderValue};
     use pretty_assertions::assert_eq;
     use proptest::proptest;
@@ -445,22 +444,20 @@ mod tests {
     #[test]
     fn test_sign_vanilla_with_headers() {
         let settings = SigningSettings::default();
-        let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+        let params = v4::SigningParams {
+            identity: Identity::new(Credentials::for_tests(), None),
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
-            signature_version: SignatureVersion::V4,
-        };
+        }
+        .into();
 
         let original = test_request("get-vanilla-query-order-key-case");
         let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
-            "b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500",
+            "5557820e7380d585310524bd93d51a08d7757fb5efd7344ee12088f2b0860947",
             out.signature
         );
 
@@ -480,18 +477,26 @@ mod tests {
         use p256::ecdsa::signature::Verifier;
         use p256::ecdsa::DerSignature;
         use pretty_assertions::assert_eq;
+        use std::time::SystemTime;
         use time::format_description::well_known::Rfc3339;
         use time::OffsetDateTime;
 
         fn new_v4a_signing_params_from_context(
             test_context: &'_ test_v4a::TestContext,
             signature_location: SignatureLocation,
-        ) -> SigningParams<'_> {
-            SigningParams {
-                access_key: &test_context.credentials.access_key_id,
-                secret_key: &test_context.credentials.secret_access_key,
-                security_token: test_context.credentials.token.as_deref(),
-                region: &test_context.region,
+        ) -> crate::http_request::SigningParams<'_> {
+            let expires_in = Some(Duration::from_secs(test_context.expiration_in_seconds));
+
+            v4a::SigningParams {
+                identity: Identity::new(
+                    Credentials::from_keys(
+                        &test_context.credentials.access_key_id,
+                        &test_context.credentials.secret_access_key,
+                        test_context.credentials.token.clone(),
+                    ),
+                    expires_in.map(|t| SystemTime::UNIX_EPOCH + t),
+                ),
+                region_set: &test_context.region,
                 service_name: &test_context.service,
                 time: OffsetDateTime::parse(&test_context.timestamp, &Rfc3339)
                     .unwrap()
@@ -513,8 +518,8 @@ mod tests {
                     },
                     ..Default::default()
                 },
-                signature_version: SignatureVersion::V4a,
             }
+            .into()
         }
 
         fn run_v4a_test_suite(test_name: &str, signature_location: SignatureLocation) {
@@ -531,9 +536,13 @@ mod tests {
             let expected_string_to_sign =
                 test_v4a::test_string_to_sign(test_name, signature_location);
             let hashed_creq = &v4::sha256_hex_string(actual_creq.to_string().as_bytes());
-            let actual_string_to_sign =
-                StringToSign::new_v4a(params.time, params.region, params.service_name, hashed_creq)
-                    .to_string();
+            let actual_string_to_sign = StringToSign::new_v4a(
+                *params.time(),
+                params.region_set().unwrap(),
+                params.service_name(),
+                hashed_creq,
+            )
+            .to_string();
 
             assert_eq!(
                 expected_string_to_sign, actual_string_to_sign,
@@ -546,7 +555,9 @@ mod tests {
             // Sigv4a signatures are non-deterministic, so we can't compare the signature directly.
             out.output.apply_to_request(&mut signed);
 
-            let keypair = v4a::generate_signing_key(params.access_key, params.secret_key);
+            let creds = params.credentials().unwrap();
+            let keypair =
+                v4a::generate_signing_key(creds.access_key_id(), creds.secret_access_key());
             let sig = DerSignature::from_bytes(&hex::decode(out.signature).unwrap()).unwrap();
 
             let peer_public_key = keypair.verifying_key();
@@ -749,22 +760,20 @@ mod tests {
     fn test_sign_url_escape() {
         let test = "double-encode-path";
         let settings = SigningSettings::default();
-        let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+        let params = v4::SigningParams {
+            identity: Identity::new(Credentials::for_tests(), None),
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
-            signature_version: SignatureVersion::V4,
-        };
+        }
+        .into();
 
         let original = test_request(test);
         let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
-            "6f871eb157f326fa5f7439eb88ca200048635950ce7d6037deda56f0c95d4364",
+            "57d157672191bac40bae387e48bbe14b15303c001fdbb01f4abf295dccb09705",
             out.signature
         );
 
@@ -782,22 +791,20 @@ mod tests {
             expires_in: Some(Duration::from_secs(35)),
             ..Default::default()
         };
-        let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+        let params = v4::SigningParams {
+            identity: Identity::new(Credentials::for_tests(), None),
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
-            signature_version: SignatureVersion::V4,
-        };
+        }
+        .into();
 
         let original = test_request("get-vanilla-query-order-key-case");
         let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
-            "f25aea20f8c722ece3b363fc5d60cc91add973f9b64c42ba36fa28d57afe9019",
+            "ecce208e4b4f7d7e3a4cc22ced6acc2ad1d170ee8ba87d7165f6fa4b9aff09ab",
             out.signature
         );
 
@@ -811,16 +818,14 @@ mod tests {
     #[test]
     fn test_sign_headers_utf8() {
         let settings = SigningSettings::default();
-        let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+        let params = v4::SigningParams {
+            identity: Identity::new(Credentials::for_tests(), None),
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
-            signature_version: SignatureVersion::V4,
-        };
+        }
+        .into();
 
         let original = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
@@ -830,7 +835,7 @@ mod tests {
         let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
-            "4596b207a7fc6bdf18725369bc0cd7022cf20efbd2c19730549f42d1a403648e",
+            "55e16b31f9bde5fd04f9d3b780dd2b5e5f11a5219001f91a8ca9ec83eaf1618f",
             out.signature
         );
 
@@ -848,9 +853,9 @@ mod tests {
                 "authorization",
                 HeaderValue::from_str(
                     "AWS4-HMAC-SHA256 \
-                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        Credential=ANOTREAL/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;some-header;x-amz-date, \
-                        Signature=4596b207a7fc6bdf18725369bc0cd7022cf20efbd2c19730549f42d1a403648e",
+                        Signature=55e16b31f9bde5fd04f9d3b780dd2b5e5f11a5219001f91a8ca9ec83eaf1618f",
                 )
                 .unwrap(),
             )
@@ -865,28 +870,25 @@ mod tests {
             session_token_mode: SessionTokenMode::Exclude,
             ..Default::default()
         };
-        let mut params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+        let params = v4::SigningParams {
+            identity: Identity::new(Credentials::for_tests_with_session_token(), None),
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
-            signature_version: SignatureVersion::V4,
-        };
+        }
+        .into();
 
         let original = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .body("")
             .unwrap();
         let out_without_session_token = sign(SignableRequest::from(&original), &params).unwrap();
-        params.security_token = Some("notarealsessiontoken");
 
         let out_with_session_token_but_excluded =
             sign(SignableRequest::from(&original), &params).unwrap();
         assert_eq!(
-            "d2445d2d58e01146627c1e498dc0b4749d0cecd2cab05c5349ed132c083914e8",
+            "ab32de057edf094958d178b3c91f3c8d5c296d526b11da991cd5773d09cea560",
             out_with_session_token_but_excluded.signature
         );
         assert_eq!(
@@ -909,9 +911,9 @@ mod tests {
                 "authorization",
                 HeaderValue::from_str(
                     "AWS4-HMAC-SHA256 \
-                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        Credential=ANOTREAL/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;x-amz-date, \
-                        Signature=d2445d2d58e01146627c1e498dc0b4749d0cecd2cab05c5349ed132c083914e8",
+                        Signature=ab32de057edf094958d178b3c91f3c8d5c296d526b11da991cd5773d09cea560",
                 )
                 .unwrap(),
             )
@@ -927,16 +929,14 @@ mod tests {
     #[test]
     fn test_sign_headers_space_trimming() {
         let settings = SigningSettings::default();
-        let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+        let params = v4::SigningParams {
+            identity: Identity::new(Credentials::for_tests(), None),
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
-            signature_version: SignatureVersion::V4,
-        };
+        }
+        .into();
 
         let original = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
@@ -949,7 +949,7 @@ mod tests {
         let signable = SignableRequest::from(&original);
         let out = sign(signable, &params).unwrap();
         assert_eq!(
-            "0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
+            "244f2a0db34c97a528f22715fe01b2417b7750c8a95c7fc104a3c48d81d84c08",
             out.signature
         );
 
@@ -970,9 +970,9 @@ mod tests {
                 "authorization",
                 HeaderValue::from_str(
                     "AWS4-HMAC-SHA256 \
-                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        Credential=ANOTREAL/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;some-header;x-amz-date, \
-                        Signature=0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
+                        Signature=244f2a0db34c97a528f22715fe01b2417b7750c8a95c7fc104a3c48d81d84c08",
                 )
                 .unwrap(),
             )
@@ -984,16 +984,14 @@ mod tests {
     #[test]
     fn test_sign_headers_returning_expected_error_on_invalid_utf8() {
         let settings = SigningSettings::default();
-        let params = SigningParams {
-            access_key: "123",
-            secret_key: "asdf",
-            security_token: None,
+        let params = v4::SigningParams {
+            identity: Identity::new(Credentials::for_tests(), None),
             region: "us-east-1",
-            service_name: "foo",
+            name: "foo",
             time: std::time::SystemTime::UNIX_EPOCH,
             settings,
-            signature_version: SignatureVersion::V4,
-        };
+        }
+        .into();
 
         let req = http::Request::builder()
             .uri("https://foo.com/")
@@ -1014,16 +1012,13 @@ mod tests {
             right in proptest::collection::vec(128_u8..=255, 0..100),
         ) {
             let settings = SigningSettings::default();
-            let params = SigningParams {
-                access_key: "123",
-                secret_key: "asdf",
-                security_token: None,
+            let params = v4::SigningParams {
+                identity: Identity::new(Credentials::for_tests(), None),
                 region: "us-east-1",
-                service_name: "foo",
+                name: "foo",
                 time: std::time::SystemTime::UNIX_EPOCH,
                 settings,
-                signature_version: SignatureVersion::V4,
-            };
+            }.into();
 
             let bytes = left.iter().chain(right.iter()).cloned().collect::<Vec<_>>();
             let req = http::Request::builder()

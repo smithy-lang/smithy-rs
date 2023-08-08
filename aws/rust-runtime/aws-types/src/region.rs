@@ -81,11 +81,6 @@ impl SigningRegion {
     pub const fn from_static(region: &'static str) -> Self {
         SigningRegion(Cow::Borrowed(region))
     }
-
-    /// Get the "type name" of this struct. Useful for debugging errors with the endpoint property bag.
-    pub fn type_name() -> &'static str {
-        "signingRegion"
-    }
 }
 
 impl Storable for SigningRegion {
@@ -125,11 +120,6 @@ impl SigningRegionSet {
     pub fn from_vec(vec: Vec<String>) -> Self {
         let set = vec.join(", ");
         Self(Cow::Owned(set))
-    }
-
-    /// Get the "type name" of this struct. Useful for debugging errors with the endpoint property bag.
-    pub fn type_name() -> &'static str {
-        "signingRegionSet"
     }
 }
 

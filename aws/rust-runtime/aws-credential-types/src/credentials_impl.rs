@@ -140,9 +140,21 @@ impl Credentials {
         )
     }
 
-    /// Creates a test `Credentials`.
+    /// Creates a test `Credentials` without a session token.
     #[cfg(feature = "test-util")]
     pub fn for_tests() -> Self {
+        Self::new(
+            "ANOTREAL",
+            "notrealrnrELgWzOk3IfjzDKtFBhDby",
+            None,
+            None,
+            "test",
+        )
+    }
+
+    /// Creates a test `Credentials` with a session token.
+    #[cfg(feature = "test-util")]
+    pub fn for_tests_with_session_token() -> Self {
         Self::new(
             "ANOTREAL",
             "notrealrnrELgWzOk3IfjzDKtFBhDby",

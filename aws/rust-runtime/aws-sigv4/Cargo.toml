@@ -17,7 +17,9 @@ sigv4a = ["p256", "num-bigint", "zeroize", "aws-smithy-types"]
 [dependencies]
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", optional = true }
+aws-credential-types = { path = "../aws-credential-types" }
 bytes = "1"
 form_urlencoded = { version = "1.0", optional = true }
 hex = "0.4"
@@ -35,6 +37,7 @@ tracing = "0.1"
 zeroize = { version = "^1", optional = true }
 
 [dev-dependencies]
+aws-credential-types = { path = "../aws-credential-types", features = ["test-util", "hardcoded-credentials"] }
 criterion = "0.4"
 hex-literal = "0.4.1"
 httparse = "1.8"

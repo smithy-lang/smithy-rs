@@ -62,28 +62,6 @@ async fn dual_stack() {
     );
 }
 
-#[cfg(not(aws_sdk_middleware_mode))]
-#[tokio::test]
-async fn multi_region_access_points() {
-    let (_captured_request, client) = test_client(|b| b);
-    let response = client
-        .get_object()
-        .bucket("arn:aws:s3::123456789012:accesspoint/mfzwi23gnjvgw.mrap")
-        .key("blah")
-        .send()
-        .await;
-    let error = response.expect_err("should fail—sigv4a is not supported");
-    assert!(
-        dbg!(format!(
-            "{}",
-            aws_smithy_types::error::display::DisplayErrorContext(&error)
-        ))
-        .contains("selected auth scheme / endpoint config mismatch"),
-        "message should contain the correct error, found: {:?}",
-        error
-    );
-}
-
 #[cfg(aws_sdk_middleware_mode)]
 #[tokio::test]
 async fn multi_region_access_points() {
@@ -127,7 +105,10 @@ async fn s3_object_lambda() {
 
     assert!(
         auth_header.starts_with(expected_start),
-        "expected auth header to start with {} but it was {}",
+        "expected auth header to start with\n\
+        {}\n\
+        but it was\n\
+        {}",
         expected_start,
         auth_header
     );

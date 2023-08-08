@@ -38,10 +38,10 @@ internal class SigV4SigningDecoratorTest {
         )
         project.lib {
             unitTest(
-                "signing_service_override",
+                "signing_name_override",
                 """
                 let conf = crate::config::Config::builder().build();
-                assert_eq!(conf.signing_service(), "test-service");
+                assert_eq!(conf.signing_name(), "test-service");
                 """,
             )
         }

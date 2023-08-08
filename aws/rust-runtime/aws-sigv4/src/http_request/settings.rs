@@ -6,9 +6,6 @@
 use http::header::{HeaderName, AUTHORIZATION, USER_AGENT};
 use std::time::Duration;
 
-/// HTTP signing parameters
-pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
-
 const HEADER_NAME_X_RAY_TRACE_ID: &str = "x-amzn-trace-id";
 
 /// HTTP-specific signing settings

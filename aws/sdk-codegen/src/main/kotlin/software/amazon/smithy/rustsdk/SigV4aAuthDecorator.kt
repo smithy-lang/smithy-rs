@@ -21,20 +21,19 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class SigV4aAuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "SigV4aAuthDecorator"
-    override val order: Byte = 0
+    override val order: Byte = (SigV4AuthDecorator().order + 1).toByte()
 
     override fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
-        baseAuthOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> = baseAuthOptions.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> = baseAuthSchemeOptions.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
         it + AuthSchemeOption.StaticAuthSchemeOption(SigV4Trait.ID) {
             rustTemplate(
                 "#{scheme_id},",
@@ -62,7 +61,7 @@ class SigV4aAuthDecorator : ClientCodegenDecorator {
         }
 }
 
-private class V4aAuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
+private class V4aAuthServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
@@ -76,11 +75,6 @@ private class V4aAuthServiceRuntimePluginCustomization(private val codegenContex
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
             is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
-                if (serviceHasEventStream) {
-                    // enable the aws-runtime `sign-eventstream` feature
-                    addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
-                }
                 section.registerAuthScheme(this) {
                     rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)
                 }
@@ -96,9 +90,10 @@ private class V4aAuthOperationCustomization(private val codegenContext: ClientCo
     private val codegenScope by lazy {
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
-            "SigV4aOperationSigningConfig" to awsRuntime.resolve("auth::sigv4a::SigV4aOperationSigningConfig"),
-            "SigningOptions" to awsRuntime.resolve("auth::sigv4a::SigningOptions"),
+            "SigV4OperationSigningConfig" to awsRuntime.resolve("auth::SigV4OperationSigningConfig"),
+            "SigningOptions" to awsRuntime.resolve("auth::SigningOptions"),
             "SignableBody" to AwsRuntimeType.awsSigv4(runtimeConfig).resolve("http_request::SignableBody"),
+            "Default" to RuntimeType.Default,
         )
     }
     private val serviceIndex = ServiceIndex.of(codegenContext.model)
@@ -120,10 +115,9 @@ private class V4aAuthOperationCustomization(private val codegenContext: ClientCo
                         signing_options.normalize_uri_path = $normalizeUrlPath;
                         signing_options.payload_override = #{payload_override};
 
-                        ${section.newLayerName}.store_put(#{SigV4aOperationSigningConfig} {
-                            region_set: None,
-                            service: None,
+                        ${section.newLayerName}.store_put(#{SigV4OperationSigningConfig} {
                             signing_options,
+                            ..#{Default}::default()
                         });
                         """,
                         *codegenScope,

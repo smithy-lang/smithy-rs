@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use num_bigint::BigInt;
 use once_cell::sync::Lazy;
 use p256::ecdsa::{signature::Signer, DerSignature, SigningKey};
+use std::fmt;
 use std::io::Write;
+use std::time::SystemTime;
 use zeroize::Zeroizing;
 
 const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
@@ -68,4 +71,144 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> Signin
     };
 
     key
+}
+
+/// Parameters to use when signing.
+#[non_exhaustive]
+pub struct SigningParams<'a, S> {
+    /// The identity to use when signing a request
+    pub(crate) identity: Identity,
+    /// Region set to sign for.
+    pub(crate) region_set: &'a str,
+    /// AWS Service Name to sign for.
+    pub(crate) service_name: &'a str,
+    /// Timestamp to use in the signature (should be `SystemTime::now()` unless testing).
+    pub(crate) time: SystemTime,
+
+    /// Additional signing settings. These differ between HTTP and Event Stream.
+    pub(crate) settings: S,
+}
+
+pub(crate) const ECDSA_256: &str = "AWS4-ECDSA-P256-SHA256";
+
+impl<'a, S> SigningParams<'a, S> {
+    /// Returns the region that will be used to sign SigV4a requests
+    pub fn region_set(&self) -> &str {
+        self.region_set
+    }
+
+    /// Returns the service name that will be used to sign requests
+    pub fn service_name(&self) -> &str {
+        self.service_name
+    }
+
+    /// Return the name of the algorithm used to sign requests
+    pub fn algorithm(&self) -> &'static str {
+        ECDSA_256
+    }
+}
+
+impl<'a, S: fmt::Debug> fmt::Debug for SigningParams<'a, S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SigningParams")
+            .field("identity", &"** redacted **")
+            .field("region_set", &self.region_set)
+            .field("service_name", &self.service_name)
+            .field("time", &self.time)
+            .field("settings", &self.settings)
+            .finish()
+    }
+}
+
+impl<'a, S: Default> SigningParams<'a, S> {
+    /// Returns a builder that can create new `SigningParams`.
+    pub fn builder() -> signing_params::Builder<'a, S> {
+        Default::default()
+    }
+}
+
+/// Builder and error for creating [`SigningParams`]
+pub mod signing_params {
+    use super::SigningParams;
+    use aws_smithy_runtime_api::builder_methods;
+    use aws_smithy_runtime_api::client::identity::Identity;
+    use std::error::Error;
+    use std::fmt;
+    use std::time::SystemTime;
+
+    /// [`SigningParams`] builder error
+    #[derive(Debug)]
+    pub struct BuildError {
+        reason: &'static str,
+    }
+    impl BuildError {
+        fn new(reason: &'static str) -> Self {
+            Self { reason }
+        }
+    }
+
+    impl fmt::Display for BuildError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}", self.reason)
+        }
+    }
+
+    impl Error for BuildError {}
+
+    /// Builder that can create new [`SigningParams`]
+    #[derive(Debug, Default)]
+    pub struct Builder<'a, S> {
+        identity: Option<Identity>,
+        region_set: Option<&'a str>,
+        service_name: Option<&'a str>,
+        time: Option<SystemTime>,
+        settings: Option<S>,
+    }
+
+    impl<'a, S> Builder<'a, S> {
+        builder_methods!(
+            set_identity,
+            identity,
+            Identity,
+            "Sets the identity (required)",
+            set_region_set,
+            region_set,
+            &'a str,
+            "Sets the region set (required)",
+            set_service_name,
+            service_name,
+            &'a str,
+            "Sets the service_name (required)",
+            set_time,
+            time,
+            SystemTime,
+            "Sets the time to be used in the signature (required)",
+            set_settings,
+            settings,
+            S,
+            "Sets additional signing settings (required)"
+        );
+
+        /// Builds an instance of [`SigningParams`]. Will yield a [`BuildError`] if
+        /// a required argument was not given.
+        pub fn build(self) -> Result<SigningParams<'a, S>, BuildError> {
+            Ok(SigningParams {
+                identity: self
+                    .identity
+                    .ok_or_else(|| BuildError::new("An identity is required"))?,
+                region_set: self
+                    .region_set
+                    .ok_or_else(|| BuildError::new("region_set is required"))?,
+                service_name: self
+                    .service_name
+                    .ok_or_else(|| BuildError::new("service name is required"))?,
+                time: self
+                    .time
+                    .ok_or_else(|| BuildError::new("time is required"))?,
+                settings: self
+                    .settings
+                    .ok_or_else(|| BuildError::new("settings are required"))?,
+            })
+        }
+    }
 }

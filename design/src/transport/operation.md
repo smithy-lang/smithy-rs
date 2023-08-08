@@ -47,7 +47,7 @@ pub fn build(self, config: &dynamodb::config::Config) -> Operation<BatchExecuteS
 
     let mut req = operation::Request::new(req);
     let mut props = req.properties_mut();
-    props.insert_signing_config(config.signing_service());
+    props.insert_signing_config(config.signing_name());
     props.insert_endpoint_resolver(config.endpoint_resolver.clone());
     Operation::new(req)
 }

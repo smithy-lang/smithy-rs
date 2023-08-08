@@ -96,9 +96,10 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
     private val codegenScope by lazy {
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
-            "SigV4OperationSigningConfig" to awsRuntime.resolve("auth::sigv4::SigV4OperationSigningConfig"),
-            "SigningOptions" to awsRuntime.resolve("auth::sigv4::SigningOptions"),
+            "SigV4OperationSigningConfig" to awsRuntime.resolve("auth::SigV4OperationSigningConfig"),
+            "SigningOptions" to awsRuntime.resolve("auth::SigningOptions"),
             "SignableBody" to AwsRuntimeType.awsSigv4(runtimeConfig).resolve("http_request::SignableBody"),
+            "Default" to RuntimeType.Default,
         )
     }
     private val serviceIndex = ServiceIndex.of(codegenContext.model)
@@ -121,9 +122,8 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                         signing_options.payload_override = #{payload_override};
 
                         ${section.newLayerName}.store_put(#{SigV4OperationSigningConfig} {
-                            region: None,
-                            service: None,
                             signing_options,
+                            ..#{Default}::default()
                         });
                         """,
                         *codegenScope,

@@ -154,21 +154,21 @@ class CredentialsIdentityResolverRegistration(
                     section.registerIdentityResolver(this) {
                         rustTemplate(
                             """
-                            #{SIGV4_SCHEME_ID},
+                            #{SIGV4A_SCHEME_ID},
                             shared_identity_resolver.clone(),
                             """,
-                            "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                                .resolve("auth::sigv4::SCHEME_ID"),
+                            "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                                .resolve("auth::sigv4a::SCHEME_ID"),
                         )
                     }
                     section.registerIdentityResolver(this) {
                         rustTemplate(
                             """
-                            #{SIGV4A_SCHEME_ID},
+                            #{SIGV4_SCHEME_ID},
                             shared_identity_resolver,
                             """,
-                            "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                                .resolve("auth::sigv4a::SCHEME_ID"),
+                            "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                                .resolve("auth::sigv4::SCHEME_ID"),
                         )
                     }
                 }

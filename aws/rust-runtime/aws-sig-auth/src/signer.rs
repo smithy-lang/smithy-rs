@@ -6,16 +6,19 @@
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignableRequest,
-    SignatureLocation, SigningParams, SigningSettings, UriPathNormalizationMode,
+    SignatureLocation, SigningSettings, UriPathNormalizationMode,
 };
 use aws_smithy_http::body::SdkBody;
 use aws_types::region::SigningRegion;
-use aws_types::SigningService;
+use aws_types::SigningName;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
 use crate::middleware::Signature;
 pub use aws_sigv4::http_request::SignableBody;
+use aws_sigv4::sign::v4;
+use aws_smithy_runtime_api::client::identity::Identity;
+
 pub type SigningError = aws_sigv4::http_request::SigningError;
 
 const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
@@ -101,7 +104,7 @@ pub struct SigningOptions {
 pub struct RequestConfig<'a> {
     pub request_ts: SystemTime,
     pub region: &'a SigningRegion,
-    pub service: &'a SigningService,
+    pub service: &'a SigningName,
     pub payload_override: Option<&'a SignableBody<'static>>,
 }
 
@@ -160,7 +163,7 @@ impl SigV4Signer {
         settings: SigningSettings,
         credentials: &'a Credentials,
         request_config: &'a RequestConfig<'a>,
-    ) -> SigningParams<'a> {
+    ) -> v4::SigningParams<'a, SigningSettings> {
         if let Some(expires_in) = settings.expires_in {
             if let Some(creds_expires_time) = credentials.expiry() {
                 let presigned_expires_time = request_config.request_ts + expires_in;
@@ -170,14 +173,12 @@ impl SigV4Signer {
             }
         }
 
-        let mut builder = SigningParams::builder()
-            .access_key(credentials.access_key_id())
-            .secret_key(credentials.secret_access_key())
+        let builder = v4::SigningParams::builder()
+            .identity(Identity::new(credentials.clone(), credentials.expiry()))
             .region(request_config.region.as_ref())
-            .service_name(request_config.service.as_ref())
+            .name(request_config.service.as_ref())
             .time(request_config.request_ts)
             .settings(settings);
-        builder.set_security_token(credentials.session_token());
         builder.build().expect("all required fields set")
     }
 
@@ -217,7 +218,7 @@ impl SigV4Signer {
                 request.headers(),
                 signable_body,
             );
-            sign(signable_request, &signing_params)?
+            sign(signable_request, &signing_params.into())?
         }
         .into_parts();
 
@@ -233,7 +234,7 @@ mod tests {
     use aws_credential_types::Credentials;
     use aws_sigv4::http_request::SigningSettings;
     use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
+    use aws_types::SigningName;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
 
@@ -256,7 +257,7 @@ mod tests {
         let request_config = RequestConfig {
             request_ts: now,
             region: &SigningRegion::from_static("test"),
-            service: &SigningService::from_static("test"),
+            service: &SigningName::from_static("test"),
             payload_override: None,
         };
         SigV4Signer::signing_params(settings, &credentials, &request_config);

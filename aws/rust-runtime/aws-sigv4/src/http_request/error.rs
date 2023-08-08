@@ -11,6 +11,7 @@ use std::str::Utf8Error;
 #[derive(Debug)]
 enum SigningErrorKind {
     FailedToCreateCanonicalRequest { source: CanonicalRequestError },
+    UnsupportedIdentityType,
 }
 
 /// Error signing request
@@ -19,11 +20,26 @@ pub struct SigningError {
     kind: SigningErrorKind,
 }
 
+impl SigningError {
+    pub(crate) fn unsupported_identity_type() -> Self {
+        Self {
+            kind: SigningErrorKind::UnsupportedIdentityType,
+        }
+    }
+}
+
 impl fmt::Display for SigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use SigningErrorKind::*;
         match self.kind {
-            SigningErrorKind::FailedToCreateCanonicalRequest { .. } => {
+            FailedToCreateCanonicalRequest { .. } => {
                 write!(f, "failed to create canonical request")
+            }
+            UnsupportedIdentityType => {
+                write!(
+                    f,
+                    "this Identity type is not supported for sigv4 signing. This is a bug"
+                )
             }
         }
     }
@@ -31,8 +47,10 @@ impl fmt::Display for SigningError {
 
 impl Error for SigningError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
+        use SigningErrorKind::*;
         match &self.kind {
-            SigningErrorKind::FailedToCreateCanonicalRequest { source } => Some(source),
+            FailedToCreateCanonicalRequest { source } => Some(source),
+            UnsupportedIdentityType => None,
         }
     }
 }

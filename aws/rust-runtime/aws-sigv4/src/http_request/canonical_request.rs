@@ -14,7 +14,7 @@ use crate::http_request::{
     PayloadChecksumKind, PercentEncodingMode, SignableBody, SignatureLocation, SigningParams,
 };
 use crate::sign::v4;
-use crate::{SignatureVersion, HMAC_256};
+use crate::SignatureVersion;
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Method, Uri};
@@ -30,6 +30,7 @@ pub(crate) mod header {
     pub(crate) const X_AMZ_DATE: &str = "x-amz-date";
     pub(crate) const X_AMZ_SECURITY_TOKEN: &str = "x-amz-security-token";
     pub(crate) const X_AMZ_USER_AGENT: &str = "x-amz-user-agent";
+    #[cfg(feature = "sigv4a")]
     pub(crate) const X_AMZ_REGION_SET: &str = "x-amz-region-set";
 }
 
@@ -41,6 +42,7 @@ pub(crate) mod param {
     pub(crate) const X_AMZ_SECURITY_TOKEN: &str = "X-Amz-Security-Token";
     pub(crate) const X_AMZ_SIGNED_HEADERS: &str = "X-Amz-SignedHeaders";
     pub(crate) const X_AMZ_SIGNATURE: &str = "X-Amz-Signature";
+    #[cfg(feature = "sigv4a")]
     pub(crate) const X_AMZ_REGION_SET: &str = "X-Amz-Region-Set";
 }
 
@@ -53,6 +55,7 @@ pub(crate) struct HeaderValues<'a> {
     pub(crate) date_time: String,
     pub(crate) security_token: Option<&'a str>,
     pub(crate) signed_headers: SignedHeaders,
+    #[cfg(feature = "sigv4a")]
     pub(crate) region_set: Option<&'a str>,
 }
 
@@ -65,6 +68,7 @@ pub(crate) struct QueryParamValues<'a> {
     pub(crate) expires: String,
     pub(crate) security_token: Option<&'a str>,
     pub(crate) signed_headers: SignedHeaders,
+    #[cfg(feature = "sigv4a")]
     pub(crate) region_set: Option<&'a str>,
 }
 
@@ -134,57 +138,61 @@ impl<'a> CanonicalRequest<'a> {
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
     ) -> Result<CanonicalRequest<'b>, CanonicalRequestError> {
+        let creds = params.credentials()
+            .expect("Safe to unwrap because the credentials must be correct to get to this point. If you encounter this error, report it as a bug.");
         // Path encoding: if specified, re-encode % as %25
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
-        let path = match params.settings.uri_path_normalization_mode {
+        let path = match params.settings().uri_path_normalization_mode {
             UriPathNormalizationMode::Enabled => normalize_uri_path(path),
             UriPathNormalizationMode::Disabled => Cow::Borrowed(path),
         };
-        let path = match params.settings.percent_encoding_mode {
+        let path = match params.settings().percent_encoding_mode {
             // The string is already URI encoded, we don't need to encode everything again, just `%`
             PercentEncodingMode::Double => Cow::Owned(percent_encode_path(&path)),
             PercentEncodingMode::Single => path,
         };
         let payload_hash = Self::payload_hash(req.body());
 
-        let date_time = format_date_time(params.time);
+        let date_time = format_date_time(*params.time());
         let (signed_headers, canonical_headers) =
             Self::headers(req, params, &payload_hash, &date_time)?;
         let signed_headers = SignedHeaders::new(signed_headers);
 
-        let security_token = match params.settings.session_token_mode {
-            SessionTokenMode::Include => params.security_token,
+        let security_token = match params.settings().session_token_mode {
+            SessionTokenMode::Include => creds.session_token(),
             SessionTokenMode::Exclude => None,
         };
 
-        let values = match params.settings.signature_location {
+        let values = match params.settings().signature_location {
             SignatureLocation::Headers => SignatureValues::Headers(HeaderValues {
                 content_sha256: payload_hash,
                 date_time,
                 security_token,
                 signed_headers,
-                region_set: params
-                    .signature_version
-                    .is_sigv4a()
-                    .then_some(params.region),
+                #[cfg(feature = "sigv4a")]
+                region_set: params.region_set(),
             }),
             SignatureLocation::QueryParams => {
-                let credential = if params.signature_version.is_sigv4a() {
-                    format!(
-                        "{}/{}/{}/aws4_request",
-                        params.access_key,
-                        format_date(params.time),
-                        params.service_name,
-                    )
-                } else {
-                    format!(
-                        "{}/{}/{}/{}/aws4_request",
-                        params.access_key,
-                        format_date(params.time),
-                        params.region,
-                        params.service_name,
-                    )
+                let credential = match params {
+                    SigningParams::V4(params) => {
+                        format!(
+                            "{}/{}/{}/{}/aws4_request",
+                            creds.access_key_id(),
+                            format_date(params.time),
+                            params.region,
+                            params.name,
+                        )
+                    }
+                    #[cfg(feature = "sigv4a")]
+                    SigningParams::V4a(params) => {
+                        format!(
+                            "{}/{}/{}/aws4_request",
+                            creds.access_key_id(),
+                            format_date(params.time),
+                            params.service_name,
+                        )
+                    }
                 };
 
                 SignatureValues::QueryParams(QueryParamValues {
@@ -193,17 +201,15 @@ impl<'a> CanonicalRequest<'a> {
                     credential,
                     date_time,
                     expires: params
-                        .settings
+                        .settings()
                         .expires_in
                         .expect("presigning requires expires_in")
                         .as_secs()
                         .to_string(),
                     security_token,
                     signed_headers,
-                    region_set: params
-                        .signature_version
-                        .is_sigv4a()
-                        .then_some(params.region),
+                    #[cfg(feature = "sigv4a")]
+                    region_set: params.region_set(),
                 })
             }
         };
@@ -243,41 +249,44 @@ impl<'a> CanonicalRequest<'a> {
 
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
-        if params.settings.signature_location == SignatureLocation::Headers {
+        if params.settings().signature_location == SignatureLocation::Headers {
+            let creds = params.credentials()
+                .expect("Safe to unwrap because the credentials must be correct to get to this point. If you encounter this error, report it as a bug.");
             Self::insert_date_header(&mut canonical_headers, date_time);
 
-            if let Some(security_token) = params.security_token {
+            if let Some(security_token) = creds.session_token() {
                 let mut sec_header = HeaderValue::from_str(security_token)?;
                 sec_header.set_sensitive(true);
                 canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
             }
 
-            if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
+            if params.settings().payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
                 let header = HeaderValue::from_str(payload_hash)?;
                 canonical_headers.insert(header::X_AMZ_CONTENT_SHA_256, header);
             }
 
-            if params.signature_version.is_sigv4a() {
-                let header = HeaderValue::from_str(params.region)?;
+            #[cfg(feature = "sigv4a")]
+            if let Some(region_set) = params.region_set() {
+                let header = HeaderValue::from_str(region_set)?;
                 canonical_headers.insert(header::X_AMZ_REGION_SET, header);
             }
         }
 
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
         for name in canonical_headers.keys() {
-            if let Some(excluded_headers) = params.settings.excluded_headers.as_ref() {
+            if let Some(excluded_headers) = params.settings().excluded_headers.as_ref() {
                 if excluded_headers.contains(name) {
                     continue;
                 }
             }
 
-            if params.settings.session_token_mode == SessionTokenMode::Exclude
+            if params.settings().session_token_mode == SessionTokenMode::Exclude
                 && name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN)
             {
                 continue;
             }
 
-            if params.settings.signature_location == SignatureLocation::QueryParams {
+            if params.settings().signature_location == SignatureLocation::QueryParams {
                 // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
                 if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
                     continue;
@@ -320,6 +329,7 @@ impl<'a> CanonicalRequest<'a> {
             add_param(&mut params, param::X_AMZ_DATE, &values.date_time);
             add_param(&mut params, param::X_AMZ_EXPIRES, &values.expires);
 
+            #[cfg(feature = "sigv4a")]
             if let Some(regions) = values.region_set {
                 add_param(&mut params, param::X_AMZ_REGION_SET, regions);
             }
@@ -551,7 +561,7 @@ impl<'a> StringToSign<'a> {
             service,
         };
         Self {
-            algorithm: HMAC_256,
+            algorithm: "AWS4-HMAC-SHA256",
             scope,
             time,
             region,
@@ -574,7 +584,7 @@ impl<'a> StringToSign<'a> {
             service,
         };
         Self {
-            algorithm: crate::ECDSA_256,
+            algorithm: "AWS4-ECDSA-P256-SHA256",
             scope,
             time,
             region,
@@ -592,10 +602,9 @@ impl<'a> fmt::Display for StringToSign<'a> {
             "{}\n{}\n{}\n{}",
             self.algorithm,
             format_date_time(self.time),
-            if self.signature_version.is_sigv4a() {
-                self.scope.v4a_display()
-            } else {
-                self.scope.to_string()
+            match self.signature_version {
+                SignatureVersion::V4 => self.scope.to_string(),
+                SignatureVersion::V4a => self.scope.v4a_display(),
             },
             self.hashed_creq
         )
@@ -614,8 +623,9 @@ mod tests {
         SigningParams, SigningSettings,
     };
     use crate::sign::v4;
-    use crate::SignatureVersion;
+    use aws_credential_types::Credentials;
     use aws_smithy_http::query_writer::QueryWriter;
+    use aws_smithy_runtime_api::client::identity::Identity;
     use http::Uri;
     use http::{header::HeaderName, HeaderValue};
     use pretty_assertions::assert_eq;
@@ -623,16 +633,18 @@ mod tests {
     use std::time::Duration;
 
     fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
-        SigningParams {
-            access_key: "test-access-key",
-            secret_key: "test-secret-key",
-            security_token: None,
-            region: "test-region",
-            service_name: "testservicename",
-            time: parse_date_time("20210511T154045Z").unwrap(),
-            settings,
-            signature_version: SignatureVersion::V4,
-        }
+        let creds = Credentials::for_tests();
+        let expiry = creds.expiry().clone();
+
+        v4::signing_params::Builder::default()
+            .identity(Identity::new(creds, expiry))
+            .region("test-region")
+            .name("testservicename")
+            .time(parse_date_time("20210511T154045Z").unwrap())
+            .settings(settings)
+            .build()
+            .unwrap()
+            .into()
     }
 
     #[test]
@@ -649,6 +661,7 @@ mod tests {
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+            session_token_mode: SessionTokenMode::Exclude,
             ..Default::default()
         };
         let signing_params = signing_params(settings);
@@ -670,6 +683,7 @@ mod tests {
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+            session_token_mode: SessionTokenMode::Exclude,
             ..Default::default()
         };
         let mut signing_params = signing_params(settings);
@@ -684,7 +698,7 @@ mod tests {
             "host;x-amz-content-sha256;x-amz-date"
         );
 
-        signing_params.settings.payload_checksum_kind = PayloadChecksumKind::NoHeader;
+        signing_params.set_payload_checksum_kind(PayloadChecksumKind::NoHeader);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
     }
@@ -762,7 +776,9 @@ mod tests {
     fn test_double_url_encode_path() {
         let req = test_request("double-encode-path");
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let mut settings = SigningSettings::default();
+        settings.session_token_mode = SessionTokenMode::Exclude;
+        let signing_params = signing_params(settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test_canonical_request("double-encode-path");
@@ -774,7 +790,9 @@ mod tests {
     fn test_double_url_encode() {
         let req = test_request("double-url-encode");
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let mut settings = SigningSettings::default();
+        settings.session_token_mode = SessionTokenMode::Exclude;
+        let signing_params = signing_params(settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test_canonical_request("double-url-encode");
@@ -826,7 +844,7 @@ mod tests {
             ..Default::default()
         };
         let mut signing_params = signing_params(settings);
-        signing_params.security_token = Some("notarealsessiontoken");
+        signing_params.set_credentials(Credentials::for_tests_with_session_token());
 
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
@@ -838,7 +856,7 @@ mod tests {
             "notarealsessiontoken"
         );
 
-        signing_params.settings.session_token_mode = SessionTokenMode::Exclude;
+        signing_params.set_session_token_mode(SessionTokenMode::Exclude);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
             creq.headers.get("x-amz-security-token").unwrap(),
@@ -864,6 +882,7 @@ mod tests {
 
         let settings = SigningSettings {
             signature_location: SignatureLocation::Headers,
+            session_token_mode: SessionTokenMode::Exclude,
             ..Default::default()
         };
 

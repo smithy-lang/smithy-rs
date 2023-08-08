@@ -36,9 +36,9 @@ import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 // TODO(enableNewSmithyRuntimeCleanup): Remove this decorator (superseded by SigV4AuthDecorator)
 /**
  * The SigV4SigningDecorator:
- * - adds a `signing_service()` method to `config` to return the default signing service
+ * - adds a `signing_name()` method to `config` to return the default signing name
  * - adds a `new_event_stream_signer()` method to `config` to create an Event Stream SigV4 signer
- * - sets the `SigningService` during operation construction
+ * - sets the `SigningName` during operation construction
  * - sets a default `OperationSigningConfig` A future enhancement will customize this for specific services that need
  *   different behavior.
  */
@@ -86,7 +86,7 @@ class SigV4SigningConfig(
 ) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
-        "SigningService" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningService"),
+        "SigningName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningName"),
         "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
     )
 
@@ -101,9 +101,9 @@ class SigV4SigningConfig(
                     """
                     /// The signature version 4 service signing name to use in the credential scope when signing requests.
                     ///
-                    /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
-                    /// [`SigningService`](aws_types::SigningService) during operation construction
-                    pub fn signing_service(&self) -> &'static str {
+                    /// The signing name may be overridden by the `Endpoint`, or by specifying a custom
+                    /// [`SigningName`](aws_types::SigningName) during operation construction.
+                    pub fn signing_name(&self) -> &'static str {
                         ${sigV4Trait.name.dq()}
                     }
                     """,
@@ -113,7 +113,7 @@ class SigV4SigningConfig(
                 if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
                         """
-                        layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
+                        layer.store_put(#{SigningName}::from_static(${sigV4Trait.name.dq()}));
                         layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
                         """,
                         *codegenScope,
@@ -203,7 +203,7 @@ class SigV4SigningFeature(
                 rustTemplate(
                     """
                     ${section.request}.properties_mut().insert(signing_config);
-                    ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
+                    ${section.request}.properties_mut().insert(#{aws_types}::SigningName::from_static(${section.config}.signing_name()));
                     if let Some(region) = &${section.config}.region {
                         ${section.request}.properties_mut().insert(#{aws_types}::region::SigningRegion::from(region.clone()));
                     }

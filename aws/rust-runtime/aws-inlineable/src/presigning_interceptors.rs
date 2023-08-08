@@ -7,7 +7,8 @@
 
 use crate::presigning::PresigningConfig;
 use crate::serialization_settings::HeaderSerializationSettings;
-use aws_runtime::auth::sigv4::{HttpSignatureType, SigV4OperationSigningConfig};
+use aws_runtime::auth::HttpSignatureType;
+use aws_runtime::auth::SigV4OperationSigningConfig;
 use aws_runtime::invocation_id::InvocationIdInterceptor;
 use aws_runtime::request_info::RequestInfoInterceptor;
 use aws_runtime::user_agent::UserAgentInterceptor;
