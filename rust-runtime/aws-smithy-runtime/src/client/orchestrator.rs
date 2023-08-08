@@ -531,7 +531,10 @@ mod tests {
             Some(layer.freeze())
         }
 
-        fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        fn runtime_components(
+            &self,
+            _: &RuntimeComponentsBuilder,
+        ) -> Cow<'_, RuntimeComponentsBuilder> {
             Cow::Borrowed(&self.builder)
         }
     }
@@ -600,7 +603,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for FailingInterceptorsClientRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -617,7 +620,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for FailingInterceptorsOperationRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -901,7 +904,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for InterceptorsTestOperationRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -1240,7 +1243,10 @@ mod tests {
             builder: RuntimeComponentsBuilder,
         }
         impl RuntimePlugin for TestInterceptorRuntimePlugin {
-            fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+            fn runtime_components(
+                &self,
+                _: &RuntimeComponentsBuilder,
+            ) -> Cow<'_, RuntimeComponentsBuilder> {
                 Cow::Borrowed(&self.builder)
             }
         }
