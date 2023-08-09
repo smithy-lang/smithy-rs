@@ -159,9 +159,9 @@ class PaginatorGenerator private constructor(
 
                 /// Create the pagination stream
                 ///
-                /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
-                pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
-                #{send_bounds:W} {
+                /// _Note:_ No requests will be dispatched until the stream is used
+                /// (e.g. with [`.next().await`](aws_smithy_async::future::fn_stream::FnStream::next)).
+                pub fn send(self) -> #{fn_stream}::FnStream<#{item_type}> {
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
@@ -302,11 +302,11 @@ class PaginatorGenerator private constructor(
                 impl ${generics.inst} ${paginatorName}Items${generics.inst} #{bounds:W} {
                     /// Create the pagination stream
                     ///
-                    /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
+                    /// _Note_: No requests will be dispatched until the stream is used
+                    /// (e.g. with [`.next().await`](aws_smithy_async::future::fn_stream::FnStream::next)).
                     ///
-                    /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
-                    pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
-                    #{send_bounds:W} {
+                    /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](aws_smithy_async::future::fn_stream::FnStream::collect).
+                    pub fn send(self) -> #{fn_stream}::FnStream<#{item_type}> {
                         #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
                 }

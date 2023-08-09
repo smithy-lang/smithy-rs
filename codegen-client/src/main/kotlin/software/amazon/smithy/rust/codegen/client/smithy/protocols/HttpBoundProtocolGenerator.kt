@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -16,10 +17,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Mak
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolParserGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -73,7 +77,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
                 #{insert_into_config}
                 let adapter: #{aws_smithy_http}::event_stream::MessageStreamAdapter<_, _> =
                     ${params.outerName}.${params.memberName}.into_body_stream(marshaller, error_marshaller, signer);
-                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(adapter).into();
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(#{HyperBodyWrapStreamCompat}::new(adapter)).into();
                 body
             }
             """,
@@ -81,6 +85,12 @@ class ClientHttpBoundProtocolPayloadGenerator(
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
             "DeferredSigner" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig).resolve("frame::DeferredSigner"),
+            "HyperBodyWrapStreamCompat" to InlineDependency.forRustFile(
+                RustModule.pubCrate("stream_compat", parent = ClientRustModule.root),
+                "/inlineable/src/hyper_body_wrap_stream.rs",
+                CargoDependency.smithyHttpEventStream(codegenContext.runtimeConfig),
+                CargoDependency.FuturesCore,
+            ).toType().resolve("HyperBodyWrapStreamCompat"),
             "marshallerConstructorFn" to params.marshallerConstructorFn,
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
             "insert_into_config" to writable {
