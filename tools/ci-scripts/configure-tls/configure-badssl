@@ -8,17 +8,12 @@ set -euxo pipefail
 
 perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
 grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts | sudo tee -a /etc/hosts
-sed -i '/ 480/a \
-\techo "-----BEGIN DH PARAMETERS-----" >./certs/sets/current/gen/dhparam/dh480.pem \
-\techo "MEICPQDZ/YFp3iEs3/k9iRGoC/5/To2+5pUF/C6GkO6VjXHHyRVy68I0rI0q7IAq" >>./sets/current/gen/dhparam/dh480.pem \
-\techo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >>./sets/current/gen/dhparam/dh480.pem \
-\techo "-----END DH PARAMETERS-----" >>./sets/current/gen/dhparam/dh480.pem \
-' certs/Makefile
 sed -i '/CMD /i \
-RUN echo "-----BEGIN DH PARAMETERS-----" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "-----BEGIN DH PARAMETERS-----" >/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
 RUN echo "MEICPQDZ/YFp3iEs3/k9iRGoC/5/To2+5pUF/C6GkO6VjXHHyRVy68I0rI0q7IAq" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
 RUN echo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
 RUN echo "-----END DH PARAMETERS-----" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
 ' Dockerfile
 sed -i '/ 480/c \\ttrue' certs/Makefile
+sed -i 's%./tool sign $@ $(D) 1 sha256 req_v3_usr $^%faketime -f "-2d" ./tool sign $@ $(D) 1 sha256 req_v3_usr $^%' certs/Makefile
 screen -dmS badssl sudo make serve

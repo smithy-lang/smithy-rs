@@ -19,7 +19,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get -y install gcc make python3-pip nginx git ruby openjdk-17-jre pkg-config libssl-dev
+          sudo apt-get -y install gcc make python3-pip nginx git ruby openjdk-17-jre pkg-config libssl-dev faketime
           pip3 install certbuilder crlbuilder
       - name: Stop nginx
         run: sudo systemctl stop nginx
@@ -46,15 +46,15 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.rust_version }}
-      - name: Build SDK
-        working-directory: smithy-rs
-        run: ./gradlew :aws:sdk:assemble -Paws.services=+sts,+sso
       - name: Build badssl.com
         shell: bash
         working-directory: badssl.com
         env:
           DOCKER_BUILDKIT: 1
         run: ../smithy-rs/tools/ci-scripts/configure-tls/configure-badssl
+      - name: Build SDK
+        working-directory: smithy-rs
+        run: ./gradlew :aws:sdk:assemble -Paws.services=+sts,+sso
       - name: Build trytls
         shell: bash
         working-directory: trytls
