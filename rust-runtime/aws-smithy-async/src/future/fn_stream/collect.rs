@@ -7,7 +7,7 @@
 //! into collection.
 //!
 //! Majority of the code is borrowed from
-//! https://github.com/tokio-rs/tokio/blob/fc9518b62714daac9a38b46c698b94ac5d5b1ca2/tokio-stream/src/stream_ext/collect.rs
+//! <https://github.com/tokio-rs/tokio/blob/fc9518b62714daac9a38b46c698b94ac5d5b1ca2/tokio-stream/src/stream_ext/collect.rs>
 
 /// A trait that signifies that elements can be collected into `T`.
 ///
