@@ -30,7 +30,7 @@ use std::future::Future as StdFuture;
 use std::pin::Pin;
 
 /// Type alias for the HTTP request type that the orchestrator uses.
-pub type HttpRequest = http::Request<SdkBody>;
+pub type HttpRequest = crate::client::http::Request;
 
 /// Type alias for the HTTP response type that the orchestrator uses.
 pub type HttpResponse = http::Response<SdkBody>;

@@ -429,6 +429,8 @@ impl fmt::Display for RewindResult {
 }
 
 fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
+    request.try_clone()
+    /*
     let cloned_body = request.body().try_clone()?;
     let mut cloned_request = ::http::Request::builder()
         .uri(request.uri().clone())
@@ -440,7 +442,7 @@ fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
         cloned_request
             .body(cloned_body)
             .expect("a clone of a valid request should be a valid request"),
-    )
+    )*/
 }
 
 #[cfg(all(test, feature = "test-util"))]
@@ -449,6 +451,10 @@ mod tests {
     use aws_smithy_http::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
+
+    fn req() -> HttpRequest {
+        HttpRequest::try_from(http::Request::new(SdkBody::empty())).unwrap()
+    }
 
     #[test]
     fn test_success_transitions() {
@@ -461,7 +467,7 @@ mod tests {
 
         context.enter_serialization_phase();
         let _ = context.take_input();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(req());
 
         context.enter_before_transmit_phase();
         context.request();
@@ -502,12 +508,7 @@ mod tests {
 
         context.enter_serialization_phase();
         let _ = context.take_input();
-        context.set_request(
-            http::Request::builder()
-                .header("test", "the-original-un-mutated-request")
-                .body(SdkBody::empty())
-                .unwrap(),
-        );
+        context.set_request(req);
         context.enter_before_transmit_phase();
         context.save_checkpoint();
         assert_eq!(context.rewind(&mut cfg), RewindResult::Unnecessary);

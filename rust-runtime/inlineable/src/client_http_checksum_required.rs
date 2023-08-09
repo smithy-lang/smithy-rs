@@ -4,6 +4,7 @@
  */
 
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::http::request::HeaderValue;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
 use aws_smithy_runtime_api::client::runtime_components::{
@@ -55,12 +56,9 @@ impl Interceptor for HttpChecksumRequiredInterceptor {
             .bytes()
             .expect("checksum can only be computed for non-streaming operations");
         let checksum = <md5::Md5 as md5::Digest>::digest(body_bytes);
-        request.headers_mut().insert(
-            HeaderName::from_static("content-md5"),
-            base64::encode(&checksum[..])
-                .parse()
-                .expect("checksum is a valid header value"),
-        );
+        request
+            .headers_mut()
+            .insert("content-md5", base64::encode(&checksum[..]));
         Ok(())
     }
 }

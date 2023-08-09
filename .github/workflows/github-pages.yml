@@ -37,7 +37,7 @@ jobs:
 
         pushd design &>/dev/null
         cargo install mdbook
-        cargo install mdbook-mermaid
+        cargo install --locked mdbook-mermaid
         mdbook build --dest-dir ../../output
         popd &>/dev/null
 

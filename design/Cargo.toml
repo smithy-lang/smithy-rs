@@ -1,0 +1,10 @@
+## cargo.toml file for the book
+[package]
+name = "book-test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Cargo.toml to facilitate testing the book"
+
+[dependencies]
+http = "0.2.9"
