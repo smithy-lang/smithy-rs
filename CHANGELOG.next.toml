@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "`RuntimeComponents` are now re-exported so that implementing a custom interceptor doens't require directly depending on `aws-smithy-runtime-api`."
+references = ["smithy-rs#2904", "aws-sdk-rust#862"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`RuntimeComponents` and `RuntimeComponentsBuilder` are now re-exported in generated clients so that implementing a custom interceptor or runtime plugin doens't require directly depending on `aws-smithy-runtime-api`."
+references = ["smithy-rs#2904"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
