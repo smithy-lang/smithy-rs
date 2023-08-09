@@ -121,7 +121,7 @@ operation NoInputOutput {}
         id: "empty_output",
         protocol: rpcv2,
         documentation: "When output structure is empty we write CBOR equivalent of {}",
-        body: "",
+        body: "v/8=",
         bodyMediaType: "application/cbor",
         headers: {
             "smithy-protocol": "rpc-v2-cbor",
@@ -158,7 +158,7 @@ operation EmptyInputOutput {
         id: "optional_output",
         protocol: rpcv2,
         documentation: "When output is empty we write CBOR equivalent of {}",
-        body: "",
+        body: "v/8=",
         bodyMediaType: "application/cbor",
         headers: {
             "smithy-protocol": "rpc-v2-cbor",
