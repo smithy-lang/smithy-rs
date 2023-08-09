@@ -24,3 +24,5 @@ pub mod auth;
 pub mod connectors;
 
 pub mod ser_de;
+
+pub mod http;
