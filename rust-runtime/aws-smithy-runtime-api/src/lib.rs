@@ -34,3 +34,6 @@ pub mod client;
 /// Internal builder macros. Not intended to be used outside of the aws-smithy-runtime crates.
 #[doc(hidden)]
 pub mod macros;
+
+#[cfg(feature = "test-util")]
+pub mod test_util;

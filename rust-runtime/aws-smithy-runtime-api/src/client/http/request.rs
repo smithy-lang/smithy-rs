@@ -14,6 +14,8 @@ use std::str::FromStr;
 /// An HTTP Request Type
 pub struct Request<B = SdkBody> {
     inner: http0::Request<B>,
+    /// Keep a cache of a string-representation of URI
+    uri_string: String,
 }
 
 impl<B: Debug> Debug for Request<B> {
@@ -45,6 +47,16 @@ impl<B> Request<B> {
     pub fn body(&self) -> &B {
         self.inner.body()
     }
+
+    /// Returns the method associated with this request
+    pub fn method(&self) -> &str {
+        self.inner.method().as_str()
+    }
+
+    /// Returns the URI associated with this request
+    pub fn uri(&self) -> &str {
+        &self.uri_string
+    }
 }
 
 impl Request<SdkBody> {
@@ -64,6 +76,7 @@ impl Request<SdkBody> {
             inner: cloned_request
                 .body(body)
                 .expect("valid->valid must still be valid"),
+            uri_string: self.uri_string.clone(),
         })
     }
 }
@@ -80,7 +93,10 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
         {
             Err(Error::erase(e))
         } else {
-            Ok(Self { inner: value })
+            Ok(Self {
+                uri_string: value.uri().to_string(),
+                inner: value,
+            })
         }
     }
 }

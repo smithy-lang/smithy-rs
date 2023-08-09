@@ -17,10 +17,11 @@ use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_types::DateTime;
 use http::{HeaderName, HeaderValue};
 use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
 use std::time::Duration;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
-const AMZ_SDK_REQUEST: HeaderName = HeaderName::from_static("amz-sdk-request");
+const AMZ_SDK_REQUEST: &str = "amz-sdk-request";
 
 /// Generates and attaches a request header that communicates request-related metadata.
 /// Examples include:
@@ -118,8 +119,8 @@ impl Interceptor for RequestInfoInterceptor {
             pairs = pairs.with_pair(pair);
         }
 
-        let headers = context.request_mut().headers_mut();
-        headers.insert(AMZ_SDK_REQUEST, pairs.try_into_header_value()?);
+        let mut headers = context.request_mut().headers_mut();
+        headers.try_insert(AMZ_SDK_REQUEST, pairs.into_header())?;
 
         Ok(())
     }
@@ -151,27 +152,22 @@ impl RequestPairs {
     }
 
     /// Converts the `RequestPairs` builder into a `HeaderValue`.
-    pub fn try_into_header_value(self) -> Result<HeaderValue, BoxError> {
-        self.try_into()
+    pub fn into_header(self) -> String {
+        self.to_string()
     }
 }
 
-impl TryFrom<RequestPairs> for HeaderValue {
-    type Error = BoxError;
-
-    fn try_from(value: RequestPairs) -> Result<Self, BoxError> {
-        let mut pairs = String::new();
-        for (key, value) in value.inner {
-            if !pairs.is_empty() {
-                pairs.push_str("; ");
+impl Display for RequestPairs {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        for (idx, (key, value)) in self.inner.iter().enumerate() {
+            if !idx == 0 {
+                write!(f, "; ")?;
             }
 
-            pairs.push_str(&key);
-            pairs.push('=');
-            pairs.push_str(&value);
+            write!(f, "{}={}", key, value)?;
             continue;
         }
-        HeaderValue::from_str(&pairs).map_err(Into::into)
+        Ok(())
     }
 }
 
@@ -198,8 +194,6 @@ mod tests {
             .headers()
             .get(header_name)
             .unwrap()
-            .to_str()
-            .unwrap()
     }
 
     #[test]
@@ -207,7 +201,13 @@ mod tests {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(
+            http::Request::builder()
+                .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
 
         let mut layer = Layer::new("test");
         layer.store_put(RetryConfig::standard());
@@ -244,6 +244,7 @@ mod tests {
             ))
             .with_pair(("allowed-whitespace", " \t"));
         let _header_value: HeaderValue = rp
+            .to_string()
             .try_into()
             .expect("request pairs can be converted into valid header value.");
     }

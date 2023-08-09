@@ -430,24 +430,12 @@ impl fmt::Display for RewindResult {
 
 fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
     request.try_clone()
-    /*
-    let cloned_body = request.body().try_clone()?;
-    let mut cloned_request = ::http::Request::builder()
-        .uri(request.uri().clone())
-        .method(request.method());
-    *cloned_request
-        .headers_mut()
-        .expect("builder has not been modified, headers must be valid") = request.headers().clone();
-    Some(
-        cloned_request
-            .body(cloned_body)
-            .expect("a clone of a valid request should be a valid request"),
-    )*/
 }
 
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
+    use crate::test_util::capture_test_logs::capture_test_logs;
     use aws_smithy_http::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
@@ -498,6 +486,7 @@ mod tests {
 
     #[test]
     fn test_rewind_for_retry() {
+        let _guard = capture_test_logs();
         let mut cfg = ConfigBag::base();
         let input = Input::doesnt_matter();
         let output = Output::erase("output".to_string());
@@ -508,16 +497,21 @@ mod tests {
 
         context.enter_serialization_phase();
         let _ = context.take_input();
-        context.set_request(req);
+        context.set_request(req());
+        context
+            .request_mut()
+            .unwrap()
+            .headers_mut()
+            .insert("test", "the-original-un-mutated-request");
         context.enter_before_transmit_phase();
         context.save_checkpoint();
         assert_eq!(context.rewind(&mut cfg), RewindResult::Unnecessary);
         // Modify the test header post-checkpoint to simulate modifying the request for signing or a mutating interceptor
-        context.request_mut().unwrap().headers_mut().remove("test");
-        context.request_mut().unwrap().headers_mut().insert(
-            "test",
-            HeaderValue::from_static("request-modified-after-signing"),
-        );
+        context
+            .request_mut()
+            .unwrap()
+            .headers_mut()
+            .insert("test", "request-modified-after-signing");
 
         context.enter_transmit_phase();
         let request = context.take_request().unwrap();
@@ -561,7 +555,9 @@ mod tests {
             .header(CONTENT_LENGTH, 456)
             .header(AUTHORIZATION, "Token: hello")
             .body(SdkBody::from("hello world!"))
-            .expect("valid request");
+            .expect("valid request")
+            .try_into()
+            .unwrap();
         let cloned = try_clone(&request).expect("request is cloneable");
 
         assert_eq!(&Uri::from_static("https://www.amazon.com"), cloned.uri());

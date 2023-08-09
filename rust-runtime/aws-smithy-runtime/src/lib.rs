@@ -27,4 +27,4 @@ pub mod static_partition_map;
 
 /// General testing utilities.
 #[cfg(feature = "test-util")]
-pub mod test_util;
+pub use aws_smithy_runtime_api::test_util;
