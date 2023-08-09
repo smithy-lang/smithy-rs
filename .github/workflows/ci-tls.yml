@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # This workflow tests the TLS configuration of the smithy-rs client
+# To run on an Ubuntu machine, run each step in this order.
+# Each script can be run on your Ubuntu host.
+# You will have to install Docker and rustc/cargo manually.
 
 env:
   rust_version: 1.68.2
