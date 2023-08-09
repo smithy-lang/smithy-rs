@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -euxo pipefail
+
+perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
+grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts | sudo tee -a /etc/hosts
+# badssl fails to create dh480.pem on our Ubuntu host.
+# Create it manually inside the docker container.
+sed -i '/CMD /i \
+RUN echo "-----BEGIN DH PARAMETERS-----" >/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "MEICPQDZ/YFp3iEs3/k9iRGoC/5/To2+5pUF/C6GkO6VjXHHyRVy68I0rI0q7IAq" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "-----END DH PARAMETERS-----" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+' Dockerfile
+sed -i '/ 480/c \\ttrue' certs/Makefile
+# badssl does not create an expired certificate;
+# it creates a certificate that expires after 1 day and waits for 1 day to run the "expired certificate" test.
+# This command patches this behavior to run the test immediately.
+# See: https://github.com/chromium/badssl.com/blob/df8d5a9d062f4b99fc19d8aacdea5333b399d624/certs/Makefile#L177
+sed -i 's%./tool sign $@ $(D) 1 sha256 req_v3_usr $^%faketime -f "-2d" ./tool sign $@ $(D) 1 sha256 req_v3_usr $^%' certs/Makefile
+screen -dmS badssl sudo make serve

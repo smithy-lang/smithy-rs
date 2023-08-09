@@ -1,0 +1,14 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -euxo pipefail
+
+perl -p -i -e 's!\./runners!runners!' setup.py
+sed -i '/import platform/a import distro' runners/trytls/utils.py
+sed -i 's/platform.linux_distribution()/distro.name(), distro.version(), distro.id()/' runners/trytls/utils.py
+sed -i 's/break//' runners/trytls/bundles/https.py
+perl -p -i -e 's/badssl\.com/badssl.test/g; s/badtls\.io/badtls.test/g;' runners/trytls/bundles/https.py
+pip3 install -e .
