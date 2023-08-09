@@ -288,7 +288,12 @@ impl ByteStream {
         Some(self.inner.next().await?.map_err(Error::streaming))
     }
 
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Result<Bytes, Error>>> {
+    /// Attempts to pull out the next value of this stream, returning `None` if the stream is
+    /// exhausted.
+    pub fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Bytes, Error>>> {
         self.project().inner.poll_next(cx).map_err(Error::streaming)
     }
 

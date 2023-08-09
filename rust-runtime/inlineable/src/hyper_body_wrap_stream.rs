@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_http::byte_stream::error::Error as ByteStreamError;
+use aws_smithy_http::byte_stream::ByteStream;
 use aws_smithy_http::event_stream::MessageStreamAdapter;
 use aws_smithy_http::result::SdkError;
 use bytes::Bytes;
@@ -11,18 +13,38 @@ use std::error::Error as StdError;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-pub(crate) struct HyperBodyWrapStreamCompat<T, E>(MessageStreamAdapter<T, E>);
+pub(crate) struct HyperBodyWrapEventStream<T, E>(MessageStreamAdapter<T, E>);
 
-impl<T, E> HyperBodyWrapStreamCompat<T, E> {
+impl<T, E> HyperBodyWrapEventStream<T, E> {
+    #[allow(dead_code)]
     pub(crate) fn new(adapter: MessageStreamAdapter<T, E>) -> Self {
         Self(adapter)
     }
 }
 
-impl<T, E: StdError + Send + Sync + 'static> Unpin for HyperBodyWrapStreamCompat<T, E> {}
+impl<T, E: StdError + Send + Sync + 'static> Unpin for HyperBodyWrapEventStream<T, E> {}
 
-impl<T, E: StdError + Send + Sync + 'static> Stream for HyperBodyWrapStreamCompat<T, E> {
+impl<T, E: StdError + Send + Sync + 'static> Stream for HyperBodyWrapEventStream<T, E> {
     type Item = Result<Bytes, SdkError<E>>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.0).poll_next(cx)
+    }
+}
+
+pub(crate) struct HyperBodyWrapByteStream(ByteStream);
+
+impl HyperBodyWrapByteStream {
+    #[allow(dead_code)]
+    pub(crate) fn new(stream: ByteStream) -> Self {
+        Self(stream)
+    }
+}
+
+impl Unpin for HyperBodyWrapByteStream {}
+
+impl Stream for HyperBodyWrapByteStream {
+    type Item = Result<Bytes, ByteStreamError>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Pin::new(&mut self.0).poll_next(cx)
@@ -79,14 +101,14 @@ mod tests {
     }
 
     #[test]
-    fn test_message_adapter_stream_is_compatible_with_hyper_wrap_stream() {
+    fn test_message_adapter_stream_can_be_made_compatible_with_hyper_wrap_stream() {
         let stream = FnStream::new(|tx| {
             Box::pin(async move {
                 let message = Ok(TestMessage("test".into()));
                 tx.send(message).await.expect("failed to send");
             })
         });
-        check_compatible_with_hyper_wrap_stream(HyperBodyWrapStreamCompat(MessageStreamAdapter::<
+        check_compatible_with_hyper_wrap_stream(HyperBodyWrapEventStream(MessageStreamAdapter::<
             TestMessage,
             TestServiceError,
         >::new(
@@ -95,5 +117,11 @@ mod tests {
             NoOpSigner {},
             stream,
         )));
+    }
+
+    #[test]
+    fn test_byte_stream_stream_can_be_made_compatible_with_hyper_wrap_stream() {
+        let stream = ByteStream::from_static(b"Hello world");
+        check_compatible_with_hyper_wrap_stream(HyperBodyWrapByteStream::new(stream));
     }
 }
