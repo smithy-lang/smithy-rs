@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use async_stream::stream;
 use aws_sdk_transcribestreaming::config::{Credentials, Region};
 use aws_sdk_transcribestreaming::error::SdkError;
 use aws_sdk_transcribestreaming::operation::start_stream_transcription::StartStreamTranscriptionOutput;
@@ -13,10 +12,10 @@ use aws_sdk_transcribestreaming::types::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
 use aws_sdk_transcribestreaming::{Client, Config};
+use aws_smithy_async::future::fn_stream::FnStream;
 use aws_smithy_client::dvr::{Event, ReplayingConnection};
 use aws_smithy_eventstream::frame::{DecodedFrame, HeaderValue, Message, MessageFrameDecoder};
 use bytes::BufMut;
-use futures_core::Stream;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error as StdError;
 
@@ -24,12 +23,18 @@ const CHUNK_SIZE: usize = 8192;
 
 #[tokio::test]
 async fn test_success() {
-    let input_stream = stream! {
-        let pcm = pcm_data();
-        for chunk in pcm.chunks(CHUNK_SIZE) {
-            yield Ok(AudioStream::AudioEvent(AudioEvent::builder().audio_chunk(Blob::new(chunk)).build()));
-        }
-    };
+    let input_stream = FnStream::new(|tx| {
+        Box::pin(async move {
+            let pcm = pcm_data();
+            for chunk in pcm.chunks(CHUNK_SIZE) {
+                tx.send(Ok(AudioStream::AudioEvent(
+                    AudioEvent::builder().audio_chunk(Blob::new(chunk)).build(),
+                )))
+                .await
+                .expect("send should succeed");
+            }
+        })
+    });
     let (replayer, mut output) =
         start_request("us-west-2", include_str!("success.json"), input_stream).await;
 
@@ -65,12 +70,18 @@ async fn test_success() {
 
 #[tokio::test]
 async fn test_error() {
-    let input_stream = stream! {
-        let pcm = pcm_data();
-        for chunk in pcm.chunks(CHUNK_SIZE).take(1) {
-            yield Ok(AudioStream::AudioEvent(AudioEvent::builder().audio_chunk(Blob::new(chunk)).build()));
-        }
-    };
+    let input_stream = FnStream::new(|tx| {
+        Box::pin(async move {
+            let pcm = pcm_data();
+            for chunk in pcm.chunks(CHUNK_SIZE).take(1) {
+                tx.send(Ok(AudioStream::AudioEvent(
+                    AudioEvent::builder().audio_chunk(Blob::new(chunk)).build(),
+                )))
+                .await
+                .expect("send should succeed");
+            }
+        })
+    });
     let (replayer, mut output) =
         start_request("us-east-1", include_str!("error.json"), input_stream).await;
 
@@ -97,7 +108,7 @@ async fn test_error() {
 async fn start_request(
     region: &'static str,
     events_json: &str,
-    input_stream: impl Stream<Item = Result<AudioStream, AudioStreamError>> + Send + Sync + 'static,
+    input_stream: FnStream<Result<AudioStream, AudioStreamError>>,
 ) -> (ReplayingConnection, StartStreamTranscriptionOutput) {
     let events: Vec<Event> = serde_json::from_str(events_json).unwrap();
     let replayer = ReplayingConnection::new(events);

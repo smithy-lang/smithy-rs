@@ -126,7 +126,7 @@ class TranscribeTestDependencies : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(AsyncStream)
-            addDependency(FuturesCore)
+            addDependency(FuturesCore.toDevDependency())
             addDependency(Hound)
         }
 }
