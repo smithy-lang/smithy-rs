@@ -462,15 +462,15 @@ class DefaultProtocolTestGenerator(
         if (body == "") {
             rustWriter.rustTemplate(
                 """
-                // No body
-                #{AssertEq}(::std::str::from_utf8(body).unwrap(), "");
+                // No body.
+                #{AssertEq}(&body, &bytes::Bytes::new());
                 """,
                 *codegenScope,
             )
         } else {
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
-                rustWriter.write(
+                rust(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",

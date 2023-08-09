@@ -38,8 +38,8 @@ pub mod test_helpers {
     }
 }
 
-/// When there are no modeled inputs,
-/// a request body is empty and the content-type request header must not be set
+/// When there are no modeled inputs, a request body is empty and the content-type request header
+/// must not be set.
 #[allow(clippy::result_large_err)]
 pub fn content_type_header_empty_body_no_modeled_input(headers: &HeaderMap) -> Result<(), MissingContentTypeReason> {
     if headers.contains_key(http::header::CONTENT_TYPE) {

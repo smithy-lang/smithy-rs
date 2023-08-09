@@ -308,11 +308,11 @@ pub fn validate_body<T: AsRef<[u8]>>(
     let body_str = std::str::from_utf8(actual_body.as_ref());
     match (media_type, body_str) {
         (MediaType::Json, Ok(actual_body)) => try_json_eq(actual_body, expected_body),
-        (MediaType::Xml, Ok(actual_body)) => try_xml_equivalent(actual_body, expected_body),
         (MediaType::Json, Err(_)) => Err(ProtocolTestFailure::InvalidBodyFormat {
             expected: "json".to_owned(),
             found: "input was not valid UTF-8".to_owned(),
         }),
+        (MediaType::Xml, Ok(actual_body)) => try_xml_equivalent(actual_body, expected_body),
         (MediaType::Xml, Err(_)) => Err(ProtocolTestFailure::InvalidBodyFormat {
             expected: "XML".to_owned(),
             found: "input was not valid UTF-8".to_owned(),

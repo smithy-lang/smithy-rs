@@ -37,7 +37,6 @@ class RequestSerializerGenerator(
     private val codegenScope by lazy {
         val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
         val interceptorContext = runtimeApi.resolve("client::interceptors::context")
-        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         arrayOf(
             *preludeScope,
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),

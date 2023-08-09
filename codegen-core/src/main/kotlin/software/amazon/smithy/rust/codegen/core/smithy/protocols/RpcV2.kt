@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborS
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
+import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 
 class RpcV2HttpBindingResolver(
@@ -57,8 +58,20 @@ class RpcV2HttpBindingResolver(
     override fun responseBindings(operationShape: OperationShape) = bindings(operationShape.outputShape)
     override fun errorResponseBindings(errorShape: ToShapeId) = bindings(errorShape)
 
+    // TODO This should return null when operationShape has no members, and we should not rely on our janky
+    //  `serverContentTypeCheckNoModeledInput`. Same goes for restJson1 protocol.
     override fun requestContentType(operationShape: OperationShape): String = "application/cbor"
-    override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
+
+    /**
+     * > Responses for operations with no defined output type MUST NOT contain bodies in their HTTP responses.
+     * > The `Content-Type` for the serialization format MUST NOT be set.
+     */
+    override fun responseContentType(operationShape: OperationShape): String? =
+        if (operationShape.outputShape(model).members().isEmpty()) {
+            null
+        } else {
+            requestContentType(operationShape)
+        }
 }
 
 /**
@@ -82,6 +95,9 @@ open class RpcV2(val codegenContext: CodegenContext) : Protocol {
     // Note that [CborParserGenerator] and [CborSerializerGenerator] automatically (de)serialize timestamps
     // using floating point seconds from the epoch.
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.EPOCH_SECONDS
+
+    override fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        listOf("smithy-protocol" to "rpc-v2-cbor")
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
         CborParserGenerator(codegenContext, httpBindingResolver)

@@ -619,13 +619,13 @@ class ServerProtocolTestGenerator(
             rustWriter.rustTemplate(
                 """
                 // No body.
-                #{AssertEq}(std::str::from_utf8(&body).unwrap(), "");
+                #{AssertEq}(&body, &bytes::Bytes::new());
                 """,
                 *codegenScope,
             )
         } else {
             assertOk(rustWriter) {
-                rustWriter.rust(
+                rust(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",

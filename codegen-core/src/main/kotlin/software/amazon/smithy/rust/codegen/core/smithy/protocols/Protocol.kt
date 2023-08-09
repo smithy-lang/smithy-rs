@@ -27,11 +27,28 @@ interface Protocol {
     /** The timestamp format that should be used if no override is specified in the model */
     val defaultTimestampFormat: TimestampFormatTrait.Format
 
-    /** Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol. */
+    /**
+     * Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol.
+     *
+     * These MUST all be lowercase, or the application will panic, as per
+     * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
+     */
     fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
 
     /**
+     * Returns additional HTTP headers that should be included in HTTP responses for the given operation for this protocol.
+     *
+     * These MUST all be lowercase, or the application will panic, as per
+     * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
+     */
+    fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> = emptyList()
+
+    /**
      * Returns additional HTTP headers that should be included in HTTP responses for the given error shape.
+     * These headers are added to responses _in addition_ to those returned by `additionalResponseHeaders`; if a header
+     * added by this function has the same header name as one added by `additionalResponseHeaders`, the one added by
+     * `additionalResponseHeaders` takes precedence.
+     *
      * These MUST all be lowercase, or the application will panic, as per
      * https://docs.rs/http/latest/http/header/struct.HeaderName.html#method.from_static
      */
