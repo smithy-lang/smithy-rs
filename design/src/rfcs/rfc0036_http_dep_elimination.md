@@ -2,7 +2,7 @@
 RFC: Eliminating Public `http` dependencies
 =============
 
-> Status: RFC
+> Status: Accepted
 >
 > Applies to: client
 
@@ -24,7 +24,7 @@ Terminology
   to operate on frames instead of having separate methods.
 - `http` (crate): a low level crate of `http` primitives (no logic, just requests and responses)
 - ossified dependency: An ossified dependency describes a dependency that, when a new version is released, cannot be utilized without breaking changes. For example, if the `mutate_request` function on every operation operates on `&mut http::Request` where `http = 0.2`, that dependency is "ossified." Compare this to a function that offers the ability to convert something into an `http = 0.2` request—since http=1 and http=0.2 are largely equivalent, the
-  existence of this function does not prevent us from using http = 1 in the future. In general terms, **functions that operate on references are much more likely to ossify—There is no practical way for someone to mutate an `http = 0.2` request if you have an `http = 1` request other than a time-consuming clone, and reconversion process.
+  existence of this function does not prevent us from using http = 1 in the future. In general terms, **functions that operate on references are much more likely to ossify**—There is no practical way for someone to mutate an `http = 0.2` request if you have an `http = 1` request other than a time-consuming clone, and reconversion process.
 
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 
@@ -41,6 +41,20 @@ If we're still on `http = 0.*` and a vulnerability is identified, we may end up 
 
 **API Friendliness**
 If we ship with an API that public exposes customers to `http = 0.*`, we have the API forever. We have to consider that we aren't shipping the Rust SDK for this month or even this year but probably the Rust SDK for the next 5-10 years.
+
+**Future CRT Usage**
+If we make this change, we enable a future where we can use the CRT HTTP request type natively without needing a last minute conversion to the CRT HTTP Request type.
+```rust,ignore
+struct HttpRequest {
+  inner: Inner
+}
+
+enum Inner {
+  Httpv0(http_0::Request),
+  Httpv1(http_1::Request),
+  Crt(aws_crt_http::Request)
+}
+```
 
 The user experience if this RFC is implemented
 ----------------------------------------------
@@ -70,7 +84,7 @@ One key mechanism that we SHOULD use for allowing our APIs to evolve in the futu
 
 In order to enable HTTP evolution, we will create a set of wrapper structures around `http::Request` and `http::Response`. These will use `http = 0` internally. Since the HTTP crate itself is quite small, including private dependencies on both versions of the crate is a workable solution. In general, we will aim for an API that is close to drop-in compatible to the HTTP crate while ensuring that a different crate could be used as the backing storage.
 
-```rust
+```rust,ignore
 // since it's our type, we can default `SdkBody`
 pub struct Request<B = SdkBody> {
     // this uses the http = 0.2 request. In the future, we can make an internal enum to allow storing an http = 1
@@ -92,8 +106,6 @@ The SigV4 crate signs a number of `HTTP` types directly. We should change it to 
 Generated clients currently include a public HTTP dependency in `customize`. This should be changed to accept our `HTTP` wrapper type instead or be restricted to a subset of operations (e.g. `add_header`) while forcing users to add an interceptor if they need full control.
 
 
-In order to implement this feature, we need to add X and update Y...
-
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 Changes checklist
 -----------------
@@ -102,7 +114,7 @@ Changes checklist
 - [ ] Refactor currently written interceptors to use the wrapper: 2 days.
 - [ ] Refactor the SigV4 crate to remove the HTTP dependency from the public interface: 2 days.
 - [ ] Add / validate support for SdkBody `http-body = 1.0rc.2` either in a PR or behind a feature gate. Test this to
-  ensure it works with Hyper.
+  ensure it works with Hyper. Some previous work here exists: 1 week
 - [ ] Remove `http::Response` and `Uri` from the public exposed types in `aws-config`: 1-4 days.
 - [ ] Long tail of other usages: 1 week
 - [ ] Implement `~` versions for SDK Crate => runtime crate dependencies: 1 week
