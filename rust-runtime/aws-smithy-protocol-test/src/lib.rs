@@ -278,10 +278,12 @@ pub fn require_headers(
 
 #[derive(Clone)]
 pub enum MediaType {
-    /// Json media types are deserialized and compared
+    /// JSON media types are deserialized and compared
     Json,
     /// XML media types are normalized and compared
     Xml,
+    /// CBOR media types are decoded from base64 to binary and compared
+    Cbor,
     /// For x-www-form-urlencoded, do some map order comparison shenanigans
     UrlEncodedForm,
     /// Other media types are compared literally
@@ -294,6 +296,7 @@ impl<T: AsRef<str>> From<T> for MediaType {
             "application/json" => MediaType::Json,
             "application/x-amz-json-1.1" => MediaType::Json,
             "application/xml" => MediaType::Xml,
+            "application/cbor" => MediaType::Cbor,
             "application/x-www-form-urlencoded" => MediaType::UrlEncodedForm,
             other => MediaType::Other(other.to_string()),
         }
@@ -324,6 +327,7 @@ pub fn validate_body<T: AsRef<[u8]>>(
             expected: "x-www-form-urlencoded".to_owned(),
             found: "input was not valid UTF-8".to_owned(),
         }),
+        (MediaType::Cbor, _) => try_cbor_eq(actual_body, expected_body),
         (MediaType::Other(media_type), Ok(actual_body)) => {
             if actual_body != expected_body {
                 Err(ProtocolTestFailure::BodyDidNotMatch {
@@ -379,6 +383,31 @@ fn try_json_eq(actual: &str, expected: &str) -> Result<(), ProtocolTestFailure> 
             comparison: pretty_comparison(actual, expected),
             hint: message,
         }),
+    }
+}
+
+fn try_cbor_eq<T: AsRef<[u8]>>(
+    actual_body: T,
+    expected_body: &str,
+) -> Result<(), ProtocolTestFailure> {
+    let decoded = base64_simd::STANDARD
+        .decode_to_vec(expected_body)
+        .expect("smithy protocol test `body` property is not properly base64 encoded");
+    let expected_cbor_value: serde_cbor::Value = serde_cbor::from_slice(decoded.as_slice()).unwrap();
+    // dbg!(&expected_cbor_value);
+    let actual_cbor_value: serde_cbor::Value = serde_cbor::from_slice(actual_body.as_ref()).unwrap(); // TODO Don't panic
+    // dbg!(&actual_cbor_value);
+    // TODO This only works because `serde_cbor::Value` uses `BTreeMap` internally.
+    if expected_cbor_value != actual_cbor_value {
+        Err(ProtocolTestFailure::BodyDidNotMatch {
+            comparison: PrettyString(format!(
+                "{}",
+                Comparison::new(&expected_cbor_value, &actual_cbor_value)
+            )),
+            hint: "TODO: Perhaps point to a CBOR diagnostic playground?".to_owned(),
+        })
+    } else {
+        Ok(())
     }
 }
 
