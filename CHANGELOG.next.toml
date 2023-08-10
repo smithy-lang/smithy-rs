@@ -22,3 +22,15 @@ message = "`RuntimeComponents` and `RuntimeComponentsBuilder` are now re-exporte
 references = ["smithy-rs#2904"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Struct members modeled as required are no longer wrapped in `Option`s."
+references = ["smithy-rs#2916", "aws-sdk-rust#536"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Support for Smithy IDLv2 nullability can now be enabled by setting `generateOptionsForRequiredShapes = false` in your codegen config. This will render `@required` struct members without an `Option`."
+references = ["smithy-rs#2916", "smithy-rs#1767"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+author = "Velfi"
