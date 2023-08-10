@@ -30,6 +30,7 @@ use smithy.test#httpResponseTests
             floatValue: 7.624,
             integerValue: 256,
             shortValue: 9898,
+            longValue: 9873
             stringValue: "simple"
         }
     },
