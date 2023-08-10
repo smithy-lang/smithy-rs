@@ -41,21 +41,25 @@ const val CODEGEN_SETTINGS = "codegen"
 open class CoreCodegenConfig(
     open val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     open val debugMode: Boolean = defaultDebugMode,
+    open val generateOptionsForRequiredShapes: Boolean = defaultGenerateOptionsForRequiredShapes,
 ) {
     companion object {
         const val defaultFormatTimeoutSeconds = 20
         const val defaultDebugMode = false
+        const val defaultGenerateOptionsForRequiredShapes = true
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
-                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
-                    node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
+                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
+                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
+                    generateOptionsForRequiredShapes = node.get().getBooleanMemberOrDefault("generateOptionsForRequiredShapes", defaultGenerateOptionsForRequiredShapes),
                 )
             } else {
                 CoreCodegenConfig(
                     formatTimeoutSeconds = defaultFormatTimeoutSeconds,
                     debugMode = defaultDebugMode,
+                    generateOptionsForRequiredShapes = defaultGenerateOptionsForRequiredShapes,
                 )
             }
     }

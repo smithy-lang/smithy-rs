@@ -17,6 +17,7 @@ event-stream = ["aws-smithy-eventstream"]
 [dependencies]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
 aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-json = { path = "../aws-smithy-json" }
 bytes = "1"
 bytes-utils = "0.1"
 http = "0.2.3"

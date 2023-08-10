@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -44,7 +45,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
+abstract class QuerySerializerGenerator(private val codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
     protected data class Context<T : Shape>(
         /** Expression that yields a QueryValueWriter */
         val writerExpression: String,
@@ -212,9 +213,14 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
-            is StringShape -> when (target.hasTrait<EnumTrait>()) {
-                true -> rust("$writer.string(${value.name}.as_str());")
-                false -> rust("$writer.string(${value.name});")
+            is StringShape -> {
+                when (
+                    target.hasTrait<EnumTrait>() ||
+                        symbolProvider.config.nullabilityCheckMode == NullableIndex.CheckMode.CLIENT_CAREFUL
+                ) {
+                    true -> rust("$writer.string(${value.name}.as_str());")
+                    false -> rust("$writer.string(${value.name});")
+                }
             }
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
             is NumberShape -> {

@@ -38,6 +38,7 @@ dependencies {
 }
 
 fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
+fun getGenerateOptionsForRequiredShapes(): String = properties.get("smithy.generate.options.for.required.shapes") ?: "true"
 
 val allCodegenTests = listOf(
     CodegenTest(
@@ -48,7 +49,8 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
+                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
+                "generateOptionsForRequiredShapes": "${getGenerateOptionsForRequiredShapes()}"
             },
             "customizationConfig": {
                 "awsSdk": {
@@ -65,7 +67,8 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
+                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
+                "generateOptionsForRequiredShapes": "${getGenerateOptionsForRequiredShapes()}"
             },
             "customizationConfig": {
                 "awsSdk": {

@@ -5,6 +5,7 @@
 
 //! Errors for operations
 
+use aws_smithy_json::deserialize::error::DeserializeError;
 use aws_smithy_types::date_time::DateTimeFormatError;
 use http::uri::InvalidUri;
 use std::borrow::Cow;
@@ -183,5 +184,11 @@ impl Error for BuildError {
             BuildErrorKind::InvalidUri { source, .. } => Some(source as _),
             BuildErrorKind::InvalidField { .. } | BuildErrorKind::MissingField { .. } => None,
         }
+    }
+}
+
+impl From<BuildError> for DeserializeError {
+    fn from(build_error: BuildError) -> Self {
+        DeserializeError::custom_source("deserialization failed due to a build error", build_error)
     }
 }

@@ -78,7 +78,11 @@ class ClientCodegenVisitor(
         val rustSymbolProviderConfig = RustSymbolProviderConfig(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = settings.codegenConfig.renameExceptions,
-            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+            nullabilityCheckMode = if (settings.codegenConfig.generateOptionsForRequiredShapes) {
+                NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1
+            } else {
+                NullableIndex.CheckMode.CLIENT_CAREFUL
+            },
             moduleProvider = ClientModuleProvider,
             nameBuilderFor = { symbol -> "${symbol.name}Builder" },
         )

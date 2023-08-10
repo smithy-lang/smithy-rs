@@ -39,6 +39,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator.Companion.hasFallibleBuilder
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -282,7 +283,7 @@ class JsonParserGenerator(
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
             is BlobShape -> deserializeBlob(memberShape)
-            is TimestampShape -> deserializeTimestamp(target, memberShape)
+            is TimestampShape -> deserializeTimestamp(memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is StructureShape -> deserializeStruct(target)
@@ -356,7 +357,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {
+    private fun RustWriter.deserializeTimestamp(member: MemberShape) {
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
@@ -508,9 +509,8 @@ class JsonParserGenerator(
                         "Builder" to symbolProvider.symbolForBuilder(shape),
                     )
                     deserializeStructInner(shape.members())
-                    // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
-                    if (returnSymbolToParse.isUnconstrained) {
-                        rust("Ok(Some(builder))")
+                    if (hasFallibleBuilder(shape, symbolProvider)) {
+                        rust("Ok(Some(builder.build()?))")
                     } else {
                         rust("Ok(Some(builder.build()))")
                     }

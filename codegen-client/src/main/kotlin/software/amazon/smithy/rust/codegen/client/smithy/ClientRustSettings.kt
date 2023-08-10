@@ -98,6 +98,7 @@ enum class SmithyRuntimeMode {
 data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
+    override val generateOptionsForRequiredShapes: Boolean = defaultGenerateOptionsForRequiredShapes,
     val renameExceptions: Boolean = defaultRenameExceptions,
     val includeFluentClient: Boolean = defaultIncludeFluentClient,
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
@@ -136,11 +137,13 @@ data class ClientCodegenConfig(
                     enableNewSmithyRuntime = SmithyRuntimeMode.fromString(node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware")),
                     includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
                     enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
+                    generateOptionsForRequiredShapes = node.get().getBooleanMemberOrDefault("generateOptionsForRequiredShapes", defaultGenerateOptionsForRequiredShapes),
                 )
             } else {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
+                    generateOptionsForRequiredShapes = node.get().getBooleanMemberOrDefault("generateOptionsForRequiredShapes", defaultGenerateOptionsForRequiredShapes),
                 )
             }
     }

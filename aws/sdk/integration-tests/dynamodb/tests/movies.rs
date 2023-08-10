@@ -28,25 +28,29 @@ async fn create_table(client: &Client, table_name: &str) {
             KeySchemaElement::builder()
                 .attribute_name("year")
                 .key_type(KeyType::Hash)
-                .build(),
+                .build()
+                .unwrap(),
         )
         .key_schema(
             KeySchemaElement::builder()
                 .attribute_name("title")
                 .key_type(KeyType::Range)
-                .build(),
+                .build()
+                .unwrap(),
         )
         .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("year")
                 .attribute_type(ScalarAttributeType::N)
-                .build(),
+                .build()
+                .unwrap(),
         )
         .attribute_definitions(
             AttributeDefinition::builder()
                 .attribute_name("title")
                 .attribute_type(ScalarAttributeType::S)
-                .build(),
+                .build()
+                .unwrap(),
         )
         .provisioned_throughput(
             ProvisionedThroughput::builder()
