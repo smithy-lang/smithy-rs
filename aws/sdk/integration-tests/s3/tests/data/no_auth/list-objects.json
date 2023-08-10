@@ -88,6 +88,6 @@
       }
     }
   ],
-  "docs": "todo docs",
+  "docs": "traffic recording of optional auth (no Authorization header is included)",
   "version": "V0"
 }

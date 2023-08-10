@@ -128,12 +128,12 @@ fn extract_endpoint_auth_scheme_config(
     // TODO(P96049742): Endpoint config doesn't currently have a concept of optional auth or "no auth", so
     // we are short-circuiting lookup of endpoint auth scheme config if that is the selected scheme.
     if scheme_id == NO_AUTH_SCHEME_ID {
-        return Ok(AuthSchemeEndpointConfig::from(None));
+        return Ok(AuthSchemeEndpointConfig::empty());
     }
     let auth_schemes = match endpoint.properties().get("authSchemes") {
         Some(Document::Array(schemes)) => schemes,
         // no auth schemes:
-        None => return Ok(AuthSchemeEndpointConfig::from(None)),
+        None => return Ok(AuthSchemeEndpointConfig::empty()),
         _other => {
             return Err(AuthOrchestrationError::BadAuthSchemeEndpointConfig(
                 "expected an array for `authSchemes` in endpoint config".into(),
