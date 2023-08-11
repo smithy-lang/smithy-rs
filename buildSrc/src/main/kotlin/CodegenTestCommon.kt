@@ -7,7 +7,6 @@ import org.gradle.api.Project
 import org.gradle.api.tasks.Exec
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.register
-import org.gradle.kotlin.dsl.setEnvironment
 import java.io.File
 
 /**
