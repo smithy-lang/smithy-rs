@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "(Behavior Break!) The SSO credentials provider is no longer enabled by default in `aws-config`, and so SSO profile config will no longer work out of box. The `credentials-sso` feature in `aws-config` was removed from the default features, and renamed to `sso`. If you need credentials from SSO, then enable the `sso` feature in `aws-config`."
+references = ["smithy-rs#2917"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `SsoCredentialsProvider` now supports token refresh and is compatible with the token cache file paths the latest AWS CLI uses."
+references = ["smithy-rs#2917", "aws-sdk-rust#703", "aws-sdk-rust#699"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = "`RuntimeComponents` are now re-exported so that implementing a custom interceptor doens't require directly depending on `aws-smithy-runtime-api`."
 references = ["smithy-rs#2904", "aws-sdk-rust#862"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
@@ -27,4 +39,10 @@ author = "jdisanti"
 message = "Fix requests to S3 with `no_credentials` set."
 references = ["smithy-rs#2907", "aws-sdk-rust#864"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`RuntimeComponents` have been added as an argument to the `IdentityResolver::resolve_identity` trait function."
+references = ["smithy-rs#2917"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
