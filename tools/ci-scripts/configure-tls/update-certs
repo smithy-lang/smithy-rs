@@ -1,0 +1,10 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -euxo pipefail
+
+sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r badtls.io/certs/ca.crt' -e 'd' trytls/runners/trytls/bundles/https.py
+sed -i -e '/BEGIN CERTIFICATE/,/CERTIFICATE/!b' -e '/END CERTIFICATE/!d;r badssl.com/certs/sets/test/gen/crt/ca-root.crt' -e 'd' smithy-rs/tools/ci-resources/tls-stub/src/main.rs
