@@ -44,7 +44,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.hyperBodyWrapStream
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
@@ -69,7 +68,6 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
-import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
@@ -522,17 +520,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     }
 
     /**
-     * Return a Writable that renders a new-type wrapper implementing "futures_core::stream::Stream"
-     * on behalf of the inner type.
-     */
-    private fun futuresStreamCompatible(operationShape: OperationShape): RuntimeType {
-        if (operationShape.isEventStream(model)) {
-            return hyperBodyWrapStream(codegenContext.runtimeConfig).resolve("HyperBodyWrapEventStream")
-        }
-        return hyperBodyWrapStream(codegenContext.runtimeConfig).resolve("HyperBodyWrapByteStream")
-    }
-
-    /**
      * Render an HTTP response (headers, response code, body) for an operation's output and the given [bindings].
      */
     private fun RustWriter.serverRenderOutputShapeResponseSerializer(
@@ -559,10 +546,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
             withBlockTemplate(
-                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(#{futures_stream_compatible}::new(",
-                ")));",
+                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(",
+                "));",
                 *codegenScope,
-                "futures_stream_compatible" to futuresStreamCompatible(operationShape),
             ) {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }

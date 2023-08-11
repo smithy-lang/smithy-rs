@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -66,6 +67,7 @@ class PythonServerEventStreamWrapperGenerator(
     private val pyO3 = PythonServerCargoDependency.PyO3.toType()
     private val codegenScope =
         arrayOf(
+            *preludeScope,
             "Inner" to innerT,
             "Error" to errorT,
             "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType(),
@@ -81,6 +83,7 @@ class PythonServerEventStreamWrapperGenerator(
             "Option" to RuntimeType.Option,
             "Arc" to RuntimeType.Arc,
             "Body" to RuntimeType.sdkBody(runtimeConfig),
+            "FnStream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::fn_stream::FnStream"),
             "UnmarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::UnmarshallMessage"),
             "MarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::MarshallMessage"),
             "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
@@ -137,7 +140,7 @@ class PythonServerEventStreamWrapperGenerator(
                 fn extract(obj: &'source #{PyO3}::PyAny) -> #{PyO3}::PyResult<Self> {
                     use #{TokioStream}::StreamExt;
                     let stream = #{PyO3Asyncio}::tokio::into_stream_v1(obj)?;
-                    let stream = stream.filter_map(|res| {
+                    let mut stream = stream.filter_map(|res| {
                         #{PyO3}::Python::with_gil(|py| {
                             // TODO(EventStreamImprovements): Add `InternalServerError` variant to all event streaming
                             //                                errors and return that variant in case of errors here?
@@ -162,6 +165,14 @@ class PythonServerEventStreamWrapperGenerator(
                                         }
                                     }
                                 }
+                            }
+                        })
+                    });
+
+                    let stream = #{FnStream}::new(|tx| {
+                        Box::pin(async move {
+                            while let #{Some}(item) = stream.next().await {
+                                tx.send(item).await.expect("send should succeed");
                             }
                         })
                     });
