@@ -8,7 +8,7 @@ use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
 #[cfg(feature = "credentials-sso")]
-use crate::sso::{SsoCredentialsProvider, SsoProviderConfig};
+use crate::sso::{credentials::SsoProviderConfig, SsoCredentialsProvider};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
 use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};

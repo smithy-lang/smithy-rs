@@ -9,6 +9,7 @@ pub mod credentials {
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver};
     use aws_smithy_runtime_api::client::orchestrator::Future;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
     use aws_smithy_types::config_bag::ConfigBag;
 
     /// Smithy identity resolver for AWS credentials.
@@ -25,7 +26,11 @@ pub mod credentials {
     }
 
     impl IdentityResolver for CredentialsIdentityResolver {
-        fn resolve_identity(&self, _config_bag: &ConfigBag) -> Future<Identity> {
+        fn resolve_identity(
+            &self,
+            _runtime_components: &RuntimeComponents,
+            _config_bag: &ConfigBag,
+        ) -> Future<Identity> {
             let cache = self.credentials_cache.clone();
             Future::new(Box::pin(async move {
                 let credentials = cache.as_ref().provide_cached_credentials().await?;

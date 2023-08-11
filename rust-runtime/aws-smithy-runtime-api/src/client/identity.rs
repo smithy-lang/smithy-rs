@@ -5,6 +5,7 @@
 
 use crate::client::auth::AuthSchemeId;
 use crate::client::orchestrator::Future;
+use crate::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::any::Any;
 use std::fmt;
@@ -28,7 +29,11 @@ pub mod http;
 /// There is no fallback to other auth schemes in the absense of an identity.
 pub trait IdentityResolver: Send + Sync + Debug {
     /// Asynchronously resolves an identity for a request using the given config.
-    fn resolve_identity(&self, config_bag: &ConfigBag) -> Future<Identity>;
+    fn resolve_identity(
+        &self,
+        runtime_components: &RuntimeComponents,
+        config_bag: &ConfigBag,
+    ) -> Future<Identity>;
 }
 
 /// Container for a shared identity resolver.
@@ -43,8 +48,12 @@ impl SharedIdentityResolver {
 }
 
 impl IdentityResolver for SharedIdentityResolver {
-    fn resolve_identity(&self, config_bag: &ConfigBag) -> Future<Identity> {
-        self.0.resolve_identity(config_bag)
+    fn resolve_identity(
+        &self,
+        runtime_components: &RuntimeComponents,
+        config_bag: &ConfigBag,
+    ) -> Future<Identity> {
+        self.0.resolve_identity(runtime_components, config_bag)
     }
 }
 

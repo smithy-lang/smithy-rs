@@ -7,6 +7,7 @@
 
 use crate::client::identity::{Identity, IdentityResolver};
 use crate::client::orchestrator::Future;
+use crate::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -65,7 +66,11 @@ impl From<String> for Token {
 }
 
 impl IdentityResolver for Token {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> Future<Identity> {
+    fn resolve_identity(
+        &self,
+        _runtime_components: &RuntimeComponents,
+        _config_bag: &ConfigBag,
+    ) -> Future<Identity> {
         Future::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }
@@ -124,7 +129,11 @@ impl Login {
 }
 
 impl IdentityResolver for Login {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> Future<Identity> {
+    fn resolve_identity(
+        &self,
+        _runtime_components: &RuntimeComponents,
+        _config_bag: &ConfigBag,
+    ) -> Future<Identity> {
         Future::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }

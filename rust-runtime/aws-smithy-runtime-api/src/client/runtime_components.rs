@@ -576,7 +576,7 @@ impl RuntimeComponentsBuilder {
         #[derive(Debug)]
         struct FakeIdentityResolver;
         impl IdentityResolver for FakeIdentityResolver {
-            fn resolve_identity(&self, _: &ConfigBag) -> Future<Identity> {
+            fn resolve_identity(&self, _: &RuntimeComponents, _: &ConfigBag) -> Future<Identity> {
                 unreachable!("fake identity resolver must be overridden for this test")
             }
         }

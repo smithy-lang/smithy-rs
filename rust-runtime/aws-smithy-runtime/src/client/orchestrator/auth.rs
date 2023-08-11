@@ -101,7 +101,9 @@ pub(super) async fn orchestrate_auth(
                     extract_endpoint_auth_scheme_config(endpoint, scheme_id)?;
                 trace!(auth_scheme_endpoint_config = ?auth_scheme_endpoint_config, "extracted auth scheme endpoint config");
 
-                let identity = identity_resolver.resolve_identity(cfg).await?;
+                let identity = identity_resolver
+                    .resolve_identity(runtime_components, cfg)
+                    .await?;
                 trace!(identity = ?identity, "resolved identity");
 
                 trace!("signing request");
@@ -170,7 +172,7 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
     use aws_smithy_runtime_api::client::runtime_components::{
-        GetIdentityResolver, RuntimeComponentsBuilder,
+        GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
     };
     use aws_smithy_types::config_bag::Layer;
     use std::collections::HashMap;
@@ -180,7 +182,11 @@ mod tests {
         #[derive(Debug)]
         struct TestIdentityResolver;
         impl IdentityResolver for TestIdentityResolver {
-            fn resolve_identity(&self, _config_bag: &ConfigBag) -> Future<Identity> {
+            fn resolve_identity(
+                &self,
+                _runtime_components: &RuntimeComponents,
+                _config_bag: &ConfigBag,
+            ) -> Future<Identity> {
                 Future::ready(Ok(Identity::new("doesntmatter", None)))
             }
         }

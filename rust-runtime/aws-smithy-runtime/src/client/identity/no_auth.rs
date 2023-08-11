@@ -5,6 +5,7 @@
 
 use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::Future;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 
 /// Identity for the [`NoAuthScheme`](crate::client::auth::no_auth::NoAuthScheme) auth scheme.
@@ -30,7 +31,11 @@ impl NoAuthIdentityResolver {
 }
 
 impl IdentityResolver for NoAuthIdentityResolver {
-    fn resolve_identity(&self, _: &ConfigBag) -> Future<Identity> {
+    fn resolve_identity(
+        &self,
+        _runtime_components: &RuntimeComponents,
+        _: &ConfigBag,
+    ) -> Future<Identity> {
         Future::ready(Ok(Identity::new(NoAuthIdentity::new(), None)))
     }
 }
