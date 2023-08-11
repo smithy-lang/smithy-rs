@@ -14,7 +14,6 @@ test-util = []
 [dependencies]
 pin-project-lite = "0.2"
 tokio = { version = "1.23.1", features = ["sync"] }
-futures-util = { version = "0.3.16", default-features = false }
 
 [dev-dependencies]
 pin-utils = "0.1"
