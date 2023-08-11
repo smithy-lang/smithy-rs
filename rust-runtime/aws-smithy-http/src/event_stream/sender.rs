@@ -341,4 +341,22 @@ mod tests {
             SdkError::ConstructionFailure(_)
         ));
     }
+
+    // Verify the developer experience for this compiles
+    #[allow(unused)]
+    fn event_stream_input_ergonomics() {
+        fn check(input: impl Into<EventStreamSender<TestMessage, TestServiceError>>) {
+            let _: EventStreamSender<TestMessage, TestServiceError> = input.into();
+        }
+        check(FnStream::new(|tx| {
+            Box::pin(async move {
+                tx.send(Ok(TestMessage("test".into()))).await.unwrap();
+            })
+        }));
+        check(FnStream::new(|tx| {
+            Box::pin(async move {
+                tx.send(Err(TestServiceError)).await.unwrap();
+            })
+        }));
+    }
 }
