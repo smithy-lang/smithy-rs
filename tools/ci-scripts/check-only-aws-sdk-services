@@ -7,7 +7,7 @@
 # this job runs `cargo check` only instead of `cargo test --all-features`
 
 set -eux
-export RUSTFLAG="--cfg aws_sdk_unstable"
+export RUSTFLAGS="--cfg aws_sdk_unstable"
 
 cd aws-sdk
 

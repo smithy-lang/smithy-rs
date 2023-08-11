@@ -491,7 +491,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
             You must pass \"aws_sdk_unstable\" flag to RUSTFLAG.
             e.g.
             ```bash
-            export RUSTFLAG=\"--cfg aws_sdk_unstable\"
+            export RUSTFLAGS=\"--cfg aws_sdk_unstable\"
             ```
             Learn more about this on this SDK's document.
         """.trimIndent()
