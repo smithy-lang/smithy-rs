@@ -14,7 +14,7 @@ use std::{
     sync::{atomic::AtomicUsize, Arc},
 };
 
-use async_stream::stream;
+use aws_smithy_async::future::fn_stream::FnStream;
 use aws_smithy_client::{conns, hyper_ext::Adapter};
 use aws_smithy_http::{body::SdkBody, byte_stream::ByteStream};
 use aws_smithy_http_server::Extension;
@@ -242,59 +242,63 @@ pub async fn capture_pokemon(
             },
         ));
     }
-    let output_stream = stream! {
-        loop {
-            use std::time::Duration;
-            match input.events.recv().await {
-                Ok(maybe_event) => match maybe_event {
-                    Some(event) => {
-                        let capturing_event = event.as_event();
-                        if let Ok(attempt) = capturing_event {
-                            let payload = attempt.payload.clone().unwrap_or_else(|| CapturingPayload::builder().build());
-                            let pokeball = payload.pokeball().unwrap_or("");
-                            if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
-                                yield Err(
+    let output_stream = FnStream::new(|tx| {
+        Box::pin(async move {
+            loop {
+                use std::time::Duration;
+                match input.events.recv().await {
+                    Ok(maybe_event) => match maybe_event {
+                        Some(event) => {
+                            let capturing_event = event.as_event();
+                            if let Ok(attempt) = capturing_event {
+                                let payload = attempt
+                                    .payload
+                                    .clone()
+                                    .unwrap_or_else(|| CapturingPayload::builder().build());
+                                let pokeball = payload.pokeball().unwrap_or("");
+                                if !matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
+                                    tx.send(Err(
                                     crate::error::CapturePokemonEventsError::InvalidPokeballError(
                                         crate::error::InvalidPokeballError {
                                             pokeball: pokeball.to_owned()
                                         }
                                     )
-                                );
-                            } else {
-                                let captured = match pokeball {
-                                    "Master Ball" => true,
-                                    "Great Ball" => rand::thread_rng().gen_range(0..100) > 33,
-                                    "Fast Ball" => rand::thread_rng().gen_range(0..100) > 66,
-                                    _ => unreachable!("invalid pokeball"),
-                                };
-                                // Only support Kanto
-                                tokio::time::sleep(Duration::from_millis(1000)).await;
-                                // Will it capture the Pokémon?
-                                if captured {
-                                    let shiny = rand::thread_rng().gen_range(0..4096) == 0;
-                                    let pokemon = payload
-                                        .name()
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let pokedex: Vec<u8> = (0..255).collect();
-                                    yield Ok(crate::model::CapturePokemonEvents::Event(
-                                        crate::model::CaptureEvent {
-                                            name: Some(pokemon),
-                                            shiny: Some(shiny),
-                                            pokedex_update: Some(Blob::new(pokedex)),
-                                            captured: Some(true),
-                                        }
-                                    ));
+                                )).await.expect("send should succeed");
+                                } else {
+                                    let captured = match pokeball {
+                                        "Master Ball" => true,
+                                        "Great Ball" => rand::thread_rng().gen_range(0..100) > 33,
+                                        "Fast Ball" => rand::thread_rng().gen_range(0..100) > 66,
+                                        _ => unreachable!("invalid pokeball"),
+                                    };
+                                    // Only support Kanto
+                                    tokio::time::sleep(Duration::from_millis(1000)).await;
+                                    // Will it capture the Pokémon?
+                                    if captured {
+                                        let shiny = rand::thread_rng().gen_range(0..4096) == 0;
+                                        let pokemon = payload.name().unwrap_or("").to_string();
+                                        let pokedex: Vec<u8> = (0..255).collect();
+                                        tx.send(Ok(crate::model::CapturePokemonEvents::Event(
+                                            crate::model::CaptureEvent {
+                                                name: Some(pokemon),
+                                                shiny: Some(shiny),
+                                                pokedex_update: Some(Blob::new(pokedex)),
+                                                captured: Some(true),
+                                            },
+                                        )))
+                                        .await
+                                        .expect("send should succeed");
+                                    }
                                 }
                             }
                         }
-                    }
-                    None => break,
-                },
-                Err(e) => println!("{:?}", e),
+                        None => break,
+                    },
+                    Err(e) => println!("{:?}", e),
+                }
             }
-        }
-    };
+        })
+    });
     Ok(output::CapturePokemonOutput::builder()
         .events(output_stream.into())
         .build()

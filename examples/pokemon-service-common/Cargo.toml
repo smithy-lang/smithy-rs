@@ -7,7 +7,6 @@ authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "A smithy Rust service to retrieve information about Pokémon."
 
 [dependencies]
-async-stream = "0.3"
 http = "0.2.9"
 rand = "0.8"
 tracing = "0.1"
@@ -16,6 +15,7 @@ tokio = { version = "1", default-features = false, features = ["time"] }
 tower = "0.4"
 
 # Local paths
+aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async" }
 aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client" }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http" }
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
