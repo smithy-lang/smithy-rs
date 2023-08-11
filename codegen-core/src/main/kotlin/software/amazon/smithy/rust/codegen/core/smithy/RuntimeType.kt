@@ -383,9 +383,10 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun retryErrorKind(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("retry::ErrorKind")
         fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
-
         fun eventStreamSender(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyHttp(runtimeConfig).resolve("event_stream::EventStreamSender")
+        fun hyperBodyWrapStream(runtimeConfig: RuntimeConfig): RuntimeType =
+            forInlineDependency(InlineDependency.hyperBodyWrapStream(runtimeConfig))
 
         fun errorMetadata(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::ErrorMetadata")
         fun errorMetadataBuilder(runtimeConfig: RuntimeConfig) =

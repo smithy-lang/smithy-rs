@@ -28,9 +28,6 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -41,13 +38,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
-import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.hyperBodyWrapStream
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
@@ -77,7 +74,6 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
@@ -530,18 +526,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
      * on behalf of the inner type.
      */
     private fun futuresStreamCompatible(operationShape: OperationShape): RuntimeType {
-        val inlineable = InlineDependency.forRustFile(
-            RustModule.pubCrate("stream_compat", parent = ServerRustModule.root),
-            "/inlineable/src/hyper_body_wrap_stream.rs",
-            CargoDependency.smithyHttpEventStream(codegenContext.runtimeConfig),
-            CargoDependency.smithyAsync(codegenContext.runtimeConfig).toDevDependency(),
-            CargoDependency.smithyEventStream(codegenContext.runtimeConfig).toDevDependency(),
-            CargoDependency.FuturesCore,
-        ).toType()
         if (operationShape.isEventStream(model)) {
-            return inlineable.resolve("HyperBodyWrapEventStream")
+            return hyperBodyWrapStream(codegenContext.runtimeConfig).resolve("HyperBodyWrapEventStream")
         }
-        return inlineable.resolve("HyperBodyWrapByteStream")
+        return hyperBodyWrapStream(codegenContext.runtimeConfig).resolve("HyperBodyWrapByteStream")
     }
 
     /**

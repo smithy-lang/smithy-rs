@@ -127,6 +127,14 @@ class InlineDependency(
             CargoDependency.smithyTypes(runtimeConfig),
         )
 
+        fun hyperBodyWrapStream(runtimeConfig: RuntimeConfig): InlineDependency = forInlineableRustFile(
+            "hyper_body_wrap_stream",
+            CargoDependency.smithyHttp(runtimeConfig).withFeature("event-stream"),
+            CargoDependency.FuturesCore,
+            CargoDependency.smithyAsync(runtimeConfig).toDevDependency(),
+            CargoDependency.smithyEventStream(runtimeConfig).toDevDependency(),
+        )
+
         fun constrained(): InlineDependency =
             InlineDependency.forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
     }
@@ -289,7 +297,6 @@ data class CargoDependency(
 
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
-        fun smithyHttpEventStream(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).withFeature("event-stream")
         fun smithyHttpAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-auth")
         fun smithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-tower")
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
