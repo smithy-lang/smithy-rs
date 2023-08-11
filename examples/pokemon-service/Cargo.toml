@@ -20,7 +20,6 @@ pokemon-service-common = { path = "../pokemon-service-common/" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
-async-stream = "0.3"
 rand = "0.8.5"
 serial_test = "1.0.0"
 
@@ -31,6 +30,7 @@ hyper = { version = "0.14.26", features = ["server", "client"] }
 hyper-rustls = { version = "0.24", features = ["http2"] }
 
 # Local paths
+aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async/" }
 aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client/", features = ["rustls"] }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }

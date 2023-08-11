@@ -5,7 +5,7 @@
 
 pub mod common;
 
-use async_stream::stream;
+use aws_smithy_async::future::fn_stream::FnStream;
 use rand::Rng;
 use serial_test::serial;
 
@@ -40,35 +40,56 @@ async fn event_stream_test() {
     let client = common::client();
 
     let mut team = vec![];
-    let input_stream = stream! {
-        // Always Pikachu
-        yield Ok(AttemptCapturingPokemonEvent::Event(
-            CapturingEvent::builder()
-            .payload(CapturingPayload::builder()
-                .name("Pikachu")
-                .pokeball("Master Ball")
-                .build())
-            .build()
-        ));
-        yield Ok(AttemptCapturingPokemonEvent::Event(
-            CapturingEvent::builder()
-            .payload(CapturingPayload::builder()
-                .name("Regieleki")
-                .pokeball("Fast Ball")
-                .build())
-            .build()
-        ));
-        yield Err(AttemptCapturingPokemonEventError::MasterBallUnsuccessful(MasterBallUnsuccessful::builder().build()));
-        // The next event should not happen
-        yield Ok(AttemptCapturingPokemonEvent::Event(
-            CapturingEvent::builder()
-            .payload(CapturingPayload::builder()
-                .name("Charizard")
-                .pokeball("Great Ball")
-                .build())
-            .build()
-        ));
-    };
+    let input_stream = FnStream::new(|tx| {
+        Box::pin(async move {
+            // Always Pikachu
+            tx.send(Ok(AttemptCapturingPokemonEvent::Event(
+                CapturingEvent::builder()
+                    .payload(
+                        CapturingPayload::builder()
+                            .name("Pikachu")
+                            .pokeball("Master Ball")
+                            .build(),
+                    )
+                    .build(),
+            )))
+            .await
+            .expect("send should succeed");
+            tx.send(Ok(AttemptCapturingPokemonEvent::Event(
+                CapturingEvent::builder()
+                    .payload(
+                        CapturingPayload::builder()
+                            .name("Regieleki")
+                            .pokeball("Fast Ball")
+                            .build(),
+                    )
+                    .build(),
+            )))
+            .await
+            .expect("send should succeed");
+
+            tx.send(Err(
+                AttemptCapturingPokemonEventError::MasterBallUnsuccessful(
+                    MasterBallUnsuccessful::builder().build(),
+                ),
+            ))
+            .await
+            .expect("send should succeed");
+            // The next event should not happen
+            tx.send(Ok(AttemptCapturingPokemonEvent::Event(
+                CapturingEvent::builder()
+                    .payload(
+                        CapturingPayload::builder()
+                            .name("Charizard")
+                            .pokeball("Great Ball")
+                            .build(),
+                    )
+                    .build(),
+            )))
+            .await
+            .expect("send should succeed");
+        })
+    });
 
     // Throw many!
     let mut output = common::client()
@@ -112,16 +133,22 @@ async fn event_stream_test() {
     while team.len() < 6 {
         let pokeball = get_pokeball();
         let pokemon = get_pokemon_to_capture();
-        let input_stream = stream! {
-            yield Ok(AttemptCapturingPokemonEvent::Event(
-                CapturingEvent::builder()
-                .payload(CapturingPayload::builder()
-                    .name(pokemon)
-                    .pokeball(pokeball)
-                    .build())
-                .build()
-            ))
-        };
+        let input_stream = FnStream::new(|tx| {
+            Box::pin(async move {
+                tx.send(Ok(AttemptCapturingPokemonEvent::Event(
+                    CapturingEvent::builder()
+                        .payload(
+                            CapturingPayload::builder()
+                                .name(pokemon)
+                                .pokeball(pokeball)
+                                .build(),
+                        )
+                        .build(),
+                )))
+                .await
+                .expect("send should succeed");
+            })
+        });
         let mut output = client
             .capture_pokemon()
             .region("Kanto")
