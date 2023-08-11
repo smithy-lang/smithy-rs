@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -68,13 +67,10 @@ class HttpBoundProtocolPayloadGenerator(
     private val codegenScope = arrayOf(
         *preludeScope,
         "BuildError" to runtimeConfig.operationBuildError(),
-        "Bytes" to RuntimeType.Bytes,
-        "ByteStreamError" to RuntimeType.smithyHttp(runtimeConfig).resolve("byte_stream::error::Error"),
         "HyperBodyWrapEventStream" to RuntimeType.hyperBodyWrapStream(runtimeConfig).resolve("HyperBodyWrapEventStream"),
         "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
-        "Stream" to CargoDependency.FuturesCore.toType().resolve("stream::Stream"),
         "hyper" to CargoDependency.HyperWithStream.toType(),
     )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
@@ -312,16 +308,25 @@ class HttpBoundProtocolPayloadGenerator(
     ) {
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer = protocolFunctions.serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
+            val outputT = if (member.isStreaming(model)) {
+                if (fromPythonServerRuntime(member)) {
+                    // `aws_smithy_http_server_python::types::ByteStream` already implements
+                    // `futures::stream::Stream`, so no need to wrap it in a futures' stream-compatible
+                    // wrapper.
+                    symbolProvider.toSymbol(member)
+                } else {
+                    // `aws_smithy_http::byte_stream::ByteStream` no longer implements `futures::stream::Stream`
+                    // so wrap it in a new-type to enable the trait.
+                    RuntimeType.hyperBodyWrapStream(runtimeConfig)
+                        .resolve("HyperBodyWrapByteStream").toSymbol()
+                }
+            } else {
+                RuntimeType.ByteSlab.toSymbol()
+            }
             rustBlockTemplate(
-                "pub(crate) fn $fnName(payload: $ref#{Member}) -> Result<#{outputT:W}, #{BuildError}>",
+                "pub(crate) fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
                 "Member" to symbolProvider.toSymbol(member),
-                "outputT" to writable {
-                    if (member.isStreaming(model)) {
-                        rustTemplate("impl #{Stream}<Item = #{Result}<#{Bytes}, #{ByteStreamError}>>", *codegenScope)
-                    } else {
-                        rust("${RuntimeType.ByteSlab.toSymbol()}")
-                    }
-                },
+                "outputT" to outputT,
                 *codegenScope,
             ) {
                 val asRef = if (payloadMetadata.takesOwnership) "" else ".as_ref()"
@@ -380,13 +385,8 @@ class HttpBoundProtocolPayloadGenerator(
                 // Write the raw blob to the payload.
                 if (member.isStreaming(model)) {
                     if (fromPythonServerRuntime(member)) {
-                        // `aws_smithy_http_server_python::types::ByteStream` already implements
-                        // `futures::stream::Stream`, so no need to wrap it in a futures' stream-compatible
-                        // wrapper.
                         rust(payloadName)
                     } else {
-                        // `aws_smithy_http::byte_stream::ByteStream` no longer implements `futures::stream::Stream`
-                        // so wrap it in a new-type to enable the trait.
                         rustTemplate(
                             "#{HyperBodyWrapByteStream}::new($payloadName)",
                             "HyperBodyWrapByteStream" to RuntimeType.hyperBodyWrapStream(runtimeConfig)

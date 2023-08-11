@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream::error::Error as ByteStreamError;
 use aws_smithy_http::byte_stream::ByteStream;
 use aws_smithy_http::event_stream::MessageStreamAdapter;
@@ -38,6 +39,11 @@ impl HyperBodyWrapByteStream {
     #[allow(dead_code)]
     pub(crate) fn new(stream: ByteStream) -> Self {
         Self(stream)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn into_inner(self) -> SdkBody {
+        self.0.into_inner()
     }
 }
 
