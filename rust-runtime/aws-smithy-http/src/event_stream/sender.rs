@@ -20,7 +20,7 @@ use tracing::trace;
 /// Input type for Event Streams.
 pub struct EventStreamSender<T, E> {
     // `FnStream` does not have a `Sync` bound but this struct needs to be `Sync`
-    // as demonstrated by a unit test `event_stream_sender_send`.
+    // as demonstrated by a unit test `event_stream_sender_send_sync`.
     // Wrapping `input_stream` with a `Mutex` will make `EventStreamSender` `Sync`.
     input_stream: Mutex<FnStream<Result<T, E>>>,
 }
@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test]
-    fn event_stream_sender_send() {
+    fn event_stream_sender_send_sync() {
         check_send_sync(EventStreamSender::from(FnStream::new(|tx| {
             Box::pin(async move {
                 let message = Result::<_, TestServiceError>::Ok(TestMessage("test".into()));
