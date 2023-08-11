@@ -248,8 +248,8 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-
-        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features").environment(env)
+        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
+        commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
