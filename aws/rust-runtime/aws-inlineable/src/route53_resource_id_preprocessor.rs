@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 // This function is only used to strip prefixes from resource IDs at the time they're passed as
 // input to a request. Resource IDs returned in responses may or may not include a prefix.
 /// Strip the resource type prefix from resource ID return
-fn trim_resource_id(resource_id: Option<&mut String>) {
+fn trim_resource_id(resource_id: &mut String) {
     const PREFIXES: &[&str] = &[
         "/hostedzone/",
         "hostedzone/",
@@ -27,11 +27,9 @@ fn trim_resource_id(resource_id: Option<&mut String>) {
     ];
 
     for prefix in PREFIXES {
-        if let Some(resource_id) = resource_id {
-            if let Some(trimmed_id) = resource_id.strip_prefix(prefix) {
-                *resource_id = trimmed_id.to_string();
-                return;
-            }
+        if let Some(trimmed_id) = resource_id.strip_prefix(prefix) {
+            *resource_id = trimmed_id.to_string();
+            return;
         }
     }
 }
@@ -81,8 +79,9 @@ where
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let input: &mut T = context.input_mut().downcast_mut().expect("correct type");
-        let field = (self.get_mut_resource_id)(input);
-        trim_resource_id(field);
+        if let Some(field) = (self.get_mut_resource_id)(input) {
+            trim_resource_id(field)
+        }
         Ok(())
     }
 }
@@ -94,48 +93,39 @@ mod test {
     #[test]
     fn does_not_change_regular_zones() {
         struct OperationInput {
-            resource: Option<String>,
+            resource: String,
         }
 
         let mut operation = OperationInput {
-            resource: Some("Z0441723226OZ66S5ZCNZ".to_string()),
+            resource: "Z0441723226OZ66S5ZCNZ".to_string(),
         };
-        trim_resource_id(operation.resource.as_mut());
-        assert_eq!(
-            &operation.resource.unwrap_or_default(),
-            "Z0441723226OZ66S5ZCNZ"
-        );
+        trim_resource_id(&mut operation.resource);
+        assert_eq!(&operation.resource, "Z0441723226OZ66S5ZCNZ");
     }
 
     #[test]
     fn sanitizes_prefixed_zone() {
         struct OperationInput {
-            change_id: Option<String>,
+            change_id: String,
         }
 
         let mut operation = OperationInput {
-            change_id: Some("/change/Z0441723226OZ66S5ZCNZ".to_string()),
+            change_id: "/change/Z0441723226OZ66S5ZCNZ".to_string(),
         };
-        trim_resource_id(operation.change_id.as_mut());
-        assert_eq!(
-            &operation.change_id.unwrap_or_default(),
-            "Z0441723226OZ66S5ZCNZ"
-        );
+        trim_resource_id(&mut operation.change_id);
+        assert_eq!(&operation.change_id, "Z0441723226OZ66S5ZCNZ");
     }
 
     #[test]
     fn allow_no_leading_slash() {
         struct OperationInput {
-            hosted_zone: Option<String>,
+            hosted_zone: String,
         }
 
         let mut operation = OperationInput {
-            hosted_zone: Some("hostedzone/Z0441723226OZ66S5ZCNZ".to_string()),
+            hosted_zone: "hostedzone/Z0441723226OZ66S5ZCNZ".to_string(),
         };
-        trim_resource_id(operation.hosted_zone.as_mut());
-        assert_eq!(
-            &operation.hosted_zone.unwrap_or_default(),
-            "Z0441723226OZ66S5ZCNZ"
-        );
+        trim_resource_id(&mut operation.hosted_zone);
+        assert_eq!(&operation.hosted_zone, "Z0441723226OZ66S5ZCNZ");
     }
 }
