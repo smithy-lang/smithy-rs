@@ -398,7 +398,7 @@ mod tests {
     use aws_smithy_types::DateTime;
 
     fn time(s: &str) -> SystemTime {
-        SystemTime::try_from(DateTime::parse(Format::DateTime, s).unwrap()).unwrap()
+        SystemTime::try_from(DateTime::from_str(s, Format::DateTime).unwrap()).unwrap()
     }
 
     struct TestHarness {
@@ -736,7 +736,7 @@ mod tests {
     async fn refresh_timings() {
         let _logs = capture_test_logs();
 
-        let start_time = DateTime::parse(Format::DateTime, "2023-01-01T00:00:00Z").unwrap();
+        let start_time = DateTime::from_str("2023-01-01T00:00:00Z", Format::DateTime).unwrap();
         let (time_source, sleep_impl) = instant_time_and_sleep(start_time.try_into().unwrap());
         let shared_time_source = SharedTimeSource::new(time_source.clone());
 
