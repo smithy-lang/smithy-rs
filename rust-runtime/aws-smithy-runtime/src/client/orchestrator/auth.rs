@@ -193,7 +193,7 @@ mod tests {
             ) -> Result<(), BoxError> {
                 request
                     .headers_mut()
-                    .insert(http::header::AUTHORIZATION, "success!".parse().unwrap());
+                    .insert(http::header::AUTHORIZATION.as_str(), "success!");
                 Ok(())
             }
         }
@@ -223,7 +223,7 @@ mod tests {
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
@@ -269,7 +269,7 @@ mod tests {
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
@@ -318,7 +318,7 @@ mod tests {
             config_with_identity(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("t", None));
         let mut ctx = InterceptorContext::new(Input::erase("doesnt-matter"));
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
         orchestrate_auth(&mut ctx, &runtime_components, &cfg)

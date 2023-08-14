@@ -44,7 +44,12 @@ These types will be used by all orchestrator functionality, so they will be hous
 
 #### What's in and what's out?
 At the onset, these types focus on supporting the most ossified usages: `&mut` modification of HTTP types. They **do not**
-support construction of HTTP types, other than `impl From<http::Request>` and `From<http::Response>`.
+support construction of HTTP types, other than `impl From<http::Request>` and `From<http::Response>`. We will also make it
+possible to use `http::HeaderName` / `http::HeaderValue` in a zero-cost way.
+
+#### The `AsHeaderComponent` trait
+All header insertion methods accept `impl AsHeaderComponent`. This allows us to provide a nice user experience while taking
+advantage of zero-cost usage of `'static str`. We will seal this trait to prevent external usage.
 
 #### Additional Functionality
 Our wrapper type will add the following additional functionality:
@@ -58,8 +63,8 @@ There is no stdlib type that cleanly defines what may be placed into headers—S
 impl HeadersMut<'_> {
     pub fn try_insert(
         &mut self,
-        key: impl Into<MaybeStatic>,
-        value: impl Into<MaybeStatic>,
+        key: impl AsHeaderName,
+        value: impl AsHeaderName,
     ) -> Result<Option<String>, BoxError> {
         // ...
     }
@@ -67,6 +72,11 @@ impl HeadersMut<'_> {
 ```
 
 This allows us to offer user-friendly types while still avoiding runtime panics. For MOST hand-written code (e.g. middleware), the API also contains `insert` which panics on failure.
+
+#### Request Extensions
+There is ongoing work which MAY restrict HTTP extensions to clone types. We will preempt that by:
+1. Forbidding http0x requests with extensions to be converted directly into `Request`
+2. Forbidding non-clone extensions from being inserted into the wrapped request.
 
 #### Proposed Implementation
 <details>

@@ -212,8 +212,7 @@ async fn try_op(
     // Load the request body into memory if configured to do so
     if let Some(&LoadedRequestBody::Requested) = cfg.load::<LoadedRequestBody>() {
         debug!("loading request body into memory");
-        let mut body = SdkBody::taken();
-        mem::swap(&mut body, ctx.request_mut().expect("set above").body_mut());
+        let body = ctx.request_mut().expect("set above").take_body();
         let loaded_body = halt_on_err!([ctx] =>
             ByteStream::new(body).collect().await.map_err(OrchestratorError::other)
         )
@@ -468,7 +467,9 @@ mod tests {
         CannedRequestSerializer::success(
             Request::builder()
                 .body(SdkBody::empty())
-                .expect("request is valid"),
+                .expect("request is valid")
+                .try_into()
+                .unwrap(),
         )
     }
 

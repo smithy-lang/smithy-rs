@@ -6,7 +6,8 @@
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignableBody,
-    SignableRequest, SignatureLocation, SigningParams, SigningSettings, UriPathNormalizationMode,
+    SignableRequest, SignatureLocation, SigningInstructions, SigningParams, SigningSettings,
+    UriPathNormalizationMode,
 };
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
@@ -19,6 +20,7 @@ use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::Document;
 use aws_types::region::{Region, SigningRegion};
 use aws_types::SigningService;
+use http::Method;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
@@ -337,7 +339,7 @@ impl Signer for SigV4Signer {
         let signing_params =
             Self::signing_params(settings, credentials, &operation_config, request_time)?;
 
-        let (signing_instructions, _signature) = {
+        /*let (signing_instructions, _signature) = {
             // A body that is already in memory can be signed directly. A body that is not in memory
             // (any sort of streaming body or presigned request) will be signed via UNSIGNED-PAYLOAD.
             let signable_body = operation_config
@@ -355,15 +357,16 @@ impl Signer for SigV4Signer {
                         .unwrap_or(SignableBody::UnsignedPayload)
                 });
 
+            // TODO(httpRefactor): Remove http dep from the sigv4 crate
             let signable_request = SignableRequest::new(
-                request.method(),
-                request.uri(),
-                request.headers(),
+                Method::from_bytes(request.method().as_bytes()).unwrap(),
+                &request.uri().parse().unwrap(),
+                &Default::default(), /*request.headers()*/
                 signable_body,
             );
             sign(signable_request, &signing_params)?
         }
-        .into_parts();
+        .into_parts();*/
 
         // If this is an event stream operation, set up the event stream signer
         #[cfg(feature = "event-stream")]
@@ -373,19 +376,20 @@ impl Signer for SigV4Signer {
 
             if let Some(signer_sender) = config_bag.load::<DeferredSignerSender>() {
                 let time_source = runtime_components.time_source().unwrap_or_default();
-                signer_sender
-                    .send(Box::new(SigV4MessageSigner::new(
-                        _signature,
-                        credentials.clone(),
-                        Region::new(signing_params.region().to_string()).into(),
-                        signing_params.service_name().to_string().into(),
-                        time_source,
-                    )) as _)
-                    .expect("failed to send deferred signer");
+                /*signer_sender
+                .send(Box::new(SigV4MessageSigner::new(
+                    _signature,
+                    credentials.clone(),
+                    Region::new(signing_params.region().to_string()).into(),
+                    signing_params.service_name().to_string().into(),
+                    time_source,
+                )) as _)
+                .expect("failed to send deferred signer");*/
             }
         }
 
-        signing_instructions.apply_to_request(request);
+        // TODO(httpRefactor): Fix sigv4 crate HTTP dependency
+        // signing_instructions.apply_to_request(request);
         Ok(())
     }
 }

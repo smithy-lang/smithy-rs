@@ -10,14 +10,14 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use fastrand::Rng;
 use http::{HeaderName, HeaderValue};
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "test-util")]
 pub use test_util::{NoInvocationIdGenerator, PredefinedInvocationIdGenerator};
 
-#[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
-const AMZ_SDK_INVOCATION_ID: HeaderName = HeaderName::from_static("amz-sdk-invocation-id");
+const AMZ_SDK_INVOCATION_ID: &str = "amz-sdk-invocation-id";
 
 /// A generator for returning new invocation IDs on demand.
 pub trait InvocationIdGenerator: Debug + Send + Sync {
@@ -130,7 +130,7 @@ impl Interceptor for InvocationIdInterceptor {
 
 /// InvocationId provides a consistent ID across retries
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InvocationId(HeaderValue);
+pub struct InvocationId(Cow<'static, str>);
 
 impl InvocationId {
     /// Create an invocation ID with the given value.
@@ -138,10 +138,7 @@ impl InvocationId {
     /// # Panics
     /// This constructor will panic if the given invocation ID is not a valid HTTP header value.
     pub fn new(invocation_id: String) -> Self {
-        Self(
-            HeaderValue::try_from(invocation_id)
-                .expect("invocation ID must be a valid HTTP header value"),
-        )
+        Self(invocation_id.into())
     }
 }
 
@@ -157,7 +154,7 @@ mod test_util {
     impl InvocationId {
         /// Create a new invocation ID from a `&'static str`.
         pub fn new_from_str(uuid: &'static str) -> Self {
-            InvocationId(HeaderValue::from_static(uuid))
+            InvocationId(Cow::Borrowed(uuid))
         }
     }
 
@@ -218,6 +215,7 @@ mod tests {
         BeforeTransmitInterceptorContextMut, Input, InterceptorContext,
     };
     use aws_smithy_runtime_api::client::interceptors::Interceptor;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use http::HeaderValue;
@@ -225,7 +223,7 @@ mod tests {
     fn expect_header<'a>(
         context: &'a BeforeTransmitInterceptorContextMut<'_>,
         header_name: &str,
-    ) -> &'a HeaderValue {
+    ) -> &'a str {
         context.request().headers().get(header_name).unwrap()
     }
 
@@ -234,7 +232,7 @@ mod tests {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
@@ -261,7 +259,7 @@ mod tests {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 

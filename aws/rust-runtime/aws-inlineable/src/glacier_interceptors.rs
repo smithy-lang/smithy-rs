@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
-use aws_smithy_runtime_api::client::orchestrator::LoadedRequestBody;
+use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, LoadedRequestBody};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Bytes;
@@ -182,23 +182,19 @@ impl Interceptor for GlacierTreeHashHeaderInterceptor {
 ///
 /// See <https://docs.aws.amazon.com/amazonglacier/latest/dev/checksum-calculations.html> for more information.
 fn add_checksum_treehash(
-    request: &mut Request<SdkBody>,
+    request: &mut HttpRequest,
     body: &Bytes,
 ) -> Result<String, byte_stream::error::Error> {
     let (full_body, hashes) = compute_hashes(body, MEGABYTE)?;
     let tree_hash = hex::encode(compute_hash_tree(hashes));
     let complete_hash = hex::encode(full_body);
     if !request.headers().contains_key(TREE_HASH_HEADER) {
-        request.headers_mut().insert(
-            HeaderName::from_static(TREE_HASH_HEADER),
-            tree_hash.parse().expect("hash must be valid header"),
-        );
+        request.headers_mut().insert(TREE_HASH_HEADER, tree_hash);
     }
     if !request.headers().contains_key(X_AMZ_CONTENT_SHA256) {
-        request.headers_mut().insert(
-            HeaderName::from_static(X_AMZ_CONTENT_SHA256),
-            complete_hash.parse().expect("hash must be valid header"),
-        );
+        request
+            .headers_mut()
+            .insert(X_AMZ_CONTENT_SHA256, complete_hash.clone());
     }
     Ok(complete_hash)
 }
@@ -299,7 +295,13 @@ mod api_version_tests {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut cfg = ConfigBag::base();
         let mut context = InterceptorContext::new(Input::doesnt_matter());
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(
+            http::Request::builder()
+                .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
         let mut context = BeforeTransmitInterceptorContextMut::from(&mut context);
 
         let interceptor = GlacierApiVersionInterceptor::new("some-version");
@@ -396,6 +398,8 @@ mod treehash_checksum_tests {
         let mut http_req = http::Request::builder()
             .uri("http://example.com/hello")
             .body(SdkBody::taken()) // the body isn't used by add_checksum_treehash
+            .unwrap()
+            .try_into()
             .unwrap();
 
         add_checksum_treehash(&mut http_req, &test_data).expect("should succeed");

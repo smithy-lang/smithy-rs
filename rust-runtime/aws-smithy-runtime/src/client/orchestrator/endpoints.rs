@@ -157,7 +157,7 @@ fn apply_endpoint(
         for value in header_values {
             request
                 .headers_mut()
-                .try_insert(header_name, value)
+                .try_insert(header_name.to_string(), value.to_string())
                 .map_err(|err| {
                     ResolveEndpointError::message("invalid header key or value value")
                         .with_source(Some(err.into()))

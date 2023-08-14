@@ -12,12 +12,11 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
 use http::header::{InvalidHeaderValue, USER_AGENT};
-use http::{HeaderName, HeaderValue};
 use std::borrow::Cow;
 use std::fmt;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
-const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
+const X_AMZ_USER_AGENT: &str = "x-amz-user-agent";
 
 #[derive(Debug)]
 enum UserAgentInterceptorError {
@@ -61,14 +60,9 @@ impl UserAgentInterceptor {
     }
 }
 
-fn header_values(
-    ua: &AwsUserAgent,
-) -> Result<(HeaderValue, HeaderValue), UserAgentInterceptorError> {
+fn header_values(ua: &AwsUserAgent) -> Result<(String, String), UserAgentInterceptorError> {
     // Pay attention to the extremely subtle difference between ua_header and aws_ua_header below...
-    Ok((
-        HeaderValue::try_from(ua.ua_header())?,
-        HeaderValue::try_from(ua.aws_ua_header())?,
-    ))
+    Ok((ua.ua_header(), ua.aws_ua_header()))
 }
 
 impl Interceptor for UserAgentInterceptor {
@@ -104,8 +98,8 @@ impl Interceptor for UserAgentInterceptor {
 
         let headers = context.request_mut().headers_mut();
         let (user_agent, x_amz_user_agent) = header_values(&ua)?;
-        headers.append(USER_AGENT, user_agent);
-        headers.append(X_AMZ_USER_AGENT, x_amz_user_agent);
+        headers.try_append(USER_AGENT.as_str(), user_agent)?;
+        headers.try_append(X_AMZ_USER_AGENT, x_amz_user_agent)?;
         Ok(())
     }
 }
@@ -127,14 +121,18 @@ mod tests {
             .headers()
             .get(header_name)
             .unwrap()
-            .to_str()
-            .unwrap()
     }
 
     fn context() -> InterceptorContext {
         let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(
+            http::Request::builder()
+                .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
         let _ = context.take_input();
         context.enter_before_transmit_phase();
         context
