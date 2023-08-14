@@ -26,10 +26,12 @@ fn trim_resource_id(resource_id: Option<&mut String>) {
         "delegationset/",
     ];
 
-    if let Some(resource_id) = resource_id {
-        if let Some(trimmed_id) = resource_id.strip_prefix("/hostedzone/") {
-            *resource_id = trimmed_id.to_string();
-            return;
+    for prefix in PREFIXES {
+        if let Some(resource_id) = resource_id {
+            if let Some(trimmed_id) = resource_id.strip_prefix(prefix) {
+                *resource_id = trimmed_id.to_string();
+                return;
+            }
         }
     }
 }
