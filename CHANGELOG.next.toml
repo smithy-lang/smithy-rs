@@ -23,6 +23,12 @@ references = ["smithy-rs#2904"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
 
+[[smithy-rs]]
+message = "Fix incorrect summary docs for builders"
+references = ["smithy-rs#2914", "aws-sdk-rust#825"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
+
 [[aws-sdk-rust]]
 message = "Fix requests to S3 with `no_credentials` set."
 references = ["smithy-rs#2907", "aws-sdk-rust#864"]
