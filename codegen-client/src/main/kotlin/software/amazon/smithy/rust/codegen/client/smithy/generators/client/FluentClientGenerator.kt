@@ -715,11 +715,18 @@ private fun OperationShape.fullyQualifiedFluentBuilder(
  *
  * _NOTE: This function generates the type names that appear under **"The fluent builder is configurable:"**_
  */
-private fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
+internal fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
     val memberName = symbolProvider.toMemberName(this)
-    val outerType = symbolProvider.toSymbol(this).rustType()
+    val outerType = symbolProvider.toSymbol(this).rustType().stripOuter<RustType.Option>()
+    // We generate Vec/HashMap helpers
+    val renderedType = when (outerType) {
+        is RustType.Vec -> listOf(outerType.member)
+        is RustType.HashMap -> listOf(outerType.key, outerType.member)
+        else -> listOf(outerType)
+    }
+    val args = renderedType.joinToString { it.asArgumentType(fullyQualified = false) }
 
-    return "$memberName(${outerType.stripOuter<RustType.Option>().asArgumentType(fullyQualified = false)})"
+    return "$memberName($args)"
 }
 
 /**
