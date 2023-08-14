@@ -11,6 +11,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 sign-http = ["http", "percent-encoding", "form_urlencoded"]
 sign-eventstream = ["aws-smithy-eventstream", "bytes"]
+http0-compat = ["http"]
 default = ["sign-http"]
 
 [dependencies]

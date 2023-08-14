@@ -12,7 +12,8 @@ sign-eventstream = ["aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-aws-sigv4 = { path = "../aws-sigv4" }
+# TODO(httpRefactor): Remove feature was http refactor is complete
+aws-sigv4 = { path = "../aws-sigv4", features = ["http0-compat"] }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
