@@ -10,6 +10,8 @@
 //!
 //! This provider is included automatically when profiles are loaded.
 
+use crate::connector::expect_connector;
+use crate::provider_config::ProviderConfig;
 use crate::sso::cache::{
     load_cached_token, save_cached_token, CachedSsoToken, CachedSsoTokenError,
 };
@@ -24,6 +26,7 @@ use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::Future;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::retry::RetryConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use std::error::Error as StdError;
@@ -246,6 +249,7 @@ impl IdentityResolver for SsoTokenProvider {
 /// Builder for [`SsoTokenProvider`].
 #[derive(Debug, Default)]
 pub struct Builder {
+    provider_config: Option<ProviderConfig>,
     region: Option<Region>,
     session_name: Option<String>,
     start_url: Option<String>,
@@ -256,6 +260,12 @@ impl Builder {
     /// Creates a new builder for [`SsoTokenProvider`].
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Override the configuration used for this provider
+    pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
+        self.provider_config = Some(provider_config.clone());
+        self
     }
 
     /// Sets the SSO region.
@@ -307,14 +317,9 @@ impl Builder {
     }
 
     /// Sets the SSO OIDC client config.
-    pub fn sso_oidc_config(mut self, config: SsoOidcConfigBuilder) -> Self {
+    #[cfg(test)]
+    pub(crate) fn sso_oidc_config(mut self, config: SsoOidcConfigBuilder) -> Self {
         self.sso_oidc_config = Some(config);
-        self
-    }
-
-    /// Sets the SSO OIDC client config.
-    pub fn set_sso_oidc_config(&mut self, config: Option<SsoOidcConfigBuilder>) -> &mut Self {
-        self.sso_oidc_config = config;
         self
     }
 
@@ -328,6 +333,19 @@ impl Builder {
     }
 
     fn build_with(self, env: Env, fs: Fs) -> SsoTokenProvider {
+        let sso_oidc_config = self.sso_oidc_config.unwrap_or_else(|| {
+            let provider_config = self.provider_config.unwrap_or_default();
+            let mut sso_oidc_config = aws_sdk_ssooidc::Config::builder()
+                .http_connector(expect_connector(
+                    "The SSO token provider",
+                    provider_config.connector(&Default::default()),
+                ))
+                .retry_config(RetryConfig::standard())
+                .time_source(provider_config.time_source());
+            sso_oidc_config.set_sleep_impl(provider_config.sleep());
+            sso_oidc_config
+        });
+
         SsoTokenProvider {
             inner: Arc::new(Inner {
                 env,
@@ -335,7 +353,7 @@ impl Builder {
                 region: self.region.expect("region is required"),
                 session_name: self.session_name.expect("session_name is required"),
                 start_url: self.start_url.expect("start_url is required"),
-                sso_oidc_config: self.sso_oidc_config.unwrap_or_default(),
+                sso_oidc_config,
                 last_refresh_attempt: Mutex::new(None),
             }),
             token_cache: ExpiringCache::new(REFRESH_BUFFER_TIME),
