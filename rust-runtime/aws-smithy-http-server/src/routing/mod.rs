@@ -37,7 +37,6 @@ use futures_util::{
 use http::Response;
 use http_body::Body as HttpBody;
 use tower::{util::Oneshot, Service, ServiceExt};
-use tracing::debug;
 
 use crate::{
     body::{boxed, BoxBody},
@@ -191,12 +190,13 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        tracing::debug!("inside routing service call");
         match self.router.match_route(&req) {
             // Successfully routed, use the routes `Service::call`.
             Ok(ok) => RoutingFuture::from_oneshot(ok.oneshot(req)),
             // Failed to route, use the `R::Error`s `IntoResponse<P>`.
             Err(error) => {
-                debug!(%error, "failed to route");
+                tracing::debug!(%error, "failed to route");
                 RoutingFuture::from_response(error.into_response())
             }
         }

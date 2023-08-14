@@ -52,18 +52,31 @@ pub struct RpcV2Router<S> {
     routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
 }
 
-impl<S> RpcV2Router<S> {
-    /// Requests for the `rpcv2` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
-    /// header. An `rpcv2` request is malformed if it contains either of these headers. Server-side
-    /// implementations MUST reject such requests for security reasons.
-    const FORBIDDEN_HEADERS: &'static [&'static str] = &["x-amz-target", "x-amzn-target"];
+/// Requests for the `rpcv2` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
+/// header. An `rpcv2` request is malformed if it contains either of these headers. Server-side
+/// implementations MUST reject such requests for security reasons.
+const FORBIDDEN_HEADERS: &'static [&'static str] = &["x-amz-target", "x-amzn-target"];
 
+/// Matches the `Identifier` ABNF rule in
+/// <https://smithy.io/2.0/spec/model.html#shape-id-abnf>.
+const IDENTIFIER_PATTERN: &'static str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za-z0-9_]*"#;
+
+impl<S> RpcV2Router<S> {
     // TODO Consider building a nom parser
     fn uri_regex() -> &'static Regex {
         // Every request for the `rpcv2` protocol MUST be sent to a URL with the following form: ``{prefix?}/service/{serviceName}/operation/{operationName}`.
         // The optional `prefix` slug may span multiple path segments and is ignored by Smithy RPC v2.
-        static PATH_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r#"/service/(?P<service>\w+)/operation/(?P<operation>\w+)$"#).unwrap());
+        // The `serviceName` slug MUST be replaced by the shape name of the service's Shape ID in
+        // the Smithy model. The `serviceName` MUST NOT contain the namespace of the service shape.
+        // <https://smithy.io/2.0/spec/model.html#shape-id-abnf>
+        static PATH_REGEX: Lazy<Regex> = Lazy::new(|| {
+            Regex::new(&format!(
+                r#"/service/(?P<service>{})/operation/(?P<operation>{})$"#,
+                IDENTIFIER_PATTERN,
+                IDENTIFIER_PATTERN,
+            ))
+            .unwrap()
+        });
 
         &PATH_REGEX
     }
@@ -108,6 +121,7 @@ impl IntoResponse<RpcV2> for Error {
         match self {
             Error::NotFound => http::Response::builder()
                 .status(http::StatusCode::NOT_FOUND)
+                // TODO
                 .header(http::header::CONTENT_TYPE, "application/xml")
                 .extension(RuntimeErrorExtension::new(
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
@@ -191,7 +205,7 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
         }
 
         // Some headers are not allowed.
-        let request_has_forbidden_header = Self::FORBIDDEN_HEADERS
+        let request_has_forbidden_header = FORBIDDEN_HEADERS
             .into_iter()
             .any(|&forbidden_header| request.headers().contains_key(forbidden_header));
         if request_has_forbidden_header {
@@ -205,8 +219,10 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
         let request_path = request.uri().path();
         let regex = Self::uri_regex();
 
+        tracing::trace!(%request_path, "capturing service and operation from URI");
         let captures = regex.captures(request_path).ok_or(Error::NotFound)?;
         let (service, operation) = (&captures["service"], &captures["operation"]);
+        tracing::trace!(%service, %operation, "captured service and operation from URI");
 
         // Lookup in the `TinyMap` for a route for the target.
         let route = self
@@ -228,13 +244,43 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2Router<S> {
 #[cfg(test)]
 mod tests {
     use http::{HeaderMap, HeaderValue, Method};
+    use regex::Regex;
 
     use crate::protocol::test_helpers::req;
 
     use super::{Error, Router, RpcV2Router};
 
+    fn identifier_regex() -> Regex {
+        Regex::new(&format!("^{}$", super::IDENTIFIER_PATTERN)).unwrap()
+    }
+
     #[test]
-    fn uri_regex_works() {
+    fn valid_identifiers() {
+        let valid_identifiers = vec!["a", "_a", "_0", "__0", "variable123", "_underscored_variable"];
+
+        for id in &valid_identifiers {
+            assert!(identifier_regex().is_match(id), "'{}' is incorrectly rejected", id);
+        }
+    }
+
+    #[test]
+    fn invalid_identifiers() {
+        let invalid_identifiers = vec![
+            "0",
+            "123starts_with_digit",
+            "@invalid_start_character",
+            " space_in_identifier",
+            "invalid-character",
+            "invalid@character",
+        ];
+
+        for id in &invalid_identifiers {
+            assert!(!identifier_regex().is_match(id), "'{}' is incorrectly accepted", id);
+        }
+    }
+
+    #[test]
+    fn uri_regex_works_accepts() {
         let regex = RpcV2Router::<()>::uri_regex();
 
         for uri in [
@@ -246,6 +292,15 @@ mod tests {
             let captures = regex.captures(uri).unwrap();
             assert_eq!("Service", &captures["service"]);
             assert_eq!("Operation", &captures["operation"]);
+        }
+    }
+
+    #[test]
+    fn uri_regex_works_rejects() {
+        let regex = RpcV2Router::<()>::uri_regex();
+
+        for uri in ["/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/NoInputOutput"] {
+            assert!(regex.captures(uri).is_none());
         }
     }
 
