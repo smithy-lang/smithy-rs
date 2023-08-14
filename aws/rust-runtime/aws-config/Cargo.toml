@@ -52,7 +52,7 @@ futures-util = { version = "0.3.16", default-features = false }
 tracing-test = "0.2.1"
 tracing-subscriber = { version = "0.3.16", features = ["fmt", "json"] }
 
-tokio = { version = "1.23.1", features = ["test-util", "macros"] }
+tokio = { version = "1.23.1", features = ["test-util", "macros", "rt-multi-thread"] }
 
 # used for fuzzing profile parsing
 arbitrary = "1.3"
