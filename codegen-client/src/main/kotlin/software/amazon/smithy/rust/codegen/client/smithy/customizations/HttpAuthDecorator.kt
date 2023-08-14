@@ -67,12 +67,11 @@ private data class HttpAuthSchemes(
     companion object {
         fun from(codegenContext: ClientCodegenContext): HttpAuthSchemes {
             val authSchemes = ServiceIndex.of(codegenContext.model).getAuthSchemes(codegenContext.serviceShape).keys
-            val generateOrchestrator = codegenContext.smithyRuntimeMode.generateOrchestrator
             return HttpAuthSchemes(
-                apiKey = generateOrchestrator && authSchemes.contains(HttpApiKeyAuthTrait.ID),
-                basic = generateOrchestrator && authSchemes.contains(HttpBasicAuthTrait.ID),
-                bearer = generateOrchestrator && authSchemes.contains(HttpBearerAuthTrait.ID),
-                digest = generateOrchestrator && authSchemes.contains(HttpDigestAuthTrait.ID),
+                apiKey = authSchemes.contains(HttpApiKeyAuthTrait.ID),
+                basic = authSchemes.contains(HttpBasicAuthTrait.ID),
+                bearer = authSchemes.contains(HttpBearerAuthTrait.ID),
+                digest = authSchemes.contains(HttpDigestAuthTrait.ID),
             )
         }
     }

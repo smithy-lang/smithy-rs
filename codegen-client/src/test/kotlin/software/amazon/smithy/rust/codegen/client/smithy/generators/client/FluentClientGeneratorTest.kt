@@ -13,9 +13,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -85,7 +83,7 @@ class FluentClientGeneratorTest {
                         let connector = #{TestConnection}::<#{SdkBody}>::new(Vec::new());
                         let config = $moduleName::Config::builder()
                             .endpoint_resolver("http://localhost:1234")
-                            #{set_http_connector}
+                            .http_connector(connector.clone())
                             .build();
                         let smithy_client = aws_smithy_client::Builder::new()
                             .connector(connector.clone())
@@ -100,11 +98,6 @@ class FluentClientGeneratorTest {
                         .withFeature("test-util").toType()
                         .resolve("test_connection::TestConnection"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-                    "set_http_connector" to writable {
-                        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                            rust(".http_connector(connector.clone())")
-                        }
-                    },
                 )
             }
         }
@@ -128,7 +121,7 @@ class FluentClientGeneratorTest {
                         let connector = #{TestConnection}::<#{SdkBody}>::new(Vec::new());
                         let config = $moduleName::Config::builder()
                             .endpoint_resolver("http://localhost:1234")
-                            #{set_http_connector}
+                            .http_connector(connector.clone())
                             .build();
                         let smithy_client = aws_smithy_client::Builder::new()
                             .connector(connector.clone())
@@ -147,11 +140,6 @@ class FluentClientGeneratorTest {
                         .withFeature("test-util").toType()
                         .resolve("test_connection::TestConnection"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-                    "set_http_connector" to writable {
-                        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                            rust(".http_connector(connector.clone())")
-                        }
-                    },
                 )
             }
         }

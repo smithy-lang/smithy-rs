@@ -70,34 +70,16 @@ class DefaultProtocolTestGenerator(
     override val operationShape: OperationShape,
 
     private val renderClientCreation: RustWriter.(ClientCreationParams) -> Unit = { params ->
-        if (params.codegenContext.smithyRuntimeMode.generateMiddleware) {
-            rustTemplate(
-                """
-                let smithy_client = #{Builder}::new()
-                    .connector(${params.connectorName})
-                    .middleware(#{MapRequestLayer}::for_mapper(#{SmithyEndpointStage}::new()))
-                    .build();
-                let ${params.clientName} = #{Client}::with_config(smithy_client, ${params.configBuilderName}.build());
-                """,
-                "Client" to ClientRustModule.root.toType().resolve("Client"),
-                "Builder" to ClientRustModule.client.toType().resolve("Builder"),
-                "SmithyEndpointStage" to RT.smithyHttp(codegenContext.runtimeConfig)
-                    .resolve("endpoint::middleware::SmithyEndpointStage"),
-                "MapRequestLayer" to RT.smithyHttpTower(codegenContext.runtimeConfig)
-                    .resolve("map_request::MapRequestLayer"),
-            )
-        } else {
-            rustTemplate(
-                """
-                let ${params.clientName} = #{Client}::from_conf(
-                    ${params.configBuilderName}
-                        .http_connector(${params.connectorName})
-                        .build()
-                );
-                """,
-                "Client" to ClientRustModule.root.toType().resolve("Client"),
-            )
-        }
+        rustTemplate(
+            """
+            let ${params.clientName} = #{Client}::from_conf(
+                ${params.configBuilderName}
+                    .http_connector(${params.connectorName})
+                    .build()
+            );
+            """,
+            "Client" to ClientRustModule.root.toType().resolve("Client"),
+        )
     },
 ) : ProtocolTestGenerator {
     private val rc = codegenContext.runtimeConfig
@@ -258,7 +240,7 @@ class DefaultProtocolTestGenerator(
                             instantiator.render(this@renderHttpRequestTestCase, inputShape, httpRequestTestCase.params)
                         }
                         withBlock("let endpoint_prefix = Some({", "}.unwrap());") {
-                            bindings.render(this, "input", codegenContext.smithyRuntimeMode, generateValidation = false)
+                            bindings.render(this, "input", generateValidation = false)
                         }
                     }
                 }
@@ -347,62 +329,38 @@ class DefaultProtocolTestGenerator(
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
-        if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-            rust(
-                "let mut op_response = #T::new(http_response);",
-                RT.operationModule(rc).resolve("Response"),
-            )
-            rustTemplate(
-                """
-                use #{parse_http_response};
-                let parser = #{op}::new();
-                let parsed = parser.parse_unloaded(&mut op_response);
-                let parsed = parsed.unwrap_or_else(|| {
-                    let (http_response, _) = op_response.into_parts();
-                    let http_response = http_response.map(|body|#{copy_from_slice}(body.bytes().unwrap()));
-                    <#{op} as #{parse_http_response}>::parse_loaded(&parser, &http_response)
-                });
-                """,
-                "op" to operationSymbol,
-                "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-                "parse_http_response" to RT.parseHttpResponse(rc),
-            )
-        } else {
-            rustTemplate(
-                """
-                use #{ResponseDeserializer};
-                use #{RuntimePlugin};
+        rustTemplate(
+            """
+            use #{ResponseDeserializer};
+            use #{RuntimePlugin};
 
-                let op = #{Operation}::new();
-                let config = op.config().expect("the operation has config");
-                let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
+            let op = #{Operation}::new();
+            let config = op.config().expect("the operation has config");
+            let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
 
-                let parsed = de.deserialize_streaming(&mut http_response);
-                let parsed = parsed.unwrap_or_else(|| {
-                    let http_response = http_response.map(|body| {
-                        #{SdkBody}::from(#{copy_from_slice}(body.bytes().unwrap()))
-                    });
-                    de.deserialize_nonstreaming(&http_response)
+            let parsed = de.deserialize_streaming(&mut http_response);
+            let parsed = parsed.unwrap_or_else(|| {
+                let http_response = http_response.map(|body| {
+                    #{SdkBody}::from(#{copy_from_slice}(body.bytes().unwrap()))
                 });
-                """,
-                "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-                "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
-                "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
-                "RuntimePlugin" to RT.runtimePlugin(rc),
-                "SdkBody" to RT.sdkBody(rc),
-            )
-        }
+                de.deserialize_nonstreaming(&http_response)
+            });
+            """,
+            "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
+            "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
+            "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
+            "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
+            "RuntimePlugin" to RT.runtimePlugin(rc),
+            "SdkBody" to RT.sdkBody(rc),
+        )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
             val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
             rust("""let parsed = parsed.expect_err("should be error response");""")
-            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                rustTemplate(
-                    """let parsed: &#{Error} = parsed.as_operation_error().expect("operation error").downcast_ref().unwrap();""",
-                    "Error" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
-                )
-            }
+            rustTemplate(
+                """let parsed: &#{Error} = parsed.as_operation_error().expect("operation error").downcast_ref().unwrap();""",
+                "Error" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
+            )
             rustBlock("if let #T::$errorVariant(parsed) = parsed", errorSymbol) {
                 compareMembers(expectedShape)
             }
@@ -410,14 +368,10 @@ class DefaultProtocolTestGenerator(
                 rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
             }
         } else {
-            if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                rust("let parsed = parsed.unwrap();")
-            } else {
-                rustTemplate(
-                    """let parsed = parsed.expect("should be successful response").downcast::<#{Output}>().unwrap();""",
-                    "Output" to codegenContext.symbolProvider.toSymbol(expectedShape),
-                )
-            }
+            rustTemplate(
+                """let parsed = parsed.expect("should be successful response").downcast::<#{Output}>().unwrap();""",
+                "Output" to codegenContext.symbolProvider.toSymbol(expectedShape),
+            )
             compareMembers(outputShape)
         }
     }
