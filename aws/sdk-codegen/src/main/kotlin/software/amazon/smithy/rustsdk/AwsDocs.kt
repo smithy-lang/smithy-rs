@@ -22,8 +22,9 @@ object AwsDocs {
     fun canRelyOnAwsConfig(codegenContext: ClientCodegenContext): Boolean =
         SdkSettings.from(codegenContext.settings).awsConfigVersion != null &&
             !setOf(
-                ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
                 ShapeId.from("com.amazonaws.sso#SWBPortalService"),
+                ShapeId.from("com.amazonaws.ssooidc#AWSSSOOIDCService"),
+                ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
             ).contains(codegenContext.serviceShape.id)
 
     fun constructClient(codegenContext: ClientCodegenContext, indent: String): Writable {
