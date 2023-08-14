@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class SigV4AuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "SigV4AuthDecorator"
@@ -34,32 +33,25 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> = baseAuthSchemeOptions.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-        it + AuthSchemeOption.StaticAuthSchemeOption(SigV4Trait.ID) {
-            rustTemplate(
-                "#{scheme_id},",
-                "scheme_id" to AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-                    .resolve("auth::sigv4::SCHEME_ID"),
-            )
-        }
+    ): List<AuthSchemeOption> = baseAuthSchemeOptions + AuthSchemeOption.StaticAuthSchemeOption(SigV4Trait.ID) {
+        rustTemplate(
+            "#{scheme_id},",
+            "scheme_id" to AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                .resolve("auth::sigv4::SCHEME_ID"),
+        )
     }
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthServiceRuntimePluginCustomization(codegenContext))
-        }
+        baseCustomizations + AuthServiceRuntimePluginCustomization(codegenContext)
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthOperationCustomization(codegenContext))
-        }
+    ): List<OperationCustomization> = baseCustomizations + AuthOperationCustomization(codegenContext)
 }
 
 private class AuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
