@@ -510,7 +510,6 @@ class JsonParserGenerator(
                     )
                     deserializeStructInner(shape.members())
 
-                    // TODO the need for this check should be eliminated or the server code should be updated.
                     if (codegenContext.target == CodegenTarget.SERVER) {
                         if (returnSymbolToParse.isUnconstrained) {
                             rust("Ok(Some(builder))")
