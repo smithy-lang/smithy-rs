@@ -143,7 +143,7 @@ data class ClientCodegenConfig(
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    generateOptionsForRequiredShapes = node.get().getBooleanMemberOrDefault("generateOptionsForRequiredShapes", defaultGenerateOptionsForRequiredShapes),
+                    generateOptionsForRequiredShapes = coreCodegenConfig.generateOptionsForRequiredShapes,
                 )
             }
     }

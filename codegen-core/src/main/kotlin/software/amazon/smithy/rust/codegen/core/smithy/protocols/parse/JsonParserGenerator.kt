@@ -509,10 +509,20 @@ class JsonParserGenerator(
                         "Builder" to symbolProvider.symbolForBuilder(shape),
                     )
                     deserializeStructInner(shape.members())
-                    if (hasFallibleBuilder(shape, symbolProvider)) {
-                        rust("Ok(Some(builder.build()?))")
+
+                    // TODO the need for this check should be eliminated or the server code should be updated.
+                    if (codegenContext.target == CodegenTarget.SERVER) {
+                        if (returnSymbolToParse.isUnconstrained) {
+                            rust("Ok(Some(builder))")
+                        } else {
+                            rust("Ok(Some(builder.build()))")
+                        }
                     } else {
-                        rust("Ok(Some(builder.build()))")
+                        if (hasFallibleBuilder(shape, symbolProvider)) {
+                            rust("Ok(Some(builder.build()?))")
+                        } else {
+                            rust("Ok(Some(builder.build()))")
+                        }
                     }
                 }
             }

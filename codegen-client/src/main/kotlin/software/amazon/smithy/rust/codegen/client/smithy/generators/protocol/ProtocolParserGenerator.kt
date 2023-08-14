@@ -137,7 +137,7 @@ class ProtocolParserGenerator(
                     withBlock("Err(match error_code {", "})") {
                         val errors = operationShape.operationErrors(model)
                         errors.forEach { error ->
-                            val errorShape = model.expectShape(error.id, software.amazon.smithy.model.shapes.StructureShape::class.java)
+                            val errorShape = model.expectShape(error.id, StructureShape::class.java)
                             val variantName = symbolProvider.toSymbol(model.expectShape(error.id)).name
                             val errorCode = httpBindingResolver.errorCode(errorShape).dq()
                             withBlock(
@@ -145,7 +145,7 @@ class ProtocolParserGenerator(
                                 "}),",
                                 errorSymbol,
                             ) {
-                                software.amazon.smithy.rust.codegen.core.rustlang.Attribute.AllowUnusedMut.render(this)
+                                Attribute.AllowUnusedMut.render(this)
                                 assignment("mut tmp") {
                                     rustBlock("") {
                                         renderShapeParser(
@@ -166,14 +166,18 @@ class ProtocolParserGenerator(
                                         )
                                     }
                                 }
-                                if (errorShape.errorMessageMember() != null) {
-                                    rust(
-                                        """
-                                        if tmp.message.is_none() {
-                                            tmp.message = _error_message;
-                                        }
-                                        """,
-                                    )
+                                val errorMessageMember = errorShape.errorMessageMember()
+                                // If the message member is optional and wasn't set, we set a generic error message.
+                                if (errorMessageMember != null) {
+                                    if (errorMessageMember.isOptional) {
+                                        rust(
+                                            """
+                                            if tmp.message.is_none() {
+                                                tmp.message = _error_message;
+                                            }
+                                            """,
+                                        )
+                                    }
                                 }
                                 rust("tmp")
                             }
