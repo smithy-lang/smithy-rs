@@ -56,7 +56,11 @@ license-files = [
 multiple-versions = "allow"
 wildcards = "deny" # Don't allow wildcard dependencies
 highlight = "all"
-deny = []
+deny = [
+    # We don't have any reason to bring mio in right now, and it isn't compatible with WASM.
+    # We should avoid unintentionally bringing it in through tokio.
+    { name = "mio" }
+]
 
 # This section is considered when running `cargo deny check sources`.
 # More documentation about the 'sources' section can be found here:
