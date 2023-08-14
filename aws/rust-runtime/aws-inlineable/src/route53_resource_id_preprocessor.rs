@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 // This function is only used to strip prefixes from resource IDs at the time they're passed as
 // input to a request. Resource IDs returned in responses may or may not include a prefix.
 /// Strip the resource type prefix from resource ID return
-fn trim_resource_id(resource_id: &mut Option<String>) {
+fn trim_resource_id(resource_id: Option<&mut String>) {
     const PREFIXES: &[&str] = &[
         "/hostedzone/",
         "hostedzone/",
@@ -26,13 +26,9 @@ fn trim_resource_id(resource_id: &mut Option<String>) {
         "delegationset/",
     ];
 
-    for prefix in PREFIXES {
-        if let Some(id) = resource_id
-            .as_deref()
-            .unwrap_or_default()
-            .strip_prefix(prefix)
-        {
-            *resource_id = Some(id.to_string());
+    if let Some(resource_id) = resource_id {
+        if let Some(trimmed_id) = resource_id.strip_prefix("/hostedzone/") {
+            *resource_id = trimmed_id.to_string();
             return;
         }
     }
@@ -40,7 +36,7 @@ fn trim_resource_id(resource_id: &mut Option<String>) {
 
 pub(crate) struct Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
+    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String>,
 {
     get_mut_resource_id: G,
     _phantom: PhantomData<T>,
@@ -48,7 +44,7 @@ where
 
 impl<G, T> fmt::Debug for Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
+    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Route53ResourceIdInterceptor").finish()
@@ -57,7 +53,7 @@ where
 
 impl<G, T> Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
+    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String>,
 {
     pub(crate) fn new(get_mut_resource_id: G) -> Self {
         Self {
@@ -69,7 +65,7 @@ where
 
 impl<G, T> Interceptor for Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String> + Send + Sync,
+    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String> + Send + Sync,
     T: fmt::Debug + Send + Sync + 'static,
 {
     fn name(&self) -> &'static str {
@@ -102,7 +98,7 @@ mod test {
         let mut operation = OperationInput {
             resource: Some("Z0441723226OZ66S5ZCNZ".to_string()),
         };
-        trim_resource_id(&mut operation.resource);
+        trim_resource_id(operation.resource.as_mut());
         assert_eq!(
             &operation.resource.unwrap_or_default(),
             "Z0441723226OZ66S5ZCNZ"
@@ -118,7 +114,7 @@ mod test {
         let mut operation = OperationInput {
             change_id: Some("/change/Z0441723226OZ66S5ZCNZ".to_string()),
         };
-        trim_resource_id(&mut operation.change_id);
+        trim_resource_id(operation.change_id.as_mut());
         assert_eq!(
             &operation.change_id.unwrap_or_default(),
             "Z0441723226OZ66S5ZCNZ"
@@ -134,7 +130,7 @@ mod test {
         let mut operation = OperationInput {
             hosted_zone: Some("hostedzone/Z0441723226OZ66S5ZCNZ".to_string()),
         };
-        trim_resource_id(&mut operation.hosted_zone);
+        trim_resource_id(operation.hosted_zone.as_mut());
         assert_eq!(
             &operation.hosted_zone.unwrap_or_default(),
             "Z0441723226OZ66S5ZCNZ"
