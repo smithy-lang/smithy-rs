@@ -7,6 +7,4 @@
 set -eux
 cd smithy-rs
 
-# TODO(enableNewSmithyRuntimeCleanup): Only run the orchestrator version of this
-./gradlew codegen-client-test:test -Psmithy.runtime.mode=middleware
-./gradlew codegen-client-test:test -Psmithy.runtime.mode=orchestrator
+./gradlew codegen-client-test:test
