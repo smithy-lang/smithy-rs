@@ -5,9 +5,9 @@
 
 use crate::canary::CanaryError;
 use crate::mk_canary;
+use async_stream::stream;
 use aws_config::SdkConfig;
 use aws_sdk_transcribestreaming as transcribe;
-use aws_smithy_async::future::fn_stream::FnStream;
 use bytes::BufMut;
 use transcribe::primitives::Blob;
 use transcribe::types::{
@@ -31,18 +31,12 @@ pub async fn transcribe_canary(
     client: transcribe::Client,
     expected_transcribe_result: String,
 ) -> anyhow::Result<()> {
-    let input_stream = FnStream::new(|tx| {
-        Box::pin(async move {
-            let pcm = pcm_data();
-            for chunk in pcm.chunks(CHUNK_SIZE) {
-                tx.send(Ok(AudioStream::AudioEvent(
-                    AudioEvent::builder().audio_chunk(Blob::new(chunk)).build(),
-                )))
-                .await
-                .expect("send should succeed");
-            }
-        })
-    });
+    let input_stream = stream! {
+        let pcm = pcm_data();
+        for chunk in pcm.chunks(CHUNK_SIZE) {
+            yield Ok(AudioStream::AudioEvent(AudioEvent::builder().audio_chunk(Blob::new(chunk)).build()));
+        }
+    };
 
     let mut output = client
         .start_stream_transcription()

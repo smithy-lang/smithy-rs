@@ -26,6 +26,12 @@ mod latest;
 #[cfg(feature = "latest")]
 pub(crate) use latest as current_canary;
 
+// NOTE: This module can be deleted 3 releases after release-2023-08-03
+#[cfg(feature = "release-2023-08-03")]
+mod release_2023_08_03;
+#[cfg(feature = "release-2023-08-03")]
+pub(crate) use release_2023_08_03 as current_canary;
+
 // NOTE: This module can be deleted 3 releases after release-2023-01-26
 #[cfg(feature = "release-2023-01-26")]
 mod release_2023_01_26;
