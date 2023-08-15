@@ -166,22 +166,6 @@ class FluentClientGenerator(
                     pub fn config(&self) -> &crate::Config {
                         &self.handle.conf
                     }
-
-                    ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                    // This is currently kept around so the tests still compile in both modes
-                    /// Creates a client with the given service configuration.
-                    pub fn with_config<C, M, R>(_client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
-                        Self::from_conf(conf)
-                    }
-
-                    ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                    // This is currently kept around so the tests still compile in both modes
-                    /// Returns the client's configuration.
-                    pub fn conf(&self) -> &crate::Config {
-                        &self.handle.conf
-                    }
                 }
                 """,
                 *clientScope,

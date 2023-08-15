@@ -82,11 +82,7 @@ class FluentClientGeneratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         check_send(client.say_hello().send());
                     }
                     """,
@@ -116,11 +112,7 @@ class FluentClientGeneratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
 
                         let say_hello_fluent_builder = client.say_hello().byte_value(4).foo("hello!");
                         assert_eq!(*say_hello_fluent_builder.get_foo(), Some("hello!".to_string()));

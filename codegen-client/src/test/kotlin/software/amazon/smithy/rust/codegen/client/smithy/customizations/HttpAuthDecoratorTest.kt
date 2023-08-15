@@ -47,11 +47,7 @@ class HttpAuthDecoratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
@@ -81,11 +77,7 @@ class HttpAuthDecoratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
@@ -123,11 +115,7 @@ class HttpAuthDecoratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
@@ -166,11 +154,7 @@ class HttpAuthDecoratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
@@ -209,11 +193,7 @@ class HttpAuthDecoratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
@@ -252,11 +232,7 @@ class HttpAuthDecoratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
@@ -291,11 +267,7 @@ class HttpAuthDecoratorTest {
                             .endpoint_resolver("http://localhost:1234")
                             .http_connector(connector.clone())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
