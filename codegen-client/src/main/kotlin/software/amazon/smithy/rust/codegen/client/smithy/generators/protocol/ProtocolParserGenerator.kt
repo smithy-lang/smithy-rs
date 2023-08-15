@@ -55,8 +55,6 @@ class ProtocolParserGenerator(
         "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
         "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-        // TODO(enableNewSmithyRuntimeCleanup): Remove the `PropertyBag` below
-        "PropertyBag" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("property_bag::PropertyBag"),
     )
 
     fun parseResponseFn(
@@ -184,24 +182,15 @@ class ProtocolParserGenerator(
 
     fun parseStreamingResponseFn(
         operationShape: OperationShape,
-        // TODO(enableNewSmithyRuntimeCleanup): Remove the `propertyBagAvailable` flag as if it were always set to `false` when switching to the orchestrator
-        propertyBagAvailable: Boolean,
         customizations: List<OperationCustomization>,
     ): RuntimeType {
         val outputShape = operationShape.outputShape(model)
         val outputSymbol = symbolProvider.toSymbol(outputShape)
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
-        val fnNameSuffix = if (propertyBagAvailable) "http_response_with_props" else "http_response"
-        return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = fnNameSuffix) { fnName ->
+        return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
-            val propertiesArg = if (propertyBagAvailable) {
-                Attribute.AllowUnusedVariables.render(this)
-                ", properties: &#{PropertyBag}"
-            } else {
-                ""
-            }
             rustBlockTemplate(
-                "pub fn $fnName(response: &mut #{http}::Response<#{SdkBody}>$propertiesArg) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &mut #{http}::Response<#{SdkBody}>) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,

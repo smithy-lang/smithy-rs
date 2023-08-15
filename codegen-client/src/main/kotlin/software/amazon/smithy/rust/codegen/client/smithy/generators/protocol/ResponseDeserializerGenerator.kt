@@ -104,7 +104,7 @@ class ResponseDeserializerGenerator(
             }
             """,
             *codegenScope,
-            "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, false, customizations),
+            "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, customizations),
             "BeforeParseResponse" to writable {
                 writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
             },
