@@ -66,8 +66,6 @@ private fun HttpChecksumTrait.requestAlgorithmMember(
 private fun HttpChecksumTrait.checksumAlgorithmToStr(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape,
-    // TODO(enableNewSmithyRuntimeCleanup): Remove `algorithmWasCloned` (it should always be false)
-    algorithmWasCloned: Boolean,
 ): Writable {
     val runtimeConfig = codegenContext.runtimeConfig
     val requestAlgorithmMember = this.requestAlgorithmMember(codegenContext, operationShape)
@@ -75,11 +73,6 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
 
     return {
         if (requestAlgorithmMember != null) {
-            if (algorithmWasCloned) {
-                // User may set checksum for requests, and we need to call as_ref before we can convert the algorithm to a &str
-                rust("let checksum_algorithm = $requestAlgorithmMember.as_ref();")
-            }
-
             if (isRequestChecksumRequired) {
                 // Checksums are required, fall back to MD5
                 rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("md5"));""")
@@ -148,7 +141,6 @@ class HttpRequestChecksumCustomization(
                             "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
                                 codegenContext,
                                 operationShape,
-                                algorithmWasCloned = false,
                             ),
                         )
                     }
