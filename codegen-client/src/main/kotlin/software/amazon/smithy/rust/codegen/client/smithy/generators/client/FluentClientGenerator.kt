@@ -345,7 +345,7 @@ class FluentClientGenerator(
             val orchestratorScope = arrayOf(
                 *preludeScope,
                 "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                    .resolve("orchestrator::CustomizableOperation"),
+                    .resolve("CustomizableOperation"),
                 "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
