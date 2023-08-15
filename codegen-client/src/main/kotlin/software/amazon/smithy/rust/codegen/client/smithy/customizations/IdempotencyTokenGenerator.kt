@@ -40,12 +40,15 @@ class IdempotencyTokenGenerator(
         return when (section) {
             is OperationSection.AdditionalRuntimePlugins -> writable {
                 section.addOperationRuntimePlugin(this) {
+                    // An idempotency token is required, but it'll be set to an empty string if
+                    // the user didn't specify one. If that's the case, then we'll generate one
+                    // and set it.
                     rustTemplate(
                         """
                         #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
                             let input: &mut #{Input} = input.downcast_mut().expect("correct type");
-                            if input.$memberName.is_none() {
-                                input.$memberName = #{Some}(token_provider.make_idempotency_token());
+                            if input.$memberName.is_empty() {
+                                input.$memberName = token_provider.make_idempotency_token();
                             }
                         })
                         """,
