@@ -189,6 +189,9 @@ impl Error for BuildError {
 
 impl From<BuildError> for DeserializeError {
     fn from(build_error: BuildError) -> Self {
-        DeserializeError::custom_source("deserialization failed due to a build error", build_error)
+        DeserializeError::custom_source(
+            "deserialization failed because a required field was missing",
+            build_error,
+        )
     }
 }

@@ -476,12 +476,6 @@ class XmlBindingTraitParserGenerator(
                 }
 
                 if (BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
-                    // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
-                    // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
-                    // (because they're inputs, only outputs will be parsed!)
-
-                    // I'm leaving this branch here so that the binding trait parser generator would work for a server
-                    // side implementation in the future.
                     rustTemplate("""builder.build().map_err(|_|#{XmlDecodeError}::custom("missing field"))""", *codegenScope)
                 } else {
                     rust("Ok(builder.build())")
