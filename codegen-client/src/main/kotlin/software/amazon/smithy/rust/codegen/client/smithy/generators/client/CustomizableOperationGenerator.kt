@@ -7,9 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.GenericTypeArg
-import software.amazon.smithy.rust.codegen.core.rustlang.RustGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
@@ -25,96 +22,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
  * fluent client builders.
  */
 class CustomizableOperationGenerator(
-    private val codegenContext: ClientCodegenContext,
-    private val generics: FluentClientGenerics,
+    codegenContext: ClientCodegenContext,
     private val customizations: List<CustomizableOperationCustomization>,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
-    private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
-
-    private fun renderCustomizableOperationModule(writer: RustWriter) {
-        val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
-        val handleGenerics = generics.toRustGenerics()
-        val combinedGenerics = operationGenerics + handleGenerics
-
-        val codegenScope = arrayOf(
-            *preludeScope,
-            "Arc" to RuntimeType.Arc,
-            "Infallible" to RuntimeType.stdConvert.resolve("Infallible"),
-            // SDK Types
-            "HttpRequest" to RuntimeType.HttpRequest,
-            "handle_generics_decl" to handleGenerics.declaration(),
-            "handle_generics_bounds" to handleGenerics.bounds(),
-            "operation_generics_decl" to operationGenerics.declaration(),
-            "combined_generics_decl" to combinedGenerics.declaration(),
-            "customize_module" to ClientRustModule.Client.customize,
-            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        )
-
-        writer.rustTemplate(
-            """
-            /// A wrapper type for [`Operation`](aws_smithy_http::operation::Operation)s that allows for
-            /// customization of the operation before it is sent. A `CustomizableOperation` may be sent
-            /// by calling its [`.send()`][#{customize_module}::CustomizableOperation::send] method.
-            ##[derive(Debug)]
-            pub struct CustomizableOperation#{combined_generics_decl:W} {
-                pub(crate) handle: #{Arc}<crate::client::Handle#{handle_generics_decl:W}>,
-                pub(crate) operation: Operation#{operation_generics_decl:W},
-            }
-
-            impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
-            where
-                #{handle_generics_bounds:W}
-            {
-                /// Allows for customizing the operation's request
-                pub fn map_request<E>(
-                    mut self,
-                    f: impl #{FnOnce}(#{HttpRequest}<#{SdkBody}>) -> #{Result}<#{HttpRequest}<#{SdkBody}>, E>,
-                ) -> #{Result}<Self, E> {
-                    let (request, response) = self.operation.into_request_response();
-                    let request = request.augment(|req, _props| f(req))?;
-                    self.operation = Operation::from_parts(request, response);
-                    #{Ok}(self)
-                }
-
-                /// Convenience for `map_request` where infallible direct mutation of request is acceptable
-                pub fn mutate_request(self, f: impl #{FnOnce}(&mut #{HttpRequest}<#{SdkBody}>)) -> Self {
-                    self.map_request(|mut req| {
-                        f(&mut req);
-                        #{Result}::<_, #{Infallible}>::Ok(req)
-                    })
-                    .expect("infallible")
-                }
-
-                /// Allows for customizing the entire operation
-                pub fn map_operation<E>(
-                    mut self,
-                    f: impl #{FnOnce}(Operation#{operation_generics_decl:W}) -> #{Result}<Operation#{operation_generics_decl:W}, E>,
-                ) -> #{Result}<Self, E> {
-                    self.operation = f(self.operation)?;
-                    #{Ok}(self)
-                }
-
-                /// Direct access to read the HTTP request
-                pub fn request(&self) -> &#{HttpRequest}<#{SdkBody}> {
-                    self.operation.request()
-                }
-
-                /// Direct access to mutate the HTTP request
-                pub fn request_mut(&mut self) -> &mut #{HttpRequest}<#{SdkBody}> {
-                    self.operation.request_mut()
-                }
-
-                #{additional_methods}
-            }
-            """,
-            *codegenScope,
-            "additional_methods" to writable {
-                writeCustomizations(customizations, CustomizableOperationSection.CustomizableOperationImpl(false))
-            },
-        )
-    }
 
     fun render(crate: RustCrate) {
         val codegenScope = arrayOf(
