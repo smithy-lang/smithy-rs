@@ -168,40 +168,6 @@ class HttpRequestChecksumCustomization(
                     }
                 }
             }
-            // TODO(enableNewSmithyRuntimeCleanup): Delete `is OperationSection.MutateInput`
-            is OperationSection.MutateInput -> {
-                // Various other things will consume the input struct before we can get at the checksum algorithm
-                // field within it. This ensures that we preserve a copy of it. It's an enum so cloning is cheap.
-                if (requestAlgorithmMember != null) {
-                    rust("let $requestAlgorithmMember = self.$requestAlgorithmMember().cloned();")
-                }
-            }
-            // TODO(enableNewSmithyRuntimeCleanup): Delete `is OperationSection.MutateRequest`
-            is OperationSection.MutateRequest -> {
-                // Return early if no request checksum can be set nor is it required
-                if (checksumTrait.isRequestChecksumRequired || requestAlgorithmMember != null) {
-                    // `add_checksum_calculation_to_request` handles both streaming and in-memory request bodies.
-                    rustTemplate(
-                        """
-                        ${section.request} = ${section.request}.augment(|mut req, properties| {
-                            #{checksum_algorithm_to_str:W}
-                            if let Some(checksum_algorithm) = checksum_algorithm {
-                                #{add_checksum_calculation_to_request}(&mut req, properties, checksum_algorithm)?;
-                            }
-                            Result::<_, #{BuildError}>::Ok(req)
-                        })?;
-                        """,
-                        "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
-                            codegenContext,
-                            operationShape,
-                            algorithmWasCloned = true,
-                        ),
-                        "add_checksum_calculation_to_request" to runtimeConfig.awsInlineableBodyWithChecksumMiddleware()
-                            .resolve("add_checksum_calculation_to_request"),
-                        "BuildError" to runtimeConfig.operationBuildError(),
-                    )
-                }
-            }
             else -> { }
         }
     }

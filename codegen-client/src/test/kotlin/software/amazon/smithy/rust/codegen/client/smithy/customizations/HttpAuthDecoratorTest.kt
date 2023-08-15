@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -26,10 +25,7 @@ class HttpAuthDecoratorTest {
 
     @Test
     fun multipleAuthSchemesSchemeSelection() {
-        clientIntegrationTest(
-            TestModels.allSchemes,
-            TestCodegenSettings.orchestratorModeTestParams,
-        ) { codegenContext, rustCrate ->
+        clientIntegrationTest(TestModels.allSchemes) { codegenContext, rustCrate ->
             rustCrate.integrationTest("tests") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)
@@ -105,10 +101,7 @@ class HttpAuthDecoratorTest {
 
     @Test
     fun apiKeyInQueryString() {
-        clientIntegrationTest(
-            TestModels.apiKeyInQueryString,
-            TestCodegenSettings.orchestratorModeTestParams,
-        ) { codegenContext, rustCrate ->
+        clientIntegrationTest(TestModels.apiKeyInQueryString) { codegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_applied_to_query_string") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)
@@ -150,10 +143,7 @@ class HttpAuthDecoratorTest {
 
     @Test
     fun apiKeyInHeaders() {
-        clientIntegrationTest(
-            TestModels.apiKeyInHeaders,
-            TestCodegenSettings.orchestratorModeTestParams,
-        ) { codegenContext, rustCrate ->
+        clientIntegrationTest(TestModels.apiKeyInHeaders) { codegenContext, rustCrate ->
             rustCrate.integrationTest("api_key_applied_to_headers") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)
@@ -196,10 +186,7 @@ class HttpAuthDecoratorTest {
 
     @Test
     fun basicAuth() {
-        clientIntegrationTest(
-            TestModels.basicAuth,
-            TestCodegenSettings.orchestratorModeTestParams,
-        ) { codegenContext, rustCrate ->
+        clientIntegrationTest(TestModels.basicAuth) { codegenContext, rustCrate ->
             rustCrate.integrationTest("basic_auth") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)
@@ -242,10 +229,7 @@ class HttpAuthDecoratorTest {
 
     @Test
     fun bearerAuth() {
-        clientIntegrationTest(
-            TestModels.bearerAuth,
-            TestCodegenSettings.orchestratorModeTestParams,
-        ) { codegenContext, rustCrate ->
+        clientIntegrationTest(TestModels.bearerAuth) { codegenContext, rustCrate ->
             rustCrate.integrationTest("bearer_auth") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)
@@ -288,10 +272,7 @@ class HttpAuthDecoratorTest {
 
     @Test
     fun optionalAuth() {
-        clientIntegrationTest(
-            TestModels.optionalAuth,
-            TestCodegenSettings.orchestratorModeTestParams,
-        ) { codegenContext, rustCrate ->
+        clientIntegrationTest(TestModels.optionalAuth) { codegenContext, rustCrate ->
             rustCrate.integrationTest("optional_auth") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)

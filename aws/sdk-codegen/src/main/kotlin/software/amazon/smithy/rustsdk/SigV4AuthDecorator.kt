@@ -9,6 +9,8 @@ import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -84,6 +86,22 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
             else -> {}
         }
     }
+}
+
+private fun needsAmzSha256(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+    ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820") -> true
+    else -> false
+}
+
+private fun disableDoubleEncode(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+    else -> false
+}
+
+private fun disableUriPathNormalization(service: ServiceShape) = when (service.id) {
+    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+    else -> false
 }
 
 private class AuthOperationCustomization(private val codegenContext: ClientCodegenContext) : OperationCustomization() {

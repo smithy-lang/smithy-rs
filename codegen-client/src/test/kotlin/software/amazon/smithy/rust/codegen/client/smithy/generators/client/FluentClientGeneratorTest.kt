@@ -8,14 +8,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -71,7 +68,7 @@ class FluentClientGeneratorTest {
 
     @Test
     fun `send() future implements Send`() {
-        val test: (ClientCodegenContext, RustCrate) -> Unit = { codegenContext, rustCrate ->
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.integrationTest("send_future_is_send") {
                 val moduleName = codegenContext.moduleUseName()
                 rustTemplate(
@@ -93,25 +90,21 @@ class FluentClientGeneratorTest {
                         check_send(client.say_hello().send());
                     }
                     """,
-                    "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
+                    "TestConnection" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.smithyClient(
+                        codegenContext.runtimeConfig,
+                    )
                         .toDevDependency()
                         .withFeature("test-util").toType()
                         .resolve("test_connection::TestConnection"),
-                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                    "SdkBody" to software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.sdkBody(codegenContext.runtimeConfig),
                 )
             }
         }
-        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams, test = test)
-        clientIntegrationTest(
-            model,
-            TestCodegenSettings.orchestratorModeTestParams,
-            test = test,
-        )
     }
 
     @Test
     fun `generate inner builders`() {
-        val test: (ClientCodegenContext, RustCrate) -> Unit = { codegenContext, rustCrate ->
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.integrationTest("inner_builder") {
                 val moduleName = codegenContext.moduleUseName()
                 rustTemplate(
@@ -143,11 +136,5 @@ class FluentClientGeneratorTest {
                 )
             }
         }
-        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams, test = test)
-        clientIntegrationTest(
-            model,
-            TestCodegenSettings.orchestratorModeTestParams,
-            test = test,
-        )
     }
 }
