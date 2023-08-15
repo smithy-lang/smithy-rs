@@ -40,20 +40,6 @@ private fun RuntimeConfig.awsInlineableHttpRequestChecksum() = RuntimeType.forIn
     ),
 )
 
-// TODO(enableNewSmithyRuntimeCleanup): Delete this method
-fun RuntimeConfig.awsInlineableBodyWithChecksumMiddleware() = RuntimeType.forInlineDependency(
-    InlineAwsDependency.forRustFile(
-        "http_body_checksum_middleware", visibility = Visibility.PUBCRATE,
-        CargoDependency.Http,
-        CargoDependency.HttpBody,
-        CargoDependency.smithyHttp(this),
-        CargoDependency.smithyChecksums(this),
-        CargoDependency.smithyTypes(this),
-        CargoDependency.Bytes,
-        CargoDependency.Tracing,
-    ),
-)
-
 class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0

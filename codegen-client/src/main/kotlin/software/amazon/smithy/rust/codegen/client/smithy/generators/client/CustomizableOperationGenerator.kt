@@ -165,7 +165,7 @@ class CustomizableOperationGenerator(
                 "additional_methods" to writable {
                     writeCustomizations(
                         customizations,
-                        CustomizableOperationSection.CustomizableOperationImpl(true),
+                        CustomizableOperationSection.CustomizableOperationImpl,
                     )
                 },
             )
