@@ -125,10 +125,8 @@ pub mod retry;
 #[cfg(feature = "sso")]
 pub mod sso;
 pub(crate) mod standard_property;
-#[cfg(feature = "sts")]
 pub mod sts;
 pub mod timeout;
-#[cfg(feature = "sts")]
 pub mod web_identity_token;
 
 /// Create an environment loader for AWS Configuration

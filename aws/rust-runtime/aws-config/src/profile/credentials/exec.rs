@@ -7,24 +7,17 @@ use super::repr::{self, BaseProvider};
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
-use aws_credential_types::provider::ProvideCredentials;
+#[cfg(feature = "credentials-sso")]
+use crate::sso::{credentials::SsoProviderConfig, SsoCredentialsProvider};
+use crate::sts;
+use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
+use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
+use aws_sdk_sts::config::{Builder as StsConfigBuilder, Credentials};
+use aws_sdk_sts::Client as StsClient;
 use aws_smithy_async::time::SharedTimeSource;
 use std::fmt::Debug;
 use std::sync::Arc;
 
-#[cfg(feature = "sso")]
-use crate::sso::{credentials::SsoProviderConfig, SsoCredentialsProvider};
-
-#[cfg(feature = "sts")]
-use crate::sts;
-#[cfg(feature = "sts")]
-use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
-#[cfg(feature = "sts")]
-use aws_sdk_sts::config::{Builder as StsConfigBuilder, Credentials};
-#[cfg(feature = "sts")]
-use aws_sdk_sts::Client as StsClient;
-
-#[cfg_attr(not(feature = "sts"), allow(dead_code))]
 #[derive(Debug)]
 pub(super) struct AssumeRoleProvider {
     role_arn: String,
@@ -33,15 +26,12 @@ pub(super) struct AssumeRoleProvider {
     time_source: SharedTimeSource,
 }
 
-#[cfg(feature = "sts")]
 impl AssumeRoleProvider {
     pub(super) async fn credentials(
         &self,
         input_credentials: Credentials,
         sts_config: &StsConfigBuilder,
-    ) -> aws_credential_types::provider::Result {
-        use aws_credential_types::provider::error::CredentialsError;
-
+    ) -> provider::Result {
         let config = sts_config
             .clone()
             .credentials_provider(input_credentials)
@@ -102,32 +92,22 @@ impl ProviderChain {
                 web_identity_token_file,
                 session_name,
             } => {
-                #[cfg(feature = "sts")]
-                {
-                    let provider = WebIdentityTokenCredentialsProvider::builder()
-                        .static_configuration(StaticConfiguration {
-                            web_identity_token_file: web_identity_token_file.into(),
-                            role_arn: role_arn.to_string(),
-                            session_name: session_name.map(|sess| sess.to_string()).unwrap_or_else(
-                                || {
-                                    sts::util::default_session_name(
-                                        "web-identity-token-profile",
-                                        provider_config.time_source().now(),
-                                    )
-                                },
-                            ),
-                        })
-                        .configure(provider_config)
-                        .build();
-                    Arc::new(provider)
-                }
-                #[cfg(not(feature = "sts"))]
-                {
-                    let _ = (role_arn, web_identity_token_file, session_name);
-                    Err(ProfileFileError::FeatureNotEnabled {
-                        feature: "sts".into(),
-                    })?
-                }
+                let provider = WebIdentityTokenCredentialsProvider::builder()
+                    .static_configuration(StaticConfiguration {
+                        web_identity_token_file: web_identity_token_file.into(),
+                        role_arn: role_arn.to_string(),
+                        session_name: session_name.map(|sess| sess.to_string()).unwrap_or_else(
+                            || {
+                                sts::util::default_session_name(
+                                    "web-identity-token-profile",
+                                    provider_config.time_source().now(),
+                                )
+                            },
+                        ),
+                    })
+                    .configure(provider_config)
+                    .build();
+                Arc::new(provider)
             }
             #[allow(unused_variables)]
             BaseProvider::Sso {
@@ -136,7 +116,7 @@ impl ProviderChain {
                 sso_role_name,
                 sso_start_url,
             } => {
-                #[cfg(feature = "sso")]
+                #[cfg(feature = "credentials-sso")]
                 {
                     use aws_types::region::Region;
                     let sso_config = SsoProviderConfig {
@@ -144,15 +124,13 @@ impl ProviderChain {
                         role_name: sso_role_name.to_string(),
                         start_url: sso_start_url.to_string(),
                         region: Region::new(sso_region.to_string()),
-                        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/703): Implement sso_session_name profile property
-                        session_name: None,
                     };
                     Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
                 }
-                #[cfg(not(feature = "sso"))]
+                #[cfg(not(feature = "credentials-sso"))]
                 {
                     Err(ProfileFileError::FeatureNotEnabled {
-                        feature: "sso".into(),
+                        feature: "credentials-sso".into(),
                     })?
                 }
             }

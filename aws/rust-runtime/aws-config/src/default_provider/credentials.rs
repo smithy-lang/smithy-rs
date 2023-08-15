@@ -94,7 +94,6 @@ impl ProvideCredentials for DefaultCredentialsChain {
 #[derive(Debug, Default)]
 pub struct Builder {
     profile_file_builder: crate::profile::credentials::Builder,
-    #[cfg(feature = "sts")]
     web_identity_builder: crate::web_identity_token::Builder,
     imds_builder: crate::imds::credentials::Builder,
     ecs_builder: crate::ecs::Builder,
@@ -183,19 +182,13 @@ impl Builder {
 
         let env_provider = EnvironmentVariableCredentialsProvider::new_with_env(conf.env());
         let profile_provider = self.profile_file_builder.configure(&conf).build();
-        #[cfg(feature = "sts")]
         let web_identity_token_provider = self.web_identity_builder.configure(&conf).build();
         let imds_provider = self.imds_builder.configure(&conf).build();
         let ecs_provider = self.ecs_builder.configure(&conf).build();
 
-        let mut provider_chain = CredentialsProviderChain::first_try("Environment", env_provider)
-            .or_else("Profile", profile_provider);
-        #[cfg(feature = "sts")]
-        {
-            provider_chain =
-                provider_chain.or_else("WebIdentityToken", web_identity_token_provider);
-        }
-        provider_chain = provider_chain
+        let provider_chain = CredentialsProviderChain::first_try("Environment", env_provider)
+            .or_else("Profile", profile_provider)
+            .or_else("WebIdentityToken", web_identity_token_provider)
             .or_else("EcsContainer", ecs_provider)
             .or_else("Ec2InstanceMetadata", imds_provider);
 
@@ -275,30 +268,21 @@ mod test {
 
     make_test!(prefer_environment);
     make_test!(profile_static_keys);
-    #[cfg(feature = "sts")]
     make_test!(web_identity_token_env);
-    #[cfg(feature = "sts")]
     make_test!(web_identity_source_profile_no_env);
-    #[cfg(feature = "sts")]
     make_test!(web_identity_token_invalid_jwt);
-    #[cfg(feature = "sts")]
     make_test!(web_identity_token_source_profile);
-    #[cfg(feature = "sts")]
     make_test!(web_identity_token_profile);
     make_test!(profile_name);
-    #[cfg(feature = "sts")]
     make_test!(profile_overrides_web_identity);
     make_test!(environment_variables_blank);
-    #[cfg(feature = "sts")]
     make_test!(imds_token_fail);
 
-    #[cfg(feature = "sts")]
     make_test!(imds_no_iam_role);
     make_test!(imds_default_chain_error);
     make_test!(imds_default_chain_success, builder: |config| {
         config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
     });
-    #[cfg(feature = "sts")]
     make_test!(imds_assume_role);
     make_test!(imds_config_with_no_creds, builder: |config| {
         config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
@@ -307,20 +291,19 @@ mod test {
     make_test!(imds_default_chain_retries, builder: |config| {
         config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
     });
-    #[cfg(feature = "sts")]
     make_test!(ecs_assume_role);
     make_test!(ecs_credentials);
     make_test!(ecs_credentials_invalid_profile);
 
-    #[cfg(not(feature = "sso"))]
-    make_test!(sso_assume_role #[should_panic(expected = "This behavior requires following cargo feature(s) enabled: sso")]);
-    #[cfg(not(feature = "sso"))]
-    make_test!(sso_no_token_file #[should_panic(expected = "This behavior requires following cargo feature(s) enabled: sso")]);
+    #[cfg(not(feature = "credentials-sso"))]
+    make_test!(sso_assume_role #[should_panic(expected = "This behavior requires following cargo feature(s) enabled: credentials-sso")]);
+    #[cfg(not(feature = "credentials-sso"))]
+    make_test!(sso_no_token_file #[should_panic(expected = "This behavior requires following cargo feature(s) enabled: credentials-sso")]);
 
-    #[cfg(feature = "sso")]
+    #[cfg(feature = "credentials-sso")]
     make_test!(sso_assume_role);
 
-    #[cfg(feature = "sso")]
+    #[cfg(feature = "credentials-sso")]
     make_test!(sso_no_token_file);
 
     #[tokio::test]

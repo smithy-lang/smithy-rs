@@ -29,7 +29,6 @@ use crate::profile::profile_file::ProfileFiles;
 use crate::profile::Profile;
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
-#[cfg(feature = "sts")]
 use aws_sdk_sts::config::Builder as StsConfigBuilder;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
@@ -143,7 +142,6 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 #[derive(Debug)]
 pub struct ProfileFileCredentialsProvider {
     factory: NamedProviderFactory,
-    #[cfg(feature = "sts")]
     sts_config: StsConfigBuilder,
     provider_config: ProviderConfig,
 }
@@ -167,7 +165,6 @@ impl ProfileFileCredentialsProvider {
                     &err
                 )),
             })?;
-        #[allow(unused_mut)]
         let mut creds = match inner_provider
             .base()
             .provide_credentials()
@@ -183,23 +180,19 @@ impl ProfileFileCredentialsProvider {
                 return Err(CredentialsError::provider_error(e));
             }
         };
-        // Note: the chain is checked against the `sts` feature in the `build_provider_chain`
-        #[cfg(feature = "sts")]
-        {
-            for provider in inner_provider.chain().iter() {
-                let next_creds = provider
-                    .credentials(creds, &self.sts_config)
-                    .instrument(tracing::debug_span!("load_assume_role", provider = ?provider))
-                    .await;
-                match next_creds {
-                    Ok(next_creds) => {
-                        tracing::info!(creds = ?next_creds, "loaded assume role credentials");
-                        creds = next_creds
-                    }
-                    Err(e) => {
-                        tracing::warn!(provider = ?provider, "failed to load assume role credentials");
-                        return Err(CredentialsError::provider_error(e));
-                    }
+        for provider in inner_provider.chain().iter() {
+            let next_creds = provider
+                .credentials(creds, &self.sts_config)
+                .instrument(tracing::debug_span!("load_assume_role", provider = ?provider))
+                .await;
+            match next_creds {
+                Ok(next_creds) => {
+                    tracing::info!(creds = ?next_creds, "loaded assume role credentials");
+                    creds = next_creds
+                }
+                Err(e) => {
+                    tracing::warn!(provider = ?provider, "failed to load assume role credentials");
+                    return Err(CredentialsError::provider_error(e));
                 }
             }
         }
@@ -451,7 +444,6 @@ impl Builder {
 
         ProfileFileCredentialsProvider {
             factory,
-            #[cfg(feature = "sts")]
             sts_config: conf.sts_client_config(),
             provider_config: conf,
         }
@@ -468,14 +460,7 @@ async fn build_provider_chain(
         .map_err(|parse_err| ProfileFileError::InvalidProfile(parse_err.clone()))?;
     let repr = repr::resolve_chain(profile_set)?;
     tracing::info!(chain = ?repr, "constructed abstract provider from config file");
-    let provider = exec::ProviderChain::from_repr(provider_config, repr, factory)?;
-    #[cfg(not(feature = "sts"))]
-    if !provider.chain().is_empty() {
-        return Err(ProfileFileError::FeatureNotEnabled {
-            feature: "sts".into(),
-        });
-    }
-    Ok(provider)
+    exec::ProviderChain::from_repr(provider_config, repr, factory)
 }
 
 #[cfg(test)]
@@ -499,13 +484,10 @@ mod test {
         };
     }
 
-    #[cfg(feature = "sts")]
     make_test!(e2e_assume_role);
     make_test!(empty_config);
-    #[cfg(feature = "sts")]
     make_test!(retry_on_error);
     make_test!(invalid_config);
-    #[cfg(feature = "sts")]
     make_test!(region_override);
     make_test!(credential_process);
     make_test!(credential_process_failure);
