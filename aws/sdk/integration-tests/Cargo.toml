@@ -11,10 +11,11 @@ members = [
     "no-default-features",
     "polly",
     "qldbsession",
+    "route53",
     "s3",
     "s3control",
     "sts",
-    "transcribestreaming",
     "timestreamquery",
+    "transcribestreaming",
     "webassembly",
 ]
