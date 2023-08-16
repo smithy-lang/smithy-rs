@@ -136,7 +136,7 @@ data class ClientCodegenConfig(
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                    enableNewSmithyRuntime = SmithyRuntimeMode.fromString(node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware")),
+                    enableNewSmithyRuntime = SmithyRuntimeMode.fromString(node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "orchestrator")),
                     includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
                     enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
                     nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", defaultNullabilityCheckMode)),
