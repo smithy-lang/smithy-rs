@@ -14,15 +14,14 @@ rustls = ["aws-smithy-client/rustls", "client-hyper"]
 native-tls = []
 allow-compilation = [] # our tests use `cargo test --all-features` and native-tls breaks CI
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
-sts = ["dep:aws-sdk-sts"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 
-default = ["client-hyper", "rustls", "rt-tokio", "sts"]
+default = ["client-hyper", "rustls", "rt-tokio"]
 
 [dependencies]
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types" }
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
-aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false, optional = true }
+aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", default-features = false }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }

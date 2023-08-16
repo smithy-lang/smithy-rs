@@ -99,7 +99,7 @@ impl fmt::Display for CachedSsoTokenError {
 }
 
 impl StdError for CachedSsoTokenError {
-    fn cause(&self) -> Option<&dyn StdError> {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             Self::FailedToFormatDateTime { source } => Some(source.as_ref()),
             Self::InvalidField { source, .. } => Some(source.as_ref()),
