@@ -52,6 +52,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         /** Expression representing the value to write to the QueryValueWriter */
         val valueExpression: ValueExpression,
         val shape: T,
+        val isOptional: Boolean = false,
     )
 
     protected data class MemberContext(
@@ -89,6 +90,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
     protected val model = codegenContext.model
     protected val symbolProvider = codegenContext.symbolProvider
     protected val runtimeConfig = codegenContext.runtimeConfig
+    private val nullableIndex = NullableIndex(model)
     private val target = codegenContext.target
     private val serviceShape = codegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
@@ -119,7 +121,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType {
-        TODO("AwsQuery doesn't support payload serialization")
+        TODO("$protocolName doesn't support payload serialization")
     }
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
@@ -172,11 +174,26 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 "Input" to structureSymbol,
                 *codegenScope,
             ) {
-                serializeStructureInner(context)
+                context.copy(writerExpression = "writer", valueExpression = ValueExpression.Reference("input"))
+                    .also { inner ->
+                        for (member in inner.shape.members()) {
+                            val memberContext = MemberContext.structMember(inner, member, symbolProvider)
+                            structWriter(memberContext) { writerExpression ->
+                                serializeMember(memberContext.copy(writerExpression = writerExpression))
+                            }
+                        }
+                    }
                 rust("Ok(())")
             }
         }
-        rust("#T(${context.writerExpression}, ${context.valueExpression.name})?;", structureSerializer)
+
+//        if (structureSymbol.isOptional()) {
+//            rustBlock("if let Some(${safeName()}) = ${context.valueExpression.asRef()}") {
+//                rust("#T(${context.writerExpression}, ${safeName()})?;", structureSerializer)
+//            }
+//        } else {
+        rust("#T(${context.writerExpression}, ${context.valueExpression.asRef()})?;", structureSerializer)
+//        }
     }
 
     private fun RustWriter.serializeStructureInner(context: Context<StructureShape>) {
@@ -214,12 +231,9 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         val value = context.valueExpression
         when (target) {
             is StringShape -> {
-                when (
-                    target.hasTrait<EnumTrait>() ||
-                        symbolProvider.config.nullabilityCheckMode == NullableIndex.CheckMode.CLIENT_CAREFUL
-                ) {
+                when (target.hasTrait<EnumTrait>()) {
                     true -> rust("$writer.string(${value.name}.as_str());")
-                    false -> rust("$writer.string(${value.name});")
+                    false -> rust("$writer.string(${value.asRef()});")
                 }
             }
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
@@ -236,7 +250,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 )
             }
             is BlobShape -> rust(
-                "$writer.string(&#T(${value.name}));",
+                "$writer.string(&#T(&${value.name}));",
                 RuntimeType.base64Encode(runtimeConfig),
             )
             is TimestampShape -> {

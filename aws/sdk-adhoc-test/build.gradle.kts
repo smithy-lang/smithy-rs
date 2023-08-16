@@ -38,7 +38,7 @@ dependencies {
 }
 
 fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
-fun getGenerateOptionsForRequiredShapes(): Boolean = properties.get("smithy.generate.options.for.required.shapes").toBoolean()
+fun getNullabilityCheckMode(): String = properties.get("smithy.nullability.check.mode") ?: "CLIENT"
 
 val allCodegenTests = listOf(
     CodegenTest(
@@ -50,7 +50,7 @@ val allCodegenTests = listOf(
             "codegen": {
                 "includeFluentClient": false,
                 "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
-                "generateOptionsForRequiredShapes": ${getGenerateOptionsForRequiredShapes()}
+                "nullabilityCheckMode": ${getNullabilityCheckMode()}
             },
             "customizationConfig": {
                 "awsSdk": {
@@ -68,7 +68,7 @@ val allCodegenTests = listOf(
             "codegen": {
                 "includeFluentClient": false,
                 "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
-                "generateOptionsForRequiredShapes": ${getGenerateOptionsForRequiredShapes()}
+                "nullabilityCheckMode": ${getNullabilityCheckMode()}
             },
             "customizationConfig": {
                 "awsSdk": {

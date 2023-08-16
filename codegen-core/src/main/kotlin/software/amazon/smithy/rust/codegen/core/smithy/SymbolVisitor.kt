@@ -187,7 +187,7 @@ open class SymbolVisitor(
             val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
             symbolBuilder(shape, rustType).locatedIn(moduleForShape(shape)).build()
         } else {
-            simpleShape(shape)
+            symbolBuilder(shape, RustType.String).build()
         }
     }
 

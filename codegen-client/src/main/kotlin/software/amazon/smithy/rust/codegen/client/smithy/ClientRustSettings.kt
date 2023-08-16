@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
@@ -98,7 +99,7 @@ enum class SmithyRuntimeMode {
 data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
-    override val generateOptionsForRequiredShapes: Boolean = defaultGenerateOptionsForRequiredShapes,
+    val nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
     val renameExceptions: Boolean = defaultRenameExceptions,
     val includeFluentClient: Boolean = defaultIncludeFluentClient,
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
@@ -120,6 +121,7 @@ data class ClientCodegenConfig(
         private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Orchestrator
         private const val defaultIncludeEndpointUrlConfig = true
         private const val defaultEnableUserConfigurableRuntimePlugins = true
+        private val defaultNullabilityCheckMode = "CLIENT"
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
@@ -137,13 +139,13 @@ data class ClientCodegenConfig(
                     enableNewSmithyRuntime = SmithyRuntimeMode.fromString(node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware")),
                     includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
                     enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
-                    generateOptionsForRequiredShapes = node.get().getBooleanMemberOrDefault("generateOptionsForRequiredShapes", defaultGenerateOptionsForRequiredShapes),
+                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", defaultNullabilityCheckMode)),
                 )
             } else {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
-                    generateOptionsForRequiredShapes = coreCodegenConfig.generateOptionsForRequiredShapes,
+                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(defaultNullabilityCheckMode),
                 )
             }
     }

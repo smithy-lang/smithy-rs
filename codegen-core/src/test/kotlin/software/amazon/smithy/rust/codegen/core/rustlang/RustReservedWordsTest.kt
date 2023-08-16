@@ -14,14 +14,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class RustReservedWordSymbolProviderTest {
     private class TestSymbolProvider(model: Model) :
-        WrappingSymbolProvider(SymbolVisitor(testRustSettings(), model, null, TestRustSymbolProviderConfig))
+        WrappingSymbolProvider(SymbolVisitor(testRustSettings(), model, null, testRustSymbolProviderConfig()))
     private val emptyConfig = RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap())
 
     @Test
