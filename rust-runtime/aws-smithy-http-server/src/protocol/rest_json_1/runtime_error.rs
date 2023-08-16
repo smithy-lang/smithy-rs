@@ -47,6 +47,9 @@ pub enum RuntimeError {
     InternalFailure(crate::Error),
     /// Request contained an `Accept` header with a MIME type, and the server cannot return a response
     /// body adhering to that MIME type.
+    /// This is returned directly (i.e. without going through a [`RequestRejection`] first) in the
+    /// generated SDK when calling [`crate::protocol::accept_header_classifier`] in
+    /// `from_request`.
     NotAcceptable,
     /// The request does not contain the expected `Content-Type` header value.
     UnsupportedMediaType,

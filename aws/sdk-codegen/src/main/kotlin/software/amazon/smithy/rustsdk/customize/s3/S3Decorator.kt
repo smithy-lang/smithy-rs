@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
@@ -34,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctio
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.traits.AllowInvalidXmlRoot
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.getBuiltIn
 import software.amazon.smithy.rustsdk.toWritable
@@ -82,6 +84,8 @@ class S3Decorator : ClientCodegenDecorator {
                     },
                 )::transform,
             )
+            // enable optional auth for operations commonly used with public buckets
+            .let(AddOptionalAuth()::transform)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
@@ -125,6 +129,26 @@ class FilterEndpointTests(
                 .version(trait.version).build()
 
             else -> trait
+        }
+    }
+}
+
+// TODO(P96049742): This model transform may need to change depending on if and how the S3 model is updated.
+private class AddOptionalAuth {
+    private val s3OptionalAuthOperations = listOf(
+        ShapeId.from("com.amazonaws.s3#ListObjects"),
+        ShapeId.from("com.amazonaws.s3#ListObjectsV2"),
+        ShapeId.from("com.amazonaws.s3#HeadObject"),
+        ShapeId.from("com.amazonaws.s3#GetObject"),
+    )
+
+    fun transform(model: Model) = ModelTransformer.create().mapShapes(model) { shape ->
+        if (shape is OperationShape && s3OptionalAuthOperations.contains(shape.id) && !shape.hasTrait<OptionalAuthTrait>()) {
+            shape.toBuilder()
+                .addTrait(OptionalAuthTrait())
+                .build()
+        } else {
+            shape
         }
     }
 }

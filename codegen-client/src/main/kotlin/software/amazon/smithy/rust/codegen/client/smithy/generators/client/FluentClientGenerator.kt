@@ -198,10 +198,9 @@ class FluentClientGenerator(
                         ///
                         /// ## Panics
                         ///
-                        /// - This method will panic if the `conf` is missing an async sleep implementation. If you experience this panic, set
-                        ///     the `sleep_impl` on the Config passed into this function to fix it.
-                        /// - This method will panic if the `conf` is missing an HTTP connector. If you experience this panic, set the
-                        ///     `http_connector` on the Config passed into this function to fix it.
+                        /// This method will panic if the `conf` has retry or timeouts enabled without a `sleep_impl`.
+                        /// If you experience this panic, it can be fixed by setting the `sleep_impl`, or by disabling
+                        /// retries and timeouts.
                         pub fn from_conf(conf: crate::Config) -> Self {
                             let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
                             let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
@@ -715,11 +714,18 @@ private fun OperationShape.fullyQualifiedFluentBuilder(
  *
  * _NOTE: This function generates the type names that appear under **"The fluent builder is configurable:"**_
  */
-private fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
+internal fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
     val memberName = symbolProvider.toMemberName(this)
-    val outerType = symbolProvider.toSymbol(this).rustType()
+    val outerType = symbolProvider.toSymbol(this).rustType().stripOuter<RustType.Option>()
+    // We generate Vec/HashMap helpers
+    val renderedType = when (outerType) {
+        is RustType.Vec -> listOf(outerType.member)
+        is RustType.HashMap -> listOf(outerType.key, outerType.member)
+        else -> listOf(outerType)
+    }
+    val args = renderedType.joinToString { it.asArgumentType(fullyQualified = false) }
 
-    return "$memberName(${outerType.stripOuter<RustType.Option>().asArgumentType(fullyQualified = false)})"
+    return "$memberName($args)"
 }
 
 /**
