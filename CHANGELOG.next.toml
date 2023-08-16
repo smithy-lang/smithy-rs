@@ -34,3 +34,14 @@ message = "Fix requests to S3 with `no_credentials` set."
 references = ["smithy-rs#2907", "aws-sdk-rust#864"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Several breaking changes were made to the aws-sigv4 API to remove the direct HTTP dependency:
+- The `take_parameters` and `take_headers` APIs were removed from `SigningInstructions`. Use `into_parts()` instead
+- The arguments of `SignableRequest::new` were changed to accept string types instead of types from the HTTP crate
+- `SigningInstructions::apply_to_request` was gated beyond an `http0-compat` feature flag for backwards compatibility. This API MAY be removed in a future release.
+- Several public accessors were removed from `SigningInstructions`.
+"""
+references = ["smithy-rs#2921"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
