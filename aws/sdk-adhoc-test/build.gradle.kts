@@ -38,7 +38,7 @@ dependencies {
 }
 
 fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
-fun getNullabilityCheckMode(): String = properties.get("smithy.nullability.check.mode") ?: "CLIENT"
+fun getNullabilityCheckMode(): String = properties.get("smithy.nullability.check.mode") ?: "CLIENT_CAREFUL"
 
 val allCodegenTests = listOf(
     CodegenTest(

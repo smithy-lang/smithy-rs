@@ -195,3 +195,12 @@ impl From<BuildError> for DeserializeError {
         )
     }
 }
+
+#[cfg(feature = "event-stream")]
+impl From<BuildError> for aws_smithy_eventstream::error::Error {
+    fn from(build_error: BuildError) -> Self {
+        aws_smithy_eventstream::error::Error::unmarshalling(format!(
+            "error unmarshalling failed because a required field was missing: {build_error}"
+        ))
+    }
+}
