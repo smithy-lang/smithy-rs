@@ -63,9 +63,11 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
     "aws-sdk-transcribestreaming",
 ];
 
+// The elements in this `Vec` should be sorted in an ascending order by the release date.
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
         ReleaseTag::from_str("release-2023-01-26").unwrap(), // last version before the crate reorg
+        ReleaseTag::from_str("release-2023-08-03").unwrap(), // last version before `Stream` trait removal
     ];
 }
 
@@ -112,23 +114,18 @@ enum CrateSource {
     },
 }
 
-fn enabled_features(crate_source: &CrateSource) -> Vec<String> {
-    let mut enabled = Vec::new();
+fn enabled_feature(crate_source: &CrateSource) -> String {
     if let CrateSource::VersionsManifest { release_tag, .. } = crate_source {
-        // we want to select the newest module specified after this release
+        // we want to select the oldest module specified after this release
         for notable in NOTABLE_SDK_RELEASE_TAGS.iter() {
             tracing::debug!(release_tag = ?release_tag, notable = ?notable, "considering if release tag came before notable release");
             if release_tag <= notable {
                 tracing::debug!("selecting {} as chosen release", notable);
-                enabled.push(notable.as_str().into());
-                break;
+                return notable.as_str().into();
             }
         }
     }
-    if enabled.is_empty() {
-        enabled.push("latest".into());
-    }
-    enabled
+    "latest".into()
 }
 
 fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
@@ -176,12 +173,8 @@ fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
     }
     writeln!(
         output,
-        "default = [{enabled}]",
-        enabled = enabled_features(&crate_source)
-            .into_iter()
-            .map(|f| format!("\"{f}\""))
-            .collect::<Vec<String>>()
-            .join(", ")
+        "default = [\"{enabled}\"]",
+        enabled = enabled_feature(&crate_source)
     )
     .unwrap();
     Ok(output)
@@ -442,6 +435,7 @@ aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 [features]
 latest = []
 "release-2023-01-26" = []
+"release-2023-08-03" = []
 default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::Path("some/sdk/path".into())).expect("success")
@@ -506,6 +500,7 @@ aws-sdk-transcribestreaming = "0.16.0"
 [features]
 latest = []
 "release-2023-01-26" = []
+"release-2023-08-03" = []
 default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::VersionsManifest {
@@ -523,7 +518,7 @@ default = ["latest"]
                     .collect(),
                     release: None,
                 },
-                release_tag: ReleaseTag::from_str("release-2023-05-26").unwrap(),
+                release_tag: ReleaseTag::from_str("release-2023-08-26").unwrap(),
             })
             .expect("success")
         );
@@ -577,26 +572,32 @@ default = ["latest"]
             release: None,
         };
         assert_eq!(
-            enabled_features(&CrateSource::VersionsManifest {
+            "latest".to_string(),
+            enabled_feature(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-9999-12-31".parse().unwrap(),
+            }),
+        );
+        assert_eq!(
+            "release-2023-08-03".to_string(),
+            enabled_feature(&CrateSource::VersionsManifest {
                 versions: versions.clone(),
                 release_tag: "release-2023-02-23".parse().unwrap(),
             }),
-            vec!["latest".to_string()]
         );
-
         assert_eq!(
-            enabled_features(&CrateSource::VersionsManifest {
+            "release-2023-01-26".to_string(),
+            enabled_feature(&CrateSource::VersionsManifest {
                 versions: versions.clone(),
                 release_tag: "release-2023-01-26".parse().unwrap(),
             }),
-            vec!["release-2023-01-26".to_string()]
         );
         assert_eq!(
-            enabled_features(&CrateSource::VersionsManifest {
+            "release-2023-01-26".to_string(),
+            enabled_feature(&CrateSource::VersionsManifest {
                 versions,
                 release_tag: "release-2023-01-13".parse().unwrap(),
             }),
-            vec!["release-2023-01-26".to_string()]
         );
     }
 }
