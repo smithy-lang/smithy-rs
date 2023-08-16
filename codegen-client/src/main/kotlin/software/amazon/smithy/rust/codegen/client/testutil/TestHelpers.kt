@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientModuleProvider
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
-import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -90,9 +89,6 @@ fun testClientCodegenContext(
     settings,
     rootDecorator ?: CombinedClientCodegenDecorator(emptyList()),
 )
-
-fun ClientCodegenContext.withSmithyRuntimeMode(smithyRuntimeMode: SmithyRuntimeMode): ClientCodegenContext =
-    copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableNewSmithyRuntime = smithyRuntimeMode)))
 
 fun ClientCodegenContext.withEnableUserConfigurableRuntimePlugins(enableUserConfigurableRuntimePlugins: Boolean): ClientCodegenContext =
     copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableUserConfigurableRuntimePlugins = enableUserConfigurableRuntimePlugins)))

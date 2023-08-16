@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.util.sdkId
 
 class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val retryConfig = RuntimeType.smithyTypes(runtimeConfig).resolve("retry")
     private val sleepModule = RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep")
     private val timeoutModule = RuntimeType.smithyTypes(runtimeConfig).resolve("timeout")
@@ -50,83 +49,35 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
-                is ServiceConfig.ConfigStruct -> {
-                    if (runtimeMode.generateMiddleware) {
-                        rustTemplate(
-                            """
-                            retry_config: #{Option}<#{RetryConfig}>,
-                            sleep_impl: #{Option}<#{SharedAsyncSleep}>,
-                            timeout_config: #{Option}<#{TimeoutConfig}>,
-                            """,
-                            *codegenScope,
-                        )
-                    }
-                }
-
                 is ServiceConfig.ConfigImpl -> {
-                    if (runtimeMode.generateOrchestrator) {
-                        rustTemplate(
-                            """
-                            /// Return a reference to the retry configuration contained in this config, if any.
-                            pub fn retry_config(&self) -> #{Option}<&#{RetryConfig}> {
-                                self.config.load::<#{RetryConfig}>()
-                            }
+                    rustTemplate(
+                        """
+                        /// Return a reference to the retry configuration contained in this config, if any.
+                        pub fn retry_config(&self) -> #{Option}<&#{RetryConfig}> {
+                            self.config.load::<#{RetryConfig}>()
+                        }
 
-                            /// Return a cloned shared async sleep implementation from this config, if any.
-                            pub fn sleep_impl(&self) -> #{Option}<#{SharedAsyncSleep}> {
-                                self.runtime_components.sleep_impl()
-                            }
+                        /// Return a cloned shared async sleep implementation from this config, if any.
+                        pub fn sleep_impl(&self) -> #{Option}<#{SharedAsyncSleep}> {
+                            self.runtime_components.sleep_impl()
+                        }
 
-                            /// Return a reference to the timeout configuration contained in this config, if any.
-                            pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
-                                self.config.load::<#{TimeoutConfig}>()
-                            }
+                        /// Return a reference to the timeout configuration contained in this config, if any.
+                        pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
+                            self.config.load::<#{TimeoutConfig}>()
+                        }
 
-                            ##[doc(hidden)]
-                            /// Returns a reference to the retry partition contained in this config, if any.
-                            ///
-                            /// WARNING: This method is unstable and may be removed at any time. Do not rely on this
-                            /// method for anything!
-                            pub fn retry_partition(&self) -> #{Option}<&#{RetryPartition}> {
-                                self.config.load::<#{RetryPartition}>()
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            /// Return a reference to the retry configuration contained in this config, if any.
-                            pub fn retry_config(&self) -> #{Option}<&#{RetryConfig}> {
-                                self.retry_config.as_ref()
-                            }
-
-                            /// Return a cloned shared async sleep implementation from this config, if any.
-                            pub fn sleep_impl(&self) -> #{Option}<#{SharedAsyncSleep}> {
-                                self.sleep_impl.clone()
-                            }
-
-                            /// Return a reference to the timeout configuration contained in this config, if any.
-                            pub fn timeout_config(&self) -> #{Option}<&#{TimeoutConfig}> {
-                                self.timeout_config.as_ref()
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
-                }
-
-                is ServiceConfig.BuilderStruct -> {
-                    if (runtimeMode.generateMiddleware) {
-                        rustTemplate(
-                            """
-                            retry_config: #{Option}<#{RetryConfig}>,
-                            sleep_impl: #{Option}<#{SharedAsyncSleep}>,
-                            timeout_config: #{Option}<#{TimeoutConfig}>,
-                            """,
-                            *codegenScope,
-                        )
-                    }
+                        ##[doc(hidden)]
+                        /// Returns a reference to the retry partition contained in this config, if any.
+                        ///
+                        /// WARNING: This method is unstable and may be removed at any time. Do not rely on this
+                        /// method for anything!
+                        pub fn retry_partition(&self) -> #{Option}<&#{RetryPartition}> {
+                            self.config.load::<#{RetryPartition}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
                 }
 
                 is ServiceConfig.BuilderImpl -> {
@@ -167,27 +118,15 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         *codegenScope,
                     )
 
-                    if (runtimeMode.generateOrchestrator) {
-                        rustTemplate(
-                            """
-                            pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
-                                retry_config.map(|r| self.config.store_put(r));
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
-                                self.retry_config = retry_config;
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        pub fn set_retry_config(&mut self, retry_config: #{Option}<#{RetryConfig}>) -> &mut Self {
+                            retry_config.map(|r| self.config.store_put(r));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
                     rustTemplate(
                         """
@@ -245,27 +184,15 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         *codegenScope,
                     )
 
-                    if (runtimeMode.generateOrchestrator) {
-                        rustTemplate(
-                            """
-                            pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
-                                self.runtime_components.set_sleep_impl(sleep_impl);
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
-                                self.sleep_impl = sleep_impl;
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        pub fn set_sleep_impl(&mut self, sleep_impl: #{Option}<#{SharedAsyncSleep}>) -> &mut Self {
+                            self.runtime_components.set_sleep_impl(sleep_impl);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
                     rustTemplate(
                         """
@@ -313,122 +240,94 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         *codegenScope,
                     )
 
-                    if (runtimeMode.generateOrchestrator) {
-                        rustTemplate(
-                            """
-                            pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
-                                timeout_config.map(|t| self.config.store_put(t));
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
-                                self.timeout_config = timeout_config;
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
+                            timeout_config.map(|t| self.config.store_put(t));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
-                    if (runtimeMode.generateOrchestrator) {
-                        Attribute.DocHidden.render(this)
-                        rustTemplate(
-                            """
-                            /// Set the partition for retry-related state. When clients share a retry partition, they will
-                            /// also share things like token buckets and client rate limiters. By default, all clients
-                            /// for the same service will share a partition.
-                            pub fn retry_partition(mut self, retry_partition: #{RetryPartition}) -> Self {
-                                self.set_retry_partition(Some(retry_partition));
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
+                    Attribute.DocHidden.render(this)
+                    rustTemplate(
+                        """
+                        /// Set the partition for retry-related state. When clients share a retry partition, they will
+                        /// also share things like token buckets and client rate limiters. By default, all clients
+                        /// for the same service will share a partition.
+                        pub fn retry_partition(mut self, retry_partition: #{RetryPartition}) -> Self {
+                            self.set_retry_partition(Some(retry_partition));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
-                        Attribute.DocHidden.render(this)
-                        rustTemplate(
-                            """
-                            /// Set the partition for retry-related state. When clients share a retry partition, they will
-                            /// also share things like token buckets and client rate limiters. By default, all clients
-                            /// for the same service will share a partition.
-                            pub fn set_retry_partition(&mut self, retry_partition: #{Option}<#{RetryPartition}>) -> &mut Self {
-                                retry_partition.map(|r| self.config.store_put(r));
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
+                    Attribute.DocHidden.render(this)
+                    rustTemplate(
+                        """
+                        /// Set the partition for retry-related state. When clients share a retry partition, they will
+                        /// also share things like token buckets and client rate limiters. By default, all clients
+                        /// for the same service will share a partition.
+                        pub fn set_retry_partition(&mut self, retry_partition: #{Option}<#{RetryPartition}>) -> &mut Self {
+                            retry_partition.map(|r| self.config.store_put(r));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
                 }
 
                 is ServiceConfig.BuilderBuild -> {
-                    if (runtimeMode.generateOrchestrator) {
-                        rustTemplate(
-                            """
-                            if layer.load::<#{RetryConfig}>().is_none() {
-                                layer.store_put(#{RetryConfig}::disabled());
+                    rustTemplate(
+                        """
+                        if layer.load::<#{RetryConfig}>().is_none() {
+                            layer.store_put(#{RetryConfig}::disabled());
+                        }
+                        let retry_config = layer.load::<#{RetryConfig}>().expect("set to default above").clone();
+
+                        if layer.load::<#{RetryPartition}>().is_none() {
+                            layer.store_put(#{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
+                        }
+                        let retry_partition = layer.load::<#{RetryPartition}>().expect("set to default above").clone();
+
+                        if retry_config.has_retry() {
+                            #{debug}!("using retry strategy with partition '{}'", retry_partition);
+                        }
+
+                        if retry_config.mode() == #{RetryMode}::Adaptive {
+                            if let #{Some}(time_source) = self.runtime_components.time_source() {
+                                let seconds_since_unix_epoch = time_source
+                                    .now()
+                                    .duration_since(#{SystemTime}::UNIX_EPOCH)
+                                    .expect("the present takes place after the UNIX_EPOCH")
+                                    .as_secs_f64();
+                                let client_rate_limiter_partition = #{ClientRateLimiterPartition}::new(retry_partition.clone());
+                                let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(client_rate_limiter_partition, || {
+                                    #{ClientRateLimiter}::new(seconds_since_unix_epoch)
+                                });
+                                layer.store_put(client_rate_limiter);
                             }
-                            let retry_config = layer.load::<#{RetryConfig}>().expect("set to default above").clone();
+                        }
 
-                            if layer.load::<#{RetryPartition}>().is_none() {
-                                layer.store_put(#{RetryPartition}::new("${codegenContext.serviceShape.sdkId()}"));
-                            }
-                            let retry_partition = layer.load::<#{RetryPartition}>().expect("set to default above").clone();
+                        // The token bucket is used for both standard AND adaptive retries.
+                        let token_bucket_partition = #{TokenBucketPartition}::new(retry_partition);
+                        let token_bucket = TOKEN_BUCKET.get_or_init(token_bucket_partition, #{TokenBucket}::default);
+                        layer.store_put(token_bucket);
 
-                            if retry_config.has_retry() {
-                                #{debug}!("using retry strategy with partition '{}'", retry_partition);
-                            }
+                        // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
+                        //  is resolved
+                        if layer.load::<#{TimeoutConfig}>().is_none() {
+                            layer.store_put(#{TimeoutConfig}::disabled());
+                        }
 
-                            if retry_config.mode() == #{RetryMode}::Adaptive {
-                                if let #{Some}(time_source) = self.runtime_components.time_source() {
-                                    let seconds_since_unix_epoch = time_source
-                                        .now()
-                                        .duration_since(#{SystemTime}::UNIX_EPOCH)
-                                        .expect("the present takes place after the UNIX_EPOCH")
-                                        .as_secs_f64();
-                                    let client_rate_limiter_partition = #{ClientRateLimiterPartition}::new(retry_partition.clone());
-                                    let client_rate_limiter = CLIENT_RATE_LIMITER.get_or_init(client_rate_limiter_partition, || {
-                                        #{ClientRateLimiter}::new(seconds_since_unix_epoch)
-                                    });
-                                    layer.store_put(client_rate_limiter);
-                                }
-                            }
-
-                            // The token bucket is used for both standard AND adaptive retries.
-                            let token_bucket_partition = #{TokenBucketPartition}::new(retry_partition);
-                            let token_bucket = TOKEN_BUCKET.get_or_init(token_bucket_partition, #{TokenBucket}::default);
-                            layer.store_put(token_bucket);
-
-                            // TODO(enableNewSmithyRuntimeCleanup): Should not need to provide a default once smithy-rs##2770
-                            //  is resolved
-                            if layer.load::<#{TimeoutConfig}>().is_none() {
-                                layer.store_put(#{TimeoutConfig}::disabled());
-                            }
-
-                            self.runtime_components.set_retry_strategy(#{Some}(
-                                #{SharedRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)))
-                            );
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            // We call clone on sleep_impl because the field is used by
-                            // initializing the credentials_cache field later in the build
-                            // method of a Config builder.
-                            """
-                            retry_config: self.retry_config,
-                            sleep_impl: self.sleep_impl.clone(),
-                            timeout_config: self.timeout_config,
-                            """,
-                            *codegenScope,
-                        )
-                    }
+                        self.runtime_components.set_retry_strategy(#{Some}(
+                            #{SharedRetryStrategy}::new(#{StandardRetryStrategy}::new(&retry_config)))
+                        );
+                        """,
+                        *codegenScope,
+                    )
                 }
 
                 else -> emptySection
@@ -438,7 +337,6 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
 
 class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val runtimeMode = codegenContext.smithyRuntimeMode
 
     fun extras(rustCrate: RustCrate) {
         rustCrate.withModule(ClientRustModule.config) {
@@ -453,12 +351,10 @@ class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
                 "types_retry" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry"),
             )
 
-            if (runtimeMode.generateOrchestrator) {
-                rustTemplate(
-                    "pub use #{types_retry}::RetryPartition;",
-                    "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
-                )
-            }
+            rustTemplate(
+                "pub use #{types_retry}::RetryPartition;",
+                "types_retry" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::retries"),
+            )
         }
         rustCrate.withModule(ClientRustModule.Config.timeout) {
             rustTemplate(
@@ -471,7 +367,6 @@ class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
 
 class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val smithyRuntime = RuntimeType.smithyRuntime(runtimeConfig)
     private val retries = smithyRuntime.resolve("client::retries")
     private val codegenScope = arrayOf(
@@ -483,22 +378,20 @@ class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenC
     )
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (runtimeMode.generateOrchestrator) {
-            when (section) {
-                is ServiceRuntimePluginSection.DeclareSingletons -> {
-                    // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
-                    //    MSRV to 1.70
-                    rustTemplate(
-                        """
-                        static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();
-                        static CLIENT_RATE_LIMITER: #{StaticPartitionMap}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{StaticPartitionMap}::new();
-                        """,
-                        *codegenScope,
-                    )
-                }
-
-                else -> emptySection
+        when (section) {
+            is ServiceRuntimePluginSection.DeclareSingletons -> {
+                // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
+                //    MSRV to 1.70
+                rustTemplate(
+                    """
+                    static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();
+                    static CLIENT_RATE_LIMITER: #{StaticPartitionMap}<#{ClientRateLimiterPartition}, #{ClientRateLimiter}> = #{StaticPartitionMap}::new();
+                    """,
+                    *codegenScope,
+                )
             }
+
+            else -> emptySection
         }
     }
 }
