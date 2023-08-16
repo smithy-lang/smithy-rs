@@ -270,6 +270,7 @@ class AwsQuerySerializerGeneratorTest {
                             $maybeUnwrap
                     )
                     .boolean(true)
+                    .blob(aws_smithy_types::Blob::new(&b"test"[..]))
                     .build()
                     .unwrap();
                 let serialized = ${format(operationGenerator!!)}(&input).unwrap();
@@ -285,7 +286,8 @@ class AwsQuerySerializerGeneratorTest {
                     &top.extra=45\
                     &top.rec.item.1.choice.choice=true\
                     &top.rec.item.1.field=World%21\
-                    &top.rec.item.1.extra=55"
+                    &top.rec.item.1.extra=55\
+                    &blob=dGVzdA%3D%3D"
                 );
                 """,
             )
