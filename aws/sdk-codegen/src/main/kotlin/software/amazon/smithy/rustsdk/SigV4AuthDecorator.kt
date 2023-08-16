@@ -27,7 +27,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
@@ -64,12 +64,12 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations + SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.expectTrait())
+        baseCustomizations + SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait())
 }
 
 private class SigV4SigningConfig(
     runtimeConfig: RuntimeConfig,
-    private val sigV4Trait: SigV4Trait,
+    private val sigV4Trait: SigV4Trait?,
 ) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
@@ -78,31 +78,34 @@ private class SigV4SigningConfig(
     )
 
     override fun section(section: ServiceConfig): Writable = writable {
-        when (section) {
-            ServiceConfig.ConfigImpl -> {
-                rust(
-                    """
-                    /// The signature version 4 service signing name to use in the credential scope when signing requests.
-                    ///
-                    /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
-                    /// [`SigningService`](aws_types::SigningService) during operation construction
-                    pub fn signing_service(&self) -> &'static str {
-                        ${sigV4Trait.name.dq()}
-                    }
-                    """,
-                )
-            }
-            ServiceConfig.BuilderBuild -> {
-                rustTemplate(
-                    """
-                    layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
-                    layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
-                    """,
-                    *codegenScope,
-                )
-            }
+        if (sigV4Trait != null) {
+            when (section) {
+                ServiceConfig.ConfigImpl -> {
+                    rust(
+                        """
+                        /// The signature version 4 service signing name to use in the credential scope when signing requests.
+                        ///
+                        /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
+                        /// [`SigningService`](aws_types::SigningService) during operation construction
+                        pub fn signing_service(&self) -> &'static str {
+                            ${sigV4Trait.name.dq()}
+                        }
+                        """,
+                    )
+                }
 
-            else -> emptySection
+                ServiceConfig.BuilderBuild -> {
+                    rustTemplate(
+                        """
+                        layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
+                        layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                else -> {}
+            }
         }
     }
 }
