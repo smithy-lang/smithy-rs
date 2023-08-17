@@ -14,7 +14,7 @@ use aws_sigv4::SigningParams;
 use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
 use aws_smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
 use aws_types::region::SigningRegion;
-use aws_types::SigningService;
+use aws_types::SigningName;
 use std::time::SystemTime;
 
 /// Event Stream SigV4 signing implementation.
@@ -23,7 +23,7 @@ pub struct SigV4MessageSigner {
     last_signature: String,
     credentials: Credentials,
     signing_region: SigningRegion,
-    signing_service: SigningService,
+    signing_name: SigningName,
     time: Option<SystemTime>,
 }
 
@@ -32,14 +32,14 @@ impl SigV4MessageSigner {
         last_signature: String,
         credentials: Credentials,
         signing_region: SigningRegion,
-        signing_service: SigningService,
+        signing_name: SigningName,
         time: Option<SystemTime>,
     ) -> Self {
         Self {
             last_signature,
             credentials,
             signing_region,
-            signing_service,
+            signing_name,
             time,
         }
     }
@@ -49,7 +49,7 @@ impl SigV4MessageSigner {
             .access_key(self.credentials.access_key_id())
             .secret_key(self.credentials.secret_access_key())
             .region(self.signing_region.as_ref())
-            .service_name(self.signing_service.as_ref())
+            .name(self.signing_name.as_ref())
             .time(self.time.unwrap_or_else(SystemTime::now))
             .settings(());
         builder.set_security_token(self.credentials.session_token());
@@ -84,7 +84,7 @@ mod tests {
     use aws_smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
     use aws_types::region::Region;
     use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
+    use aws_types::SigningName;
     use std::time::{Duration, UNIX_EPOCH};
 
     fn check_send_sync<T: Send + Sync>(value: T) -> T {
@@ -98,7 +98,7 @@ mod tests {
             "initial-signature".into(),
             Credentials::for_tests(),
             SigningRegion::from(region),
-            SigningService::from_static("transcribe"),
+            SigningName::from_static("transcribe"),
             Some(UNIX_EPOCH + Duration::new(1611160427, 0)),
         ));
         let mut signatures = Vec::new();
@@ -146,7 +146,7 @@ impl SigV4Signer {
         // so we can safely assume they all exist in the property bag at this point.
         let credentials = properties.get::<Credentials>().unwrap();
         let region = properties.get::<SigningRegion>().unwrap();
-        let signing_service = properties.get::<SigningService>().unwrap();
+        let name = properties.get::<SigningName>().unwrap();
         let time = properties
             .get::<SystemTime>()
             .copied()
@@ -155,7 +155,7 @@ impl SigV4Signer {
             .access_key(credentials.access_key_id())
             .secret_key(credentials.secret_access_key())
             .region(region.as_ref())
-            .service_name(signing_service.as_ref())
+            .name(name.as_ref())
             .time(time)
             .settings(());
         builder.set_security_token(credentials.session_token());
@@ -210,7 +210,7 @@ mod old_tests {
     use aws_smithy_http::property_bag::PropertyBag;
     use aws_types::region::Region;
     use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
+    use aws_types::SigningName;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -219,7 +219,7 @@ mod old_tests {
         let mut properties = PropertyBag::new();
         properties.insert(region.clone());
         properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-        properties.insert(SigningService::from_static("transcribe"));
+        properties.insert(SigningName::from_static("transcribe"));
         properties.insert(Credentials::for_tests());
         properties.insert(SigningRegion::from(region));
         properties.insert(Signature::new("initial-signature".into()));

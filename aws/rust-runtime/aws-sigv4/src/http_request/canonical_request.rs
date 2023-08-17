@@ -170,7 +170,7 @@ impl<'a> CanonicalRequest<'a> {
                     params.access_key,
                     format_date(params.time),
                     params.region,
-                    params.service_name,
+                    params.name,
                 ),
                 date_time,
                 expires: params
@@ -554,7 +554,7 @@ mod tests {
             secret_key: "test-secret-key",
             security_token: None,
             region: "test-region",
-            service_name: "testservicename",
+            name: "testservicename",
             time: parse_date_time("20210511T154045Z").unwrap(),
             settings,
         }
