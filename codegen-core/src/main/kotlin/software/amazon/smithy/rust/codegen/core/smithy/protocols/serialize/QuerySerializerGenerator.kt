@@ -187,13 +187,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             }
         }
 
-//        if (structureSymbol.isOptional()) {
-//            rustBlock("if let Some(${safeName()}) = ${context.valueExpression.asRef()}") {
-//                rust("#T(${context.writerExpression}, ${safeName()})?;", structureSerializer)
-//            }
-//        } else {
         rust("#T(${context.writerExpression}, ${context.valueExpression.asRef()})?;", structureSerializer)
-//        }
     }
 
     private fun RustWriter.serializeStructureInner(context: Context<StructureShape>) {
@@ -250,7 +244,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 )
             }
             is BlobShape -> rust(
-                "$writer.string(&#T(&${value.name}));",
+                "$writer.string(&#T(${value.asRef()}));",
                 RuntimeType.base64Encode(runtimeConfig),
             )
             is TimestampShape -> {

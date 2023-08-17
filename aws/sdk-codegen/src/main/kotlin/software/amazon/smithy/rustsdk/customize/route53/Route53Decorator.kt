@@ -100,7 +100,7 @@ class TrimResourceIdCustomization(
                     rustTemplate(
                         """
                         #{Route53ResourceIdInterceptor}::new(|input: &mut #{Input}| {
-                            Some(&mut input.$fieldName)
+                            input.$fieldName.as_mut()
                         })
                         """,
                         "Input" to codegenContext.symbolProvider.toSymbol(inputShape),

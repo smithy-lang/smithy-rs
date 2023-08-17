@@ -207,6 +207,8 @@ class Ec2QuerySerializerGeneratorTest {
             map: MyMap,
             @required
             top: Top,
+            @required
+            blob: Blob
         }
 
         @http(uri: "/top", method: "POST")
@@ -262,6 +264,7 @@ class Ec2QuerySerializerGeneratorTest {
                             $maybeUnwrap
                     )
                     .boolean(true)
+                    .blob(aws_smithy_types::Blob::new(&b"test"[..]))
                     .build()
                     .unwrap();
                 let serialized = ${format(operationGenerator!!)}(&input).unwrap();
@@ -277,7 +280,8 @@ class Ec2QuerySerializerGeneratorTest {
                     &Top.Extra=45\
                     &Top.Rec.1.Choice.Choice=true\
                     &Top.Rec.1.Field=World%21\
-                    &Top.Rec.1.Extra=55"
+                    &Top.Rec.1.Extra=55\
+                    &Blob=dGVzdA%3D%3D"
                 );
                 """,
             )

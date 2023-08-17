@@ -37,7 +37,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-fun getNullabilityCheckMode(): String = properties.get("smithy.nullability.check.mode") ?: "CLIENT_CAREFUL"
+fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
 
 val allCodegenTests = listOf(
     CodegenTest(
