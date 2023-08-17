@@ -20,7 +20,6 @@ use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::fmt::Formatter;
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -131,6 +130,9 @@ impl<'a> CanonicalRequest<'a> {
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
     ) -> Result<CanonicalRequest<'b>, CanonicalRequestError> {
+        let creds = params
+            .credentials()
+            .ok_or_else(CanonicalRequestError::unsupported_credential_type)?;
         // Path encoding: if specified, re-encode % as %25
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
@@ -151,7 +153,7 @@ impl<'a> CanonicalRequest<'a> {
         let signed_headers = SignedHeaders::new(signed_headers);
 
         let security_token = match params.settings.session_token_mode {
-            SessionTokenMode::Include => params.security_token,
+            SessionTokenMode::Include => creds.session_token(),
             SessionTokenMode::Exclude => None,
         };
 
@@ -167,7 +169,7 @@ impl<'a> CanonicalRequest<'a> {
                 content_sha256: payload_hash,
                 credential: format!(
                     "{}/{}/{}/{}/aws4_request",
-                    params.access_key,
+                    creds.access_key_id(),
                     format_date(params.time),
                     params.region,
                     params.service_name,
@@ -200,6 +202,9 @@ impl<'a> CanonicalRequest<'a> {
         payload_hash: &str,
         date_time: &str,
     ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), CanonicalRequestError> {
+        let creds = params
+            .credentials()
+            .ok_or_else(CanonicalRequestError::unsupported_credential_type)?;
         // Header computation:
         // The canonical request will include headers not present in the input. We need to clone and
         // normalize the headers from the original request and add:
@@ -222,7 +227,7 @@ impl<'a> CanonicalRequest<'a> {
         if params.settings.signature_location == SignatureLocation::Headers {
             Self::insert_date_header(&mut canonical_headers, date_time);
 
-            if let Some(security_token) = params.security_token {
+            if let Some(security_token) = creds.session_token() {
                 let mut sec_header = HeaderValue::from_str(security_token)?;
                 sec_header.set_sensitive(true);
                 canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
@@ -517,7 +522,7 @@ impl<'a> StringToSign<'a> {
 }
 
 impl<'a> fmt::Display for StringToSign<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}\n{}\n{}\n{}",
@@ -537,22 +542,21 @@ mod tests {
     };
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
     use crate::http_request::{
-        PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SigningSettings,
+        PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SignatureLocation,
+        SigningParams, SigningSettings,
     };
-    use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
+    use aws_credential_types::Credentials;
     use aws_smithy_http::query_writer::QueryWriter;
+    use aws_smithy_runtime_api::client::identity::Identity;
     use http::{HeaderValue, Uri};
-
     use pretty_assertions::assert_eq;
     use proptest::{prelude::*, proptest};
     use std::time::Duration;
 
-    fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
+    fn signing_params(identity: &Identity, settings: SigningSettings) -> SigningParams<'_> {
         SigningParams {
-            access_key: "test-access-key",
-            secret_key: "test-secret-key",
-            security_token: None,
+            identity,
             region: "test-region",
             service_name: "testservicename",
             time: parse_date_time("20210511T154045Z").unwrap(),
@@ -576,7 +580,8 @@ mod tests {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         assert_eq!(
@@ -597,7 +602,8 @@ mod tests {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let mut signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let mut signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
             creq.values.content_sha256(),
@@ -624,7 +630,8 @@ mod tests {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(creq.values.content_sha256(), "UNSIGNED-PAYLOAD");
         assert!(creq.to_string().ends_with("UNSIGNED-PAYLOAD"));
@@ -640,7 +647,8 @@ mod tests {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(creq.values.content_sha256(), payload_hash);
         assert!(creq.to_string().ends_with(payload_hash));
@@ -680,7 +688,8 @@ mod tests {
     fn test_double_url_encode_path() {
         let req = test_request("double-encode-path");
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test_canonical_request("double-encode-path");
@@ -692,7 +701,8 @@ mod tests {
     fn test_double_url_encode() {
         let req = test_request("double-url-encode");
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test_canonical_request("double-url-encode");
@@ -705,7 +715,8 @@ mod tests {
         let req = http::Request::builder()
             .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap().into();
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
             Some("k=&list-type=2&prefix=~objprefix&single=&unreserved=-_.~"),
@@ -728,7 +739,8 @@ mod tests {
             .unwrap()
             .into();
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = "list-type=2&prefix=%20%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~";
@@ -744,8 +756,8 @@ mod tests {
             session_token_mode: SessionTokenMode::Include,
             ..Default::default()
         };
-        let mut signing_params = signing_params(settings);
-        signing_params.security_token = Some("notarealsessiontoken");
+        let identity = Credentials::for_tests_with_session_token().into();
+        let mut signing_params = signing_params(&identity, settings);
 
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
@@ -787,7 +799,8 @@ mod tests {
             ..Default::default()
         };
 
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
         let values = canonical.values.as_headers().unwrap();
@@ -819,7 +832,8 @@ mod tests {
             ..Default::default()
         };
 
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
         let values = canonical.values.into_query_params().unwrap();
@@ -857,7 +871,8 @@ mod tests {
                 ..Default::default()
             };
 
-            let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
             let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
             let values = canonical.values.into_query_params().unwrap();

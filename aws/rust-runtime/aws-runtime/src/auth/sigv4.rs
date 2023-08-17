@@ -217,12 +217,16 @@ impl SigV4Signer {
 
     fn signing_params<'a>(
         settings: SigningSettings,
-        credentials: &'a Credentials,
+        identity: &'a Identity,
         operation_config: &'a SigV4OperationSigningConfig,
         request_timestamp: SystemTime,
     ) -> Result<SigningParams<'a>, SigV4SigningError> {
+        let creds = identity
+            .data::<Credentials>()
+            .ok_or_else(|| SigV4SigningError::WrongIdentityType(identity.clone()))?;
+
         if let Some(expires_in) = settings.expires_in {
-            if let Some(creds_expires_time) = credentials.expiry() {
+            if let Some(creds_expires_time) = creds.expiry() {
                 let presigned_expires_time = request_timestamp + expires_in;
                 if presigned_expires_time > creds_expires_time {
                     tracing::warn!(EXPIRATION_WARNING);
@@ -230,9 +234,8 @@ impl SigV4Signer {
             }
         }
 
-        let mut builder = SigningParams::builder()
-            .access_key(credentials.access_key_id())
-            .secret_key(credentials.secret_access_key())
+        let builder = SigningParams::builder()
+            .identity(identity)
             .region(
                 operation_config
                     .region
@@ -249,7 +252,6 @@ impl SigV4Signer {
             )
             .time(request_timestamp)
             .settings(settings);
-        builder.set_security_token(credentials.session_token());
         Ok(builder.build().expect("all required fields set"))
     }
 
@@ -324,18 +326,18 @@ impl Signer for SigV4Signer {
             Self::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
         let request_time = runtime_components.time_source().unwrap_or_default().now();
 
-        let credentials = if let Some(creds) = identity.data::<Credentials>() {
-            creds
-        } else if operation_config.signing_options.signing_optional {
-            tracing::debug!("skipped SigV4 signing since signing is optional for this operation and there are no credentials");
-            return Ok(());
-        } else {
-            return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
+        if identity.data::<Credentials>().is_none() {
+            if operation_config.signing_options.signing_optional {
+                tracing::debug!("skipped SigV4 signing since signing is optional for this operation and there are no credentials");
+                return Ok(());
+            } else {
+                return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
+            }
         };
 
         let settings = Self::settings(&operation_config);
         let signing_params =
-            Self::signing_params(settings, credentials, &operation_config, request_time)?;
+            Self::signing_params(settings, identity, &operation_config, request_time)?;
 
         let (signing_instructions, _signature) = {
             // A body that is already in memory can be signed directly. A body that is not in memory
@@ -382,7 +384,7 @@ impl Signer for SigV4Signer {
                 signer_sender
                     .send(Box::new(SigV4MessageSigner::new(
                         _signature,
-                        credentials.clone(),
+                        identity.clone(),
                         Region::new(signing_params.region().to_string()).into(),
                         signing_params.service_name().to_string().into(),
                         time_source,
@@ -397,11 +399,11 @@ impl Signer for SigV4Signer {
 
 #[cfg(feature = "event-stream")]
 mod event_stream {
-    use aws_credential_types::Credentials;
     use aws_sigv4::event_stream::{sign_empty_message, sign_message};
     use aws_sigv4::SigningParams;
     use aws_smithy_async::time::SharedTimeSource;
     use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
+    use aws_smithy_runtime_api::client::identity::Identity;
     use aws_types::region::SigningRegion;
     use aws_types::SigningService;
 
@@ -409,7 +411,7 @@ mod event_stream {
     #[derive(Debug)]
     pub(super) struct SigV4MessageSigner {
         last_signature: String,
-        credentials: Credentials,
+        identity: Identity,
         signing_region: SigningRegion,
         signing_service: SigningService,
         time: SharedTimeSource,
@@ -418,14 +420,14 @@ mod event_stream {
     impl SigV4MessageSigner {
         pub(super) fn new(
             last_signature: String,
-            credentials: Credentials,
+            identity: Identity,
             signing_region: SigningRegion,
             signing_service: SigningService,
             time: SharedTimeSource,
         ) -> Self {
             Self {
                 last_signature,
-                credentials,
+                identity,
                 signing_region,
                 signing_service,
                 time,
@@ -433,14 +435,12 @@ mod event_stream {
         }
 
         fn signing_params(&self) -> SigningParams<'_, ()> {
-            let mut builder = SigningParams::builder()
-                .access_key(self.credentials.access_key_id())
-                .secret_key(self.credentials.secret_access_key())
+            let builder = SigningParams::builder()
+                .identity(&self.identity)
                 .region(self.signing_region.as_ref())
                 .service_name(self.signing_service.as_ref())
                 .time(self.time.now())
                 .settings(());
-            builder.set_security_token(self.credentials.session_token());
             builder.build().unwrap()
         }
     }
@@ -467,9 +467,11 @@ mod event_stream {
 
     #[cfg(test)]
     mod tests {
-        use super::*;
+        use crate::auth::sigv4::event_stream::SigV4MessageSigner;
         use aws_credential_types::Credentials;
+        use aws_smithy_async::time::SharedTimeSource;
         use aws_smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
+
         use aws_types::region::Region;
         use aws_types::region::SigningRegion;
         use aws_types::SigningService;
@@ -484,7 +486,7 @@ mod event_stream {
             let region = Region::new("us-east-1");
             let mut signer = check_send_sync(SigV4MessageSigner::new(
                 "initial-signature".into(),
-                Credentials::for_tests(),
+                Credentials::for_tests_with_session_token().into(),
                 SigningRegion::from(region),
                 SigningService::from_static("transcribe"),
                 SharedTimeSource::new(UNIX_EPOCH + Duration::new(1611160427, 0)),
@@ -534,13 +536,14 @@ mod tests {
         let mut settings = SigningSettings::default();
         settings.expires_in = Some(creds_expire_in - Duration::from_secs(10));
 
-        let credentials = Credentials::new(
+        let identity = Credentials::new(
             "test-access-key",
             "test-secret-key",
             Some("test-session-token".into()),
             Some(now + creds_expire_in),
             "test",
-        );
+        )
+        .into();
         let operation_config = SigV4OperationSigningConfig {
             region: Some(SigningRegion::from_static("test")),
             service: Some(SigningService::from_static("test")),
@@ -555,13 +558,13 @@ mod tests {
                 payload_override: None,
             },
         };
-        SigV4Signer::signing_params(settings, &credentials, &operation_config, now).unwrap();
+        SigV4Signer::signing_params(settings, &identity, &operation_config, now).unwrap();
         assert!(!logs_contain(EXPIRATION_WARNING));
 
         let mut settings = SigningSettings::default();
         settings.expires_in = Some(creds_expire_in + Duration::from_secs(10));
 
-        SigV4Signer::signing_params(settings, &credentials, &operation_config, now).unwrap();
+        SigV4Signer::signing_params(settings, &identity, &operation_config, now).unwrap();
         assert!(logs_contain(EXPIRATION_WARNING));
     }
 

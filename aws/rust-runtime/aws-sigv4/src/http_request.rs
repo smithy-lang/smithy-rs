@@ -10,6 +10,8 @@
 //! **Note**: This requires `http0-compat` to be enabled.
 //!
 //! ```rust
+//! # use aws_credential_types::Credentials;
+//! use aws_smithy_runtime_api::client::identity::Identity;
 //! # use aws_sigv4::http_request::SignableBody;
 //! #[cfg(feature = "http0-compat")]
 //! fn test() -> Result<(), aws_sigv4::http_request::SigningError> {
@@ -18,10 +20,16 @@
 //! use std::time::SystemTime;
 //!
 //! // Set up information and settings for the signing
+//! let identity = Credentials::new(
+//!     "AKIDEXAMPLE",
+//!     "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+//!     None,
+//!     None,
+//!     "hardcoded-credentials"
+//! ).into();
 //! let signing_settings = SigningSettings::default();
 //! let signing_params = SigningParams::builder()
-//!     .access_key("example access key")
-//!     .secret_key("example secret key")
+//!     .identity(&identity)
 //!     .region("us-east-1")
 //!     .service_name("exampleservice")
 //!     .time(SystemTime::now())
