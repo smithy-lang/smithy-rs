@@ -16,8 +16,7 @@ This RFC defines the API of our wrapper types around `http::Request` and `http::
 <!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
 Terminology
 -----------
-
-- **Some Term**: A definition for that term
+- `Extensions` / "Request Extensions": The `http` crate Request/Response types include a typed property bag to store additional metadata along with the request.
 
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 The user experience if this RFC is implemented
@@ -37,7 +36,13 @@ How to actually implement this RFC
 We will need to add two types, `HttpRequest` and `HttpResponse`.
 
 #### To string or not to String
-The `http` library is very precise in its representation—specifically it allows for `HeaderValue`s that are both a super and subset of `String`—a superset because headers support arbitrary binary data but a subset because headers can contain any sequence of non-zero codepoints including sequences that are not valid UTF-8.
+The `http` library is very precise in its representation—specifically it allows for `HeaderValue`s that are both a super and subset of `String`—a superset because headers support arbitrary binary data but a subset because headers cannot contain `\0`.
+
+Headers containing arbitrary binary data are not widely supported. Generally, Smithy protocols will use base-64 encoding when storing binary data in headers.
+
+Finally, it's nicer for users if they can stay in "string land". Because of this, HttpRequest and Response expose header names and values as strings.
+
+**This is a one way door**.
 
 #### Where should these types live?
 These types will be used by all orchestrator functionality, so they will be housed in `aws-smithy-runtime-api`
@@ -49,7 +54,11 @@ possible to use `http::HeaderName` / `http::HeaderValue` in a zero-cost way.
 
 #### The `AsHeaderComponent` trait
 All header insertion methods accept `impl AsHeaderComponent`. This allows us to provide a nice user experience while taking
-advantage of zero-cost usage of `'static str`. We will seal this trait to prevent external usage.
+advantage of zero-cost usage of `'static str`. We will seal this trait to prevent external usage. We will have separate implementation for:
+- `&'static str`
+- `String`
+- http03x::HeaderName
+-
 
 #### Additional Functionality
 Our wrapper type will add the following additional functionality:
@@ -86,6 +95,9 @@ There is ongoing work which MAY restrict HTTP extensions to clone types. We will
 {{#include ../../../rust-runtime/aws-smithy-runtime-api/src/client/http/request.rs}}
 ```
 </details>
+
+### Future Work
+Currently, the only way to construct `Request` is from a compatyible type (e.g. `http03x::Request`)
 
 Changes checklist
 -----------------

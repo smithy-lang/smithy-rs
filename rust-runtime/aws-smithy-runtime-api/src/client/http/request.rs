@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::box_error::BoxError;
 use aws_smithy_http::body::SdkBody;
 use http as http0;
 use http0::header::Iter;
 use http0::{Extensions, HeaderMap, Method};
 use std::borrow::Cow;
 use std::fmt::Debug;
-use std::str::FromStr;
+use std::str::{FromStr, Utf8Error};
 
 #[derive(Debug)]
 /// An HTTP Request Type
@@ -33,7 +32,7 @@ impl TryFrom<String> for Uri {
     type Error = HttpError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        let parsed = value.parse()?;
+        let parsed = value.parse().map_err(HttpError::invalid_uri)?;
         Ok(Uri {
             as_string: value,
             parsed,
@@ -54,7 +53,7 @@ impl<B> TryInto<http0::Request<B>> for Request<B> {
     type Error = HttpError;
 
     fn try_into(self) -> Result<http::Request<B>, Self::Error> {
-        Ok(self.into_http03x()?)
+        self.into_http03x()
     }
 }
 
@@ -74,7 +73,7 @@ impl<B> Request<B> {
             self.headers
                 .headers
                 .into_iter()
-                .map(|(k, v)| (k, v.into_http0())),
+                .map(|(k, v)| (k, v.into_http03x())),
         );
         *req.headers_mut() = headers;
         *req.extensions_mut() = self.extensions;
@@ -114,7 +113,7 @@ impl<B> Request<B> {
 
     /// Returns the method associated with this request
     pub fn method(&self) -> &str {
-        &self.method.as_str()
+        self.method.as_str()
     }
 
     /// Returns the URI associated with this request
@@ -127,7 +126,7 @@ impl<B> Request<B> {
     where
         U: TryInto<Uri>,
     {
-        let uri = uri.try_into().map_err(|e| e.into())?;
+        let uri = uri.try_into()?;
         self.uri = uri;
         Ok(())
     }
@@ -169,7 +168,7 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
             .filter_map(|value| value.to_str().err())
             .next()
         {
-            Err(e.into())
+            Err(HttpError::header_was_not_a_string(e))
         } else {
             let (parts, body) = value.into_parts();
             let mut string_safe_headers: HeaderMap<HeaderValue> = Default::default();
@@ -236,6 +235,11 @@ impl Headers {
         self.headers.len()
     }
 
+    /// Returns true if there are no headers
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Returns true if this header is present
     pub fn contains_key(&self, key: &str) -> bool {
         self.headers.contains_key(key)
@@ -268,8 +272,6 @@ impl Headers {
     ) -> Result<Option<String>, HttpError> {
         let key = header_name(key.into_maybe_static()?)?;
         let value = header_value(value.into_maybe_static()?)?;
-        // try to convert it into our more restrictive header value
-        let value: HeaderValue = value.try_into().map_err(HttpError::invalid_header_value)?;
         Ok(self
             .headers
             .insert(key, value)
@@ -306,7 +308,9 @@ mod sealed {
     /// Trait defining things that may be converted into a header component (name or value)
     pub trait AsHeaderComponent {
         fn into_maybe_static(self) -> Result<MaybeStatic, HttpError>;
-        fn already_header_name(self) -> Result<http0::HeaderName, Self>
+
+        /// If a component is already internally represented as a `HeaderName`, return it
+        fn try_as_http03_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -334,7 +338,11 @@ mod sealed {
 
     impl AsHeaderComponent for http0::HeaderValue {
         fn into_maybe_static(self) -> Result<MaybeStatic, HttpError> {
-            Ok(Cow::Owned(self.to_str()?.to_string()))
+            Ok(Cow::Owned(
+                self.to_str()
+                    .map_err(HttpError::header_was_not_a_string)?
+                    .to_string(),
+            ))
         }
     }
 
@@ -343,7 +351,7 @@ mod sealed {
             Ok(self.to_string().into())
         }
 
-        fn already_header_name(self) -> Result<http0::HeaderName, Self>
+        fn try_as_http03_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -354,7 +362,7 @@ mod sealed {
 
 mod header_value {
     use super::http0;
-    use crate::box_error::BoxError;
+    use std::str::Utf8Error;
 
     /// HeaderValue type
     ///
@@ -365,12 +373,12 @@ mod header_value {
     }
 
     impl HeaderValue {
-        pub(crate) fn from_http0(value: http0::HeaderValue) -> Result<Self, BoxError> {
+        pub(crate) fn from_http03x(value: http0::HeaderValue) -> Result<Self, Utf8Error> {
             let _ = std::str::from_utf8(value.as_bytes())?;
             Ok(Self { _private: value })
         }
 
-        pub(crate) fn into_http0(self) -> http0::HeaderValue {
+        pub(crate) fn into_http03x(self) -> http0::HeaderValue {
             self._private
         }
     }
@@ -382,9 +390,9 @@ mod header_value {
         }
     }
 
-    impl Into<String> for HeaderValue {
-        fn into(self) -> String {
-            self.as_ref().to_string()
+    impl From<HeaderValue> for String {
+        fn from(value: HeaderValue) -> Self {
+            value.as_ref().to_string()
         }
     }
 }
@@ -403,36 +411,36 @@ impl FromStr for HeaderValue {
     type Err = HttpError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !s.is_ascii() {
-            return Err(HttpError::new("header contained non-ascii data"));
-        }
-        Ok(s.parse()?)
+        HeaderValue::try_from(s.to_string())
     }
 }
 
 impl TryFrom<http0::HeaderValue> for HeaderValue {
-    type Error = BoxError;
+    type Error = Utf8Error;
 
     fn try_from(value: http::HeaderValue) -> Result<Self, Self::Error> {
-        HeaderValue::from_http0(value)
+        HeaderValue::from_http03x(value)
     }
 }
 
 impl TryFrom<String> for HeaderValue {
-    type Error = BoxError;
+    type Error = HttpError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        HeaderValue::from_http0(http0::HeaderValue::try_from(value)?)
+        Ok(HeaderValue::from_http03x(
+            http0::HeaderValue::try_from(value).map_err(HttpError::invalid_header_value)?,
+        )
+        .expect("input was a string"))
     }
 }
 
 type MaybeStatic = Cow<'static, str>;
 
 fn header_name(name: impl AsHeaderComponent) -> Result<http0::HeaderName, HttpError> {
-    name.already_header_name().or_else(|name| {
+    name.try_as_http03_header_name().or_else(|name| {
         name.into_maybe_static().and_then(|cow| match cow {
             Cow::Borrowed(staticc) => Ok(http0::HeaderName::from_static(staticc)),
-            Cow::Owned(s) => http0::HeaderName::try_from(s).map_err(|e| e.into()),
+            Cow::Owned(s) => http0::HeaderName::try_from(s).map_err(HttpError::invalid_header_name),
         })
     })
 }
@@ -440,37 +448,23 @@ fn header_name(name: impl AsHeaderComponent) -> Result<http0::HeaderName, HttpEr
 fn header_value(value: MaybeStatic) -> Result<HeaderValue, HttpError> {
     let header = match value {
         Cow::Borrowed(b) => http0::HeaderValue::from_static(b),
-        Cow::Owned(s) => http0::HeaderValue::try_from(s)?,
+        Cow::Owned(s) => {
+            http0::HeaderValue::try_from(s).map_err(HttpError::invalid_header_value)?
+        }
     };
-    Ok(header.try_into().map_err(|e| HttpError::new(e))?)
+    header.try_into().map_err(HttpError::new)
 }
 
-pub(crate) mod private {
-    use crate::client::http::HttpError;
-    use http::header::{InvalidHeaderName, InvalidHeaderValue, ToStrError};
-    use http::uri::InvalidUri;
+#[cfg(test)]
+mod test {
+    use http::HeaderValue;
 
-    impl From<ToStrError> for HttpError {
-        fn from(value: ToStrError) -> Self {
-            Self(value.into())
-        }
-    }
-
-    impl From<InvalidHeaderName> for HttpError {
-        fn from(value: InvalidHeaderName) -> Self {
-            Self(value.into())
-        }
-    }
-
-    impl From<InvalidHeaderValue> for HttpError {
-        fn from(value: InvalidHeaderValue) -> Self {
-            Self(value.into())
-        }
-    }
-
-    impl From<InvalidUri> for HttpError {
-        fn from(value: InvalidUri) -> Self {
-            Self(value.into())
-        }
+    #[test]
+    fn headers_can_be_any_string() {
+        let _: HeaderValue = "😹".parse().expect("can be any string");
+        let _: HeaderValue = "abcd".parse().expect("can be any string");
+        let _ = "a\nb"
+            .parse::<HeaderValue>()
+            .expect_err("cannot contain control characters");
     }
 }
