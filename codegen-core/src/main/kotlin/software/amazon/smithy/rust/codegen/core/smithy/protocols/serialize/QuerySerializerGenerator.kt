@@ -174,15 +174,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 "Input" to structureSymbol,
                 *codegenScope,
             ) {
-                context.copy(writerExpression = "writer", valueExpression = ValueExpression.Reference("input"))
-                    .also { inner ->
-                        for (member in inner.shape.members()) {
-                            val memberContext = MemberContext.structMember(inner, member, symbolProvider)
-                            structWriter(memberContext) { writerExpression ->
-                                serializeMember(memberContext.copy(writerExpression = writerExpression))
-                            }
-                        }
-                    }
+                serializeStructureInner(context)
                 rust("Ok(())")
             }
         }

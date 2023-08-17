@@ -100,7 +100,7 @@ private object CodegenCoreTestModules {
     }
 }
 
-fun testRustSymbolProviderConfig(nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT) = RustSymbolProviderConfig(
+fun testRustSymbolProviderConfig(nullabilityCheckMode: NullableIndex.CheckMode) = RustSymbolProviderConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
     nullabilityCheckMode = nullabilityCheckMode,
