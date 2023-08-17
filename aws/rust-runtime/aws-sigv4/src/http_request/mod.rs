@@ -23,7 +23,7 @@
 //!     .access_key("example access key")
 //!     .secret_key("example secret key")
 //!     .region("us-east-1")
-//!     .service_name("exampleservice")
+//!     .name("exampleservice")
 //!     .time(SystemTime::now())
 //!     .settings(signing_settings)
 //!     .build()
