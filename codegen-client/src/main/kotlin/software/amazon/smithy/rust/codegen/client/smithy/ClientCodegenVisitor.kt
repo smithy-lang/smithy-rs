@@ -82,7 +82,6 @@ class ClientCodegenVisitor(
             nameBuilderFor = { symbol -> "${symbol.name}Builder" },
         )
 
-        println("rustSymbolProviderConfig:\n$rustSymbolProviderConfig")
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
         val (protocol, generator) = ClientProtocolLoader(
