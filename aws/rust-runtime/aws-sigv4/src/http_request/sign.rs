@@ -215,19 +215,10 @@ fn calculate_signing_params<'a>(
     let creq = CanonicalRequest::from(request, params)?;
 
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-    let string_to_sign = StringToSign::new(
-        params.time,
-        params.region,
-        params.service_name,
-        encoded_creq,
-    )
-    .to_string();
-    let signing_key = generate_signing_key(
-        params.secret_key,
-        params.time,
-        params.region,
-        params.service_name,
-    );
+    let string_to_sign =
+        StringToSign::new(params.time, params.region, params.name, encoded_creq).to_string();
+    let signing_key =
+        generate_signing_key(params.secret_key, params.time, params.region, params.name);
     let signature = calculate_signature(signing_key, string_to_sign.as_bytes());
     tracing::trace!(canonical_request = %creq, string_to_sign = %string_to_sign, "calculated signing parameters");
 
@@ -270,20 +261,11 @@ fn calculate_signing_headers<'a>(
 
     // Step 2: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-string-to-sign.html.
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
-    let sts = StringToSign::new(
-        params.time,
-        params.region,
-        params.service_name,
-        encoded_creq,
-    );
+    let sts = StringToSign::new(params.time, params.region, params.name, encoded_creq);
 
     // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
-    let signing_key = generate_signing_key(
-        params.secret_key,
-        params.time,
-        params.region,
-        params.service_name,
-    );
+    let signing_key =
+        generate_signing_key(params.secret_key, params.time, params.region, params.name);
     let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
@@ -388,7 +370,7 @@ mod tests {
             secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
             security_token: None,
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
@@ -417,7 +399,7 @@ mod tests {
             secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
             security_token: None,
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
@@ -449,7 +431,7 @@ mod tests {
             secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
             security_token: None,
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
@@ -477,7 +459,7 @@ mod tests {
             secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
             security_token: None,
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
@@ -531,7 +513,7 @@ mod tests {
             secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
             security_token: None,
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
@@ -593,7 +575,7 @@ mod tests {
             secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
             security_token: None,
             region: "us-east-1",
-            service_name: "service",
+            name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
             settings,
         };
@@ -655,7 +637,7 @@ mod tests {
                 secret_key: "asdf",
                 security_token: None,
                 region: "us-east-1",
-                service_name: "foo",
+                name: "foo",
                 time: std::time::SystemTime::UNIX_EPOCH,
                 settings,
             };

@@ -40,8 +40,10 @@ pub struct SigningParams<'a, S> {
 
     /// Region to sign for.
     pub(crate) region: &'a str,
-    /// AWS Service Name to sign for.
-    pub(crate) service_name: &'a str,
+    /// Service Name to sign for.
+    ///
+    /// NOTE: Endpoint resolution rules may specify a name that differs from the typical service name.
+    pub(crate) name: &'a str,
     /// Timestamp to use in the signature (should be `SystemTime::now()` unless testing).
     pub(crate) time: SystemTime,
 
@@ -50,14 +52,14 @@ pub struct SigningParams<'a, S> {
 }
 
 impl<'a, S> SigningParams<'a, S> {
-    /// Returns the region that will be used to sign
+    /// Returns the signing region.
     pub fn region(&self) -> &str {
         self.region
     }
 
-    /// Returns the service name that will be used to sign
-    pub fn service_name(&self) -> &str {
-        self.service_name
+    /// Returns the signing name.
+    pub fn name(&self) -> &str {
+        self.name
     }
 }
 
@@ -68,7 +70,7 @@ impl<'a, S: fmt::Debug> fmt::Debug for SigningParams<'a, S> {
             .field("secret_key", &"** redacted **")
             .field("security_token", &"** redacted **")
             .field("region", &self.region)
-            .field("service_name", &self.service_name)
+            .field("name", &self.name)
             .field("time", &self.time)
             .field("settings", &self.settings)
             .finish()
@@ -115,7 +117,7 @@ pub mod signing_params {
         secret_key: Option<&'a str>,
         security_token: Option<&'a str>,
         region: Option<&'a str>,
-        service_name: Option<&'a str>,
+        name: Option<&'a str>,
         time: Option<SystemTime>,
         settings: Option<S>,
     }
@@ -161,14 +163,14 @@ pub mod signing_params {
             self.region = region;
         }
 
-        /// Sets the service name (required)
-        pub fn service_name(mut self, service_name: &'a str) -> Self {
-            self.service_name = Some(service_name);
+        /// Sets the signing name (required)
+        pub fn name(mut self, name: &'a str) -> Self {
+            self.name = Some(name);
             self
         }
-        /// Sets the service name (required)
-        pub fn set_service_name(&mut self, service_name: Option<&'a str>) {
-            self.service_name = service_name;
+        /// Sets the signing name (required)
+        pub fn set_name(&mut self, name: Option<&'a str>) {
+            self.name = name;
         }
 
         /// Sets the time to be used in the signature (required)
@@ -205,9 +207,9 @@ pub mod signing_params {
                 region: self
                     .region
                     .ok_or_else(|| BuildError::new("region is required"))?,
-                service_name: self
-                    .service_name
-                    .ok_or_else(|| BuildError::new("service name is required"))?,
+                name: self
+                    .name
+                    .ok_or_else(|| BuildError::new("name is required"))?,
                 time: self
                     .time
                     .ok_or_else(|| BuildError::new("time is required"))?,
