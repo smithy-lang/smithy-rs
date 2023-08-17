@@ -46,7 +46,6 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         ServiceConfigDecorator(),
         AwsPresigningDecorator(),
         AwsCrateDocsDecorator(),
-        HttpConnectorDecorator(),
         AwsEndpointsStdLib(),
         *PromotedBuiltInsDecorators,
         GenericSmithySdkConfigSettings(),

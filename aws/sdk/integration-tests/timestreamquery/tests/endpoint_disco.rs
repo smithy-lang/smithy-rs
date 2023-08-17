@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#[cfg(not(aws_sdk_middleware_mode))]
 #[tokio::test]
 async fn do_endpoint_discovery() {
     use aws_credential_types::provider::SharedCredentialsProvider;

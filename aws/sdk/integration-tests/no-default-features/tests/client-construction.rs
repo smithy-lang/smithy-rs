@@ -18,7 +18,6 @@ async fn test_clients_from_sdk_config() {
 }
 
 // This will fail due to lack of a connector when constructing the service client
-#[cfg(not(aws_sdk_middleware_mode))]
 #[tokio::test]
 async fn test_clients_from_service_config() {
     use aws_sdk_s3::config::Region;
@@ -49,28 +48,4 @@ async fn test_clients_from_service_config() {
         msg.contains("No HTTP connector was available to send this request. Enable the `rustls` crate feature or set a connector to fix this."),
         "expected '{msg}' to contain 'No HTTP connector was available to send this request. Enable the `rustls` crate feature or set a connector to fix this.'"
     );
-}
-
-// TODO(enableNewSmithyRuntimeMode): Remove this test (covered above for orchestrator)
-//
-// This will fail due to lack of a connector when constructing the service client
-#[cfg(aws_sdk_middleware_mode)]
-#[tokio::test]
-#[should_panic(
-    expected = "No HTTP connector was available. Enable the `rustls` crate feature or set a connector to fix this."
-)]
-async fn test_clients_from_service_config_middleware() {
-    #[derive(Clone, Debug)]
-    struct StubSleep;
-    impl AsyncSleep for StubSleep {
-        fn sleep(&self, _duration: Duration) -> Sleep {
-            todo!()
-        }
-    }
-
-    let config = Config::builder()
-        .sleep_impl(SharedAsyncSleep::new(StubSleep {}))
-        .build();
-    // This will panic due to the lack of an HTTP connector
-    aws_sdk_s3::Client::from_conf(config);
 }

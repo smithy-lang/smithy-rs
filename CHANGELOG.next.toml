@@ -36,6 +36,17 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = """Several breaking changes were made to the aws-sigv4 API to remove the direct HTTP dependency:
+- The `take_parameters` and `take_headers` APIs were removed from `SigningInstructions`. Use `into_parts()` instead
+- The arguments of `SignableRequest::new` were changed to accept string types instead of types from the HTTP crate
+- `SigningInstructions::apply_to_request` was gated beyond an `http0-compat` feature flag for backwards compatibility. This API MAY be removed in a future release.
+- Several public accessors were removed from `SigningInstructions`.
+"""
+references = ["smithy-rs#2921"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
 message = "Struct members modeled as required are no longer wrapped in `Option`s."
 references = ["smithy-rs#2916", "aws-sdk-rust#536"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }

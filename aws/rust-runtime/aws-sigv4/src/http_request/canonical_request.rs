@@ -15,7 +15,7 @@ use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, 
 use crate::sign::sha256_hex_string;
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
-use http::{HeaderMap, HeaderValue, Method, Uri};
+use http::{HeaderMap, HeaderValue, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
@@ -103,7 +103,7 @@ impl<'a> SignatureValues<'a> {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct CanonicalRequest<'a> {
-    pub(super) method: &'a Method,
+    pub(super) method: &'a str,
     pub(super) path: Cow<'a, str>,
     pub(super) params: Option<String>,
     pub(super) headers: HeaderMap,
@@ -212,7 +212,7 @@ impl<'a> CanonicalRequest<'a> {
             // Header names and values need to be normalized according to Step 4 of https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
-                HeaderName::from_str(&name.as_str().to_lowercase())?,
+                HeaderName::from_str(&name.to_lowercase())?,
                 normalize_header_value(value)?,
             );
         }
@@ -237,7 +237,7 @@ impl<'a> CanonicalRequest<'a> {
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
         for name in canonical_headers.keys() {
             if let Some(excluded_headers) = params.settings.excluded_headers.as_ref() {
-                if excluded_headers.contains(name) {
+                if excluded_headers.iter().any(|it| name.as_str() == it) {
                     continue;
                 }
             }
@@ -406,9 +406,7 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
 
 /// Works just like [trim_all] but acts on HeaderValues instead of bytes.
 /// Will ensure that the underlying bytes are valid UTF-8.
-fn normalize_header_value(
-    header_value: &HeaderValue,
-) -> Result<HeaderValue, CanonicalRequestError> {
+fn normalize_header_value(header_value: &str) -> Result<HeaderValue, CanonicalRequestError> {
     let trimmed_value = trim_all(header_value.as_bytes());
     HeaderValue::from_str(
         std::str::from_utf8(&trimmed_value)
@@ -544,8 +542,8 @@ mod tests {
     use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
     use aws_smithy_http::query_writer::QueryWriter;
-    use http::Uri;
-    use http::{header::HeaderName, HeaderValue};
+    use http::{HeaderValue, Uri};
+
     use pretty_assertions::assert_eq;
     use proptest::{prelude::*, proptest};
     use std::time::Duration;
@@ -565,14 +563,14 @@ mod tests {
     #[test]
     fn test_repeated_header() {
         let mut req = test_request("get-vanilla-query-order-key-case");
-        req.headers_mut().append(
-            "x-amz-object-attributes",
-            HeaderValue::from_static("Checksum"),
-        );
-        req.headers_mut().append(
-            "x-amz-object-attributes",
-            HeaderValue::from_static("ObjectSize"),
-        );
+        req.headers.push((
+            "x-amz-object-attributes".to_string(),
+            "Checksum".to_string(),
+        ));
+        req.headers.push((
+            "x-amz-object-attributes".to_string(),
+            "ObjectSize".to_string(),
+        ));
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
@@ -618,13 +616,10 @@ mod tests {
 
     #[test]
     fn test_unsigned_payload() {
-        let req = test_request("get-vanilla-query-order-key-case");
-        let req = SignableRequest::new(
-            req.method(),
-            req.uri(),
-            req.headers(),
-            SignableBody::UnsignedPayload,
-        );
+        let mut req = test_request("get-vanilla-query-order-key-case");
+        req.set_body(SignableBody::UnsignedPayload);
+        let req: SignableRequest<'_> = SignableRequest::from(&req);
+
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
@@ -638,13 +633,9 @@ mod tests {
     #[test]
     fn test_precomputed_payload() {
         let payload_hash = "44ce7dd67c959e0d3524ffac1771dfbba87d2b6b4b4e99e42034a8b803f8b072";
-        let req = test_request("get-vanilla-query-order-key-case");
-        let req = SignableRequest::new(
-            req.method(),
-            req.uri(),
-            req.headers(),
-            SignableBody::Precomputed(String::from(payload_hash)),
-        );
+        let mut req = test_request("get-vanilla-query-order-key-case");
+        req.set_body(SignableBody::Precomputed(String::from(payload_hash)));
+        let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
@@ -712,7 +703,7 @@ mod tests {
     #[test]
     fn test_tilde_in_uri() {
         let req = http::Request::builder()
-            .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap();
+            .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap().into();
         let req = SignableRequest::from(&req);
         let signing_params = signing_params(SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
@@ -734,7 +725,8 @@ mod tests {
         let req = http::Request::builder()
             .uri(query_writer.build_uri())
             .body("")
-            .unwrap();
+            .unwrap()
+            .into();
         let req = SignableRequest::from(&req);
         let signing_params = signing_params(SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
@@ -786,7 +778,8 @@ mod tests {
             .header("x-amzn-trace-id", "test-trace-id")
             .header("x-amz-user-agent", "test-user-agent")
             .body("")
-            .unwrap();
+            .unwrap()
+            .into();
         let request = SignableRequest::from(&request);
 
         let settings = SigningSettings {
@@ -816,7 +809,8 @@ mod tests {
             .header("x-amzn-trace-id", "test-trace-id")
             .header("x-amz-user-agent", "test-user-agent")
             .body("")
-            .unwrap();
+            .unwrap()
+            .into();
         let request = SignableRequest::from(&request);
 
         let settings = SigningSettings {
@@ -847,7 +841,7 @@ mod tests {
             for key in &excluded_headers {
                 request_builder = request_builder.header(key, "value");
             }
-            let request = request_builder.body("").unwrap();
+            let request = request_builder.body("").unwrap().into();
 
             let request = SignableRequest::from(&request);
 
@@ -857,9 +851,7 @@ mod tests {
                 excluded_headers: Some(
                     excluded_headers
                         .into_iter()
-                        .map(|header_string| {
-                            HeaderName::from_static(Box::leak(header_string.into_boxed_str()))
-                        })
+                        .map(std::borrow::Cow::Owned)
                         .collect(),
                 ),
                 ..Default::default()
@@ -908,20 +900,13 @@ mod tests {
 
         #[test]
         fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
-            if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
-                assert!(normalize_header_value(&header_value).is_ok());
-            }
+            prop_assume!(HeaderValue::from_str(&v).is_ok());
+            assert!(normalize_header_value(&v).is_ok());
         }
 
         #[test]
         fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
             assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
-    }
-
-    #[test]
-    fn test_normalize_header_value_returns_expected_error_on_invalid_utf8() {
-        let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
-        assert!(normalize_header_value(&header_value).is_err());
     }
 }

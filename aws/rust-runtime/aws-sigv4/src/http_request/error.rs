@@ -4,6 +4,7 @@
  */
 
 use http::header::{InvalidHeaderName, InvalidHeaderValue};
+use http::uri::InvalidUri;
 use std::error::Error;
 use std::fmt;
 use std::str::Utf8Error;
@@ -50,6 +51,7 @@ enum CanonicalRequestErrorKind {
     InvalidHeaderName { source: InvalidHeaderName },
     InvalidHeaderValue { source: InvalidHeaderValue },
     InvalidUtf8InHeaderValue { source: Utf8Error },
+    InvalidUri { source: InvalidUri },
 }
 
 #[derive(Debug)]
@@ -64,6 +66,7 @@ impl fmt::Display for CanonicalRequestError {
             InvalidHeaderName { .. } => write!(f, "invalid header name"),
             InvalidHeaderValue { .. } => write!(f, "invalid header value"),
             InvalidUtf8InHeaderValue { .. } => write!(f, "invalid UTF-8 in header value"),
+            InvalidUri { .. } => write!(f, "the uri was invalid"),
         }
     }
 }
@@ -75,6 +78,7 @@ impl Error for CanonicalRequestError {
             InvalidHeaderName { source } => Some(source),
             InvalidHeaderValue { source } => Some(source),
             InvalidUtf8InHeaderValue { source } => Some(source),
+            InvalidUri { source } => Some(source),
         }
     }
 }
@@ -99,6 +103,14 @@ impl From<InvalidHeaderValue> for CanonicalRequestError {
     fn from(source: InvalidHeaderValue) -> Self {
         Self {
             kind: CanonicalRequestErrorKind::InvalidHeaderValue { source },
+        }
+    }
+}
+
+impl From<InvalidUri> for CanonicalRequestError {
+    fn from(source: InvalidUri) -> Self {
+        Self {
+            kind: CanonicalRequestErrorKind::InvalidUri { source },
         }
     }
 }

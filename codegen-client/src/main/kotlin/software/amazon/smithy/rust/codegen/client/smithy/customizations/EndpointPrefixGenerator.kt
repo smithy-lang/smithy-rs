@@ -38,7 +38,7 @@ class EndpointPrefixGenerator(private val codegenContext: ClientCodegenContext, 
         is OperationSection.MutateRequest -> writable {
             endpointTraitBindings(codegenContext, shape)?.also { endpointTraitBindings ->
                 withBlock("let endpoint_prefix = ", "?;") {
-                    endpointTraitBindings.render(this, "self", codegenContext.smithyRuntimeMode)
+                    endpointTraitBindings.render(this, "self")
                 }
                 rust("request.properties_mut().insert(endpoint_prefix);")
             }

@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class InvocationIdDecorator : ClientCodegenDecorator {
     override val name: String get() = "InvocationIdDecorator"
@@ -26,17 +25,13 @@ class InvocationIdDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(InvocationIdRuntimePluginCustomization(codegenContext))
-        }
+        baseCustomizations + InvocationIdRuntimePluginCustomization(codegenContext)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(InvocationIdConfigCustomization(codegenContext))
-        }
+        baseCustomizations + InvocationIdConfigCustomization(codegenContext)
 }
 
 private class InvocationIdRuntimePluginCustomization(

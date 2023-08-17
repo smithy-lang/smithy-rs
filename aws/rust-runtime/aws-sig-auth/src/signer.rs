@@ -16,6 +16,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::middleware::Signature;
 pub use aws_sigv4::http_request::SignableBody;
+
 pub type SigningError = aws_sigv4::http_request::SigningError;
 
 const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
@@ -212,11 +213,17 @@ impl SigV4Signer {
                 });
 
             let signable_request = SignableRequest::new(
-                request.method(),
-                request.uri(),
-                request.headers(),
+                request.method().as_str(),
+                request.uri().to_string(),
+                request.headers().iter().map(|(k, v)| {
+                    (
+                        k.as_str(),
+                        std::str::from_utf8(v.as_bytes())
+                            .expect("only string headers are signable"),
+                    )
+                }),
                 signable_body,
-            );
+            )?;
             sign(signable_request, &signing_params)?
         }
         .into_parts();

@@ -37,7 +37,6 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 fun getNullabilityCheckMode(): String = properties.get("smithy.nullability.check.mode") ?: "CLIENT_CAREFUL"
 
 val allCodegenTests = listOf(
@@ -49,7 +48,6 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
                 "nullabilityCheckMode": ${getNullabilityCheckMode()}
             },
             "customizationConfig": {
@@ -67,7 +65,6 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
                 "nullabilityCheckMode": ${getNullabilityCheckMode()}
             },
             "customizationConfig": {

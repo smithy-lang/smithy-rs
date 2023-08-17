@@ -168,7 +168,7 @@ internal class EndpointResolverGenerator(
 
         // Now that we rendered the rules once (and then threw it away) we can see what functions we actually used!
         val fnsUsed = registry.fnsUsed()
-        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.endpoint(codegenContext)) {
+        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Config.endpoint) {
             rustTemplate(
                 """
                 /// The default endpoint resolver
