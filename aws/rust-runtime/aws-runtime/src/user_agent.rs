@@ -7,6 +7,7 @@ use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
 use aws_types::os_shim_internal::Env;
@@ -71,9 +72,14 @@ fn header_values(
 }
 
 impl Interceptor for UserAgentInterceptor {
+    fn name(&self) -> &'static str {
+        "UserAgentInterceptor"
+    }
+
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let api_metadata = cfg
@@ -108,11 +114,11 @@ impl Interceptor for UserAgentInterceptor {
 mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+    use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::interceptors::Interceptor;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::error::display::DisplayErrorContext;
-    use aws_smithy_types::type_erasure::TypeErasedBox;
 
     fn expect_header<'a>(context: &'a InterceptorContext, header_name: &str) -> &'a str {
         context
@@ -126,7 +132,7 @@ mod tests {
     }
 
     fn context() -> InterceptorContext {
-        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
         let _ = context.take_input();
@@ -136,6 +142,7 @@ mod tests {
 
     #[test]
     fn test_overridden_ua() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut context = context();
 
         let mut layer = Layer::new("test");
@@ -146,7 +153,7 @@ mod tests {
         let interceptor = UserAgentInterceptor::new();
         let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut ctx, &mut cfg)
+            .modify_before_signing(&mut ctx, &rc, &mut cfg)
             .unwrap();
 
         let header = expect_header(&context, "user-agent");
@@ -161,6 +168,7 @@ mod tests {
 
     #[test]
     fn test_default_ua() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
@@ -171,7 +179,7 @@ mod tests {
         let interceptor = UserAgentInterceptor::new();
         let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut ctx, &mut config)
+            .modify_before_signing(&mut ctx, &rc, &mut config)
             .unwrap();
 
         let expected_ua = AwsUserAgent::new_from_environment(Env::real(), api_metadata);
@@ -191,6 +199,7 @@ mod tests {
 
     #[test]
     fn test_app_name() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut context = context();
 
         let api_metadata = ApiMetadata::new("some-service", "some-version");
@@ -202,7 +211,7 @@ mod tests {
         let interceptor = UserAgentInterceptor::new();
         let mut ctx = Into::into(&mut context);
         interceptor
-            .modify_before_signing(&mut ctx, &mut config)
+            .modify_before_signing(&mut ctx, &rc, &mut config)
             .unwrap();
 
         let app_value = "app/my_awesome_app";
@@ -221,6 +230,7 @@ mod tests {
 
     #[test]
     fn test_api_metadata_missing() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut context = context();
         let mut config = ConfigBag::base();
 
@@ -231,7 +241,7 @@ mod tests {
             "{}",
             DisplayErrorContext(
                 &*interceptor
-                    .modify_before_signing(&mut ctx, &mut config)
+                    .modify_before_signing(&mut ctx, &rc, &mut config)
                     .expect_err("it should error")
             )
         );

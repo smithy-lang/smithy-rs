@@ -134,7 +134,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val generator = EndpointTypesGenerator.fromContext(codegenContext)
-        rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
+        rustCrate.withModule(ClientRustModule.Config.endpoint) {
             withInlineModule(endpointTestsModule(codegenContext), rustCrate.moduleDocProvider) {
                 generator.testGenerator()(this)
             }

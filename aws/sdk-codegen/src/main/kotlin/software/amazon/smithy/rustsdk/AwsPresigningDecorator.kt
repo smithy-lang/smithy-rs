@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -98,18 +99,6 @@ class AwsPresigningDecorator internal constructor(
 
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-            baseCustomizations + AwsInputPresignedMethod(codegenContext, operation)
-        } else {
-            baseCustomizations
-        }
-    }
 
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
@@ -216,10 +205,12 @@ class AwsInputPresignedMethod(
                     """
                     // Change signature type to query params and wire up presigning config
                     let mut props = request.properties_mut();
-                    props.insert(#{SharedTimeSource}::new(presigning_config.start_time()));
+                    props.insert(#{SharedTimeSource}::new(#{StaticTimeSource}::new(presigning_config.start_time())));
                     """,
                     "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig)
                         .resolve("time::SharedTimeSource"),
+                    "StaticTimeSource" to RuntimeType.smithyAsync(runtimeConfig)
+                        .resolve("time::StaticTimeSource"),
                 )
                 withBlock("props.insert(", ");") {
                     rustTemplate(
@@ -283,30 +274,13 @@ class AwsPresignedFluentBuilderMethod(
                     """,
                     *codegenScope,
                     "OpError" to section.operationErrorType,
-                    "RawResponseType" to if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                        RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
-                    } else {
-                        RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
-                    },
+                    "RawResponseType" to
+                        RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
                 ) {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                        renderPresignedMethodBodyMiddleware()
-                    } else {
-                        renderPresignedMethodBody(section)
-                    }
+                    renderPresignedMethodBody(section)
                 }
             }
         }
-
-    private fun RustWriter.renderPresignedMethodBodyMiddleware() {
-        rustTemplate(
-            """
-            let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-            input.presigned(&self.handle.conf, presigning_config).await
-            """,
-            *codegenScope,
-        )
-    }
 
     private fun RustWriter.renderPresignedMethodBody(section: FluentClientSection.FluentBuilderImpl) {
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(section.operationShape.id)
@@ -333,9 +307,7 @@ class AwsPresignedFluentBuilderMethod(
                 .await
                 .map_err(|err| {
                     err.map_service_error(|err| {
-                        #{TypedBox}::<#{OperationError}>::assume_from(err.into())
-                            .expect("correct error type")
-                            .unwrap()
+                        err.downcast::<#{OperationError}>().expect("correct error type")
                     })
                 })?;
             let request = context.take_request().expect("request set before transmit");
@@ -350,31 +322,29 @@ class AwsPresignedFluentBuilderMethod(
             "SigV4PresigningRuntimePlugin" to AwsRuntimeType.presigningInterceptor(runtimeConfig)
                 .resolve("SigV4PresigningRuntimePlugin"),
             "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
-            "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
             "USER_AGENT" to CargoDependency.Http.toType().resolve("header::USER_AGENT"),
             "alternate_presigning_serializer" to writable {
                 if (presignableOp.hasModelTransforms()) {
                     val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
                     rustTemplate(
                         """
-                        ##[derive(Debug)]
+                        ##[derive(::std::fmt::Debug)]
                         struct AlternatePresigningSerializerRuntimePlugin;
                         impl #{RuntimePlugin} for AlternatePresigningSerializerRuntimePlugin {
-                            fn config(&self) -> Option<#{FrozenLayer}> {
-                                use #{ConfigBagAccessors};
+                            fn config(&self) -> #{Option}<#{FrozenLayer}> {
                                 let mut cfg = #{Layer}::new("presigning_serializer");
-                                cfg.set_request_serializer(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
-                                Some(cfg.freeze())
+                                cfg.store_put(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
+                                #{Some}(cfg.freeze())
                             }
                         }
                         """,
+                        *preludeScope,
                         "AlternateSerializer" to alternateSerializer(operationShape),
-                        "ConfigBagAccessors" to RuntimeType.configBagAccessors(runtimeConfig),
                         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
                         "Layer" to smithyTypes.resolve("config_bag::Layer"),
                         "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
                         "SharedRequestSerializer" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                            .resolve("client::orchestrator::SharedRequestSerializer"),
+                            .resolve("client::ser_de::SharedRequestSerializer"),
                     )
                 }
             },
@@ -501,6 +471,9 @@ private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
 
         Presigned requests can be given to other users or applications to access a resource or perform
         an operation without having access to the AWS security credentials.
+
+        _Important:_ If you're using credentials that can expire, such as those from STS AssumeRole or SSO, then
+        the presigned request can only be valid for as long as the credentials used to create it are.
         """,
     )
 }

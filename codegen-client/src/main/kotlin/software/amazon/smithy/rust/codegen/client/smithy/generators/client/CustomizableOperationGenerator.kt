@@ -33,28 +33,6 @@ class CustomizableOperationGenerator(
     private val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
     private val smithyTypes = CargoDependency.smithyTypes(runtimeConfig).toType()
 
-    fun render(crate: RustCrate) {
-        crate.withModule(ClientRustModule.Client.customize) {
-            if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                rustTemplate(
-                    """
-                    pub use #{Operation};
-                    pub use #{Request};
-                    pub use #{Response};
-                    pub use #{ClassifyRetry};
-                    pub use #{RetryKind};
-                    """,
-                    "Operation" to smithyHttp.resolve("operation::Operation"),
-                    "Request" to smithyHttp.resolve("operation::Request"),
-                    "Response" to smithyHttp.resolve("operation::Response"),
-                    "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-                    "RetryKind" to smithyTypes.resolve("retry::RetryKind"),
-                )
-                renderCustomizableOperationModule(this)
-            }
-        }
-    }
-
     private fun renderCustomizableOperationModule(writer: RustWriter) {
         val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
         val handleGenerics = generics.toRustGenerics()
@@ -138,7 +116,7 @@ class CustomizableOperationGenerator(
         )
     }
 
-    fun renderForOrchestrator(crate: RustCrate) {
+    fun render(crate: RustCrate) {
         val codegenScope = arrayOf(
             *preludeScope,
             "CustomizableOperation" to ClientRustModule.Client.customize.toType()
@@ -156,6 +134,7 @@ class CustomizableOperationGenerator(
             "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::interceptors::MutateRequestInterceptor"),
             "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+            "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
             "SendResult" to ClientRustModule.Client.customize.toType()
                 .resolve("internal::SendResult"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
@@ -188,6 +167,7 @@ class CustomizableOperationGenerator(
                         pub(crate) customizable_send: #{Box}<dyn #{CustomizableSend}<T, E>>,
                         pub(crate) config_override: #{Option}<crate::config::Builder>,
                         pub(crate) interceptors: Vec<#{SharedInterceptor}>,
+                        pub(crate) runtime_plugins: Vec<#{SharedRuntimePlugin}>,
                     }
 
                     impl<T, E> CustomizableOperation<T, E> {
@@ -197,8 +177,15 @@ class CustomizableOperationGenerator(
                         /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
                         /// The order in which those user-specified operation interceptors are invoked should not be relied upon
                         /// as it is an implementation detail.
-                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + #{Send} + #{Sync} + 'static) -> Self {
+                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                            self
+                        }
+
+                        /// Adds a runtime plugin.
+                        ##[allow(unused)]
+                        pub(crate) fn runtime_plugin(mut self, runtime_plugin: impl #{RuntimePlugin} + 'static) -> Self {
+                            self.runtime_plugins.push(#{SharedRuntimePlugin}::new(runtime_plugin));
                             self
                         }
 
@@ -264,7 +251,10 @@ class CustomizableOperationGenerator(
                             };
 
                             self.interceptors.into_iter().for_each(|interceptor| {
-                                config_override.add_interceptor(interceptor);
+                                config_override.push_interceptor(interceptor);
+                            });
+                            self.runtime_plugins.into_iter().for_each(|plugin| {
+                                config_override.push_runtime_plugin(plugin);
                             });
 
                             (self.customizable_send)(config_override).await
@@ -314,74 +304,5 @@ class CustomizableOperationGenerator(
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
         }
-    }
-}
-
-fun renderCustomizableOperationSend(codegenContext: ClientCodegenContext, generics: FluentClientGenerics, writer: RustWriter) {
-    val runtimeConfig = codegenContext.runtimeConfig
-    val smithyHttp = CargoDependency.smithyHttp(runtimeConfig).toType()
-    val smithyClient = CargoDependency.smithyClient(runtimeConfig).toType()
-
-    val operationGenerics = RustGenerics(GenericTypeArg("O"), GenericTypeArg("Retry"))
-    val handleGenerics = generics.toRustGenerics()
-    val combinedGenerics = operationGenerics + handleGenerics
-
-    val codegenScope = arrayOf(
-        *preludeScope,
-        "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-        "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        // TODO(enableNewSmithyRuntimeCleanup): Delete the trait bounds when cleaning up middleware
-        "ParseHttpResponse" to smithyHttp.resolve("response::ParseHttpResponse"),
-        "NewRequestPolicy" to smithyClient.resolve("retry::NewRequestPolicy"),
-        "SmithyRetryPolicy" to smithyClient.resolve("bounds::SmithyRetryPolicy"),
-        "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-        // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
-        "combined_generics_decl" to combinedGenerics.declaration(),
-        "handle_generics_bounds" to handleGenerics.bounds(),
-    )
-
-    if (generics is FlexibleClientGenerics) {
-        writer.rustTemplate(
-            """
-            impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
-            where
-                #{handle_generics_bounds:W}
-            {
-                /// Sends this operation's request
-                pub async fn send<T, E>(self) -> #{Result}<T, #{SdkError}<E>>
-                where
-                    E: std::error::Error + #{Send} + #{Sync} + 'static,
-                    O: #{ParseHttpResponse}<Output = #{Result}<T, E>> + #{Send} + #{Sync} + #{Clone} + 'static,
-                    Retry: #{Send} + #{Sync} + #{Clone},
-                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + #{Send} + #{Sync} + #{Clone},
-                    <R as #{NewRequestPolicy}>::Policy: #{SmithyRetryPolicy}<O, T, E, Retry> + #{Clone},
-                {
-                    self.handle.client.call(self.operation).await
-                }
-            }
-            """,
-            *codegenScope,
-        )
-    } else if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-        writer.rustTemplate(
-            """
-            impl#{combined_generics_decl:W} CustomizableOperation#{combined_generics_decl:W}
-            where
-                #{handle_generics_bounds:W}
-            {
-                /// Sends this operation's request
-                pub async fn send<T, E>(self) -> #{Result}<T, #{SdkError}<E>>
-                where
-                    E: std::error::Error + #{Send} + #{Sync} + 'static,
-                    O: #{ParseHttpResponse}<Output = #{Result}<T, E>> + #{Send} + #{Sync} + #{Clone} + 'static,
-                    Retry: #{Send} + #{Sync} + #{Clone},
-                    Retry: #{ClassifyRetry}<#{SdkSuccess}<T>, #{SdkError}<E>> + #{Send} + #{Sync} + #{Clone},
-                {
-                    self.handle.client.call(self.operation).await
-                }
-            }
-            """,
-            *codegenScope,
-        )
     }
 }

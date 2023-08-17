@@ -19,7 +19,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 class HttpAuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
         "TestConnection" to CargoDependency.smithyClient(runtimeConfig)
-            .withFeature("test-util").toType()
+            .toDevDependency().withFeature("test-util").toType()
             .resolve("test_connection::TestConnection"),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
@@ -57,7 +57,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -91,7 +91,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -136,7 +136,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -182,7 +182,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -228,7 +228,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -274,7 +274,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);
@@ -316,7 +316,7 @@ class HttpAuthDecoratorTest {
                             .build_dyn();
                         let client = $moduleName::Client::with_config(smithy_client, config);
                         let _ = client.some_operation()
-                            .send_orchestrator()
+                            .send()
                             .await
                             .expect("success");
                         connector.assert_requests_match(&[]);

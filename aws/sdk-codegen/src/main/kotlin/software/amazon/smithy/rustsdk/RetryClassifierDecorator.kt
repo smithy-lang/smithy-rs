@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RetryClassifierDecorator : ClientCodegenDecorator {
     override val name: String = "RetryPolicy"
@@ -25,13 +24,9 @@ class RetryClassifierDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        (baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig)).letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + OperationRetryClassifiersFeature(
-                codegenContext,
-                operation,
-            )
-        }
+    ): List<OperationCustomization> = baseCustomizations +
+        RetryClassifierFeature(codegenContext.runtimeConfig) +
+        OperationRetryClassifiersFeature(codegenContext, operation)
 }
 
 class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {

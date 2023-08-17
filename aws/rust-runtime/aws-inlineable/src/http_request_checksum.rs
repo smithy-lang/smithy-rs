@@ -19,6 +19,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::HeaderValue;
 use http_body::Body;
@@ -76,11 +77,16 @@ impl<AP> RequestChecksumInterceptor<AP> {
 
 impl<AP> Interceptor for RequestChecksumInterceptor<AP>
 where
-    AP: Fn(&Input) -> Result<Option<ChecksumAlgorithm>, BoxError>,
+    AP: Fn(&Input) -> Result<Option<ChecksumAlgorithm>, BoxError> + Send + Sync,
 {
+    fn name(&self) -> &'static str {
+        "RequestChecksumInterceptor"
+    }
+
     fn read_before_serialization(
         &self,
         context: &BeforeSerializationInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let checksum_algorithm = (self.algorithm_provider)(context.input())?;
@@ -98,6 +104,7 @@ where
     fn modify_before_retry_loop(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let state = cfg
@@ -232,11 +239,8 @@ mod tests {
         let mut body = request.body().try_clone().expect("body is retryable");
 
         let mut body_data = BytesMut::new();
-        loop {
-            match body.data().await {
-                Some(data) => body_data.extend_from_slice(&data.unwrap()),
-                None => break,
-            }
+        while let Some(data) = body.data().await {
+            body_data.extend_from_slice(&data.unwrap())
         }
         let body = std::str::from_utf8(&body_data).unwrap();
         assert_eq!(
@@ -283,11 +287,8 @@ mod tests {
         let mut body = request.body().try_clone().expect("body is retryable");
 
         let mut body_data = BytesMut::new();
-        loop {
-            match body.data().await {
-                Some(data) => body_data.extend_from_slice(&data.unwrap()),
-                None => break,
-            }
+        while let Some(data) = body.data().await {
+            body_data.extend_from_slice(&data.unwrap())
         }
         let body = std::str::from_utf8(&body_data).unwrap();
         let expected_checksum = base64::encode(&crc32c_checksum);

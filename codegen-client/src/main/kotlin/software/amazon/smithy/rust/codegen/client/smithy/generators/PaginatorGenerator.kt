@@ -204,52 +204,26 @@ class PaginatorGenerator private constructor(
             "items_fn" to itemsFn(),
             "output_token" to outputTokenLens,
             "item_type" to writable {
-                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}>>", *codegenScope)
-                } else {
-                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
-                }
+                rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
             },
             "orchestrate" to writable {
-                if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                    rustTemplate(
-                        """
-                        {
-                            let op = match input.make_operation(&handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure) {
-                                #{Ok}(op) => op,
-                                #{Err}(e) => {
-                                    let _ = tx.send(#{Err}(e)).await;
-                                    return;
-                                }
-                            };
-                            handle.client.call(op).await
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    rustTemplate(
-                        "#{operation}::orchestrate(&runtime_plugins, input.clone()).await",
-                        *codegenScope,
-                    )
-                }
+                rustTemplate(
+                    "#{operation}::orchestrate(&runtime_plugins, input.clone()).await",
+                    *codegenScope,
+                )
             },
             "runtime_plugin_init" to writable {
-                if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
-                    rustTemplate(
-                        """
-                        let runtime_plugins = #{operation}::operation_runtime_plugins(
-                            handle.runtime_plugins.clone(),
-                            &handle.conf,
-                            #{None},
-                        );
-                        """,
-                        *codegenScope,
-                        "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                    )
-                }
+                rustTemplate(
+                    """
+                    let runtime_plugins = #{operation}::operation_runtime_plugins(
+                        handle.runtime_plugins.clone(),
+                        &handle.conf,
+                        #{None},
+                    );
+                    """,
+                    *codegenScope,
+                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                )
             },
         )
     }
@@ -317,11 +291,7 @@ class PaginatorGenerator private constructor(
                     paginationInfo.itemsMemberPath,
                 ),
                 "item_type" to writable {
-                    if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}>>", *codegenScope)
-                    } else {
-                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
-                    }
+                    rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
                 },
                 *codegenScope,
             )

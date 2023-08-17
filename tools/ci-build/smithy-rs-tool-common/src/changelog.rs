@@ -149,6 +149,13 @@ impl HandAuthoredEntry {
         if self.references.is_empty() {
             bail!("Changelog entry must refer to at least one pull request or issue");
         }
+        if self.message.len() > 800 {
+            bail!(
+                "Your changelog entry is too long. Post long-form change log entries in \
+                the GitHub Discussions under the Changelog category, and link to them from \
+                the changelog."
+            );
+        }
 
         Ok(())
     }

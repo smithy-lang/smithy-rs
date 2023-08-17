@@ -20,7 +20,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.createTestInlineModuleCreator
@@ -237,7 +237,7 @@ class ConstrainedStringGeneratorTest {
             ).render()
         }
 
-        assertThrows<CommandFailed> {
+        assertThrows<CommandError> {
             project.compileAndTest()
         }
     }

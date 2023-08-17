@@ -10,7 +10,7 @@ import software.amazon.smithy.aws.traits.auth.UnsignedPayloadTrait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class SigV4AuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "SigV4AuthDecorator"
@@ -33,33 +32,26 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
     override fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
-        baseAuthOptions: List<AuthOption>,
-    ): List<AuthOption> = baseAuthOptions.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-        it + AuthOption.StaticAuthOption(SigV4Trait.ID) {
-            rustTemplate(
-                "#{scheme_id},",
-                "scheme_id" to AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-                    .resolve("auth::sigv4::SCHEME_ID"),
-            )
-        }
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> = baseAuthSchemeOptions + AuthSchemeOption.StaticAuthSchemeOption(SigV4Trait.ID) {
+        rustTemplate(
+            "#{scheme_id},",
+            "scheme_id" to AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                .resolve("auth::sigv4::SCHEME_ID"),
+        )
     }
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthServiceRuntimePluginCustomization(codegenContext))
-        }
+        baseCustomizations + AuthServiceRuntimePluginCustomization(codegenContext)
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AuthOperationCustomization(codegenContext))
-        }
+    ): List<OperationCustomization> = baseCustomizations + AuthOperationCustomization(codegenContext)
 }
 
 private class AuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
@@ -69,23 +61,23 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
         val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
         arrayOf(
             "SIGV4_SCHEME_ID" to awsRuntime.resolve("auth::sigv4::SCHEME_ID"),
-            "SigV4HttpAuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4HttpAuthScheme"),
+            "SigV4AuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4AuthScheme"),
             "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
             "SigningService" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningService"),
-            "SharedHttpAuthScheme" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::auth::SharedHttpAuthScheme"),
+            "SharedAuthScheme" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
         )
     }
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.AdditionalConfig -> {
+            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
                 if (serviceHasEventStream) {
                     // enable the aws-runtime `sign-eventstream` feature
                     addDependency(AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol())
                 }
-                section.registerHttpAuthScheme(this, runtimeConfig) {
-                    rustTemplate("#{SharedHttpAuthScheme}::new(#{SigV4HttpAuthScheme}::new())", *codegenScope)
+                section.registerAuthScheme(this) {
+                    rustTemplate("#{SharedAuthScheme}::new(#{SigV4AuthScheme}::new())", *codegenScope)
                 }
             }
 

@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+set -euxo pipefail
+
+python3 scripts/generate.py badtls.test
+sudo mkdir /etc/nginx/tls || true
+sudo mkdir /var/www || true
+sudo python3 scripts/install.py /etc/nginx/conf.d /etc/nginx/tls /var/www
+sudo rm /etc/nginx/sites-enabled/default
+echo '#### start of badtls.test hosts ####' | sudo tee -a /etc/hosts
+echo '127.0.0.1 domain-match.badtls.test wildcard-match.badtls.test san-match.badtls.test dh1024.badtls.test expired-1963.badtls.test future.badtls.test domain-mismatch.badtls.test san-mismatch.badtls.test bad-key-usage.badtls.test expired.badtls.test wildcard.mismatch.badtls.test rc4.badtls.test weak-sig.badtls.test rc4-md5.badtls.test' | sudo tee -a /etc/hosts
+echo '#### end of badtls.test hosts ####' | sudo tee -a /etc/hosts
+screen -dmS badtls sudo bash ./scripts/local.sh

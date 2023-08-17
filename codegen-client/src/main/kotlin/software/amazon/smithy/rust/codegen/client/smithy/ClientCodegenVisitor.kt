@@ -45,7 +45,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.util.CommandFailed
+import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -170,8 +170,9 @@ class ClientCodegenVisitor(
             ),
         )
         try {
-            "cargo fmt".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
-        } catch (err: CommandFailed) {
+            // use an increased max_width to make rustfmt fail less frequently
+            "cargo fmt -- --config max_width=150".runCommand(fileManifest.baseDir, timeout = settings.codegenConfig.formatTimeoutSeconds.toLong())
+        } catch (err: CommandError) {
             logger.warning("Failed to run cargo fmt: [${service.id}]\n${err.output}")
         }
 

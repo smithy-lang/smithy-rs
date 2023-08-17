@@ -22,11 +22,11 @@ async-trait = "0.1"
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1"
-fastrand = "1"
+fastrand = "2.0.0"
 futures-util = "0.3"
 http = "0.2.1"
 md-5 = "0.10.0"

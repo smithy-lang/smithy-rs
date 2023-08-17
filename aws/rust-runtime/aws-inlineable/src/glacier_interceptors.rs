@@ -11,12 +11,12 @@ use aws_sigv4::http_request::SignableBody;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::config_bag_accessors::ConfigBagAccessors;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::orchestrator::LoadedRequestBody;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use bytes::Bytes;
 use http::header::{HeaderName, HeaderValue};
@@ -68,9 +68,14 @@ impl<I> GlacierAccountIdAutofillInterceptor<I> {
 impl<I: GlacierAccountId + Send + Sync + 'static> Interceptor
     for GlacierAccountIdAutofillInterceptor<I>
 {
+    fn name(&self) -> &'static str {
+        "GlacierAccountIdAutofillInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         context: &mut BeforeSerializationInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let erased_input = context.input_mut();
@@ -96,9 +101,14 @@ impl GlacierApiVersionInterceptor {
 }
 
 impl Interceptor for GlacierApiVersionInterceptor {
+    fn name(&self) -> &'static str {
+        "GlacierApiVersionInterceptor"
+    }
+
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         context.request_mut().headers_mut().insert(
@@ -114,21 +124,27 @@ impl Interceptor for GlacierApiVersionInterceptor {
 pub(crate) struct GlacierTreeHashHeaderInterceptor;
 
 impl Interceptor for GlacierTreeHashHeaderInterceptor {
+    fn name(&self) -> &'static str {
+        "GlacierTreeHashHeaderInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         _context: &mut BeforeSerializationInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         // Request the request body to be loaded into memory immediately after serialization
         // so that it can be checksummed before signing and transmit
         cfg.interceptor_state()
-            .set_loaded_request_body(LoadedRequestBody::Requested);
+            .store_put(LoadedRequestBody::Requested);
         Ok(())
     }
 
     fn modify_before_retry_loop(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let maybe_loaded_body = cfg.load::<LoadedRequestBody>();
@@ -236,8 +252,8 @@ fn compute_hash_tree(mut hashes: Vec<Digest>) -> Digest {
 #[cfg(test)]
 mod account_id_autofill_tests {
     use super::*;
-    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-    use aws_smithy_types::type_erasure::TypedBox;
+    use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 
     #[test]
     fn autofill_account_id() {
@@ -251,13 +267,13 @@ mod account_id_autofill_tests {
             }
         }
 
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut cfg = ConfigBag::base();
-        let mut context =
-            InterceptorContext::new(TypedBox::new(SomeInput { account_id: None }).erase());
+        let mut context = InterceptorContext::new(Input::erase(SomeInput { account_id: None }));
         let mut context = BeforeSerializationInterceptorContextMut::from(&mut context);
         let interceptor = GlacierAccountIdAutofillInterceptor::<SomeInput>::new();
         interceptor
-            .modify_before_serialization(&mut context, &mut cfg)
+            .modify_before_serialization(&mut context, &rc, &mut cfg)
             .expect("success");
         assert_eq!(
             DEFAULT_ACCOUNT_ID,
@@ -275,19 +291,20 @@ mod account_id_autofill_tests {
 #[cfg(test)]
 mod api_version_tests {
     use super::*;
-    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-    use aws_smithy_types::type_erasure::TypedBox;
+    use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 
     #[test]
     fn api_version_interceptor() {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let mut cfg = ConfigBag::base();
-        let mut context = InterceptorContext::new(TypedBox::new("dontcare").erase());
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
         let mut context = BeforeTransmitInterceptorContextMut::from(&mut context);
 
         let interceptor = GlacierApiVersionInterceptor::new("some-version");
         interceptor
-            .modify_before_signing(&mut context, &mut cfg)
+            .modify_before_signing(&mut context, &rc, &mut cfg)
             .expect("success");
 
         assert_eq!(

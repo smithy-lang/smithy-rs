@@ -7,17 +7,15 @@
 //!
 //! # Example: Signing an HTTP request
 //!
+//! **Note**: This requires `http0-compat` to be enabled.
+//!
 //! ```rust
-//! # fn test() -> Result<(), aws_sigv4::http_request::SigningError> {
+//! # use aws_sigv4::http_request::SignableBody;
+//! #[cfg(feature = "http0-compat")]
+//! fn test() -> Result<(), aws_sigv4::http_request::SigningError> {
 //! use aws_sigv4::http_request::{sign, SigningSettings, SigningParams, SignableRequest};
 //! use http;
 //! use std::time::SystemTime;
-//!
-//! // Create the request to sign
-//! let mut request = http::Request::builder()
-//!     .uri("https://some-endpoint.some-region.amazonaws.com")
-//!     .body("")
-//!     .unwrap();
 //!
 //! // Set up information and settings for the signing
 //! let signing_settings = SigningSettings::default();
@@ -31,11 +29,17 @@
 //!     .build()
 //!     .unwrap();
 //! // Convert the HTTP request into a signable request
-//! let signable_request = SignableRequest::from(&request);
+//! let signable_request = SignableRequest::new(
+//!     "GET",
+//!     "https://some-endpoint.some-region.amazonaws.com",
+//!     std::iter::empty(),
+//!     SignableBody::Bytes(&[])
+//! ).expect("signable request");
 //!
+//! let mut my_req = http::Request::new("...");
 //! // Sign and then apply the signature to the request
 //! let (signing_instructions, _signature) = sign(signable_request, &signing_params)?.into_parts();
-//! signing_instructions.apply_to_request(&mut request);
+//! signing_instructions.apply_to_request(&mut my_req);
 //! # Ok(())
 //! # }
 //! ```

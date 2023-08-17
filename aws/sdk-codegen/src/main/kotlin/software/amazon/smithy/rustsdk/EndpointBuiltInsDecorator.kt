@@ -141,19 +141,12 @@ fun decoratorForBuiltIn(
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? =
                     when (parameter.builtIn) {
                         builtIn.builtIn -> writable {
-                            if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
-                                val newtype = configParamNewtype(parameter, name, codegenContext.runtimeConfig)
-                                val symbol = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
-                                rustTemplate(
-                                    """$configRef.#{load_from_service_config_layer}""",
-                                    "load_from_service_config_layer" to loadFromConfigBag(symbol.name, newtype),
-                                )
-                            } else {
-                                rust("$configRef.$name")
-                            }
-                            if (codegenContext.smithyRuntimeMode.defaultToMiddleware && parameter.type == ParameterType.STRING) {
-                                rust(".clone()")
-                            }
+                            val newtype = configParamNewtype(parameter, name, codegenContext.runtimeConfig)
+                            val symbol = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
+                            rustTemplate(
+                                """$configRef.#{load_from_service_config_layer}""",
+                                "load_from_service_config_layer" to loadFromConfigBag(symbol.name, newtype),
+                            )
                         }
 
                         else -> null
@@ -178,7 +171,7 @@ fun decoratorForBuiltIn(
 private val endpointUrlDocs = writable {
     rust(
         """
-        /// Sets the endpoint url used to communicate with this service
+        /// Sets the endpoint URL used to communicate with this service
 
         /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
         /// will be prefixed onto this URL. To fully override the endpoint resolver, use
