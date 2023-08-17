@@ -14,7 +14,7 @@ use aws_credential_types::Credentials;
 use aws_sigv4::http_request::SignableBody;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_types::region::SigningRegion;
-use aws_types::SigningService;
+use aws_types::SigningName;
 
 use crate::signer::{
     OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
@@ -50,7 +50,7 @@ impl AsRef<str> for Signature {
 ///
 /// Prior to signing, the following fields MUST be present in the property bag:
 /// - [`SigningRegion`]: The region used when signing the request, e.g. `us-east-1`
-/// - [`SigningService`]: The name of the service to use when signing the request, e.g. `dynamodb`
+/// - [`SigningName`]: The name of the service to use when signing the request, e.g. `dynamodb`
 /// - [`Credentials`]: Credentials to sign with
 /// - [`OperationSigningConfig`]: Operation specific signing configuration, e.g.
 ///   changes to URL encoding behavior, or headers that must be omitted.
@@ -71,7 +71,7 @@ impl SigV4SigningStage {
 enum SigningStageErrorKind {
     MissingCredentials,
     MissingSigningRegion,
-    MissingSigningService,
+    MissingSigningName,
     MissingSigningConfig,
     SigningFailure(SigningError),
 }
@@ -91,7 +91,7 @@ impl Display for SigningStageError {
             MissingSigningRegion => {
                 write!(f, "no signing region in the property bag")
             }
-            MissingSigningService => {
+            MissingSigningName => {
                 write!(f, "no signing service in the property bag")
             }
             MissingSigningConfig => {
@@ -109,7 +109,7 @@ impl Error for SigningStageError {
             ErrorKind::SigningFailure(err) => Some(err),
             ErrorKind::MissingCredentials
             | ErrorKind::MissingSigningRegion
-            | ErrorKind::MissingSigningService
+            | ErrorKind::MissingSigningName
             | ErrorKind::MissingSigningConfig => None,
         }
     }
@@ -143,9 +143,9 @@ fn signing_config(
     let region = config
         .get::<SigningRegion>()
         .ok_or(SigningStageErrorKind::MissingSigningRegion)?;
-    let signing_service = config
-        .get::<SigningService>()
-        .ok_or(SigningStageErrorKind::MissingSigningService)?;
+    let name = config
+        .get::<SigningName>()
+        .ok_or(SigningStageErrorKind::MissingSigningName)?;
     let payload_override = config.get::<SignableBody<'static>>();
     let request_config = RequestConfig {
         request_ts: config
@@ -154,7 +154,7 @@ fn signing_config(
             .unwrap_or_else(|| SharedTimeSource::default().now()),
         region,
         payload_override,
-        service: signing_service,
+        name,
     };
     Ok((operation_config, request_config, credentials))
 }
@@ -196,7 +196,7 @@ impl MapRequest for SigV4SigningStage {
                         signature.as_ref().into(),
                         identity,
                         request_config.region.clone(),
-                        request_config.service.clone(),
+                        request_config.name.clone(),
                         time_override,
                     )) as _)
                     .expect("failed to send deferred signer");
@@ -223,7 +223,7 @@ mod test {
     use aws_smithy_async::time::SharedTimeSource;
 
     use aws_types::region::{Region, SigningRegion};
-    use aws_types::SigningService;
+    use aws_types::SigningName;
 
     use crate::middleware::{
         SigV4SigningStage, Signature, SigningStageError, SigningStageErrorKind,
@@ -241,7 +241,7 @@ mod test {
             .augment(|req, properties| {
                 properties.insert(region.clone());
                 properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-                properties.insert(SigningService::from_static("kinesis"));
+                properties.insert(SigningName::from_static("kinesis"));
                 properties.insert(OperationSigningConfig::default_config());
                 properties.insert(Credentials::for_tests_with_session_token());
                 properties.insert(SigningRegion::from(region));
@@ -275,7 +275,7 @@ mod test {
                 properties.insert::<SharedTimeSource>(SharedTimeSource::new(
                     UNIX_EPOCH + Duration::new(1611160427, 0),
                 ));
-                properties.insert(SigningService::from_static("kinesis"));
+                properties.insert(SigningName::from_static("kinesis"));
                 properties.insert(OperationSigningConfig::default_config());
                 properties.insert(Credentials::for_tests_with_session_token());
                 properties.insert(SigningRegion::from(region.clone()));
@@ -292,7 +292,7 @@ mod test {
             "abac477b4afabf5651079e7b9a0aa6a1a3e356a7418a81d974cdae9d4c8e5441".into(),
             Credentials::for_tests_with_session_token().into(),
             SigningRegion::from(region),
-            SigningService::from_static("kinesis"),
+            SigningName::from_static("kinesis"),
             Some(UNIX_EPOCH + Duration::new(1611160427, 0)),
         );
 
@@ -319,7 +319,7 @@ mod test {
                 conf.insert(SharedTimeSource::new(
                     UNIX_EPOCH + Duration::new(1611160427, 0),
                 ));
-                conf.insert(SigningService::from_static("kinesis"));
+                conf.insert(SigningName::from_static("kinesis"));
                 conf.insert(endpoint);
                 Result::<_, Infallible>::Ok(req)
             })

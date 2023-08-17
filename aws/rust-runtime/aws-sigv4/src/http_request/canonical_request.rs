@@ -172,7 +172,7 @@ impl<'a> CanonicalRequest<'a> {
                     creds.access_key_id(),
                     format_date(params.time),
                     params.region,
-                    params.service_name,
+                    params.name,
                 ),
                 date_time,
                 expires: params
@@ -558,7 +558,7 @@ mod tests {
         SigningParams {
             identity,
             region: "test-region",
-            service_name: "testservicename",
+            name: "testservicename",
             time: parse_date_time("20210511T154045Z").unwrap(),
             settings,
         }

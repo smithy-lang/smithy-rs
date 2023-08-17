@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::client::runtime_components::{GetIdentityResolver, Ru
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::Document;
 use aws_types::region::{Region, SigningRegion};
-use aws_types::SigningService;
+use aws_types::SigningName;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
@@ -32,14 +32,14 @@ pub const SCHEME_ID: AuthSchemeId = AuthSchemeId::new("sigv4");
 
 struct EndpointAuthSchemeConfig {
     signing_region_override: Option<SigningRegion>,
-    signing_service_override: Option<SigningService>,
+    signing_name_override: Option<SigningName>,
 }
 
 #[derive(Debug)]
 enum SigV4SigningError {
     MissingOperationSigningConfig,
     MissingSigningRegion,
-    MissingSigningService,
+    MissingSigningName,
     WrongIdentityType(Identity),
     BadTypeInEndpointAuthSchemeConfig(&'static str),
 }
@@ -51,7 +51,7 @@ impl fmt::Display for SigV4SigningError {
         match self {
             MissingOperationSigningConfig => w("missing operation signing config for SigV4"),
             MissingSigningRegion => w("missing signing region for SigV4 signing"),
-            MissingSigningService => w("missing signing service for SigV4 signing"),
+            MissingSigningName => w("missing signing service for SigV4 signing"),
             WrongIdentityType(identity) => {
                 write!(f, "wrong identity type for SigV4: {identity:?}")
             }
@@ -70,7 +70,7 @@ impl StdError for SigV4SigningError {
         match self {
             Self::MissingOperationSigningConfig => None,
             Self::MissingSigningRegion => None,
-            Self::MissingSigningService => None,
+            Self::MissingSigningName => None,
             Self::WrongIdentityType(_) => None,
             Self::BadTypeInEndpointAuthSchemeConfig(_) => None,
         }
@@ -160,12 +160,12 @@ impl Default for SigningOptions {
 ///
 /// Although these fields MAY be customized on a per request basis, they are generally static
 /// for a given operation
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SigV4OperationSigningConfig {
     /// AWS Region to sign for.
     pub region: Option<SigningRegion>,
     /// AWS Service to sign for.
-    pub service: Option<SigningService>,
+    pub service: Option<SigningName>,
     /// Signing options.
     pub signing_options: SigningOptions,
 }
@@ -243,11 +243,11 @@ impl SigV4Signer {
                     .ok_or(SigV4SigningError::MissingSigningRegion)?
                     .as_ref(),
             )
-            .service_name(
+            .name(
                 operation_config
                     .service
                     .as_ref()
-                    .ok_or(SigV4SigningError::MissingSigningService)?
+                    .ok_or(SigV4SigningError::MissingSigningName)?
                     .as_ref(),
             )
             .time(request_timestamp)
@@ -264,16 +264,16 @@ impl SigV4Signer {
             .ok_or(SigV4SigningError::MissingOperationSigningConfig)?;
 
         let signing_region = config_bag.load::<SigningRegion>();
-        let signing_service = config_bag.load::<SigningService>();
+        let signing_name = config_bag.load::<SigningName>();
 
         let EndpointAuthSchemeConfig {
             signing_region_override,
-            signing_service_override,
+            signing_name_override,
         } = Self::extract_endpoint_auth_scheme_config(auth_scheme_endpoint_config)?;
 
         match (
             signing_region_override.or_else(|| signing_region.cloned()),
-            signing_service_override.or_else(|| signing_service.cloned()),
+            signing_name_override.or_else(|| signing_name.cloned()),
         ) {
             (None, None) => Ok(Cow::Borrowed(operation_config)),
             (region, service) => {
@@ -292,7 +292,7 @@ impl SigV4Signer {
     fn extract_endpoint_auth_scheme_config(
         endpoint_config: AuthSchemeEndpointConfig<'_>,
     ) -> Result<EndpointAuthSchemeConfig, SigV4SigningError> {
-        let (mut signing_region_override, mut signing_service_override) = (None, None);
+        let (mut signing_region_override, mut signing_name_override) = (None, None);
         if let Some(config) = endpoint_config.as_document().and_then(Document::as_object) {
             use SigV4SigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
             signing_region_override = match config.get("signingRegion") {
@@ -300,15 +300,15 @@ impl SigV4Signer {
                 None => None,
                 _ => return Err(UnexpectedType("signingRegion")),
             };
-            signing_service_override = match config.get("signingName") {
-                Some(Document::String(s)) => Some(SigningService::from(s.to_string())),
+            signing_name_override = match config.get("signingName") {
+                Some(Document::String(s)) => Some(SigningName::from(s.to_string())),
                 None => None,
                 _ => return Err(UnexpectedType("signingName")),
             };
         }
         Ok(EndpointAuthSchemeConfig {
             signing_region_override,
-            signing_service_override,
+            signing_name_override,
         })
     }
 }
@@ -386,7 +386,7 @@ impl Signer for SigV4Signer {
                         _signature,
                         identity.clone(),
                         Region::new(signing_params.region().to_string()).into(),
-                        signing_params.service_name().to_string().into(),
+                        signing_params.name().to_string().into(),
                         time_source,
                     )) as _)
                     .expect("failed to send deferred signer");
@@ -405,7 +405,7 @@ mod event_stream {
     use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
     use aws_smithy_runtime_api::client::identity::Identity;
     use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
+    use aws_types::SigningName;
 
     /// Event Stream SigV4 signing implementation.
     #[derive(Debug)]
@@ -413,7 +413,7 @@ mod event_stream {
         last_signature: String,
         identity: Identity,
         signing_region: SigningRegion,
-        signing_service: SigningService,
+        signing_name: SigningName,
         time: SharedTimeSource,
     }
 
@@ -422,14 +422,14 @@ mod event_stream {
             last_signature: String,
             identity: Identity,
             signing_region: SigningRegion,
-            signing_service: SigningService,
+            signing_name: SigningName,
             time: SharedTimeSource,
         ) -> Self {
             Self {
                 last_signature,
                 identity,
                 signing_region,
-                signing_service,
+                signing_name,
                 time,
             }
         }
@@ -438,7 +438,7 @@ mod event_stream {
             let builder = SigningParams::builder()
                 .identity(&self.identity)
                 .region(self.signing_region.as_ref())
-                .service_name(self.signing_service.as_ref())
+                .name(self.signing_name.as_ref())
                 .time(self.time.now())
                 .settings(());
             builder.build().unwrap()
@@ -474,7 +474,7 @@ mod event_stream {
 
         use aws_types::region::Region;
         use aws_types::region::SigningRegion;
-        use aws_types::SigningService;
+        use aws_types::SigningName;
         use std::time::{Duration, UNIX_EPOCH};
 
         fn check_send_sync<T: Send + Sync>(value: T) -> T {
@@ -488,7 +488,7 @@ mod event_stream {
                 "initial-signature".into(),
                 Credentials::for_tests_with_session_token().into(),
                 SigningRegion::from(region),
-                SigningService::from_static("transcribe"),
+                SigningName::from_static("transcribe"),
                 SharedTimeSource::new(UNIX_EPOCH + Duration::new(1611160427, 0)),
             ));
             let mut signatures = Vec::new();
@@ -522,7 +522,7 @@ mod tests {
     use aws_sigv4::http_request::SigningSettings;
     use aws_smithy_types::config_bag::Layer;
     use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
+    use aws_types::SigningName;
     use std::collections::HashMap;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
@@ -546,7 +546,7 @@ mod tests {
         .into();
         let operation_config = SigV4OperationSigningConfig {
             region: Some(SigningRegion::from_static("test")),
-            service: Some(SigningService::from_static("test")),
+            service: Some(SigningName::from_static("test")),
             signing_options: SigningOptions {
                 double_uri_encode: true,
                 content_sha256_header: true,
@@ -573,7 +573,7 @@ mod tests {
         let mut layer = Layer::new("test");
         layer.store_put(SigV4OperationSigningConfig {
             region: Some(SigningRegion::from(Region::new("override-this-region"))),
-            service: Some(SigningService::from_static("override-this-service")),
+            service: Some(SigningName::from_static("override-this-service")),
             signing_options: Default::default(),
         });
         let config = Document::Object({
@@ -600,7 +600,7 @@ mod tests {
         );
         assert_eq!(
             result.service,
-            Some(SigningService::from_static("qldb-override"))
+            Some(SigningName::from_static("qldb-override"))
         );
         assert!(matches!(result, Cow::Owned(_)));
     }
@@ -610,7 +610,7 @@ mod tests {
         let mut layer = Layer::new("test");
         layer.store_put(SigV4OperationSigningConfig {
             region: Some(SigningRegion::from(Region::new("us-east-1"))),
-            service: Some(SigningService::from_static("qldb")),
+            service: Some(SigningName::from_static("qldb")),
             signing_options: Default::default(),
         });
         let cfg = ConfigBag::of_layers(vec![layer]);
@@ -622,7 +622,7 @@ mod tests {
             result.region,
             Some(SigningRegion::from(Region::new("us-east-1")))
         );
-        assert_eq!(result.service, Some(SigningService::from_static("qldb")));
+        assert_eq!(result.service, Some(SigningName::from_static("qldb")));
         assert!(matches!(result, Cow::Borrowed(_)));
     }
 }

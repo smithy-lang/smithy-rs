@@ -11,7 +11,7 @@ use aws_sigv4::http_request::{
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime_api::client::identity::Identity;
 use aws_types::region::SigningRegion;
-use aws_types::SigningService;
+use aws_types::SigningName;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
@@ -101,7 +101,7 @@ pub struct SigningOptions {
 pub struct RequestConfig<'a> {
     pub request_ts: SystemTime,
     pub region: &'a SigningRegion,
-    pub service: &'a SigningService,
+    pub name: &'a SigningName,
     pub payload_override: Option<&'a SignableBody<'static>>,
 }
 
@@ -173,7 +173,7 @@ impl SigV4Signer {
         let builder = SigningParams::builder()
             .identity(identity)
             .region(request_config.region.as_ref())
-            .service_name(request_config.service.as_ref())
+            .name(request_config.name.as_ref())
             .time(request_config.request_ts)
             .settings(settings);
         builder.build().expect("all required fields set")
@@ -238,7 +238,7 @@ mod tests {
     use aws_sigv4::http_request::SigningSettings;
 
     use aws_types::region::SigningRegion;
-    use aws_types::SigningService;
+    use aws_types::SigningName;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
 
@@ -262,7 +262,7 @@ mod tests {
         let request_config = RequestConfig {
             request_ts: now,
             region: &SigningRegion::from_static("test"),
-            service: &SigningService::from_static("test"),
+            name: &SigningName::from_static("test"),
             payload_override: None,
         };
         SigV4Signer::signing_params(settings, &identity, &request_config);

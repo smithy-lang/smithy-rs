@@ -18,7 +18,7 @@
 //! ```rust
 //! use aws_credential_types::Credentials;
 //! use aws_smithy_http::body::SdkBody;
-//! use aws_types::SigningService;
+//! use aws_types::SigningName;
 //! use aws_types::region::{Region, SigningRegion};
 //! use std::time::{Duration, SystemTime, UNIX_EPOCH};
 //! use aws_sig_auth::signer::{self, SigningError, OperationSigningConfig, HttpSignatureType, RequestConfig};
@@ -39,7 +39,7 @@
 //!     let request_config = RequestConfig {
 //!         request_ts: timestamp,
 //!         region: &SigningRegion::from(region),
-//!         service: &SigningService::from_static("rds-db"),
+//!         name: &SigningName::from_static("rds-db"),
 //!         payload_override: None,
 //!     };
 //!     let mut request = http::Request::builder()
@@ -86,7 +86,7 @@
 //! use aws_sig_auth::signer::{OperationSigningConfig, RequestConfig, SigV4Signer};
 //! use aws_smithy_http::body::SdkBody;
 //! use aws_types::region::{Region, SigningRegion};
-//! use aws_types::SigningService;
+//! use aws_types::SigningName;
 //! use std::error::Error;
 //! use std::time::SystemTime;
 //! use aws_smithy_runtime_api::client::identity::Identity;
@@ -100,7 +100,7 @@
 //!     let request_config = RequestConfig {
 //!         request_ts: now,
 //!         region: &SigningRegion::from(region),
-//!         service: &SigningService::from_static("execute-api"),
+//!         name: &SigningName::from_static("execute-api"),
 //!         payload_override: None,
 //!     };
 //!     let identity = credentials_provider.provide_credentials().await?.into();

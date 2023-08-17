@@ -33,7 +33,7 @@
 //! let params = SigningParams::builder()
 //!     .identity(&identity)
 //!     .region("us-east-1")
-//!     .service_name("exampleservice")
+//!     .name("exampleservice")
 //!     .time(SystemTime::now())
 //!     .settings(())
 //!     .build()
@@ -73,7 +73,7 @@ fn calculate_string_to_sign(
     writeln!(
         sts,
         "{}/{}/{}/aws4_request",
-        date_str, params.region, params.service_name
+        date_str, params.region, params.name
     )
     .unwrap();
     writeln!(sts, "{}", last_signature).unwrap();
@@ -126,12 +126,8 @@ fn sign_payload<'a>(
     // needs to exactly match the string formatted timestamp, which doesn't include sub-seconds.
     let time = truncate_subsecs(params.time);
 
-    let signing_key = generate_signing_key(
-        creds.secret_access_key(),
-        time,
-        params.region,
-        params.service_name,
-    );
+    let signing_key =
+        generate_signing_key(creds.secret_access_key(), time, params.region, params.name);
     let string_to_sign = calculate_string_to_sign(
         message_payload.as_ref().map(|v| &v[..]).unwrap_or(&[]),
         last_signature,
@@ -174,7 +170,7 @@ mod tests {
         let params = SigningParams {
             identity: &Credentials::for_tests().into(),
             region: "us-east-1",
-            service_name: "testservice",
+            name: "testservice",
             time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
             settings: (),
         };
@@ -210,7 +206,7 @@ mod tests {
         let params = SigningParams {
             identity: &Credentials::for_tests().into(),
             region: "us-east-1",
-            service_name: "testservice",
+            name: "testservice",
             time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
             settings: (),
         };

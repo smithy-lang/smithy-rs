@@ -31,7 +31,7 @@
 //! let signing_params = SigningParams::builder()
 //!     .identity(&identity)
 //!     .region("us-east-1")
-//!     .service_name("exampleservice")
+//!     .name("exampleservice")
 //!     .time(SystemTime::now())
 //!     .settings(signing_settings)
 //!     .build()
