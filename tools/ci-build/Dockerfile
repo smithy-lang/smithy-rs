@@ -148,7 +148,7 @@ RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook-mermaid --l
 #
 # Final image
 #
-# `clang-libs` needed by SDK examples for `libxlsxwriter-sys`
+# `clang` needed by SDK examples for `libxlsxwriter-sys`
 FROM bare_base_image AS final_image
 ARG rust_stable_version
 ARG rust_nightly_version
@@ -156,7 +156,7 @@ RUN set -eux; \
     yum -y install \
         bc \
         ca-certificates \
-        clang-libs \
+        clang \
         gcc \
         git \
         java-11-amazon-corretto-headless \
