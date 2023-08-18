@@ -34,3 +34,15 @@ message = "Fix requests to S3 with `no_credentials` set."
 references = ["smithy-rs#2907", "aws-sdk-rust#864"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level."
+references = ["smithy-rs#2934", "aws-sdk-rust#872"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level."
+references = ["smithy-rs#2934", "aws-sdk-rust#872"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
