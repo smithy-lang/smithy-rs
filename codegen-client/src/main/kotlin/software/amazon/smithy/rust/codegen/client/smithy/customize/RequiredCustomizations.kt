@@ -99,13 +99,13 @@ class RequiredCustomizations : ClientCodegenDecorator {
             rust("/// Error type returned by the client.")
             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                 rustTemplate(
-                    "pub type SdkError<E> = #{SdkError}<E, #{R}>;",
+                    "pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;",
                     "SdkError" to RuntimeType.sdkError(rc),
                     "R" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 )
             } else {
                 rustTemplate(
-                    "pub type SdkError<E> = #{SdkError}<E, #{R}>;",
+                    "pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;",
                     "SdkError" to RuntimeType.sdkError(rc),
                     "R" to RuntimeType.smithyHttp(rc).resolve("operation::Response"),
                 )
