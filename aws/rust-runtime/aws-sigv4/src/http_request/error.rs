@@ -12,6 +12,7 @@ use std::str::Utf8Error;
 #[derive(Debug)]
 enum SigningErrorKind {
     FailedToCreateCanonicalRequest { source: CanonicalRequestError },
+    UnsupportedIdentityType,
 }
 
 /// Error signing request
@@ -20,11 +21,22 @@ pub struct SigningError {
     kind: SigningErrorKind,
 }
 
+impl SigningError {
+    pub(crate) fn unsupported_identity_type() -> Self {
+        Self {
+            kind: SigningErrorKind::UnsupportedIdentityType,
+        }
+    }
+}
+
 impl fmt::Display for SigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.kind {
             SigningErrorKind::FailedToCreateCanonicalRequest { .. } => {
                 write!(f, "failed to create canonical request")
+            }
+            SigningErrorKind::UnsupportedIdentityType => {
+                write!(f, "only 'AWS credentials' are supported for signing")
             }
         }
     }
@@ -34,6 +46,7 @@ impl Error for SigningError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
             SigningErrorKind::FailedToCreateCanonicalRequest { source } => Some(source),
+            SigningErrorKind::UnsupportedIdentityType => None,
         }
     }
 }
@@ -52,6 +65,7 @@ enum CanonicalRequestErrorKind {
     InvalidHeaderValue { source: InvalidHeaderValue },
     InvalidUtf8InHeaderValue { source: Utf8Error },
     InvalidUri { source: InvalidUri },
+    UnsupportedIdentityType,
 }
 
 #[derive(Debug)]
@@ -67,6 +81,9 @@ impl fmt::Display for CanonicalRequestError {
             InvalidHeaderValue { .. } => write!(f, "invalid header value"),
             InvalidUtf8InHeaderValue { .. } => write!(f, "invalid UTF-8 in header value"),
             InvalidUri { .. } => write!(f, "the uri was invalid"),
+            UnsupportedIdentityType => {
+                write!(f, "only AWS credentials are supported for signing")
+            }
         }
     }
 }
@@ -79,6 +96,7 @@ impl Error for CanonicalRequestError {
             InvalidHeaderValue { source } => Some(source),
             InvalidUtf8InHeaderValue { source } => Some(source),
             InvalidUri { source } => Some(source),
+            UnsupportedIdentityType => None,
         }
     }
 }
@@ -87,6 +105,12 @@ impl CanonicalRequestError {
     pub(crate) fn invalid_utf8_in_header_value(source: Utf8Error) -> Self {
         Self {
             kind: CanonicalRequestErrorKind::InvalidUtf8InHeaderValue { source },
+        }
+    }
+
+    pub(crate) fn unsupported_credential_type() -> Self {
+        Self {
+            kind: CanonicalRequestErrorKind::UnsupportedIdentityType,
         }
     }
 }

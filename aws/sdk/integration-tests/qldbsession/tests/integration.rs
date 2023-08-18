@@ -37,7 +37,7 @@ async fn signv4_use_correct_service_name() {
     let conf = Config::builder()
         .http_connector(conn.clone())
         .region(Region::new("us-east-1"))
-        .credentials_provider(Credentials::for_tests())
+        .credentials_provider(Credentials::for_tests_with_session_token())
         .build();
     let client = Client::from_conf(conf);
 

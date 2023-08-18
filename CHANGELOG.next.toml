@@ -51,3 +51,12 @@ message = "In sigV4-related code, rename 'signing service' to 'signing name'. Th
 references = ["smithy-rs#2911"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+All versions of SigningParams have been updated to contain an [`Identity`](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/identity/struct.Identity.html)
+as opposed to AWS credentials in `&str` form. [Read more](https://github.com/awslabs/aws-sdk-rust/discussions/868).
+"""
+references = ["smithy-rs#2913"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"

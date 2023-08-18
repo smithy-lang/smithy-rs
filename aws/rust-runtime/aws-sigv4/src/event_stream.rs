@@ -11,6 +11,8 @@
 //! use aws_sigv4::event_stream::{sign_message, SigningParams};
 //! use aws_smithy_eventstream::frame::{Header, HeaderValue, Message};
 //! use std::time::SystemTime;
+//! use aws_credential_types::Credentials;
+//! use aws_smithy_runtime_api::client::identity::Identity;
 //!
 //! // The `last_signature` argument is the previous message's signature, or
 //! // the signature of the initial HTTP request if a message hasn't been signed yet.
@@ -21,9 +23,15 @@
 //!     HeaderValue::String("value".into()),
 //! ));
 //!
+//! let identity = Credentials::new(
+//!     "AKIDEXAMPLE",
+//!     "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
+//!     None,
+//!     None,
+//!     "hardcoded-credentials"
+//! ).into();
 //! let params = SigningParams::builder()
-//!     .access_key("example access key")
-//!     .secret_key("example secret key")
+//!     .identity(&identity)
 //!     .region("us-east-1")
 //!     .name("exampleservice")
 //!     .time(SystemTime::now())
@@ -113,11 +121,13 @@ fn sign_payload<'a>(
     last_signature: &'a str,
     params: &'a SigningParams<'a>,
 ) -> SigningOutput<Message> {
+    let creds = params.credentials().expect("AWS credentials are required");
     // Truncate the sub-seconds up front since the timestamp written to the signed message header
     // needs to exactly match the string formatted timestamp, which doesn't include sub-seconds.
     let time = truncate_subsecs(params.time);
 
-    let signing_key = generate_signing_key(params.secret_key, time, params.region, params.name);
+    let signing_key =
+        generate_signing_key(creds.secret_access_key(), time, params.region, params.name);
     let string_to_sign = calculate_string_to_sign(
         message_payload.as_ref().map(|v| &v[..]).unwrap_or(&[]),
         last_signature,
@@ -141,7 +151,11 @@ fn sign_payload<'a>(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::event_stream::{calculate_string_to_sign, sign_message};
+    use crate::sign::sha256_hex_string;
+    use crate::SigningParams;
+    use aws_credential_types::Credentials;
+    use aws_smithy_eventstream::frame::{Header, HeaderValue, Message};
     use std::time::{Duration, UNIX_EPOCH};
 
     #[test]
@@ -154,9 +168,7 @@ mod tests {
         message_to_sign.write_to(&mut message_payload).unwrap();
 
         let params = SigningParams {
-            access_key: "fake access key",
-            secret_key: "fake secret key",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "testservice",
             time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),
@@ -192,9 +204,7 @@ mod tests {
             HeaderValue::String("value".into()),
         ));
         let params = SigningParams {
-            access_key: "fake access key",
-            secret_key: "fake secret key",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "testservice",
             time: (UNIX_EPOCH + Duration::new(123_456_789_u64, 1234u32)),

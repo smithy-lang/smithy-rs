@@ -89,8 +89,9 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
         ));
         aws_http::auth::set_credentials_cache(
             conf,
-            CredentialsCache::lazy()
-                .create_cache(SharedCredentialsProvider::new(Credentials::for_tests())),
+            CredentialsCache::lazy().create_cache(SharedCredentialsProvider::new(
+                Credentials::for_tests_with_session_token(),
+            )),
         );
         conf.insert(SigningRegion::from_static("test-region"));
         conf.insert(OperationSigningConfig::default_config());
