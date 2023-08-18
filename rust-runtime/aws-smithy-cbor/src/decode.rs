@@ -15,9 +15,9 @@ pub struct DeserializeError {
 }
 
 impl std::fmt::Display for DeserializeError {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO
-        todo!()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO? Is this good enough?
+        self._inner.fmt(f)
     }
 }
 

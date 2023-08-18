@@ -98,6 +98,7 @@ class ServerProtocolTestGenerator(
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
+        "Base64SimdDev" to ServerCargoDependency.Base64SimdDev.toType(),
         "SmithyHttp" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
         "Http" to RuntimeType.Http,
         "Hyper" to RuntimeType.Hyper,
@@ -287,7 +288,7 @@ class ServerProtocolTestGenerator(
         }
 
         with(httpRequestTestCase) {
-            renderHttpRequest(uri, method, headers, body.orNull(), queryParams, host.orNull())
+            renderHttpRequest(uri, method, headers, body.orNull(), bodyMediaType.orNull(), queryParams, host.orNull())
         }
         if (protocolSupport.requestBodyDeserialization) {
             makeRequest(operationShape, operationSymbol, this, checkRequestHandler(operationShape, httpRequestTestCase))
@@ -364,7 +365,9 @@ class ServerProtocolTestGenerator(
         rustBlock("") {
             with(testCase.request) {
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
-                renderHttpRequest(uri.get(), method, headers, body.orNull(), queryParams, host.orNull())
+                // TODO(https://github.com/smithy-lang/smithy/issues/1932): we send `null` for `bodyMediaType` for now but
+                //  the Smithy protocol test should give it to us.
+                renderHttpRequest(uri.get(), method, headers, body.orNull(), bodyMediaType = null, queryParams, host.orNull())
             }
 
             makeRequest(
@@ -382,6 +385,7 @@ class ServerProtocolTestGenerator(
         method: String,
         headers: Map<String, String>,
         body: String?,
+        bodyMediaType: String?,
         queryParams: List<String>,
         host: String?,
     ) {
@@ -411,8 +415,20 @@ class ServerProtocolTestGenerator(
                     //
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
+                    
+                    val encodedBody = if (bodyMediaType == "application/cbor") {
+                        "#{Bytes}::from_static($sanitizedBody.as_bytes())"
+                    } else {
+                        """
+                        #{Bytes}::from(
+                            #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
+                                "`body` field of Smithy protocol test is not correctly base64 encoded"
+                            )
+                        )
+                        """
+                    }
 
-                    "#{SmithyHttpServer}::body::Body::from(#{Bytes}::from_static($sanitizedBody.as_bytes()))"
+                    "#{SmithyHttpServer}::body::Body::from($encodedBody)"
                 } else {
                     "#{SmithyHttpServer}::body::Body::empty()"
                 }

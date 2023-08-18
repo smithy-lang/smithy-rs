@@ -710,6 +710,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // there's something to parse (i.e. `parser != null`), so `!!` is safe here.
             val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
             rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+            // TODO Isn't this VERY wrong? If there's modeled operation input, we must reject if there's no payload!
+            //   We currently accept and silently build empty input!
             rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """

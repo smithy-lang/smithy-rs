@@ -151,6 +151,7 @@ operation EmptyInputOutput {
         method: "POST",
         uri: "/service/RpcV2Protocol/operation/OptionalInputOutput",
         body: "v/8=",
+        bodyMediaType: "application/cbor",
     },
 ])
 @httpResponseTests([
