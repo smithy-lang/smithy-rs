@@ -256,6 +256,7 @@ class ServerProtocolTestGenerator(
         testModuleWriter.newlinePrefix = ""
 
         Attribute.TokioTest.render(testModuleWriter)
+        Attribute.TracedTest.render(testModuleWriter)
 
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")

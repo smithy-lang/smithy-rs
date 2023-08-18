@@ -186,6 +186,7 @@ class DefaultProtocolTestGenerator(
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
         Attribute.TokioTest.render(testModuleWriter)
+        Attribute.TracedTest.render(testModuleWriter)
         val action = when (testCase) {
             is HttpResponseTestCase -> Action.Response
             is HttpRequestTestCase -> Action.Request
