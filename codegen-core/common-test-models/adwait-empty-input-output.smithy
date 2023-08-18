@@ -21,7 +21,7 @@ use smithy.test#httpResponseTests
             "X-Amz-Target"
         ]
         method: "POST",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/NoInputOutput",
+        uri: "/service/RpcV2Protocol/operation/NoInputOutput",
         body: ""
     },
     {
@@ -34,7 +34,7 @@ use smithy.test#httpResponseTests
             "Content-Type": "application/cbor"
         }
         method: "POST",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/NoInputOutput",
+        uri: "/service/RpcV2Protocol/operation/NoInputOutput",
         body: "",
         appliesTo: "server"
     },
@@ -48,7 +48,7 @@ use smithy.test#httpResponseTests
             "Content-Type": "application/cbor"
         }
         method: "POST",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/NoInputOutput",
+        uri: "/service/RpcV2Protocol/operation/NoInputOutput",
         body: "v/8=",
         appliesTo: "server"
     }
@@ -112,7 +112,7 @@ operation NoInputOutput {}
             "X-Amz-Target"
         ]
         method: "POST",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/EmptyInputOutput",
+        uri: "/service/RpcV2Protocol/operation/EmptyInputOutput",
         body: "v/8=",
     },
 ])
@@ -149,7 +149,7 @@ operation EmptyInputOutput {
             "X-Amz-Target"
         ]
         method: "POST",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/OptionalInputOutput",
+        uri: "/service/RpcV2Protocol/operation/OptionalInputOutput",
         body: "v/8=",
     },
 ])

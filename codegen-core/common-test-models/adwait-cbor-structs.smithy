@@ -20,7 +20,7 @@ use smithy.test#httpResponseTests
         }
         method: "POST",
         bodyMediaType: "application/cbor",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/SimpleScalarProperties",
+        uri: "/service/RpcV2Protocol/operation/SimpleScalarProperties",
         body: "v2lieXRlVmFsdWUFa2RvdWJsZVZhbHVl+z/+OVgQYk3TcWZhbHNlQm9vbGVhblZhbHVl9GpmbG9hdFZhbHVl+kDz989saW50ZWdlclZhbHVlGQEAaWxvbmdWYWx1ZRkmkWpzaG9ydFZhbHVlGSaqa3N0cmluZ1ZhbHVlZnNpbXBsZXB0cnVlQm9vbGVhblZhbHVl9f8="
         params: {
             trueBooleanValue: true,
@@ -39,7 +39,7 @@ use smithy.test#httpResponseTests
         documentation: "RpcV2 Cbor should not serialize null structure values",
         protocol: rpcv2,
         method: "POST",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/SimpleScalarProperties",
+        uri: "/service/RpcV2Protocol/operation/SimpleScalarProperties",
         body: "v/8=",
         bodyMediaType: "application/cbor",
         headers: {
@@ -57,7 +57,7 @@ use smithy.test#httpResponseTests
         documentation: "RpcV2 Cbor should not deserialize null structure values",
         protocol: rpcv2,
         method: "POST",
-        uri: "/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/SimpleScalarProperties",
+        uri: "/service/RpcV2Protocol/operation/SimpleScalarProperties",
         body: "v2tzdHJpbmdWYWx1Zfb/",
         bodyMediaType: "application/cbor",
         headers: {
