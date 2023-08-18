@@ -46,3 +46,15 @@ message = "Fixed re-exported `SdkError` type. The previous release had the wrong
 references = ["smithy-rs#2931", "aws-sdk-rust#875"]
 meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level."
+references = ["smithy-rs#2934", "aws-sdk-rust#872"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level."
+references = ["smithy-rs#2934", "aws-sdk-rust#872"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
