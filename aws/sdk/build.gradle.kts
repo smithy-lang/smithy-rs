@@ -247,7 +247,6 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
     binaryName = "sdk-versioner"
     arguments = listOf(
         "use-path-and-version-dependencies",
-        "--isolate-crates",
         "--sdk-path", sdkOutputDir.absolutePath,
         "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
         outputDir.resolve("examples").absolutePath,
