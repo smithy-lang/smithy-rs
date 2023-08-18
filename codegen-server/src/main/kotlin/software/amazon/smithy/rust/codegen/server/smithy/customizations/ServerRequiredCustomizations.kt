@@ -42,13 +42,14 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
 
         rustCrate.withModule(ServerRustModule.Types) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
+            // TODO(enableNewSmithyRuntimeCleanup): Remove re-export of SdkError in server and add changelog entry
             rustTemplate(
                 """
-                pub type SdkError<E> = #{SdkError}<E, #{SdkErrorResponse}>;
+                pub type SdkError<E> = #{SdkError}<E, #{Response}>;
                 pub use #{DisplayErrorContext};
                 """,
                 "SdkError" to RuntimeType.smithyHttp(rc).resolve("result::SdkError"),
-                "SdkErrorResponse" to RuntimeType.HttpResponse,
+                "Response" to RuntimeType.smithyHttp(rc).resolve("operation::Response"),
                 "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
             )
         }
