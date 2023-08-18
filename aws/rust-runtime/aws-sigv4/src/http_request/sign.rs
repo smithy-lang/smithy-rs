@@ -214,7 +214,7 @@ fn calculate_signing_params<'a>(
 ) -> Result<(CalculatedParams, String), SigningError> {
     let creds = params
         .credentials()
-        .ok_or_else(SigningError::unsupported_credential_type)?;
+        .ok_or_else(SigningError::unsupported_identity_type)?;
     let creq = CanonicalRequest::from(request, params)?;
 
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
@@ -264,7 +264,7 @@ fn calculate_signing_headers<'a>(
 ) -> Result<SigningOutput<Vec<Header>>, SigningError> {
     let creds = params
         .credentials()
-        .ok_or_else(SigningError::unsupported_credential_type)?;
+        .ok_or_else(SigningError::unsupported_identity_type)?;
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
     let creq = CanonicalRequest::from(request, params)?;
     tracing::trace!(canonical_request = %creq);

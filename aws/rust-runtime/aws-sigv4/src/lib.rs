@@ -30,7 +30,7 @@ pub mod event_stream;
 pub mod http_request;
 
 /// Parameters to use when signing.
-// #[derive(Debug)] is safe because `Identity` handles redaction.
+// #[derive(Debug)] assumes that any data `Identity` holds is responsible for handling its own redaction.
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct SigningParams<'a, S> {

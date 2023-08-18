@@ -12,7 +12,7 @@ use std::str::Utf8Error;
 #[derive(Debug)]
 enum SigningErrorKind {
     FailedToCreateCanonicalRequest { source: CanonicalRequestError },
-    UnsupportedCredentialType,
+    UnsupportedIdentityType,
 }
 
 /// Error signing request
@@ -22,9 +22,9 @@ pub struct SigningError {
 }
 
 impl SigningError {
-    pub(crate) fn unsupported_credential_type() -> Self {
+    pub(crate) fn unsupported_identity_type() -> Self {
         Self {
-            kind: SigningErrorKind::UnsupportedCredentialType,
+            kind: SigningErrorKind::UnsupportedIdentityType,
         }
     }
 }
@@ -35,8 +35,8 @@ impl fmt::Display for SigningError {
             SigningErrorKind::FailedToCreateCanonicalRequest { .. } => {
                 write!(f, "failed to create canonical request")
             }
-            SigningErrorKind::UnsupportedCredentialType => {
-                write!(f, "only AWS credentials are supported for signing")
+            SigningErrorKind::UnsupportedIdentityType => {
+                write!(f, "only 'AWS credentials' are supported for signing")
             }
         }
     }
@@ -46,7 +46,7 @@ impl Error for SigningError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match &self.kind {
             SigningErrorKind::FailedToCreateCanonicalRequest { source } => Some(source),
-            SigningErrorKind::UnsupportedCredentialType => None,
+            SigningErrorKind::UnsupportedIdentityType => None,
         }
     }
 }
@@ -65,7 +65,7 @@ enum CanonicalRequestErrorKind {
     InvalidHeaderValue { source: InvalidHeaderValue },
     InvalidUtf8InHeaderValue { source: Utf8Error },
     InvalidUri { source: InvalidUri },
-    UnsupportedCredentialType,
+    UnsupportedIdentityType,
 }
 
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl fmt::Display for CanonicalRequestError {
             InvalidHeaderValue { .. } => write!(f, "invalid header value"),
             InvalidUtf8InHeaderValue { .. } => write!(f, "invalid UTF-8 in header value"),
             InvalidUri { .. } => write!(f, "the uri was invalid"),
-            UnsupportedCredentialType => {
+            UnsupportedIdentityType => {
                 write!(f, "only AWS credentials are supported for signing")
             }
         }
@@ -96,7 +96,7 @@ impl Error for CanonicalRequestError {
             InvalidHeaderValue { source } => Some(source),
             InvalidUtf8InHeaderValue { source } => Some(source),
             InvalidUri { source } => Some(source),
-            UnsupportedCredentialType => None,
+            UnsupportedIdentityType => None,
         }
     }
 }
@@ -110,7 +110,7 @@ impl CanonicalRequestError {
 
     pub(crate) fn unsupported_credential_type() -> Self {
         Self {
-            kind: CanonicalRequestErrorKind::UnsupportedCredentialType,
+            kind: CanonicalRequestErrorKind::UnsupportedIdentityType,
         }
     }
 }
