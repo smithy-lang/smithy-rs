@@ -42,7 +42,9 @@ async fn ignore_invalid_xml_body_root() {
     ]);
 
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .credentials_provider(SharedCredentialsProvider::new(
+            Credentials::for_tests_with_session_token(),
+        ))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();
