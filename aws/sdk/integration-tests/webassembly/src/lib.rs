@@ -4,7 +4,7 @@
  */
 
 mod default_config;
-mod list_buckets;
+mod list_objects;
 
 #[no_mangle]
 pub extern "C" fn run() {
@@ -16,7 +16,7 @@ pub extern "C" fn run() {
         .build()
         .unwrap();
     rt.block_on(async move {
-        let result = crate::list_buckets::s3_list_buckets().await;
+        let result = crate::list_objects::s3_list_objects().await;
         println!("result: {:?}", result);
     });
 }
