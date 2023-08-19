@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub mod connector;
+/// Test response deserializer implementations.
 pub mod deserializer;
-pub mod interceptor;
+
+/// Test request serializer implementations.
 pub mod serializer;

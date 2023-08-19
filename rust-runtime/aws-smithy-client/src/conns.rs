@@ -5,6 +5,8 @@
 
 //! Type aliases for standard connection types.
 
+use crate::erase::DynConnector;
+
 #[cfg(feature = "rustls")]
 /// A `hyper` connector that uses the `rustls` crate for TLS. To use this in a smithy client,
 /// wrap it in a [hyper_ext::Adapter](crate::hyper_ext::Adapter).
@@ -47,6 +49,63 @@ lazy_static::lazy_static! {
             .enable_http2()
             .build()
     };
+}
+
+mod default_connector {
+    use crate::erase::DynConnector;
+    use crate::http_connector::ConnectorSettings;
+    use aws_smithy_async::rt::sleep::SharedAsyncSleep;
+
+    #[cfg(feature = "rustls")]
+    fn base(
+        settings: &ConnectorSettings,
+        sleep: Option<SharedAsyncSleep>,
+    ) -> crate::hyper_ext::Builder {
+        let mut hyper = crate::hyper_ext::Adapter::builder().connector_settings(settings.clone());
+        if let Some(sleep) = sleep {
+            hyper = hyper.sleep_impl(sleep);
+        }
+        hyper
+    }
+
+    /// Given `ConnectorSettings` and an `SharedAsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
+    pub fn default_connector(
+        settings: &ConnectorSettings,
+        sleep: Option<SharedAsyncSleep>,
+    ) -> Option<DynConnector> {
+        #[cfg(feature = "rustls")]
+        {
+            tracing::trace!(settings = ?settings, sleep = ?sleep, "creating a new default connector");
+            let hyper = base(settings, sleep).build(super::https());
+            Some(DynConnector::new(hyper))
+        }
+        #[cfg(not(feature = "rustls"))]
+        {
+            tracing::trace!(settings = ?settings, sleep = ?sleep, "no default connector available");
+            None
+        }
+    }
+}
+pub use default_connector::default_connector;
+
+/// Error that indicates a connector is required.
+#[non_exhaustive]
+#[derive(Debug, Default)]
+pub struct ConnectorRequiredError;
+
+impl std::fmt::Display for ConnectorRequiredError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("No HTTP connector was available. Enable the `rustls` crate feature or set a connector to fix this.")
+    }
+}
+
+impl std::error::Error for ConnectorRequiredError {}
+
+/// Converts an optional connector to a result.
+pub fn require_connector(
+    connector: Option<DynConnector>,
+) -> Result<DynConnector, ConnectorRequiredError> {
+    connector.ok_or(ConnectorRequiredError)
 }
 
 #[cfg(feature = "rustls")]
@@ -143,12 +202,19 @@ mod custom_tls_tests {
 
     async fn send_request_and_assert_success(conn: DynConnector, uri: &Uri) {
         let mut svc = ServiceBuilder::new().service(conn);
-        let req = Request::builder()
-            .uri(uri)
-            .method(Method::GET)
-            .body(SdkBody::empty())
-            .unwrap();
-        let res = svc.call(req).await.unwrap();
+        let mut att = 0;
+        let res = loop {
+            let req = Request::builder()
+                .uri(uri)
+                .method(Method::GET)
+                .body(SdkBody::empty())
+                .unwrap();
+            if let Ok(res) = svc.call(req).await {
+                break res;
+            }
+            assert!(att < 5);
+            att += 1;
+        };
         assert!(res.status().is_success());
     }
 }

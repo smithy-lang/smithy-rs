@@ -10,7 +10,7 @@ use std::{
 
 use tower::Service;
 
-use super::{OperationError, OperationShape};
+use super::OperationShape;
 
 /// A utility trait used to provide an even interface for all operation services.
 ///
@@ -19,8 +19,7 @@ use super::{OperationError, OperationShape};
 /// [`IntoService`](super::IntoService).
 ///
 /// See [`operation`](crate::operation) documentation for more info.
-pub trait OperationService<Op, Exts, PollError>:
-    Service<Self::Normalized, Response = Op::Output, Error = OperationError<Op::Error, PollError>>
+pub trait OperationService<Op, Exts>: Service<Self::Normalized, Response = Op::Output, Error = Op::Error>
 where
     Op: OperationShape,
 {
@@ -31,10 +30,10 @@ where
 }
 
 // `Service<Op::Input>`
-impl<Op, S, PollError> OperationService<Op, (), PollError> for S
+impl<Op, S> OperationService<Op, ()> for S
 where
     Op: OperationShape,
-    S: Service<Op::Input, Response = Op::Output, Error = OperationError<Op::Error, PollError>>,
+    S: Service<Op::Input, Response = Op::Output, Error = Op::Error>,
 {
     type Normalized = Op::Input;
 
@@ -44,10 +43,10 @@ where
 }
 
 // `Service<(Op::Input, Ext0)>`
-impl<Op, Ext0, S, PollError> OperationService<Op, (Ext0,), PollError> for S
+impl<Op, Ext0, S> OperationService<Op, (Ext0,)> for S
 where
     Op: OperationShape,
-    S: Service<(Op::Input, Ext0), Response = Op::Output, Error = OperationError<Op::Error, PollError>>,
+    S: Service<(Op::Input, Ext0), Response = Op::Output, Error = Op::Error>,
 {
     type Normalized = (Op::Input, Ext0);
 
@@ -57,10 +56,10 @@ where
 }
 
 // `Service<(Op::Input, Ext0, Ext1)>`
-impl<Op, Ext0, Ext1, S, PollError> OperationService<Op, (Ext0, Ext1), PollError> for S
+impl<Op, Ext0, Ext1, S> OperationService<Op, (Ext0, Ext1)> for S
 where
     Op: OperationShape,
-    S: Service<(Op::Input, Ext0, Ext1), Response = Op::Output, Error = OperationError<Op::Error, PollError>>,
+    S: Service<(Op::Input, Ext0, Ext1), Response = Op::Output, Error = Op::Error>,
 {
     type Normalized = (Op::Input, Ext0, Ext1);
 
@@ -70,39 +69,37 @@ where
 }
 
 /// An extension trait of [`OperationService`].
-pub trait OperationServiceExt<Op, Exts, PollError>: OperationService<Op, Exts, PollError>
+pub trait OperationServiceExt<Op, Exts>: OperationService<Op, Exts>
 where
     Op: OperationShape,
 {
     /// Convert the [`OperationService`] into a canonicalized [`Service`].
-    fn canonicalize(self) -> Normalize<Op, Self, PollError>
+    fn normalize(self) -> Normalize<Op, Self>
     where
         Self: Sized,
     {
         Normalize {
             inner: self,
             _operation: PhantomData,
-            _poll_error: PhantomData,
         }
     }
 }
 
-impl<F, Op, Exts, PollError> OperationServiceExt<Op, Exts, PollError> for F
+impl<F, Op, Exts> OperationServiceExt<Op, Exts> for F
 where
     Op: OperationShape,
-    F: OperationService<Op, Exts, PollError>,
+    F: OperationService<Op, Exts>,
 {
 }
 
 /// A [`Service`] normalizing the request type of a [`OperationService`].
 #[derive(Debug)]
-pub struct Normalize<Op, S, PollError> {
-    inner: S,
-    _operation: PhantomData<Op>,
-    _poll_error: PhantomData<PollError>,
+pub struct Normalize<Op, S> {
+    pub(crate) inner: S,
+    pub(crate) _operation: PhantomData<Op>,
 }
 
-impl<Op, S, PollError> Clone for Normalize<Op, S, PollError>
+impl<Op, S> Clone for Normalize<Op, S>
 where
     S: Clone,
 {
@@ -110,15 +107,14 @@ where
         Self {
             inner: self.inner.clone(),
             _operation: PhantomData,
-            _poll_error: PhantomData,
         }
     }
 }
 
-impl<Op, S, Exts, PollError> Service<(Op::Input, Exts)> for Normalize<Op, S, PollError>
+impl<Op, S, Exts> Service<(Op::Input, Exts)> for Normalize<Op, S>
 where
     Op: OperationShape,
-    S: OperationService<Op, Exts, PollError>,
+    S: OperationService<Op, Exts>,
 {
     type Response = S::Response;
     type Error = S::Error;

@@ -14,8 +14,8 @@ use crate::imds::client::LazyClient;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
-use aws_credential_types::time_source::TimeSource;
 use aws_credential_types::Credentials;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::os_shim_internal::Env;
 use std::borrow::Cow;
 use std::error::Error as StdError;
@@ -53,7 +53,7 @@ pub struct ImdsCredentialsProvider {
     client: LazyClient,
     env: Env,
     profile: Option<String>,
-    time_source: TimeSource,
+    time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
 }
 
@@ -201,7 +201,7 @@ impl ImdsCredentialsProvider {
             return expiration;
         }
 
-        let rng = fastrand::Rng::with_seed(
+        let mut rng = fastrand::Rng::with_seed(
             now.duration_since(SystemTime::UNIX_EPOCH)
                 .expect("now should be after UNIX EPOCH")
                 .as_secs(),
@@ -306,8 +306,7 @@ mod test {
     };
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
-    use aws_credential_types::time_source::{TestingTimeSource, TimeSource};
-    use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::TestConnection;
     use tracing_test::traced_test;
@@ -369,16 +368,12 @@ mod test {
         // set to 2021-09-21T04:16:50Z that makes returned credentials' expiry (2021-09-21T04:16:53Z)
         // not stale
         let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632197810);
-        let time_source = TimeSource::testing(&TestingTimeSource::new(
-            time_of_request_to_fetch_credentials,
-        ));
-
-        tokio::time::pause();
+        let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
 
         let provider_config = ProviderConfig::no_configuration()
             .with_http_connector(DynConnector::new(connection.clone()))
-            .with_time_source(time_source)
-            .with_sleep(TokioSleep::new());
+            .with_sleep(sleep)
+            .with_time_source(time_source);
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
             .build()
@@ -390,7 +385,10 @@ mod test {
             .build();
         let creds = provider.provide_credentials().await.expect("valid creds");
         // The expiry should be equal to what is originally set (==2021-09-21T04:16:53Z).
-        assert!(creds.expiry() == UNIX_EPOCH.checked_add(Duration::from_secs(1632197813)));
+        assert_eq!(
+            creds.expiry(),
+            UNIX_EPOCH.checked_add(Duration::from_secs(1632197813))
+        );
         connection.assert_requests_match(&[]);
 
         // There should not be logs indicating credentials are extended for stability.
@@ -416,16 +414,12 @@ mod test {
 
         // set to 2021-09-21T17:41:25Z that renders fetched credentials already expired (2021-09-21T04:16:53Z)
         let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632246085);
-        let time_source = TimeSource::testing(&TestingTimeSource::new(
-            time_of_request_to_fetch_credentials,
-        ));
-
-        tokio::time::pause();
+        let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
 
         let provider_config = ProviderConfig::no_configuration()
             .with_http_connector(DynConnector::new(connection.clone()))
-            .with_time_source(time_source)
-            .with_sleep(TokioSleep::new());
+            .with_sleep(sleep)
+            .with_time_source(time_source);
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
             .build()

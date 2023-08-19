@@ -5,14 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
 sealed class CustomizableOperationSection(name: String) : Section(name) {
     /** Write custom code into a customizable operation's impl block */
     data class CustomizableOperationImpl(
-        val operationShape: OperationShape?,
+        val isRuntimeModeOrchestrator: Boolean,
     ) : CustomizableOperationSection("CustomizableOperationImpl")
 }
 

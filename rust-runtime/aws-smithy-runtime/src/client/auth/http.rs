@@ -3,26 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Auth scheme implementations for HTTP API Key, Basic Auth, Bearer Token, and Digest auth.
+
 use aws_smithy_http::query_writer::QueryWriter;
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::http::{
     HTTP_API_KEY_AUTH_SCHEME_ID, HTTP_BASIC_AUTH_SCHEME_ID, HTTP_BEARER_AUTH_SCHEME_ID,
     HTTP_DIGEST_AUTH_SCHEME_ID,
 };
 use aws_smithy_runtime_api::client::auth::{
-    AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpRequestSigner,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
 };
 use aws_smithy_runtime_api::client::identity::http::{Login, Token};
-use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver, IdentityResolvers};
-use aws_smithy_runtime_api::client::orchestrator::{BoxError, HttpRequest};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use aws_smithy_types::base64::encode;
+use aws_smithy_types::config_bag::ConfigBag;
 use http::header::HeaderName;
 use http::HeaderValue;
 
 /// Destination for the API key
 #[derive(Copy, Clone, Debug)]
 pub enum ApiKeyLocation {
+    /// Place the API key in the URL query parameters
     Query,
+    /// Place the API key in the request headers
     Header,
 }
 
@@ -49,19 +55,19 @@ impl ApiKeyAuthScheme {
     }
 }
 
-impl HttpAuthScheme for ApiKeyAuthScheme {
+impl AuthScheme for ApiKeyAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_API_KEY_AUTH_SCHEME_ID
     }
 
-    fn identity_resolver<'a>(
+    fn identity_resolver(
         &self,
-        identity_resolvers: &'a IdentityResolvers,
-    ) -> Option<&'a dyn IdentityResolver> {
+        identity_resolvers: &dyn GetIdentityResolver,
+    ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -73,12 +79,13 @@ struct ApiKeySigner {
     name: String,
 }
 
-impl HttpRequestSigner for ApiKeySigner {
-    fn sign_request(
+impl Signer for ApiKeySigner {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let api_key = identity
@@ -119,19 +126,19 @@ impl BasicAuthScheme {
     }
 }
 
-impl HttpAuthScheme for BasicAuthScheme {
+impl AuthScheme for BasicAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_BASIC_AUTH_SCHEME_ID
     }
 
-    fn identity_resolver<'a>(
+    fn identity_resolver(
         &self,
-        identity_resolvers: &'a IdentityResolvers,
-    ) -> Option<&'a dyn IdentityResolver> {
+        identity_resolvers: &dyn GetIdentityResolver,
+    ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -139,12 +146,13 @@ impl HttpAuthScheme for BasicAuthScheme {
 #[derive(Debug, Default)]
 struct BasicAuthSigner;
 
-impl HttpRequestSigner for BasicAuthSigner {
-    fn sign_request(
+impl Signer for BasicAuthSigner {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let login = identity
@@ -177,19 +185,19 @@ impl BearerAuthScheme {
     }
 }
 
-impl HttpAuthScheme for BearerAuthScheme {
+impl AuthScheme for BearerAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_BEARER_AUTH_SCHEME_ID
     }
 
-    fn identity_resolver<'a>(
+    fn identity_resolver(
         &self,
-        identity_resolvers: &'a IdentityResolvers,
-    ) -> Option<&'a dyn IdentityResolver> {
+        identity_resolvers: &dyn GetIdentityResolver,
+    ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -197,12 +205,13 @@ impl HttpAuthScheme for BearerAuthScheme {
 #[derive(Debug, Default)]
 struct BearerAuthSigner;
 
-impl HttpRequestSigner for BearerAuthSigner {
-    fn sign_request(
+impl Signer for BearerAuthSigner {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         let token = identity
@@ -233,19 +242,19 @@ impl DigestAuthScheme {
     }
 }
 
-impl HttpAuthScheme for DigestAuthScheme {
+impl AuthScheme for DigestAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_DIGEST_AUTH_SCHEME_ID
     }
 
-    fn identity_resolver<'a>(
+    fn identity_resolver(
         &self,
-        identity_resolvers: &'a IdentityResolvers,
-    ) -> Option<&'a dyn IdentityResolver> {
+        identity_resolvers: &dyn GetIdentityResolver,
+    ) -> Option<SharedIdentityResolver> {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -253,12 +262,13 @@ impl HttpAuthScheme for DigestAuthScheme {
 #[derive(Debug, Default)]
 struct DigestAuthSigner;
 
-impl HttpRequestSigner for DigestAuthSigner {
-    fn sign_request(
+impl Signer for DigestAuthSigner {
+    fn sign_http_request(
         &self,
         _request: &mut HttpRequest,
         _identity: &Identity,
         _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+        _runtime_components: &RuntimeComponents,
         _config_bag: &ConfigBag,
     ) -> Result<(), BoxError> {
         unimplemented!(
@@ -272,6 +282,7 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::identity::http::Login;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 
     #[test]
     fn test_api_key_signing_headers() {
@@ -280,6 +291,7 @@ mod tests {
             location: ApiKeyLocation::Header,
             name: "some-header-name".into(),
         };
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let config_bag = ConfigBag::base();
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder()
@@ -287,10 +299,11 @@ mod tests {
             .body(SdkBody::empty())
             .unwrap();
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");
@@ -308,6 +321,7 @@ mod tests {
             location: ApiKeyLocation::Query,
             name: "some-query-name".into(),
         };
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let config_bag = ConfigBag::base();
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder()
@@ -315,10 +329,11 @@ mod tests {
             .body(SdkBody::empty())
             .unwrap();
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");
@@ -332,15 +347,17 @@ mod tests {
     #[test]
     fn test_basic_auth() {
         let signer = BasicAuthSigner;
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let config_bag = ConfigBag::base();
         let identity = Identity::new(Login::new("Aladdin", "open sesame", None), None);
         let mut request = http::Request::builder().body(SdkBody::empty()).unwrap();
 
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");
@@ -355,13 +372,15 @@ mod tests {
         let signer = BearerAuthSigner;
 
         let config_bag = ConfigBag::base();
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder().body(SdkBody::empty()).unwrap();
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
                 &config_bag,
             )
             .expect("success");

@@ -19,6 +19,7 @@ use tokio::task::JoinHandle;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_protocol_test::MediaType;
+use aws_smithy_types::error::display::DisplayErrorContext;
 
 use crate::dvr::{Action, ConnectionId, Direction, Event, NetworkTraffic};
 
@@ -63,15 +64,7 @@ impl ReplayingConnection {
 
     /// Validate all headers and bodies
     pub async fn full_validate(self, media_type: MediaType) -> Result<(), Box<dyn Error>> {
-        self.validate_base(None, |b1, b2| {
-            aws_smithy_protocol_test::validate_body(
-                b1,
-                std::str::from_utf8(b2).unwrap(),
-                media_type.clone(),
-            )
-            .map_err(|e| Box::new(e) as _)
-        })
-        .await
+        self.validate_body_and_headers(None, media_type).await
     }
 
     /// Validate actual requests against expected requests
@@ -82,6 +75,25 @@ impl ReplayingConnection {
     ) -> Result<(), Box<dyn Error>> {
         self.validate_base(Some(checked_headers), body_comparer)
             .await
+    }
+
+    /// Validate that the bodies match, using a given [`MediaType`] for comparison
+    ///
+    /// The specified headers are also validated
+    pub async fn validate_body_and_headers(
+        self,
+        checked_headers: Option<&[&str]>,
+        media_type: MediaType,
+    ) -> Result<(), Box<dyn Error>> {
+        self.validate_base(checked_headers, |b1, b2| {
+            aws_smithy_protocol_test::validate_body(
+                b1,
+                std::str::from_utf8(b2).unwrap(),
+                media_type.clone(),
+            )
+            .map_err(|e| Box::new(e) as _)
+        })
+        .await
     }
 
     async fn validate_base(
@@ -102,7 +114,7 @@ impl ReplayingConnection {
                 ))?
                 .take()
                 .await;
-            aws_smithy_protocol_test::assert_uris_match(actual.uri(), expected.uri());
+            aws_smithy_protocol_test::assert_uris_match(expected.uri(), actual.uri());
             body_comparer(expected.body().as_ref(), actual.body().as_ref())?;
             let expected_headers = expected
                 .headers()
@@ -126,7 +138,14 @@ impl ReplayingConnection {
                     ))
                 })
                 .collect::<Vec<_>>();
-            aws_smithy_protocol_test::validate_headers(actual.headers(), expected_headers)?;
+            aws_smithy_protocol_test::validate_headers(actual.headers(), expected_headers)
+                .map_err(|err| {
+                    format!(
+                        "event {} validation failed with: {}",
+                        conn_id.0,
+                        DisplayErrorContext(&err)
+                    )
+                })?;
         }
         Ok(())
     }
@@ -261,6 +280,7 @@ impl tower::Service<http::Request<SdkBody>> for ReplayingConnection {
 
     fn call(&mut self, mut req: Request<SdkBody>) -> Self::Future {
         let event_id = self.next_id();
+        tracing::debug!("received event {}: {req:?}", event_id.0);
         let mut events = match self.live_events.lock().unwrap().remove(&event_id) {
             Some(traffic) => traffic,
             None => {

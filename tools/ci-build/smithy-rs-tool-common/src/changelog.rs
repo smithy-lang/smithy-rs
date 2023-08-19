@@ -11,20 +11,15 @@ use std::fmt::{self, Display};
 use std::path::Path;
 use std::str::FromStr;
 
-#[derive(Copy, Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, Default, Serialize, PartialEq, Eq)]
 pub enum SdkAffected {
     #[serde(rename = "client")]
     Client,
     #[serde(rename = "server")]
     Server,
     #[serde(rename = "all")]
+    #[default]
     All,
-}
-
-impl Default for SdkAffected {
-    fn default() -> Self {
-        SdkAffected::All
-    }
 }
 
 impl Display for SdkAffected {
@@ -154,6 +149,13 @@ impl HandAuthoredEntry {
         if self.references.is_empty() {
             bail!("Changelog entry must refer to at least one pull request or issue");
         }
+        if self.message.len() > 800 {
+            bail!(
+                "Your changelog entry is too long. Post long-form change log entries in \
+                the GitHub Discussions under the Changelog category, and link to them from \
+                the changelog."
+            );
+        }
 
         Ok(())
     }
@@ -209,7 +211,6 @@ impl Changelog {
                     // Remove comments from the top
                     let value = value
                         .split('\n')
-                        .into_iter()
                         .filter(|line| !line.trim().starts_with('#'))
                         .collect::<Vec<_>>()
                         .join("\n");

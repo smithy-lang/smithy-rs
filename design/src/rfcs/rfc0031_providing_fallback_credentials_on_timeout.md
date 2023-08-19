@@ -27,14 +27,14 @@ We have mentioned static stability. Supporting it calls for the following functi
 - REQ 1: Once a credentials provider has served credentials, it should continue serving them in the event of a timeout (whether internal or external) while obtaining refreshed credentials.
 
 Today, we have the following trait method to obtain credentials:
-```rust
+```rust,ignore
 fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
 where
     Self: 'a,
 ```
 This method returns a future, which can be raced against a timeout future as demonstrated by the following code snippet from `LazyCredentialsCache`:
 
-```rust
+```rust,ignore
 let timeout_future = self.sleeper.sleep(self.load_timeout); // by default self.load_timeout is 5 seconds.
 // --snip--
 let future = Timeout::new(provider.provide_credentials(), timeout_future);
@@ -76,7 +76,7 @@ Proposal
 To address the problem in the previous section, we propose to add a new method to the `ProvideCredentials` trait called `fallback_on_interrupt`. This method allows credentials providers to have a fallback mechanism on an external timeout and to serve credentials to users if needed. There are two options as to how it is implemented, either as a synchronous primitive or as an asynchronous primitive.
 
 #### Option A: Synchronous primitive
-```rust
+```rust,ignore
 pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     // --snip--
 
@@ -90,7 +90,7 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
 - :-1: It may turn into a blocking operation if it takes longer than it should.
 
 #### Option B: Asynchronous primitive
-```rust
+```rust,ignore
 mod future {
     // --snip--
 
@@ -117,7 +117,7 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
 Option A cannot be reversible in the future if we are to support the use case for asynchronously retrieving the fallback credentials, whereas option B allows us to continue supporting both ready and pending futures when retrieving the fallback credentials. However, `fallback_on_interrupt` is supposed to return credentials that have been set aside in case `provide_credentials` is timed out. To express that intent, we choose option A and document that users should NOT go fetch new credentials in `fallback_on_interrupt`.
 
 The user experience for the code snippet in question will look like this once this proposal is implemented:
-```rust
+```rust,ignore
 let timeout_future = self.sleeper.sleep(self.load_timeout); // by default self.load_timeout is 5 seconds.
 // --snip--
 let future = Timeout::new(provider.provide_credentials(), timeout_future);
@@ -146,7 +146,7 @@ Almost all credentials providers do not have to implement their own `fallback_on
 Considering the two cases we analyzed above, implementing `CredentialsProviderChain::fallback_on_interrupt` is not so straightforward. Keeping track of whose turn in the chain it is to call `provide_credentials` when an external timeout has occurred is a challenging task. Even if we figured it out, that would still not satisfy `Case 2` above, because it was provider 1 that was actively running when the external timeout kicked in, but the chain should return credentials from provider 2, not from provider 1.
 
 With that in mind, consider instead the following approach:
-```rust
+```rust,ignore
 impl ProvideCredentials for CredentialsProviderChain {
     // --snip--
 
@@ -174,7 +174,7 @@ Alternative
 In this section, we will describe an alternative approach that we ended up dismissing as unworkable.
 
 Instead of `fallback_on_interrupt`, we considered the following method to be added to the `ProvideCredentials` trait:
-```rust
+```rust,ignore
 pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     // --snip--
 
@@ -201,7 +201,7 @@ pub trait ProvideCredentials: Send + Sync + std::fmt::Debug {
     }
 ```
 `provide_credentials_with_timeout` encapsulated the timeout race and allowed users to specify how long the external timeout for `provide_credentials` would be. The code snippet from `LazyCredentialsCache` then looked like
-```rust
+```rust,ignore
 let sleeper = Arc::clone(&self.sleeper);
 let load_timeout = self.load_timeout; // by default self.load_timeout is 5 seconds.
 // --snip--
@@ -217,7 +217,7 @@ let result = cache
 // --snip--
 ```
 However, implementing `CredentialsProviderChain::provide_credentials_with_timeout` quickly ran into the following problem:
-```rust
+```rust,ignore
 impl ProvideCredentials for CredentialsProviderChain {
     // --snip--
 
@@ -289,7 +289,7 @@ This a case where `CredentialsProviderChain::fallback_on_interrupt` requires the
 </p>
 
 The outermost chain is a `CredentialsProviderChain` and follows the precedence policy for `fallback_on_interrupt`. It contains a sub-chain that, in turn, contains provider 1 and provider 2. This sub-chain implements its own `fallback_on_interrupt` to realize the recency policy for fallback credentials found in provider 1 and provider 2. Conceptually, we have
-```
+```rust,ignore
 pub struct FallbackRecencyChain {
     provider_chain: CredentialsProviderChain,
 }
@@ -310,7 +310,7 @@ impl ProvideCredentials for FallbackRecencyChain {
 }
 ```
 We can then compose the entire chain like so:
-```
+```rust,ignore
 let provider_1 = /* ... */
 let provider_2 = /* ... */
 let provider_3 = /* ... */

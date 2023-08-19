@@ -5,11 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
-import software.amazon.smithy.aws.traits.ServiceTrait
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
@@ -21,8 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
@@ -30,11 +30,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
-import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 
-// TODO(enableNewSmithyRuntime): Delete this class when cleaning up `enableNewSmithyRuntime`
+// TODO(enableNewSmithyRuntimeCleanup): Delete this class when cleaning up `enableNewSmithyRuntime`
 /** Generates the `make_operation` function on input structs */
 open class MakeOperationGenerator(
     protected val codegenContext: CodegenContext,
@@ -52,13 +52,11 @@ open class MakeOperationGenerator(
     private val defaultClassifier = RuntimeType.smithyHttp(runtimeConfig)
         .resolve("retry::DefaultResponseRetryClassifier")
 
-    private val sdkId =
-        codegenContext.serviceShape.getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "")
-            ?: codegenContext.serviceShape.id.getName(codegenContext.serviceShape)
+    private val sdkId = codegenContext.serviceShape.sdkId()
 
     private val codegenScope = arrayOf(
         *preludeScope,
-        "config" to ClientRustModule.Config,
+        "config" to ClientRustModule.config,
         "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
         "http" to RuntimeType.Http,
         "operation" to RuntimeType.operationModule(runtimeConfig),
@@ -66,6 +64,7 @@ open class MakeOperationGenerator(
         "OpBuildError" to runtimeConfig.operationBuildError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "SharedPropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::SharedPropertyBag"),
+        "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
     )
 
     fun generateMakeOperation(
@@ -97,6 +96,12 @@ open class MakeOperationGenerator(
             "$fnType $functionName($self, _config: &#{config}::Config) -> $returnType",
             *codegenScope,
         ) {
+            rustTemplate(
+                """
+                assert_ne!(_config.retry_config().map(|rc| rc.mode()), #{Option}::Some(#{RetryMode}::Adaptive), "Adaptive retry mode is unsupported, please use Standard mode or disable retries.");
+                """,
+                *codegenScope,
+            )
             writeCustomizations(customizations, OperationSection.MutateInput(customizations, "self", "_config"))
 
             withBlock("let mut request = {", "};") {
@@ -108,7 +113,12 @@ open class MakeOperationGenerator(
             // Clippy warning to make the codegen a little simpler in that case.
             Attribute.AllowClippyUselessConversion.render(this)
             withBlockTemplate("let body = #{SdkBody}::from(", ");", *codegenScope) {
-                bodyGenerator.generatePayload(this, "self", shape)
+                bodyGenerator.generatePayload(
+                    this,
+                    "self",
+                    shape,
+                    ClientAdditionalPayloadContext(propertyBagAvailable = true),
+                )
                 val streamingMember = shape.inputShape(model).findStreamingMember(model)
                 val isBlobStreaming = streamingMember != null && model.expectShape(streamingMember.target) is BlobShape
                 if (isBlobStreaming) {

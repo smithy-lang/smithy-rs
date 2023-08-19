@@ -21,6 +21,6 @@ internal class RegionProviderConfigTest {
                 runtimeConfig = AwsTestRuntimeConfig,
             ),
         )
-        validateConfigCustomizations(RegionProviderConfig(codegenContext), project)
+        validateConfigCustomizations(codegenContext, RegionProviderConfig(codegenContext), project)
     }
 }

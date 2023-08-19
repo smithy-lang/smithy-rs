@@ -4,27 +4,27 @@
  */
 
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Output};
-use aws_smithy_runtime_api::client::interceptors::InterceptorRegistrar;
-use aws_smithy_runtime_api::client::orchestrator::{
-    ConfigBagAccessors, HttpResponse, OrchestratorError, ResponseDeserializer,
-};
-use aws_smithy_runtime_api::client::runtime_plugin::{BoxError, RuntimePlugin};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, OrchestratorError};
+use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_runtime_api::client::ser_de::{ResponseDeserializer, SharedResponseDeserializer};
+use aws_smithy_types::config_bag::{FrozenLayer, Layer};
 use std::sync::Mutex;
 
+/// Test response deserializer that always returns the same canned response.
 #[derive(Default, Debug)]
 pub struct CannedResponseDeserializer {
     inner: Mutex<Option<Result<Output, OrchestratorError<Error>>>>,
 }
 
 impl CannedResponseDeserializer {
+    /// Creates a new `CannedResponseDeserializer` with the given canned response.
     pub fn new(output: Result<Output, OrchestratorError<Error>>) -> Self {
         Self {
             inner: Mutex::new(Some(output)),
         }
     }
 
-    pub fn take(&self) -> Option<Result<Output, OrchestratorError<Error>>> {
+    fn take(&self) -> Option<Result<Output, OrchestratorError<Error>>> {
         match self.inner.lock() {
             Ok(mut guard) => guard.take(),
             Err(_) => None,
@@ -44,15 +44,11 @@ impl ResponseDeserializer for CannedResponseDeserializer {
 }
 
 impl RuntimePlugin for CannedResponseDeserializer {
-    fn configure(
-        &self,
-        cfg: &mut ConfigBag,
-        _interceptors: &mut InterceptorRegistrar,
-    ) -> Result<(), BoxError> {
-        cfg.set_response_deserializer(Self {
+    fn config(&self) -> Option<FrozenLayer> {
+        let mut cfg = Layer::new("CannedResponse");
+        cfg.store_put(SharedResponseDeserializer::new(Self {
             inner: Mutex::new(self.take()),
-        });
-
-        Ok(())
+        }));
+        Some(cfg.freeze())
     }
 }

@@ -7,19 +7,19 @@
 //!
 //! Interceptors have access to varying pieces of context during the course of an operation.
 //!
-//! An operation is composed of multiple phases. The initial phase is [`Phase::BeforeSerialization`], which
-//! has the original input as context. The next phase is [`Phase::BeforeTransmit`], which has the serialized
+//! An operation is composed of multiple phases. The initial phase is "before serialization", which
+//! has the original input as context. The next phase is "before transmit", which has the serialized
 //! request as context. Depending on which hook is being called with the dispatch context,
 //! the serialized request may or may not be signed (which should be apparent from the hook name).
-//! Following the [`Phase::BeforeTransmit`] phase is the [`Phase::BeforeDeserialization`] phase, which has
-//! the raw response available as context. Finally, the [`Phase::AfterDeserialization`] phase
+//! Following the "before transmit" phase is the "before deserialization" phase, which has
+//! the raw response available as context. Finally, the "after deserialization" phase
 //! has both the raw and parsed response available.
 //!
 //! To summarize:
-//! 1. [`Phase::BeforeSerialization`]: Only has the operation input.
-//! 2. [`Phase::BeforeTransmit`]: Only has the serialized request.
-//! 3. [`Phase::BeforeDeserialization`]: Has the raw response.
-//! 3. [`Phase::AfterDeserialization`]: Has the raw response and the parsed response.
+//! 1. Before serialization: Only has the operation input.
+//! 2. Before transmit: Only has the serialized request.
+//! 3. Before deserialization: Has the raw response.
+//! 3. After deserialization: Has the raw response and the parsed response.
 //!
 //! When implementing hooks, if information from a previous phase is required, then implement
 //! an earlier hook to examine that context, and save off any necessary information into the
@@ -27,37 +27,100 @@
 //! recommended for storing request-specific information in your interceptor implementation.
 //! Use the [`ConfigBag`] instead.
 
-/// Operation phases.
-pub mod phase;
-pub mod wrappers;
-
 use crate::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
-use crate::config_bag::ConfigBag;
-use crate::type_erasure::{TypeErasedBox, TypeErasedError};
 use aws_smithy_http::result::SdkError;
+use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
 use phase::Phase;
 use std::fmt::Debug;
-use std::mem;
-use tracing::{error, trace};
+use std::{fmt, mem};
+use tracing::{debug, error, trace};
 
-pub type Input = TypeErasedBox;
-pub type Output = TypeErasedBox;
-pub type Error = TypeErasedError;
+macro_rules! new_type_box {
+    ($name:ident, $doc:literal) => {
+        new_type_box!($name, TypeErasedBox, $doc, Send, Sync, fmt::Debug,);
+    };
+    ($name:ident, $underlying:ident, $doc:literal, $($additional_bound:path,)*) => {
+        #[doc = $doc]
+        #[derive(Debug)]
+        pub struct $name($underlying);
+
+        impl $name {
+            #[doc = concat!("Creates a new `", stringify!($name), "` with the provided concrete input value.")]
+            pub fn erase<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(input: T) -> Self {
+                Self($underlying::new(input))
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast_ref<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(&self) -> Option<&T> {
+                self.0.downcast_ref()
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast_mut<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(&mut self) -> Option<&mut T> {
+                self.0.downcast_mut()
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(self) -> Result<T, Self> {
+                self.0.downcast::<T>().map(|v| *v).map_err(Self)
+            }
+
+            #[doc = concat!("Returns a `", stringify!($name), "` with a fake/test value with the expectation that it won't be downcast in the test.")]
+            #[cfg(feature = "test-util")]
+            pub fn doesnt_matter() -> Self {
+                Self($underlying::doesnt_matter())
+            }
+        }
+    };
+}
+
+new_type_box!(Input, "Type-erased operation input.");
+new_type_box!(Output, "Type-erased operation output.");
+new_type_box!(
+    Error,
+    TypeErasedError,
+    "Type-erased operation error.",
+    std::error::Error,
+);
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
+/// Type-erased result for an operation.
 pub type OutputOrError = Result<Output, OrchestratorError<Error>>;
 
 type Request = HttpRequest;
 type Response = HttpResponse;
 
+pub use wrappers::{
+    AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
+    BeforeDeserializationInterceptorContextRef, BeforeSerializationInterceptorContextMut,
+    BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
+    BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
+    FinalizerInterceptorContextRef,
+};
+
+mod wrappers;
+
+/// Operation phases.
+pub(crate) mod phase;
+
 /// A container for the data currently available to an interceptor.
 ///
 /// Different context is available based on which phase the operation is currently in. For example,
-/// context in the [`Phase::BeforeSerialization`] phase won't have a `request` yet since the input hasn't been
-/// serialized at that point. But once it gets into the [`Phase::BeforeTransmit`] phase, the `request` will be set.
+/// context in the "before serialization" phase won't have a `request` yet since the input hasn't been
+/// serialized at that point. But once it gets into the "before transmit" phase, the `request` will be set.
 #[derive(Debug)]
-pub struct InterceptorContext<I = Input, O = Output, E = Error>
-where
-    E: Debug,
-{
+pub struct InterceptorContext<I = Input, O = Output, E = Error> {
     pub(crate) input: Option<I>,
     pub(crate) output_or_error: Option<Result<O, OrchestratorError<E>>>,
     pub(crate) request: Option<Request>,
@@ -68,7 +131,7 @@ where
 }
 
 impl InterceptorContext<Input, Output, Error> {
-    /// Creates a new interceptor context in the [`Phase::BeforeSerialization`] phase.
+    /// Creates a new interceptor context in the "before serialization" phase.
     pub fn new(input: Input) -> InterceptorContext<Input, Output, Error> {
         InterceptorContext {
             input: Some(input),
@@ -79,6 +142,210 @@ impl InterceptorContext<Input, Output, Error> {
             tainted: false,
             request_checkpoint: None,
         }
+    }
+}
+
+impl<I, O, E> InterceptorContext<I, O, E> {
+    /// Retrieve the input for the operation being invoked.
+    pub fn input(&self) -> Option<&I> {
+        self.input.as_ref()
+    }
+
+    /// Retrieve the input for the operation being invoked.
+    pub fn input_mut(&mut self) -> Option<&mut I> {
+        self.input.as_mut()
+    }
+
+    /// Takes ownership of the input.
+    pub fn take_input(&mut self) -> Option<I> {
+        self.input.take()
+    }
+
+    /// Set the request for the operation being invoked.
+    pub fn set_request(&mut self, request: Request) {
+        self.request = Some(request);
+    }
+
+    /// Retrieve the transmittable request for the operation being invoked.
+    /// This will only be available once request marshalling has completed.
+    pub fn request(&self) -> Option<&Request> {
+        self.request.as_ref()
+    }
+
+    /// Retrieve the transmittable request for the operation being invoked.
+    /// This will only be available once request marshalling has completed.
+    pub fn request_mut(&mut self) -> Option<&mut Request> {
+        self.request.as_mut()
+    }
+
+    /// Takes ownership of the request.
+    pub fn take_request(&mut self) -> Option<Request> {
+        self.request.take()
+    }
+
+    /// Set the response for the operation being invoked.
+    pub fn set_response(&mut self, response: Response) {
+        self.response = Some(response);
+    }
+
+    /// Returns the response.
+    pub fn response(&self) -> Option<&Response> {
+        self.response.as_ref()
+    }
+
+    /// Returns a mutable reference to the response.
+    pub fn response_mut(&mut self) -> Option<&mut Response> {
+        self.response.as_mut()
+    }
+
+    /// Set the output or error for the operation being invoked.
+    pub fn set_output_or_error(&mut self, output: Result<O, OrchestratorError<E>>) {
+        self.output_or_error = Some(output);
+    }
+
+    /// Returns the deserialized output or error.
+    pub fn output_or_error(&self) -> Option<Result<&O, &OrchestratorError<E>>> {
+        self.output_or_error.as_ref().map(Result::as_ref)
+    }
+
+    /// Returns the mutable reference to the deserialized output or error.
+    pub fn output_or_error_mut(&mut self) -> Option<&mut Result<O, OrchestratorError<E>>> {
+        self.output_or_error.as_mut()
+    }
+
+    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
+    pub fn is_failed(&self) -> bool {
+        self.output_or_error
+            .as_ref()
+            .map(Result::is_err)
+            .unwrap_or_default()
+    }
+
+    /// Advance to the Serialization phase.
+    #[doc(hidden)]
+    pub fn enter_serialization_phase(&mut self) {
+        debug!("entering \'serialization\' phase");
+        debug_assert!(
+            self.phase.is_before_serialization(),
+            "called enter_serialization_phase but phase is not before 'serialization'"
+        );
+        self.phase = Phase::Serialization;
+    }
+
+    /// Advance to the BeforeTransmit phase.
+    #[doc(hidden)]
+    pub fn enter_before_transmit_phase(&mut self) {
+        debug!("entering \'before transmit\' phase");
+        debug_assert!(
+            self.phase.is_serialization(),
+            "called enter_before_transmit_phase but phase is not 'serialization'"
+        );
+        debug_assert!(
+            self.input.is_none(),
+            "input must be taken before calling enter_before_transmit_phase"
+        );
+        debug_assert!(
+            self.request.is_some(),
+            "request must be set before calling enter_before_transmit_phase"
+        );
+        self.request_checkpoint = try_clone(self.request().expect("checked above"));
+        self.phase = Phase::BeforeTransmit;
+    }
+
+    /// Advance to the Transmit phase.
+    #[doc(hidden)]
+    pub fn enter_transmit_phase(&mut self) {
+        debug!("entering \'transmit\' phase");
+        debug_assert!(
+            self.phase.is_before_transmit(),
+            "called enter_transmit_phase but phase is not before transmit"
+        );
+        self.phase = Phase::Transmit;
+    }
+
+    /// Advance to the BeforeDeserialization phase.
+    #[doc(hidden)]
+    pub fn enter_before_deserialization_phase(&mut self) {
+        debug!("entering \'before deserialization\' phase");
+        debug_assert!(
+            self.phase.is_transmit(),
+            "called enter_before_deserialization_phase but phase is not 'transmit'"
+        );
+        debug_assert!(
+            self.request.is_none(),
+            "request must be taken before entering the 'before deserialization' phase"
+        );
+        debug_assert!(
+            self.response.is_some(),
+            "response must be set to before entering the 'before deserialization' phase"
+        );
+        self.phase = Phase::BeforeDeserialization;
+    }
+
+    /// Advance to the Deserialization phase.
+    #[doc(hidden)]
+    pub fn enter_deserialization_phase(&mut self) {
+        debug!("entering \'deserialization\' phase");
+        debug_assert!(
+            self.phase.is_before_deserialization(),
+            "called enter_deserialization_phase but phase is not 'before deserialization'"
+        );
+        self.phase = Phase::Deserialization;
+    }
+
+    /// Advance to the AfterDeserialization phase.
+    #[doc(hidden)]
+    pub fn enter_after_deserialization_phase(&mut self) {
+        debug!("entering \'after deserialization\' phase");
+        debug_assert!(
+            self.phase.is_deserialization(),
+            "called enter_after_deserialization_phase but phase is not 'deserialization'"
+        );
+        debug_assert!(
+            self.output_or_error.is_some(),
+            "output must be set to before entering the 'after deserialization' phase"
+        );
+        self.phase = Phase::AfterDeserialization;
+    }
+
+    /// Set the request checkpoint. This should only be called once, right before entering the retry loop.
+    #[doc(hidden)]
+    pub fn save_checkpoint(&mut self) {
+        trace!("saving request checkpoint...");
+        self.request_checkpoint = self.request().and_then(try_clone);
+        match self.request_checkpoint.as_ref() {
+            Some(_) => trace!("successfully saved request checkpoint"),
+            None => trace!("failed to save request checkpoint: request body could not be cloned"),
+        }
+    }
+
+    /// Returns false if rewinding isn't possible
+    #[doc(hidden)]
+    pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> RewindResult {
+        // If request_checkpoint was never set, but we've already made one attempt,
+        // then this is not a retryable request
+        if self.request_checkpoint.is_none() && self.tainted {
+            return RewindResult::Impossible;
+        }
+
+        if !self.tainted {
+            // The first call to rewind() happens before the request is ever touched, so we don't need
+            // to clone it then. However, the request must be marked as tainted so that subsequent calls
+            // to rewind() properly reload the saved request checkpoint.
+            self.tainted = true;
+            return RewindResult::Unnecessary;
+        }
+
+        // Otherwise, rewind to the saved request checkpoint
+        self.phase = Phase::BeforeTransmit;
+        self.request = try_clone(self.request_checkpoint.as_ref().expect("checked above"));
+        assert!(
+            self.request.is_some(),
+            "if the request wasn't cloneable, then we should have already return from this method."
+        );
+        self.response = None;
+        self.output_or_error = None;
+        RewindResult::Occurred
     }
 }
 
@@ -105,6 +372,8 @@ where
         )
     }
 
+    /// Convert this context into the final operation result that is returned in client's the public API.
+    #[doc(hidden)]
     pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
         let Self {
             output_or_error,
@@ -113,195 +382,8 @@ where
             ..
         } = self;
         output_or_error
-            .expect("output_or_error must always beset before finalize is called.")
+            .expect("output_or_error must always be set before finalize is called.")
             .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
-    }
-
-    /// Retrieve the input for the operation being invoked.
-    pub fn input(&self) -> &I {
-        self.input
-            .as_ref()
-            .expect("input is present in 'before serialization'")
-    }
-
-    /// Retrieve the input for the operation being invoked.
-    pub fn input_mut(&mut self) -> &mut I {
-        self.input
-            .as_mut()
-            .expect("input is present in 'before serialization'")
-    }
-
-    /// Takes ownership of the input.
-    pub fn take_input(&mut self) -> Option<I> {
-        self.input.take()
-    }
-
-    /// Set the request for the operation being invoked.
-    pub fn set_request(&mut self, request: Request) {
-        self.request = Some(request);
-    }
-
-    /// Retrieve the transmittable request for the operation being invoked.
-    /// This will only be available once request marshalling has completed.
-    pub fn request(&self) -> &Request {
-        self.request
-            .as_ref()
-            .expect("request populated in 'before transmit'")
-    }
-
-    /// Retrieve the transmittable request for the operation being invoked.
-    /// This will only be available once request marshalling has completed.
-    pub fn request_mut(&mut self) -> &mut Request {
-        self.request
-            .as_mut()
-            .expect("request populated in 'before transmit'")
-    }
-
-    /// Takes ownership of the request.
-    pub fn take_request(&mut self) -> Request {
-        self.request
-            .take()
-            .expect("take request once during 'transmit'")
-    }
-
-    /// Set the response for the operation being invoked.
-    pub fn set_response(&mut self, response: Response) {
-        self.response = Some(response);
-    }
-
-    /// Returns the response.
-    pub fn response(&self) -> &Response {
-        self.response.as_ref().expect(
-            "response set in 'before deserialization' and available in the phases following it",
-        )
-    }
-
-    /// Returns a mutable reference to the response.
-    pub fn response_mut(&mut self) -> &mut Response {
-        self.response.as_mut().expect(
-            "response is set in 'before deserialization' and available in the following phases",
-        )
-    }
-
-    /// Set the output or error for the operation being invoked.
-    pub fn set_output_or_error(&mut self, output: Result<O, OrchestratorError<E>>) {
-        self.output_or_error = Some(output);
-    }
-
-    /// Returns the deserialized output or error.
-    pub fn output_or_error(&self) -> Result<&O, &OrchestratorError<E>> {
-        self.output_or_error
-            .as_ref()
-            .expect("output set in Phase::AfterDeserialization")
-            .as_ref()
-    }
-
-    /// Returns the mutable reference to the deserialized output or error.
-    pub fn output_or_error_mut(&mut self) -> &mut Result<O, OrchestratorError<E>> {
-        self.output_or_error
-            .as_mut()
-            .expect("output set in 'after deserialization'")
-    }
-
-    /// Advance to the Serialization phase.
-    #[doc(hidden)]
-    pub fn enter_serialization_phase(&mut self) {
-        debug_assert!(
-            self.phase.is_before_serialization(),
-            "called enter_serialization_phase but phase is not before 'serialization'"
-        );
-        self.phase = Phase::Serialization;
-    }
-
-    /// Advance to the BeforeTransmit phase.
-    #[doc(hidden)]
-    pub fn enter_before_transmit_phase(&mut self) {
-        debug_assert!(
-            self.phase.is_serialization(),
-            "called enter_before_transmit_phase but phase is not 'serialization'"
-        );
-        debug_assert!(
-            self.input.is_none(),
-            "input must be taken before calling enter_before_transmit_phase"
-        );
-        debug_assert!(
-            self.request.is_some(),
-            "request must be set before calling enter_before_transmit_phase"
-        );
-        self.request_checkpoint = try_clone(self.request());
-        self.tainted = true;
-        self.phase = Phase::BeforeTransmit;
-    }
-
-    /// Advance to the Transmit phase.
-    #[doc(hidden)]
-    pub fn enter_transmit_phase(&mut self) {
-        debug_assert!(
-            self.phase.is_before_transmit(),
-            "called enter_transmit_phase but phase is not before transmit"
-        );
-        self.phase = Phase::Transmit;
-    }
-
-    /// Advance to the BeforeDeserialization phase.
-    #[doc(hidden)]
-    pub fn enter_before_deserialization_phase(&mut self) {
-        debug_assert!(
-            self.phase.is_transmit(),
-            "called enter_before_deserialization_phase but phase is not 'transmit'"
-        );
-        debug_assert!(
-            self.request.is_none(),
-            "request must be taken before entering the 'before deserialization' phase"
-        );
-        debug_assert!(
-            self.response.is_some(),
-            "response must be set to before entering the 'before deserialization' phase"
-        );
-        self.phase = Phase::BeforeDeserialization;
-    }
-
-    /// Advance to the Deserialization phase.
-    #[doc(hidden)]
-    pub fn enter_deserialization_phase(&mut self) {
-        debug_assert!(
-            self.phase.is_before_deserialization(),
-            "called enter_deserialization_phase but phase is not 'before deserialization'"
-        );
-        self.phase = Phase::Deserialization;
-    }
-
-    /// Advance to the AfterDeserialization phase.
-    #[doc(hidden)]
-    pub fn enter_after_deserialization_phase(&mut self) {
-        debug_assert!(
-            self.phase.is_deserialization(),
-            "called enter_after_deserialization_phase but phase is not 'deserialization'"
-        );
-        debug_assert!(
-            self.output_or_error.is_some(),
-            "output must be set to before entering the 'after deserialization' phase"
-        );
-        self.phase = Phase::AfterDeserialization;
-    }
-
-    // Returns false if rewinding isn't possible
-    pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> bool {
-        // If before transmit was never touched, then we don't need to rewind
-        if !self.tainted {
-            return true;
-        }
-        // If request_checkpoint was never set, then this is not a retryable request
-        if self.request_checkpoint.is_none() {
-            return false;
-        }
-        // Otherwise, rewind back to the beginning of BeforeTransmit
-        // TODO(enableNewSmithyRuntime): Also rewind the ConfigBag
-        self.phase = Phase::BeforeTransmit;
-        self.request = try_clone(self.request_checkpoint.as_ref().expect("checked above"));
-        self.response = None;
-        self.output_or_error = None;
-        true
     }
 
     /// Mark this context as failed due to errors during the operation. Any errors already contained
@@ -317,13 +399,32 @@ where
             error!("orchestrator context received an error but one was already present; Throwing away previous error: {:?}", existing_err);
         }
     }
+}
 
-    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
-    pub fn is_failed(&self) -> bool {
-        self.output_or_error
-            .as_ref()
-            .map(Result::is_err)
-            .unwrap_or_default()
+/// The result of attempting to rewind a request.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[doc(hidden)]
+pub enum RewindResult {
+    /// The request couldn't be rewound because it wasn't cloneable.
+    Impossible,
+    /// The request wasn't rewound because it was unnecessary.
+    Unnecessary,
+    /// The request was rewound successfully.
+    Occurred,
+}
+
+impl fmt::Display for RewindResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            RewindResult::Impossible => write!(
+                f,
+                "The request couldn't be rewound because it wasn't cloneable."
+            ),
+            RewindResult::Unnecessary => {
+                write!(f, "The request wasn't rewound because it was unnecessary.")
+            }
+            RewindResult::Occurred => write!(f, "The request was rewound successfully."),
+        }
     }
 }
 
@@ -342,21 +443,20 @@ fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
     )
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
-    use crate::type_erasure::TypedBox;
     use aws_smithy_http::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
 
     #[test]
     fn test_success_transitions() {
-        let input = TypedBox::new("input".to_string()).erase();
-        let output = TypedBox::new("output".to_string()).erase();
+        let input = Input::doesnt_matter();
+        let output = Output::erase("output".to_string());
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!("input", context.input().downcast_ref::<String>().unwrap());
+        assert!(context.input().is_some());
         context.input_mut();
 
         context.enter_serialization_phase();
@@ -392,23 +492,13 @@ mod tests {
 
     #[test]
     fn test_rewind_for_retry() {
-        use std::fmt;
-        #[derive(Debug)]
-        struct Error;
-        impl fmt::Display for Error {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("don't care")
-            }
-        }
-        impl std::error::Error for Error {}
-
         let mut cfg = ConfigBag::base();
-        let input = TypedBox::new("input".to_string()).erase();
-        let output = TypedBox::new("output".to_string()).erase();
-        let error = TypedBox::new(Error).erase_error();
+        let input = Input::doesnt_matter();
+        let output = Output::erase("output".to_string());
+        let error = Error::doesnt_matter();
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!("input", context.input().downcast_ref::<String>().unwrap());
+        assert!(context.input().is_some());
 
         context.enter_serialization_phase();
         let _ = context.take_input();
@@ -419,16 +509,17 @@ mod tests {
                 .unwrap(),
         );
         context.enter_before_transmit_phase();
-
+        context.save_checkpoint();
+        assert_eq!(context.rewind(&mut cfg), RewindResult::Unnecessary);
         // Modify the test header post-checkpoint to simulate modifying the request for signing or a mutating interceptor
-        context.request_mut().headers_mut().remove("test");
-        context.request_mut().headers_mut().insert(
+        context.request_mut().unwrap().headers_mut().remove("test");
+        context.request_mut().unwrap().headers_mut().insert(
             "test",
             HeaderValue::from_static("request-modified-after-signing"),
         );
 
         context.enter_transmit_phase();
-        let request = context.take_request();
+        let request = context.take_request().unwrap();
         assert_eq!(
             "request-modified-after-signing",
             request.headers().get("test").unwrap()
@@ -439,12 +530,12 @@ mod tests {
         context.enter_deserialization_phase();
         context.set_output_or_error(Err(OrchestratorError::operation(error)));
 
-        assert!(context.rewind(&mut cfg));
+        assert_eq!(context.rewind(&mut cfg), RewindResult::Occurred);
 
         // Now after rewinding, the test header should be its original value
         assert_eq!(
             "the-original-un-mutated-request",
-            context.request().headers().get("test").unwrap()
+            context.request().unwrap().headers().get("test").unwrap()
         );
 
         context.enter_transmit_phase();

@@ -65,6 +65,7 @@ impl SsoCredentialsProvider {
 
         let mut sso_config = SsoConfig::builder()
             .http_connector(expect_connector(
+                "The SSO credentials provider",
                 provider_config.connector(&Default::default()),
             ))
             .retry_config(RetryConfig::standard());
@@ -217,7 +218,7 @@ async fn load_sso_credentials(
         .region(sso_provider_config.region.clone())
         .credentials_cache(CredentialsCache::no_caching())
         .build();
-    // TODO(enableNewSmithyRuntime): Use `customize().config_override()` to set the region instead of creating a new client once middleware is removed
+    // TODO(enableNewSmithyRuntimeCleanup): Use `customize().config_override()` to set the region instead of creating a new client once middleware is removed
     let client = SsoClient::from_conf(config);
     let resp = client
         .get_role_credentials()

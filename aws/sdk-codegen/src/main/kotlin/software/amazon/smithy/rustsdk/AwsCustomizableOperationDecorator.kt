@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -18,62 +19,85 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
     CustomizableOperationCustomization() {
     private val codegenScope = arrayOf(
         *RuntimeType.preludeScope,
-        "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig)
-            .resolve("user_agent::AwsUserAgent"),
-        "BeforeTransmitInterceptorContextMut" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::interceptors::BeforeTransmitInterceptorContextMut"),
-        "ConfigBag" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("config_bag::ConfigBag"),
-        "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::ConfigBagAccessors"),
+        "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
+        "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
+        "ConfigBag" to RuntimeType.configBag(runtimeConfig),
         "http" to CargoDependency.Http.toType(),
-        "InterceptorContext" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::interceptors::InterceptorContext"),
-        "RequestTime" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::RequestTime"),
-        "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::interceptors::SharedInterceptor"),
-        "TestParamsSetterInterceptor" to CargoDependency.smithyRuntime(runtimeConfig).withFeature("test-util")
-            .toType().resolve("client::test_util::interceptor::TestParamsSetterInterceptor"),
+        "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
+        "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
+        "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
+        "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).toType().resolve("time::SharedTimeSource"),
+        "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::StaticRuntimePlugin"),
+        "StaticTimeSource" to CargoDependency.smithyAsync(runtimeConfig).toType().resolve("time::StaticTimeSource"),
+        "TestParamsSetterInterceptor" to testParamsSetterInterceptor(),
     )
+
+    // TODO(enableNewSmithyRuntimeCleanup): Delete this once test helpers on `CustomizableOperation` have been removed
+    private fun testParamsSetterInterceptor(): RuntimeType = RuntimeType.forInlineFun("TestParamsSetterInterceptor", ClientRustModule.Client.customize) {
+        rustTemplate(
+            """
+            mod test_params_setter_interceptor {
+                use aws_smithy_runtime_api::box_error::BoxError;
+                use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+                use aws_smithy_runtime_api::client::interceptors::Interceptor;
+                use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                use aws_smithy_types::config_bag::ConfigBag;
+                use std::fmt;
+
+                pub(super) struct TestParamsSetterInterceptor<F> { f: F }
+
+                impl<F> fmt::Debug for TestParamsSetterInterceptor<F> {
+                    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                        write!(f, "TestParamsSetterInterceptor")
+                    }
+                }
+
+                impl<F> TestParamsSetterInterceptor<F> {
+                    pub fn new(f: F) -> Self { Self { f } }
+                }
+
+                impl<F> Interceptor for TestParamsSetterInterceptor<F>
+                where
+                    F: Fn(&mut BeforeTransmitInterceptorContextMut<'_>, &mut ConfigBag) + Send + Sync + 'static,
+                {
+                    fn name(&self) -> &'static str {
+                        "TestParamsSetterInterceptor"
+                    }
+
+                    fn modify_before_signing(
+                        &self,
+                        context: &mut BeforeTransmitInterceptorContextMut<'_>,
+                        _runtime_components: &RuntimeComponents,
+                        cfg: &mut ConfigBag,
+                    ) -> Result<(), BoxError> {
+                        (self.f)(context, cfg);
+                        Ok(())
+                    }
+                }
+            }
+            use test_params_setter_interceptor::TestParamsSetterInterceptor;
+            """,
+            *codegenScope,
+        )
+    }
 
     override fun section(section: CustomizableOperationSection): Writable =
         writable {
             if (section is CustomizableOperationSection.CustomizableOperationImpl) {
-                if (section.operationShape == null) {
-                    // TODO(enableNewSmithyRuntime): Delete this branch when middleware is no longer used
-                    // This branch customizes CustomizableOperation in the middleware. section.operationShape being
-                    // null means that this customization is rendered in a place where we don't need to figure out
-                    // the module for an operation (which is the case for CustomizableOperation in the middleware
-                    // that is rendered in the customize module).
+                if (section.isRuntimeModeOrchestrator) {
+                    // TODO(enableNewSmithyRuntimeCleanup): Delete these utilities
                     rustTemplate(
                         """
                         ##[doc(hidden)]
                         // This is a temporary method for testing. NEVER use it in production
-                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            self.operation.properties_mut().insert(request_time);
-                            self
-                        }
-
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn user_agent_for_tests(mut self) -> Self {
-                            self.operation.properties_mut().insert(#{AwsUserAgent}::for_tests());
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    // The else branch is for rendering customization for the orchestrator.
-                    rustTemplate(
-                        """
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            use #{ConfigBagAccessors};
-                            let interceptor = #{TestParamsSetterInterceptor}::new(move |_: &mut #{BeforeTransmitInterceptorContextMut}<'_>, cfg: &mut #{ConfigBag}| {
-                                cfg.set_request_time(#{RequestTime}::new(request_time));
-                            });
-                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
-                            self
+                        pub fn request_time_for_tests(self, request_time: ::std::time::SystemTime) -> Self {
+                            self.runtime_plugin(
+                                #{StaticRuntimePlugin}::new()
+                                    .with_runtime_components(
+                                        #{RuntimeComponentsBuilder}::new("request_time_for_tests")
+                                            .with_time_source(Some(#{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))))
+                                    )
+                            )
                         }
 
                         ##[doc(hidden)]
@@ -92,6 +116,44 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                                 );
                             });
                             self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                            self
+                        }
+
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn remove_invocation_id_for_tests(mut self) -> Self {
+                            let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{BeforeTransmitInterceptorContextMut}<'_>, _: &mut #{ConfigBag}| {
+                                context.request_mut().headers_mut().remove("amz-sdk-invocation-id");
+                            });
+                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    // TODO(enableNewSmithyRuntimeCleanup): Delete this branch when middleware is no longer used
+                    rustTemplate(
+                        """
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
+                            self.operation.properties_mut().insert(
+                                #{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))
+                            );
+                            self
+                        }
+
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn user_agent_for_tests(mut self) -> Self {
+                            self.operation.properties_mut().insert(#{AwsUserAgent}::for_tests());
+                            self
+                        }
+
+                        ##[doc(hidden)]
+                        // This is a temporary method for testing. NEVER use it in production
+                        pub fn remove_invocation_id_for_tests(self) -> Self {
                             self
                         }
                         """,

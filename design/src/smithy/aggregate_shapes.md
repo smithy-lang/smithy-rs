@@ -28,7 +28,7 @@ Smithy `structure` becomes a `struct` in Rust. Backwards compatibility & usabili
   2. All structs are marked `#[non_exhaustive]`
   3. All structs derive `Debug` & `PartialEq`. Structs **do not** derive `Eq` because a `float` member may be added in the future.
   4. Struct fields are public. Public struct fields allow for [split borrows](https://doc.rust-lang.org/nomicon/borrow-splitting.html). When working with output objects this significantly improves ergonomics, especially with optional fields.
-      ```rust
+      ```rust,ignore
       let out = dynamo::ListTablesOutput::new();
       out.some_field.unwrap(); // <- partial move, impossible with an accessor
       ```
@@ -52,7 +52,7 @@ long ReadIOs
 long WriteIOs
 ```
 **Rust Output**:
-```rust
+```rust,ignore
 /// <p>Contains I/O usage metrics for a command that was invoked.</p>
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq)]
@@ -151,7 +151,7 @@ list BoolList {
 }
 ```
 **Rust**:
-```rust
+```rust,ignore
 #[non_exhaustive]
 #[derive(std::clone::Clone, std::cmp::PartialEq, std::fmt::Debug)]
 pub enum AttributeValue {

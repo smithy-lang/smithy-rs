@@ -10,8 +10,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -20,13 +20,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.InlineAwsDependency
 
@@ -46,42 +44,21 @@ class GlacierDecorator : ClientCodegenDecorator {
     override val name: String = "Glacier"
     override val order: Byte = 0
 
-    // TODO(enableNewSmithyRuntime): Delete the operation customizations when cleaning up middleware
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateMiddleware) {
-        it + listOfNotNull(
-            ApiVersionHeader(codegenContext.serviceShape.version),
-            TreeHashHeader.forOperation(operation, codegenContext.runtimeConfig),
-            AccountIdAutofill.forOperation(operation, codegenContext.model),
-        )
-    }
+    ): List<OperationCustomization> = baseCustomizations + GlacierOperationInterceptorsCustomization(codegenContext)
 
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> = baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-        it + listOf(GlacierAccountIdCustomization(codegenContext))
-    }
+    ): List<StructureCustomization> = baseCustomizations + GlacierAccountIdCustomization(codegenContext)
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(GlacierApiVersionCustomization(codegenContext))
-        }
-
-    override fun operationRuntimePluginCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(GlacierOperationInterceptorsCustomization(codegenContext))
-        }
+    ): List<ServiceRuntimePluginCustomization> = baseCustomizations + GlacierApiVersionCustomization(codegenContext)
 }
 
 /** Implements the `GlacierAccountId` trait for inputs that have an `account_id` field */
@@ -108,7 +85,7 @@ private class GlacierAccountIdCustomization(private val codegenContext: ClientCo
 private class GlacierApiVersionCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             val apiVersion = codegenContext.serviceShape.version
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rustTemplate(
@@ -127,9 +104,9 @@ private class GlacierApiVersionCustomization(private val codegenContext: ClientC
  *    the `aws-sigv4` module to recalculate the payload hash.
  */
 private class GlacierOperationInterceptorsCustomization(private val codegenContext: ClientCodegenContext) :
-    OperationRuntimePluginCustomization() {
-    override fun section(section: OperationRuntimePluginSection): Writable = writable {
-        if (section is OperationRuntimePluginSection.AdditionalConfig) {
+    OperationCustomization() {
+    override fun section(section: OperationSection): Writable = writable {
+        if (section is OperationSection.AdditionalInterceptors) {
             val inputShape = codegenContext.model.expectShape(section.operationShape.inputShape) as StructureShape
             val inlineModule = inlineModule(codegenContext.runtimeConfig)
             if (inputShape.inputWithAccountId()) {

@@ -11,23 +11,24 @@ import software.amazon.smithy.model.knowledge.OperationIndex
 import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
@@ -88,9 +89,14 @@ sealed class ServiceConfig(name: String) : Section(name) {
     object BuilderBuild : ServiceConfig("BuilderBuild")
 
     /**
-     * A section for setting up a field to be used by RuntimePlugin
+     * A section for customizing individual fields in the initializer of Config
      */
-    object ToRuntimePlugin : ServiceConfig("ToRuntimePlugin")
+    object BuilderBuildExtras : ServiceConfig("BuilderBuildExtras")
+
+    /**
+     * A section for setting up a field to be used by ConfigOverrideRuntimePlugin
+     */
+    data class OperationConfigOverride(val cfg: String) : ServiceConfig("ToRuntimePlugin")
 
     /**
      * A section for extra functionality that needs to be defined with the config module
@@ -103,7 +109,78 @@ sealed class ServiceConfig(name: String) : Section(name) {
     data class DefaultForTests(val configBuilderRef: String) : ServiceConfig("DefaultForTests")
 }
 
-data class ConfigParam(val name: String, val type: Symbol, val setterDocs: Writable?, val getterDocs: Writable? = null)
+data class ConfigParam(
+    val name: String,
+    val type: Symbol,
+    val newtype: RuntimeType?,
+    val setterDocs: Writable?,
+    val getterDocs: Writable? = null,
+    val optional: Boolean = true,
+) {
+
+    data class Builder(
+        var name: String? = null,
+        var type: Symbol? = null,
+        var newtype: RuntimeType? = null,
+        var setterDocs: Writable? = null,
+        var getterDocs: Writable? = null,
+        var optional: Boolean = true,
+    ) {
+        fun name(name: String) = apply { this.name = name }
+        fun type(type: Symbol) = apply { this.type = type }
+        fun newtype(newtype: RuntimeType) = apply { this.newtype = newtype }
+        fun setterDocs(setterDocs: Writable?) = apply { this.setterDocs = setterDocs }
+        fun getterDocs(getterDocs: Writable?) = apply { this.getterDocs = getterDocs }
+        fun optional(optional: Boolean) = apply { this.optional = optional }
+        fun build() = ConfigParam(name!!, type!!, newtype, setterDocs, getterDocs, optional)
+    }
+}
+
+/**
+ * Generate a [RuntimeType] for a newtype whose name is [newtypeName] that wraps [inner].
+ *
+ * When config parameters are stored in a config map in Rust, stored parameters are keyed by type.
+ * Therefore, primitive types, such as bool and String, need to be wrapped in newtypes to make them distinct.
+ */
+fun configParamNewtype(newtypeName: String, inner: Symbol, runtimeConfig: RuntimeConfig) =
+    RuntimeType.forInlineFun(newtypeName, ClientRustModule.config) {
+        val codegenScope = arrayOf(
+            "Storable" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Storable"),
+            "StoreReplace" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::StoreReplace"),
+        )
+        rustTemplate(
+            """
+            ##[derive(Debug, Clone)]
+            pub(crate) struct $newtypeName(pub(crate) $inner);
+            impl #{Storable} for $newtypeName {
+                type Storer = #{StoreReplace}<Self>;
+            }
+            """,
+            *codegenScope,
+        )
+    }
+
+/**
+ * Render an expression that loads a value from a config bag.
+ *
+ * The expression to be rendered handles a case where a newtype is stored in the config bag, but the user expects
+ * the underlying raw type after the newtype has been loaded from the bag.
+ */
+fun loadFromConfigBag(innerTypeName: String, newtype: RuntimeType): Writable = writable {
+    rustTemplate(
+        """
+        load::<#{newtype}>().map(#{f})
+        """,
+        "newtype" to newtype,
+        "f" to writable {
+            if (innerTypeName == "bool") {
+                rust("|ty| ty.0")
+            } else {
+                rust("|ty| ty.0.clone()")
+            }
+        },
+    )
+}
 
 /**
  * Config customization for a config param with no special behavior:
@@ -111,47 +188,32 @@ data class ConfigParam(val name: String, val type: Symbol, val setterDocs: Writa
  * 2. convenience setter (non-optional)
  * 3. standard setter (&mut self)
  */
-fun standardConfigParam(param: ConfigParam): ConfigCustomization = object : ConfigCustomization() {
+fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext): ConfigCustomization = object : ConfigCustomization() {
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
-            is ServiceConfig.ConfigStruct -> writable {
-                docsOrFallback(param.getterDocs)
-                rust("pub (crate) ${param.name}: #T,", param.type.makeOptional())
-            }
-
-            ServiceConfig.ConfigImpl -> emptySection
-            ServiceConfig.BuilderStruct -> writable {
-                rust("${param.name}: #T,", param.type.makeOptional())
-            }
-
             ServiceConfig.BuilderImpl -> writable {
                 docsOrFallback(param.setterDocs)
                 rust(
                     """
                     pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
-                        self.${param.name} = Some(${param.name}.into());
+                        self.set_${param.name}(Some(${param.name}.into()));
                         self
-                        }""",
+                    }""",
                     param.type,
                 )
 
                 docsOrFallback(param.setterDocs)
-                rust(
+                rustTemplate(
                     """
-                    pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
-                        self.${param.name} = ${param.name};
+                    pub fn set_${param.name}(&mut self, ${param.name}: Option<#{T}>) -> &mut Self {
+                        self.config.store_or_unset(${param.name}.map(#{newtype}));
                         self
                     }
                     """,
-                    param.type,
+                    "T" to param.type,
+                    "newtype" to param.newtype!!,
                 )
             }
-
-            ServiceConfig.BuilderBuild -> writable {
-                rust("${param.name}: self.${param.name},")
-            }
-
-            ServiceConfig.ToRuntimePlugin -> emptySection
 
             else -> emptySection
         }
@@ -184,42 +246,65 @@ typealias ConfigCustomization = NamedCustomization<ServiceConfig>
  *    // builder implementation
  * }
  */
-class ServiceConfigGenerator(private val customizations: List<ConfigCustomization> = listOf()) {
 
+class ServiceConfigGenerator(
+    codegenContext: ClientCodegenContext,
+    private val customizations: List<ConfigCustomization> = listOf(),
+) {
     companion object {
         fun withBaseBehavior(
-            codegenContext: CodegenContext,
+            codegenContext: ClientCodegenContext,
             extraCustomizations: List<ConfigCustomization>,
         ): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
             if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
-                baseFeatures.add(IdempotencyTokenProviderCustomization())
+                baseFeatures.add(IdempotencyTokenProviderCustomization(codegenContext))
             }
-            return ServiceConfigGenerator(baseFeatures + extraCustomizations)
+            return ServiceConfigGenerator(codegenContext, baseFeatures + extraCustomizations)
         }
     }
 
+    private val moduleUseName = codegenContext.moduleUseName()
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val enableUserConfigurableRuntimePlugins = codegenContext.enableUserConfigurableRuntimePlugins
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
+    val codegenScope = arrayOf(
+        *preludeScope,
+        "BoxError" to RuntimeType.boxError(runtimeConfig),
+        "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
+        "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
+        "Cow" to RuntimeType.Cow,
+        "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+        "Layer" to smithyTypes.resolve("config_bag::Layer"),
+        "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
+        "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
+        "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+        "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
+        "runtime_plugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin"),
+    )
+
     fun render(writer: RustWriter) {
-        writer.docs("Service config.\n")
+        writer.docs("Configuration for a $moduleUseName service client.\n")
         customizations.forEach {
             it.section(ServiceConfig.ConfigStructAdditionalDocs)(writer)
         }
+        Attribute(Attribute.derive(RuntimeType.Clone, RuntimeType.Debug)).render(writer)
         writer.rustBlock("pub struct Config") {
+            rustTemplate(
+                """
+                // Both `config` and `cloneable` are the same config, but the cloneable one
+                // is kept around so that it is possible to convert back into a builder. This can be
+                // optimized in the future.
+                pub(crate) config: #{FrozenLayer},
+                cloneable: #{CloneableLayer},
+                pub(crate) runtime_components: #{RuntimeComponentsBuilder},
+                pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
+                """,
+                *codegenScope,
+            )
             customizations.forEach {
                 it.section(ServiceConfig.ConfigStruct)(this)
             }
-        }
-
-        // Custom implementation for Debug so we don't need to enforce Debug down the chain
-        writer.rustBlock("impl std::fmt::Debug for Config") {
-            writer.rustTemplate(
-                """
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    let mut config = f.debug_struct("Config");
-                    config.finish()
-                }
-                """,
-            )
         }
 
         writer.rustBlock("impl Config") {
@@ -229,37 +314,86 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
                 pub fn builder() -> Builder { Builder::default() }
                 """,
             )
+            writer.rustTemplate(
+                """
+                /// Converts this config back into a builder so that it can be tweaked.
+                pub fn to_builder(&self) -> Builder {
+                    Builder {
+                        config: self.cloneable.clone(),
+                        runtime_components: self.runtime_components.clone(),
+                        runtime_plugins: self.runtime_plugins.clone(),
+                    }
+                }
+                """,
+            )
             customizations.forEach {
                 it.section(ServiceConfig.ConfigImpl)(this)
             }
         }
 
         writer.docs("Builder for creating a `Config`.")
-        writer.raw("#[derive(Clone, Default)]")
+        Attribute(Attribute.derive(RuntimeType.Clone, RuntimeType.Debug)).render(writer)
         writer.rustBlock("pub struct Builder") {
+            rustTemplate(
+                """
+                pub(crate) config: #{CloneableLayer},
+                pub(crate) runtime_components: #{RuntimeComponentsBuilder},
+                pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
+                """,
+                *codegenScope,
+            )
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
             }
         }
 
-        // Custom implementation for Debug so we don't need to enforce Debug down the chain
-        writer.rustBlock("impl std::fmt::Debug for Builder") {
+        // Custom implementation of Default to give the runtime components builder a name
+        writer.rustBlockTemplate("impl #{Default} for Builder", *codegenScope) {
             writer.rustTemplate(
                 """
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    let mut config = f.debug_struct("Builder");
-                    config.finish()
+                fn default() -> Self {
+                    Self {
+                        config: #{Default}::default(),
+                        runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
+                        runtime_plugins: #{Default}::default(),
+                    }
                 }
                 """,
+                *codegenScope,
             )
         }
 
         writer.rustBlock("impl Builder") {
             writer.docs("Constructs a config builder.")
-            writer.rustTemplate("pub fn new() -> Self { Self::default() }")
+            writer.rust("pub fn new() -> Self { Self::default() }")
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
+
+            val visibility = if (enableUserConfigurableRuntimePlugins) { "pub" } else { "pub(crate)" }
+
+            docs("Adds a runtime plugin to the config.")
+            if (!enableUserConfigurableRuntimePlugins) { Attribute.AllowUnused.render(this) }
+            rustTemplate(
+                """
+                $visibility fn runtime_plugin(mut self, plugin: impl #{RuntimePlugin} + 'static) -> Self {
+                    self.push_runtime_plugin(#{SharedRuntimePlugin}::new(plugin));
+                    self
+                }
+                """,
+                *codegenScope,
+            )
+            docs("Adds a runtime plugin to the config.")
+            if (!enableUserConfigurableRuntimePlugins) { Attribute.AllowUnused.render(this) }
+            rustTemplate(
+                """
+                $visibility fn push_runtime_plugin(&mut self, plugin: #{SharedRuntimePlugin}) -> &mut Self {
+                    self.runtime_plugins.push(plugin);
+                    self
+                }
+                """,
+                *codegenScope,
+            )
 
             val testUtilOnly =
                 Attribute(Attribute.cfg(Attribute.any(Attribute.feature(TestUtilFeature.name), writable("test"))))
@@ -280,40 +414,36 @@ class ServiceConfigGenerator(private val customizations: List<ConfigCustomizatio
             }
 
             docs("Builds a [`Config`].")
-            rustBlock("pub fn build(self) -> Config") {
+            rust("##[allow(unused_mut)]")
+            rustBlock("pub fn build(mut self) -> Config") {
+                rustTemplate(
+                    """
+                    let mut layer = self.config;
+                    let mut resolver = #{Resolver}::initial(&mut layer, &mut self.runtime_components);
+                    """,
+                    *codegenScope,
+                )
+                customizations.forEach {
+                    it.section(ServiceConfig.BuilderBuild)(this)
+                }
                 rustBlock("Config") {
                     customizations.forEach {
-                        it.section(ServiceConfig.BuilderBuild)(this)
+                        it.section(ServiceConfig.BuilderBuildExtras)(this)
                     }
+                    rustTemplate(
+                        """
+                        config: #{Layer}::from(layer.clone()).with_name("$moduleUseName::config::Config").freeze(),
+                        cloneable: layer,
+                        runtime_components: self.runtime_components,
+                        runtime_plugins: self.runtime_plugins,
+                        """,
+                        *codegenScope,
+                    )
                 }
             }
-        }
-        customizations.forEach {
-            it.section(ServiceConfig.Extras)(writer)
-        }
-    }
 
-    fun renderRuntimePluginImplForBuilder(writer: RustWriter, codegenContext: CodegenContext) {
-        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-        writer.rustBlockTemplate(
-            "impl #{RuntimePlugin} for Builder",
-            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-        ) {
-            rustBlockTemplate(
-                """
-                fn configure(&self, _cfg: &mut #{ConfigBag}, interceptors: &mut #{InterceptorRegistrar}) -> Result<(), #{BoxError}>
-                """,
-                "BoxError" to runtimeApi.resolve("client::runtime_plugin::BoxError"),
-                "ConfigBag" to runtimeApi.resolve("config_bag::ConfigBag"),
-                "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
-            ) {
-                rust("// TODO(enableNewSmithyRuntime): Put into `cfg` the fields in `self.config_override` that are not `None`")
-
-                customizations.forEach {
-                    it.section(ServiceConfig.ToRuntimePlugin)(writer)
-                }
-
-                rust("Ok(())")
+            customizations.forEach {
+                it.section(ServiceConfig.Extras)(writer)
             }
         }
     }

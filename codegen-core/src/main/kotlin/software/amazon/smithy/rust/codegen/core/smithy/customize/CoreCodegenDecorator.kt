@@ -23,7 +23,7 @@ import java.util.logging.Logger
 /**
  * Represents the bare minimum for codegen plugin customization.
  */
-interface CoreCodegenDecorator<CodegenContext> {
+interface CoreCodegenDecorator<CodegenContext, CodegenSettings> {
     /**
      * The name of this decorator, used for logging and debug information
      */
@@ -43,7 +43,7 @@ interface CoreCodegenDecorator<CodegenContext> {
     /**
      * Hook to transform the Smithy model before codegen takes place.
      */
-    fun transformModel(service: ServiceShape, model: Model): Model = model
+    fun transformModel(service: ServiceShape, model: Model, settings: CodegenSettings): Model = model
 
     /**
      * Hook to add additional modules to the generated crate.
@@ -114,9 +114,9 @@ interface CoreCodegenDecorator<CodegenContext> {
 /**
  * Implementations for combining decorators for the core customizations.
  */
-abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCodegenDecorator<CodegenContext>>(
+abstract class CombinedCoreCodegenDecorator<CodegenContext, CodegenSettings, Decorator : CoreCodegenDecorator<CodegenContext, CodegenSettings>>(
     decorators: List<Decorator>,
-) : CoreCodegenDecorator<CodegenContext> {
+) : CoreCodegenDecorator<CodegenContext, CodegenSettings> {
     private val orderedDecorators = decorators.sortedBy { it.order }
 
     final override fun crateManifestCustomizations(codegenContext: CodegenContext): ManifestCustomizations =
@@ -128,9 +128,9 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
         return orderedDecorators.forEach { it.extras(codegenContext, rustCrate) }
     }
 
-    final override fun transformModel(service: ServiceShape, model: Model): Model =
+    final override fun transformModel(service: ServiceShape, model: Model, settings: CodegenSettings): Model =
         combineCustomizations(model) { decorator, otherModel ->
-            decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel)
+            decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel, settings)
         }
 
     final override fun moduleDocumentationCustomization(
@@ -209,7 +209,7 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, Decorator : CoreCode
          * method on `CoreCodegenDecorator`.
          */
         @JvmStatic
-        protected fun <CodegenContext, Decorator : CoreCodegenDecorator<CodegenContext>> decoratorsFromClasspath(
+        protected fun <CodegenContext, CodegenSettings, Decorator : CoreCodegenDecorator<CodegenContext, CodegenSettings>> decoratorsFromClasspath(
             context: PluginContext,
             decoratorClass: Class<Decorator>,
             logger: Logger,

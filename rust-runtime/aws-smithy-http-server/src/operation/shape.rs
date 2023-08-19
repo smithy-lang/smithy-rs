@@ -3,14 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{Handler, IntoService, Normalize, Operation, OperationService};
+use std::marker::PhantomData;
+
+use super::{Handler, IntoService, Normalize, OperationService};
+use crate::shape_id::ShapeId;
 
 /// Models the [Smithy Operation shape].
 ///
 /// [Smithy Operation shape]: https://awslabs.github.io/smithy/1.0/spec/core/model.html#operation
 pub trait OperationShape {
-    /// The name of the operation.
-    const NAME: &'static str;
+    /// The ID of the operation.
+    const ID: ShapeId;
 
     /// The operation input.
     type Input;
@@ -23,22 +26,29 @@ pub trait OperationShape {
 
 /// An extension trait over [`OperationShape`].
 pub trait OperationShapeExt: OperationShape {
-    /// Creates a new [`Operation`] for well-formed [`Handler`]s.
-    fn from_handler<H, Exts>(handler: H) -> Operation<IntoService<Self, H>>
+    /// Creates a new [`Service`](tower::Service), [`IntoService`], for well-formed [`Handler`]s.
+    fn from_handler<H, Exts>(handler: H) -> IntoService<Self, H>
     where
         H: Handler<Self, Exts>,
         Self: Sized,
     {
-        Operation::from_handler(handler)
+        IntoService {
+            handler,
+            _operation: PhantomData,
+        }
     }
 
-    /// Creates a new [`Operation`] for well-formed [`Service`](tower::Service)s.
-    fn from_service<S, Exts, PollError>(svc: S) -> Operation<Normalize<Self, S, PollError>>
+    /// Creates a new normalized [`Service`](tower::Service), [`Normalize`], for well-formed
+    /// [`Service`](tower::Service)s.
+    fn from_service<S, Exts>(svc: S) -> Normalize<Self, S>
     where
-        S: OperationService<Self, Exts, PollError>,
+        S: OperationService<Self, Exts>,
         Self: Sized,
     {
-        Operation::from_service(svc)
+        Normalize {
+            inner: svc,
+            _operation: PhantomData,
+        }
     }
 }
 

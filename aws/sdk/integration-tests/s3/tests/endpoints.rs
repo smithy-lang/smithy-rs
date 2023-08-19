@@ -73,7 +73,11 @@ async fn multi_region_access_points() {
         .await;
     let error = response.expect_err("should fail—sigv4a is not supported");
     assert!(
-        dbg!(format!("{:?}", error)).contains("No auth schemes were supported"),
+        dbg!(format!(
+            "{}",
+            aws_smithy_types::error::display::DisplayErrorContext(&error)
+        ))
+        .contains("selected auth scheme / endpoint config mismatch"),
         "message should contain the correct error, found: {:?}",
         error
     );

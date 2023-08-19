@@ -58,12 +58,12 @@ where
 ///
 /// [API Gateway Stage]: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-stages.html
 fn convert_event(request: Request) -> HyperRequest {
-    let raw_path = request.raw_http_path();
-    let (mut parts, body) = request.into_parts();
-    let mut path = String::from(parts.uri.path());
+    let raw_path: &str = request.extensions().raw_http_path();
+    let path: &str = request.uri().path();
 
-    if !raw_path.is_empty() && raw_path != path {
-        path = raw_path;
+    let (parts, body) = if !raw_path.is_empty() && raw_path != path {
+        let mut path = raw_path.to_owned(); // Clone only when we need to strip out the stage.
+        let (mut parts, body) = request.into_parts();
 
         let uri_parts: uri::Parts = parts.uri.into();
         let path_and_query = uri_parts
@@ -81,7 +81,11 @@ fn convert_event(request: Request) -> HyperRequest {
             .path_and_query(path)
             .build()
             .expect("unable to construct new URI");
-    }
+
+        (parts, body)
+    } else {
+        request.into_parts()
+    };
 
     let body = match body {
         lambda_http::Body::Empty => hyper::Body::empty(),

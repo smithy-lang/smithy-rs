@@ -9,22 +9,32 @@ import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import java.util.ServiceLoader
 import java.util.logging.Logger
 
-typealias ClientProtocolMap = ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>
+typealias ClientProtocolMap = ProtocolMap<OperationGenerator, ClientCodegenContext>
+
+sealed interface AuthSchemeOption {
+    /** Auth scheme for the `StaticAuthSchemeOptionResolver` */
+    data class StaticAuthSchemeOption(
+        val schemeShapeId: ShapeId,
+        val constructor: Writable,
+    ) : AuthSchemeOption
+
+    class CustomResolver(/* unimplemented */) : AuthSchemeOption
+}
 
 /**
  * [ClientCodegenDecorator] allows downstream users to customize code generation.
@@ -33,7 +43,13 @@ typealias ClientProtocolMap = ProtocolMap<ClientProtocolGenerator, ClientCodegen
  * AWS services. A different downstream customer may wish to add a different set of derive
  * attributes to the generated classes.
  */
-interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
+interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext, ClientRustSettings> {
+    fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> = baseAuthSchemeOptions
+
     fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
@@ -71,15 +87,6 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations
 
     /**
-     * Hooks to register additional operation-level runtime plugins at codegen time
-     */
-    fun operationRuntimePluginCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> = baseCustomizations
-
-    /**
      * Hook to override the protocol test generator
      */
     fun protocolTestGenerator(
@@ -94,11 +101,19 @@ interface ClientCodegenDecorator : CoreCodegenDecorator<ClientCodegenContext> {
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
 open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorator>) :
-    CombinedCoreCodegenDecorator<ClientCodegenContext, ClientCodegenDecorator>(decorators), ClientCodegenDecorator {
+    CombinedCoreCodegenDecorator<ClientCodegenContext, ClientRustSettings, ClientCodegenDecorator>(decorators), ClientCodegenDecorator {
     override val name: String
         get() = "CombinedClientCodegenDecorator"
     override val order: Byte
         get() = 0
+
+    override fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> = combineCustomizations(baseAuthSchemeOptions) { decorator, authOptions ->
+        decorator.authOptions(codegenContext, operationShape, authOptions)
+    }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -141,15 +156,6 @@ open class CombinedClientCodegenDecorator(decorators: List<ClientCodegenDecorato
     ): List<ServiceRuntimePluginCustomization> =
         combineCustomizations(baseCustomizations) { decorator, customizations ->
             decorator.serviceRuntimePluginCustomizations(codegenContext, customizations)
-        }
-
-    override fun operationRuntimePluginCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
-        combineCustomizations(baseCustomizations) { decorator, customizations ->
-            decorator.operationRuntimePluginCustomizations(codegenContext, operation, customizations)
         }
 
     override fun protocolTestGenerator(

@@ -32,7 +32,7 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.67.1
+        toolchain: 1.69.0
     - name: Delete old SDK
       run: |
     - name: Generate a fresh SDK
@@ -47,7 +47,7 @@ jobs:
         git checkout origin/main -b next
 
         # Delete the old SDK
-        rm -rf sdk examples
+        rm -rf sdk examples tests
         rm -f versions.toml Cargo.toml index.md
 
         # Copy in the new SDK

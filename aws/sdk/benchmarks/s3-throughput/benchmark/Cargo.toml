@@ -1,0 +1,21 @@
+[package]
+name = "benchmark"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
+description = "S3 benchmark"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/awslabs/smithy-rs"
+publish = false
+
+[dependencies]
+aws-config = "0.55.3"
+aws-sdk-s3 = "0.28.0"
+aws-smithy-http = "0.55.3"
+aws-smithy-client= { version = "0.55.3", features = ["client-hyper"] }
+clap = { version = "4.3.2", default-features = false, features = ["derive", "std", "help"] }
+tokio = { version = "1.28.2", features = ["full"] }
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+tracing = "0.1"
+async-trait = "0.1.68"
+hyper = { version = "0.14.27", features = ["client"] }

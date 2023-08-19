@@ -81,7 +81,7 @@ class PythonServerCodegenVisitor(
                 .protocolFor(context.model, service)
         protocolGeneratorFactory = generator
 
-        model = codegenDecorator.transformModel(service, baseModel)
+        model = codegenDecorator.transformModel(service, baseModel, settings)
 
         // `publicConstrainedTypes` must always be `false` for the Python server, since Python generates its own
         // wrapper newtypes.

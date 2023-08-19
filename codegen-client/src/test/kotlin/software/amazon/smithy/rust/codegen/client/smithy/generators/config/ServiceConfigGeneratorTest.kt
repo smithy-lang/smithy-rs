@@ -7,18 +7,24 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.shapes.ServiceShape
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
+import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.withEnableUserConfigurableRuntimePlugins
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 internal class ServiceConfigGeneratorTest {
     @Test
@@ -76,43 +82,88 @@ internal class ServiceConfigGeneratorTest {
         model.lookup<ServiceShape>("com.example#ResourceService").needsIdempotencyToken(model) shouldBe true
     }
 
-    @Test
-    fun `generate customizations as specified`() {
-        class ServiceCustomizer : NamedCustomization<ServiceConfig>() {
+    @ParameterizedTest
+    @ValueSource(strings = ["middleware", "orchestrator"])
+    fun `generate customizations as specified`(smithyRuntimeModeStr: String) {
+        class ServiceCustomizer(private val codegenContext: ClientCodegenContext) :
+            NamedCustomization<ServiceConfig>() {
+
             override fun section(section: ServiceConfig): Writable {
                 return when (section) {
                     ServiceConfig.ConfigStructAdditionalDocs -> emptySection
-                    ServiceConfig.ConfigStruct -> writable { rust("config_field: u64,") }
+
                     ServiceConfig.ConfigImpl -> writable {
-                        rust(
+                        rustTemplate(
                             """
+                            ##[allow(missing_docs)]
                             pub fn config_field(&self) -> u64 {
-                                self.config_field
+                                self.config.load::<#{T}>().map(|u| u.0).unwrap()
                             }
                             """,
+                            "T" to configParamNewtype(
+                                "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
+                                codegenContext.runtimeConfig,
+                            ),
                         )
                     }
-                    ServiceConfig.BuilderStruct -> writable { rust("config_field: Option<u64>") }
-                    ServiceConfig.BuilderImpl -> emptySection
-                    ServiceConfig.BuilderBuild -> writable {
-                        rust("config_field: self.config_field.unwrap_or_default(),")
+
+                    ServiceConfig.BuilderImpl -> writable {
+                        rustTemplate(
+                            """
+                            ##[allow(missing_docs)]
+                            pub fn config_field(mut self, config_field: u64) -> Self {
+                                self.config.store_put(#{T}(config_field));
+                                self
+                            }
+                            """,
+                            "T" to configParamNewtype(
+                                "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
+                                codegenContext.runtimeConfig,
+                            ),
+                        )
                     }
+
                     else -> emptySection
                 }
             }
         }
-        val sut = ServiceConfigGenerator(listOf(ServiceCustomizer()))
-        val symbolProvider = testSymbolProvider("namespace empty".asSmithyModel())
+
+        val model = "namespace empty".asSmithyModel()
+        val codegenContext = testClientCodegenContext(model)
+            .withEnableUserConfigurableRuntimePlugins(true)
+        val sut = ServiceConfigGenerator(codegenContext, listOf(ServiceCustomizer(codegenContext)))
+        val symbolProvider = codegenContext.symbolProvider
         val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(ClientRustModule.Config) {
+        project.withModule(ClientRustModule.config) {
             sut.render(this)
             unitTest(
                 "set_config_fields",
                 """
-                let mut builder = Config::builder();
-                builder.config_field = Some(99);
+                let builder = Config::builder().config_field(99);
                 let config = builder.build();
-                assert_eq!(config.config_field, 99);
+                assert_eq!(config.config_field(), 99);
+                """,
+            )
+
+            unitTest(
+                "set_runtime_plugin",
+                """
+                use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+                use aws_smithy_types::config_bag::FrozenLayer;
+
+                #[derive(Debug)]
+                struct TestRuntimePlugin;
+
+                impl RuntimePlugin for TestRuntimePlugin {
+                    fn config(&self) -> Option<FrozenLayer> {
+                        todo!("ExampleRuntimePlugin.config")
+                    }
+                }
+
+                let config = Config::builder()
+                    .runtime_plugin(TestRuntimePlugin)
+                    .build();
+                assert_eq!(config.runtime_plugins.len(), 1);
                 """,
             )
         }

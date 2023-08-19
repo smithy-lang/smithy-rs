@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RecursionDetectionDecorator : ClientCodegenDecorator {
     override val name: String get() = "RecursionDetectionDecorator"
@@ -22,16 +21,14 @@ class RecursionDetectionDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(RecursionDetectionRuntimePluginCustomization(codegenContext))
-        }
+        baseCustomizations + RecursionDetectionRuntimePluginCustomization(codegenContext)
 }
 
 private class RecursionDetectionRuntimePluginCustomization(
     private val codegenContext: ClientCodegenContext,
 ) : ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rust(
                     "#T::new()",

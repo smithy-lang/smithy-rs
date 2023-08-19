@@ -26,10 +26,8 @@ async fn assume_role_signed() {
 
 #[tokio::test]
 async fn web_identity_unsigned() {
-    let creds = Credentials::for_tests();
     let (server, request) = capture_request(None);
     let conf = aws_sdk_sts::Config::builder()
-        .credentials_provider(creds)
         .region(Region::new("us-east-1"))
         .http_connector(server)
         .build();

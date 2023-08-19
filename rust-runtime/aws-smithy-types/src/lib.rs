@@ -14,12 +14,17 @@
     unreachable_pub
 )]
 pub mod base64;
+/// A typemap for storing configuration.
+pub mod config_bag;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
+
+/// Utilities for type erasure.
+pub mod type_erasure;
 
 mod blob;
 mod document;

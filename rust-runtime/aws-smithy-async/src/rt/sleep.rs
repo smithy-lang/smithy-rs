@@ -39,13 +39,42 @@ where
     }
 }
 
+/// Wrapper type for sharable `AsyncSleep`
+#[derive(Clone, Debug)]
+pub struct SharedAsyncSleep(Arc<dyn AsyncSleep>);
+
+impl SharedAsyncSleep {
+    /// Create a new `SharedAsyncSleep` from `AsyncSleep`
+    pub fn new(sleep: impl AsyncSleep + 'static) -> Self {
+        Self(Arc::new(sleep))
+    }
+}
+
+impl AsRef<dyn AsyncSleep> for SharedAsyncSleep {
+    fn as_ref(&self) -> &(dyn AsyncSleep + 'static) {
+        self.0.as_ref()
+    }
+}
+
+impl From<Arc<dyn AsyncSleep>> for SharedAsyncSleep {
+    fn from(sleep: Arc<dyn AsyncSleep>) -> Self {
+        SharedAsyncSleep(sleep)
+    }
+}
+
+impl AsyncSleep for SharedAsyncSleep {
+    fn sleep(&self, duration: Duration) -> Sleep {
+        self.0.sleep(duration)
+    }
+}
+
 #[cfg(all(
     feature = "rt-tokio",
     not(all(target_family = "wasm", target_os = "wasi"))
 ))]
 /// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
-    Some(sleep_tokio())
+pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
+    Some(SharedAsyncSleep::from(sleep_tokio()))
 }
 
 #[cfg(all(target_family = "wasm", target_os = "wasi"))]
@@ -56,7 +85,7 @@ pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
 
 #[cfg(not(any(all(target_family = "wasm", target_os = "wasi"), feature = "rt-tokio")))]
 /// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
+pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
     None
 }
 

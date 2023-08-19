@@ -12,8 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RetryInformationHeaderDecorator : ClientCodegenDecorator {
     override val name: String = "RetryInformationHeader"
@@ -23,27 +21,22 @@ class RetryInformationHeaderDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AddRetryInformationHeaderInterceptors(codegenContext))
-        }
+        baseCustomizations + listOf(AddRetryInformationHeaderInterceptors(codegenContext))
 }
 
 private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val smithyRuntime = RuntimeType.smithyRuntime(runtimeConfig)
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             // Track the latency between client and server.
             section.registerInterceptor(runtimeConfig, this) {
-                rust("#T::new()", smithyRuntime.resolve("client::orchestrator::interceptors::ServiceClockSkewInterceptor"))
-            }
-
-            // Track the number of request attempts made.
-            section.registerInterceptor(runtimeConfig, this) {
-                rust("#T::new()", smithyRuntime.resolve("client::orchestrator::interceptors::RequestAttemptsInterceptor"))
+                rust(
+                    "#T::new()",
+                    awsRuntime.resolve("service_clock_skew::ServiceClockSkewInterceptor"),
+                )
             }
 
             // Add request metadata to outgoing requests. Sets a header.

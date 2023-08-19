@@ -50,7 +50,14 @@ from pokemon_service_server_sdk.types import ByteStream
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.
-logging.basicConfig(handlers=[TracingHandler(level=logging.DEBUG).handler()])
+logging.basicConfig(
+    handlers=[
+        TracingHandler(
+            level=logging.DEBUG,
+            format="pretty",  # You can also use "json" or "compact" (default)
+        ).handler()
+    ]
+)
 
 
 class SafeCounter:

@@ -5,7 +5,6 @@
 
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::time::SystemTime;
 
 use aws_smithy_http::middleware::MapRequest;
 use aws_smithy_http::operation::Request;
@@ -13,15 +12,23 @@ use aws_smithy_http::property_bag::PropertyBag;
 
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::SignableBody;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::region::SigningRegion;
-use aws_types::SigningService;
+use aws_types::SigningName;
 
 use crate::signer::{
     OperationSigningConfig, RequestConfig, SigV4Signer, SigningError, SigningRequirements,
 };
 
+#[cfg(feature = "sign-eventstream")]
+use crate::event_stream::SigV4MessageSigner as EventStreamSigV4Signer;
+#[cfg(feature = "sign-eventstream")]
+use aws_smithy_eventstream::frame::DeferredSignerSender;
+
+// TODO(enableNewSmithyRuntimeCleanup): Delete `Signature` when switching to the orchestrator
 /// Container for the request signature for use in the property bag.
 #[non_exhaustive]
+#[derive(Debug, Clone)]
 pub struct Signature(String);
 
 impl Signature {
@@ -42,16 +49,13 @@ impl AsRef<str> for Signature {
 /// a signature.
 ///
 /// Prior to signing, the following fields MUST be present in the property bag:
-/// - [`SigningRegion`](SigningRegion): The region used when signing the request, e.g. `us-east-1`
-/// - [`SigningService`](SigningService): The name of the service to use when signing the request, e.g. `dynamodb`
-/// - [`Credentials`](Credentials): Credentials to sign with
-/// - [`OperationSigningConfig`](OperationSigningConfig): Operation specific signing configuration, e.g.
+/// - [`SigningRegion`]: The region used when signing the request, e.g. `us-east-1`
+/// - [`SigningName`]: The name of the service to use when signing the request, e.g. `dynamodb`
+/// - [`Credentials`]: Credentials to sign with
+/// - [`OperationSigningConfig`]: Operation specific signing configuration, e.g.
 ///   changes to URL encoding behavior, or headers that must be omitted.
+/// - [`SharedTimeSource`]: The time source to use when signing the request.
 /// If any of these fields are missing, the middleware will return an error.
-///
-/// The following fields MAY be present in the property bag:
-/// - [`SystemTime`](SystemTime): The timestamp to use when signing the request. If this field is not present
-///   [`SystemTime::now`](SystemTime::now) will be used.
 #[derive(Clone, Debug)]
 pub struct SigV4SigningStage {
     signer: SigV4Signer,
@@ -67,7 +71,7 @@ impl SigV4SigningStage {
 enum SigningStageErrorKind {
     MissingCredentials,
     MissingSigningRegion,
-    MissingSigningService,
+    MissingSigningName,
     MissingSigningConfig,
     SigningFailure(SigningError),
 }
@@ -87,7 +91,7 @@ impl Display for SigningStageError {
             MissingSigningRegion => {
                 write!(f, "no signing region in the property bag")
             }
-            MissingSigningService => {
+            MissingSigningName => {
                 write!(f, "no signing service in the property bag")
             }
             MissingSigningConfig => {
@@ -105,7 +109,7 @@ impl Error for SigningStageError {
             ErrorKind::SigningFailure(err) => Some(err),
             ErrorKind::MissingCredentials
             | ErrorKind::MissingSigningRegion
-            | ErrorKind::MissingSigningService
+            | ErrorKind::MissingSigningName
             | ErrorKind::MissingSigningConfig => None,
         }
     }
@@ -139,18 +143,18 @@ fn signing_config(
     let region = config
         .get::<SigningRegion>()
         .ok_or(SigningStageErrorKind::MissingSigningRegion)?;
-    let signing_service = config
-        .get::<SigningService>()
-        .ok_or(SigningStageErrorKind::MissingSigningService)?;
+    let name = config
+        .get::<SigningName>()
+        .ok_or(SigningStageErrorKind::MissingSigningName)?;
     let payload_override = config.get::<SignableBody<'static>>();
     let request_config = RequestConfig {
         request_ts: config
-            .get::<SystemTime>()
-            .copied()
-            .unwrap_or_else(SystemTime::now),
+            .get::<SharedTimeSource>()
+            .map(|t| t.now())
+            .unwrap_or_else(|| SharedTimeSource::default().now()),
         region,
         payload_override,
-        service: signing_service,
+        name,
     };
     Ok((operation_config, request_config, credentials))
 }
@@ -176,11 +180,28 @@ impl MapRequest for SigV4SigningStage {
                     },
                     SigningRequirements::Required => signing_config(config)?,
                 };
+            let identity = creds.into();
 
             let signature = self
                 .signer
-                .sign(operation_config, &request_config, &creds, &mut req)
+                .sign(operation_config, &request_config, &identity, &mut req)
                 .map_err(SigningStageErrorKind::SigningFailure)?;
+
+            // If this is an event stream operation, set up the event stream signer
+            #[cfg(feature = "sign-eventstream")]
+            if let Some(signer_sender) = config.get::<DeferredSignerSender>() {
+                let time_override = config.get::<SharedTimeSource>().map(|ts| ts.now());
+                signer_sender
+                    .send(Box::new(EventStreamSigV4Signer::new(
+                        signature.as_ref().into(),
+                        identity,
+                        request_config.region.clone(),
+                        request_config.name.clone(),
+                        time_override,
+                    )) as _)
+                    .expect("failed to send deferred signer");
+            }
+
             config.insert(signature);
             Ok(req)
         })
@@ -199,8 +220,10 @@ mod test {
 
     use aws_credential_types::Credentials;
     use aws_endpoint::AwsAuthStage;
+    use aws_smithy_async::time::SharedTimeSource;
+
     use aws_types::region::{Region, SigningRegion};
-    use aws_types::SigningService;
+    use aws_types::SigningName;
 
     use crate::middleware::{
         SigV4SigningStage, Signature, SigningStageError, SigningStageErrorKind,
@@ -218,9 +241,9 @@ mod test {
             .augment(|req, properties| {
                 properties.insert(region.clone());
                 properties.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-                properties.insert(SigningService::from_static("kinesis"));
+                properties.insert(SigningName::from_static("kinesis"));
                 properties.insert(OperationSigningConfig::default_config());
-                properties.insert(Credentials::for_tests());
+                properties.insert(Credentials::for_tests_with_session_token());
                 properties.insert(SigningRegion::from(region));
                 Result::<_, Infallible>::Ok(req)
             })
@@ -232,6 +255,50 @@ mod test {
         let property_bag = req.properties();
         let signature = property_bag.get::<Signature>();
         assert!(signature.is_some());
+    }
+
+    #[cfg(feature = "sign-eventstream")]
+    #[test]
+    fn sends_event_stream_signer_for_event_stream_operations() {
+        use crate::event_stream::SigV4MessageSigner as EventStreamSigV4Signer;
+        use aws_smithy_eventstream::frame::{DeferredSigner, SignMessage};
+
+        let (mut deferred_signer, deferred_signer_sender) = DeferredSigner::new();
+        let req = http::Request::builder()
+            .uri("https://test-service.test-region.amazonaws.com/")
+            .body(SdkBody::from(""))
+            .unwrap();
+        let region = Region::new("us-east-1");
+        let req = operation::Request::new(req)
+            .augment(|req, properties| {
+                properties.insert(region.clone());
+                properties.insert::<SharedTimeSource>(SharedTimeSource::new(
+                    UNIX_EPOCH + Duration::new(1611160427, 0),
+                ));
+                properties.insert(SigningName::from_static("kinesis"));
+                properties.insert(OperationSigningConfig::default_config());
+                properties.insert(Credentials::for_tests_with_session_token());
+                properties.insert(SigningRegion::from(region.clone()));
+                properties.insert(deferred_signer_sender);
+                Result::<_, Infallible>::Ok(req)
+            })
+            .expect("succeeds");
+
+        let signer = SigV4SigningStage::new(SigV4Signer::new());
+        let _ = signer.apply(req).unwrap();
+
+        let mut signer_for_comparison = EventStreamSigV4Signer::new(
+            // This is the expected SigV4 signature for the HTTP request above
+            "abac477b4afabf5651079e7b9a0aa6a1a3e356a7418a81d974cdae9d4c8e5441".into(),
+            Credentials::for_tests_with_session_token().into(),
+            SigningRegion::from(region),
+            SigningName::from_static("kinesis"),
+            Some(UNIX_EPOCH + Duration::new(1611160427, 0)),
+        );
+
+        let expected_signed_empty = signer_for_comparison.sign_empty().unwrap().unwrap();
+        let actual_signed_empty = deferred_signer.sign_empty().unwrap().unwrap();
+        assert_eq!(expected_signed_empty, actual_signed_empty);
     }
 
     // check that the endpoint middleware followed by signing middleware produce the expected result
@@ -249,8 +316,10 @@ mod test {
         let req = operation::Request::new(req)
             .augment(|req, conf| {
                 conf.insert(region.clone());
-                conf.insert(UNIX_EPOCH + Duration::new(1611160427, 0));
-                conf.insert(SigningService::from_static("kinesis"));
+                conf.insert(SharedTimeSource::new(
+                    UNIX_EPOCH + Duration::new(1611160427, 0),
+                ));
+                conf.insert(SigningName::from_static("kinesis"));
                 conf.insert(endpoint);
                 Result::<_, Infallible>::Ok(req)
             })
@@ -270,7 +339,8 @@ mod test {
                 .apply(req.try_clone().expect("can clone"))
                 .expect_err("no cred provider"),
         );
-        req.properties_mut().insert(Credentials::for_tests());
+        req.properties_mut()
+            .insert(Credentials::for_tests_with_session_token());
         let req = signer.apply(req).expect("signing succeeded");
         // make sure we got the correct error types in any order
         assert!(errs.iter().all(|el| matches!(

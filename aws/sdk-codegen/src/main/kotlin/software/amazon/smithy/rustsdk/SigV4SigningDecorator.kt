@@ -15,16 +15,16 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.config.EventStreamSigningConfig
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.extendIf
@@ -32,12 +32,12 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
 
-// TODO(enableNewSmithyRuntime): Remove this decorator (superseded by SigV4AuthDecorator)
+// TODO(enableNewSmithyRuntimeCleanup): Remove this decorator (superseded by SigV4AuthDecorator)
 /**
  * The SigV4SigningDecorator:
- * - adds a `signing_service()` method to `config` to return the default signing service
+ * - adds a `name()` method to `config` to return the default signing service
  * - adds a `new_event_stream_signer()` method to `config` to create an Event Stream SigV4 signer
- * - sets the `SigningService` during operation construction
+ * - sets the `SigningName` during operation construction
  * - sets a default `OperationSigningConfig` A future enhancement will customize this for specific services that need
  *   different behavior.
  */
@@ -77,44 +77,42 @@ class SigV4SigningDecorator : ClientCodegenDecorator {
 }
 
 class SigV4SigningConfig(
-    runtimeConfig: RuntimeConfig,
+    private val runtimeConfig: RuntimeConfig,
     private val serviceHasEventStream: Boolean,
     private val sigV4Trait: SigV4Trait,
-) : EventStreamSigningConfig(runtimeConfig) {
+) : ConfigCustomization() {
     private val codegenScope = arrayOf(
-        "SigV4Signer" to AwsRuntimeType.awsSigAuthEventStream(runtimeConfig).resolve("event_stream::SigV4Signer"),
+        "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
+        "SigningName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningName"),
+        "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
     )
 
-    override fun configImplSection(): Writable {
-        return writable {
-            rustTemplate(
-                """
-                /// The signature version 4 service signing name to use in the credential scope when signing requests.
-                ///
-                /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
-                /// [`SigningService`](aws_types::SigningService) during operation construction
-                pub fn signing_service(&self) -> &'static str {
-                    ${sigV4Trait.name.dq()}
-                }
-                """,
-                *codegenScope,
-            )
-            if (serviceHasEventStream) {
-                rustTemplate(
-                    "#{signerFn:W}",
-                    "signerFn" to
-                        renderEventStreamSignerFn { propertiesName ->
-                            writable {
-                                rustTemplate(
-                                    """
-                                    #{SigV4Signer}::new($propertiesName)
-                                    """,
-                                    *codegenScope,
-                                )
-                            }
-                        },
+    override fun section(section: ServiceConfig): Writable = writable {
+        when (section) {
+            ServiceConfig.ConfigImpl -> {
+                rust(
+                    """
+                    /// The signature version 4 service signing name to use in the credential scope when signing requests.
+                    ///
+                    /// The signing name may be overridden by the `Endpoint`, or by specifying a custom
+                    /// [`SigningName`](aws_types::SigningName) during operation construction
+                    pub fn name(&self) -> &'static str {
+                        ${sigV4Trait.name.dq()}
+                    }
+                    """,
                 )
             }
+            ServiceConfig.BuilderBuild -> {
+                rustTemplate(
+                    """
+                    layer.store_put(#{SigningName}::from_static(${sigV4Trait.name.dq()}));
+                    layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
+                    """,
+                    *codegenScope,
+                )
+            }
+
+            else -> emptySection
         }
     }
 }
@@ -196,7 +194,7 @@ class SigV4SigningFeature(
                 rustTemplate(
                     """
                     ${section.request}.properties_mut().insert(signing_config);
-                    ${section.request}.properties_mut().insert(#{aws_types}::SigningService::from_static(${section.config}.signing_service()));
+                    ${section.request}.properties_mut().insert(#{aws_types}::SigningName::from_static(${section.config}.name()));
                     if let Some(region) = &${section.config}.region {
                         ${section.request}.properties_mut().insert(#{aws_types}::region::SigningRegion::from(region.clone()));
                     }
@@ -209,5 +207,3 @@ class SigV4SigningFeature(
         }
     }
 }
-
-fun RuntimeConfig.sigAuth() = awsRuntimeCrate("aws-sig-auth")

@@ -13,6 +13,7 @@
 //! ```
 //! # use std::convert::Infallible;
 //! # use aws_smithy_http_server::instrumentation::{*, sensitivity::{*, headers::*, uri::*}};
+//! # use aws_smithy_http_server::shape_id::ShapeId;
 //! # use http::{Request, Response};
 //! # use tower::{util::service_fn, Service};
 //! # async fn service(request: Request<()>) -> Result<Response<()>, Infallible> {
@@ -20,6 +21,7 @@
 //! # }
 //! # async fn example() {
 //! # let service = service_fn(service);
+//! # const ID: ShapeId = ShapeId::new("namespace#foo-operation", "namespace", "foo-operation");
 //! let request = Request::get("http://localhost/a/b/c/d?bar=hidden")
 //!     .header("header-name-a", "hidden")
 //!     .body(())
@@ -47,7 +49,7 @@
 //!         }
 //!     })
 //!     .status_code();
-//! let mut service = InstrumentOperation::new(service, "foo-operation")
+//! let mut service = InstrumentOperation::new(service, ID)
 //!     .request_fmt(request_fmt)
 //!     .response_fmt(response_fmt);
 //!
@@ -57,14 +59,12 @@
 //!
 //! [sensitive trait]: https://awslabs.github.io/smithy/1.0/spec/core/documentation-traits.html?highlight=sensitive%20trait#sensitive-trait
 
-mod layer;
 mod plugin;
 pub mod sensitivity;
 mod service;
 
 use std::fmt::{Debug, Display};
 
-pub use layer::*;
 pub use plugin::*;
 pub use service::*;
 

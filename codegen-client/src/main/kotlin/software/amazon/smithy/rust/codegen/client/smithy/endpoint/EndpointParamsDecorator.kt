@@ -8,12 +8,11 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * Decorator that injects operation-level interceptors that configure an endpoint parameters builder
@@ -26,24 +25,22 @@ class EndpointParamsDecorator : ClientCodegenDecorator {
     override val name: String get() = "EndpointParamsDecorator"
     override val order: Byte get() = 0
 
-    override fun operationRuntimePluginCustomizations(
+    override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(EndpointParametersRuntimePluginCustomization(codegenContext, operation))
-        }
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
+        baseCustomizations + listOf(EndpointParametersCustomization(codegenContext, operation))
 }
 
-private class EndpointParametersRuntimePluginCustomization(
+private class EndpointParametersCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operation: OperationShape,
-) : OperationRuntimePluginCustomization() {
-    override fun section(section: OperationRuntimePluginSection): Writable = writable {
+) : OperationCustomization() {
+    override fun section(section: OperationSection): Writable = writable {
         val symbolProvider = codegenContext.symbolProvider
         val operationName = symbolProvider.toSymbol(operation).name
-        if (section is OperationRuntimePluginSection.AdditionalConfig) {
+        if (section is OperationSection.AdditionalInterceptors) {
             section.registerInterceptor(codegenContext.runtimeConfig, this) {
                 rust("${operationName}EndpointParamsInterceptor")
             }

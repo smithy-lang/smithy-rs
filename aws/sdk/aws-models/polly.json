@@ -677,6 +677,24 @@
                     "traits": {
                         "smithy.api#enumValue": "fi-FI"
                     }
+                },
+                "en_IE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "en-IE"
+                    }
+                },
+                "nl_BE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "nl-BE"
+                    }
+                },
+                "fr_BE": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "fr-BE"
+                    }
                 }
             }
         },
@@ -3370,6 +3388,30 @@
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#enumValue": "Tomoko"
+                    }
+                },
+                "Niamh": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "Niamh"
+                    }
+                },
+                "Sofie": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "Sofie"
+                    }
+                },
+                "Lisa": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "Lisa"
+                    }
+                },
+                "Isabelle": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "Isabelle"
                     }
                 }
             }

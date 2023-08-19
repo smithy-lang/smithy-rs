@@ -25,7 +25,9 @@ async fn test_signer() {
         http::Response::builder().status(200).body("").unwrap(),
     )]);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .credentials_provider(SharedCredentialsProvider::new(
+            Credentials::for_tests_with_session_token(),
+        ))
         .http_connector(conn.clone())
         .region(Region::new("us-east-1"))
         .build();
@@ -39,6 +41,7 @@ async fn test_signer() {
         .unwrap()
         .request_time_for_tests(UNIX_EPOCH + Duration::from_secs(1636751225))
         .user_agent_for_tests()
+        .remove_invocation_id_for_tests()
         .send()
         .await
         .expect_err("empty response");

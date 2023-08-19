@@ -46,7 +46,7 @@ Each of these configurable parts must therefore be logged cautiously.
 
 It would be unfeasible to forbid the logging of sensitive data all together using the type system. With the current API, the customer will always have an opportunity to log a request containing sensitive data before it enters the `Service<Request<B>>` that we provide to them.
 
-```rust
+```rust,ignore
 // The API provides us with a `Service<Request<B>>`
 let app: Router = OperationRegistryBuilder::default().build().expect("unable to build operation registry").into();
 
@@ -88,7 +88,7 @@ Developers might want to observe sensitive data for debugging purposes. It shoul
 
 To prevent excessive branches such as
 
-```rust
+```rust,ignore
 if cfg!(feature = "unredacted-logging") {
     debug!(%data, "logging here");
 } else {
@@ -98,7 +98,7 @@ if cfg!(feature = "unredacted-logging") {
 
 the following wrapper should be provided from a runtime crate:
 
-```rust
+```rust,ignore
 pub struct Sensitive<T>(T);
 
 impl<T> Debug for Sensitive<T>
@@ -130,7 +130,7 @@ where
 
 In which case the branch above becomes
 
-```rust
+```rust,ignore
 debug!(sensitive_data = %Sensitive(data));
 ```
 
@@ -168,7 +168,7 @@ structure Stocked {
 
 should generate the following
 
-```rust
+```rust,ignore
 // NOTE: This code is intended to show behavior - it does not compile
 
 pub struct InventoryLogging<S> {
@@ -226,7 +226,7 @@ This logging middleware should be applied outside of the [OperationHandler](http
 
 An easy position to apply the logging middleware is illustrated below in the form of `Logging{Operation}::new`:
 
-```rust
+```rust,ignore
 let empty_operation = LoggingEmptyOperation::new(operation(registry.empty_operation));
 let get_pokemon_species = LoggingPokemonSpecies::new(operation(registry.get_pokemon_species));
 let get_server_statistics = LoggingServerStatistics::new(operation(registry.get_server_statistics));
@@ -273,7 +273,7 @@ Request extensions can be used to adjoin data to a Request as it passes through 
 
 These can be used to provide data to middleware interested in logging potentially sensitive data.
 
-```rust
+```rust,ignore
 struct Sensitivity {
     /* Data concerning which parts of the request are sensitive */
 }
@@ -301,7 +301,7 @@ impl<B, S> Service<Request<B>> for Middleware<S> {
 
 A middleware layer must be code generated (much in the same way as the logging middleware) which is dedicated to inserting the `Sensitivity` struct into the extensions of each incoming request.
 
-```rust
+```rust,ignore
 impl<B, S> Service<Request<B>> for SensitivityInserter<S>
 where
     S: Service<Request<B>>
@@ -333,7 +333,7 @@ where
 
 It is possible that sensitivity is a parameter passed to middleware during construction. This is similar in nature to [Use Request Extensions](#use-request-extensions) except that the `Sensitivity` is passed to middleware during construction.
 
-```rust
+```rust,ignore
 struct Middleware<S> {
     inner: S,
     sensitivity: Sensitivity

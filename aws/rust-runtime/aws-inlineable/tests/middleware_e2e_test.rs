@@ -28,8 +28,9 @@ use aws_http::retry::AwsResponseRetryClassifier;
 use aws_http::user_agent::AwsUserAgent;
 use aws_inlineable::middleware::DefaultMiddleware;
 use aws_sig_auth::signer::OperationSigningConfig;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::region::SigningRegion;
-use aws_types::SigningService;
+use aws_types::SigningName;
 
 type Client<C> = aws_smithy_client::Client<C, DefaultMiddleware>;
 
@@ -88,13 +89,16 @@ fn test_operation() -> Operation<TestOperationParser, AwsResponseRetryClassifier
         ));
         aws_http::auth::set_credentials_cache(
             conf,
-            CredentialsCache::lazy()
-                .create_cache(SharedCredentialsProvider::new(Credentials::for_tests())),
+            CredentialsCache::lazy().create_cache(SharedCredentialsProvider::new(
+                Credentials::for_tests_with_session_token(),
+            )),
         );
         conf.insert(SigningRegion::from_static("test-region"));
         conf.insert(OperationSigningConfig::default_config());
-        conf.insert(SigningService::from_static("test-service-signing"));
-        conf.insert(UNIX_EPOCH + Duration::from_secs(1613414417));
+        conf.insert(SigningName::from_static("test-service-signing"));
+        conf.insert(SharedTimeSource::new(
+            UNIX_EPOCH + Duration::from_secs(1613414417),
+        ));
         conf.insert(AwsUserAgent::for_tests());
         Result::<_, Infallible>::Ok(req)
     })

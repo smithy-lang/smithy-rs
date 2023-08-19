@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomi
 internal class CredentialProviderConfigTest {
     @Test
     fun `generates a valid config`() {
-        validateConfigCustomizations(CredentialProviderConfig(AwsTestRuntimeConfig))
+        val codegenContext = awsTestCodegenContext()
+        validateConfigCustomizations(codegenContext, CredentialProviderConfig(codegenContext))
     }
 }

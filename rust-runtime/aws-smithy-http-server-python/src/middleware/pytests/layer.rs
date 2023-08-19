@@ -7,7 +7,7 @@ use std::convert::Infallible;
 
 use aws_smithy_http_server::{
     body::{to_boxed, Body, BoxBody},
-    proto::rest_json_1::RestJson1,
+    protocol::rest_json_1::RestJson1,
 };
 use aws_smithy_http_server_python::{
     middleware::{PyMiddlewareHandler, PyMiddlewareLayer},
