@@ -49,6 +49,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                 "EndpointResolverParams" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::endpoint::EndpointResolverParams"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
             )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
@@ -67,7 +68,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                             client_config.config,
                             &client_config.runtime_components,
                         );
-                        let sut_components = sut.runtime_components();
+                        let prev = #{RuntimeComponentsBuilder}::new("prev");
+                        let sut_components = sut.runtime_components(&prev);
                         let endpoint_resolver = sut_components.endpoint_resolver().unwrap();
                         let endpoint = endpoint_resolver
                             .resolve_endpoint(&#{EndpointResolverParams}::new(crate::config::endpoint::Params {}))
