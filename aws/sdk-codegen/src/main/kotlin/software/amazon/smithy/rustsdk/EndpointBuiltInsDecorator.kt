@@ -57,7 +57,9 @@ fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
 }
 
 private fun promotedBuiltins(parameter: Parameter) =
-    parameter == Builtins.FIPS || parameter == Builtins.DUALSTACK || parameter == Builtins.SDK_ENDPOINT
+    parameter.builtIn == Builtins.FIPS.builtIn ||
+        parameter.builtIn == Builtins.DUALSTACK.builtIn ||
+        parameter.builtIn == Builtins.SDK_ENDPOINT.builtIn
 
 private fun configParamNewtype(parameter: Parameter, name: String, runtimeConfig: RuntimeConfig): RuntimeType {
     val type = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
