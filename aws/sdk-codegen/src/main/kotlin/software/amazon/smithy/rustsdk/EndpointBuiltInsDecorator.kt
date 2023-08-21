@@ -141,19 +141,12 @@ fun decoratorForBuiltIn(
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? =
                     when (parameter.builtIn) {
                         builtIn.builtIn -> writable {
-                            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                                val newtype = configParamNewtype(parameter, name, codegenContext.runtimeConfig)
-                                val symbol = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
-                                rustTemplate(
-                                    """$configRef.#{load_from_service_config_layer}""",
-                                    "load_from_service_config_layer" to loadFromConfigBag(symbol.name, newtype),
-                                )
-                            } else {
-                                rust("$configRef.$name")
-                            }
-                            if (codegenContext.smithyRuntimeMode.generateMiddleware && parameter.type == ParameterType.STRING) {
-                                rust(".clone()")
-                            }
+                            val newtype = configParamNewtype(parameter, name, codegenContext.runtimeConfig)
+                            val symbol = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
+                            rustTemplate(
+                                """$configRef.#{load_from_service_config_layer}""",
+                                "load_from_service_config_layer" to loadFromConfigBag(symbol.name, newtype),
+                            )
                         }
 
                         else -> null

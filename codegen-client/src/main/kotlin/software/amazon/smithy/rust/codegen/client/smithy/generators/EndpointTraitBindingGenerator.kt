@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
-import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.rustFormatString
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -48,7 +47,6 @@ class EndpointTraitBindings(
     fun render(
         writer: RustWriter,
         input: String,
-        smithyRuntimeMode: SmithyRuntimeMode,
         generateValidation: Boolean = true,
     ) {
         // the Rust format pattern to make the endpoint prefix e.g. "{}.foo"
@@ -74,7 +72,7 @@ class EndpointTraitBindings(
                         rust("let $field = &$input.$field;")
                     }
                     if (generateValidation) {
-                        val contents = if (smithyRuntimeMode.generateOrchestrator) {
+                        val contents =
                             // TODO(enableNewSmithyRuntimeCleanup): Remove the allow attribute once all places need .into method
                             """
                             if $field.is_empty() {
@@ -82,13 +80,6 @@ class EndpointTraitBindings(
                                 return Err(#{invalidFieldError:W}.into())
                             }
                             """
-                        } else {
-                            """
-                            if $field.is_empty() {
-                                return Err(#{invalidFieldError:W})
-                            }
-                            """
-                        }
                         rustTemplate(
                             contents,
                             "invalidFieldError" to OperationBuildError(runtimeConfig).invalidField(

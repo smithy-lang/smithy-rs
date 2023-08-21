@@ -13,7 +13,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSec
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * Decorator that injects operation-level interceptors that configure an endpoint parameters builder
@@ -31,9 +30,7 @@ class EndpointParamsDecorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(EndpointParametersCustomization(codegenContext, operation))
-        }
+        baseCustomizations + listOf(EndpointParametersCustomization(codegenContext, operation))
 }
 
 private class EndpointParametersCustomization(

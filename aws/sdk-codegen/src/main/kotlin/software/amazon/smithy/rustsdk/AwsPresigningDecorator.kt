@@ -100,18 +100,6 @@ class AwsPresigningDecorator internal constructor(
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-            baseCustomizations + AwsInputPresignedMethod(codegenContext, operation)
-        } else {
-            baseCustomizations
-        }
-    }
-
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
      */
@@ -286,30 +274,13 @@ class AwsPresignedFluentBuilderMethod(
                     """,
                     *codegenScope,
                     "OpError" to section.operationErrorType,
-                    "RawResponseType" to if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                        RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
-                    } else {
-                        RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
-                    },
+                    "RawResponseType" to
+                        RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
                 ) {
-                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                        renderPresignedMethodBodyMiddleware()
-                    } else {
-                        renderPresignedMethodBody(section)
-                    }
+                    renderPresignedMethodBody(section)
                 }
             }
         }
-
-    private fun RustWriter.renderPresignedMethodBodyMiddleware() {
-        rustTemplate(
-            """
-            let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-            input.presigned(&self.handle.conf, presigning_config).await
-            """,
-            *codegenScope,
-        )
-    }
 
     private fun RustWriter.renderPresignedMethodBody(section: FluentClientSection.FluentBuilderImpl) {
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(section.operationShape.id)
@@ -500,6 +471,9 @@ private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
 
         Presigned requests can be given to other users or applications to access a resource or perform
         an operation without having access to the AWS security credentials.
+
+        _Important:_ If you're using credentials that can expire, such as those from STS AssumeRole or SSO, then
+        the presigned request can only be valid for as long as the credentials used to create it are.
         """,
     )
 }

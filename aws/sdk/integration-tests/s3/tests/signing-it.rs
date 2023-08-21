@@ -22,7 +22,9 @@ async fn test_signer() {
         http::Response::builder().status(200).body("").unwrap(),
     )]);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .credentials_provider(SharedCredentialsProvider::new(
+            Credentials::for_tests_with_session_token(),
+        ))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();

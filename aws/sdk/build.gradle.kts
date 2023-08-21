@@ -61,7 +61,6 @@ val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, prop
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
@@ -105,7 +104,6 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
                             "enableUserConfigurableRuntimePlugins": false
                         },
                         "service": "${service.service}",
@@ -338,7 +336,7 @@ tasks.register("generateCargoWorkspace") {
     doFirst {
         outputDir.mkdirs()
         outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
-        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.resolve("clippy.toml"))
+        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.resolve("clippy.toml"), overwrite = true)
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
     if (awsServices.examples.isNotEmpty()) {

@@ -20,7 +20,7 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "`RuntimeComponents` and `RuntimeComponentsBuilder` are now re-exported in generated clients so that implementing a custom interceptor or runtime plugin doens't require directly depending on `aws-smithy-runtime-api`."
 references = ["smithy-rs#2904"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
@@ -28,3 +28,41 @@ message = "It's now possible to nest runtime components with the `RuntimePlugin`
 references = ["smithy-rs#2909"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix incorrect summary docs for builders"
+references = ["smithy-rs#2914", "aws-sdk-rust#825"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix requests to S3 with `no_credentials` set."
+references = ["smithy-rs#2907", "aws-sdk-rust#864"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Several breaking changes were made to the aws-sigv4 API to remove the direct HTTP dependency:
+- The `take_parameters` and `take_headers` APIs were removed from `SigningInstructions`. Use `into_parts()` instead
+- The arguments of `SignableRequest::new` were changed to accept string types instead of types from the HTTP crate
+- `SigningInstructions::apply_to_request` was gated beyond an `http0-compat` feature flag for backwards compatibility. This API MAY be removed in a future release.
+- Several public accessors were removed from `SigningInstructions`.
+"""
+references = ["smithy-rs#2921"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "In sigV4-related code, rename 'signing service' to 'signing name'. This aligns with the terminology used by the endpoint resolver."
+references = ["smithy-rs#2911"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+All versions of SigningParams have been updated to contain an [`Identity`](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/identity/struct.Identity.html)
+as opposed to AWS credentials in `&str` form. [Read more](https://github.com/awslabs/aws-sdk-rust/discussions/868).
+"""
+references = ["smithy-rs#2913"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"

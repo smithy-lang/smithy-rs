@@ -5,21 +5,16 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
-import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
+import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
-import software.amazon.smithy.rust.codegen.client.testutil.withSmithyRuntimeMode
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class IdempotencyTokenProviderCustomizationTest {
-    @ParameterizedTest
-    @ValueSource(strings = ["middleware", "orchestrator"])
-    fun `generates a valid config`(smithyRuntimeModeStr: String) {
-        val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
+    @Test
+    fun `generates a valid config`() {
         val model = "namespace test".asSmithyModel()
-        val codegenContext = testClientCodegenContext(model).withSmithyRuntimeMode(smithyRuntimeMode)
+        val codegenContext = testClientCodegenContext(model)
         validateConfigCustomizations(
             codegenContext,
             IdempotencyTokenProviderCustomization(codegenContext),
