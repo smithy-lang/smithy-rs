@@ -73,7 +73,7 @@ private class SigV4SigningConfig(
 ) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
-        "SigningService" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningService"),
+        "SigningName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningName"),
         "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
     )
 
@@ -86,8 +86,8 @@ private class SigV4SigningConfig(
                         /// The signature version 4 service signing name to use in the credential scope when signing requests.
                         ///
                         /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
-                        /// [`SigningService`](aws_types::SigningService) during operation construction
-                        pub fn signing_service(&self) -> &'static str {
+                        /// [`SigningName`](aws_types::SigningName) during operation construction
+                        pub fn signing_name(&self) -> &'static str {
                             ${sigV4Trait.name.dq()}
                         }
                         """,
@@ -97,7 +97,7 @@ private class SigV4SigningConfig(
                 ServiceConfig.BuilderBuild -> {
                     rustTemplate(
                         """
-                        layer.store_put(#{SigningService}::from_static(${sigV4Trait.name.dq()}));
+                        layer.store_put(#{SigningName}::from_static(${sigV4Trait.name.dq()}));
                         layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
                         """,
                         *codegenScope,

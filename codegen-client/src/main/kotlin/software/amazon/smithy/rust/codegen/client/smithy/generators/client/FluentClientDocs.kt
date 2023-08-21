@@ -27,12 +27,19 @@ object FluentClientDocs {
             this config will only require an endpoint to produce a functioning client. However, some Smithy
             features will require additional configuration. For example, `@auth` requires some kind of identity
             or identity resolver to be configured. The config is used to customize various aspects of the client,
-            such as what HTTP connector it uses, what kind of timeouts it has, and if it has retry enabled
-            (just to list a few). The documentation on [`Config`](crate::Config) covers the available config
-            options and their defaults.
+            such as:
+
+              - [HTTP Connector](crate::config::Builder::http_connector)
+              - [Retry](crate::config::Builder::retry_config)
+              - [Timeouts](crate::config::Builder::timeout_config)
+              - [... and more](crate::config::Builder)
+
+            Below is a minimal example of how to create a client:
 
             ```rust,no_run
-            let config = $moduleUseName::Config::builder().build();
+            let config = $moduleUseName::Config::builder()
+                .endpoint_url("http://localhost:1234")
+                .build();
             let client = $moduleUseName::Client::from_conf(config);
             ```
 

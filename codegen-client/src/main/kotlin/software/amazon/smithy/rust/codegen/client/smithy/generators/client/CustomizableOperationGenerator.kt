@@ -123,10 +123,11 @@ class CustomizableOperationGenerator(
                     /// The fields in the builder that are `Some` override those applied to the service
                     /// configuration level. For instance,
                     ///
-                    /// Config A     overridden by    Config B          ==        Config C
-                    /// field_1: None,                field_1: Some(v2),          field_1: Some(v2),
-                    /// field_2: Some(v1),            field_2: Some(v2),          field_2: Some(v2),
-                    /// field_3: Some(v1),            field_3: None,              field_3: Some(v1),
+                    /// | Config A           | overridden by Config B | = Config C         |
+                    /// |--------------------|------------------------|--------------------|
+                    /// | field_1: None,     | field_1: Some(v2),     | field_1: Some(v2), |
+                    /// | field_2: Some(v1), | field_2: Some(v2),     | field_2: Some(v2), |
+                    /// | field_3: Some(v1), | field_3: None,         | field_3: Some(v1), |
                     pub fn config_override(
                         mut self,
                         config_override: impl #{Into}<crate::config::Builder>,
@@ -142,12 +143,7 @@ class CustomizableOperationGenerator(
                     where
                         E: std::error::Error + #{Send} + #{Sync} + 'static,
                     {
-                        let mut config_override = if let Some(config_override) = self.config_override {
-                            config_override
-                        } else {
-                            crate::config::Builder::new()
-                        };
-
+                        let mut config_override = self.config_override.unwrap_or_default();
                         self.interceptors.into_iter().for_each(|interceptor| {
                             config_override.push_interceptor(interceptor);
                         });
