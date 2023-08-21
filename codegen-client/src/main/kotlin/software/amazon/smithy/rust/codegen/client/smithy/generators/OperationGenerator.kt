@@ -10,10 +10,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.MakeOperationGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ResponseDeserializerGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientHttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -36,15 +35,9 @@ import software.amazon.smithy.rust.codegen.core.util.sdkId
 open class OperationGenerator(
     private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
-    /**
-     * Operations generate a `make_operation(&config)` method to build a `aws_smithy_http::Operation` that can be dispatched
-     * This is the serializer side of request dispatch
-     */
-    // TODO(enableNewSmithyRuntimeCleanup): Remove the `makeOperationGenerator`
-    private val makeOperationGenerator: MakeOperationGenerator,
-    private val bodyGenerator: ProtocolPayloadGenerator,
-    // TODO(enableNewSmithyRuntimeCleanup): Remove the `traitGenerator`
-    private val traitGenerator: HttpBoundProtocolTraitImplGenerator,
+    private val bodyGenerator: ProtocolPayloadGenerator = ClientHttpBoundProtocolPayloadGenerator(
+        codegenContext, protocol,
+    ),
 ) {
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -55,22 +48,10 @@ open class OperationGenerator(
      */
     fun renderOperation(
         operationWriter: RustWriter,
-        // TODO(enableNewSmithyRuntimeCleanup): Remove the `inputWriter` since `make_operation` generation is going away
-        inputWriter: RustWriter,
         operationShape: OperationShape,
         codegenDecorator: ClientCodegenDecorator,
     ) {
         val operationCustomizations = codegenDecorator.operationCustomizations(codegenContext, operationShape, emptyList())
-        val inputShape = operationShape.inputShape(model)
-
-        // impl OperationInputShape { ... }
-        inputWriter.implBlock(symbolProvider.toSymbol(inputShape)) {
-            writeCustomizations(
-                operationCustomizations,
-                OperationSection.InputImpl(operationCustomizations, operationShape, inputShape, protocol),
-            )
-        }
-
         renderOperationStruct(
             operationWriter,
             operationShape,

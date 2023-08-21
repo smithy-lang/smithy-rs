@@ -6,14 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -39,10 +37,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides endpoint resolver`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
@@ -85,10 +80,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides http connector`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
@@ -163,10 +155,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides retry strategy`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,

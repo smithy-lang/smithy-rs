@@ -6,15 +6,12 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -91,14 +88,6 @@ class RegionDecorator : ClientCodegenDecorator {
         return baseCustomizations.extendIf(usesRegion(codegenContext)) {
             RegionProviderConfig(codegenContext)
         }
-    }
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations.extendIf(usesRegion(codegenContext)) { RegionConfigPlugin() }
     }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
@@ -208,25 +197,6 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                     }
                     """,
                     *codegenScope,
-                )
-            }
-
-            else -> emptySection
-        }
-    }
-}
-
-class RegionConfigPlugin : OperationCustomization() {
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateRequest -> writable {
-                // Allow the region to be late-inserted via another method
-                rust(
-                    """
-                    if let Some(region) = &${section.config}.region {
-                        ${section.request}.properties_mut().insert(region.clone());
-                    }
-                    """,
                 )
             }
 
