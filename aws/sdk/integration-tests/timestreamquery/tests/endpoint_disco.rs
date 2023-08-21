@@ -26,7 +26,9 @@ async fn do_endpoint_discovery() {
         .http_connector(conn.clone())
         .region(Region::from_static("us-west-2"))
         .sleep_impl(SharedAsyncSleep::new(sleep))
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .credentials_provider(SharedCredentialsProvider::new(
+            Credentials::for_tests_with_session_token(),
+        ))
         .time_source(SharedTimeSource::new(ts.clone()))
         .build();
     let conf = query::config::Builder::from(&config)
