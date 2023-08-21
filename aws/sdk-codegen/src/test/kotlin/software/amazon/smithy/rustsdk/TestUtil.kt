@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -65,6 +66,7 @@ fun awsSdkIntegrationTest(
                         .withMember("includeFluentClient", false)
                         .letIf(generateOrchestrator) {
                             it.withMember("enableNewSmithyRuntime", StringNode.from("orchestrator"))
+                                .withMember("includeEndpointUrlConfig", BooleanNode.from(false))
                         }
                         .build(),
                 ).build(),

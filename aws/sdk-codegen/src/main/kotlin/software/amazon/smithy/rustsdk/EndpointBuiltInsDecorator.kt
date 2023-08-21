@@ -204,6 +204,9 @@ val PromotedBuiltInsDecorators =
         decoratorForBuiltIn(Builtins.DUALSTACK),
         decoratorForBuiltIn(
             Builtins.SDK_ENDPOINT,
-            ConfigParam.Builder().name("endpoint_url").type(RuntimeType.String.toSymbol()).setterDocs(endpointUrlDocs),
+            ConfigParam.Builder()
+                .name("endpoint_url")
+                .type(RuntimeType.String.toSymbol())
+                .setterDocs(endpointUrlDocs),
         ),
     ).toTypedArray()
