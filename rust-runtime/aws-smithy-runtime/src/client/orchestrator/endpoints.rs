@@ -121,6 +121,7 @@ pub(super) async fn orchestrate_endpoint(
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
     let endpoint_prefix = cfg.load::<EndpointPrefix>();
+    tracing::debug!(endpoint_params = ?params, endpoint_prefix = ?endpoint_prefix, "resolving endpoint");
     let request = ctx.request_mut().expect("set during serialization");
 
     let endpoint = runtime_components
