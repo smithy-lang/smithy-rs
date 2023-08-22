@@ -58,3 +58,15 @@ message = "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orche
 references = ["smithy-rs#2934", "aws-sdk-rust#872"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix `SDK::Endpoint` built-in for `@endpointRuleSet`."
+references = ["smithy-rs#2935"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix `SDK::Endpoint` built-in for `@endpointRuleSet`."
+references = ["smithy-rs#2935"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
