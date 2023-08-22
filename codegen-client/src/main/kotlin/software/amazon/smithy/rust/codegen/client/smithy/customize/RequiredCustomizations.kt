@@ -24,10 +24,12 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -79,6 +81,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
         baseCustomizations + AllowLintsCustomization()
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        val rc = codegenContext.runtimeConfig
+
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
 
@@ -91,7 +95,29 @@ class RequiredCustomizations : ClientCodegenDecorator {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
         }
         rustCrate.withModule(ClientRustModule.Error) {
-            pubUseSmithyErrorTypes(codegenContext)(this)
+            // TODO(enableNewSmithyRuntimeCleanup): Change SdkError to a `pub use` after changing the generic's default
+            rust("/// Error type returned by the client.")
+            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                rustTemplate(
+                    "pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;",
+                    "SdkError" to RuntimeType.sdkError(rc),
+                    "R" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
+                )
+            } else {
+                rustTemplate(
+                    "pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;",
+                    "SdkError" to RuntimeType.sdkError(rc),
+                    "R" to RuntimeType.smithyHttp(rc).resolve("operation::Response"),
+                )
+            }
+            rustTemplate(
+                """
+                pub use #{DisplayErrorContext};
+                pub use #{ProvideErrorMetadata};
+                """,
+                "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
+                "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+            )
         }
 
         ClientRustModule.Meta.also { metaModule ->

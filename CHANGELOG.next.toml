@@ -35,6 +35,18 @@ references = ["smithy-rs#2907", "aws-sdk-rust#864"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
 
+[[aws-sdk-rust]]
+message = "Fixed re-exported `SdkError` type. The previous release had the wrong type for `SdkError`, which caused projects to fail to compile when upgrading."
+references = ["smithy-rs#2931", "aws-sdk-rust#875"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fixed re-exported `SdkError` type. The previous release had the wrong type for `SdkError` when generating code for orchestrator mode, which caused projects to fail to compile when upgrading."
+references = ["smithy-rs#2931", "aws-sdk-rust#875"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
+
 [[smithy-rs]]
 message = "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level."
 references = ["smithy-rs#2934", "aws-sdk-rust#872"]
