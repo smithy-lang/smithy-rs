@@ -6,10 +6,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyErrorTypes
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -34,12 +35,23 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         baseCustomizations + AllowLintsCustomization()
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+        val rc = codegenContext.runtimeConfig
+
         // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
 
         rustCrate.withModule(ServerRustModule.Types) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
-            pubUseSmithyErrorTypes(codegenContext)(this)
+            // TODO(enableNewSmithyRuntimeCleanup): Remove re-export of SdkError in server and add changelog entry
+            rustTemplate(
+                """
+                pub type SdkError<E, R = #{Response}> = #{SdkError}<E, R>;
+                pub use #{DisplayErrorContext};
+                """,
+                "SdkError" to RuntimeType.smithyHttp(rc).resolve("result::SdkError"),
+                "Response" to RuntimeType.smithyHttp(rc).resolve("operation::Response"),
+                "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
+            )
         }
 
         rustCrate.withModule(ServerRustModule.root) {
