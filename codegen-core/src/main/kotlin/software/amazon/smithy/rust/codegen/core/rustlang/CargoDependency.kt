@@ -307,8 +307,5 @@ data class CargoDependency(
 
         // behind feature-gate
         val Serde = CargoDependency("serde", CratesIo("1.0"), features = setOf("derive"), scope = DependencyScope.CfgUnstable)
-
-        // Compile Guard
-        val CompileGuard = CargoDependency("compilation-guard", CratesIo("0.1.1"))
     }
 }
