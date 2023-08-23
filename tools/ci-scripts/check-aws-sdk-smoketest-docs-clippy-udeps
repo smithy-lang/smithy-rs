@@ -6,7 +6,6 @@
 
 set -eux
 
-export RUSTFLAGS="--cfg aws_sdk_unstable"
 # Docs, clippy, etc on the smoketest itself
 pushd aws-sdk-smoketest &>/dev/null
 

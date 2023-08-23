@@ -5,8 +5,6 @@
 #
 
 set -eux
-
-
 cd smithy-rs
 
 # TODO(enableNewSmithyRuntimeCleanup): Only run the orchestrator version of this

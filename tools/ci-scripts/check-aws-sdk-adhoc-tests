@@ -7,8 +7,6 @@
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
-
-
 set -eu
 cd smithy-rs
 
