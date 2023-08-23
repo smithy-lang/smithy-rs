@@ -21,7 +21,7 @@ percent-encoding = "2.1.0"
 pin-project-lite = "0.2.9"
 
 [dev-dependencies]
-async-trait = "0.1.50"
+async-trait = "0.1.68"
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }

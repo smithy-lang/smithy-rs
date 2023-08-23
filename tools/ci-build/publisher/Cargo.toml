@@ -15,27 +15,27 @@ opt-level = 0
 
 [dependencies]
 anyhow = "1.0"
-async-recursion = "0.3.2"
-async-trait = "0.1.51"
-cargo_toml = "0.10.1"
-clap = { version = "~3.1.18", features = ["derive"] }
-crates_io_api = "0.7.3"
+async-recursion = "0.3"
+async-trait = "0.1"
+cargo_toml = "0.10"
+clap = { version = "~3.1", features = ["derive"] }
+crates_io_api = "0.7"
 dialoguer = "0.8"
 fs-err = "2"
 handlebars = "4.2"
 lazy_static = "1"
-regex = "1.5.4"
+regex = "1.5"
 semver = "1.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha256 = "1"
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common", features = ["async-shell"] }
-tempfile = "3.3.0"
-thiserror = "1.0"
-tokio = { version = "1.20.1", features = ["full"] }
-toml = { version = "0.5.8", features = ["preserve_order"] }
-tracing = "0.1.29"
-tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+tempfile = "3.3"
+thiserror = "1"
+tokio = { version = "1", features = ["full"] }
+toml = { version = "0.5", features = ["preserve_order"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 pretty_assertions = "1.3"

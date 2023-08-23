@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 anyhow = "1"
-async-trait = "0.1.56"
+async-trait = "0.1.68"
 aws-config = "0.55.3"
 aws-sdk-cloudwatch = "0.28.0"
 aws-sdk-lambda = "0.28.0"
