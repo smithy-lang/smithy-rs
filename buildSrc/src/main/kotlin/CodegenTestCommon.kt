@@ -236,7 +236,6 @@ fun Project.registerCargoCommandsTasks(
     outputDir: File,
     defaultRustDocFlags: String,
 ) {
-    val env = mapOf("RUSTFLAGS" to "--cfg aws_sdk_unstable")
     val dependentTasks =
         listOfNotNull(
             "assemble",
@@ -247,29 +246,25 @@ fun Project.registerCargoCommandsTasks(
     this.tasks.register<Exec>(Cargo.CHECK.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-        environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
         commandLine("cargo", "check", "--lib", "--tests", "--benches", "--all-features")
     }
 
     this.tasks.register<Exec>(Cargo.TEST.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-
-        commandLine("cargo", "test", "--all-features", "--no-fail-fast").environment(env)
+        commandLine("cargo", "test", "--all-features", "--no-fail-fast")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTDOCFLAGS", defaultRustDocFlags)
-
-        commandLine("cargo", "doc", "--no-deps", "--document-private-items").environment(env)
+        commandLine("cargo", "doc", "--no-deps", "--document-private-items")
     }
 
     this.tasks.register<Exec>(Cargo.CLIPPY.toString) {
         dependsOn(dependentTasks)
         workingDir(outputDir)
-
-        commandLine("cargo", "clippy").environment(env)
+        commandLine("cargo", "clippy")
     }
 }
