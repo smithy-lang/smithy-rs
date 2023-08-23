@@ -35,10 +35,7 @@ public object RenderSerdeAttribute {
 
     public fun addSerdeWithoutShapeModel(writer: RustWriter) {
         Attribute("").serdeSerialize().render(writer)
-        Attribute("").serdeSerializeCompilationGuard().render(writer)
-
         Attribute("").serdeDeserialize().render(writer)
-        Attribute("").serdeDeserializeCompilationGuard().render(writer)
     }
 
     public fun addSerde(writer: RustWriter, shape: Shape, model: Model) {

@@ -486,27 +486,6 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-deserialize")), derive(RuntimeType.SerdeDeserialize)))
     }
 
-    private fun compilationGuard(featureName: String): Attribute {
-        val comment = """\n
-            You must pass \"aws_sdk_unstable\" flag to RUSTFLAG.
-            e.g.
-            ```bash
-            export RUSTFLAGS=\"--cfg aws_sdk_unstable\"
-            ```
-            Learn more about this on this SDK's document.
-        """.trimIndent()
-
-        return Attribute(cfgAttr(all(not(writable("aws_sdk_unstable")), feature(featureName)), attributeWithStringAsArgument(RuntimeType.CompileGuardAttr, comment)))
-    }
-
-    public fun serdeSerializeCompilationGuard(): Attribute {
-        return compilationGuard("serde-serialize")
-    }
-
-    public fun serdeDeserializeCompilationGuard(): Attribute {
-        return compilationGuard("serde-deserialize")
-    }
-
     public fun serdeSkip(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), any(feature("serde-serialize"), feature("serde-deserialize"))), serde("skip")))
     }
