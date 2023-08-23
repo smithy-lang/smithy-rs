@@ -11,12 +11,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class HttpConnectorConfigDecorator : ClientCodegenDecorator {
     override val name: String = "HttpConnectorConfigDecorator"
@@ -25,17 +23,13 @@ class HttpConnectorConfigDecorator : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + HttpConnectorConfigCustomization(codegenContext)
-        }
+    ): List<ConfigCustomization> = baseCustomizations + HttpConnectorConfigCustomization(codegenContext)
 }
 
 private class HttpConnectorConfigCustomization(
     codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
@@ -114,40 +108,16 @@ private class HttpConnectorConfigCustomization(
 
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
-            is ServiceConfig.ConfigStruct -> writable {
-                if (runtimeMode.generateMiddleware) {
-                    rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
-                }
-            }
-
             is ServiceConfig.ConfigImpl -> writable {
-                if (runtimeMode.generateOrchestrator) {
-                    rustTemplate(
-                        """
-                        /// Return the [`SharedHttpConnector`](#{SharedHttpConnector}) to use when making requests, if any.
-                        pub fn http_connector(&self) -> Option<#{SharedHttpConnector}> {
-                            self.runtime_components.http_connector()
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    rustTemplate(
-                        """
-                        /// Return an [`HttpConnector`](#{HttpConnector}) to use when making requests, if any.
-                        pub fn http_connector(&self) -> Option<&#{HttpConnector}> {
-                            self.http_connector.as_ref()
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
-            }
-
-            is ServiceConfig.BuilderStruct -> writable {
-                if (runtimeMode.generateMiddleware) {
-                    rustTemplate("http_connector: Option<#{HttpConnector}>,", *codegenScope)
-                }
+                rustTemplate(
+                    """
+                    /// Return the [`SharedHttpConnector`](#{SharedHttpConnector}) to use when making requests, if any.
+                    pub fn http_connector(&self) -> Option<#{SharedHttpConnector}> {
+                        self.runtime_components.http_connector()
+                    }
+                    """,
+                    *codegenScope,
+                )
             }
 
             ServiceConfig.BuilderImpl -> writable {
@@ -229,47 +199,29 @@ private class HttpConnectorConfigCustomization(
                     """,
                     *codegenScope,
                 )
-                if (runtimeMode.generateOrchestrator) {
-                    rustTemplate(
-                        """
-                        pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
-                            http_connector.map(|c| self.config.store_put(c.into()));
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    rustTemplate(
-                        """
-                        pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
-                            self.http_connector = http_connector.map(|inner| inner.into());
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                rustTemplate(
+                    """
+                    pub fn set_http_connector(&mut self, http_connector: Option<impl Into<#{HttpConnector}>>) -> &mut Self {
+                        http_connector.map(|c| self.config.store_put(c.into()));
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
             }
 
             is ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.generateOrchestrator) {
-                    rustTemplate(
-                        "#{set_connector}(&mut resolver);",
-                        "set_connector" to setConnectorFn(),
-                    )
-                } else {
-                    rust("http_connector: self.http_connector,")
-                }
+                rustTemplate(
+                    "#{set_connector}(&mut resolver);",
+                    "set_connector" to setConnectorFn(),
+                )
             }
 
             is ServiceConfig.OperationConfigOverride -> writable {
-                if (runtimeMode.generateOrchestrator) {
-                    rustTemplate(
-                        "#{set_connector}(&mut resolver);",
-                        "set_connector" to setConnectorFn(),
-                    )
-                }
+                rustTemplate(
+                    "#{set_connector}(&mut resolver);",
+                    "set_connector" to setConnectorFn(),
+                )
             }
 
             else -> emptySection

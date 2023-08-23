@@ -84,82 +84,52 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
     override fun section(section: CustomizableOperationSection): Writable =
         writable {
             if (section is CustomizableOperationSection.CustomizableOperationImpl) {
-                if (section.isRuntimeModeOrchestrator) {
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete these utilities
-                    rustTemplate(
-                        """
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn request_time_for_tests(self, request_time: ::std::time::SystemTime) -> Self {
-                            self.runtime_plugin(
-                                #{StaticRuntimePlugin}::new()
-                                    .with_runtime_components(
-                                        #{RuntimeComponentsBuilder}::new("request_time_for_tests")
-                                            .with_time_source(Some(#{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))))
-                                    )
-                            )
-                        }
+                // TODO(enableNewSmithyRuntimeCleanup): Delete these utilities
+                rustTemplate(
+                    """
+                    ##[doc(hidden)]
+                    // This is a temporary method for testing. NEVER use it in production
+                    pub fn request_time_for_tests(self, request_time: ::std::time::SystemTime) -> Self {
+                        self.runtime_plugin(
+                            #{StaticRuntimePlugin}::new()
+                                .with_runtime_components(
+                                    #{RuntimeComponentsBuilder}::new("request_time_for_tests")
+                                        .with_time_source(Some(#{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))))
+                                )
+                        )
+                    }
 
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn user_agent_for_tests(mut self) -> Self {
-                            let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{BeforeTransmitInterceptorContextMut}<'_>, _: &mut #{ConfigBag}| {
-                                let headers = context.request_mut().headers_mut();
-                                let user_agent = #{AwsUserAgent}::for_tests();
-                                headers.insert(
-                                    #{http}::header::USER_AGENT,
-                                    #{http}::HeaderValue::try_from(user_agent.ua_header()).unwrap(),
-                                );
-                                headers.insert(
-                                    #{http}::HeaderName::from_static("x-amz-user-agent"),
-                                    #{http}::HeaderValue::try_from(user_agent.aws_ua_header()).unwrap(),
-                                );
-                            });
-                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
-                            self
-                        }
-
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn remove_invocation_id_for_tests(mut self) -> Self {
-                            let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{BeforeTransmitInterceptorContextMut}<'_>, _: &mut #{ConfigBag}| {
-                                context.request_mut().headers_mut().remove("amz-sdk-invocation-id");
-                            });
-                            self.interceptors.push(#{SharedInterceptor}::new(interceptor));
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete this branch when middleware is no longer used
-                    rustTemplate(
-                        """
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn request_time_for_tests(mut self, request_time: ::std::time::SystemTime) -> Self {
-                            self.operation.properties_mut().insert(
-                                #{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))
+                    ##[doc(hidden)]
+                    // This is a temporary method for testing. NEVER use it in production
+                    pub fn user_agent_for_tests(mut self) -> Self {
+                        let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{BeforeTransmitInterceptorContextMut}<'_>, _: &mut #{ConfigBag}| {
+                            let headers = context.request_mut().headers_mut();
+                            let user_agent = #{AwsUserAgent}::for_tests();
+                            headers.insert(
+                                #{http}::header::USER_AGENT,
+                                #{http}::HeaderValue::try_from(user_agent.ua_header()).unwrap(),
                             );
-                            self
-                        }
+                            headers.insert(
+                                #{http}::HeaderName::from_static("x-amz-user-agent"),
+                                #{http}::HeaderValue::try_from(user_agent.aws_ua_header()).unwrap(),
+                            );
+                        });
+                        self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                        self
+                    }
 
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn user_agent_for_tests(mut self) -> Self {
-                            self.operation.properties_mut().insert(#{AwsUserAgent}::for_tests());
-                            self
-                        }
-
-                        ##[doc(hidden)]
-                        // This is a temporary method for testing. NEVER use it in production
-                        pub fn remove_invocation_id_for_tests(self) -> Self {
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                    ##[doc(hidden)]
+                    // This is a temporary method for testing. NEVER use it in production
+                    pub fn remove_invocation_id_for_tests(mut self) -> Self {
+                        let interceptor = #{TestParamsSetterInterceptor}::new(|context: &mut #{BeforeTransmitInterceptorContextMut}<'_>, _: &mut #{ConfigBag}| {
+                            context.request_mut().headers_mut().remove("amz-sdk-invocation-id");
+                        });
+                        self.interceptors.push(#{SharedInterceptor}::new(interceptor));
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
             }
         }
 }

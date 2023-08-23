@@ -9,9 +9,6 @@ use aws_sdk_s3::Client;
 use aws_smithy_client::test_connection::{capture_request, CaptureRequestReceiver};
 use aws_types::SdkConfig;
 
-// TODO(enableNewSmithyRuntimeCleanup): Remove this attribute once #[cfg(aws_sdk_middleware_mode)]
-//  has been removed
-#[allow(dead_code)]
 fn test_client() -> (CaptureRequestReceiver, Client) {
     let (conn, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
@@ -23,7 +20,6 @@ fn test_client() -> (CaptureRequestReceiver, Client) {
     (captured_request, client)
 }
 
-#[cfg(not(aws_sdk_middleware_mode))]
 #[tokio::test]
 async fn operation_overrides_force_path_style() {
     let (captured_request, client) = test_client();
@@ -42,7 +38,6 @@ async fn operation_overrides_force_path_style() {
     );
 }
 
-#[cfg(not(aws_sdk_middleware_mode))]
 #[tokio::test]
 async fn operation_overrides_fips() {
     let (captured_request, client) = test_client();
@@ -61,7 +56,6 @@ async fn operation_overrides_fips() {
     );
 }
 
-#[cfg(not(aws_sdk_middleware_mode))]
 #[tokio::test]
 async fn operation_overrides_dual_stack() {
     let (captured_request, client) = test_client();
@@ -84,7 +78,6 @@ async fn operation_overrides_dual_stack() {
 //  accessed in ServiceRuntimePlugin::config. Currently, a credentials cache created for a single
 //  operation invocation is not picked up by an identity resolver.
 /*
-#[cfg(not(aws_sdk_middleware_mode))]
 #[tokio::test]
 async fn operation_overrides_credentials_provider() {
     let (captured_request, client) = test_client();

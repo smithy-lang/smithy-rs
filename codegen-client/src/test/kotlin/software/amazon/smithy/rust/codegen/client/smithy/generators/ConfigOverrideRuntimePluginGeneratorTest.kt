@@ -6,14 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -39,16 +37,14 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides endpoint resolver`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
                 "EndpointResolverParams" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::endpoint::EndpointResolverParams"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
             )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
@@ -67,7 +63,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                             client_config.config,
                             &client_config.runtime_components,
                         );
-                        let sut_components = sut.runtime_components();
+                        let prev = #{RuntimeComponentsBuilder}::new("prev");
+                        let sut_components = sut.runtime_components(&prev);
                         let endpoint_resolver = sut_components.endpoint_resolver().unwrap();
                         let endpoint = endpoint_resolver
                             .resolve_endpoint(&#{EndpointResolverParams}::new(crate::config::endpoint::Params {}))
@@ -85,10 +82,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides http connector`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
@@ -163,10 +157,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides retry strategy`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,

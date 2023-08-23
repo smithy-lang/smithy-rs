@@ -5,8 +5,8 @@
 
 //! Functions shared between the tests of several modules.
 
-use bytes::Bytes;
-use http::{Method, Request, Uri, Version};
+use crate::http_request::{SignableBody, SignableRequest};
+use http::{Method, Request, Uri};
 use std::error::Error as StdError;
 
 fn path(name: &str, ext: &str) -> String {
@@ -34,19 +34,19 @@ pub(crate) fn test_sts(name: &str) -> String {
     read(&path(name, "sts"))
 }
 
-pub(crate) fn test_request(name: &str) -> Request<Bytes> {
+pub(crate) fn test_request(name: &str) -> TestRequest {
     test_parsed_request(name, "req")
 }
 
-pub(crate) fn test_signed_request(name: &str) -> Request<Bytes> {
+pub(crate) fn test_signed_request(name: &str) -> TestRequest {
     test_parsed_request(name, "sreq")
 }
 
-pub(crate) fn test_signed_request_query_params(name: &str) -> Request<Bytes> {
+pub(crate) fn test_signed_request_query_params(name: &str) -> TestRequest {
     test_parsed_request(name, "qpsreq")
 }
 
-fn test_parsed_request(name: &str, ext: &str) -> Request<Bytes> {
+fn test_parsed_request(name: &str, ext: &str) -> TestRequest {
     let path = path(name, ext);
     match parse_request(read(&path).as_bytes()) {
         Ok(parsed) => parsed,
@@ -54,15 +54,86 @@ fn test_parsed_request(name: &str, ext: &str) -> Request<Bytes> {
     }
 }
 
-pub(crate) fn make_headers_comparable<B>(request: &mut Request<B>) {
-    for (_name, value) in request.headers_mut() {
-        value.set_sensitive(false);
+pub(crate) struct TestRequest {
+    pub(crate) uri: String,
+    pub(crate) method: String,
+    pub(crate) headers: Vec<(String, String)>,
+    pub(crate) body: TestSignedBody,
+}
+
+pub(crate) enum TestSignedBody {
+    Signable(SignableBody<'static>),
+    Bytes(Vec<u8>),
+}
+
+impl TestSignedBody {
+    fn as_signable_body(&self) -> SignableBody<'_> {
+        match self {
+            TestSignedBody::Signable(data) => data.clone(),
+            TestSignedBody::Bytes(data) => SignableBody::Bytes(data.as_slice()),
+        }
     }
 }
 
-fn parse_request(
-    s: &[u8],
-) -> Result<Request<bytes::Bytes>, Box<dyn StdError + Send + Sync + 'static>> {
+impl TestRequest {
+    pub(crate) fn set_body(&mut self, body: SignableBody<'static>) {
+        self.body = TestSignedBody::Signable(body);
+    }
+
+    pub(crate) fn as_http_request(&self) -> http::Request<&'static str> {
+        let mut builder = http::Request::builder()
+            .uri(&self.uri)
+            .method(Method::from_bytes(self.method.as_bytes()).unwrap());
+        for (k, v) in &self.headers {
+            builder = builder.header(k, v);
+        }
+        builder.body("body").unwrap()
+    }
+}
+
+impl<B: AsRef<[u8]>> From<http::Request<B>> for TestRequest {
+    fn from(value: Request<B>) -> Self {
+        let invalid = value
+            .headers()
+            .values()
+            .find(|h| std::str::from_utf8(h.as_bytes()).is_err());
+        if let Some(invalid) = invalid {
+            panic!("invalid header: {:?}", invalid);
+        }
+        Self {
+            uri: value.uri().to_string(),
+            method: value.method().to_string(),
+            headers: value
+                .headers()
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.to_string(),
+                        String::from_utf8(v.as_bytes().to_vec()).unwrap(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            body: TestSignedBody::Bytes(value.body().as_ref().to_vec()),
+        }
+    }
+}
+
+impl<'a> From<&'a TestRequest> for SignableRequest<'a> {
+    fn from(request: &'a TestRequest) -> SignableRequest<'a> {
+        SignableRequest::new(
+            &request.method,
+            &request.uri,
+            request
+                .headers
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str())),
+            request.body.as_signable_body(),
+        )
+        .expect("URI MUST be valid")
+    }
+}
+
+fn parse_request(s: &[u8]) -> Result<TestRequest, Box<dyn StdError + Send + Sync + 'static>> {
     let mut headers = [httparse::EMPTY_HEADER; 64];
     // httparse 1.5 requires two trailing newlines to head the header section.
     let mut with_newline = Vec::from(s);
@@ -70,37 +141,30 @@ fn parse_request(
     let mut req = httparse::Request::new(&mut headers);
     let _ = req.parse(&with_newline).unwrap();
 
-    let version = match req.version.unwrap() {
-        1 => Version::HTTP_11,
-        _ => unimplemented!(),
-    };
-
-    let method = match req.method.unwrap() {
-        "GET" => Method::GET,
-        "POST" => Method::POST,
-        _ => unimplemented!(),
-    };
-
-    let mut builder = Request::builder();
-    builder = builder.version(version);
-    builder = builder.method(method);
-
     let mut uri_builder = Uri::builder().scheme("https");
     if let Some(path) = req.path {
         uri_builder = uri_builder.path_and_query(path);
     }
+
+    let mut headers = vec![];
     for header in req.headers {
         let name = header.name.to_lowercase();
         if name == "host" {
             uri_builder = uri_builder.authority(header.value);
         } else if !name.is_empty() {
-            builder = builder.header(&name, header.value);
+            headers.push((
+                header.name.to_string(),
+                std::str::from_utf8(header.value)?.to_string(),
+            ));
         }
     }
 
-    builder = builder.uri(uri_builder.build()?);
-    let req = builder.body(bytes::Bytes::new())?;
-    Ok(req)
+    Ok(TestRequest {
+        uri: uri_builder.build()?.to_string(),
+        method: req.method.unwrap().to_string(),
+        headers,
+        body: TestSignedBody::Bytes(vec![]),
+    })
 }
 
 #[test]

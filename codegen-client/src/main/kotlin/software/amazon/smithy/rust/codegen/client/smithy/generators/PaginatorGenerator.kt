@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.model.traits.PaginatedTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerics
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -38,23 +37,14 @@ fun OperationShape.isPaginated(model: Model) =
 class PaginatorGenerator private constructor(
     private val codegenContext: ClientCodegenContext,
     operation: OperationShape,
-    private val generics: FluentClientGenerics,
-    retryClassifier: RuntimeType,
 ) {
     companion object {
         fun paginatorType(
             codegenContext: ClientCodegenContext,
-            generics: FluentClientGenerics,
             operationShape: OperationShape,
-            retryClassifier: RuntimeType,
         ): RuntimeType? {
             return if (operationShape.isPaginated(codegenContext.model)) {
-                PaginatorGenerator(
-                    codegenContext,
-                    operationShape,
-                    generics,
-                    retryClassifier,
-                ).paginatorType()
+                PaginatorGenerator(codegenContext, operationShape).paginatorType()
             } else {
                 null
             }
@@ -87,15 +77,7 @@ class PaginatorGenerator private constructor(
 
     private val codegenScope = arrayOf(
         *preludeScope,
-        "generics" to generics.decl,
-        "bounds" to generics.bounds,
         "page_size_setter" to pageSizeSetter(),
-        "send_bounds" to generics.sendBounds(
-            symbolProvider.toSymbol(operation),
-            outputType,
-            errorType,
-            retryClassifier,
-        ),
 
         // Operation Types
         "operation" to symbolProvider.toSymbol(operation),
@@ -125,15 +107,15 @@ class PaginatorGenerator private constructor(
         rustTemplate(
             """
             /// Paginator for #{operation:D}
-            pub struct $paginatorName#{generics:W} {
-                handle: std::sync::Arc<crate::client::Handle${generics.inst}>,
+            pub struct $paginatorName {
+                handle: std::sync::Arc<crate::client::Handle>,
                 builder: #{Builder},
                 stop_on_duplicate_token: bool,
             }
 
-            impl${generics.inst} ${paginatorName}${generics.inst} #{bounds:W} {
+            impl $paginatorName {
                 /// Create a new paginator-wrapper
-                pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle${generics.inst}>, builder: #{Builder}) -> Self {
+                pub(crate) fn new(handle: std::sync::Arc<crate::client::Handle>, builder: #{Builder}) -> Self {
                     Self {
                         handle,
                         builder,
@@ -160,8 +142,7 @@ class PaginatorGenerator private constructor(
                 /// Create the pagination stream
                 ///
                 /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
-                pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
-                #{send_bounds:W} {
+                pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin} {
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
@@ -204,52 +185,26 @@ class PaginatorGenerator private constructor(
             "items_fn" to itemsFn(),
             "output_token" to outputTokenLens,
             "item_type" to writable {
-                if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}>>", *codegenScope)
-                } else {
-                    rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
-                }
+                rustTemplate("#{Result}<#{Output}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
             },
             "orchestrate" to writable {
-                if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                    rustTemplate(
-                        """
-                        {
-                            let op = match input.make_operation(&handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure) {
-                                #{Ok}(op) => op,
-                                #{Err}(e) => {
-                                    let _ = tx.send(#{Err}(e)).await;
-                                    return;
-                                }
-                            };
-                            handle.client.call(op).await
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    rustTemplate(
-                        "#{operation}::orchestrate(&runtime_plugins, input.clone()).await",
-                        *codegenScope,
-                    )
-                }
+                rustTemplate(
+                    "#{operation}::orchestrate(&runtime_plugins, input.clone()).await",
+                    *codegenScope,
+                )
             },
             "runtime_plugin_init" to writable {
-                if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                    rustTemplate(
-                        """
-                        let runtime_plugins = #{operation}::operation_runtime_plugins(
-                            handle.runtime_plugins.clone(),
-                            &handle.conf,
-                            #{None},
-                        );
-                        """,
-                        *codegenScope,
-                        "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                    )
-                }
+                rustTemplate(
+                    """
+                    let runtime_plugins = #{operation}::operation_runtime_plugins(
+                        handle.runtime_plugins.clone(),
+                        &handle.conf,
+                        #{None},
+                    );
+                    """,
+                    *codegenScope,
+                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                )
             },
         )
     }
@@ -278,7 +233,7 @@ class PaginatorGenerator private constructor(
                     ///
                     /// This paginator automatically flattens results using `$documentedPath`. Queries to the underlying service
                     /// are dispatched lazily.
-                    pub fn items(self) -> #{ItemPaginator}${generics.inst} {
+                    pub fn items(self) -> #{ItemPaginator} {
                         #{ItemPaginator}(self)
                     }
                     """,
@@ -297,16 +252,15 @@ class PaginatorGenerator private constructor(
                 /// Flattened paginator for `$paginatorName`
                 ///
                 /// This is created with [`.items()`]($paginatorName::items)
-                pub struct ${paginatorName}Items#{generics:W}($paginatorName${generics.inst});
+                pub struct ${paginatorName}Items($paginatorName);
 
-                impl ${generics.inst} ${paginatorName}Items${generics.inst} #{bounds:W} {
+                impl ${paginatorName}Items {
                     /// Create the pagination stream
                     ///
                     /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
                     ///
                     /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
-                    pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin}
-                    #{send_bounds:W} {
+                    pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin} {
                         #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
                 }
@@ -317,11 +271,7 @@ class PaginatorGenerator private constructor(
                     paginationInfo.itemsMemberPath,
                 ),
                 "item_type" to writable {
-                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}>>", *codegenScope)
-                    } else {
-                        rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
-                    }
+                    rustTemplate("#{Result}<${itemType()}, #{SdkError}<#{Error}, #{HttpResponse}>>", *codegenScope)
                 },
                 *codegenScope,
             )

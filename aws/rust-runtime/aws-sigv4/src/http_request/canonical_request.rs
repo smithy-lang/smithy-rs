@@ -15,12 +15,11 @@ use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, 
 use crate::sign::sha256_hex_string;
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
-use http::{HeaderMap, HeaderValue, Method, Uri};
+use http::{HeaderMap, HeaderValue, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::fmt;
-use std::fmt::Formatter;
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -103,7 +102,7 @@ impl<'a> SignatureValues<'a> {
 
 #[derive(Debug, PartialEq)]
 pub(super) struct CanonicalRequest<'a> {
-    pub(super) method: &'a Method,
+    pub(super) method: &'a str,
     pub(super) path: Cow<'a, str>,
     pub(super) params: Option<String>,
     pub(super) headers: HeaderMap,
@@ -131,6 +130,9 @@ impl<'a> CanonicalRequest<'a> {
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
     ) -> Result<CanonicalRequest<'b>, CanonicalRequestError> {
+        let creds = params
+            .credentials()
+            .ok_or_else(CanonicalRequestError::unsupported_credential_type)?;
         // Path encoding: if specified, re-encode % as %25
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
@@ -151,7 +153,7 @@ impl<'a> CanonicalRequest<'a> {
         let signed_headers = SignedHeaders::new(signed_headers);
 
         let security_token = match params.settings.session_token_mode {
-            SessionTokenMode::Include => params.security_token,
+            SessionTokenMode::Include => creds.session_token(),
             SessionTokenMode::Exclude => None,
         };
 
@@ -167,10 +169,10 @@ impl<'a> CanonicalRequest<'a> {
                 content_sha256: payload_hash,
                 credential: format!(
                     "{}/{}/{}/{}/aws4_request",
-                    params.access_key,
+                    creds.access_key_id(),
                     format_date(params.time),
                     params.region,
-                    params.service_name,
+                    params.name,
                 ),
                 date_time,
                 expires: params
@@ -200,6 +202,9 @@ impl<'a> CanonicalRequest<'a> {
         payload_hash: &str,
         date_time: &str,
     ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), CanonicalRequestError> {
+        let creds = params
+            .credentials()
+            .ok_or_else(CanonicalRequestError::unsupported_credential_type)?;
         // Header computation:
         // The canonical request will include headers not present in the input. We need to clone and
         // normalize the headers from the original request and add:
@@ -212,7 +217,7 @@ impl<'a> CanonicalRequest<'a> {
             // Header names and values need to be normalized according to Step 4 of https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
             // Using append instead of insert means this will not clobber headers that have the same lowercased name
             canonical_headers.append(
-                HeaderName::from_str(&name.as_str().to_lowercase())?,
+                HeaderName::from_str(&name.to_lowercase())?,
                 normalize_header_value(value)?,
             );
         }
@@ -222,7 +227,7 @@ impl<'a> CanonicalRequest<'a> {
         if params.settings.signature_location == SignatureLocation::Headers {
             Self::insert_date_header(&mut canonical_headers, date_time);
 
-            if let Some(security_token) = params.security_token {
+            if let Some(security_token) = creds.session_token() {
                 let mut sec_header = HeaderValue::from_str(security_token)?;
                 sec_header.set_sensitive(true);
                 canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
@@ -237,7 +242,7 @@ impl<'a> CanonicalRequest<'a> {
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
         for name in canonical_headers.keys() {
             if let Some(excluded_headers) = params.settings.excluded_headers.as_ref() {
-                if excluded_headers.contains(name) {
+                if excluded_headers.iter().any(|it| name.as_str() == it) {
                     continue;
                 }
             }
@@ -406,9 +411,7 @@ fn trim_spaces_from_byte_string(bytes: &[u8]) -> &[u8] {
 
 /// Works just like [trim_all] but acts on HeaderValues instead of bytes.
 /// Will ensure that the underlying bytes are valid UTF-8.
-fn normalize_header_value(
-    header_value: &HeaderValue,
-) -> Result<HeaderValue, CanonicalRequestError> {
+fn normalize_header_value(header_value: &str) -> Result<HeaderValue, CanonicalRequestError> {
     let trimmed_value = trim_all(header_value.as_bytes());
     HeaderValue::from_str(
         std::str::from_utf8(&trimmed_value)
@@ -519,7 +522,7 @@ impl<'a> StringToSign<'a> {
 }
 
 impl<'a> fmt::Display for StringToSign<'a> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
             "{}\n{}\n{}\n{}",
@@ -539,24 +542,23 @@ mod tests {
     };
     use crate::http_request::test::{test_canonical_request, test_request, test_sts};
     use crate::http_request::{
-        PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SigningSettings,
+        PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SignatureLocation,
+        SigningParams, SigningSettings,
     };
-    use crate::http_request::{SignatureLocation, SigningParams};
     use crate::sign::sha256_hex_string;
+    use aws_credential_types::Credentials;
     use aws_smithy_http::query_writer::QueryWriter;
-    use http::Uri;
-    use http::{header::HeaderName, HeaderValue};
+    use aws_smithy_runtime_api::client::identity::Identity;
+    use http::{HeaderValue, Uri};
     use pretty_assertions::assert_eq;
     use proptest::{prelude::*, proptest};
     use std::time::Duration;
 
-    fn signing_params(settings: SigningSettings) -> SigningParams<'static> {
+    fn signing_params(identity: &Identity, settings: SigningSettings) -> SigningParams<'_> {
         SigningParams {
-            access_key: "test-access-key",
-            secret_key: "test-secret-key",
-            security_token: None,
+            identity,
             region: "test-region",
-            service_name: "testservicename",
+            name: "testservicename",
             time: parse_date_time("20210511T154045Z").unwrap(),
             settings,
         }
@@ -565,20 +567,21 @@ mod tests {
     #[test]
     fn test_repeated_header() {
         let mut req = test_request("get-vanilla-query-order-key-case");
-        req.headers_mut().append(
-            "x-amz-object-attributes",
-            HeaderValue::from_static("Checksum"),
-        );
-        req.headers_mut().append(
-            "x-amz-object-attributes",
-            HeaderValue::from_static("ObjectSize"),
-        );
+        req.headers.push((
+            "x-amz-object-attributes".to_string(),
+            "Checksum".to_string(),
+        ));
+        req.headers.push((
+            "x-amz-object-attributes".to_string(),
+            "ObjectSize".to_string(),
+        ));
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         assert_eq!(
@@ -599,7 +602,8 @@ mod tests {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let mut signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let mut signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
             creq.values.content_sha256(),
@@ -618,18 +622,16 @@ mod tests {
 
     #[test]
     fn test_unsigned_payload() {
-        let req = test_request("get-vanilla-query-order-key-case");
-        let req = SignableRequest::new(
-            req.method(),
-            req.uri(),
-            req.headers(),
-            SignableBody::UnsignedPayload,
-        );
+        let mut req = test_request("get-vanilla-query-order-key-case");
+        req.set_body(SignableBody::UnsignedPayload);
+        let req: SignableRequest<'_> = SignableRequest::from(&req);
+
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(creq.values.content_sha256(), "UNSIGNED-PAYLOAD");
         assert!(creq.to_string().ends_with("UNSIGNED-PAYLOAD"));
@@ -638,18 +640,15 @@ mod tests {
     #[test]
     fn test_precomputed_payload() {
         let payload_hash = "44ce7dd67c959e0d3524ffac1771dfbba87d2b6b4b4e99e42034a8b803f8b072";
-        let req = test_request("get-vanilla-query-order-key-case");
-        let req = SignableRequest::new(
-            req.method(),
-            req.uri(),
-            req.headers(),
-            SignableBody::Precomputed(String::from(payload_hash)),
-        );
+        let mut req = test_request("get-vanilla-query-order-key-case");
+        req.set_body(SignableBody::Precomputed(String::from(payload_hash)));
+        let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
             ..Default::default()
         };
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(creq.values.content_sha256(), payload_hash);
         assert!(creq.to_string().ends_with(payload_hash));
@@ -689,7 +688,8 @@ mod tests {
     fn test_double_url_encode_path() {
         let req = test_request("double-encode-path");
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test_canonical_request("double-encode-path");
@@ -701,7 +701,8 @@ mod tests {
     fn test_double_url_encode() {
         let req = test_request("double-url-encode");
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test_canonical_request("double-url-encode");
@@ -712,9 +713,10 @@ mod tests {
     #[test]
     fn test_tilde_in_uri() {
         let req = http::Request::builder()
-            .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap();
+            .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap().into();
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
             Some("k=&list-type=2&prefix=~objprefix&single=&unreserved=-_.~"),
@@ -734,9 +736,11 @@ mod tests {
         let req = http::Request::builder()
             .uri(query_writer.build_uri())
             .body("")
-            .unwrap();
+            .unwrap()
+            .into();
         let req = SignableRequest::from(&req);
-        let signing_params = signing_params(SigningSettings::default());
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = "list-type=2&prefix=%20%21%22%23%24%25%26%27%28%29%2A%2B%2C-.%2F0123456789%3A%3B%3C%3D%3E%3F%40ABCDEFGHIJKLMNOPQRSTUVWXYZ%5B%5C%5D%5E_%60abcdefghijklmnopqrstuvwxyz%7B%7C%7D~";
@@ -752,8 +756,8 @@ mod tests {
             session_token_mode: SessionTokenMode::Include,
             ..Default::default()
         };
-        let mut signing_params = signing_params(settings);
-        signing_params.security_token = Some("notarealsessiontoken");
+        let identity = Credentials::for_tests_with_session_token().into();
+        let mut signing_params = signing_params(&identity, settings);
 
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
@@ -786,7 +790,8 @@ mod tests {
             .header("x-amzn-trace-id", "test-trace-id")
             .header("x-amz-user-agent", "test-user-agent")
             .body("")
-            .unwrap();
+            .unwrap()
+            .into();
         let request = SignableRequest::from(&request);
 
         let settings = SigningSettings {
@@ -794,7 +799,8 @@ mod tests {
             ..Default::default()
         };
 
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
         let values = canonical.values.as_headers().unwrap();
@@ -816,7 +822,8 @@ mod tests {
             .header("x-amzn-trace-id", "test-trace-id")
             .header("x-amz-user-agent", "test-user-agent")
             .body("")
-            .unwrap();
+            .unwrap()
+            .into();
         let request = SignableRequest::from(&request);
 
         let settings = SigningSettings {
@@ -825,7 +832,8 @@ mod tests {
             ..Default::default()
         };
 
-        let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
         let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
         let values = canonical.values.into_query_params().unwrap();
@@ -847,7 +855,7 @@ mod tests {
             for key in &excluded_headers {
                 request_builder = request_builder.header(key, "value");
             }
-            let request = request_builder.body("").unwrap();
+            let request = request_builder.body("").unwrap().into();
 
             let request = SignableRequest::from(&request);
 
@@ -857,15 +865,14 @@ mod tests {
                 excluded_headers: Some(
                     excluded_headers
                         .into_iter()
-                        .map(|header_string| {
-                            HeaderName::from_static(Box::leak(header_string.into_boxed_str()))
-                        })
+                        .map(std::borrow::Cow::Owned)
                         .collect(),
                 ),
                 ..Default::default()
             };
 
-            let signing_params = signing_params(settings);
+        let identity = Credentials::for_tests().into();
+        let signing_params = signing_params(&identity, settings);
             let canonical = CanonicalRequest::from(&request, &signing_params).unwrap();
 
             let values = canonical.values.into_query_params().unwrap();
@@ -908,20 +915,13 @@ mod tests {
 
         #[test]
         fn test_normalize_header_value_works_on_valid_header_value(v in (".*")) {
-            if let Ok(header_value) = HeaderValue::from_maybe_shared(v) {
-                assert!(normalize_header_value(&header_value).is_ok());
-            }
+            prop_assume!(HeaderValue::from_str(&v).is_ok());
+            assert!(normalize_header_value(&v).is_ok());
         }
 
         #[test]
         fn test_trim_all_does_nothing_when_there_are_no_spaces(s in "[^ ]*") {
             assert_eq!(trim_all(s.as_bytes()).as_ref(), s.as_bytes());
         }
-    }
-
-    #[test]
-    fn test_normalize_header_value_returns_expected_error_on_invalid_utf8() {
-        let header_value = HeaderValue::from_bytes(&[0xC0, 0xC1]).unwrap();
-        assert!(normalize_header_value(&header_value).is_err());
     }
 }

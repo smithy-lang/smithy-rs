@@ -200,7 +200,7 @@ fun RustType.qualifiedName(): String {
 
 /** Format this Rust type as an `impl Into<T>` */
 fun RustType.implInto(fullyQualified: Boolean = true): String {
-    return "impl ${RuntimeType.Into.fullyQualifiedName()}<${this.render(fullyQualified)}>"
+    return "impl ${RuntimeType.Into.render(fullyQualified)}<${this.render(fullyQualified)}>"
 }
 
 /** Format this Rust type so that it may be used as an argument type in a function definition */

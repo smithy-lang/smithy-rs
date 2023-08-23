@@ -10,12 +10,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RetryClassifierDecorator : ClientCodegenDecorator {
     override val name: String = "RetryPolicy"
@@ -25,29 +22,8 @@ class RetryClassifierDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        (baseCustomizations + RetryClassifierFeature(codegenContext.runtimeConfig)).letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + OperationRetryClassifiersFeature(
-                codegenContext,
-                operation,
-            )
-        }
-}
-
-class RetryClassifierFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    override fun retryType(): RuntimeType =
-        AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier")
-
-    override fun section(section: OperationSection) = when (section) {
-        is OperationSection.FinalizeOperation -> writable {
-            rust(
-                "let ${section.operation} = ${section.operation}.with_retry_classifier(#T::new());",
-                retryType(),
-            )
-        }
-
-        else -> emptySection
-    }
+    ): List<OperationCustomization> = baseCustomizations +
+        OperationRetryClassifiersFeature(codegenContext, operation)
 }
 
 class OperationRetryClassifiersFeature(

@@ -164,7 +164,7 @@ pub async fn invoke_with_stop_point(
 /// Apply configuration is responsible for apply runtime plugins to the config bag, as well as running
 /// `read_before_execution` interceptors. If a failure occurs due to config construction, `invoke`
 /// will raise it to the user. If an interceptor fails, then `invoke`
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 fn apply_configuration(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -183,7 +183,7 @@ fn apply_configuration(
         .build()?)
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn try_op(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -316,7 +316,7 @@ async fn try_op(
     }
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn try_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -404,7 +404,7 @@ async fn try_attempt(
     run_interceptors!(halt_on_err: read_after_deserialization(ctx, runtime_components, cfg));
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn finally_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -416,7 +416,7 @@ async fn finally_attempt(
     });
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn finally_op(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -531,7 +531,10 @@ mod tests {
             Some(layer.freeze())
         }
 
-        fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        fn runtime_components(
+            &self,
+            _: &RuntimeComponentsBuilder,
+        ) -> Cow<'_, RuntimeComponentsBuilder> {
             Cow::Borrowed(&self.builder)
         }
     }
@@ -600,7 +603,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for FailingInterceptorsClientRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -617,7 +620,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for FailingInterceptorsOperationRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -901,7 +904,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for InterceptorsTestOperationRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -1240,7 +1243,10 @@ mod tests {
             builder: RuntimeComponentsBuilder,
         }
         impl RuntimePlugin for TestInterceptorRuntimePlugin {
-            fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+            fn runtime_components(
+                &self,
+                _: &RuntimeComponentsBuilder,
+            ) -> Cow<'_, RuntimeComponentsBuilder> {
                 Cow::Borrowed(&self.builder)
             }
         }
