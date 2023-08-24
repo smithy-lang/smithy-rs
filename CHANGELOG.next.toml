@@ -42,3 +42,15 @@ as opposed to AWS credentials in `&str` form. [Read more](https://github.com/aws
 references = ["smithy-rs#2913"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "Velfi"
