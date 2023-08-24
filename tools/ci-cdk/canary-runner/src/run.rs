@@ -171,6 +171,9 @@ pub async fn run(opt: RunArgs) -> Result<()> {
     let start_time = SystemTime::now();
     let config = aws_config::load_from_env().await;
     let result = run_canary(&options, &config).await;
+    if let Err(err) = &result {
+        error!("Canary invocation failed: {err:?}",);
+    }
 
     let mut metrics = vec![
         (
