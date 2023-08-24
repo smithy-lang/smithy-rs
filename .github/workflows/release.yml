@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.69.0
+  rust_version: 1.70.0
 
 name: Release smithy-rs
 run-name: ${{ github.workflow }} ${{ inputs.semantic_version }} (${{ inputs.commit_sha }}) - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
