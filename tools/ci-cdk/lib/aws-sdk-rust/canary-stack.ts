@@ -152,6 +152,15 @@ export class CanaryStack extends Stack {
             }),
         );
 
+        // Allow canaries to call EC2
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["ec2:DescribeSpotPriceHistory", "ec2:DescribeVpcs"],
+                effect: Effect.ALLOW,
+                resources: ["*"],
+            }),
+        );
+
         // Allow the OIDC role to pass the Lambda execution role to Lambda
         if (this.awsSdkRustOidcRole) {
             this.awsSdkRustOidcRole.oidcRole.addToPolicy(
