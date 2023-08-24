@@ -313,9 +313,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val SerdeSerialize = Serde.resolve("Serialize")
         val SerdeDeserialize = Serde.resolve("Deserialize")
 
-        val CompileGuard = CargoDependency.CompileGuard.toType()
-        val CompileGuardAttr = CompileGuard.resolve("compilation_guard")
-
         // smithy runtime types
         fun smithyAsync(runtimeConfig: RuntimeConfig) = CargoDependency.smithyAsync(runtimeConfig).toType()
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = CargoDependency.smithyChecksums(runtimeConfig).toType()
