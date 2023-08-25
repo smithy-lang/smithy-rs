@@ -56,6 +56,8 @@ tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 "#;
 
+const REQUIRED_SMITHY_CRATES: &[&str] = &["aws-smithy-async"];
+
 const REQUIRED_SDK_CRATES: &[&str] = &[
     "aws-config",
     "aws-sdk-s3",
@@ -130,37 +132,8 @@ fn enabled_feature(crate_source: &CrateSource) -> String {
 
 fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
     let mut output = BASE_MANIFEST.to_string();
-    for &sdk_crate in REQUIRED_SDK_CRATES {
-        match &crate_source {
-            CrateSource::Path(path) => {
-                let path_name = match sdk_crate.strip_prefix("aws-sdk-") {
-                    Some(path) => path,
-                    None => sdk_crate,
-                };
-                let crate_path = path.join(path_name);
-                writeln!(
-                    output,
-                    r#"{sdk_crate} = {{ path = "{path}" }}"#,
-                    path = crate_path.to_string_lossy()
-                )
-                .unwrap()
-            }
-            CrateSource::VersionsManifest {
-                versions,
-                release_tag,
-            } => match versions.crates.get(sdk_crate) {
-                Some(version) => writeln!(
-                    output,
-                    r#"{sdk_crate} = "{version}""#,
-                    version = version.version
-                )
-                .unwrap(),
-                None => {
-                    bail!("Couldn't find `{sdk_crate}` in versions.toml for `{release_tag}`")
-                }
-            },
-        }
-    }
+    write_dependencies(REQUIRED_SMITHY_CRATES, &mut output, &crate_source)?;
+    write_dependencies(REQUIRED_SDK_CRATES, &mut output, &crate_source)?;
     write!(output, "\n[features]\n").unwrap();
     writeln!(output, "latest = []").unwrap();
     for release_tag in NOTABLE_SDK_RELEASE_TAGS.iter() {
@@ -178,6 +151,45 @@ fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
     )
     .unwrap();
     Ok(output)
+}
+
+fn write_dependencies(
+    required_crates: &[&str],
+    output: &mut String,
+    crate_source: &CrateSource,
+) -> Result<()> {
+    for &required_crate in required_crates {
+        match &crate_source {
+            CrateSource::Path(path) => {
+                let path_name = match required_crate.strip_prefix("aws-sdk-") {
+                    Some(path) => path,
+                    None => required_crate,
+                };
+                let crate_path = path.join(path_name);
+                writeln!(
+                    output,
+                    r#"{required_crate} = {{ path = "{path}" }}"#,
+                    path = crate_path.to_string_lossy()
+                )
+                .unwrap()
+            }
+            CrateSource::VersionsManifest {
+                versions,
+                release_tag,
+            } => match versions.crates.get(required_crate) {
+                Some(version) => writeln!(
+                    output,
+                    r#"{required_crate} = "{version}""#,
+                    version = version.version
+                )
+                .unwrap(),
+                None => {
+                    bail!("Couldn't find `{required_crate}` in versions.toml for `{release_tag}`")
+                }
+            },
+        }
+    }
+    Ok(())
 }
 
 fn sha1_file(path: &Path) -> Result<String> {
@@ -427,6 +439,7 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+aws-smithy-async = { path = "some/sdk/path/aws-smithy-async" }
 aws-config = { path = "some/sdk/path/aws-config" }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
@@ -492,6 +505,7 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+aws-smithy-async = "0.46.0"
 aws-config = "0.46.0"
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"
@@ -509,6 +523,7 @@ default = ["latest"]
                     aws_doc_sdk_examples_revision: "some-revision-docs".into(),
                     manual_interventions: Default::default(),
                     crates: [
+                        crate_version("aws-smithy-async", "0.46.0"),
                         crate_version("aws-config", "0.46.0"),
                         crate_version("aws-sdk-s3", "0.20.0"),
                         crate_version("aws-sdk-ec2", "0.19.0"),
