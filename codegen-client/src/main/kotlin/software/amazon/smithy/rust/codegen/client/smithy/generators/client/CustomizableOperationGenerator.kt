@@ -197,7 +197,7 @@ class CustomizableOperationGenerator(
 
                     impl<T, E, B> CustomizableOperation<T, E, B> {
                         /// Creates a new `CustomizableOperation` from `customizable_send`.
-                        pub fn new(customizable_send: B) -> Self {
+                        pub(crate) fn new(customizable_send: B) -> Self {
                             Self {
                                 customizable_send,
                                 config_override: #{None},
