@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RetryInformationHeaderDecorator : ClientCodegenDecorator {
     override val name: String = "RetryInformationHeader"
@@ -22,9 +21,7 @@ class RetryInformationHeaderDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AddRetryInformationHeaderInterceptors(codegenContext))
-        }
+        baseCustomizations + listOf(AddRetryInformationHeaderInterceptors(codegenContext))
 }
 
 private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodegenContext) :

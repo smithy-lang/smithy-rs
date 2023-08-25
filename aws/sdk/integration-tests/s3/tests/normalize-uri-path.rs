@@ -14,7 +14,9 @@ use std::time::{Duration, UNIX_EPOCH};
 async fn test_operation_should_not_normalize_uri_path() {
     let (conn, rx) = capture_request(None);
     let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .credentials_provider(SharedCredentialsProvider::new(
+            Credentials::for_tests_with_session_token(),
+        ))
         .region(Region::new("us-east-1"))
         .http_connector(conn.clone())
         .build();

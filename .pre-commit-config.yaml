@@ -6,19 +6,6 @@ repos:
   - id: end-of-file-fixer
     exclude: ^aws/rust-runtime/aws-sigv4/aws-sig-v4-test-suite/
   - id: trailing-whitespace
-- repo: local
-  hooks:
-  - id: kotlin-block-quotes
-    name: Kotlin Block Quotes
-    entry: ./.pre-commit-hooks/kotlin-block-quotes.py
-    language: python
-    files: ^.*\.kt$
-  - id: license-header-check
-    name: License Header Check
-    entry: ./.pre-commit-hooks/license-header.sh
-    language: system
-    files: ^.*$
-    pass_filenames: false
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v2.10.0
   hooks:
@@ -29,3 +16,16 @@ repos:
   - id: pretty-format-rust
     entry: rustfmt --edition 2021
     files: ^.*\.rs$
+- repo: local
+  hooks:
+  - id: kotlin-block-quotes
+    name: Kotlin Block Quotes
+    entry: ./.pre-commit-hooks/kotlin-block-quotes.py
+    language: python
+    files: ^.*\.kt$
+  - id: sdk-lints-check
+    name: sdk-lints
+    entry: ./.pre-commit-hooks/sdk-lints.sh
+    language: system
+    files: ^.*$
+    pass_filenames: false

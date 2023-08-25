@@ -110,12 +110,7 @@ class EndpointParamsInterceptorGenerator(
         val builtInParams = params.toList().filter { it.isBuiltIn }
         // first load builtins and their defaults
         builtInParams.forEach { param ->
-            val config = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                "cfg"
-            } else {
-                "_config"
-            }
-            endpointTypesGenerator.builtInFor(param, config)?.also { defaultValue ->
+            endpointTypesGenerator.builtInFor(param, "cfg")?.also { defaultValue ->
                 rust(".set_${param.name.rustName()}(#W)", defaultValue)
             }
         }
@@ -173,7 +168,6 @@ class EndpointParamsInterceptorGenerator(
                 endpointTraitBindings.render(
                     this,
                     "_input",
-                    codegenContext.smithyRuntimeMode,
                 )
             }
             rust("cfg.interceptor_state().store_put(endpoint_prefix);")
