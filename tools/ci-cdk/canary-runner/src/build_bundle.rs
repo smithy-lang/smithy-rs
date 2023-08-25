@@ -68,7 +68,6 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
 // The elements in this `Vec` should be sorted in an ascending order by the release date.
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
-        ReleaseTag::from_str("release-2023-01-26").unwrap(), // last version before the crate reorg
         ReleaseTag::from_str("release-2023-08-03").unwrap(), // last version before `Stream` trait removal
     ];
 }
@@ -447,7 +446,6 @@ aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 
 [features]
 latest = []
-"release-2023-01-26" = []
 "release-2023-08-03" = []
 default = ["latest"]
 "#,
@@ -513,7 +511,6 @@ aws-sdk-transcribestreaming = "0.16.0"
 
 [features]
 latest = []
-"release-2023-01-26" = []
 "release-2023-08-03" = []
 default = ["latest"]
 "#,
@@ -597,18 +594,11 @@ default = ["latest"]
             "release-2023-08-03".to_string(),
             enabled_feature(&CrateSource::VersionsManifest {
                 versions: versions.clone(),
-                release_tag: "release-2023-02-23".parse().unwrap(),
+                release_tag: "release-2023-08-03".parse().unwrap(),
             }),
         );
         assert_eq!(
-            "release-2023-01-26".to_string(),
-            enabled_feature(&CrateSource::VersionsManifest {
-                versions: versions.clone(),
-                release_tag: "release-2023-01-26".parse().unwrap(),
-            }),
-        );
-        assert_eq!(
-            "release-2023-01-26".to_string(),
+            "release-2023-08-03".to_string(),
             enabled_feature(&CrateSource::VersionsManifest {
                 versions,
                 release_tag: "release-2023-01-13".parse().unwrap(),
