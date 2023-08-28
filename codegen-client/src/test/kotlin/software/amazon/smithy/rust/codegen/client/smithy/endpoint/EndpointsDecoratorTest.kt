@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -120,56 +119,6 @@ class EndpointsDecoratorTest {
             field: String
         }
     """.asSmithyModel()
-
-    // TODO(enableNewSmithyRuntimeCleanup): Delete this test (replaced by the second @Test below)
-    @Test
-    fun `set an endpoint in the property bag`() {
-        val testDir = clientIntegrationTest(
-            model,
-            // Just run integration tests.
-            TestCodegenSettings.middlewareModeTestParams
-                .copy(command = { "cargo test --test *".runWithWarnings(it) }),
-        ) { clientCodegenContext, rustCrate ->
-            rustCrate.integrationTest("endpoint_params_test") {
-                val moduleName = clientCodegenContext.moduleUseName()
-                Attribute.TokioTest.render(this)
-                rust(
-                    """
-                    async fn endpoint_params_are_set() {
-                            let conf = $moduleName::Config::builder().a_string_param("hello").a_bool_param(false).build();
-                            let operation = $moduleName::operation::test_operation::TestOperationInput::builder()
-                                .bucket("bucket-name").build().expect("input is valid")
-                                .make_operation(&conf).await.expect("valid operation");
-                            use $moduleName::endpoint::{Params};
-                            use aws_smithy_http::endpoint::Result;
-                            let props = operation.properties();
-                            let endpoint_result = dbg!(props.get::<Result>().expect("endpoint result in the bag"));
-                            let endpoint_params = props.get::<Params>().expect("endpoint params in the bag");
-                            let endpoint = endpoint_result.as_ref().expect("endpoint resolved properly");
-                            assert_eq!(
-                                endpoint_params,
-                                &Params::builder()
-                                    .bucket("bucket-name".to_string())
-                                    .built_in_with_default("some-default")
-                                    .bool_built_in_with_default(true)
-                                    .a_bool_param(false)
-                                    .a_string_param("hello".to_string())
-                                    .region("us-east-2".to_string())
-                                    .build().unwrap()
-                            );
-
-                            assert_eq!(endpoint.url(), "https://www.us-east-2.example.com");
-                    }
-                    """,
-                )
-            }
-        }
-        // the model has an intentionally failing test—ensure it fails
-        val failure = shouldThrow<CommandError> { "cargo test".runWithWarnings(testDir) }
-        failure.output shouldContain "endpoint::test::test_1"
-        failure.output shouldContain "https://failingtest.com"
-        "cargo clippy".runWithWarnings(testDir)
-    }
 
     @Test
     fun `resolve endpoint`() {

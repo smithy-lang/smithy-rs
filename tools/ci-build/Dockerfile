@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.68.2
+ARG rust_stable_version=1.70.0
 ARG rust_nightly_version=nightly-2023-05-31
 
 FROM ${base_image} AS bare_base_image
@@ -149,6 +149,7 @@ RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook-mermaid --l
 #
 # Final image
 #
+# `clang` needed by SDK examples for `libxlsxwriter-sys`
 FROM bare_base_image AS final_image
 ARG rust_stable_version
 ARG rust_nightly_version
@@ -156,6 +157,7 @@ RUN set -eux; \
     yum -y install --allowerasing \
         bc \
         ca-certificates \
+        clang \
         gcc \
         git \
         glibc-langpack-en \

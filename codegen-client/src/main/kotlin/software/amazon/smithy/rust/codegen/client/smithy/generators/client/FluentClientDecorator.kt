@@ -9,14 +9,12 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -36,25 +34,10 @@ class FluentClientDecorator : ClientCodegenDecorator {
             return
         }
 
-        val generics = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            NoClientGenerics(codegenContext.runtimeConfig)
-        } else {
-            FlexibleClientGenerics(
-                connectorDefault = null,
-                middlewareDefault = null,
-                retryDefault = RuntimeType.smithyClient(codegenContext.runtimeConfig).resolve("retry::Standard"),
-                client = RuntimeType.smithyClient(codegenContext.runtimeConfig),
-            )
-        }
-
         FluentClientGenerator(
             codegenContext,
-            generics = generics,
             customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
-        rustCrate.withModule(ClientRustModule.Client.customize) {
-            renderCustomizableOperationSend(codegenContext, generics, this)
-        }
 
         rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
     }

@@ -393,7 +393,7 @@ fn render_aws_sdk() {
 January 1st, 1970
 =================
 **New this release:**
-- 🐛 ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change
+- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change
 
 **Service Features:**
 - `aws-sdk-ec2` (0.12.0): Some API change
@@ -414,7 +414,7 @@ Old entry contents
         r#"{
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
-  "body": "**New this release:**\n- 🐛 ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567))\n\n",
+  "body": "**New this release:**\n- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567))\n\n",
   "prerelease": true
 }"#,
         release_manifest
@@ -511,7 +511,7 @@ author = "rcoh"
 January 1st, 1970
 =================
 **Breaking Changes:**
-- ⚠ (all, [smithy-rs#3](https://github.com/awslabs/smithy-rs/issues/3)) Third change - empty
+- :warning: (all, [smithy-rs#3](https://github.com/awslabs/smithy-rs/issues/3)) Third change - empty
 
 **New this release:**
 - (server, [smithy-rs#1](https://github.com/awslabs/smithy-rs/issues/1), @server-dev) First change - server

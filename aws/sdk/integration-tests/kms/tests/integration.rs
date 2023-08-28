@@ -66,7 +66,7 @@ async fn generate_random() {
     let conf = Config::builder()
         .http_connector(conn.clone())
         .region(Region::new("us-east-1"))
-        .credentials_provider(Credentials::for_tests())
+        .credentials_provider(Credentials::for_tests_with_session_token())
         .build();
     let client = kms::Client::from_conf(conf);
     let resp = client
@@ -148,7 +148,7 @@ async fn generate_random_keystore_not_found() {
     let conf = Config::builder()
         .http_connector(conn.clone())
         .region(Region::new("us-east-1"))
-        .credentials_provider(Credentials::for_tests())
+        .credentials_provider(Credentials::for_tests_with_session_token())
         .build();
     let client = kms::Client::from_conf(conf);
 

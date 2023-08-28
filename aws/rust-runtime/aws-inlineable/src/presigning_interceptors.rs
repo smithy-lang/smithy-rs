@@ -118,7 +118,10 @@ impl RuntimePlugin for SigV4PresigningRuntimePlugin {
         Some(layer.freeze())
     }
 
-    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+    fn runtime_components(
+        &self,
+        _: &RuntimeComponentsBuilder,
+    ) -> Cow<'_, RuntimeComponentsBuilder> {
         Cow::Borrowed(&self.runtime_components)
     }
 }

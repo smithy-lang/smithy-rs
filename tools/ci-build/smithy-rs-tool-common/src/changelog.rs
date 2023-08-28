@@ -139,17 +139,23 @@ pub struct HandAuthoredEntry {
 
 impl HandAuthoredEntry {
     /// Validate a changelog entry to ensure it follows standards
-    pub fn validate(&self) -> Result<()> {
+    pub fn validate(&self, validation_set: ValidationSet) -> Result<()> {
         if self.author.is_empty() {
             bail!("Author must be set (was empty)");
         }
         if !self.author.chars().all(|c| c.is_alphanumeric() || c == '-') {
             bail!("Author must be valid GitHub username: [a-zA-Z0-9\\-]")
         }
-        // TODO(enableNewSmithyRuntimeCleanup): Re-add this validation
-        // if self.references.is_empty() {
-        //     bail!("Changelog entry must refer to at least one pull request or issue");
-        // }
+        if validation_set == ValidationSet::Development && self.references.is_empty() {
+            bail!("Changelog entry must refer to at least one pull request or issue");
+        }
+        if validation_set == ValidationSet::Development && self.message.len() > 800 {
+            bail!(
+                "Your changelog entry is too long. Post long-form change log entries in \
+                the GitHub Discussions under the Changelog category, and link to them from \
+                the changelog."
+            );
+        }
 
         Ok(())
     }
@@ -171,6 +177,19 @@ pub struct SdkModelEntry {
     pub kind: SdkModelChangeKind,
     /// More details about the change
     pub message: String,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum ValidationSet {
+    /// Validate for local development and CI
+    Development,
+    /// Validate for rendering.
+    ///
+    /// This does less validation to avoid blocking a release for things that
+    /// were added to changelog validation later that could cause issues with
+    /// SDK_CHANGELOG.next.json where there are historical entries that didn't
+    /// have this validation applied.
+    Render,
 }
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
@@ -237,9 +256,9 @@ impl Changelog {
         serde_json::to_string_pretty(self).context("failed to serialize changelog JSON")
     }
 
-    pub fn validate(&self) -> Result<(), Vec<String>> {
+    pub fn validate(&self, validation_set: ValidationSet) -> Result<(), Vec<String>> {
         let validate_aws_handauthored = |entry: &HandAuthoredEntry| -> Result<()> {
-            entry.validate()?;
+            entry.validate(validation_set)?;
             if entry.meta.target.is_some() {
                 bail!("aws-sdk-rust changelog entry cannot have an affected target");
             }
@@ -247,7 +266,7 @@ impl Changelog {
         };
 
         let validate_smithyrs_handauthored = |entry: &HandAuthoredEntry| -> Result<()> {
-            entry.validate()?;
+            entry.validate(validation_set)?;
             if entry.meta.target.is_none() {
                 bail!("smithy-rs entry must have an affected target");
             }
@@ -272,7 +291,7 @@ impl Changelog {
 
 #[cfg(test)]
 mod tests {
-    use super::{Changelog, HandAuthoredEntry, SdkAffected};
+    use super::{Changelog, HandAuthoredEntry, SdkAffected, ValidationSet};
     use anyhow::Context;
 
     #[test]
@@ -342,7 +361,7 @@ mod tests {
         "#;
         // three errors should be produced, missing authors x 2 and a SdkAffected is not set to default
         let changelog: Changelog = toml::from_str(buffer).expect("valid changelog");
-        let res = changelog.validate();
+        let res = changelog.validate(ValidationSet::Development);
         assert!(res.is_err());
         if let Err(e) = res {
             assert_eq!(e.len(), 3);
@@ -372,7 +391,7 @@ mod tests {
         {
             // loading directly from toml::from_str won't set the default target field
             let changelog: Changelog = toml::from_str(buffer).expect("valid changelog");
-            let res = changelog.validate();
+            let res = changelog.validate(ValidationSet::Development);
             assert!(res.is_err());
             if let Err(e) = res {
                 assert!(e.contains(&"smithy-rs entry must have an affected target".to_string()))
@@ -381,7 +400,7 @@ mod tests {
         {
             // loading through Chanelog will result in no error
             let changelog: Changelog = Changelog::parse_str(buffer).expect("valid changelog");
-            let res = changelog.validate();
+            let res = changelog.validate(ValidationSet::Development);
             assert!(res.is_ok());
             if let Err(e) = res {
                 panic!("some error has been produced {e:?}");

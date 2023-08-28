@@ -5,11 +5,13 @@
 
 use crate::cargo;
 use anyhow::{anyhow, bail, Context, Result};
-use clap::Parser;
+use clap::{ArgEnum, Parser};
 use dialoguer::Confirm;
+use smithy_rs_tool_common::package::PackageCategory;
 use smithy_rs_tool_common::release_tag::ReleaseTag;
 use smithy_rs_tool_common::shell::ShellOperation;
 use smithy_rs_tool_common::versions_manifest::{Release, VersionsManifest};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -17,6 +19,16 @@ use tokio::sync::Semaphore;
 use tracing::info;
 
 const MAX_CONCURRENCY: usize = 5;
+
+#[derive(Copy, Clone, Debug, ArgEnum, Eq, PartialEq, Ord, PartialOrd)]
+pub enum CrateSet {
+    /// (default) Yank all crates associated with the release.
+    All,
+    /// Yank all AWS SDK crates.
+    AllAwsSdk,
+    /// Yank generated AWS SDK crates.
+    GeneratedAwsSdk,
+}
 
 #[derive(Parser, Debug)]
 pub struct YankReleaseArgs {
@@ -28,12 +40,15 @@ pub struct YankReleaseArgs {
     /// The `--github-release-tag` option is preferred to this, but this is provided as a fail safe.
     #[clap(long, required_unless_present = "github-release-tag")]
     versions_toml: Option<PathBuf>,
+    #[clap(arg_enum)]
+    crate_set: Option<CrateSet>,
 }
 
 pub async fn subcommand_yank_release(
     YankReleaseArgs {
         github_release_tag,
         versions_toml,
+        crate_set,
     }: &YankReleaseArgs,
 ) -> Result<()> {
     // Make sure cargo exists
@@ -47,8 +62,18 @@ pub async fn subcommand_yank_release(
     }
     .context("failed to retrieve information about the release to yank")?;
 
+    let tag = release
+        .tag
+        .as_ref()
+        .ok_or_else(|| {
+            anyhow!("Versions manifest doesn't have a release tag. Can only yank tagged releases.")
+        })?
+        .clone();
+    let crates = filter_crates(crate_set.unwrap_or(CrateSet::All), release);
+    let _ = release;
+
     // Don't proceed unless the user confirms the plan
-    confirm_plan(&release)?;
+    confirm_plan(&tag, &crates)?;
 
     // Use a semaphore to only allow a few concurrent yanks
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENCY));
@@ -58,7 +83,7 @@ pub async fn subcommand_yank_release(
     );
 
     let mut tasks = Vec::new();
-    for (crate_name, crate_version) in release.crates {
+    for (crate_name, crate_version) in crates {
         let permit = semaphore.clone().acquire_owned().await.unwrap();
         tasks.push(tokio::spawn(async move {
             info!("Yanking `{}-{}`...", crate_name, crate_version);
@@ -75,6 +100,25 @@ pub async fn subcommand_yank_release(
     }
 
     Ok(())
+}
+
+fn filter_crates(crate_set: CrateSet, release: Release) -> BTreeMap<String, String> {
+    if crate_set == CrateSet::All {
+        return release.crates;
+    }
+
+    release
+        .crates
+        .into_iter()
+        .filter(|c| {
+            let category = PackageCategory::from_package_name(&c.0);
+            match crate_set {
+                CrateSet::All => unreachable!(),
+                CrateSet::AllAwsSdk => category.is_sdk(),
+                CrateSet::GeneratedAwsSdk => category == PackageCategory::AwsSdk,
+            }
+        })
+        .collect()
 }
 
 async fn acquire_release_from_tag(tag: &str) -> Result<Release> {
@@ -98,14 +142,10 @@ fn release_metadata(manifest: VersionsManifest) -> Result<Release> {
     }
 }
 
-fn confirm_plan(release: &Release) -> Result<()> {
-    let tag = release.tag.as_ref().ok_or_else(|| {
-        anyhow!("Versions manifest doesn't have a release tag. Can only yank tagged releases.")
-    })?;
-
+fn confirm_plan(tag: &str, crates: &BTreeMap<String, String>) -> Result<()> {
     info!("This will yank aws-sdk-rust's `{tag}` release from crates.io.");
     info!("Crates to yank:");
-    for (crate_name, crate_version) in &release.crates {
+    for (crate_name, crate_version) in crates {
         info!("   {}-{}", crate_name, crate_version);
     }
 
