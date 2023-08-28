@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -263,10 +264,7 @@ class HttpBoundProtocolPayloadGenerator(
             contentType,
         ).render()
 
-        if (target == CodegenTarget.CLIENT) {
-            // No need to wrap it with `HyperBodyWrapEventStream` for the client since wrapping takes place
-            // within `renderEventStreamBody` provided by `ClientHttpBoundProtocolPayloadGenerator`.
-
+        val renderEventStreamBody = writable {
             // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
             //  parameters that are not `@eventHeader` or `@eventPayload`.
             renderEventStreamBody(
@@ -279,23 +277,18 @@ class HttpBoundProtocolPayloadGenerator(
                     additionalPayloadContext,
                 ),
             )
+        }
+
+        if (target == CodegenTarget.CLIENT) {
+            // No need to wrap it with `HyperBodyWrapEventStream` for the client since wrapping takes place
+            // within `renderEventStreamBody` provided by `ClientHttpBoundProtocolPayloadGenerator`.
+            renderEventStreamBody()
         } else {
             withBlockTemplate(
                 "#{HyperBodyWrapEventStream}::new(", ")",
                 *codegenScope,
             ) {
-                // TODO(EventStream): [RPC] RPC protocols need to send an initial message with the
-                //  parameters that are not `@eventHeader` or `@eventPayload`.
-                renderEventStreamBody(
-                    this,
-                    EventStreamBodyParams(
-                        outerName,
-                        memberName,
-                        marshallerConstructorFn,
-                        errorMarshallerConstructorFn,
-                        additionalPayloadContext,
-                    ),
-                )
+                renderEventStreamBody()
             }
         }
     }
