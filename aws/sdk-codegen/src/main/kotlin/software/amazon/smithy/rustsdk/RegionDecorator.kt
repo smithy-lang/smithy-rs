@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.aws.traits.auth.SigV4Trait
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
@@ -82,7 +84,11 @@ class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
-    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.getBuiltIn(Builtins.REGION) != null
+    // Services that have an endpoint ruleset that references the SDK::Region built in, or
+    // that use SigV4, both need a configurable region.
+    private fun usesRegion(codegenContext: ClientCodegenContext) =
+        codegenContext.getBuiltIn(Builtins.REGION) != null || ServiceIndex.of(codegenContext.model)
+            .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
