@@ -98,7 +98,6 @@ class ResponseDeserializerGenerator(
                 let mut force_error = false;
                 #{BeforeParseResponse}
 
-                let success = true;
                 // If this is an error, defer to the non-streaming parser
                 if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
