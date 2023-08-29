@@ -16,6 +16,7 @@ aws-smithy-http = { path = "../aws-smithy-http" }
 bytes = "1"
 http = "0.2.4"
 tower = { version = "0.4.8" }
+tracing = "0.1"
 wasi-preview2-prototype = { version = "0.0.2", features = ["http-client"] }
 
 [package.metadata.docs.rs]

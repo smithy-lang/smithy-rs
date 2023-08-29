@@ -39,7 +39,8 @@ impl Service<Request<SdkBody>> for Adapter {
     }
 
     fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
-        println!("Adapter: sending request...");
+        tracing::debug!("adapter: sending request");
+        tracing::trace!("request details {:?}", req);
         let client = DefaultClient::new(None);
         // Right now only synchronous calls can be made through WASI
         let fut = client.handle(req.map(|body| match body.bytes() {
@@ -50,6 +51,8 @@ impl Service<Request<SdkBody>> for Adapter {
             let res = fut
                 .map_err(|err| ConnectorError::other(err.into(), None))
                 .expect("response from adapter");
+            tracing::debug!("adapter: response received");
+            tracing::trace!("response details {:?}", res);
 
             let (parts, body) = res.into_parts();
             let loaded_body = if body.is_empty() {
