@@ -34,11 +34,8 @@ class FluentClientDecorator : ClientCodegenDecorator {
             return
         }
 
-        val generics = NoClientGenerics(codegenContext.runtimeConfig)
-
         FluentClientGenerator(
             codegenContext,
-            generics = generics,
             customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
 

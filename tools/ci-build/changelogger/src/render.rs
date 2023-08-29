@@ -10,7 +10,7 @@ use once_cell::sync::Lazy;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
-    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
+    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry, ValidationSet,
 };
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::versions_manifest::{CrateVersionMetadataMap, VersionsManifest};
@@ -237,7 +237,7 @@ fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
     for source in &args.source {
         let changelog = Changelog::load_from_file(source)
             .map_err(|errs| anyhow::Error::msg(format!("failed to load {source:?}: {errs:#?}")))?;
-        changelog.validate().map_err(|errs| {
+        changelog.validate(ValidationSet::Render).map_err(|errs| {
             anyhow::Error::msg(format!(
                 "failed to load {source:?}: {errors}",
                 errors = errs.join("\n")

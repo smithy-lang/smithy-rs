@@ -19,5 +19,5 @@ pub(crate) async fn get_default_config() -> aws_config::SdkConfig {
 pub async fn test_default_config() {
     let shared_config = get_default_config().await;
     let client = aws_sdk_s3::Client::new(&shared_config);
-    assert_eq!(client.conf().region().unwrap().to_string(), "us-east-2")
+    assert_eq!(client.config().region().unwrap().to_string(), "us-east-2")
 }

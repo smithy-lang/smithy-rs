@@ -11,28 +11,10 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[aws-sdk-rust]]
-message = "`RuntimeComponents` are now re-exported so that implementing a custom interceptor doens't require directly depending on `aws-smithy-runtime-api`."
-references = ["smithy-rs#2904", "aws-sdk-rust#862"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
 [[smithy-rs]]
-message = "`RuntimeComponents` and `RuntimeComponentsBuilder` are now re-exported in generated clients so that implementing a custom interceptor or runtime plugin doens't require directly depending on `aws-smithy-runtime-api`."
-references = ["smithy-rs#2904"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix incorrect summary docs for builders"
-references = ["smithy-rs#2914", "aws-sdk-rust#825"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Fix requests to S3 with `no_credentials` set."
-references = ["smithy-rs#2907", "aws-sdk-rust#864"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
+message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
+references = ["smithy-rs#2909"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -59,4 +41,16 @@ as opposed to AWS credentials in `&str` form. [Read more](https://github.com/aws
 """
 references = ["smithy-rs#2913"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "Velfi"

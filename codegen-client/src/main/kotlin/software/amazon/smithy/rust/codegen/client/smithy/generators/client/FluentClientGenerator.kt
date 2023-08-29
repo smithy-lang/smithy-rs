@@ -58,10 +58,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
     private val reexportSmithyClientBuilder: Boolean = true,
-    private val generics: FluentClientGenerics,
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryClassifier: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig)
-        .resolve("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -85,7 +82,7 @@ class FluentClientGenerator(
     fun render(crate: RustCrate, customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList()) {
         renderFluentClient(crate)
 
-        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, generics, customizableOperationCustomizations)
+        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, customizableOperationCustomizations)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
@@ -123,9 +120,6 @@ class FluentClientGenerator(
                 "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                 "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
-                // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
-                "generics_decl" to generics.decl,
-                "smithy_inst" to generics.smithyInst,
             )
             rustTemplate(
                 """
@@ -172,22 +166,6 @@ class FluentClientGenerator(
                     pub fn config(&self) -> &crate::Config {
                         &self.handle.conf
                     }
-
-                    ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                    // This is currently kept around so the tests still compile in both modes
-                    /// Creates a client with the given service configuration.
-                    pub fn with_config<C, M, R>(_client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
-                        Self::from_conf(conf)
-                    }
-
-                    ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                    // This is currently kept around so the tests still compile in both modes
-                    /// Returns the client's configuration.
-                    pub fn conf(&self) -> &crate::Config {
-                        &self.handle.conf
-                    }
                 }
                 """,
                 *clientScope,
@@ -203,9 +181,8 @@ class FluentClientGenerator(
             val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
                 rustBlockTemplate(
-                    "impl${generics.inst} super::Client${generics.inst} #{bounds:W}",
+                    "impl super::Client",
                     "client" to RuntimeType.smithyClient(runtimeConfig),
-                    "bounds" to generics.bounds,
                 ) {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                     val maybePaginated = if (operation.isPaginated(model)) {
@@ -252,7 +229,7 @@ class FluentClientGenerator(
 
                     rustTemplate(
                         """
-                        pub fn $fnName(&self) -> #{FluentBuilder}${generics.inst} {
+                        pub fn $fnName(&self) -> #{FluentBuilder} {
                             #{FluentBuilder}::new(self.handle.clone())
                         }
                         """,
@@ -277,16 +254,13 @@ class FluentClientGenerator(
             rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
-                pub async fn send_with${generics.inst}(
-                    self,
-                    client: &crate::Client${generics.inst}
-                ) -> #{Result}<
+                pub async fn send_with(self, client: &crate::Client) -> #{Result}<
                     #{OperationOutput},
                     #{SdkError}<
                         #{OperationError},
                         #{RawResponseType}
                     >
-                > #{send_bounds:W} #{boundsWithoutWhereClause:W} {
+                > {
                     let mut fluent_builder = client.$fnName();
                     fluent_builder.inner = self;
                     fluent_builder.send().await
@@ -300,8 +274,6 @@ class FluentClientGenerator(
                 "OperationOutput" to outputType,
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
                 "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-                "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
-                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
             )
         }
 
@@ -313,33 +285,29 @@ class FluentClientGenerator(
         deprecatedShape(operation)
         Attribute(derive(derives.toSet())).render(this)
         withBlockTemplate(
-            "pub struct $builderName#{generics:W} {",
+            "pub struct $builderName {",
             "}",
-            "generics" to generics.decl,
         ) {
             rustTemplate(
                 """
-                handle: #{Arc}<crate::client::Handle${generics.inst}>,
+                handle: #{Arc}<crate::client::Handle>,
                 inner: #{Inner},
                 """,
                 "Inner" to symbolProvider.symbolForBuilder(input),
                 "Arc" to RuntimeType.Arc,
-                "generics" to generics.decl,
             )
             rustTemplate("config_override: #{Option}<crate::config::Builder>,", *preludeScope)
         }
 
         rustBlockTemplate(
-            "impl${generics.inst} $builderName${generics.inst} #{bounds:W}",
+            "impl $builderName",
             "client" to RuntimeType.smithyClient(runtimeConfig),
-            "bounds" to generics.bounds,
         ) {
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
-                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle${generics.inst}>) -> Self {",
+                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
                 "}",
                 "Arc" to RuntimeType.Arc,
-                "generics" to generics.decl,
             ) {
                 withBlockTemplate(
                     "Self {",
@@ -361,7 +329,7 @@ class FluentClientGenerator(
             val orchestratorScope = arrayOf(
                 *preludeScope,
                 "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                    .resolve("orchestrator::CustomizableOperation"),
+                    .resolve("CustomizableOperation"),
                 "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
@@ -442,14 +410,14 @@ class FluentClientGenerator(
                 """,
             )
 
-            PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
+            PaginatorGenerator.paginatorType(codegenContext, operation)
                 ?.also { paginatorType ->
                     rustTemplate(
                         """
                         /// Create a paginator for this request
                         ///
                         /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
-                        pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                        pub fn into_paginator(self) -> #{Paginator} {
                             #{Paginator}::new(self.handle, self.inner)
                         }
                         """,

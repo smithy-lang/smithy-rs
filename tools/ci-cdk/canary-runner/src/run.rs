@@ -27,13 +27,14 @@ use serde::Deserialize;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::release_tag::ReleaseTag;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::build_bundle::BuildBundleArgs;
 
 use aws_sdk_cloudwatch as cloudwatch;
 use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
+use std::collections::HashMap;
 
 lazy_static::lazy_static! {
     // Occasionally, a breaking change introduced in smithy-rs will cause the canary to fail
@@ -170,6 +171,9 @@ pub async fn run(opt: RunArgs) -> Result<()> {
     let start_time = SystemTime::now();
     let config = aws_config::load_from_env().await;
     let result = run_canary(&options, &config).await;
+    if let Err(err) = &result {
+        error!("Canary invocation failed: {err:?}",);
+    }
 
     let mut metrics = vec![
         (
@@ -421,6 +425,36 @@ async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Resu
                 .as_deref()
                 .unwrap_or("<no error given>")
         );
+    }
+    if let Some(payload) = response.payload {
+        // Example payload:
+        // {
+        //  "failures": {
+        //    "ec2_paginator": "service error\n\nCaused by:\n    0: unhandled error\n    1: unhandled error\n    2: Error { code: \"UnauthorizedOperation\", message: \"You are not authorized to perform this operation.\", aws_request_id: \"0adcd3f5-73f3-45a2-bd2e-09e4172b65f1\" }",
+        //    "transcribe_canary": "Transcription from Transcribe doesn't look right:\nExpected: `Good day to you transcribe. This is Polly talking to you from the Rust ST K.`\nActual:   `Good day to you transcribe. This is Polly talking to you from the Rust S. D. K.`\n"
+        //  },
+        //  "result": "failure"
+        //}
+        #[derive(serde::Deserialize)]
+        struct Payload {
+            failures: Option<HashMap<String, String>>,
+            result: String,
+        }
+        let payload: Payload = serde_json::from_slice(payload.as_ref())?;
+        if payload.result == "failure"
+            || !payload
+                .failures
+                .as_ref()
+                .map(|m| m.is_empty())
+                .unwrap_or(true)
+        {
+            if let Some(failures) = &payload.failures {
+                for (service, message) in failures {
+                    error!("{service} failed:\n{message}\n");
+                }
+            }
+            bail!("The canary failed.");
+        }
     }
     Ok(())
 }

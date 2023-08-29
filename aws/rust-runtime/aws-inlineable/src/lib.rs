@@ -28,9 +28,6 @@ pub mod no_credentials;
 /// Support types required for adding presigning to an operation in a generated service.
 pub mod presigning;
 
-/// Presigning tower service
-pub mod presigning_service;
-
 /// Presigning interceptors
 pub mod presigning_interceptors;
 
@@ -42,9 +39,6 @@ pub mod glacier_checksums;
 
 /// Glacier-specific behavior
 pub mod glacier_interceptors;
-
-/// Default middleware stack for AWS services
-pub mod middleware;
 
 /// Strip prefixes from IDs returned by Route53 operations when those IDs are used to construct requests
 pub mod route53_resource_id_preprocessor_middleware;

@@ -73,7 +73,7 @@ class ConfigOverrideRuntimePluginGenerator(
                     Some(self.config.clone())
                 }
 
-                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
                     #{Cow}::Borrowed(&self.components)
                 }
             }

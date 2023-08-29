@@ -25,7 +25,7 @@ aws-smithy-http-tower = { path = "../../../rust-runtime/aws-smithy-http-tower" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-types = { path = "../aws-types" }
 bytes = "1"
 bytes-utils = "0.1.1"
@@ -36,7 +36,6 @@ md-5 = "0.10.1"
 ring = "0.16"
 tokio = { version = "1.23.1", features = ["full"] }
 tokio-stream = "0.1.5"
-tower = { version = "0.4", default-features = false }
 tracing = "0.1"
 
 [dev-dependencies]

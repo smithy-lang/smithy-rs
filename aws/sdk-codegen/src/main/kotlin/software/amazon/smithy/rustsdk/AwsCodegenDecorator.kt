@@ -35,7 +35,6 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         RequireEndpointRules(),
         UserAgentDecorator(),
         SigV4AuthDecorator(),
-        SigV4SigningDecorator(),
         HttpRequestChecksumDecorator(),
         HttpResponseChecksumDecorator(),
         RetryClassifierDecorator(),
