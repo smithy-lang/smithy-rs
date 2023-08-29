@@ -387,6 +387,35 @@ class FluentClientGenerator(
             }
         }
 
+        if (smithyRuntimeMode.generateOrchestrator) {
+            rustTemplate(
+                """
+                impl
+                    crate::client::customize::internal::CustomizableSend<
+                        #{OperationOutput},
+                        #{OperationError},
+                    > for $builderName
+                {
+                    fn send(
+                        self,
+                        config_override: crate::config::Builder,
+                    ) -> crate::client::customize::internal::BoxFuture<
+                        crate::client::customize::internal::SendResult<
+                            #{OperationOutput},
+                            #{OperationError},
+                        >,
+                    > {
+                        #{Box}::pin(async move { self.config_override(config_override).send().await })
+                    }
+                }
+                """,
+                *preludeScope,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            )
+        }
+
         rustBlockTemplate(
             "impl${generics.inst} $builderName${generics.inst} #{bounds:W}",
             "client" to RuntimeType.smithyClient(runtimeConfig),
@@ -520,22 +549,12 @@ class FluentClientGenerator(
                             #{CustomizableOperation}<
                                 #{OperationOutput},
                                 #{OperationError},
+                                Self,
                             >,
                             #{SdkError}<#{OperationError}>,
                         >
                         {
-                            #{Ok}(#{CustomizableOperation} {
-                                customizable_send: #{Box}::new(move |config_override| {
-                                    #{Box}::pin(async {
-                                        self.config_override(config_override)
-                                            .send()
-                                            .await
-                                    })
-                                }),
-                                config_override: None,
-                                interceptors: vec![],
-                                runtime_plugins: vec![],
-                            })
+                            #{Ok}(#{CustomizableOperation}::new(self))
                         }
                         """,
                         *orchestratorScope,
