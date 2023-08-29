@@ -5,12 +5,20 @@
 
 //! HTTP WASI Adapter
 
-use aws_smithy_http::{body::SdkBody, byte_stream::ByteStream, result::ConnectorError};
+use aws_smithy_client::{erase::DynConnector, http_connector::HttpConnector};
+use aws_smithy_http::{body::SdkBody, result::ConnectorError};
 use bytes::Bytes;
 use http::{Request, Response};
-use std::task::{Context, Poll};
+use std::{
+    sync::Arc,
+    task::{Context, Poll},
+};
 use tower::Service;
 use wasi_preview2_prototype::http_client::DefaultClient;
+
+pub fn wasi_connector() -> HttpConnector {
+    HttpConnector::ConnectorFn(Arc::new(|_, _| Some(DynConnector::new(Adapter::default()))))
+}
 
 #[derive(Default, Debug, Clone)]
 /// HTTP Service Adapter used in WASI environment
