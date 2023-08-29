@@ -125,10 +125,6 @@ ARG cargo_wasmtime_version=9.0.1
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
-FROM install_rust AS cargo_wasi
-ARG cargo_wasi_version=0.1.27
-RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
-
 FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.20.0
 ARG rust_nightly_version
@@ -180,7 +176,6 @@ COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
 COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
-COPY --chown=build:build --from=cargo_wasi /opt/cargo/bin/cargo-wasi /opt/cargo/bin/cargo-wasi
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
