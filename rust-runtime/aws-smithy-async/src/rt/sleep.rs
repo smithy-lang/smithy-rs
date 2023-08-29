@@ -68,22 +68,13 @@ impl AsyncSleep for SharedAsyncSleep {
     }
 }
 
-#[cfg(all(
-    feature = "rt-tokio",
-    not(all(target_family = "wasm", target_os = "wasi"))
-))]
+#[cfg(feature = "rt-tokio")]
 /// Returns a default sleep implementation based on the features enabled
 pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
     Some(SharedAsyncSleep::from(sleep_tokio()))
 }
 
-#[cfg(all(target_family = "wasm", target_os = "wasi"))]
-/// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
-    Some(SharedAsyncSleep::from(sleep_wasi()))
-}
-
-#[cfg(not(any(all(target_family = "wasm", target_os = "wasi"), feature = "rt-tokio")))]
+#[cfg(not(feature = "rt-tokio"))]
 /// Returns a default sleep implementation based on the features enabled
 pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
     None
@@ -119,17 +110,11 @@ impl Future for Sleep {
 
 /// Implementation of [`AsyncSleep`] for Tokio.
 #[non_exhaustive]
-#[cfg(all(
-    feature = "rt-tokio",
-    not(all(target_family = "wasm", target_os = "wasi"))
-))]
+#[cfg(feature = "rt-tokio")]
 #[derive(Debug, Default)]
 pub struct TokioSleep;
 
-#[cfg(all(
-    feature = "rt-tokio",
-    not(all(target_family = "wasm", target_os = "wasi"))
-))]
+#[cfg(feature = "rt-tokio")]
 impl TokioSleep {
     /// Create a new [`AsyncSleep`] implementation using the Tokio hashed wheel sleep implementation
     pub fn new() -> TokioSleep {
@@ -137,48 +122,14 @@ impl TokioSleep {
     }
 }
 
-#[cfg(all(
-    feature = "rt-tokio",
-    not(all(target_family = "wasm", target_os = "wasi"))
-))]
+#[cfg(feature = "rt-tokio")]
 impl AsyncSleep for TokioSleep {
     fn sleep(&self, duration: Duration) -> Sleep {
         Sleep::new(tokio::time::sleep(duration))
     }
 }
 
-#[cfg(all(
-    feature = "rt-tokio",
-    not(all(target_family = "wasm", target_os = "wasi"))
-))]
+#[cfg(feature = "rt-tokio")]
 fn sleep_tokio() -> Arc<dyn AsyncSleep> {
     Arc::new(TokioSleep::new())
-}
-
-/// Implementation of [`AsyncSleep`] for WASI.
-#[non_exhaustive]
-#[cfg(all(target_family = "wasm", target_os = "wasi"))]
-#[derive(Debug, Default)]
-pub struct WasiSleep;
-
-#[cfg(all(target_family = "wasm", target_os = "wasi"))]
-impl WasiSleep {
-    /// Create a new [`AsyncSleep`] implementation using the WASI sleep implementation
-    pub fn new() -> WasiSleep {
-        Default::default()
-    }
-}
-
-#[cfg(all(target_family = "wasm", target_os = "wasi"))]
-impl AsyncSleep for WasiSleep {
-    fn sleep(&self, duration: std::time::Duration) -> Sleep {
-        Sleep::new(Box::pin(async move {
-            std::thread::sleep(duration);
-        }))
-    }
-}
-
-#[cfg(all(target_family = "wasm", target_os = "wasi"))]
-fn sleep_wasi() -> Arc<dyn AsyncSleep> {
-    Arc::new(WasiSleep::new())
 }
