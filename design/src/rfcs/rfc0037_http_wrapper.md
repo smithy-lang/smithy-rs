@@ -40,9 +40,9 @@ The `http` library is very precise in its representation—specifically it allow
 
 Headers containing arbitrary binary data are not widely supported. Generally, Smithy protocols will use base-64 encoding when storing binary data in headers.
 
-Finally, it's nicer for users if they can stay in "string land". Because of this, HttpRequest and Response expose header names and values as strings.
+Finally, it's nicer for users if they can stay in "string land". Because of this, HttpRequest and Response expose header names and values as strings. Internally, the current design uses `HeaderName` and `HeaderValue`, however, there is a gate on construction that enforces that values are valid UTF-8.
 
-**This is a one way door**.
+**This is a one way door because `.as_str()` would panic in the future if we allow non-string values into headers.**.
 
 #### Where should these types live?
 These types will be used by all orchestrator functionality, so they will be housed in `aws-smithy-runtime-api`
