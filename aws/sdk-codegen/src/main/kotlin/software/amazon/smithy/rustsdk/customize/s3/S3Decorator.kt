@@ -135,15 +135,9 @@ class FilterEndpointTests(
 
 // TODO(P96049742): This model transform may need to change depending on if and how the S3 model is updated.
 private class AddOptionalAuth {
-    private val s3OptionalAuthOperations = listOf(
-        ShapeId.from("com.amazonaws.s3#ListObjects"),
-        ShapeId.from("com.amazonaws.s3#ListObjectsV2"),
-        ShapeId.from("com.amazonaws.s3#HeadObject"),
-        ShapeId.from("com.amazonaws.s3#GetObject"),
-    )
-
     fun transform(model: Model) = ModelTransformer.create().mapShapes(model) { shape ->
-        if (shape is OperationShape && s3OptionalAuthOperations.contains(shape.id) && !shape.hasTrait<OptionalAuthTrait>()) {
+        // Add @optionalAuth to all S3 operations
+        if (shape is OperationShape && !shape.hasTrait<OptionalAuthTrait>()) {
             shape.toBuilder()
                 .addTrait(OptionalAuthTrait())
                 .build()
