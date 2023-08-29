@@ -5,8 +5,7 @@
 
 //! HTTP WASI Adapter
 
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
+use aws_smithy_http::{body::SdkBody, byte_stream::ByteStream, result::ConnectorError};
 use bytes::Bytes;
 use http::{Request, Response};
 use std::task::{Context, Poll};
@@ -31,7 +30,7 @@ impl Service<Request<SdkBody>> for Adapter {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Request<SdkBody>) -> Self::Future {
+    fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
         println!("Adapter: sending request...");
         let client = DefaultClient::new(None);
         // Right now only synchronous calls can be made through WASI
@@ -40,9 +39,17 @@ impl Service<Request<SdkBody>> for Adapter {
             None => Bytes::new(),
         }));
         Box::pin(async move {
-            Ok(fut
-                .map_err(|err| ConnectorError::other(err.into(), None))?
-                .map(SdkBody::from))
+            let res = fut
+                .map_err(|err| ConnectorError::other(err.into(), None))
+                .expect("response from adapter");
+
+            let (parts, body) = res.into_parts();
+            let loaded_body = if body.is_empty() {
+                SdkBody::empty()
+            } else {
+                SdkBody::from(body)
+            };
+            Ok(http::Response::from_parts(parts, loaded_body))
         })
     }
 }

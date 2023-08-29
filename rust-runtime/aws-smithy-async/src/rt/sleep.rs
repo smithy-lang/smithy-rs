@@ -79,8 +79,8 @@ pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
 
 #[cfg(all(target_family = "wasm", target_os = "wasi"))]
 /// Returns a default sleep implementation based on the features enabled
-pub fn default_async_sleep() -> Option<Arc<dyn AsyncSleep>> {
-    Some(sleep_wasi())
+pub fn default_async_sleep() -> Option<SharedAsyncSleep> {
+    Some(SharedAsyncSleep::from(sleep_wasi()))
 }
 
 #[cfg(not(any(all(target_family = "wasm", target_os = "wasi"), feature = "rt-tokio")))]

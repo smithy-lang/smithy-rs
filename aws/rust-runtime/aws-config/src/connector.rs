@@ -30,8 +30,8 @@ compile_error!("Feature native-tls has been removed. For upgrade instructions, s
     not(any(feature = "rustls", feature = "native-tls"))
 ))]
 pub fn default_connector(
-    _settings: &ConnectorSettings,
-    _sleep: Option<Arc<dyn AsyncSleep>>,
+    _settings: &aws_smithy_client::http_connector::ConnectorSettings,
+    _sleep: Option<aws_smithy_async::rt::sleep::SharedAsyncSleep>,
 ) -> Option<DynConnector> {
     Some(DynConnector::new(
         aws_smithy_wasm::wasi_adapter::Adapter::default(),
