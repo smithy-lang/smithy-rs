@@ -94,10 +94,13 @@ class ResponseDeserializerGenerator(
         rustTemplate(
             """
             fn deserialize_streaming(&self, response: &mut #{HttpResponse}) -> #{Option}<#{OutputOrError}> {
+                ##[allow(unused_mut)]
+                let mut force_error = false;
                 #{BeforeParseResponse}
 
+                let success = true;
                 // If this is an error, defer to the non-streaming parser
-                if !response.status().is_success() && response.status().as_u16() != $successCode {
+                if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
                 }
                 #{Some}(#{type_erase_result}(#{parse_streaming_response}(response)))
@@ -106,7 +109,7 @@ class ResponseDeserializerGenerator(
             *codegenScope,
             "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, customizations),
             "BeforeParseResponse" to writable {
-                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
+                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
             },
         )
     }
@@ -136,8 +139,10 @@ class ResponseDeserializerGenerator(
             let (success, status) = (response.status().is_success(), response.status().as_u16());
             let headers = response.headers();
             let body = response.body().bytes().expect("body loaded");
+            ##[allow(unused_mut)]
+            let mut force_error = false;
             #{BeforeParseResponse}
-            let parse_result = if !success && status != $successCode {
+            let parse_result = if !success && status != $successCode || force_error {
                 #{parse_error}(status, headers, body)
             } else {
                 #{parse_response}(status, headers, body)
@@ -148,7 +153,7 @@ class ResponseDeserializerGenerator(
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
             "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
             "BeforeParseResponse" to writable {
-                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
+                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", "body"))
             },
         )
     }

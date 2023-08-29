@@ -48,6 +48,14 @@ sealed class OperationSection(name: String) : Section(name) {
     data class BeforeParseResponse(
         override val customizations: List<OperationCustomization>,
         val responseName: String,
+        /**
+         * Name of the `force_error` variable. Set this to true to trigger error parsing.
+         */
+        val forceError: String,
+        /**
+         * When set, the name of the response body data field
+         */
+        val body: String?,
     ) : OperationSection("BeforeParseResponse")
 
     /**
