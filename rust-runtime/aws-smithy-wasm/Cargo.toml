@@ -11,6 +11,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
+aws-smithy-client = { path = "../aws-smithy-client" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 bytes = "1"
 http = "0.2.4"

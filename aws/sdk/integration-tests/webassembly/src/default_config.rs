@@ -4,12 +4,14 @@
  */
 
 use aws_smithy_types::{retry::RetryConfig, timeout::TimeoutConfig};
+use aws_smithy_wasm::wasi_adapter::wasi_connector;
 
 pub(crate) async fn get_default_config() -> aws_config::SdkConfig {
     aws_config::from_env()
         .region("us-east-2")
         .timeout_config(TimeoutConfig::disabled())
         .retry_config(RetryConfig::disabled())
+        .http_connector(wasi_connector())
         .no_credentials()
         .load()
         .await
