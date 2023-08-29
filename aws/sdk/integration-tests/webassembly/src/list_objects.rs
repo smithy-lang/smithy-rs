@@ -26,7 +26,6 @@ async fn s3_list_objects() -> ListObjectsV2Output {
 #[tokio::test]
 pub async fn test_s3_list_objects() {
     let result = s3_list_objects().await;
-    println!("result: {:?}", result);
     let objects = result.contents().unwrap();
     assert!(objects.len() > 1);
 }
