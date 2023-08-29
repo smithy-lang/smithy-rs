@@ -9,7 +9,3 @@ runner = [
     "--preview2",
     "--wasi-modules=experimental-wasi-http",
 ]
-
-# TODO(Rust 1.70): The sparse registry config can be removed when upgrading to Rust 1.70
-[registries.crates-io]
-protocol = "sparse"
