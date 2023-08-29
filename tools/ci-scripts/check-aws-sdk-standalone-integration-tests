@@ -42,7 +42,6 @@ cargo check --tests
 
 # Running WebAssembly (WASI) specific integration tests
 pushd "${tmp_dir}/aws/sdk/integration-tests/webassembly" &>/dev/null
-cargo wasi build
-env_credentials="--env AWS_ACCESS_KEY_ID='' --env AWS_SECRET_ACCESS_KEY='' --env AWS_SESSION_TOKEN=''"
-CARGO_TARGET_WASM32_WASI_RUNNER="wasmtime --wasm-features=component-model --wasi-modules=experimental-wasi-http ${env_credentials}" cargo wasi test -- --nocapture
+cargo build
+cargo test -- --nocapture
 popd
