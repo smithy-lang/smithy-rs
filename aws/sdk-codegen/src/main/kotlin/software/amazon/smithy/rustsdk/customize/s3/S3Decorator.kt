@@ -121,7 +121,7 @@ class S3Decorator : ClientCodegenDecorator {
                             section.body?.also { body ->
                                 rustTemplate(
                                     """
-                                    if matches!(#{errors}::body_is_error(&$body), Ok(true)) {
+                                    if matches!(#{errors}::body_is_error($body), Ok(true)) {
                                         ${section.forceError} = true;
                                     }
                                     """,
