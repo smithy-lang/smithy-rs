@@ -22,28 +22,8 @@ pub use aws_smithy_client::conns::default_connector;
 #[cfg(all(feature = "native-tls", not(feature = "allow-compilation")))]
 compile_error!("Feature native-tls has been removed. For upgrade instructions, see: https://awslabs.github.io/smithy-rs/design/transport/connector.html");
 
-/// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
-#[cfg(all(
-    feature = "wasm",
-    target_family = "wasm",
-    target_os = "wasi",
-    not(any(feature = "rustls", feature = "native-tls"))
-))]
-pub fn default_connector(
-    _settings: &aws_smithy_client::http_connector::ConnectorSettings,
-    _sleep: Option<aws_smithy_async::rt::sleep::SharedAsyncSleep>,
-) -> Option<DynConnector> {
-    Some(DynConnector::new(
-        aws_smithy_wasm::wasi_adapter::Adapter::default(),
-    ))
-}
-
-/// Given `ConnectorSettings` and an `AsyncSleep`, create a `DynConnector` from defaults depending on what cargo features are activated.
-#[cfg(not(any(
-    all(feature = "wasm", target_family = "wasm", target_os = "wasi"),
-    feature = "rustls",
-    feature = "native-tls"
-)))]
+/// Given `ConnectorSettings` and a [`SharedAsyncSleep`](aws_smithy_async::rt::sleep::SharedAsyncSleep), create a `DynConnector` from defaults depending on what cargo features are activated.
+#[cfg(not(feature = "client-hyper"))]
 pub fn default_connector(
     _settings: &aws_smithy_client::http_connector::ConnectorSettings,
     _sleep: Option<aws_smithy_async::rt::sleep::SharedAsyncSleep>,

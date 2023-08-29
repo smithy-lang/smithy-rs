@@ -1,7 +1,10 @@
 [package]
 name = "aws-config"
 version = "0.0.0-smithy-rs-head"
-authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
+authors = [
+    "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+    "Russell Cohen <rcoh@amazon.com>",
+]
 description = "AWS SDK config and credential provider implementations."
 edition = "2021"
 exclude = ["test-data/*", "integration-tests/*"]
@@ -12,11 +15,10 @@ repository = "https://github.com/awslabs/smithy-rs"
 client-hyper = ["aws-smithy-client/client-hyper"]
 rustls = ["aws-smithy-client/rustls", "client-hyper"]
 native-tls = []
-allow-compilation = [] # our tests use `cargo test --all-features` and native-tls breaks CI
+allow-compilation = [
+] # our tests use `cargo test --all-features` and native-tls breaks CI
 rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
 credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
-
-wasm = ["dep:aws-smithy-wasm"]
 
 default = ["client-hyper", "rustls", "rt-tokio", "credentials-sso"]
 
@@ -49,9 +51,6 @@ ring = { version = "0.16", optional = true }
 hex = { version = "0.4.3", optional = true }
 zeroize = { version = "1", optional = true }
 
-# used for WebAssembly target family
-aws-smithy-wasm = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-wasm", optional = true }
-
 [dev-dependencies]
 futures-util = { version = "0.3.16", default-features = false }
 tracing-test = "0.2.1"
@@ -66,12 +65,24 @@ arbitrary = "1.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rt-tokio", "client-hyper"] }
+aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = [
+    "test-util",
+] }
+aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = [
+    "test-util",
+    "rt-tokio",
+    "client-hyper",
+] }
 
 # used for a usage example
-hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http2", "http1"] }
-aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
+hyper-rustls = { version = "0.24", features = [
+    "webpki-tokio",
+    "http2",
+    "http1",
+] }
+aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = [
+    "test-util",
+] }
 
 [package.metadata.docs.rs]
 all-features = true

@@ -26,7 +26,6 @@ allowed_external_types = [
    "aws_smithy_types::timeout::OperationTimeoutConfig",
    "aws_smithy_types::timeout::TimeoutConfig",
    "aws_smithy_types::timeout::TimeoutConfigBuilder",
-   "aws_smithy_wasm::wasi_adapter::*",
    "aws_types::*",
    "http::response::Response",
    "http::uri::Uri",
