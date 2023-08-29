@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::auth::no_auth::NO_AUTH_SCHEME_ID;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolver,
@@ -125,15 +124,10 @@ fn extract_endpoint_auth_scheme_config(
     endpoint: &Endpoint,
     scheme_id: AuthSchemeId,
 ) -> Result<AuthSchemeEndpointConfig<'_>, AuthOrchestrationError> {
-    // TODO(P96049742): Endpoint config doesn't currently have a concept of optional auth or "no auth", so
-    // we are short-circuiting lookup of endpoint auth scheme config if that is the selected scheme.
-    if scheme_id == NO_AUTH_SCHEME_ID {
-        return Ok(AuthSchemeEndpointConfig::empty());
-    }
     let auth_schemes = match endpoint.properties().get("authSchemes") {
         Some(Document::Array(schemes)) => schemes,
         // no auth schemes:
-        None => return Ok(AuthSchemeEndpointConfig::empty()),
+        None => return Ok(AuthSchemeEndpointConfig::from(None)),
         _other => {
             return Err(AuthOrchestrationError::BadAuthSchemeEndpointConfig(
                 "expected an array for `authSchemes` in endpoint config".into(),
@@ -199,7 +193,7 @@ mod tests {
             ) -> Result<(), BoxError> {
                 request
                     .headers_mut()
-                    .insert(http::header::AUTHORIZATION, "success!".parse().unwrap());
+                    .insert(http::header::AUTHORIZATION.as_str(), "success!");
                 Ok(())
             }
         }
@@ -229,7 +223,7 @@ mod tests {
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
@@ -275,7 +269,7 @@ mod tests {
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
@@ -324,7 +318,7 @@ mod tests {
             config_with_identity(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("t", None));
         let mut ctx = InterceptorContext::new(Input::erase("doesnt-matter"));
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::new(SdkBody::empty()));
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
         orchestrate_auth(&mut ctx, &runtime_components, &cfg)

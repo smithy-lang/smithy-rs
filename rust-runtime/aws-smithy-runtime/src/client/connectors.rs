@@ -17,6 +17,7 @@ pub mod adapter {
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_runtime_api::client::connectors::HttpConnector;
     use aws_smithy_runtime_api::client::orchestrator::{BoxFuture, HttpRequest, HttpResponse};
+    use std::future::ready;
     use std::sync::{Arc, Mutex};
 
     /// Adapts a [`DynConnector`] to the [`HttpConnector`] trait.
@@ -41,7 +42,11 @@ pub mod adapter {
 
     impl HttpConnector for DynConnectorAdapter {
         fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
-            let future = self.dyn_connector.lock().unwrap().call_lite(request);
+            let req = match request.into_http03x() {
+                Err(e) => return Box::pin(ready(Err(Box::new(e) as _))),
+                Ok(req) => req,
+            };
+            let future = self.dyn_connector.lock().unwrap().call_lite(req);
             future
         }
     }

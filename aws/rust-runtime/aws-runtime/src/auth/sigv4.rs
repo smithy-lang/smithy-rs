@@ -358,15 +358,9 @@ impl Signer for SigV4Signer {
                 });
 
             let signable_request = SignableRequest::new(
-                request.method().as_str(),
+                request.method(),
                 request.uri().to_string(),
-                request.headers().iter().map(|(k, v)| {
-                    (
-                        k.as_str(),
-                        // use from_utf8 instead of to_str because we _do_ allow non-ascii header values
-                        std::str::from_utf8(v.as_bytes()).expect("only utf-8 headers are signable"),
-                    )
-                }),
+                request.headers().iter(),
                 signable_body,
             )?;
             sign(signable_request, &signing_params)?
@@ -392,7 +386,7 @@ impl Signer for SigV4Signer {
                     .expect("failed to send deferred signer");
             }
         }
-        signing_instructions.apply_to_request(request);
+        // signing_instructions.apply_to_request(request);
         Ok(())
     }
 }

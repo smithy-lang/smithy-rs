@@ -25,6 +25,5 @@ pub mod client;
 /// A data structure for persisting and sharing state between multiple clients.
 pub mod static_partition_map;
 
-/// General testing utilities.
-#[cfg(feature = "test-util")]
+/// Test utilities
 pub mod test_util;

@@ -419,13 +419,7 @@ mod tests {
         let resp = components
             .http_connector()
             .unwrap()
-            .call(
-                http::Request::builder()
-                    .method("GET")
-                    .uri("/")
-                    .body(SdkBody::empty())
-                    .unwrap(),
-            )
+            .call(HttpRequest::new(SdkBody::empty()))
             .await
             .unwrap();
         dbg!(&resp);

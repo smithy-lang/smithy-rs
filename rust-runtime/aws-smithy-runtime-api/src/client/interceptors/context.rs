@@ -166,6 +166,14 @@ impl<I, O, E> InterceptorContext<I, O, E> {
         self.request = Some(request);
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_http03_request(
+        &mut self,
+        request: http::Request<aws_smithy_http::body::SdkBody>,
+    ) {
+        self.request = Some(request.try_into().expect("request could not be converted"));
+    }
+
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
     pub fn request(&self) -> Option<&Request> {
@@ -429,26 +437,14 @@ impl fmt::Display for RewindResult {
 }
 
 fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
-    let cloned_body = request.body().try_clone()?;
-    let mut cloned_request = ::http::Request::builder()
-        .uri(request.uri().clone())
-        .method(request.method());
-    *cloned_request
-        .headers_mut()
-        .expect("builder has not been modified, headers must be valid") = request.headers().clone();
-    Some(
-        cloned_request
-            .body(cloned_body)
-            .expect("a clone of a valid request should be a valid request"),
-    )
+    request.try_clone()
 }
 
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
-    use http::header::{AUTHORIZATION, CONTENT_LENGTH};
-    use http::{HeaderValue, Uri};
+    use http::HeaderValue;
 
     #[test]
     fn test_success_transitions() {
@@ -461,7 +457,7 @@ mod tests {
 
         context.enter_serialization_phase();
         let _ = context.take_input();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(HttpRequest::new(SdkBody::empty()));
 
         context.enter_before_transmit_phase();
         context.request();
@@ -502,7 +498,7 @@ mod tests {
 
         context.enter_serialization_phase();
         let _ = context.take_input();
-        context.set_request(
+        context.set_http03_request(
             http::Request::builder()
                 .header("test", "the-original-un-mutated-request")
                 .body(SdkBody::empty())
@@ -512,7 +508,6 @@ mod tests {
         context.save_checkpoint();
         assert_eq!(context.rewind(&mut cfg), RewindResult::Unnecessary);
         // Modify the test header post-checkpoint to simulate modifying the request for signing or a mutating interceptor
-        context.request_mut().unwrap().headers_mut().remove("test");
         context.request_mut().unwrap().headers_mut().insert(
             "test",
             HeaderValue::from_static("request-modified-after-signing"),
@@ -550,24 +545,5 @@ mod tests {
 
         let output = context.output_or_error.unwrap().expect("success");
         assert_eq!("output", output.downcast_ref::<String>().unwrap());
-    }
-
-    #[test]
-    fn try_clone_clones_all_data() {
-        let request = ::http::Request::builder()
-            .uri(Uri::from_static("https://www.amazon.com"))
-            .method("POST")
-            .header(CONTENT_LENGTH, 456)
-            .header(AUTHORIZATION, "Token: hello")
-            .body(SdkBody::from("hello world!"))
-            .expect("valid request");
-        let cloned = try_clone(&request).expect("request is cloneable");
-
-        assert_eq!(&Uri::from_static("https://www.amazon.com"), cloned.uri());
-        assert_eq!("POST", cloned.method());
-        assert_eq!(2, cloned.headers().len());
-        assert_eq!("Token: hello", cloned.headers().get(AUTHORIZATION).unwrap(),);
-        assert_eq!("456", cloned.headers().get(CONTENT_LENGTH).unwrap());
-        assert_eq!("hello world!".as_bytes(), cloned.body().bytes().unwrap());
     }
 }

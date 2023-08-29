@@ -4,10 +4,7 @@
  */
 
 use aws_smithy_http::endpoint::error::ResolveEndpointError;
-use aws_smithy_http::endpoint::{
-    apply_endpoint as apply_endpoint_to_request_uri, EndpointPrefix, ResolveEndpoint,
-    SharedEndpointResolver,
-};
+use aws_smithy_http::endpoint::{EndpointPrefix, ResolveEndpoint, SharedEndpointResolver};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::endpoint::{EndpointResolver, EndpointResolverParams};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
@@ -15,8 +12,8 @@ use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
-use http::header::HeaderName;
-use http::{HeaderValue, Uri};
+use http::Uri;
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::str::FromStr;
 use tracing::trace;
@@ -121,7 +118,6 @@ pub(super) async fn orchestrate_endpoint(
         .load::<EndpointResolverParams>()
         .expect("endpoint resolver params must be set");
     let endpoint_prefix = cfg.load::<EndpointPrefix>();
-    tracing::debug!(endpoint_params = ?params, endpoint_prefix = ?endpoint_prefix, "resolving endpoint");
     let request = ctx.request_mut().expect("set during serialization");
 
     let endpoint = runtime_components
@@ -141,31 +137,31 @@ fn apply_endpoint(
     endpoint: &Endpoint,
     endpoint_prefix: Option<&EndpointPrefix>,
 ) -> Result<(), BoxError> {
-    let uri: Uri = endpoint.url().parse().map_err(|err| {
-        ResolveEndpointError::from_source("endpoint did not have a valid uri", err)
-    })?;
-
-    apply_endpoint_to_request_uri(request.uri_mut(), &uri, endpoint_prefix).map_err(|err| {
-        ResolveEndpointError::message(format!(
-            "failed to apply endpoint `{:?}` to request `{:?}`",
-            uri, request,
-        ))
-        .with_source(Some(err.into()))
-    })?;
+    let prefixed_endpoint = match endpoint_prefix {
+        Some(prefix) => Cow::Owned(format!("{}{}", prefix.as_str(), endpoint.url())),
+        None => Cow::Borrowed(endpoint.url()),
+    };
+    request
+        .uri_mut()
+        .set_endpoint(prefixed_endpoint.as_ref())
+        .map_err(|err| {
+            ResolveEndpointError::message(format!(
+                "failed to apply endpoint `{:?}` to request `{:?}`",
+                endpoint.url(),
+                request,
+            ))
+            .with_source(Some(err.into()))
+        })?;
 
     for (header_name, header_values) in endpoint.headers() {
-        request.headers_mut().remove(header_name);
         for value in header_values {
-            request.headers_mut().insert(
-                HeaderName::from_str(header_name).map_err(|err| {
-                    ResolveEndpointError::message("invalid header name")
+            request
+                .headers_mut()
+                .try_insert(header_name.to_string(), value.to_string())
+                .map_err(|err| {
+                    ResolveEndpointError::message("invalid header key or value value")
                         .with_source(Some(err.into()))
-                })?,
-                HeaderValue::from_str(value).map_err(|err| {
-                    ResolveEndpointError::message("invalid header value")
-                        .with_source(Some(err.into()))
-                })?,
-            );
+                })?;
         }
     }
     Ok(())
