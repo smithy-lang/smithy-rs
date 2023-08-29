@@ -104,7 +104,7 @@ impl<Item> FnStream<Item> {
     }
 
     /// Consumes this stream and gathers elements into a collection.
-    pub async fn collect<T: collect::Collectable<Item>>(mut self) -> T {
+    pub async fn collect<T: collect::sealed::Collectable<Item>>(mut self) -> T {
         let mut collection = T::initialize();
         while let Some(item) = self.next().await {
             if !T::extend(&mut collection, item) {

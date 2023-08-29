@@ -9,15 +9,13 @@
 //! Majority of the code is borrowed from
 //! <https://github.com/tokio-rs/tokio/blob/fc9518b62714daac9a38b46c698b94ac5d5b1ca2/tokio-stream/src/stream_ext/collect.rs>
 
-/// A trait that signifies that elements can be collected into `T`.
-///
-/// Currently the trait may not be implemented by clients so we can make changes in the future
-/// without breaking code depending on it.
-pub trait Collectable<T>: sealed::CollectablePrivate<T> {}
-
 pub(crate) mod sealed {
+    /// A trait that signifies that elements can be collected into `T`.
+    ///
+    /// Currently the trait may not be implemented by clients so we can make changes in the future
+    /// without breaking code depending on it.
     #[doc(hidden)]
-    pub trait CollectablePrivate<T> {
+    pub trait Collectable<T> {
         type Collection;
 
         fn initialize() -> Self::Collection;
@@ -28,9 +26,7 @@ pub(crate) mod sealed {
     }
 }
 
-impl<T> Collectable<T> for Vec<T> {}
-
-impl<T> sealed::CollectablePrivate<T> for Vec<T> {
+impl<T> sealed::Collectable<T> for Vec<T> {
     type Collection = Self;
 
     fn initialize() -> Self::Collection {
@@ -47,11 +43,9 @@ impl<T> sealed::CollectablePrivate<T> for Vec<T> {
     }
 }
 
-impl<T, U, E> Collectable<Result<T, E>> for Result<U, E> where U: Collectable<T> {}
-
-impl<T, U, E> sealed::CollectablePrivate<Result<T, E>> for Result<U, E>
+impl<T, U, E> sealed::Collectable<Result<T, E>> for Result<U, E>
 where
-    U: Collectable<T>,
+    U: sealed::Collectable<T>,
 {
     type Collection = Result<U::Collection, E>;
 
