@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -77,9 +78,39 @@ fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).reso
 fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
+
+    fun emptyOrUnset(symbolProvider: SymbolProvider, ref: Writable, member: MemberShape): Writable {
+        val checkSet = RuntimeType.forInlineFun("check_set", RustModule.private("serde_util")) {
+            rustTemplate(
+                """
+                pub(crate) fn check_set<T: #{Default} + #{PartialEq}>(field: Option<T>, name: &'static str) -> Result<T, #{BuildError}> {
+                    if let Some(field) = field {
+                        if field != Default::default() {
+                            return Ok(field)
+                        }
+                    }
+                    Err(#{BuildError}::missing_field(name, "field was required"))
+                }
+
+                """,
+                "BuildError" to runtimeConfig.operationBuildError(), *preludeScope,
+            )
+        }
+
+        val fieldName = symbolProvider.toMemberName(member)
+        return writable {
+            rustTemplate(
+                "Some(#{checkSet}(#{ref}, ${fieldName.dq()})?)",
+                "checkSet" to checkSet,
+                "ref" to ref,
+            )
+        }
+    }
+
     fun missingField(field: String, details: String) = writable {
         rust("#T::missing_field(${field.dq()}, ${details.dq()})", runtimeConfig.operationBuildError())
     }
+
     fun invalidField(field: String, details: String) = invalidField(field) { rust(details.dq()) }
     fun invalidField(field: String, details: Writable) = writable {
         rustTemplate(
@@ -164,7 +195,8 @@ class BuilderGenerator(
     }
 
     private fun RustWriter.missingRequiredField(field: String) {
-        val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
+        val detailedMessage =
+            "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
     }
 
