@@ -25,8 +25,6 @@ echo -e "${C_YELLOW}Taking examples from 'awsdocs/aws-doc-sdk-examples'...${C_RE
 examples_revision=$(cd aws-doc-sdk-examples; git rev-parse HEAD)
 mv aws-doc-sdk-examples/rust_dev_preview smithy-rs/aws/sdk/examples
 rm -rf smithy-rs/aws/sdk/examples/.cargo
-# TODO(https://github.com/awslabs/smithy-rs/issues/2810): This Cargo.toml `rm` can be removed when the flat example structure is cleaned up
-rm -f smithy-rs/aws/sdk/examples/Cargo.toml
 
 echo -e "${C_YELLOW}Creating empty model metadata file since we don't have model update information...${C_RESET}"
 MODEL_METADATA_PATH="$(pwd)/model-metadata.toml"
