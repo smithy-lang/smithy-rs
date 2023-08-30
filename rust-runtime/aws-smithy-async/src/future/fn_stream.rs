@@ -96,8 +96,10 @@ impl<Item> FnStream<Item> {
             Poll::Pending => {
                 if let Some(generator) = me.generator {
                     if generator.as_mut().poll(cx).is_ready() {
-                        // if the generator returned ready we MUST NOT poll it again—doing so
-                        // will cause a panic.
+                        // `generator` keeps writing items to `tx` and will not be `Poll::Ready`
+                        // until it is done writing to `tx`. Once it is done, it returns `()`
+                        // as output and is `Poll::Ready`, at which point we MUST NOT poll it again
+                        // since doing so will cause a panic.
                         *me.generator = None;
                     }
                 }
