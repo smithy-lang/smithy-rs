@@ -84,3 +84,9 @@ message = "Generate a region setter when a model uses SigV4."
 references = ["smithy-rs#2960"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix code generation for union members with the `@httpPayload` trait."
+references = ["smithy-rs#2969", "smithy-rs#1896"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jdisanti"
