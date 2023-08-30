@@ -343,7 +343,7 @@ fun TestWriterDelegator.compileAndTest(
     val env = mapOf("RUSTFLAGS" to "-A dead_code")
     val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
-        "cargo clippy".runCommand(baseDir, env)
+        "cargo clippy --all-features".runCommand(baseDir, env)
     }
     return testOutput
 }
