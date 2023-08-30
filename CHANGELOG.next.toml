@@ -56,6 +56,18 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "Velfi"
 
 [[aws-sdk-rust]]
+message = "Correctly identify HTTP 200 responses from S3 with `<Error>` as the root Element as errors. **Note**: This a behavior change and will change the error type returned by the SDK in some cases."
+references = ["smithy-rs#2958", "aws-sdk-rust#873"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Allow `no_credentials` to be used with all S3 operations."
+references = ["smithy-rs#2955", "aws-sdk-rust#878"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = """
 The `futures_core::stream::Stream` trait has been removed from public API. It should not affect usual SDK use cases, but it does require code upgrade for a small number of cases. The notable example is Transcribe streaming when streaming data is created via a `stream!` macro from the `async-stream` crate. The use of that macro needs to be replaced with `aws_smithy_async::future::fn_stream::FnStream`. See https://github.com/awslabs/smithy-rs/discussions/2952 for more details.
 """
@@ -65,7 +77,7 @@ author = "ysaito1001"
 
 [[smithy-rs]]
 message = """
-The `futures_core::stream::Stream` trait has been removed from public API. The methods that were made available through the `Stream` trait have been removed from these types. However, we have preserved `.next()` and `.collect()` to continue supporting existing call sites in `smithy-rs` and `aws-sdk-rust`, including tests and rustdocs. If we need to support missing stream operations, we are planning to do so in an additive, backward compatible manner.
+The `futures_core::stream::Stream` trait has been removed from public API. The methods that were made available through the `Stream` trait have been removed from `FnStream`, `TryFlatMap`, ByteStream`, `EventStreamSender`, and `MessageStreamAdapter`. However, we have preserved `.next()` and `.collect()` to continue supporting existing call sites in `smithy-rs` and `aws-sdk-rust`, including tests and rustdocs. If we need to support missing stream operations, we are planning to do so in an additive, backward compatible manner.
 
 If your code uses a `stream!` macro from the `async_stream` crate to generate stream data, it needs to be replaced by `aws_smithy_async::future::fn_steram::FnStream`. See https://github.com/awslabs/smithy-rs/discussions/2952 for more details.
 """
