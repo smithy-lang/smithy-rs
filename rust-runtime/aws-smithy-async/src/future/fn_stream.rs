@@ -26,6 +26,9 @@ pin_project! {
     ///
     /// If `tx.send` returns an error, the function MUST return immediately.
     ///
+    /// Note `FnStream` is only `Send` but not `Sync` because `generator` is a boxed future that
+    /// is `Send` and returns `()` as output when it is done.
+    ///
     /// # Examples
     /// ```no_run
     /// # async fn docs() {
