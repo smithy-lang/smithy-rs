@@ -68,6 +68,24 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Generate a region setter when a model uses SigV4."
+references = ["smithy-rs#2960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = """
 The `futures_core::stream::Stream` trait has been removed from public API. It should not affect usual SDK use cases, but it does require code upgrade for a small number of cases. The notable example is Transcribe streaming when streaming data is created via a `stream!` macro from the `async-stream` crate. The use of that macro needs to be replaced with `aws_smithy_async::future::fn_stream::FnStream`. See https://github.com/awslabs/smithy-rs/discussions/2952 for more details.
 """
