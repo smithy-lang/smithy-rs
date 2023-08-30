@@ -12,7 +12,6 @@ publish = false
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-transcribestreaming = { path = "../../build/aws-sdk/sdk/transcribestreaming" }
-aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }

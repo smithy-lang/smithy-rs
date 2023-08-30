@@ -6,13 +6,12 @@
 use aws_sdk_transcribestreaming::config::{Credentials, Region};
 use aws_sdk_transcribestreaming::error::SdkError;
 use aws_sdk_transcribestreaming::operation::start_stream_transcription::StartStreamTranscriptionOutput;
-use aws_sdk_transcribestreaming::primitives::Blob;
+use aws_sdk_transcribestreaming::primitives::{Blob, FnStream};
 use aws_sdk_transcribestreaming::types::error::{AudioStreamError, TranscriptResultStreamError};
 use aws_sdk_transcribestreaming::types::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
 use aws_sdk_transcribestreaming::{Client, Config};
-use aws_smithy_async::future::fn_stream::FnStream;
 use aws_smithy_client::dvr::{Event, ReplayingConnection};
 use aws_smithy_eventstream::frame::{DecodedFrame, HeaderValue, Message, MessageFrameDecoder};
 use bytes::BufMut;
