@@ -22,7 +22,7 @@ pub(crate) mod sealed {
 
         fn extend(collection: &mut Self::Collection, item: T) -> bool;
 
-        fn finalize(collection: &mut Self::Collection) -> Self;
+        fn finalize(collection: Self::Collection) -> Self;
     }
 }
 
@@ -38,8 +38,8 @@ impl<T> sealed::Collectable<T> for Vec<T> {
         true
     }
 
-    fn finalize(collection: &mut Self::Collection) -> Self {
-        std::mem::take(collection)
+    fn finalize(collection: Self::Collection) -> Self {
+        collection
     }
 }
 
@@ -66,12 +66,10 @@ where
         }
     }
 
-    fn finalize(collection: &mut Self::Collection) -> Self {
-        if let Ok(collection) = collection.as_mut() {
-            Ok(U::finalize(collection))
-        } else {
-            let res = std::mem::replace(collection, Ok(U::initialize()));
-            Err(res.map(drop).unwrap_err())
+    fn finalize(collection: Self::Collection) -> Self {
+        match collection {
+            Ok(collection) => Ok(U::finalize(collection)),
+            err @ Err(_) => Err(err.map(drop).unwrap_err()),
         }
     }
 }

@@ -111,7 +111,7 @@ impl<Item> FnStream<Item> {
                 break;
             }
         }
-        T::finalize(&mut collection)
+        T::finalize(collection)
     }
 }
 
