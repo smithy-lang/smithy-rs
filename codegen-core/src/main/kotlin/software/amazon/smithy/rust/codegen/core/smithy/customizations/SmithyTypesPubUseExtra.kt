@@ -26,6 +26,14 @@ private fun hasStreamingOperations(model: Model): Boolean {
     }
 }
 
+/** Returns true if the model has event streaming operations */
+private fun hasEventStreamOperations(model: Model): Boolean =
+    model.operationShapes.any { operation ->
+        val input = model.expectShape(operation.inputShape, StructureShape::class.java)
+        val output = model.expectShape(operation.outputShape, StructureShape::class.java)
+        input.hasEventStreamMember(model) || output.hasEventStreamMember(model)
+    }
+
 // TODO(https://github.com/awslabs/smithy-rs/issues/2111): Fix this logic to consider collection/map shapes
 private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) -> Boolean): Boolean =
     model.structureShapes.any { structure ->
@@ -68,6 +76,14 @@ fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writab
             "AggregatedBytes" to RuntimeType.smithyHttp(rc).resolve("byte_stream::AggregatedBytes"),
             "Error" to RuntimeType.smithyHttp(rc).resolve("byte_stream::error::Error"),
             "SdkBody" to RuntimeType.smithyHttp(rc).resolve("body::SdkBody"),
+        )
+    }
+    if (hasEventStreamOperations(model)) {
+        rustTemplate(
+            """
+            pub use #{FnStream};
+            """,
+            "FnStream" to RuntimeType.smithyAsync(rc).resolve("future::fn_stream::FnStream"),
         )
     }
 }

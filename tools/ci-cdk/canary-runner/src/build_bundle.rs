@@ -56,8 +56,6 @@ tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 "#;
 
-const REQUIRED_SMITHY_CRATES: &[&str] = &["aws-smithy-async"];
-
 const REQUIRED_SDK_CRATES: &[&str] = &[
     "aws-config",
     "aws-sdk-s3",
@@ -131,7 +129,6 @@ fn enabled_feature(crate_source: &CrateSource) -> String {
 
 fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
     let mut output = BASE_MANIFEST.to_string();
-    write_dependencies(REQUIRED_SMITHY_CRATES, &mut output, &crate_source)?;
     write_dependencies(REQUIRED_SDK_CRATES, &mut output, &crate_source)?;
     write!(output, "\n[features]\n").unwrap();
     writeln!(output, "latest = []").unwrap();
@@ -438,7 +435,6 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
-aws-smithy-async = { path = "some/sdk/path/aws-smithy-async" }
 aws-config = { path = "some/sdk/path/aws-config" }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
@@ -503,7 +499,6 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
-aws-smithy-async = "0.46.0"
 aws-config = "0.46.0"
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"
@@ -520,7 +515,6 @@ default = ["latest"]
                     aws_doc_sdk_examples_revision: "some-revision-docs".into(),
                     manual_interventions: Default::default(),
                     crates: [
-                        crate_version("aws-smithy-async", "0.46.0"),
                         crate_version("aws-config", "0.46.0"),
                         crate_version("aws-sdk-s3", "0.20.0"),
                         crate_version("aws-sdk-ec2", "0.19.0"),

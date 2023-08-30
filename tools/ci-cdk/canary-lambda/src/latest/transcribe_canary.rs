@@ -7,7 +7,6 @@ use crate::canary::CanaryError;
 use crate::mk_canary;
 use aws_config::SdkConfig;
 use aws_sdk_transcribestreaming as transcribe;
-use aws_smithy_async::future::fn_stream::FnStream;
 use bytes::BufMut;
 use transcribe::primitives::Blob;
 use transcribe::types::{
@@ -31,7 +30,7 @@ pub async fn transcribe_canary(
     client: transcribe::Client,
     expected_transcribe_result: String,
 ) -> anyhow::Result<()> {
-    let input_stream = FnStream::new(|tx| {
+    let input_stream = transcribe::primitives::FnStream::new(|tx| {
         Box::pin(async move {
             let pcm = pcm_data();
             for chunk in pcm.chunks(CHUNK_SIZE) {
