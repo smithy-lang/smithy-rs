@@ -34,3 +34,9 @@ message = "`CustomizableOperation`, created as a result of calling the `.customi
 references = ["smithy-rs#2944", "smithy-rs#2951"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Generate a region setter when a model uses SigV4."
+references = ["smithy-rs#2960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
