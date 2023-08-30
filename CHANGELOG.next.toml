@@ -54,3 +54,9 @@ message = "Update MSRV to Rust 1.70.0"
 references = ["smithy-rs#2948"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Allow `no_credentials` to be used with all S3 operations."
+references = ["smithy-rs#2955", "aws-sdk-rust#878"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
