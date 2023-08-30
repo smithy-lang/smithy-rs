@@ -6,8 +6,8 @@
 use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
 
 async fn s3_list_objects() -> ListObjectsV2Output {
-    use aws_sdk_s3::Client;
     use crate::default_config::get_default_config;
+    use aws_sdk_s3::Client;
 
     let shared_config = get_default_config().await;
     let client = Client::new(&shared_config);

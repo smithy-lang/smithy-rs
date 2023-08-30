@@ -5,30 +5,9 @@
 
 #![allow(dead_code)]
 
+#[cfg(target_family = "wasm")]
 mod default_config;
+#[cfg(target_family = "wasm")]
 mod list_objects;
-
-wit_bindgen::generate!({
-    inline: "
-        package aws:component
-
-        interface run {
-            run: func() -> result
-        }
-
-        world main {
-            export run
-        }
-    ",
-    exports: {
-        "aws:component/run": Component
-    }
-});
-
-struct Component;
-
-impl exports::aws::component::run::Guest for Component {
-    fn run() -> Result<(), ()> {
-        Ok(())
-    }
-}
+#[cfg(all(target_family = "wasm", target_os = "wasi"))]
+mod wasi;
