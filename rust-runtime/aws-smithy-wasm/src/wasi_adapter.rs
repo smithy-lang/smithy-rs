@@ -16,6 +16,9 @@ use std::{
 use tower::Service;
 use wasi_preview2_prototype::http_client::DefaultClient;
 
+/// Creates a connector function that can be used during instantiation of the client SDK
+/// in order to route the HTTP requests through the WebAssembly host. The host must
+/// support the WASI HTTP proposal as defined in the Preview 2 specification.
 pub fn wasi_connector() -> HttpConnector {
     HttpConnector::ConnectorFn(Arc::new(|_, _| Some(DynConnector::new(Adapter::default()))))
 }
