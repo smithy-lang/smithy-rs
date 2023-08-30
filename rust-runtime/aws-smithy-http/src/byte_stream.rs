@@ -304,7 +304,7 @@ impl ByteStream {
     }
 
     /// Return the bounds on the remaining length of the `ByteStream`.
-    pub fn size_hint(&self) -> (usize, Option<usize>) {
+    pub fn size_hint(&self) -> (u64, Option<u64>) {
         self.inner.size_hint()
     }
 
@@ -443,10 +443,6 @@ impl futures_core::stream::Stream for StreamWrapper {
             .byte_stream
             .poll_next(cx)
             .map_err(Error::streaming)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.byte_stream.size_hint()
     }
 }
 
@@ -591,27 +587,14 @@ impl<B> Inner<B> {
         Ok(AggregatedBytes(output))
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>)
+    fn size_hint(&self) -> (u64, Option<u64>)
     where
         B: http_body::Body<Data = Bytes>,
     {
         let size_hint = http_body::Body::size_hint(&self.body);
-        let lower = size_hint.lower().try_into();
-        let upper = size_hint.upper().map(|u| u.try_into()).transpose();
-
-        match (lower, upper) {
-            (Ok(lower), Ok(upper)) => (lower, upper),
-            (Err(_), _) | (_, Err(_)) => {
-                panic!("{}", SIZE_HINT_32_BIT_PANIC_MESSAGE)
-            }
-        }
+        (size_hint.lower(), size_hint.upper())
     }
 }
-
-const SIZE_HINT_32_BIT_PANIC_MESSAGE: &str = r#"
-You're running a 32-bit system and this stream's length is too large to be represented with a usize.
-Please limit stream length to less than 4.294Gb or run this program on a 64-bit computer architecture.
-"#;
 
 #[cfg(test)]
 mod tests {
