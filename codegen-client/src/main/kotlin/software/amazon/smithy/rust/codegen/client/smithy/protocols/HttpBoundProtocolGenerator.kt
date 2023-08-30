@@ -7,12 +7,14 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializer
 
 class ClientHttpBoundProtocolPayloadGenerator(
     codegenContext: ClientCodegenContext,
@@ -44,4 +46,20 @@ class ClientHttpBoundProtocolPayloadGenerator(
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
         )
     },
+    streamPayloadSerializer = StreamPayloadSerializer(
+        { writer, params ->
+            // `aws_smithy_http::byte_stream::ByteStream` no longer implements `futures::stream::Stream`
+            // so wrap it in a new-type to enable the trait.
+            writer.rust(
+                "#T",
+                RuntimeType.hyperBodyWrapStream(params.runtimeConfig).resolve("HyperBodyWrapByteStream").toSymbol(),
+            )
+        },
+        { writer, params ->
+            writer.rust(
+                "#T::new(${params.payloadName!!})",
+                RuntimeType.hyperBodyWrapStream(params.runtimeConfig).resolve("HyperBodyWrapByteStream").toSymbol(),
+            )
+        },
+    ),
 )

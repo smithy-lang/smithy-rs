@@ -57,6 +57,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtoc
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializer
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializerParams
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -87,6 +89,12 @@ import java.util.logging.Logger
 sealed class ServerHttpBoundProtocolSection(name: String) : Section(name) {
     data class AfterTimestampDeserializedMember(val shape: MemberShape) :
         ServerHttpBoundProtocolSection("AfterTimestampDeserializedMember")
+
+    data class TypeOfSerializedPayloadStream(val params: StreamPayloadSerializerParams) :
+        ServerHttpBoundProtocolSection("TypeOfSerializedPayloadStream")
+
+    data class WrapStreamAfterPayloadGenerated(val params: StreamPayloadSerializerParams) :
+        ServerHttpBoundProtocolSection("WrapStreamAfterPayloadGenerated")
 }
 
 /**
@@ -123,6 +131,7 @@ class ServerHttpBoundProtocolGenerator(
 class ServerHttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
     protocol: Protocol,
+    customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
 ) : ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
     codegenContext, protocol, HttpMessageType.RESPONSE,
     renderEventStreamBody = { writer, params ->
@@ -143,6 +152,26 @@ class ServerHttpBoundProtocolPayloadGenerator(
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
         )
     },
+    streamPayloadSerializer = StreamPayloadSerializer(
+        { writer, params ->
+            for (customization in customizations) {
+                customization.section(
+                    ServerHttpBoundProtocolSection.TypeOfSerializedPayloadStream(
+                        params,
+                    ),
+                )(writer)
+            }
+        },
+        { writer, params ->
+            for (customization in customizations) {
+                customization.section(
+                    ServerHttpBoundProtocolSection.WrapStreamAfterPayloadGenerated(
+                        params,
+                    ),
+                )(writer)
+            }
+        },
+    ),
 )
 
 /*
@@ -544,7 +573,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
-            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
+            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol, customizations)
             withBlockTemplate(
                 "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(",
                 "));",
