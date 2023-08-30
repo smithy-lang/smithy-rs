@@ -56,6 +56,12 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "Velfi"
 
 [[aws-sdk-rust]]
+message = "Correctly identify HTTP 200 responses from S3 with `<Error>` as the root Element as errors. **Note**: This a behavior change and will change the error type returned by the SDK in some cases."
+references = ["smithy-rs#2958", "aws-sdk-rust#873"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
 message = "Allow `no_credentials` to be used with all S3 operations."
 references = ["smithy-rs#2955", "aws-sdk-rust#878"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
