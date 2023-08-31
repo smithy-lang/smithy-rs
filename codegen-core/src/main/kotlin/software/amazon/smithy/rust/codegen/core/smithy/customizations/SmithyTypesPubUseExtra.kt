@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 
 /** Returns true if the model has normal streaming operations (excluding event streams) */
@@ -25,14 +26,6 @@ private fun hasStreamingOperations(model: Model): Boolean {
             (output.hasStreamingMember(model) && !output.hasEventStreamMember(model))
     }
 }
-
-/** Returns true if the model has event streaming operations */
-private fun hasEventStreamOperations(model: Model): Boolean =
-    model.operationShapes.any { operation ->
-        val input = model.expectShape(operation.inputShape, StructureShape::class.java)
-        val output = model.expectShape(operation.outputShape, StructureShape::class.java)
-        input.hasEventStreamMember(model) || output.hasEventStreamMember(model)
-    }
 
 // TODO(https://github.com/awslabs/smithy-rs/issues/2111): Fix this logic to consider collection/map shapes
 private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) -> Boolean): Boolean =
@@ -78,7 +71,7 @@ fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writab
             "SdkBody" to RuntimeType.smithyHttp(rc).resolve("body::SdkBody"),
         )
     }
-    if (hasEventStreamOperations(model)) {
+    if (codegenContext.serviceShape.hasEventStreamOperations(model)) {
         rustTemplate(
             """
             pub use #{FnStream};
