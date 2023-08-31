@@ -57,8 +57,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtoc
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializer
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializerParams
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializerRenderer
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -128,6 +128,36 @@ class ServerHttpBoundProtocolGenerator(
     }
 }
 
+/**
+ * Server implementation of the [StreamPayloadSerializerRenderer] interface.
+ *
+ * The implementation of each method is delegated to [customizations]. Regular server codegen and python server
+ * have different requirements for how to render stream payload serializers, and they express their requirements
+ * through customizations, specifically with [TypeOfSerializedPayloadStream] and [WrapStreamAfterPayloadGenerated].
+ */
+private class ServerStreamPayloadSerializerRenderer(private val customizations: List<ServerHttpBoundProtocolCustomization>) :
+    StreamPayloadSerializerRenderer {
+    override fun renderOutputType(writer: RustWriter, params: StreamPayloadSerializerParams) {
+        for (customization in customizations) {
+            customization.section(
+                ServerHttpBoundProtocolSection.TypeOfSerializedPayloadStream(
+                    params,
+                ),
+            )(writer)
+        }
+    }
+
+    override fun renderPayload(writer: RustWriter, params: StreamPayloadSerializerParams) {
+        for (customization in customizations) {
+            customization.section(
+                ServerHttpBoundProtocolSection.WrapStreamAfterPayloadGenerated(
+                    params,
+                ),
+            )(writer)
+        }
+    }
+}
+
 class ServerHttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
     protocol: Protocol,
@@ -152,26 +182,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
         )
     },
-    streamPayloadSerializer = StreamPayloadSerializer(
-        { writer, params ->
-            for (customization in customizations) {
-                customization.section(
-                    ServerHttpBoundProtocolSection.TypeOfSerializedPayloadStream(
-                        params,
-                    ),
-                )(writer)
-            }
-        },
-        { writer, params ->
-            for (customization in customizations) {
-                customization.section(
-                    ServerHttpBoundProtocolSection.WrapStreamAfterPayloadGenerated(
-                        params,
-                    ),
-                )(writer)
-            }
-        },
-    ),
+    ServerStreamPayloadSerializerRenderer(customizations),
 )
 
 /*

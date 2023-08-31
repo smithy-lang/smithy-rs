@@ -61,17 +61,31 @@ data class StreamPayloadSerializerParams(
     val payloadName: String?,
 )
 
-data class StreamPayloadSerializer(
-    val outputT: (RustWriter, StreamPayloadSerializerParams) -> Unit,
-    val renderPayload: (RustWriter, StreamPayloadSerializerParams) -> Unit,
-)
+/**
+ * An interface to help customize how to render a stream payload serializer.
+ *
+ * When the output of the serializer is passed to `hyper::body::Body::wrap_stream`,
+ * it requires what's passed to implement `futures_core::stream::Stream` trait.
+ * However, a certain type, such as `aws_smithy_http::byte_stream::ByteStream` does not
+ * implement the trait, so we need to wrap it with a new-type that does implement the trait.
+ *
+ * Each implementing type of the interface can choose whether the payload should be wrapped
+ * with such a new-type or should simply be used as-is.
+ */
+interface StreamPayloadSerializerRenderer {
+    /** Renders the return type of stream payload serializer **/
+    fun renderOutputType(writer: RustWriter, params: StreamPayloadSerializerParams)
+
+    /** Renders the stream payload **/
+    fun renderPayload(writer: RustWriter, params: StreamPayloadSerializerParams)
+}
 
 class HttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
     private val renderEventStreamBody: (RustWriter, EventStreamBodyParams) -> Unit,
-    private val streamPayloadSerializer: StreamPayloadSerializer,
+    private val streamPayloadSerializerRenderer: StreamPayloadSerializerRenderer,
 ) : ProtocolPayloadGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -321,7 +335,7 @@ class HttpBoundProtocolPayloadGenerator(
                 *codegenScope,
             )
             if (member.isStreaming(model)) {
-                streamPayloadSerializer.outputT(
+                streamPayloadSerializerRenderer.renderOutputType(
                     this,
                     StreamPayloadSerializerParams(symbolProvider, runtimeConfig, member, null),
                 )
@@ -386,7 +400,7 @@ class HttpBoundProtocolPayloadGenerator(
             is BlobShape -> {
                 // Write the raw blob to the payload.
                 if (member.isStreaming(model)) {
-                    streamPayloadSerializer.renderPayload(
+                    streamPayloadSerializerRenderer.renderPayload(
                         this,
                         StreamPayloadSerializerParams(symbolProvider, runtimeConfig, member, payloadName),
                     )
