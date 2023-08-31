@@ -28,11 +28,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
+import software.amazon.smithy.rust.codegen.core.smithy.generators.enforceRequired
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
-import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
@@ -136,11 +135,10 @@ class EndpointParamsInterceptorGenerator(
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) ->
             val memberName = codegenContext.symbolProvider.toMemberName(memberShape)
-            val member = writable("_input.$memberName.clone()").letIf(memberShape.isRequired) { ref ->
-                OperationBuildError(codegenContext.runtimeConfig).emptyOrUnset(symbolProvider, ref, memberShape)
-            }
+            val member = memberShape.enforceRequired(writable("_input.$memberName.clone()"), codegenContext)
+
             rustTemplate(
-                ".${EndpointParamsGenerator.setterName(param.name)}(dbg!(#{member}))", "member" to member,
+                ".${EndpointParamsGenerator.setterName(param.name)}(#{member})", "member" to member,
             )
         }
     }
