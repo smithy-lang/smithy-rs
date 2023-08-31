@@ -90,11 +90,22 @@ sealed class ServerHttpBoundProtocolSection(name: String) : Section(name) {
     data class AfterTimestampDeserializedMember(val shape: MemberShape) :
         ServerHttpBoundProtocolSection("AfterTimestampDeserializedMember")
 
-    data class TypeOfSerializedPayloadStream(val params: StreamPayloadSerializerParams) :
-        ServerHttpBoundProtocolSection("TypeOfSerializedPayloadStream")
+    /**
+     * Represent a section for rendering the return type of serialized stream payload.
+     *
+     * When overriding the `section` method, this should render [Symbol] for that return type.
+     */
+    data class TypeOfSerializedStreamPayload(val params: StreamPayloadSerializerParams) :
+        ServerHttpBoundProtocolSection("TypeOfSerializedStreamPayload")
 
-    data class WrapStreamAfterPayloadGenerated(val params: StreamPayloadSerializerParams) :
-        ServerHttpBoundProtocolSection("WrapStreamAfterPayloadGenerated")
+    /**
+     * Represent a section for rendering the serialized stream payload.
+     *
+     * When overriding the `section` method, this should render either the payload as-is or the payload wrapped
+     * with a new-type that implements the `futures_core::stream::Stream` trait.
+     */
+    data class WrapStreamPayload(val params: StreamPayloadSerializerParams) :
+        ServerHttpBoundProtocolSection("WrapStreamPayload")
 }
 
 /**
@@ -133,14 +144,14 @@ class ServerHttpBoundProtocolGenerator(
  *
  * The implementation of each method is delegated to [customizations]. Regular server codegen and python server
  * have different requirements for how to render stream payload serializers, and they express their requirements
- * through customizations, specifically with [TypeOfSerializedPayloadStream] and [WrapStreamAfterPayloadGenerated].
+ * through customizations, specifically with [TypeOfSerializedStreamPayload] and [WrapStreamPayload].
  */
 private class ServerStreamPayloadSerializerRenderer(private val customizations: List<ServerHttpBoundProtocolCustomization>) :
     StreamPayloadSerializerRenderer {
     override fun renderOutputType(writer: RustWriter, params: StreamPayloadSerializerParams) {
         for (customization in customizations) {
             customization.section(
-                ServerHttpBoundProtocolSection.TypeOfSerializedPayloadStream(
+                ServerHttpBoundProtocolSection.TypeOfSerializedStreamPayload(
                     params,
                 ),
             )(writer)
@@ -150,7 +161,7 @@ private class ServerStreamPayloadSerializerRenderer(private val customizations: 
     override fun renderPayload(writer: RustWriter, params: StreamPayloadSerializerParams) {
         for (customization in customizations) {
             customization.section(
-                ServerHttpBoundProtocolSection.WrapStreamAfterPayloadGenerated(
+                ServerHttpBoundProtocolSection.WrapStreamPayload(
                     params,
                 ),
             )(writer)

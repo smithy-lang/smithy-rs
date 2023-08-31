@@ -22,7 +22,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 
 class StreamPayloadSerializerCustomization() : ServerHttpBoundProtocolCustomization() {
     override fun section(section: ServerHttpBoundProtocolSection): Writable = when (section) {
-        is ServerHttpBoundProtocolSection.TypeOfSerializedPayloadStream -> writable {
+        is ServerHttpBoundProtocolSection.TypeOfSerializedStreamPayload -> writable {
             // `aws_smithy_http::byte_stream::ByteStream` no longer implements `futures_core::stream::Stream`
             // so wrap it in a new-type to enable the trait.
             rust(
@@ -32,7 +32,7 @@ class StreamPayloadSerializerCustomization() : ServerHttpBoundProtocolCustomizat
             )
         }
 
-        is ServerHttpBoundProtocolSection.WrapStreamAfterPayloadGenerated -> writable {
+        is ServerHttpBoundProtocolSection.WrapStreamPayload -> writable {
             rustTemplate(
                 "#{HyperBodyWrapByteStream}::new(${section.params.payloadName!!})",
                 "HyperBodyWrapByteStream" to RuntimeType.hyperBodyWrapStream(section.params.runtimeConfig)
