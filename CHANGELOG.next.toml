@@ -90,3 +90,15 @@ message = "Fix code generation for union members with the `@httpPayload` trait."
 references = ["smithy-rs#2969", "smithy-rs#1896"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Make `bucket` required for request construction for S3. When `bucket` is not set, a **different** operation than intended can be triggered."
+references = ["smithy-rs#1668", "aws-sdk-rust#873", "smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Required members with @contextParam are now treated as client-side required."
+references = ["smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
+author = "rcoh"

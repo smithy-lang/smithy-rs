@@ -111,6 +111,7 @@ class EndpointsDecoratorTest {
 
         structure TestOperationInput {
             @contextParam(name: "Bucket")
+            @required
             bucket: String,
             nested: NestedStructure
         }
@@ -210,6 +211,10 @@ class EndpointsDecoratorTest {
                             interceptor.called.load(Ordering::Relaxed),
                             "the interceptor should have been called"
                         );
+
+                        // bucket_name is unset and marked as required on the model, so we'll refuse to construct this request
+                        let err = client.test_operation().send().await.expect_err("param missing");
+                        assert_eq!(format!("{}", err), "failed to construct request");
                     }
                     """,
                 )
