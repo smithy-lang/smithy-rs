@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -23,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplat
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -89,42 +89,20 @@ fun MemberShape.enforceRequired(
         return field
     }
     val shape = this
-    val ctx = arrayOf(
-        "checkSetString" to checkSetString,
-        "error" to OperationBuildError(codegenContext.runtimeConfig).missingField(
-            codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
-        ),
-        "field" to field,
+    val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
+        codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
     )
     val unwrapped = when (codegenContext.model.expectShape(this.target)) {
         is StringShape -> writable {
             rustTemplate(
-                "#{checkSetString}(#{field}).ok_or_else(||#{error})?",
-                *ctx,
+                "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
+                "field" to field,
             )
         }
 
-        else -> writable {
-            rustTemplate("#{field}.ok_or_else(||#{error})?", *ctx)
-        }
-    }
-    return unwrapped.letIf(produceOption) { writable { rust("Some(#T)", it) } }
-}
-
-private val checkSetString = RuntimeType.forInlineFun("non_empty_str", RustModule.private("serde_util")) {
-    rustTemplate(
-        """
-        pub (crate) fn non_empty_str<T: AsRef<str>>(field: Option<T>) -> Option<T> {
-            if let Some(field) = field {
-                if field.as_ref() != "" {
-                    return Some(field)
-                }
-            }
-            None
-        }
-
-        """,
-    )
+        else -> field
+    }.map { base -> rustTemplate("#{base}.ok_or_else(||#{error})?", "base" to base, "error" to error) }
+    return unwrapped.letIf(produceOption) { w -> w.map { rust("Some(#T)", it) } }
 }
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
