@@ -258,8 +258,8 @@ impl RuntimePlugins {
 #[cfg(test)]
 mod tests {
     use super::{RuntimePlugin, RuntimePlugins};
-    use crate::client::connectors::{HttpConnector, SharedHttpConnector};
-    use crate::client::orchestrator::{BoxFuture, HttpRequest, HttpResponse};
+    use crate::client::connectors::{HttpConnector, HttpConnectorFuture, SharedHttpConnector};
+    use crate::client::orchestrator::HttpRequest;
     use crate::client::runtime_components::RuntimeComponentsBuilder;
     use crate::client::runtime_plugin::Order;
     use aws_smithy_http::body::SdkBody;
@@ -342,14 +342,14 @@ mod tests {
         #[derive(Debug)]
         struct CN1;
         impl HttpConnector for CN1 {
-            fn call(&self, _: HttpRequest) -> BoxFuture<HttpResponse> {
-                Box::pin(async {
+            fn call(&self, _: HttpRequest) -> HttpConnectorFuture {
+                HttpConnectorFuture::new(Box::pin(async {
                     Ok(http::Response::builder()
                         .status(200)
                         .header("rp1", "1")
                         .body(SdkBody::empty())
                         .unwrap())
-                })
+                }))
             }
         }
 
@@ -357,14 +357,14 @@ mod tests {
         #[derive(Debug)]
         struct CN2(SharedHttpConnector);
         impl HttpConnector for CN2 {
-            fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
+            fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
                 let inner = self.0.clone();
-                Box::pin(async move {
+                HttpConnectorFuture::new(Box::pin(async move {
                     let mut resp = inner.call(request).await.unwrap();
                     resp.headers_mut()
                         .append("rp2", HeaderValue::from_static("1"));
                     Ok(resp)
-                })
+                }))
             }
         }
 

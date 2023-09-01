@@ -102,3 +102,27 @@ message = "Required members with @contextParam are now treated as client-side re
 references = ["smithy-rs#2964"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "`aws_smithy_client::hyper_ext::Adapter` was moved/renamed to `aws_smithy_runtime::client::connectors::hyper_connector::HyperConnector`."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Test connectors moved into `aws_smithy_runtime::client::connectors::test_util` behind the `test-util` feature."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "DVR's RecordingConnection and ReplayingConnection were renamed to RecordingConnector and ReplayingConnector respectively."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "TestConnection was renamed to EventConnector."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"

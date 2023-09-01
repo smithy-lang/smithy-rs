@@ -9,14 +9,18 @@ pub mod connection_poisoning;
 #[cfg(feature = "test-util")]
 pub mod test_util;
 
+/// Default HTTP and TLS connectors that use hyper and rustls.
+#[cfg(feature = "connector-hyper")]
+pub mod hyper_connector;
+
 // TODO(enableNewSmithyRuntimeCleanup): Delete this module
 /// Unstable API for interfacing the old middleware connectors with the newer orchestrator connectors.
 ///
 /// Important: This module and its contents will be removed in the next release.
 pub mod adapter {
     use aws_smithy_client::erase::DynConnector;
-    use aws_smithy_runtime_api::client::connectors::HttpConnector;
-    use aws_smithy_runtime_api::client::orchestrator::{BoxFuture, HttpRequest, HttpResponse};
+    use aws_smithy_runtime_api::client::connectors::{HttpConnector, HttpConnectorFuture};
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use std::sync::{Arc, Mutex};
 
     /// Adapts a [`DynConnector`] to the [`HttpConnector`] trait.
@@ -40,9 +44,9 @@ pub mod adapter {
     }
 
     impl HttpConnector for DynConnectorAdapter {
-        fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
+        fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
             let future = self.dyn_connector.lock().unwrap().call_lite(request);
-            future
+            HttpConnectorFuture::new(future)
         }
     }
 }
