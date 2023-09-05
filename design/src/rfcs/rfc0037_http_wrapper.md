@@ -97,7 +97,7 @@ There is ongoing work which MAY restrict HTTP extensions to clone types. We will
 </details>
 
 ### Future Work
-Currently, the only way to construct `Request` is from a compatyible type (e.g. `http03x::Request`)
+Currently, the only way to construct `Request` is from a compatible type (e.g. `http03x::Request`)
 
 Changes checklist
 -----------------
