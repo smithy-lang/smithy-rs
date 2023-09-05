@@ -148,7 +148,7 @@ fn record_body(
 impl HttpConnector for RecordingConnector {
     fn call(&self, mut request: HttpRequest) -> HttpConnectorFuture {
         let event_id = self.next_id();
-        // A request has two 3 phases:
+        // A request has three phases:
         // 1. A "Request" phase. This is initial HTTP request, headers, & URI
         // 2. A body phase. This may contain multiple data segments.
         // 3. A finalization phase. An EOF of some sort is sent on the body to indicate that
