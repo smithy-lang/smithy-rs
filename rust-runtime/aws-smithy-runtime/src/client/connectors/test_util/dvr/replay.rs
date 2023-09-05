@@ -346,6 +346,6 @@ impl HttpConnector for ReplayingConnector {
             recording.lock().unwrap().insert(event_id, recorded_request);
             resp
         };
-        HttpConnectorFuture::new(Box::pin(fut))
+        HttpConnectorFuture::new(fut)
     }
 }

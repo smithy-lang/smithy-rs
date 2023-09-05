@@ -369,9 +369,9 @@ where
         }
         let mut client = self.client.clone();
         let fut = client.call(request);
-        HttpConnectorFuture::new(Box::pin(async move {
+        HttpConnectorFuture::new(async move {
             Ok(fut.await.map_err(downcast_error)?.map(SdkBody::from))
-        }))
+        })
     }
 }
 

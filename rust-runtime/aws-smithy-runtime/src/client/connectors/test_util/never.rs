@@ -34,9 +34,9 @@ impl NeverConnector {
 impl HttpConnector for NeverConnector {
     fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
         self.invocations.fetch_add(1, Ordering::SeqCst);
-        HttpConnectorFuture::new(Box::pin(async move {
+        HttpConnectorFuture::new(async move {
             Never::new().await;
             unreachable!()
-        }))
+        })
     }
 }

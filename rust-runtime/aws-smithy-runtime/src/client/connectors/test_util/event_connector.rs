@@ -179,9 +179,9 @@ impl HttpConnector for EventConnector {
         };
 
         let sleep = self.sleep_impl.sleep(simulated_latency);
-        HttpConnectorFuture::new(Box::pin(async move {
+        HttpConnectorFuture::new(async move {
             sleep.await;
             res
-        }))
+        })
     }
 }

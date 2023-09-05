@@ -201,6 +201,6 @@ impl HttpConnector for RecordingConnector {
                 }
             }
         };
-        HttpConnectorFuture::new(Box::pin(fut))
+        HttpConnectorFuture::new(fut)
     }
 }

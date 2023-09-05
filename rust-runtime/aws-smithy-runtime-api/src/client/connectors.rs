@@ -33,15 +33,61 @@
 use crate::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_http::result::ConnectorError;
+use pin_project_lite::pin_project;
 use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::Poll;
 
-/// Boxed future used by [`HttpConnectorFuture`].
-pub type BoxFuture = Pin<Box<dyn StdFuture<Output = Result<HttpResponse, ConnectorError>> + Send>>;
-/// Future for [`HttpConnector::call`].
-pub type HttpConnectorFuture = NowOrLater<Result<HttpResponse, ConnectorError>, BoxFuture>;
+type BoxFuture = Pin<Box<dyn StdFuture<Output = Result<HttpResponse, ConnectorError>> + Send>>;
+
+pin_project! {
+    /// Future for [`HttpConnector::call`].
+    pub struct HttpConnectorFuture {
+        #[pin]
+        inner: NowOrLater<Result<HttpResponse, ConnectorError>, BoxFuture>,
+    }
+}
+
+impl HttpConnectorFuture {
+    /// Create a new `HttpConnectorFuture` with the given future.
+    pub fn new<F>(future: F) -> Self
+    where
+        F: StdFuture<Output = Result<HttpResponse, ConnectorError>> + Send + 'static,
+    {
+        Self {
+            inner: NowOrLater::new(Box::pin(future)),
+        }
+    }
+
+    /// Create a new `HttpConnectorFuture` with the given boxed future.
+    ///
+    /// Use this if you already have a boxed future to avoid double boxing it.
+    pub fn new_boxed(
+        future: Pin<Box<dyn StdFuture<Output = Result<HttpResponse, ConnectorError>> + Send>>,
+    ) -> Self {
+        Self {
+            inner: NowOrLater::new(future),
+        }
+    }
+
+    /// Create a `HttpConnectorFuture` that is immediately ready with the given result.
+    pub fn ready(result: Result<HttpResponse, ConnectorError>) -> Self {
+        Self {
+            inner: NowOrLater::ready(result),
+        }
+    }
+}
+
+impl StdFuture for HttpConnectorFuture {
+    type Output = Result<HttpResponse, ConnectorError>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+        this.inner.poll(cx)
+    }
+}
 
 /// Trait with a `call` function that asynchronously converts a request into a response.
 ///
