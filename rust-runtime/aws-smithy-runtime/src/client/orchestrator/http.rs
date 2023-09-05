@@ -43,7 +43,7 @@ pub(crate) async fn read_body(response: &mut HttpResponse) -> Result<(), <SdkBod
 }
 
 #[derive(Debug)]
-pub struct SensitiveOutput;
+pub(crate) struct SensitiveOutput;
 impl Storable for SensitiveOutput {
     type Storer = StoreReplace<Self>;
 }

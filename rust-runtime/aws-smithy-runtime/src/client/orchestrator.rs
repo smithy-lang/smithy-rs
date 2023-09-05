@@ -392,7 +392,7 @@ async fn try_attempt(
                 .map_err(OrchestratorError::response)
                 .and_then(|_| {
                     let _span = debug_span!("deserialize_nonstreaming").entered();
-                    log_response_body(response, &cfg);
+                    log_response_body(response, cfg);
                     response_deserializer.deserialize_nonstreaming(response)
                 }),
         }
