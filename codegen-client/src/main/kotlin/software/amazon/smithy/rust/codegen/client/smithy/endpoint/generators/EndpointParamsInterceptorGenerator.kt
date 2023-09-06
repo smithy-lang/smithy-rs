@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.enforceRequired
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -134,8 +135,10 @@ class EndpointParamsInterceptorGenerator(
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) ->
             val memberName = codegenContext.symbolProvider.toMemberName(memberShape)
-            rust(
-                ".${EndpointParamsGenerator.setterName(param.name)}(_input.$memberName.clone())",
+            val member = memberShape.enforceRequired(writable("_input.$memberName.clone()"), codegenContext)
+
+            rustTemplate(
+                ".${EndpointParamsGenerator.setterName(param.name)}(#{member})", "member" to member,
             )
         }
     }
