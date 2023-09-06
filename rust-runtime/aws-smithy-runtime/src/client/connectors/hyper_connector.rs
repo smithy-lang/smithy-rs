@@ -27,7 +27,6 @@ use tokio::io::{AsyncRead, AsyncWrite};
 mod default_connector {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_client::http_connector::ConnectorSettings;
-    use hyper::{service::Service, Uri};
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
@@ -79,47 +78,7 @@ mod default_connector {
     pub(super) fn https() -> hyper_rustls::HttpsConnector<hyper::client::HttpConnector> {
         HTTPS_NATIVE_ROOTS.clone()
     }
-
-    // New-type around hyper_rustls's HttpsConnector
-    /// Default TCP connector that uses rustls that can be used with [`HyperConnector`](super::HyperConnector).
-    #[derive(Clone)]
-    pub struct DefaultHttpsTcpConnector {
-        inner: hyper_rustls::HttpsConnector<hyper::client::HttpConnector>,
-    }
-    impl DefaultHttpsTcpConnector {
-        /// Creates a new `DefaultHttpsTcpConnector`.
-        pub fn new() -> Self {
-            Self { inner: https() }
-        }
-    }
-    impl Default for DefaultHttpsTcpConnector {
-        fn default() -> Self {
-            Self::new()
-        }
-    }
-    impl Service<Uri> for DefaultHttpsTcpConnector {
-        type Response =
-            <hyper_rustls::HttpsConnector<hyper::client::HttpConnector> as Service<Uri>>::Response;
-        type Error =
-            <hyper_rustls::HttpsConnector<hyper::client::HttpConnector> as Service<Uri>>::Error;
-        type Future =
-            <hyper_rustls::HttpsConnector<hyper::client::HttpConnector> as Service<Uri>>::Future;
-
-        fn poll_ready(
-            &mut self,
-            cx: &mut std::task::Context<'_>,
-        ) -> std::task::Poll<Result<(), Self::Error>> {
-            self.inner.poll_ready(cx)
-        }
-
-        fn call(&mut self, uri: Uri) -> Self::Future {
-            self.inner.call(uri)
-        }
-    }
 }
-
-#[cfg(feature = "tls-rustls")]
-pub use default_connector::DefaultHttpsTcpConnector;
 
 /// Given `ConnectorSettings` and an `SharedAsyncSleep`, create a `SharedHttpConnector` from defaults depending on what cargo features are activated.
 pub fn default_connector(
@@ -129,8 +88,7 @@ pub fn default_connector(
     #[cfg(feature = "tls-rustls")]
     {
         tracing::trace!(settings = ?settings, sleep = ?sleep, "creating a new default connector");
-        let hyper = default_connector::base(settings, sleep)
-            .build(default_connector::DefaultHttpsTcpConnector::new());
+        let hyper = default_connector::base(settings, sleep).build_https();
         Some(SharedHttpConnector::new(hyper))
     }
     #[cfg(not(feature = "tls-rustls"))]
@@ -258,6 +216,11 @@ impl HyperConnectorBuilder {
                 client: read_timeout,
             }),
         }
+    }
+
+    /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    pub fn build_https(self) -> HyperConnector {
+        self.build(default_connector::https())
     }
 
     /// Set the async sleep implementation used for timeouts

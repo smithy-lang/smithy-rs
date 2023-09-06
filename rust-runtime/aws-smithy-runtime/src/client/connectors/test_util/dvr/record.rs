@@ -33,15 +33,11 @@ pub struct RecordingConnector {
 impl RecordingConnector {
     /// Construct a recording connection wrapping a default HTTPS implementation
     pub fn https() -> Self {
-        use crate::client::connectors::hyper_connector::{
-            DefaultHttpsTcpConnector, HyperConnector,
-        };
+        use crate::client::connectors::hyper_connector::HyperConnector;
         Self {
             data: Default::default(),
             num_events: Arc::new(AtomicUsize::new(0)),
-            inner: SharedHttpConnector::new(
-                HyperConnector::builder().build(DefaultHttpsTcpConnector::new()),
-            ),
+            inner: SharedHttpConnector::new(HyperConnector::builder().build_https()),
         }
     }
 }
