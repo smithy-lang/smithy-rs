@@ -126,3 +126,15 @@ message = "TestConnection was renamed to EventConnector."
 references = ["smithy-rs#2970"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Remove `once_cell` from public API"
+references = ["smithy-rs#2973"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Remove `once_cell` from public API"
+references = ["smithy-rs#2973"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
