@@ -36,6 +36,7 @@ async fn get_request_id_from_modeled_error() {
     let err = client
         .get_object()
         .key("dontcare")
+        .bucket("dontcare")
         .send()
         .await
         .expect_err("status was 404, this is an error")
@@ -83,6 +84,7 @@ async fn get_request_id_from_unmodeled_error() {
     let client = Client::from_conf(config);
     let err = client
         .get_object()
+        .bucket("dontcare")
         .key("dontcare")
         .send()
         .await
@@ -156,6 +158,7 @@ async fn get_request_id_from_successful_streaming_response() {
     let output = client
         .get_object()
         .key("dontcare")
+        .bucket("dontcare")
         .send()
         .await
         .expect("valid successful response");
@@ -194,6 +197,7 @@ async fn conversion_to_service_error_maintains_request_id() {
     let client = Client::from_conf(config);
     let err = client
         .get_object()
+        .bucket("dontcare")
         .key("dontcare")
         .send()
         .await

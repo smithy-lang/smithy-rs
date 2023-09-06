@@ -54,3 +54,51 @@ message = "Update MSRV to Rust 1.70.0"
 references = ["smithy-rs#2948"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Correctly identify HTTP 200 responses from S3 with `<Error>` as the root Element as errors. **Note**: This a behavior change and will change the error type returned by the SDK in some cases."
+references = ["smithy-rs#2958", "aws-sdk-rust#873"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Allow `no_credentials` to be used with all S3 operations."
+references = ["smithy-rs#2955", "aws-sdk-rust#878"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Generate a region setter when a model uses SigV4."
+references = ["smithy-rs#2960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix code generation for union members with the `@httpPayload` trait."
+references = ["smithy-rs#2969", "smithy-rs#1896"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Make `bucket` required for request construction for S3. When `bucket` is not set, a **different** operation than intended can be triggered."
+references = ["smithy-rs#1668", "aws-sdk-rust#873", "smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Required members with @contextParam are now treated as client-side required."
+references = ["smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
+author = "rcoh"
