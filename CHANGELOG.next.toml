@@ -104,13 +104,13 @@ meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
 author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Port redacting sensitive HTTP response bodies to the orchestrator"
+message = "Fix regression with redacting sensitive HTTP response bodies."
 references = ["smithy-rs#2926", "smithy-rs#2972"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
 
 [[smithy-rs]]
-message = "Port redacting sensitive HTTP response bodies to the orchestrator"
+message = "Fix regression with redacting sensitive HTTP response bodies."
 references = ["smithy-rs#2926", "smithy-rs#2972"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "ysaito1001"
