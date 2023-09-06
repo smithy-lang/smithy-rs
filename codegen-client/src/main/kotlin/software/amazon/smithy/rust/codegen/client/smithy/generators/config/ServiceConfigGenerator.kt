@@ -19,7 +19,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.docsOrFallback
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -30,9 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * [ServiceConfig] is the parent type of sections that can be overridden when generating a config for a service.
@@ -192,27 +189,8 @@ fun loadFromConfigBag(innerTypeName: String, newtype: RuntimeType): Writable = w
  * 3. standard setter (&mut self)
  */
 fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext): ConfigCustomization = object : ConfigCustomization() {
-    private val runtimeMode = codegenContext.smithyRuntimeMode
-
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
-            ServiceConfig.ConfigStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
-                    docsOrFallback(param.getterDocs)
-                    val t = when (param.optional) {
-                        true -> param.type.makeOptional()
-                        false -> param.type
-                    }
-                    rust("pub (crate) ${param.name}: #T,", t)
-                }
-            }
-
-            ServiceConfig.BuilderStruct -> writable {
-                if (runtimeMode.defaultToMiddleware) {
-                    rust("${param.name}: #T,", param.type.makeOptional())
-                }
-            }
-
             ServiceConfig.BuilderImpl -> writable {
                 docsOrFallback(param.setterDocs)
                 rust(
@@ -225,35 +203,16 @@ fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext
                 )
 
                 docsOrFallback(param.setterDocs)
-                if (runtimeMode.defaultToOrchestrator) {
-                    rustTemplate(
-                        """
-                        pub fn set_${param.name}(&mut self, ${param.name}: Option<#{T}>) -> &mut Self {
-                            self.config.store_or_unset(${param.name}.map(#{newtype}));
-                            self
-                        }
-                        """,
-                        "T" to param.type,
-                        "newtype" to param.newtype!!,
-                    )
-                } else {
-                    rust(
-                        """
-                        pub fn set_${param.name}(&mut self, ${param.name}: Option<#T>) -> &mut Self {
-                            self.${param.name} = ${param.name};
-                            self
-                        }
-                        """,
-                        param.type,
-                    )
-                }
-            }
-
-            ServiceConfig.BuilderBuild -> writable {
-                if (runtimeMode.defaultToMiddleware) {
-                    val default = "".letIf(!param.optional) { ".unwrap_or_default() " }
-                    rust("${param.name}: self.${param.name}$default,")
-                }
+                rustTemplate(
+                    """
+                    pub fn set_${param.name}(&mut self, ${param.name}: Option<#{T}>) -> &mut Self {
+                        self.config.store_or_unset(${param.name}.map(#{newtype}));
+                        self
+                    }
+                    """,
+                    "T" to param.type,
+                    "newtype" to param.newtype!!,
+                )
             }
 
             else -> emptySection
@@ -305,64 +264,46 @@ class ServiceConfigGenerator(
         }
     }
 
-    private val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+    private val moduleUseName = codegenContext.moduleUseName()
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val enableUserConfigurableRuntimePlugins = codegenContext.enableUserConfigurableRuntimePlugins
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     val codegenScope = arrayOf(
         *preludeScope,
-        "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
+        "BoxError" to RuntimeType.boxError(runtimeConfig),
         "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
         "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
-        "ConfigBagAccessors" to RuntimeType.configBagAccessors(codegenContext.runtimeConfig),
         "Cow" to RuntimeType.Cow,
         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
         "Layer" to smithyTypes.resolve("config_bag::Layer"),
-        "Resolver" to RuntimeType.smithyRuntime(codegenContext.runtimeConfig).resolve("client::config_override::Resolver"),
-        "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
-        "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
-        "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(codegenContext.runtimeConfig),
+        "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
+        "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
+        "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+        "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
+        "runtime_plugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin"),
     )
-    private val moduleUseName = codegenContext.moduleUseName()
-    private val runtimeMode = codegenContext.smithyRuntimeMode
 
     fun render(writer: RustWriter) {
-        writer.docs("Service config.\n")
+        writer.docs("Configuration for a $moduleUseName service client.\n")
         customizations.forEach {
             it.section(ServiceConfig.ConfigStructAdditionalDocs)(writer)
         }
-        Attribute(Attribute.derive(RuntimeType.Clone)).render(writer)
-        if (runtimeMode.generateOrchestrator) {
-            Attribute(Attribute.derive(RuntimeType.Debug)).render(writer)
-        }
+        Attribute(Attribute.derive(RuntimeType.Clone, RuntimeType.Debug)).render(writer)
         writer.rustBlock("pub struct Config") {
-            if (runtimeMode.defaultToOrchestrator) {
-                rustTemplate(
-                    """
-                    // Both `config` and `cloneable` are the same config, but the cloneable one
-                    // is kept around so that it is possible to convert back into a builder. This can be
-                    // optimized in the future.
-                    pub(crate) config: #{FrozenLayer},
-                    cloneable: #{CloneableLayer},
-                    pub(crate) runtime_components: #{RuntimeComponentsBuilder},
-                    pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
-                    """,
-                    *codegenScope,
-                )
-            }
+            rustTemplate(
+                """
+                // Both `config` and `cloneable` are the same config, but the cloneable one
+                // is kept around so that it is possible to convert back into a builder. This can be
+                // optimized in the future.
+                pub(crate) config: #{FrozenLayer},
+                cloneable: #{CloneableLayer},
+                pub(crate) runtime_components: #{RuntimeComponentsBuilder},
+                pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
+                """,
+                *codegenScope,
+            )
             customizations.forEach {
                 it.section(ServiceConfig.ConfigStruct)(this)
-            }
-        }
-
-        if (runtimeMode.defaultToMiddleware) {
-            // Custom implementation for Debug so we don't need to enforce Debug down the chain
-            writer.rustBlock("impl std::fmt::Debug for Config") {
-                writer.rustTemplate(
-                    """
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        let mut config = f.debug_struct("Config");
-                        config.finish()
-                    }
-                    """,
-                )
             }
         }
 
@@ -373,75 +314,53 @@ class ServiceConfigGenerator(
                 pub fn builder() -> Builder { Builder::default() }
                 """,
             )
-            if (runtimeMode.defaultToOrchestrator) {
-                writer.rustTemplate(
-                    """
-                    /// Converts this config back into a builder so that it can be tweaked.
-                    pub fn to_builder(&self) -> Builder {
-                        Builder {
-                            config: self.cloneable.clone(),
-                            runtime_components: self.runtime_components.clone(),
-                            runtime_plugins: self.runtime_plugins.clone(),
-                        }
+            writer.rustTemplate(
+                """
+                /// Converts this config back into a builder so that it can be tweaked.
+                pub fn to_builder(&self) -> Builder {
+                    Builder {
+                        config: self.cloneable.clone(),
+                        runtime_components: self.runtime_components.clone(),
+                        runtime_plugins: self.runtime_plugins.clone(),
                     }
-                    """,
-                )
-            }
+                }
+                """,
+            )
             customizations.forEach {
                 it.section(ServiceConfig.ConfigImpl)(this)
             }
         }
 
         writer.docs("Builder for creating a `Config`.")
-        if (runtimeMode.defaultToMiddleware) {
-            writer.raw("#[derive(Clone, Default)]")
-        } else {
-            writer.raw("#[derive(Clone, Debug)]")
-        }
+        Attribute(Attribute.derive(RuntimeType.Clone, RuntimeType.Debug)).render(writer)
         writer.rustBlock("pub struct Builder") {
-            if (runtimeMode.defaultToOrchestrator) {
-                rustTemplate(
-                    """
-                    pub(crate) config: #{CloneableLayer},
-                    pub(crate) runtime_components: #{RuntimeComponentsBuilder},
-                    pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
-                    """,
-                    *codegenScope,
-                )
-            }
+            rustTemplate(
+                """
+                pub(crate) config: #{CloneableLayer},
+                pub(crate) runtime_components: #{RuntimeComponentsBuilder},
+                pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
+                """,
+                *codegenScope,
+            )
             customizations.forEach {
                 it.section(ServiceConfig.BuilderStruct)(this)
             }
         }
 
-        if (runtimeMode.defaultToMiddleware) {
-            // Custom implementation for Debug so we don't need to enforce Debug down the chain
-            writer.rustBlock("impl std::fmt::Debug for Builder") {
-                writer.rustTemplate(
-                    """
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        let mut config = f.debug_struct("Builder");
-                        config.finish()
+        // Custom implementation of Default to give the runtime components builder a name
+        writer.rustBlockTemplate("impl #{Default} for Builder", *codegenScope) {
+            writer.rustTemplate(
+                """
+                fn default() -> Self {
+                    Self {
+                        config: #{Default}::default(),
+                        runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
+                        runtime_plugins: #{Default}::default(),
                     }
-                    """,
-                )
-            }
-        } else {
-            // Custom implementation of Default to give the runtime components builder a name
-            writer.rustBlockTemplate("impl #{Default} for Builder", *codegenScope) {
-                writer.rustTemplate(
-                    """
-                    fn default() -> Self {
-                        Self {
-                            config: #{Default}::default(),
-                            runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
-                            runtime_plugins: #{Default}::default(),
-                        }
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
+                }
+                """,
+                *codegenScope,
+            )
         }
 
         writer.rustBlock("impl Builder") {
@@ -451,26 +370,30 @@ class ServiceConfigGenerator(
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
 
-            if (runtimeMode.defaultToOrchestrator) {
-                rustTemplate(
-                    """
-                    /// Adds a runtime plugin to the config.
-                    ##[allow(unused)]
-                    pub(crate) fn runtime_plugin(mut self, plugin: impl #{RuntimePlugin} + 'static) -> Self {
-                        self.push_runtime_plugin(#{SharedRuntimePlugin}::new(plugin));
-                        self
-                    }
+            val visibility = if (enableUserConfigurableRuntimePlugins) { "pub" } else { "pub(crate)" }
 
-                    /// Adds a runtime plugin to the config.
-                    ##[allow(unused)]
-                    pub(crate) fn push_runtime_plugin(&mut self, plugin: #{SharedRuntimePlugin}) -> &mut Self {
-                        self.runtime_plugins.push(plugin);
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
+            docs("Adds a runtime plugin to the config.")
+            if (!enableUserConfigurableRuntimePlugins) { Attribute.AllowUnused.render(this) }
+            rustTemplate(
+                """
+                $visibility fn runtime_plugin(mut self, plugin: impl #{RuntimePlugin} + 'static) -> Self {
+                    self.push_runtime_plugin(#{SharedRuntimePlugin}::new(plugin));
+                    self
+                }
+                """,
+                *codegenScope,
+            )
+            docs("Adds a runtime plugin to the config.")
+            if (!enableUserConfigurableRuntimePlugins) { Attribute.AllowUnused.render(this) }
+            rustTemplate(
+                """
+                $visibility fn push_runtime_plugin(&mut self, plugin: #{SharedRuntimePlugin}) -> &mut Self {
+                    self.runtime_plugins.push(plugin);
+                    self
+                }
+                """,
+                *codegenScope,
+            )
 
             val testUtilOnly =
                 Attribute(Attribute.cfg(Attribute.any(Attribute.feature(TestUtilFeature.name), writable("test"))))
@@ -491,43 +414,34 @@ class ServiceConfigGenerator(
             }
 
             docs("Builds a [`Config`].")
-            if (runtimeMode.defaultToOrchestrator) {
-                rust("##[allow(unused_mut)]")
-                rustBlock("pub fn build(mut self) -> Config") {
+            rust("##[allow(unused_mut)]")
+            rustBlock("pub fn build(mut self) -> Config") {
+                rustTemplate(
+                    """
+                    let mut layer = self.config;
+                    let mut resolver = #{Resolver}::initial(&mut layer, &mut self.runtime_components);
+                    """,
+                    *codegenScope,
+                )
+                customizations.forEach {
+                    it.section(ServiceConfig.BuilderBuild)(this)
+                }
+                rustBlock("Config") {
+                    customizations.forEach {
+                        it.section(ServiceConfig.BuilderBuildExtras)(this)
+                    }
                     rustTemplate(
                         """
-                        let mut layer = self.config;
-                        let mut resolver = #{Resolver}::initial(&mut layer, &mut self.runtime_components);
+                        config: #{Layer}::from(layer.clone()).with_name("$moduleUseName::config::Config").freeze(),
+                        cloneable: layer,
+                        runtime_components: self.runtime_components,
+                        runtime_plugins: self.runtime_plugins,
                         """,
                         *codegenScope,
                     )
-                    customizations.forEach {
-                        it.section(ServiceConfig.BuilderBuild)(this)
-                    }
-                    rustBlock("Config") {
-                        customizations.forEach {
-                            it.section(ServiceConfig.BuilderBuildExtras)(this)
-                        }
-                        rustTemplate(
-                            """
-                            config: #{Layer}::from(layer.clone()).with_name("$moduleUseName::config::Config").freeze(),
-                            cloneable: layer,
-                            runtime_components: self.runtime_components,
-                            runtime_plugins: self.runtime_plugins,
-                            """,
-                            *codegenScope,
-                        )
-                    }
-                }
-            } else {
-                rustBlock("pub fn build(self) -> Config") {
-                    rustBlock("Config") {
-                        customizations.forEach {
-                            it.section(ServiceConfig.BuilderBuild)(this)
-                        }
-                    }
                 }
             }
+
             customizations.forEach {
                 it.section(ServiceConfig.Extras)(writer)
             }

@@ -113,66 +113,6 @@ class HttpResponseChecksumCustomization(
                     )
                 }
             }
-            // TODO(enableNewSmithyRuntimeCleanup): Delete `is OperationSection.MutateRequest`
-            is OperationSection.MutateRequest -> {
-                // Otherwise, we need to set a property that the `MutateOutput` section handler will read to know if it
-                // should checksum validate the response.
-                rustTemplate(
-                    """
-                    if let Some($validationModeName) = self.$validationModeName.as_ref() {
-                        let $validationModeName = $validationModeName.clone();
-                        // Place #{ValidationModeShape} in the property bag so we can check
-                        // it during response deserialization to see if we need to checksum validate
-                        // the response body.
-                        let _ = request.properties_mut().insert($validationModeName);
-                    }
-                    """,
-                    "ValidationModeShape" to codegenContext.symbolProvider.toSymbol(requestValidationModeMemberInner),
-                )
-            }
-            // TODO(enableNewSmithyRuntimeCleanup): Delete `is OperationSection.MutateOutput`
-            is OperationSection.MutateOutput -> {
-                if (!section.propertyBagAvailable) {
-                    return@writable
-                }
-
-                // CRC32, CRC32C, SHA256, SHA1 -> "crc32", "crc32c", "sha256", "sha1"
-                val responseAlgorithms = checksumTrait.responseAlgorithms
-                    .map { algorithm -> algorithm.lowercase() }.joinToString(", ") { algorithm -> "\"$algorithm\"" }
-
-                rustTemplate(
-                    """
-                    let response_algorithms = [$responseAlgorithms].as_slice();
-                    let $validationModeName = properties.get::<#{ValidationModeShape}>();
-                    // Per [the spec](https://smithy.io/2.0/aws/aws-core.html##http-response-checksums),
-                    // we check to see if it's the `ENABLED` variant
-                    if matches!($validationModeName, Some(&#{ValidationModeShape}::Enabled)) {
-                        if let Some((checksum_algorithm, precalculated_checksum)) =
-                            #{check_headers_for_precalculated_checksum}(
-                                response.headers(),
-                                response_algorithms,
-                            )
-                        {
-                            let bytestream = output.body.take().map(|bytestream| {
-                                bytestream.map(move |sdk_body| {
-                                    #{wrap_body_with_checksum_validator}(
-                                        sdk_body,
-                                        checksum_algorithm,
-                                        precalculated_checksum.clone(),
-                                    )
-                                })
-                            });
-                            output = output.set_body(bytestream);
-                        }
-                    }
-                    """,
-                    "ValidationModeShape" to codegenContext.symbolProvider.toSymbol(requestValidationModeMemberInner),
-                    "wrap_body_with_checksum_validator" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksumMiddleware()
-                        .resolve("wrap_body_with_checksum_validator"),
-                    "check_headers_for_precalculated_checksum" to codegenContext.runtimeConfig.awsInlineableBodyWithChecksumMiddleware()
-                        .resolve("check_headers_for_precalculated_checksum"),
-                )
-            }
 
             else -> {}
         }

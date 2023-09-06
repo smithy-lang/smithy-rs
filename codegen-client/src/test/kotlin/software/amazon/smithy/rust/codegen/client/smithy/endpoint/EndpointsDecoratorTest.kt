@@ -111,6 +111,7 @@ class EndpointsDecoratorTest {
 
         structure TestOperationInput {
             @contextParam(name: "Bucket")
+            @required
             bucket: String,
             nested: NestedStructure
         }
@@ -121,7 +122,7 @@ class EndpointsDecoratorTest {
     """.asSmithyModel()
 
     @Test
-    fun `set an endpoint in the property bag`() {
+    fun `resolve endpoint`() {
         val testDir = clientIntegrationTest(
             model,
             // Just run integration tests.
@@ -133,29 +134,87 @@ class EndpointsDecoratorTest {
                 rust(
                     """
                     async fn endpoint_params_are_set() {
-                            let conf = $moduleName::Config::builder().a_string_param("hello").a_bool_param(false).build();
-                            let operation = $moduleName::operation::test_operation::TestOperationInput::builder()
-                                .bucket("bucket-name").build().expect("input is valid")
-                                .make_operation(&conf).await.expect("valid operation");
-                            use $moduleName::endpoint::{Params};
-                            use aws_smithy_http::endpoint::Result;
-                            let props = operation.properties();
-                            let endpoint_result = dbg!(props.get::<Result>().expect("endpoint result in the bag"));
-                            let endpoint_params = props.get::<Params>().expect("endpoint params in the bag");
-                            let endpoint = endpoint_result.as_ref().expect("endpoint resolved properly");
-                            assert_eq!(
-                                endpoint_params,
-                                &Params::builder()
-                                    .bucket("bucket-name".to_string())
-                                    .built_in_with_default("some-default")
-                                    .bool_built_in_with_default(true)
-                                    .a_bool_param(false)
-                                    .a_string_param("hello".to_string())
-                                    .region("us-east-2".to_string())
-                                    .build().unwrap()
-                            );
+                        use aws_smithy_async::rt::sleep::TokioSleep;
+                        use aws_smithy_client::never::NeverConnector;
+                        use aws_smithy_runtime_api::box_error::BoxError;
+                        use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
+                        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                        use aws_smithy_types::config_bag::ConfigBag;
+                        use aws_smithy_types::endpoint::Endpoint;
+                        use aws_smithy_types::timeout::TimeoutConfig;
+                        use std::sync::atomic::AtomicBool;
+                        use std::sync::atomic::Ordering;
+                        use std::sync::Arc;
+                        use std::time::Duration;
+                        use $moduleName::{
+                            config::endpoint::Params, config::interceptors::BeforeTransmitInterceptorContextRef,
+                            config::Interceptor, config::SharedAsyncSleep, Client, Config,
+                        };
 
-                            assert_eq!(endpoint.url(), "https://www.us-east-2.example.com");
+                        ##[derive(Clone, Debug, Default)]
+                        struct TestInterceptor {
+                            called: Arc<AtomicBool>,
+                        }
+                        impl Interceptor for TestInterceptor {
+                            fn name(&self) -> &'static str {
+                                "TestInterceptor"
+                            }
+
+                            fn read_before_transmit(
+                                &self,
+                                _context: &BeforeTransmitInterceptorContextRef<'_>,
+                                _runtime_components: &RuntimeComponents,
+                                cfg: &mut ConfigBag,
+                            ) -> Result<(), BoxError> {
+                                let params = cfg
+                                    .load::<EndpointResolverParams>()
+                                    .expect("params set in config");
+                                let params: &Params = params.get().expect("correct type");
+                                assert_eq!(
+                                    params,
+                                    &Params::builder()
+                                        .bucket("bucket-name".to_string())
+                                        .built_in_with_default("some-default")
+                                        .bool_built_in_with_default(true)
+                                        .a_bool_param(false)
+                                        .a_string_param("hello".to_string())
+                                        .region("us-east-2".to_string())
+                                        .build()
+                                        .unwrap()
+                                );
+
+                                let endpoint = cfg.load::<Endpoint>().expect("endpoint set in config");
+                                assert_eq!(endpoint.url(), "https://www.us-east-2.example.com");
+
+                                self.called.store(true, Ordering::Relaxed);
+                                Ok(())
+                            }
+                        }
+
+                        let interceptor = TestInterceptor::default();
+                        let config = Config::builder()
+                            .http_connector(NeverConnector::new())
+                            .interceptor(interceptor.clone())
+                            .timeout_config(
+                                TimeoutConfig::builder()
+                                    .operation_timeout(Duration::from_millis(30))
+                                    .build(),
+                            )
+                            .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
+                            .a_string_param("hello")
+                            .a_bool_param(false)
+                            .build();
+                        let client = Client::from_conf(config);
+
+                        let _ = dbg!(client.test_operation().bucket("bucket-name").send().await);
+                        assert!(
+                            interceptor.called.load(Ordering::Relaxed),
+                            "the interceptor should have been called"
+                        );
+
+                        // bucket_name is unset and marked as required on the model, so we'll refuse to construct this request
+                        let err = client.test_operation().send().await.expect_err("param missing");
+                        assert_eq!(format!("{}", err), "failed to construct request");
                     }
                     """,
                 )

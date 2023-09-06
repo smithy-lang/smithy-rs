@@ -131,3 +131,7 @@ check-semver:
 .PHONY: generate-smithy-rs-release
 generate-smithy-rs-release:
 	$(CI_ACTION) $@ $(ARGS)
+
+.PHONY: verify-tls-config
+verify-tls-config:
+	$(CI_ACTION) $@ $(ARGS)

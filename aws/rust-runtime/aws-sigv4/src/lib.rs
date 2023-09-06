@@ -15,7 +15,8 @@
     unreachable_pub
 )]
 
-use std::fmt;
+use aws_credential_types::Credentials;
+use aws_smithy_runtime_api::client::identity::Identity;
 use std::time::SystemTime;
 
 pub mod sign;
@@ -29,19 +30,18 @@ pub mod event_stream;
 pub mod http_request;
 
 /// Parameters to use when signing.
+// #[derive(Debug)] assumes that any data `Identity` holds is responsible for handling its own redaction.
+#[derive(Debug)]
 #[non_exhaustive]
 pub struct SigningParams<'a, S> {
-    /// Access Key ID to use.
-    pub(crate) access_key: &'a str,
-    /// Secret access key to use.
-    pub(crate) secret_key: &'a str,
-    /// (Optional) Security token to use.
-    pub(crate) security_token: Option<&'a str>,
+    pub(crate) identity: &'a Identity,
 
     /// Region to sign for.
     pub(crate) region: &'a str,
-    /// AWS Service Name to sign for.
-    pub(crate) service_name: &'a str,
+    /// Service Name to sign for.
+    ///
+    /// NOTE: Endpoint resolution rules may specify a name that differs from the typical service name.
+    pub(crate) name: &'a str,
     /// Timestamp to use in the signature (should be `SystemTime::now()` unless testing).
     pub(crate) time: SystemTime,
 
@@ -50,28 +50,19 @@ pub struct SigningParams<'a, S> {
 }
 
 impl<'a, S> SigningParams<'a, S> {
-    /// Returns the region that will be used to sign
+    /// Returns the signing region.
     pub fn region(&self) -> &str {
         self.region
     }
 
-    /// Returns the service name that will be used to sign
-    pub fn service_name(&self) -> &str {
-        self.service_name
+    /// Returns the signing name.
+    pub fn name(&self) -> &str {
+        self.name
     }
-}
 
-impl<'a, S: fmt::Debug> fmt::Debug for SigningParams<'a, S> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SigningParams")
-            .field("access_key", &"** redacted **")
-            .field("secret_key", &"** redacted **")
-            .field("security_token", &"** redacted **")
-            .field("region", &self.region)
-            .field("service_name", &self.service_name)
-            .field("time", &self.time)
-            .field("settings", &self.settings)
-            .finish()
+    /// If the identity in params contains AWS credentials, return them. Otherwise, return `None`.
+    pub(crate) fn credentials(&self) -> Option<&Credentials> {
+        self.identity.data::<Credentials>()
     }
 }
 
@@ -84,7 +75,7 @@ impl<'a, S: Default> SigningParams<'a, S> {
 
 /// Builder and error for creating [`SigningParams`]
 pub mod signing_params {
-    use super::SigningParams;
+    use super::{Identity, SigningParams};
     use std::error::Error;
     use std::fmt;
     use std::time::SystemTime;
@@ -111,44 +102,22 @@ pub mod signing_params {
     /// Builder that can create new [`SigningParams`]
     #[derive(Debug, Default)]
     pub struct Builder<'a, S> {
-        access_key: Option<&'a str>,
-        secret_key: Option<&'a str>,
-        security_token: Option<&'a str>,
+        identity: Option<&'a Identity>,
         region: Option<&'a str>,
-        service_name: Option<&'a str>,
+        name: Option<&'a str>,
         time: Option<SystemTime>,
         settings: Option<S>,
     }
 
     impl<'a, S> Builder<'a, S> {
-        /// Sets the access key (required).
-        pub fn access_key(mut self, access_key: &'a str) -> Self {
-            self.access_key = Some(access_key);
+        /// Sets the identity (required).
+        pub fn identity(mut self, identity: &'a Identity) -> Self {
+            self.identity = Some(identity);
             self
         }
-        /// Sets the access key (required)
-        pub fn set_access_key(&mut self, access_key: Option<&'a str>) {
-            self.access_key = access_key;
-        }
-
-        /// Sets the secret key (required)
-        pub fn secret_key(mut self, secret_key: &'a str) -> Self {
-            self.secret_key = Some(secret_key);
-            self
-        }
-        /// Sets the secret key (required)
-        pub fn set_secret_key(&mut self, secret_key: Option<&'a str>) {
-            self.secret_key = secret_key;
-        }
-
-        /// Sets the security token (optional)
-        pub fn security_token(mut self, security_token: &'a str) -> Self {
-            self.security_token = Some(security_token);
-            self
-        }
-        /// Sets the security token (optional)
-        pub fn set_security_token(&mut self, security_token: Option<&'a str>) {
-            self.security_token = security_token;
+        /// Sets the identity (required)
+        pub fn set_identity(&mut self, identity: Option<&'a Identity>) {
+            self.identity = identity;
         }
 
         /// Sets the region (required)
@@ -161,14 +130,14 @@ pub mod signing_params {
             self.region = region;
         }
 
-        /// Sets the service name (required)
-        pub fn service_name(mut self, service_name: &'a str) -> Self {
-            self.service_name = Some(service_name);
+        /// Sets the signing name (required)
+        pub fn name(mut self, name: &'a str) -> Self {
+            self.name = Some(name);
             self
         }
-        /// Sets the service name (required)
-        pub fn set_service_name(&mut self, service_name: Option<&'a str>) {
-            self.service_name = service_name;
+        /// Sets the signing name (required)
+        pub fn set_name(&mut self, name: Option<&'a str>) {
+            self.name = name;
         }
 
         /// Sets the time to be used in the signature (required)
@@ -195,19 +164,15 @@ pub mod signing_params {
         /// a required argument was not given.
         pub fn build(self) -> Result<SigningParams<'a, S>, BuildError> {
             Ok(SigningParams {
-                access_key: self
-                    .access_key
-                    .ok_or_else(|| BuildError::new("access key is required"))?,
-                secret_key: self
-                    .secret_key
-                    .ok_or_else(|| BuildError::new("secret key is required"))?,
-                security_token: self.security_token,
+                identity: self
+                    .identity
+                    .ok_or_else(|| BuildError::new("an identity is required"))?,
                 region: self
                     .region
                     .ok_or_else(|| BuildError::new("region is required"))?,
-                service_name: self
-                    .service_name
-                    .ok_or_else(|| BuildError::new("service name is required"))?,
+                name: self
+                    .name
+                    .ok_or_else(|| BuildError::new("name is required"))?,
                 time: self
                     .time
                     .ok_or_else(|| BuildError::new("time is required"))?,

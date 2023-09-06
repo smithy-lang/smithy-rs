@@ -25,16 +25,16 @@ internal class EndpointConfigCustomization(
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
-    private val runtimeMode = codegenContext.smithyRuntimeMode
     private val types = Types(runtimeConfig)
 
     private val codegenScope = arrayOf(
         *preludeScope,
         "DefaultEndpointResolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
+        "Endpoint" to RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint::Endpoint"),
         "OldSharedEndpointResolver" to types.sharedEndpointResolver,
         "Params" to typesGenerator.paramsStruct(),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
-        "SharedEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::SharedEndpointResolver"),
+        "SharedEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::SharedEndpointResolver"),
         "SmithyResolver" to types.resolveEndpoint,
     )
 
@@ -43,52 +43,22 @@ internal class EndpointConfigCustomization(
             val sharedEndpointResolver = "#{OldSharedEndpointResolver}<#{Params}>"
             val resolverTrait = "#{SmithyResolver}<#{Params}>"
             when (section) {
-                is ServiceConfig.ConfigStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
-                        rustTemplate(
-                            "pub (crate) endpoint_resolver: $sharedEndpointResolver,",
-                            *codegenScope,
-                        )
-                    }
-                }
-
                 is ServiceConfig.ConfigImpl -> {
-                    if (runtimeMode.defaultToOrchestrator) {
-                        rustTemplate(
-                            """
-                            /// Returns the endpoint resolver.
-                            pub fn endpoint_resolver(&self) -> #{SharedEndpointResolver} {
-                                self.runtime_components.endpoint_resolver().expect("resolver defaulted if not set")
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            /// Returns the endpoint resolver.
-                            pub fn endpoint_resolver(&self) -> $sharedEndpointResolver {
-                                self.endpoint_resolver.clone()
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
-                }
-
-                is ServiceConfig.BuilderStruct -> {
-                    if (runtimeMode.defaultToMiddleware) {
-                        rustTemplate(
-                            "endpoint_resolver: #{Option}<$sharedEndpointResolver>,",
-                            *codegenScope,
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        /// Returns the endpoint resolver.
+                        pub fn endpoint_resolver(&self) -> #{SharedEndpointResolver} {
+                            self.runtime_components.endpoint_resolver().expect("resolver defaulted if not set")
+                        }
+                        """,
+                        *codegenScope,
+                    )
                 }
 
                 ServiceConfig.BuilderImpl -> {
                     // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
                     val defaultResolverDocs = if (typesGenerator.defaultResolver() != null) {
-                        val endpointModule = ClientRustModule.endpoint(codegenContext).fullyQualifiedPath()
+                        val endpointModule = ClientRustModule.Config.endpoint.fullyQualifiedPath()
                             .replace("crate::", "$moduleUseName::")
                         """
                         ///
@@ -125,9 +95,47 @@ internal class EndpointConfigCustomization(
                     } else {
                         ""
                     }
+                    if (codegenContext.settings.codegenConfig.includeEndpointUrlConfig) {
+                        rustTemplate(
+                            """
+                            /// Set the endpoint URL to use when making requests.
+                            ///
+                            /// Note: setting an endpoint URL will replace any endpoint resolver that has been set.
+                            ///
+                            /// ## Panics
+                            /// Panics if an invalid URL is given.
+                            pub fn endpoint_url(mut self, endpoint_url: impl #{Into}<#{String}>) -> Self {
+                                self.set_endpoint_url(#{Some}(endpoint_url.into()));
+                                self
+                            }
+
+                            /// Set the endpoint URL to use when making requests.
+                            ///
+                            /// Note: setting an endpoint URL will replace any endpoint resolver that has been set.
+                            ///
+                            /// ## Panics
+                            /// Panics if an invalid URL is given.
+                            pub fn set_endpoint_url(&mut self, endpoint_url: #{Option}<#{String}>) -> &mut Self {
+                                ##[allow(deprecated)]
+                                self.set_endpoint_resolver(
+                                    endpoint_url.map(|url| {
+                                        #{OldSharedEndpointResolver}::new(
+                                            #{Endpoint}::immutable(url).expect("invalid endpoint URL")
+                                        )
+                                    })
+                                );
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
                     rustTemplate(
                         """
                         /// Sets the endpoint resolver to use when making requests.
+                        ///
+                        /// Note: setting an endpoint resolver will replace any endpoint URL that has been set.
+                        ///
                         $defaultResolverDocs
                         pub fn endpoint_resolver(mut self, endpoint_resolver: impl $resolverTrait + 'static) -> Self {
                             self.set_endpoint_resolver(#{Some}(#{OldSharedEndpointResolver}::new(endpoint_resolver)));
@@ -142,55 +150,29 @@ internal class EndpointConfigCustomization(
                         *codegenScope,
                     )
 
-                    if (runtimeMode.defaultToOrchestrator) {
-                        rustTemplate(
-                            """
-                            pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
-                                self.config.store_or_unset(endpoint_resolver);
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
-                                self.endpoint_resolver = endpoint_resolver;
-                                self
-                            }
-                            """,
-                            *codegenScope,
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
+                            self.config.store_or_unset(endpoint_resolver);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
                 }
 
                 ServiceConfig.BuilderBuild -> {
-                    if (runtimeMode.defaultToOrchestrator) {
-                        rustTemplate(
-                            "#{set_endpoint_resolver}(&mut resolver);",
-                            "set_endpoint_resolver" to setEndpointResolverFn(),
-                        )
-                    } else {
-                        rustTemplate(
-                            """
-                            endpoint_resolver: self.endpoint_resolver.unwrap_or_else(||
-                                #{OldSharedEndpointResolver}::new(#{DefaultResolver}::new())
-                            ),
-                            """,
-                            *codegenScope,
-                            "DefaultResolver" to defaultResolver(),
-                        )
-                    }
+                    rustTemplate(
+                        "#{set_endpoint_resolver}(&mut resolver);",
+                        "set_endpoint_resolver" to setEndpointResolverFn(),
+                    )
                 }
 
                 is ServiceConfig.OperationConfigOverride -> {
-                    if (runtimeMode.defaultToOrchestrator) {
-                        rustTemplate(
-                            "#{set_endpoint_resolver}(&mut resolver);",
-                            "set_endpoint_resolver" to setEndpointResolverFn(),
-                        )
-                    }
+                    rustTemplate(
+                        "#{set_endpoint_resolver}(&mut resolver);",
+                        "set_endpoint_resolver" to setEndpointResolverFn(),
+                    )
                 }
 
                 else -> emptySection
@@ -203,7 +185,7 @@ internal class EndpointConfigCustomization(
         // the endpoint resolver will be required (so that it can be unwrapped).
         return typesGenerator.defaultResolver() ?: RuntimeType.forInlineFun(
             "MissingResolver",
-            ClientRustModule.endpoint(codegenContext),
+            ClientRustModule.Config.endpoint,
         ) {
             rustTemplate(
                 """

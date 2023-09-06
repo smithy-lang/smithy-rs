@@ -8,138 +8,115 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.HttpBoundProtocolTraitImplGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.escape
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.outputShape
 import java.nio.file.Path
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType as RT
 
-private class TestProtocolPayloadGenerator(private val body: String) : ProtocolPayloadGenerator {
-    override fun payloadMetadata(operationShape: OperationShape, additionalPayloadContext: AdditionalPayloadContext) =
-        ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
+private class TestServiceRuntimePluginCustomization(
+    private val context: ClientCodegenContext,
+    private val fakeRequestBuilder: String,
+    private val fakeRequestBody: String,
+) : ServiceRuntimePluginCustomization() {
+    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
+        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+            val rc = context.runtimeConfig
+            section.registerInterceptor(rc, this) {
+                rustTemplate(
+                    """
+                    {
+                        ##[derive(::std::fmt::Debug)]
+                        struct TestInterceptor;
+                        impl #{Interceptor} for TestInterceptor {
+                            fn name(&self) -> &'static str {
+                                "TestInterceptor"
+                            }
 
-    override fun generatePayload(
-        writer: RustWriter,
-        shapeName: String,
-        operationShape: OperationShape,
-        additionalPayloadContext: AdditionalPayloadContext,
-    ) {
-        writer.writeWithNoFormatting(body)
-    }
-}
+                            fn modify_before_retry_loop(
+                                &self,
+                                context: &mut #{BeforeTransmitInterceptorContextMut}<'_>,
+                                _rc: &#{RuntimeComponents},
+                                _cfg: &mut #{ConfigBag},
+                            ) -> #{Result}<(), #{BoxError}> {
+                                // Replace the serialized request
+                                let mut fake_req = ::http::Request::builder()
+                                    $fakeRequestBuilder
+                                    .body(#{SdkBody}::from($fakeRequestBody))
+                                    .expect("valid request");
+                                ::std::mem::swap(
+                                    context.request_mut(),
+                                    &mut fake_req,
+                                );
+                                Ok(())
+                            }
+                        }
 
-private class TestProtocolTraitImplGenerator(
-    private val codegenContext: ClientCodegenContext,
-    private val correctResponse: String,
-) : HttpBoundProtocolTraitImplGenerator(codegenContext, RestJson(codegenContext)) {
-    private val symbolProvider = codegenContext.symbolProvider
-
-    override fun generateTraitImpls(
-        operationWriter: RustWriter,
-        operationShape: OperationShape,
-        customizations: List<OperationCustomization>,
-    ) {
-        operationWriter.rustTemplate(
-            """
-            impl #{parse_strict} for ${operationShape.id.name}{
-                type Output = Result<#{Output}, #{Error}>;
-                fn parse(&self, _response: &#{Response}<#{Bytes}>) -> Self::Output {
-                    ${operationWriter.escape(correctResponse)}
-                }
+                        TestInterceptor
+                    }
+                    """,
+                    *preludeScope,
+                    "BeforeTransmitInterceptorContextMut" to RT.beforeTransmitInterceptorContextMut(rc),
+                    "BoxError" to RT.boxError(rc),
+                    "ConfigBag" to RT.configBag(rc),
+                    "Interceptor" to RT.interceptor(rc),
+                    "RuntimeComponents" to RT.runtimeComponents(rc),
+                    "SdkBody" to RT.sdkBody(rc),
+                )
             }
-            """,
-            "parse_strict" to RuntimeType.parseStrictResponse(codegenContext.runtimeConfig),
-            "Output" to symbolProvider.toSymbol(operationShape.outputShape(codegenContext.model)),
-            "Error" to symbolProvider.symbolForOperationError(operationShape),
-            "Response" to RuntimeType.HttpResponse,
-            "Bytes" to RuntimeType.Bytes,
-        )
+        }
     }
 }
 
-private class TestProtocolMakeOperationGenerator(
-    codegenContext: CodegenContext,
-    protocol: Protocol,
-    body: String,
-    private val httpRequestBuilder: String,
-) : MakeOperationGenerator(
-    codegenContext,
-    protocol,
-    TestProtocolPayloadGenerator(body),
-    public = true,
-    includeDefaultPayloadHeaders = true,
-) {
-    override fun createHttpRequest(writer: RustWriter, operationShape: OperationShape) {
-        writer.rust("#T::new()", RuntimeType.HttpRequestBuilder)
-        writer.writeWithNoFormatting(httpRequestBuilder)
-    }
-}
-
-// A stubbed test protocol to do enable testing intentionally broken protocols
-private class TestProtocolGenerator(
-    codegenContext: ClientCodegenContext,
-    protocol: Protocol,
-    httpRequestBuilder: String,
-    body: String,
-    correctResponse: String,
-) : OperationGenerator(
-    codegenContext,
-    protocol,
-    TestProtocolMakeOperationGenerator(codegenContext, protocol, body, httpRequestBuilder),
-    TestProtocolPayloadGenerator(body),
-    TestProtocolTraitImplGenerator(codegenContext, correctResponse),
-)
-
-private class TestProtocolFactory(
-    private val httpRequestBuilder: String,
-    private val body: String,
-    private val correctResponse: String,
-) : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
-    override fun protocol(codegenContext: ClientCodegenContext): Protocol = RestJson(codegenContext)
-
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator {
-        return TestProtocolGenerator(
-            codegenContext,
-            protocol(codegenContext),
-            httpRequestBuilder,
-            body,
-            correctResponse,
-        )
-    }
-
-    override fun support(): ProtocolSupport {
-        return ProtocolSupport(
-            requestSerialization = true,
-            requestBodySerialization = true,
-            responseDeserialization = true,
-            errorDeserialization = true,
-            requestDeserialization = false,
-            requestBodyDeserialization = false,
-            responseSerialization = false,
-            errorSerialization = false,
-        )
+private class TestOperationCustomization(
+    private val context: ClientCodegenContext,
+    private val fakeOutput: String,
+) : OperationCustomization() {
+    override fun section(section: OperationSection): Writable = writable {
+        val rc = context.runtimeConfig
+        if (section is OperationSection.AdditionalRuntimePluginConfig) {
+            rustTemplate(
+                """
+                // Override the default response deserializer with our fake output
+                ##[derive(::std::fmt::Debug)]
+                struct TestDeser;
+                impl #{ResponseDeserializer} for TestDeser {
+                    fn deserialize_nonstreaming(
+                        &self,
+                        _response: &#{HttpResponse},
+                    ) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>> {
+                        let fake_out: #{Result}<
+                            crate::operation::say_hello::SayHelloOutput,
+                            crate::operation::say_hello::SayHelloError,
+                        > = $fakeOutput;
+                        fake_out
+                            .map(|o| #{Output}::erase(o))
+                            .map_err(|e| #{OrchestratorError}::operation(#{Error}::erase(e)))
+                    }
+                }
+                cfg.store_put(#{SharedResponseDeserializer}::new(TestDeser));
+                """,
+                *preludeScope,
+                "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
+                "Error" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Error"),
+                "HttpResponse" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
+                "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
+                "Output" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Output"),
+                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
+            )
+        }
     }
 }
 
@@ -226,22 +203,34 @@ class ProtocolTestGeneratorTest {
      * Returns the [Path] the service was generated at, suitable for running `cargo test`
      */
     private fun testService(
-        httpRequestBuilder: String,
-        body: String = "${correctBody.dq()}.to_string()",
-        correctResponse: String = """Ok(crate::operation::say_hello::SayHelloOutput::builder().value("hey there!").build())""",
+        fakeRequestBuilder: String,
+        fakeRequestBody: String = "${correctBody.dq()}.to_string()",
+        fakeOutput: String = """Ok(crate::operation::say_hello::SayHelloOutput::builder().value("hey there!").build())""",
     ): Path {
         val codegenDecorator = object : ClientCodegenDecorator {
             override val name: String = "mock"
             override val order: Byte = 0
             override fun classpathDiscoverable(): Boolean = false
-            override fun protocols(
-                serviceId: ShapeId,
-                currentProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>,
-            ): ProtocolMap<OperationGenerator, ClientCodegenContext> =
-                // Intentionally replace the builtin implementation of RestJson1 with our fake protocol
-                mapOf(RestJson1Trait.ID to TestProtocolFactory(httpRequestBuilder, body, correctResponse))
+
+            override fun serviceRuntimePluginCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ServiceRuntimePluginCustomization>,
+            ): List<ServiceRuntimePluginCustomization> = baseCustomizations + TestServiceRuntimePluginCustomization(
+                codegenContext,
+                fakeRequestBuilder,
+                fakeRequestBody,
+            )
+
+            override fun operationCustomizations(
+                codegenContext: ClientCodegenContext,
+                operation: OperationShape,
+                baseCustomizations: List<OperationCustomization>,
+            ): List<OperationCustomization> = baseCustomizations + TestOperationCustomization(codegenContext, fakeOutput)
         }
-        return clientIntegrationTest(model, additionalDecorators = listOf(codegenDecorator))
+        return clientIntegrationTest(
+            model,
+            additionalDecorators = listOf(codegenDecorator),
+        )
     }
 
     @Test
@@ -264,7 +253,7 @@ class ProtocolTestGeneratorTest {
                 .header("X-Greeting", "Hi")
                 .method("POST")
                 """,
-                correctResponse = "Ok(crate::operation::say_hello::SayHelloOutput::builder().build())",
+                fakeOutput = "Ok(crate::operation::say_hello::SayHelloOutput::builder().build())",
             )
         }
 

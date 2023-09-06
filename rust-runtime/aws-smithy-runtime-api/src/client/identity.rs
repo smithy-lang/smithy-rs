@@ -15,8 +15,19 @@ use std::time::SystemTime;
 #[cfg(feature = "http-auth")]
 pub mod http;
 
-/// Resolves an identity for a request.
+/// Resolver for identities.
+///
+/// Every [`AuthScheme`](crate::client::auth::AuthScheme) has one or more compatible
+/// identity resolvers, which are selected from runtime components by the auth scheme
+/// implementation itself.
+///
+/// The identity resolver must return a [`Future`] with the resolved identity, or an error
+/// if resolution failed. There is no optionality for identity resolvers. The identity either
+/// resolves successfully, or it fails. The orchestrator will choose exactly one auth scheme
+/// to use, and thus, its chosen identity resolver is the only identity resolver that runs.
+/// There is no fallback to other auth schemes in the absense of an identity.
 pub trait IdentityResolver: Send + Sync + Debug {
+    /// Asynchronously resolves an identity for a request using the given config.
     fn resolve_identity(&self, config_bag: &ConfigBag) -> Future<Identity>;
 }
 
@@ -67,6 +78,17 @@ impl ConfiguredIdentityResolver {
     }
 }
 
+/// An identity that can be used for authentication.
+///
+/// The [`Identity`] is a container for any arbitrary identity data that may be used
+/// by a [`Signer`](crate::client::auth::Signer) implementation. Under the hood, it
+/// has an `Arc<dyn Any>`, and it is the responsibility of the signer to downcast
+/// to the appropriate data type using the `data()` function.
+///
+/// The `Identity` also holds an optional expiration time, which may duplicate
+/// an expiration time on the identity data. This is because an `Arc<dyn Any>`
+/// can't be downcast to any arbitrary trait, and expiring identities are
+/// common enough to be built-in.
 #[derive(Clone)]
 pub struct Identity {
     data: Arc<dyn Any + Send + Sync>,
@@ -76,6 +98,7 @@ pub struct Identity {
 }
 
 impl Identity {
+    /// Creates a new identity with the given data and expiration time.
     pub fn new<T>(data: T, expiration: Option<SystemTime>) -> Self
     where
         T: Any + Debug + Send + Sync,
@@ -87,16 +110,18 @@ impl Identity {
         }
     }
 
+    /// Returns the raw identity data.
     pub fn data<T: Any + Debug + Send + Sync + 'static>(&self) -> Option<&T> {
         self.data.downcast_ref()
     }
 
+    /// Returns the expiration time for this identity, if any.
     pub fn expiration(&self) -> Option<&SystemTime> {
         self.expiration.as_ref()
     }
 }
 
-impl fmt::Debug for Identity {
+impl Debug for Identity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Identity")
             .field("data", (self.data_debug)(&self.data))
@@ -108,6 +133,7 @@ impl fmt::Debug for Identity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aws_smithy_async::time::{SystemTimeSource, TimeSource};
 
     #[test]
     fn check_send_sync() {
@@ -123,7 +149,8 @@ mod tests {
             last: String,
         }
 
-        let expiration = SystemTime::now();
+        let ts = SystemTimeSource::new();
+        let expiration = ts.now();
         let identity = Identity::new(
             MyIdentityData {
                 first: "foo".into(),

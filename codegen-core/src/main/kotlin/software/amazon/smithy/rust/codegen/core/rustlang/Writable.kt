@@ -25,6 +25,11 @@ fun Writable.isEmpty(): Boolean {
     return writer.toString() == RustWriter.root().toString()
 }
 
+fun Writable.map(f: RustWriter.(Writable) -> Unit): Writable {
+    val self = this
+    return writable { f(self) }
+}
+
 fun Writable.isNotEmpty(): Boolean = !this.isEmpty()
 
 operator fun Writable.plus(other: Writable): Writable {
@@ -108,10 +113,12 @@ fun rustTypeParameters(
                         "#{gg:W}",
                         "gg" to typeParameter.declaration(withAngleBrackets = false),
                     )
+
                     else -> {
                         // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
                         @Suppress("UNCHECKED_CAST")
-                        val func = typeParameter as? Writable ?: throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+                        val func = typeParameter as? Writable
+                            ?: throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
                         func.invoke(this)
                     }
                 }

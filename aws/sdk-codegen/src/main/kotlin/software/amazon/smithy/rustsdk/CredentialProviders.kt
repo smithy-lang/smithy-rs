@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class CredentialsProviderDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsProvider"
@@ -33,9 +32,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(CredentialsIdentityResolverRegistration(codegenContext))
-        }
+        baseCustomizations + listOf(CredentialsIdentityResolverRegistration(codegenContext))
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -67,7 +64,6 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
  * Add a `.credentials_provider` field and builder to the `Config` for a given service
  */
 class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
-    private val smithyRuntimeMode = codegenContext.smithyRuntimeMode
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         *preludeScope,
@@ -79,11 +75,6 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            ServiceConfig.BuilderStruct -> {
-                if (smithyRuntimeMode.defaultToMiddleware) {
-                    rustTemplate("credentials_provider: #{Option}<#{SharedCredentialsProvider}>,", *codegenScope)
-                }
-            }
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
@@ -96,29 +87,16 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
                     *codegenScope,
                 )
 
-                if (smithyRuntimeMode.defaultToOrchestrator) {
-                    rustTemplate(
-                        """
-                        /// Sets the credentials provider for this service
-                        pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
-                            self.config.store_or_unset(credentials_provider);
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    rustTemplate(
-                        """
-                        /// Sets the credentials provider for this service
-                        pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
-                            self.credentials_provider = credentials_provider;
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                rustTemplate(
+                    """
+                    /// Sets the credentials provider for this service
+                    pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
+                        self.config.store_or_unset(credentials_provider);
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
             }
 
             is ServiceConfig.DefaultForTests -> rustTemplate(

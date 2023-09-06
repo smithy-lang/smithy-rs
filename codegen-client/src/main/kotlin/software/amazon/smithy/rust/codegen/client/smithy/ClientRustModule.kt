@@ -73,17 +73,6 @@ object ClientRustModule {
         val interceptors = RustModule.public("interceptors", parent = self)
     }
 
-    // TODO(enableNewSmithyRuntimeCleanup): Delete this root endpoint module
-    @Deprecated(message = "use the endpoint() method to get the endpoint module for now")
-    val Endpoint = RustModule.public("endpoint")
-
-    // TODO(enableNewSmithyRuntimeCleanup): Just use Config.endpoint directly and delete this function
-    fun endpoint(codegenContext: ClientCodegenContext): RustModule.LeafModule = if (codegenContext.smithyRuntimeMode.defaultToMiddleware) {
-        Endpoint
-    } else {
-        Config.endpoint
-    }
-
     val Error = RustModule.public("error")
     val Operation = RustModule.public("operation")
     val Meta = RustModule.public("meta")
@@ -117,7 +106,6 @@ class ClientModuleDocProvider(
             ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")
             ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Interceptor`](crate::config::Interceptor).")
             ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
-            ClientRustModule.Endpoint -> strDoc("Endpoint resolution functionality.")
             ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
             ClientRustModule.Meta -> strDoc("Information about this crate.")
             ClientRustModule.Input -> PANIC("this module shouldn't exist in the new scheme")

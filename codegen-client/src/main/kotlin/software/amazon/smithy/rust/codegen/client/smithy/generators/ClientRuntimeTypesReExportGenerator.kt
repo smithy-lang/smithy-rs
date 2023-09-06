@@ -16,10 +16,6 @@ class ClientRuntimeTypesReExportGenerator(
     private val rustCrate: RustCrate,
 ) {
     fun render() {
-        if (!codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            return
-        }
-
         val rc = codegenContext.runtimeConfig
         val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
 
@@ -28,14 +24,29 @@ class ClientRuntimeTypesReExportGenerator(
                 """
                 pub use #{ConfigBag};
                 pub use #{Interceptor};
+                pub use #{RuntimeComponents};
                 pub use #{SharedInterceptor};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
                 "Interceptor" to RuntimeType.interceptor(rc),
+                "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
                 "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
             )
+
+            if (codegenContext.enableUserConfigurableRuntimePlugins) {
+                rustTemplate(
+                    """
+                    pub use #{runtime_plugin}::{RuntimePlugin, SharedRuntimePlugin};
+                    pub use #{config_bag}::FrozenLayer;
+                    pub use #{RuntimeComponentsBuilder};
+                    """,
+                    "runtime_plugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin"),
+                    "config_bag" to RuntimeType.smithyTypes(rc).resolve("config_bag"),
+                    "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
+                )
+            }
         }
-        rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
+        rustCrate.withModule(ClientRustModule.Config.endpoint) {
             rustTemplate(
                 """
                 pub use #{ResolveEndpoint};
