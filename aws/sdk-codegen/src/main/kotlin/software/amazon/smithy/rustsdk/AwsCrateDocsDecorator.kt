@@ -135,7 +135,6 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
         val compileExample = AwsDocs.canRelyOnAwsConfig(codegenContext)
         val exampleMode = if (compileExample) "no_run" else "ignore"
 
-        val serdeInfoText = "##" + SerdeDecorator.SerdeInfoText
         template(
             asComments,
             """
@@ -173,7 +172,6 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             See the [client documentation](https://docs.rs/$moduleName/latest/$snakeCaseModuleName/client/struct.Client.html)
             for information on what calls can be made, and the inputs and outputs for each of those calls.${"\n"}
 
-            $serdeInfoText
 
             """.trimIndent().trimStart(),
             "tokio" to CargoDependency.Tokio.toDevDependency().toType(),
@@ -213,6 +211,10 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             * [Usage examples](https://github.com/awslabs/aws-sdk-rust/tree/main/examples)${"\n"}
             """.trimIndent(),
         )
+
+        // important !
+        // REMOVE THIS LINE WHEN THE SERDE FEATURE IS STABLIZED!
+        template(asComments, SerdeDecorator.SerdeInfoText.trimIndent())
 
         if (includeLicense) {
             template(
