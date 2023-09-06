@@ -219,6 +219,7 @@ impl HyperConnectorBuilder {
     }
 
     /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    #[cfg(feature = "tls-rustls")]
     pub fn build_https(self) -> HyperConnector {
         self.build(default_connector::https())
     }
