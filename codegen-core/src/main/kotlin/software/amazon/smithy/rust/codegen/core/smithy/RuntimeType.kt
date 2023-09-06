@@ -303,6 +303,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val TokioStream = CargoDependency.TokioStream.toType()
         val Tower = CargoDependency.Tower.toType()
         val Tracing = CargoDependency.Tracing.toType()
+        val TracingTest = CargoDependency.TracingTest.toType()
 
         // codegen types
         val ConstrainedTrait = RuntimeType("crate::constrained::Constrained", InlineDependency.constrained())
