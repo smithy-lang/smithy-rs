@@ -49,7 +49,7 @@ impl HttpError {
 
 impl Display for HttpError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "An error occurred creating an HTTP Request")
+        write!(f, "an error occurred creating an HTTP Request")
     }
 }
 
