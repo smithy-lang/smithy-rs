@@ -76,6 +76,6 @@ pub(crate) fn log_response_body(response: &HttpResponse, cfg: &ConfigBag) {
     {
         trace!(response = ?response, "read HTTP response body");
     } else {
-        trace!(response = "** REDACTED **. To print, set LOG_SENSITIVE_BODIES=true")
+        trace!(response = "** REDACTED **. To print, set LOG_SENSITIVE_BODIES=true", "read HTTP response body")
     }
 }
