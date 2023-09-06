@@ -72,8 +72,8 @@ There is no stdlib type that cleanly defines what may be placed into headers—S
 impl HeadersMut<'_> {
     pub fn try_insert(
         &mut self,
-        key: impl AsHeaderName,
-        value: impl AsHeaderName,
+        key: impl AsHeaderComponent,
+        value: impl AsHeaderComponent,
     ) -> Result<Option<String>, BoxError> {
         // ...
     }
