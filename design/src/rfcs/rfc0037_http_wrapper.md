@@ -36,13 +36,15 @@ How to actually implement this RFC
 We will need to add two types, `HttpRequest` and `HttpResponse`.
 
 #### To string or not to String
-The `http` library is very precise in its representation—specifically it allows for `HeaderValue`s that are both a super and subset of `String`—a superset because headers support arbitrary binary data but a subset because headers cannot contain `\0`.
+Our header library restricts header names and values to `String`s (UTF-8).
 
-Headers containing arbitrary binary data are not widely supported. Generally, Smithy protocols will use base-64 encoding when storing binary data in headers.
+Although the `http` library is very precise in its representation—it allows for `HeaderValue`s that are both a super and subset of `String`—a superset because headers support arbitrary binary data but a subset because headers cannot contain control characters like `\n`.
+
+Although technically allowed, headers containing arbitrary binary data are not widely supported. Generally, Smithy protocols will use base-64 encoding when storing binary data in headers.
 
 Finally, it's nicer for users if they can stay in "string land". Because of this, HttpRequest and Response expose header names and values as strings. Internally, the current design uses `HeaderName` and `HeaderValue`, however, there is a gate on construction that enforces that values are valid UTF-8.
 
-**This is a one way door because `.as_str()` would panic in the future if we allow non-string values into headers.**.
+**This is a one way door because `.as_str()` would panic in the future if we allow non-string values into headers.**
 
 #### Where should these types live?
 These types will be used by all orchestrator functionality, so they will be housed in `aws-smithy-runtime-api`
@@ -58,7 +60,6 @@ advantage of zero-cost usage of `'static str`. We will seal this trait to preven
 - `&'static str`
 - `String`
 - http03x::HeaderName
--
 
 #### Additional Functionality
 Our wrapper type will add the following additional functionality:
@@ -80,12 +81,14 @@ impl HeadersMut<'_> {
 }
 ```
 
-This allows us to offer user-friendly types while still avoiding runtime panics. For MOST hand-written code (e.g. middleware), the API also contains `insert` which panics on failure.
+This allows us to offer user-friendly types while still avoiding runtime panics. We also offer `insert` and `append` which panic on invalid values.
 
 #### Request Extensions
 There is ongoing work which MAY restrict HTTP extensions to clone types. We will preempt that by:
-1. Forbidding http0x requests with extensions to be converted directly into `Request`
+1. Preventing `Extensions` from being present when initially constructing our HTTP request wrapper.
 2. Forbidding non-clone extensions from being inserted into the wrapped request.
+
+This also enables supporting request extensions for different downstream providers by allowing cloning into different extension types.
 
 #### Proposed Implementation
 <details>
@@ -97,7 +100,7 @@ There is ongoing work which MAY restrict HTTP extensions to clone types. We will
 </details>
 
 ### Future Work
-Currently, the only way to construct `Request` is from a compatyible type (e.g. `http03x::Request`)
+Currently, the only way to construct `Request` is from a compatible type (e.g. `http03x::Request`)
 
 Changes checklist
 -----------------

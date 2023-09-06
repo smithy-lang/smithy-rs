@@ -40,6 +40,13 @@ impl TryFrom<String> for Uri {
     }
 }
 
+impl<'a> TryFrom<&'a str> for Uri {
+    type Error = HttpError;
+    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+        Self::try_from(value.to_string())
+    }
+}
+
 impl From<http0::Uri> for Uri {
     fn from(value: http::Uri) -> Self {
         Self {
@@ -307,10 +314,11 @@ mod sealed {
     use super::*;
     /// Trait defining things that may be converted into a header component (name or value)
     pub trait AsHeaderComponent {
+        /// If the component can be represented as a Cow<'static, str>, return it
         fn into_maybe_static(self) -> Result<MaybeStatic, HttpError>;
 
-        /// If a component is already internally represented as a `HeaderName`, return it
-        fn try_as_http03_header_name(self) -> Result<http0::HeaderName, Self>
+        /// If a component is already internally represented as a `http03x::HeaderName`, return it
+        fn as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -351,7 +359,7 @@ mod sealed {
             Ok(self.to_string().into())
         }
 
-        fn try_as_http03_header_name(self) -> Result<http0::HeaderName, Self>
+        fn as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -437,7 +445,7 @@ impl TryFrom<String> for HeaderValue {
 type MaybeStatic = Cow<'static, str>;
 
 fn header_name(name: impl AsHeaderComponent) -> Result<http0::HeaderName, HttpError> {
-    name.try_as_http03_header_name().or_else(|name| {
+    name.as_http03x_header_name().or_else(|name| {
         name.into_maybe_static().and_then(|cow| match cow {
             Cow::Borrowed(staticc) => Ok(http0::HeaderName::from_static(staticc)),
             Cow::Owned(s) => http0::HeaderName::try_from(s).map_err(HttpError::invalid_header_name),
@@ -457,6 +465,7 @@ fn header_value(value: MaybeStatic) -> Result<HeaderValue, HttpError> {
 
 #[cfg(test)]
 mod test {
+    use aws_smithy_http::body::SdkBody;
     use http::HeaderValue;
 
     #[test]
@@ -466,5 +475,49 @@ mod test {
         let _ = "a\nb"
             .parse::<HeaderValue>()
             .expect_err("cannot contain control characters");
+    }
+
+    #[test]
+    fn request_can_be_created() {
+        let req = http::Request::builder()
+            .uri("http://foo.com")
+            .body(SdkBody::from("hello"))
+            .unwrap();
+        let mut req = super::Request::try_from(req).unwrap();
+        req.headers_mut().insert("a", "b");
+        assert_eq!(req.headers().get("a").unwrap(), "b");
+        req.headers_mut().append("a", "c");
+        assert_eq!(req.headers().get("a").unwrap(), "b");
+        let http0 = req.into_http03x().unwrap();
+        assert_eq!(http0.uri(), "http://foo.com");
+    }
+
+    #[test]
+    fn uri_mutations() {
+        let req = http::Request::builder()
+            .uri("http://foo.com")
+            .body(SdkBody::from("hello"))
+            .unwrap();
+        let mut req = super::Request::try_from(req).unwrap();
+        assert_eq!(req.uri(), "http://foo.com/");
+        req.set_uri("http://bar.com").unwrap();
+        assert_eq!(req.uri(), "http://bar.com");
+        let http0 = req.into_http03x().unwrap();
+        assert_eq!(http0.uri(), "http://bar.com");
+    }
+
+    #[test]
+    #[should_panic]
+    fn header_panics() {
+        let req = http::Request::builder()
+            .uri("http://foo.com")
+            .body(SdkBody::from("hello"))
+            .unwrap();
+        let mut req = super::Request::try_from(req).unwrap();
+        let _ = req
+            .headers_mut()
+            .try_insert("a\nb", "a\nb")
+            .expect_err("invalid header");
+        let _ = req.headers_mut().insert("a\nb", "a\nb");
     }
 }
