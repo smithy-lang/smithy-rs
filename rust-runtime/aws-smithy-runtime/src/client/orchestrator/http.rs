@@ -4,11 +4,7 @@
  */
 
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use bytes::{Buf, Bytes};
 use http_body::Body;
@@ -42,30 +38,11 @@ pub(crate) async fn read_body(response: &mut HttpResponse) -> Result<(), <SdkBod
     Ok(())
 }
 
+/// Marker value stored in the config bag to indicate that a response body should be redacted.
 #[derive(Debug)]
-pub(crate) struct SensitiveOutput;
+pub struct SensitiveOutput;
 impl Storable for SensitiveOutput {
     type Storer = StoreReplace<Self>;
-}
-
-/// An interceptor to inject a marker `SensitiveOutput`, causing wire logging of a response body
-/// to be disabled.
-#[derive(Debug)]
-pub struct SensitiveOutputInterceptor;
-impl Interceptor for SensitiveOutputInterceptor {
-    fn name(&self) -> &'static str {
-        "SensitiveOutputInterceptor"
-    }
-
-    fn modify_before_deserialization(
-        &self,
-        _context: &mut BeforeDeserializationInterceptorContextMut<'_>,
-        _runtime_components: &RuntimeComponents,
-        cfg: &mut ConfigBag,
-    ) -> Result<(), BoxError> {
-        cfg.interceptor_state().store_put(SensitiveOutput);
-        Ok(())
-    }
 }
 
 pub(crate) fn log_response_body(response: &HttpResponse, cfg: &ConfigBag) {

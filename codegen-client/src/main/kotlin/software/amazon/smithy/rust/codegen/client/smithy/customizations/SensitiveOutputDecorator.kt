@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSec
 import software.amazon.smithy.rust.codegen.client.smithy.generators.SensitiveIndex
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
@@ -34,14 +35,14 @@ private class SensitiveOutputCustomization(
 ) : OperationCustomization() {
     private val sensitiveIndex = SensitiveIndex.of(codegenContext.model)
     override fun section(section: OperationSection): Writable = writable {
-        if (section is OperationSection.AdditionalInterceptors && sensitiveIndex.hasSensitiveOutput(operation)) {
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                rust(
-                    "#T",
-                    RuntimeType.smithyRuntime(codegenContext.runtimeConfig)
-                        .resolve("client::orchestrator::http::SensitiveOutputInterceptor"),
-                )
-            }
+        if (section is OperationSection.AdditionalRuntimePluginConfig && sensitiveIndex.hasSensitiveOutput(operation)) {
+            rustTemplate(
+                """
+                ${section.newLayerName}.store_put(#{SensitiveOutput});
+                """,
+                "SensitiveOutput" to RuntimeType.smithyRuntime(codegenContext.runtimeConfig)
+                    .resolve("client::orchestrator::http::SensitiveOutput"),
+            )
         }
     }
 }
