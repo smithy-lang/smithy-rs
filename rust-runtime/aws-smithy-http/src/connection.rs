@@ -82,7 +82,7 @@ impl CaptureSmithyConnection {
         match self.loader.lock().unwrap().as_ref() {
             Some(loader) => loader(),
             None => {
-                println!("no loader was set :-/");
+                tracing::debug!("no loader was set on the CaptureSmithyConnection");
                 None
             }
         }
@@ -94,6 +94,7 @@ mod test {
     use crate::connection::{CaptureSmithyConnection, ConnectionMetadata};
 
     #[test]
+    #[allow(clippy::redundant_clone)]
     fn retrieve_connection_metadata() {
         let retriever = CaptureSmithyConnection::new();
         let retriever_clone = retriever.clone();

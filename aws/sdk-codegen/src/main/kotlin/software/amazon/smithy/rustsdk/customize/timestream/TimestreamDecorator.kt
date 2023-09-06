@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.DocSection
 import software.amazon.smithy.rustsdk.InlineAwsDependency
@@ -32,30 +31,20 @@ class TimestreamDecorator : ClientCodegenDecorator {
     override val name: String = "Timestream"
     override val order: Byte = -1
 
-    private fun applies(codegenContext: ClientCodegenContext): Boolean =
-        codegenContext.smithyRuntimeMode.defaultToOrchestrator
-
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-        emptyList<AdHocCustomization>().letIf(applies(codegenContext)) {
-            listOf(
-                adhocCustomization<DocSection.CreateClient> {
-                    addDependency(AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency())
-                    rustTemplate(
-                        """
-                        let config = aws_config::load_from_env().await;
-                        // You MUST call `with_endpoint_discovery_enabled` to produce a working client for this service.
-                        let ${it.clientName} = ${it.crateName}::Client::new(&config).with_endpoint_discovery_enabled().await;
-                        """.replaceIndent(it.indent),
-                    )
-                },
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> = listOf(
+        adhocCustomization<DocSection.CreateClient> {
+            addDependency(AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency())
+            rustTemplate(
+                """
+                let config = aws_config::load_from_env().await;
+                // You MUST call `with_endpoint_discovery_enabled` to produce a working client for this service.
+                let ${it.clientName} = ${it.crateName}::Client::new(&config).with_endpoint_discovery_enabled().await;
+                """.replaceIndent(it.indent),
             )
-        }
+        },
+    )
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        if (!applies(codegenContext)) {
-            return
-        }
-
         val endpointDiscovery = InlineAwsDependency.forRustFile(
             "endpoint_discovery",
             Visibility.PUBLIC,
@@ -72,7 +61,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                             #{ResolveEndpointError}::from_source("failed to call describe_endpoints", e)
                         })?;
                     let endpoint = describe_endpoints.endpoints().unwrap().get(0).unwrap();
-                    let expiry = client.conf().time_source().expect("checked when ep discovery was enabled").now()
+                    let expiry = client.config().time_source().expect("checked when ep discovery was enabled").now()
                         + #{Duration}::from_secs(endpoint.cache_period_in_minutes() as u64 * 60);
                     Ok((
                         #{Endpoint}::builder()

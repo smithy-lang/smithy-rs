@@ -18,6 +18,10 @@ use http::HeaderValue;
 pub(crate) struct AcceptHeaderInterceptor;
 
 impl Interceptor for AcceptHeaderInterceptor {
+    fn name(&self) -> &'static str {
+        "AcceptHeaderInterceptor"
+    }
+
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,

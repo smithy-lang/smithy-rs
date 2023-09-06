@@ -115,7 +115,7 @@ data class RuntimeConfig(
 
 /**
  * `RuntimeType` captures all necessary information to render a type into a Rust file:
- * - [name]: What type is this?
+ * - [fullyQualifiedName]: What type is this?
  * - [namespace]: Where can we find this type.
  * - [dependency]: What other crates, if any, are required to use this type?
  *
@@ -126,7 +126,7 @@ data class RuntimeConfig(
  * `http::header::HeaderName`
  *  ------------  ----------
  *       |            |
- * `[namespace]`  `[name]`
+ * `[namespace]`  `[fullyQualifiedName]`
  *
  *  This type would have a [CargoDependency] pointing to the `http` crate. Writing it multiple times would still only
  *  add the dependency once.
@@ -185,8 +185,14 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
     /**
      * Returns the fully qualified name for this type
      */
-    fun fullyQualifiedName(): String {
-        return path
+    fun fullyQualifiedName(): String = path
+
+    fun render(fullyQualified: Boolean = true): String {
+        return if (fullyQualified) {
+            fullyQualifiedName()
+        } else {
+            name
+        }
     }
 
     /**
@@ -336,41 +342,58 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun configBag(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag")
-        fun configBagAccessors(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::config_bag_accessors::ConfigBagAccessors")
+
+        fun runtimeComponents(runtimeConfig: RuntimeConfig) =
+            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_components::RuntimeComponents")
+
         fun runtimeComponentsBuilder(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_components::RuntimeComponentsBuilder")
+
         fun runtimePlugins(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins")
+
         fun runtimePlugin(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
+
         fun sharedRuntimePlugin(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::SharedRuntimePlugin")
+
         fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
+
         fun interceptor(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::Interceptor")
+
         fun interceptorContext(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::InterceptorContext")
+
         fun sharedInterceptor(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor")
 
         fun afterDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::AfterDeserializationInterceptorContextRef")
+
         fun beforeSerializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextRef")
+
         fun beforeSerializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextMut")
+
         fun beforeDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextRef")
+
         fun beforeDeserializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextMut")
+
         fun beforeTransmitInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextRef")
+
         fun beforeTransmitInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextMut")
+
         fun finalizerInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextRef")
+
         fun finalizerInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextMut")
 

@@ -47,6 +47,10 @@ impl SigV4PresigningInterceptor {
 }
 
 impl Interceptor for SigV4PresigningInterceptor {
+    fn name(&self) -> &'static str {
+        "SigV4PresigningInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         _context: &mut BeforeSerializationInterceptorContextMut<'_>,
@@ -114,7 +118,10 @@ impl RuntimePlugin for SigV4PresigningRuntimePlugin {
         Some(layer.freeze())
     }
 
-    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+    fn runtime_components(
+        &self,
+        _: &RuntimeComponentsBuilder,
+    ) -> Cow<'_, RuntimeComponentsBuilder> {
         Cow::Borrowed(&self.runtime_components)
     }
 }

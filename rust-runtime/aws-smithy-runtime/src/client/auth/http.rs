@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Auth scheme implementations for HTTP API Key, Basic Auth, Bearer Token, and Digest auth.
+
 use aws_smithy_http::query_writer::QueryWriter;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::http::{
@@ -10,7 +12,7 @@ use aws_smithy_runtime_api::client::auth::http::{
     HTTP_DIGEST_AUTH_SCHEME_ID,
 };
 use aws_smithy_runtime_api::client::auth::{
-    AuthSchemeEndpointConfig, AuthSchemeId, HttpAuthScheme, HttpRequestSigner,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
 };
 use aws_smithy_runtime_api::client::identity::http::{Login, Token};
 use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
@@ -24,7 +26,9 @@ use http::HeaderValue;
 /// Destination for the API key
 #[derive(Copy, Clone, Debug)]
 pub enum ApiKeyLocation {
+    /// Place the API key in the URL query parameters
     Query,
+    /// Place the API key in the request headers
     Header,
 }
 
@@ -51,7 +55,7 @@ impl ApiKeyAuthScheme {
     }
 }
 
-impl HttpAuthScheme for ApiKeyAuthScheme {
+impl AuthScheme for ApiKeyAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_API_KEY_AUTH_SCHEME_ID
     }
@@ -63,7 +67,7 @@ impl HttpAuthScheme for ApiKeyAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -75,8 +79,8 @@ struct ApiKeySigner {
     name: String,
 }
 
-impl HttpRequestSigner for ApiKeySigner {
-    fn sign_request(
+impl Signer for ApiKeySigner {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
@@ -122,7 +126,7 @@ impl BasicAuthScheme {
     }
 }
 
-impl HttpAuthScheme for BasicAuthScheme {
+impl AuthScheme for BasicAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_BASIC_AUTH_SCHEME_ID
     }
@@ -134,7 +138,7 @@ impl HttpAuthScheme for BasicAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -142,8 +146,8 @@ impl HttpAuthScheme for BasicAuthScheme {
 #[derive(Debug, Default)]
 struct BasicAuthSigner;
 
-impl HttpRequestSigner for BasicAuthSigner {
-    fn sign_request(
+impl Signer for BasicAuthSigner {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
@@ -181,7 +185,7 @@ impl BearerAuthScheme {
     }
 }
 
-impl HttpAuthScheme for BearerAuthScheme {
+impl AuthScheme for BearerAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_BEARER_AUTH_SCHEME_ID
     }
@@ -193,7 +197,7 @@ impl HttpAuthScheme for BearerAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -201,8 +205,8 @@ impl HttpAuthScheme for BearerAuthScheme {
 #[derive(Debug, Default)]
 struct BearerAuthSigner;
 
-impl HttpRequestSigner for BearerAuthSigner {
-    fn sign_request(
+impl Signer for BearerAuthSigner {
+    fn sign_http_request(
         &self,
         request: &mut HttpRequest,
         identity: &Identity,
@@ -238,7 +242,7 @@ impl DigestAuthScheme {
     }
 }
 
-impl HttpAuthScheme for DigestAuthScheme {
+impl AuthScheme for DigestAuthScheme {
     fn scheme_id(&self) -> AuthSchemeId {
         HTTP_DIGEST_AUTH_SCHEME_ID
     }
@@ -250,7 +254,7 @@ impl HttpAuthScheme for DigestAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn request_signer(&self) -> &dyn HttpRequestSigner {
+    fn signer(&self) -> &dyn Signer {
         &self.signer
     }
 }
@@ -258,8 +262,8 @@ impl HttpAuthScheme for DigestAuthScheme {
 #[derive(Debug, Default)]
 struct DigestAuthSigner;
 
-impl HttpRequestSigner for DigestAuthSigner {
-    fn sign_request(
+impl Signer for DigestAuthSigner {
+    fn sign_http_request(
         &self,
         _request: &mut HttpRequest,
         _identity: &Identity,
@@ -295,7 +299,7 @@ mod tests {
             .body(SdkBody::empty())
             .unwrap();
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
@@ -325,7 +329,7 @@ mod tests {
             .body(SdkBody::empty())
             .unwrap();
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
@@ -349,7 +353,7 @@ mod tests {
         let mut request = http::Request::builder().body(SdkBody::empty()).unwrap();
 
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),
@@ -372,7 +376,7 @@ mod tests {
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder().body(SdkBody::empty()).unwrap();
         signer
-            .sign_request(
+            .sign_http_request(
                 &mut request,
                 &identity,
                 AuthSchemeEndpointConfig::empty(),

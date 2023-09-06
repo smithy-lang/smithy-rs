@@ -37,7 +37,10 @@ impl IdempotencyTokenRuntimePlugin {
 }
 
 impl RuntimePlugin for IdempotencyTokenRuntimePlugin {
-    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+    fn runtime_components(
+        &self,
+        _: &RuntimeComponentsBuilder,
+    ) -> Cow<'_, RuntimeComponentsBuilder> {
         Cow::Borrowed(&self.runtime_components)
     }
 }
@@ -56,6 +59,10 @@ impl<S> Interceptor for IdempotencyTokenInterceptor<S>
 where
     S: Fn(IdempotencyTokenProvider, &mut Input) + Send + Sync,
 {
+    fn name(&self) -> &'static str {
+        "IdempotencyTokenInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         context: &mut BeforeSerializationInterceptorContextMut<'_>,

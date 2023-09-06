@@ -10,7 +10,7 @@ use once_cell::sync::Lazy;
 use ordinal::Ordinal;
 use serde::Serialize;
 use smithy_rs_tool_common::changelog::{
-    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry,
+    Changelog, HandAuthoredEntry, Reference, SdkModelChangeKind, SdkModelEntry, ValidationSet,
 };
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::versions_manifest::{CrateVersionMetadataMap, VersionsManifest};
@@ -175,13 +175,13 @@ fn to_md_link(reference: &Reference) -> String {
 fn render_entry(entry: &HandAuthoredEntry, mut out: &mut String) {
     let mut meta = String::new();
     if entry.meta.bug {
-        meta.push('🐛');
+        meta.push_str(":bug:");
     }
     if entry.meta.breaking {
-        meta.push('⚠');
+        meta.push_str(":warning:");
     }
     if entry.meta.tada {
-        meta.push('🎉');
+        meta.push_str(":tada:");
     }
     if !meta.is_empty() {
         meta.push(' ');
@@ -237,7 +237,7 @@ fn load_changelogs(args: &RenderArgs) -> Result<Changelog> {
     for source in &args.source {
         let changelog = Changelog::load_from_file(source)
             .map_err(|errs| anyhow::Error::msg(format!("failed to load {source:?}: {errs:#?}")))?;
-        changelog.validate().map_err(|errs| {
+        changelog.validate(ValidationSet::Render).map_err(|errs| {
             anyhow::Error::msg(format!(
                 "failed to load {source:?}: {errors}",
                 errors = errs.join("\n")
@@ -562,11 +562,11 @@ message = "Some API change"
 v0.3.0 (January 4th, 2022)
 ==========================
 **Breaking Changes:**
-- ⚠ (all, [smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the code generator
+- :warning: (all, [smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the code generator
 
 **New this release:**
-- 🎉 (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
-- 🎉 (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
     **Update guide:**
     blah blah
@@ -586,10 +586,10 @@ Thank you for your contributions! ❤
 v0.1.0 (January 4th, 2022)
 ==========================
 **Breaking Changes:**
-- ⚠ ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the AWS SDK
+- :warning: ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the AWS SDK
 
 **New this release:**
-- 🎉 ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- :tada: ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
 **Service Features:**
 - `aws-sdk-ec2` (0.12.0): Some API change

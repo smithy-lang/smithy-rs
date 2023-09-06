@@ -54,8 +54,12 @@ impl<VE> ResponseChecksumInterceptor<VE> {
 
 impl<VE> Interceptor for ResponseChecksumInterceptor<VE>
 where
-    VE: Fn(&Input) -> bool,
+    VE: Fn(&Input) -> bool + Send + Sync,
 {
+    fn name(&self) -> &'static str {
+        "ResponseChecksumInterceptor"
+    }
+
     fn read_before_serialization(
         &self,
         context: &BeforeSerializationInterceptorContextRef<'_>,

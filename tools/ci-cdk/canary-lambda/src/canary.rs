@@ -78,7 +78,7 @@ impl CanaryEnv {
         // Amazon Transcribe starts returning different output for the same audio.
         let expected_transcribe_result = env::var("CANARY_EXPECTED_TRANSCRIBE_RESULT")
             .unwrap_or_else(|_| {
-                "Good day to you transcribe. This is Polly talking to you from the Rust ST K."
+                "Good day to you transcribe. This is Polly talking to you from the Rust S. D. K."
                     .to_string()
             });
 

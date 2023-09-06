@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use http::header::{HeaderName, AUTHORIZATION, USER_AGENT};
+use http::header::{AUTHORIZATION, USER_AGENT};
+use std::borrow::Cow;
 use std::time::Duration;
 
 /// HTTP signing parameters
@@ -30,7 +31,7 @@ pub struct SigningSettings {
     pub expires_in: Option<Duration>,
 
     /// Headers that should be excluded from the signing process
-    pub excluded_headers: Option<Vec<HeaderName>>,
+    pub excluded_headers: Option<Vec<Cow<'static, str>>>,
 
     /// Specifies whether the absolute path component of the URI should be normalized during signing.
     pub uri_path_normalization_mode: UriPathNormalizationMode,
@@ -109,11 +110,11 @@ impl Default for SigningSettings {
         let excluded_headers = Some(
             [
                 // This header is calculated as part of the signing process, so if it's present, discard it
-                AUTHORIZATION,
+                Cow::Borrowed(AUTHORIZATION.as_str()),
                 // Changes when sent by proxy
-                USER_AGENT,
+                Cow::Borrowed(USER_AGENT.as_str()),
                 // Changes based on the request from the client
-                HeaderName::from_static(HEADER_NAME_X_RAY_TRACE_ID),
+                Cow::Borrowed(HEADER_NAME_X_RAY_TRACE_ID),
             ]
             .to_vec(),
         );

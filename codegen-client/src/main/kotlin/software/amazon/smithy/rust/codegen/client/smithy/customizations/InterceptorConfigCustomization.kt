@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -17,16 +16,9 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
     private val moduleUseName = codegenContext.moduleUseName()
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    // TODO(enableNewSmithyRuntimeCleanup): Remove the writable below
-    private val maybeHideOrchestratorCode = writable {
-        if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-            rust("##[doc(hidden)]")
-        }
-    }
     private val codegenScope = arrayOf(
         "Interceptor" to RuntimeType.interceptor(runtimeConfig),
         "SharedInterceptor" to RuntimeType.sharedInterceptor(runtimeConfig),
-        "maybe_hide_orchestrator_code" to maybeHideOrchestratorCode,
     )
 
     override fun section(section: ServiceConfig) =
@@ -34,7 +26,6 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
             when (section) {
                 ServiceConfig.ConfigImpl -> rustTemplate(
                     """
-                    #{maybe_hide_orchestrator_code}
                     /// Returns interceptors currently registered by the user.
                     pub fn interceptors(&self) -> impl Iterator<Item = #{SharedInterceptor}> + '_ {
                         self.runtime_components.interceptors()
@@ -46,7 +37,6 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
                         """
-                        #{maybe_hide_orchestrator_code}
                         /// Add an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
                         /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
@@ -91,12 +81,11 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         /// ## }
                         /// ## }
                         /// ```
-                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + Send + Sync + 'static) -> Self {
+                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
                             self.push_interceptor(#{SharedInterceptor}::new(interceptor));
                             self
                         }
 
-                        #{maybe_hide_orchestrator_code}
                         /// Add a [`SharedInterceptor`](#{SharedInterceptor}) that runs at specific stages of the request execution pipeline.
                         ///
                         /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
@@ -149,7 +138,6 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                             self
                         }
 
-                        #{maybe_hide_orchestrator_code}
                         /// Set [`SharedInterceptor`](#{SharedInterceptor})s for the builder.
                         pub fn set_interceptors(&mut self, interceptors: impl IntoIterator<Item = #{SharedInterceptor}>) -> &mut Self {
                             self.runtime_components.set_interceptors(interceptors.into_iter());

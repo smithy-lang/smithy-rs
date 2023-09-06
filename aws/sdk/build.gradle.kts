@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import aws.sdk.AwsExamplesLayout
 import aws.sdk.AwsServices
 import aws.sdk.Membership
 import aws.sdk.discoverServices
@@ -61,7 +60,6 @@ val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, prop
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "middleware"
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
@@ -101,10 +99,11 @@ fun generateSmithyBuild(services: AwsServices): String {
                         },
                         "codegen": {
                             "includeFluentClient": false,
+                            "includeEndpointUrlConfig": false,
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
+                            "enableUserConfigurableRuntimePlugins": false
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -244,22 +243,12 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
 
     toolPath = sdkVersionerToolPath
     binaryName = "sdk-versioner"
-    arguments = when (AwsExamplesLayout.detect(project)) {
-        AwsExamplesLayout.Flat -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", "../../sdk",
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-        AwsExamplesLayout.Workspaces -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", sdkOutputDir.absolutePath,
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-    }
+    arguments = listOf(
+        "use-path-and-version-dependencies",
+        "--sdk-path", sdkOutputDir.absolutePath,
+        "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
+        outputDir.resolve("examples").absolutePath,
+    )
 
     outputs.dir(outputDir)
     dependsOn("relocateExamples", "generateVersionManifest")
@@ -336,6 +325,7 @@ tasks.register("generateCargoWorkspace") {
     doFirst {
         outputDir.mkdirs()
         outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
+        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.resolve("clippy.toml"), overwrite = true)
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
     if (awsServices.examples.isNotEmpty()) {
@@ -345,6 +335,7 @@ tasks.register("generateCargoWorkspace") {
         inputs.dir(test.path)
     }
     outputs.file(outputDir.resolve("Cargo.toml"))
+    outputs.file(outputDir.resolve("clippy.toml"))
     outputs.upToDateWhen { false }
 }
 
@@ -453,7 +444,12 @@ tasks["test"].dependsOn("assemble")
 tasks["test"].finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 
 tasks.register<Delete>("deleteSdk") {
-    delete = setOf(outputDir)
+    delete(
+        fileTree(outputDir) {
+            // Delete files but keep directories so that terminals don't get messed up in local development
+            include("**/*.*")
+        },
+    )
 }
 tasks["clean"].dependsOn("deleteSdk")
 tasks["clean"].doFirst {

@@ -358,6 +358,7 @@ impl tower::Service<http::Request<SdkBody>> for ConnectionFn {
 /// match_events!(ev!(dns), ev!(connect), ev!(http(200)))(&mock.events());
 /// # }
 /// ```
+#[cfg(feature = "wiremock")]
 pub mod wire_mock {
     use bytes::Bytes;
     use http::{Request, Response};
@@ -576,7 +577,7 @@ pub mod wire_mock {
                     rx.await.ok();
                     tracing::info!("server shutdown!");
                 });
-            spawn(async move { server.await });
+            spawn(server);
             Self {
                 event_log: wire_events,
                 bind_addr: listener_addr,
@@ -673,7 +674,7 @@ pub mod wire_mock {
 
 #[cfg(test)]
 mod tests {
-    use hyper::service::Service;
+    use tower::Service;
 
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;

@@ -5,7 +5,6 @@
 
 //! Configuration Options for Credential Providers
 
-use aws_credential_types::time_source::TimeSource;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_client::erase::DynConnector;
@@ -151,6 +150,21 @@ impl ProviderConfig {
         }
     }
 
+    /// Initializer for ConfigBag to avoid possibly setting incorrect defaults.
+    pub(crate) fn init(time_source: SharedTimeSource, sleep: Option<SharedAsyncSleep>) -> Self {
+        Self {
+            parsed_profile: Default::default(),
+            profile_files: ProfileFiles::default(),
+            env: Env::default(),
+            fs: Fs::default(),
+            time_source,
+            connector: HttpConnector::Prebuilt(None),
+            sleep,
+            region: None,
+            profile_name_override: None,
+        }
+    }
+
     /// Create a default provider config with the region region automatically loaded from the default chain.
     ///
     /// # Examples
@@ -271,10 +285,7 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
-    // these setters are doc(hidden) because they only exist for tests
-
-    #[doc(hidden)]
-    pub fn with_fs(self, fs: Fs) -> Self {
+    pub(crate) fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             fs,
@@ -282,8 +293,7 @@ impl ProviderConfig {
         }
     }
 
-    #[doc(hidden)]
-    pub fn with_env(self, env: Env) -> Self {
+    pub(crate) fn with_env(self, env: Env) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             env,
@@ -291,8 +301,11 @@ impl ProviderConfig {
         }
     }
 
-    #[doc(hidden)]
-    pub fn with_time_source(self, time_source: TimeSource) -> Self {
+    /// Override the time source for this configuration
+    pub fn with_time_source(
+        self,
+        time_source: impl aws_smithy_async::time::TimeSource + 'static,
+    ) -> Self {
         ProviderConfig {
             time_source: SharedTimeSource::new(time_source),
             ..self
@@ -301,14 +314,11 @@ impl ProviderConfig {
 
     /// Override the HTTPS connector for this configuration
     ///
-    /// **Warning**: Use of this method will prevent you from taking advantage of the HTTP connect timeouts.
-    /// Consider [`ProviderConfig::with_tcp_connector`].
-    ///
-    /// # Stability
-    /// This method is expected to change to support HTTP configuration.
-    pub fn with_http_connector(self, connector: DynConnector) -> Self {
+    /// **Note**: In order to take advantage of late-configured timeout settings, use [`HttpConnector::ConnectorFn`]
+    /// when configuring this connector.
+    pub fn with_http_connector(self, connector: impl Into<HttpConnector>) -> Self {
         ProviderConfig {
-            connector: HttpConnector::Prebuilt(Some(connector)),
+            connector: connector.into(),
             ..self
         }
     }

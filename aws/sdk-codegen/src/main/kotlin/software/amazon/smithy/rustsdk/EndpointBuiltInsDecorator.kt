@@ -57,7 +57,9 @@ fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
 }
 
 private fun promotedBuiltins(parameter: Parameter) =
-    parameter == Builtins.FIPS || parameter == Builtins.DUALSTACK || parameter == Builtins.SDK_ENDPOINT
+    parameter.builtIn == Builtins.FIPS.builtIn ||
+        parameter.builtIn == Builtins.DUALSTACK.builtIn ||
+        parameter.builtIn == Builtins.SDK_ENDPOINT.builtIn
 
 private fun configParamNewtype(parameter: Parameter, name: String, runtimeConfig: RuntimeConfig): RuntimeType {
     val type = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
@@ -141,19 +143,12 @@ fun decoratorForBuiltIn(
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? =
                     when (parameter.builtIn) {
                         builtIn.builtIn -> writable {
-                            if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
-                                val newtype = configParamNewtype(parameter, name, codegenContext.runtimeConfig)
-                                val symbol = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
-                                rustTemplate(
-                                    """$configRef.#{load_from_service_config_layer}""",
-                                    "load_from_service_config_layer" to loadFromConfigBag(symbol.name, newtype),
-                                )
-                            } else {
-                                rust("$configRef.$name")
-                            }
-                            if (codegenContext.smithyRuntimeMode.defaultToMiddleware && parameter.type == ParameterType.STRING) {
-                                rust(".clone()")
-                            }
+                            val newtype = configParamNewtype(parameter, name, codegenContext.runtimeConfig)
+                            val symbol = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
+                            rustTemplate(
+                                """$configRef.#{load_from_service_config_layer}""",
+                                "load_from_service_config_layer" to loadFromConfigBag(symbol.name, newtype),
+                            )
                         }
 
                         else -> null
@@ -178,7 +173,7 @@ fun decoratorForBuiltIn(
 private val endpointUrlDocs = writable {
     rust(
         """
-        /// Sets the endpoint url used to communicate with this service
+        /// Sets the endpoint URL used to communicate with this service
 
         /// Note: this is used in combination with other endpoint rules, e.g. an API that applies a host-label prefix
         /// will be prefixed onto this URL. To fully override the endpoint resolver, use
@@ -204,6 +199,9 @@ val PromotedBuiltInsDecorators =
         decoratorForBuiltIn(Builtins.DUALSTACK),
         decoratorForBuiltIn(
             Builtins.SDK_ENDPOINT,
-            ConfigParam.Builder().name("endpoint_url").type(RuntimeType.String.toSymbol()).setterDocs(endpointUrlDocs),
+            ConfigParam.Builder()
+                .name("endpoint_url")
+                .type(RuntimeType.String.toSymbol())
+                .setterDocs(endpointUrlDocs),
         ),
     ).toTypedArray()

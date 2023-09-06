@@ -28,10 +28,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.enforceRequired
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 class EndpointParamsInterceptorGenerator(
     private val codegenContext: ClientCodegenContext,
@@ -44,15 +46,12 @@ class EndpointParamsInterceptorGenerator(
         val runtimeApi = CargoDependency.smithyRuntimeApi(rc).toType()
         val interceptors = runtimeApi.resolve("client::interceptors")
         val orchestrator = runtimeApi.resolve("client::orchestrator")
-        val smithyTypes = CargoDependency.smithyTypes(rc).toType()
         arrayOf(
             *preludeScope,
             "BoxError" to RuntimeType.boxError(rc),
             "ConfigBag" to RuntimeType.configBag(rc),
-            "ConfigBagAccessors" to RuntimeType.smithyRuntimeApi(rc)
-                .resolve("client::config_bag_accessors::ConfigBagAccessors"),
             "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
-            "EndpointResolverParams" to orchestrator.resolve("EndpointResolverParams"),
+            "EndpointResolverParams" to runtimeApi.resolve("client::endpoint::EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Interceptor" to RuntimeType.interceptor(rc),
@@ -76,12 +75,15 @@ class EndpointParamsInterceptorGenerator(
             struct $interceptorName;
 
             impl #{Interceptor} for $interceptorName {
+                fn name(&self) -> &'static str {
+                    ${interceptorName.dq()}
+                }
+
                 fn read_before_execution(
                     &self,
                     context: &#{BeforeSerializationInterceptorContextRef}<'_, #{Input}, #{Output}, #{Error}>,
                     cfg: &mut #{ConfigBag},
                 ) -> #{Result}<(), #{BoxError}> {
-                    use #{ConfigBagAccessors};
                     let _input = context.input()
                         .downcast_ref::<${operationInput.name}>()
                         .ok_or("failed to downcast to ${operationInput.name}")?;
@@ -92,7 +94,7 @@ class EndpointParamsInterceptorGenerator(
                         #{param_setters}
                         .build()
                         .map_err(|err| #{ContextAttachedError}::new("endpoint params could not be built", err))?;
-                    cfg.interceptor_state().set_endpoint_resolver_params(#{EndpointResolverParams}::new(params));
+                    cfg.interceptor_state().store_put(#{EndpointResolverParams}::new(params));
                     #{Ok}(())
                 }
             }
@@ -109,12 +111,7 @@ class EndpointParamsInterceptorGenerator(
         val builtInParams = params.toList().filter { it.isBuiltIn }
         // first load builtins and their defaults
         builtInParams.forEach { param ->
-            val config = if (codegenContext.smithyRuntimeMode.defaultToOrchestrator) {
-                "cfg"
-            } else {
-                "_config"
-            }
-            endpointTypesGenerator.builtInFor(param, config)?.also { defaultValue ->
+            endpointTypesGenerator.builtInFor(param, "cfg")?.also { defaultValue ->
                 rust(".set_${param.name.rustName()}(#W)", defaultValue)
             }
         }
@@ -122,7 +119,7 @@ class EndpointParamsInterceptorGenerator(
         idx.getClientContextParams(codegenContext.serviceShape).orNull()?.parameters?.forEach { (name, param) ->
             val setterName = EndpointParamsGenerator.setterName(name)
             val inner = ClientContextConfigCustomization.toSymbol(param.type, symbolProvider)
-            val newtype = configParamNewtype(name, inner, codegenContext.runtimeConfig)
+            val newtype = configParamNewtype(name.toPascalCase(), inner, codegenContext.runtimeConfig)
             rustTemplate(
                 ".$setterName(cfg.#{load_from_service_config_layer})",
                 "load_from_service_config_layer" to loadFromConfigBag(inner.name, newtype),
@@ -138,8 +135,10 @@ class EndpointParamsInterceptorGenerator(
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) ->
             val memberName = codegenContext.symbolProvider.toMemberName(memberShape)
-            rust(
-                ".${EndpointParamsGenerator.setterName(param.name)}(_input.$memberName.clone())",
+            val member = memberShape.enforceRequired(writable("_input.$memberName.clone()"), codegenContext)
+
+            rustTemplate(
+                ".${EndpointParamsGenerator.setterName(param.name)}(#{member})", "member" to member,
             )
         }
     }
@@ -172,7 +171,6 @@ class EndpointParamsInterceptorGenerator(
                 endpointTraitBindings.render(
                     this,
                     "_input",
-                    codegenContext.smithyRuntimeMode,
                 )
             }
             rust("cfg.interceptor_state().store_put(endpoint_prefix);")

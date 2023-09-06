@@ -30,7 +30,10 @@ impl HttpChecksumRequiredRuntimePlugin {
 }
 
 impl RuntimePlugin for HttpChecksumRequiredRuntimePlugin {
-    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+    fn runtime_components(
+        &self,
+        _: &RuntimeComponentsBuilder,
+    ) -> Cow<'_, RuntimeComponentsBuilder> {
         Cow::Borrowed(&self.runtime_components)
     }
 }
@@ -39,6 +42,10 @@ impl RuntimePlugin for HttpChecksumRequiredRuntimePlugin {
 struct HttpChecksumRequiredInterceptor;
 
 impl Interceptor for HttpChecksumRequiredInterceptor {
+    fn name(&self) -> &'static str {
+        "HttpChecksumRequiredInterceptor"
+    }
+
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,

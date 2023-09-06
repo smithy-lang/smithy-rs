@@ -114,7 +114,7 @@ class EndpointsCredentialsTest {
                             .credentials_provider(#{Credentials}::for_tests())
                             .build();
                         let client = $moduleName::Client::from_conf(conf);
-                        let _ = client.custom_auth().send().await;
+                        let _ = dbg!(client.custom_auth().send().await);
                         let req = rcvr.expect_request();
                         let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
