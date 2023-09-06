@@ -6,6 +6,7 @@
 use aws_smithy_http::body::SdkBody;
 use http as http0;
 use http0::header::Iter;
+use http0::uri::PathAndQuery;
 use http0::{Extensions, HeaderMap, Method};
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -26,6 +27,55 @@ pub struct Request<B = SdkBody> {
 pub struct Uri {
     as_string: String,
     parsed: http0::Uri,
+}
+
+impl Uri {
+    /// Sets `endpoint` as the endpoint for a URL.
+    ///
+    /// An `endpoint` MUST contain a scheme and authority.
+    /// An `endpoint` MAY contain a port and path.
+    ///
+    /// An `endpoint` MUST NOT contain a query
+    pub fn set_endpoint(&mut self, endpoint: &str) -> Result<(), HttpError> {
+        let endpoint: http0::Uri = endpoint.parse().map_err(HttpError::invalid_uri)?;
+        let endpoint = endpoint.into_parts();
+        let authority = endpoint
+            .authority
+            .ok_or_else(|| HttpError::new("endpoint must contain authority"))?;
+        let scheme = endpoint
+            .scheme
+            .ok_or_else(|| HttpError::new("endpoint must have scheme"))?;
+        let new_uri = http0::Uri::builder()
+            .authority(authority)
+            .scheme(scheme)
+            .path_and_query(merge_paths(endpoint.path_and_query, &self.parsed).as_ref())
+            .build()
+            .map_err(HttpError::new)?;
+        self.as_string = new_uri.to_string();
+        self.parsed = new_uri;
+        Ok(())
+    }
+}
+
+fn merge_paths(endpoint_path: Option<PathAndQuery>, uri: &http0::Uri) -> Cow<'_, str> {
+    let uri_path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("");
+    let endpoint_path = match endpoint_path {
+        None => return Cow::Borrowed(uri_path_and_query),
+        Some(path) => path,
+    };
+    if let Some(query) = endpoint_path.query() {
+        tracing::warn!(query = %query, "query specified in endpoint will be ignored during endpoint resolution");
+    }
+    let endpoint_path = endpoint_path.path();
+    if endpoint_path.is_empty() {
+        Cow::Borrowed(uri_path_and_query)
+    } else {
+        let ep_no_slash = endpoint_path.strip_suffix('/').unwrap_or(endpoint_path);
+        let uri_path_no_slash = uri_path_and_query
+            .strip_prefix('/')
+            .unwrap_or(uri_path_and_query);
+        Cow::Owned(format!("{}/{}", ep_no_slash, uri_path_no_slash))
+    }
 }
 
 impl TryFrom<String> for Uri {
@@ -126,6 +176,11 @@ impl<B> Request<B> {
     /// Returns the URI associated with this request
     pub fn uri(&self) -> &str {
         &self.uri.as_string
+    }
+
+    /// Returns a mutable reference the the URI of this http::Request
+    pub fn uri_mut(&mut self) -> &mut Uri {
+        &mut self.uri
     }
 
     /// Sets the URI of this request
@@ -237,6 +292,13 @@ impl Headers {
         self.headers.get(key.as_ref()).map(|v| v.as_ref())
     }
 
+    /// Returns an iterator over the headers
+    pub fn iter(&self) -> HeadersIter<'_> {
+        HeadersIter {
+            inner: self.headers.iter(),
+        }
+    }
+
     /// Returns the total number of **values** stored in the map
     pub fn len(&self) -> usize {
         self.headers.len()
@@ -298,6 +360,13 @@ impl Headers {
         Ok(self.headers.append(key, value))
     }
 
+    /// Removes all headers with a given key
+    ///
+    /// If there are multiple entries for this key, the first entry is returned
+    pub fn remove(&mut self, key: &str) -> Option<HeaderValue> {
+        self.headers.remove(key)
+    }
+
     /// Appends a value to a given key
     ///
     /// # Panics
@@ -318,7 +387,7 @@ mod sealed {
         fn into_maybe_static(self) -> Result<MaybeStatic, HttpError>;
 
         /// If a component is already internally represented as a `http03x::HeaderName`, return it
-        fn as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
+        fn repr_as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -359,7 +428,7 @@ mod sealed {
             Ok(self.to_string().into())
         }
 
-        fn as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
+        fn repr_as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -445,7 +514,7 @@ impl TryFrom<String> for HeaderValue {
 type MaybeStatic = Cow<'static, str>;
 
 fn header_name(name: impl AsHeaderComponent) -> Result<http0::HeaderName, HttpError> {
-    name.as_http03x_header_name().or_else(|name| {
+    name.repr_as_http03x_header_name().or_else(|name| {
         name.into_maybe_static().and_then(|cow| match cow {
             Cow::Borrowed(staticc) => Ok(http0::HeaderName::from_static(staticc)),
             Cow::Owned(s) => http0::HeaderName::try_from(s).map_err(HttpError::invalid_header_name),
@@ -466,7 +535,8 @@ fn header_value(value: MaybeStatic) -> Result<HeaderValue, HttpError> {
 #[cfg(test)]
 mod test {
     use aws_smithy_http::body::SdkBody;
-    use http::HeaderValue;
+    use http::header::{AUTHORIZATION, CONTENT_LENGTH};
+    use http::{HeaderValue, Uri};
 
     #[test]
     fn headers_can_be_any_string() {
@@ -519,5 +589,25 @@ mod test {
             .try_insert("a\nb", "a\nb")
             .expect_err("invalid header");
         let _ = req.headers_mut().insert("a\nb", "a\nb");
+    }
+
+    #[test]
+    fn try_clone_clones_all_data() {
+        let request = ::http::Request::builder()
+            .uri(Uri::from_static("https://www.amazon.com"))
+            .method("POST")
+            .header(CONTENT_LENGTH, 456)
+            .header(AUTHORIZATION, "Token: hello")
+            .body(SdkBody::from("hello world!"))
+            .expect("valid request");
+        let request: super::Request = request.try_into().unwrap();
+        let cloned = request.try_clone().expect("request is cloneable");
+
+        assert_eq!("https://www.amazon.com/", cloned.uri());
+        assert_eq!("POST", cloned.method());
+        assert_eq!(2, cloned.headers().len());
+        assert_eq!("Token: hello", cloned.headers().get(AUTHORIZATION).unwrap(),);
+        assert_eq!("456", cloned.headers().get(CONTENT_LENGTH).unwrap());
+        assert_eq!("hello world!".as_bytes(), cloned.body().bytes().unwrap());
     }
 }
