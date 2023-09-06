@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplat
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -29,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -46,6 +49,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -76,10 +80,37 @@ abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
 fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
 
+fun MemberShape.enforceRequired(
+    field: Writable,
+    codegenContext: CodegenContext,
+    produceOption: Boolean = true,
+): Writable {
+    if (!this.isRequired) {
+        return field
+    }
+    val shape = this
+    val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
+        codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
+    )
+    val unwrapped = when (codegenContext.model.expectShape(this.target)) {
+        is StringShape -> writable {
+            rustTemplate(
+                "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
+                "field" to field,
+            )
+        }
+
+        else -> field
+    }.map { base -> rustTemplate("#{base}.ok_or_else(||#{error})?", "base" to base, "error" to error) }
+    return unwrapped.letIf(produceOption) { w -> w.map { rust("Some(#T)", it) } }
+}
+
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
+
     fun missingField(field: String, details: String) = writable {
         rust("#T::missing_field(${field.dq()}, ${details.dq()})", runtimeConfig.operationBuildError())
     }
+
     fun invalidField(field: String, details: String) = invalidField(field) { rust(details.dq()) }
     fun invalidField(field: String, details: Writable) = writable {
         rustTemplate(
@@ -164,7 +195,8 @@ class BuilderGenerator(
     }
 
     private fun RustWriter.missingRequiredField(field: String) {
-        val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
+        val detailedMessage =
+            "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
     }
 
