@@ -18,11 +18,14 @@ use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
 use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, SharedEndpointResolver};
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
+use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
 use aws_smithy_runtime_api::client::retries::{RetryClassifiers, SharedRetryStrategy};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugins, StaticRuntimePlugin};
+use aws_smithy_runtime_api::client::runtime_plugin::{
+    RuntimePlugins, SharedRuntimePlugin, StaticRuntimePlugin,
+};
 use aws_smithy_runtime_api::client::ser_de::{
     RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
 };
@@ -139,6 +142,7 @@ pub struct OperationBuilder<I = (), O = (), E = ()> {
     operation_name: Option<Cow<'static, str>>,
     config: Layer,
     runtime_components: RuntimeComponentsBuilder,
+    runtime_plugins: Vec<SharedRuntimePlugin>,
     _phantom: PhantomData<(I, O, E)>,
 }
 
@@ -155,6 +159,7 @@ impl OperationBuilder<(), (), ()> {
             operation_name: None,
             config: Layer::new("operation"),
             runtime_components: RuntimeComponentsBuilder::new("operation"),
+            runtime_plugins: Vec::new(),
             _phantom: Default::default(),
         }
     }
@@ -226,6 +231,16 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
+    pub fn interceptor(mut self, interceptor: SharedInterceptor) -> Self {
+        self.runtime_components.push_interceptor(interceptor);
+        self
+    }
+
+    pub fn runtime_plugin(mut self, runtime_plugin: SharedRuntimePlugin) -> Self {
+        self.runtime_plugins.push(runtime_plugin);
+        self
+    }
+
     pub fn serializer<I2>(
         mut self,
         serializer: impl Fn(I2) -> Result<HttpRequest, BoxError> + Send + Sync + 'static,
@@ -240,6 +255,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             operation_name: self.operation_name,
             config: self.config,
             runtime_components: self.runtime_components,
+            runtime_plugins: self.runtime_plugins,
             _phantom: Default::default(),
         }
     }
@@ -264,6 +280,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             operation_name: self.operation_name,
             config: self.config,
             runtime_components: self.runtime_components,
+            runtime_plugins: self.runtime_plugins,
             _phantom: Default::default(),
         }
     }
@@ -291,11 +308,14 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             self.config.load::<SharedResponseDeserializer>().is_some(),
             "a deserializer is required"
         );
-        let runtime_plugins = RuntimePlugins::new().with_client_plugin(
+        let mut runtime_plugins = RuntimePlugins::new().with_client_plugin(
             StaticRuntimePlugin::new()
                 .with_config(self.config.freeze())
                 .with_runtime_components(self.runtime_components),
         );
+        for runtime_plugin in self.runtime_plugins {
+            runtime_plugins = runtime_plugins.with_client_plugin(runtime_plugin);
+        }
 
         Operation {
             service_name,
