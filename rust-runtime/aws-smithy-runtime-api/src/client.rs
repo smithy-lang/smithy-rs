@@ -20,7 +20,6 @@ pub mod runtime_plugin;
 
 pub mod auth;
 
-/// Smithy connectors and related code.
 pub mod connectors;
 
 pub mod ser_de;
