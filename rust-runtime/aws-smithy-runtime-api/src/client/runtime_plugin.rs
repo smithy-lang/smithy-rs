@@ -185,12 +185,12 @@ impl RuntimePlugin for StaticRuntimePlugin {
         self.runtime_components
             .as_ref()
             .map(Cow::Borrowed)
-            .unwrap_or_else(|| RuntimePlugin::runtime_components(self, _current_components))
+            .unwrap_or_else(|| Cow::Borrowed(&EMPTY_RUNTIME_COMPONENTS_BUILDER))
     }
 }
 
 macro_rules! insert_plugin {
-    ($vec:expr, $plugin:ident, $create_rp:expr) => {{
+    ($vec:expr, $plugin:ident) => {{
         // Insert the plugin in the correct order
         let mut insert_index = 0;
         let order = $plugin.order();
@@ -202,7 +202,7 @@ macro_rules! insert_plugin {
                 break;
             }
         }
-        $vec.insert(insert_index, $create_rp);
+        $vec.insert(insert_index, $plugin);
     }};
 }
 
@@ -235,21 +235,13 @@ impl RuntimePlugins {
         Default::default()
     }
 
-    pub fn with_client_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
-        insert_plugin!(
-            self.client_plugins,
-            plugin,
-            SharedRuntimePlugin::new(plugin)
-        );
+    pub fn with_client_plugin(mut self, plugin: SharedRuntimePlugin) -> Self {
+        insert_plugin!(self.client_plugins, plugin);
         self
     }
 
-    pub fn with_operation_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
-        insert_plugin!(
-            self.operation_plugins,
-            plugin,
-            SharedRuntimePlugin::new(plugin)
-        );
+    pub fn with_operation_plugin(mut self, plugin: SharedRuntimePlugin) -> Self {
+        insert_plugin!(self.operation_plugins, plugin);
         self
     }
 
@@ -274,7 +266,7 @@ mod tests {
     use crate::client::connectors::{HttpConnector, HttpConnectorFuture, SharedHttpConnector};
     use crate::client::orchestrator::HttpRequest;
     use crate::client::runtime_components::RuntimeComponentsBuilder;
-    use crate::client::runtime_plugin::Order;
+    use crate::client::runtime_plugin::{Order, SharedRuntimePlugin};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_types::config_bag::ConfigBag;
     use http::HeaderValue;
@@ -287,7 +279,7 @@ mod tests {
 
     #[test]
     fn can_add_runtime_plugin_implementors_to_runtime_plugins() {
-        RuntimePlugins::new().with_client_plugin(SomeStruct);
+        RuntimePlugins::new().with_client_plugin(SharedRuntimePlugin::new(SomeStruct));
     }
 
     #[test]
@@ -307,7 +299,7 @@ mod tests {
         }
 
         fn insert_plugin(vec: &mut Vec<RP>, plugin: RP) {
-            insert_plugin!(vec, plugin, plugin);
+            insert_plugin!(vec, plugin);
         }
 
         let mut vec = Vec::new();
@@ -425,8 +417,8 @@ mod tests {
         // Emulate assembling a full runtime plugins list and using it to apply configuration
         let plugins = RuntimePlugins::new()
             // intentionally configure the plugins in the reverse order
-            .with_client_plugin(Plugin2)
-            .with_client_plugin(Plugin1);
+            .with_client_plugin(SharedRuntimePlugin::new(Plugin2))
+            .with_client_plugin(SharedRuntimePlugin::new(Plugin1));
         let mut cfg = ConfigBag::base();
         let components = plugins.apply_client_configuration(&mut cfg).unwrap();
 

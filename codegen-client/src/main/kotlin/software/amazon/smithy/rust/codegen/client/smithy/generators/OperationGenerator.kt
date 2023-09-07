@@ -141,14 +141,16 @@ open class OperationGenerator(
                     client_config: &crate::config::Config,
                     config_override: #{Option}<crate::config::Builder>,
                 ) -> #{RuntimePlugins} {
-                    let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(Self::new());
+                    let mut runtime_plugins = client_runtime_plugins.with_operation_plugin(#{SharedRuntimePlugin}::new(Self::new()));
                     #{additional_runtime_plugins}
                     if let #{Some}(config_override) = config_override {
                         for plugin in config_override.runtime_plugins.iter().cloned() {
                             runtime_plugins = runtime_plugins.with_operation_plugin(plugin);
                         }
                         runtime_plugins = runtime_plugins.with_operation_plugin(
-                            crate::config::ConfigOverrideRuntimePlugin::new(config_override, client_config.config.clone(), &client_config.runtime_components)
+                            #{SharedRuntimePlugin}::new(
+                                crate::config::ConfigOverrideRuntimePlugin::new(config_override, client_config.config.clone(), &client_config.runtime_components)
+                            )
                         );
                     }
                     runtime_plugins
@@ -160,6 +162,7 @@ open class OperationGenerator(
                 "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::error::OrchestratorError"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
                 "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
                 "invoke_with_stop_point" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::invoke_with_stop_point"),
                 "additional_runtime_plugins" to writable {

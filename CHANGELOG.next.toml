@@ -177,3 +177,9 @@ message = "Source defaults from the default trait instead of implicitly based on
 references = ["smithy-rs#2985"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "`StaticUriEndpointResolver`'s `uri` constructor now takes a `String` instead of a `Uri`."
+references = ["smithy-rs#2997"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"

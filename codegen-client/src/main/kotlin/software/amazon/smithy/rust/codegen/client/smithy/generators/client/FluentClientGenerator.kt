@@ -481,12 +481,14 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                 let mut plugins = #{RuntimePlugins}::new()
                     .with_client_plugin(
-                        #{StaticRuntimePlugin}::new()
-                            .with_config(config.config.clone())
-                            .with_runtime_components(config.runtime_components.clone())
+                        #{SharedRuntimePlugin}::new(
+                            #{StaticRuntimePlugin}::new()
+                                .with_config(config.config.clone())
+                                .with_runtime_components(config.runtime_components.clone())
+                        )
                     )
-                    .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
-                    .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+                    .with_client_plugin(#{SharedRuntimePlugin}::new(crate::config::ServiceRuntimePlugin::new(config)))
+                    .with_client_plugin(#{SharedRuntimePlugin}::new(#{NoAuthRuntimePlugin}::new()));
                 for plugin in configured_plugins {
                     plugins = plugins.with_client_plugin(plugin);
                 }
@@ -497,6 +499,7 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
             "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+            "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
             "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::runtime_plugin::StaticRuntimePlugin"),
         )

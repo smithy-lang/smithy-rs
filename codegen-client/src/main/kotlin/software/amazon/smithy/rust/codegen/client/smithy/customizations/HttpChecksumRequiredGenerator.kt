@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -38,7 +39,7 @@ class HttpChecksumRequiredGenerator(
             is OperationSection.AdditionalRuntimePlugins -> writable {
                 section.addOperationRuntimePlugin(this) {
                     rustTemplate(
-                        "#{HttpChecksumRequiredRuntimePlugin}::new()",
+                        "#{SharedRuntimePlugin}::new(#{HttpChecksumRequiredRuntimePlugin}::new())",
                         "HttpChecksumRequiredRuntimePlugin" to
                             InlineDependency.forRustFile(
                                 RustModule.pubCrate("client_http_checksum_required", parent = ClientRustModule.root),
@@ -48,6 +49,7 @@ class HttpChecksumRequiredGenerator(
                                 CargoDependency.Http,
                                 CargoDependency.Md5,
                             ).toType().resolve("HttpChecksumRequiredRuntimePlugin"),
+                        "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(codegenContext.runtimeConfig),
                     )
                 }
             }

@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
@@ -48,6 +49,7 @@ class IdempotencyTokenGenerator(
                     CargoDependency.smithyRuntimeApi(runtimeConfig),
                     CargoDependency.smithyTypes(runtimeConfig),
                 ).toType().resolve("IdempotencyTokenRuntimePlugin"),
+            "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
         )
 
         return when (section) {
@@ -58,12 +60,14 @@ class IdempotencyTokenGenerator(
                         // then we'll generate one and set it.
                         rustTemplate(
                             """
-                            #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
-                                let input: &mut #{Input} = input.downcast_mut().expect("correct type");
-                                if input.$memberName.is_none() {
-                                    input.$memberName = #{Some}(token_provider.make_idempotency_token());
-                                }
-                            })
+                            #{SharedRuntimePlugin}::new(
+                                #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
+                                    let input: &mut #{Input} = input.downcast_mut().expect("correct type");
+                                    if input.$memberName.is_none() {
+                                        input.$memberName = #{Some}(token_provider.make_idempotency_token());
+                                    }
+                                })
+                            )
                             """,
                             *codegenScope,
                         )
@@ -73,12 +77,14 @@ class IdempotencyTokenGenerator(
                         // and set it.
                         rustTemplate(
                             """
-                            #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
-                                let input: &mut #{Input} = input.downcast_mut().expect("correct type");
-                                if input.$memberName.is_empty() {
-                                    input.$memberName = token_provider.make_idempotency_token();
-                                }
-                            })
+                            #{SharedRuntimePlugin}::new(
+                                #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
+                                    let input: &mut #{Input} = input.downcast_mut().expect("correct type");
+                                    if input.$memberName.is_empty() {
+                                        input.$memberName = token_provider.make_idempotency_token();
+                                    }
+                                })
+                            )
                             """,
                             *codegenScope,
                         )
