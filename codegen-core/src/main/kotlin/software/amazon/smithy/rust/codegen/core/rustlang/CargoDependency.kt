@@ -127,14 +127,6 @@ class InlineDependency(
             CargoDependency.smithyTypes(runtimeConfig),
         )
 
-        fun hyperBodyWrapStream(runtimeConfig: RuntimeConfig): InlineDependency = forInlineableRustFile(
-            "hyper_body_wrap_stream",
-            CargoDependency.smithyHttp(runtimeConfig).withFeature("event-stream"),
-            CargoDependency.FuturesCore,
-            CargoDependency.smithyAsync(runtimeConfig).toDevDependency(),
-            CargoDependency.smithyEventStream(runtimeConfig).toDevDependency(),
-        )
-
         fun constrained(): InlineDependency =
             InlineDependency.forRustFile(ConstrainedModule, "/inlineable/src/constrained.rs")
     }

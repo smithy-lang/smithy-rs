@@ -27,6 +27,8 @@
 
 pub mod body;
 pub mod endpoint;
+#[doc(hidden)]
+pub mod futures_stream_adapter;
 pub mod header;
 pub mod http;
 pub mod http_versions;

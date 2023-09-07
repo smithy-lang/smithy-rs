@@ -96,7 +96,7 @@ class HttpBoundProtocolPayloadGenerator(
     private val codegenScope = arrayOf(
         *preludeScope,
         "BuildError" to runtimeConfig.operationBuildError(),
-        "HyperBodyWrapEventStream" to RuntimeType.hyperBodyWrapStream(runtimeConfig).resolve("HyperBodyWrapEventStream"),
+        "FuturesStreamCompatEventStream" to RuntimeType.futuresStreamCompatEventStream(runtimeConfig),
         "NoOpSigner" to smithyEventStream.resolve("frame::NoOpSigner"),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
@@ -308,12 +308,12 @@ class HttpBoundProtocolPayloadGenerator(
         }
 
         if (target == CodegenTarget.CLIENT) {
-            // No need to wrap it with `HyperBodyWrapEventStream` for the client since wrapping takes place
+            // No need to wrap it with `FuturesStreamCompatEventStream` for the client since wrapping takes place
             // within `renderEventStreamBody` provided by `ClientHttpBoundProtocolPayloadGenerator`.
             renderEventStreamBody()
         } else {
             withBlockTemplate(
-                "#{HyperBodyWrapEventStream}::new(", ")",
+                "#{FuturesStreamCompatEventStream}::new(", ")",
                 *codegenScope,
             ) {
                 renderEventStreamBody()

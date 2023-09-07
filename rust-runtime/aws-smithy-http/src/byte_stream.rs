@@ -136,6 +136,7 @@ use std::task::{Context, Poll};
 
 #[cfg(feature = "rt-tokio")]
 mod bytestream_util;
+use crate::futures_stream_adapter::FuturesStreamCompatByteStream;
 #[cfg(feature = "rt-tokio")]
 pub use bytestream_util::Length;
 
@@ -417,32 +418,13 @@ impl ByteStream {
     /// # }
     /// ```
     pub fn into_async_read(self) -> impl tokio::io::AsyncRead {
-        tokio_util::io::StreamReader::new(StreamWrapper { byte_stream: self })
+        tokio_util::io::StreamReader::new(FuturesStreamCompatByteStream::new(self))
     }
 
     /// Given a function to modify an [`SdkBody`], run it on the `SdkBody` inside this `Bytestream`.
     /// returning a new `Bytestream`.
     pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Send + Sync + 'static) -> ByteStream {
         ByteStream::new(self.into_inner().map(f))
-    }
-}
-
-pin_project! {
-    // A new-type wrapper around `ByteStream` so we can pass it to `tokio_util::io::StreamReader`.
-    struct StreamWrapper {
-        #[pin]
-        byte_stream: ByteStream,
-    }
-}
-
-impl futures_core::stream::Stream for StreamWrapper {
-    type Item = Result<Bytes, Error>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        self.project()
-            .byte_stream
-            .poll_next(cx)
-            .map_err(Error::streaming)
     }
 }
 

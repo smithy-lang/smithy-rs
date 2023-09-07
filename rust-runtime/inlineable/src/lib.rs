@@ -13,8 +13,6 @@ mod client_idempotency_token;
 mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
-#[allow(unused)]
-mod hyper_body_wrap_stream;
 #[allow(dead_code)]
 mod idempotency_token;
 #[allow(dead_code)]

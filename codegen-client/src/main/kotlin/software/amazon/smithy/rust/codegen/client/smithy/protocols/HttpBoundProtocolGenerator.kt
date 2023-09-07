@@ -22,16 +22,14 @@ private class ClientStreamPayloadSerializerRenderer : StreamPayloadSerializerRen
     override fun renderOutputType(writer: RustWriter, params: StreamPayloadSerializerParams) {
         writer.rust(
             "#T",
-            RuntimeType.hyperBodyWrapStream(params.runtimeConfig).resolve("HyperBodyWrapByteStream").toSymbol(),
+            RuntimeType.futuresStreamCompatByteStream(params.runtimeConfig).toSymbol(),
         )
     }
 
     override fun renderPayload(writer: RustWriter, params: StreamPayloadSerializerParams) {
-        // Payload is `aws_smithy_http::byte_stream::ByteStream` but it no longer implements `futures::stream::Stream`,
-        // so we wrap it in a new-type to enable the trait.
         writer.rust(
             "#T::new(${params.payloadName!!})",
-            RuntimeType.hyperBodyWrapStream(params.runtimeConfig).resolve("HyperBodyWrapByteStream").toSymbol(),
+            RuntimeType.futuresStreamCompatByteStream(params.runtimeConfig),
         )
     }
 }
@@ -51,7 +49,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
                 _cfg.interceptor_state().store_put(signer_sender);
                 let adapter: #{aws_smithy_http}::event_stream::MessageStreamAdapter<_, _> =
                     ${params.outerName}.${params.memberName}.into_body_stream(marshaller, error_marshaller, signer);
-                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(#{HyperBodyWrapEventStream}::new(adapter)).into();
+                let body: #{SdkBody} = #{hyper}::Body::wrap_stream(#{FuturesStreamCompatEventStream}::new(adapter)).into();
                 body
             }
             """,
@@ -60,8 +58,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
             "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
             "DeferredSigner" to RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                 .resolve("frame::DeferredSigner"),
-            "HyperBodyWrapEventStream" to RuntimeType.hyperBodyWrapStream(codegenContext.runtimeConfig)
-                .resolve("HyperBodyWrapEventStream"),
+            "FuturesStreamCompatEventStream" to RuntimeType.futuresStreamCompatEventStream(codegenContext.runtimeConfig),
             "marshallerConstructorFn" to params.marshallerConstructorFn,
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
         )
