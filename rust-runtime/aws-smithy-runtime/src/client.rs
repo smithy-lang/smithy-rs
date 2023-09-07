@@ -6,13 +6,10 @@
 /// Smithy auth scheme implementations.
 pub mod auth;
 
-/// Smithy code related to connectors and connections.
+/// Built-in Smithy connectors.
 ///
-/// A "connector" manages one or more "connections", handles connection timeouts, re-establishes
-/// connections, etc.
-///
-/// "Connections" refers to the actual transport layer implementation of the connector.
-/// By default, the orchestrator uses a connector provided by `hyper`.
+/// See the [module docs in `aws-smithy-runtime-api`](aws_smithy_runtime_api::client::connectors)
+/// for more information about connectors.
 pub mod connectors;
 
 /// Utility to simplify config building for config and config overrides.
