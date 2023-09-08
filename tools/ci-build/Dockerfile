@@ -5,7 +5,7 @@
 
 # This is the base Docker build image used by CI
 
-ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
+ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.70.0
 ARG rust_nightly_version=nightly-2023-05-31
 
@@ -13,7 +13,7 @@ FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
 
 FROM bare_base_image as musl_toolchain
-RUN yum -y install tar gzip gcc make
+RUN yum -y install --allowerasing tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
     && ls \
     && tar xvzf musl-1.2.3.tar.gz \
@@ -30,20 +30,21 @@ ENV RUSTUP_HOME=/opt/rustup \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0
 WORKDIR /root
-RUN yum -y install \
-    autoconf \
-    automake \
-    binutils \
-    ca-certificates \
-    curl \
-    gcc \
-    gcc-c++ \
-    git \
-    make \
-    openssl-devel \
-    pkgconfig \
-    tar \
-    xz && \
+RUN yum -y install --allowerasing \
+        autoconf \
+        automake \
+        binutils \
+        ca-certificates \
+        curl \
+        gcc \
+        gcc-c++ \
+        git \
+        make \
+        openssl-devel \
+        perl \
+        pkgconfig \
+        tar \
+        xz && \
     yum clean all
 RUN set -eux; \
     if [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]]; then \
@@ -149,20 +150,21 @@ FROM bare_base_image AS final_image
 ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
-    yum -y install \
-    bc \
-    ca-certificates \
-    clang \
-    gcc \
-    git \
-    java-11-amazon-corretto-headless \
-    make \
-    openssl-devel \
-    pkgconfig \
-    python3 \
-    python3-devel \
-    python3-pip \
-    shadow-utils; \
+    yum -y install --allowerasing \
+        bc \
+        ca-certificates \
+        clang \
+        gcc \
+        git \
+        glibc-langpack-en \
+        java-11-amazon-corretto-headless \
+        make \
+        openssl-devel \
+        pkgconfig \
+        python3 \
+        python3-devel \
+        python3-pip \
+        shadow-utils; \
     yum clean all; \
     rm -rf /var/cache/yum; \
     groupadd build; \

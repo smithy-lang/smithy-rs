@@ -258,8 +258,8 @@ impl RuntimePlugins {
 #[cfg(test)]
 mod tests {
     use super::{RuntimePlugin, RuntimePlugins};
-    use crate::client::connectors::{HttpConnector, SharedHttpConnector};
-    use crate::client::orchestrator::{BoxFuture, HttpRequest, HttpResponse};
+    use crate::client::connectors::{HttpConnector, HttpConnectorFuture, SharedHttpConnector};
+    use crate::client::orchestrator::HttpRequest;
     use crate::client::runtime_components::RuntimeComponentsBuilder;
     use crate::client::runtime_plugin::Order;
     use aws_smithy_http::body::SdkBody;
@@ -338,12 +338,12 @@ mod tests {
 
     #[tokio::test]
     async fn components_can_wrap_components() {
-        // CN1, the inner connector, creates a response with a `rp1` header
+        // Connector1, the inner connector, creates a response with a `rp1` header
         #[derive(Debug)]
-        struct CN1;
-        impl HttpConnector for CN1 {
-            fn call(&self, _: HttpRequest) -> BoxFuture<HttpResponse> {
-                Box::pin(async {
+        struct Connector1;
+        impl HttpConnector for Connector1 {
+            fn call(&self, _: HttpRequest) -> HttpConnectorFuture {
+                HttpConnectorFuture::new(async {
                     Ok(http::Response::builder()
                         .status(200)
                         .header("rp1", "1")
@@ -353,13 +353,13 @@ mod tests {
             }
         }
 
-        // CN2, the outer connector, calls the inner connector and adds the `rp2` header to the response
+        // Connector2, the outer connector, calls the inner connector and adds the `rp2` header to the response
         #[derive(Debug)]
-        struct CN2(SharedHttpConnector);
-        impl HttpConnector for CN2 {
-            fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
+        struct Connector2(SharedHttpConnector);
+        impl HttpConnector for Connector2 {
+            fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
                 let inner = self.0.clone();
-                Box::pin(async move {
+                HttpConnectorFuture::new(async move {
                     let mut resp = inner.call(request).await.unwrap();
                     resp.headers_mut()
                         .append("rp2", HeaderValue::from_static("1"));
@@ -368,10 +368,10 @@ mod tests {
             }
         }
 
-        // RP1 registers CN1
+        // Plugin1 registers Connector1
         #[derive(Debug)]
-        struct RP1;
-        impl RuntimePlugin for RP1 {
+        struct Plugin1;
+        impl RuntimePlugin for Plugin1 {
             fn order(&self) -> Order {
                 Order::Overrides
             }
@@ -381,16 +381,16 @@ mod tests {
                 _: &RuntimeComponentsBuilder,
             ) -> Cow<'_, RuntimeComponentsBuilder> {
                 Cow::Owned(
-                    RuntimeComponentsBuilder::new("RP1")
-                        .with_http_connector(Some(SharedHttpConnector::new(CN1))),
+                    RuntimeComponentsBuilder::new("Plugin1")
+                        .with_http_connector(Some(SharedHttpConnector::new(Connector1))),
                 )
             }
         }
 
-        // RP2 registers CN2
+        // Plugin2 registers Connector2
         #[derive(Debug)]
-        struct RP2;
-        impl RuntimePlugin for RP2 {
+        struct Plugin2;
+        impl RuntimePlugin for Plugin2 {
             fn order(&self) -> Order {
                 Order::NestedComponents
             }
@@ -400,8 +400,10 @@ mod tests {
                 current_components: &RuntimeComponentsBuilder,
             ) -> Cow<'_, RuntimeComponentsBuilder> {
                 Cow::Owned(
-                    RuntimeComponentsBuilder::new("RP2").with_http_connector(Some(
-                        SharedHttpConnector::new(CN2(current_components.http_connector().unwrap())),
+                    RuntimeComponentsBuilder::new("Plugin2").with_http_connector(Some(
+                        SharedHttpConnector::new(Connector2(
+                            current_components.http_connector().unwrap(),
+                        )),
                     )),
                 )
             }
@@ -410,8 +412,8 @@ mod tests {
         // Emulate assembling a full runtime plugins list and using it to apply configuration
         let plugins = RuntimePlugins::new()
             // intentionally configure the plugins in the reverse order
-            .with_client_plugin(RP2)
-            .with_client_plugin(RP1);
+            .with_client_plugin(Plugin2)
+            .with_client_plugin(Plugin1);
         let mut cfg = ConfigBag::base();
         let components = plugins.apply_client_configuration(&mut cfg).unwrap();
 

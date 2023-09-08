@@ -511,11 +511,11 @@ impl RuntimeComponentsBuilder {
     #[cfg(feature = "test-util")]
     pub fn for_tests() -> Self {
         use crate::client::auth::AuthSchemeOptionResolver;
-        use crate::client::connectors::HttpConnector;
+        use crate::client::connectors::{HttpConnector, HttpConnectorFuture};
         use crate::client::endpoint::{EndpointResolver, EndpointResolverParams};
         use crate::client::identity::Identity;
         use crate::client::identity::IdentityResolver;
-        use crate::client::orchestrator::Future;
+        use crate::client::orchestrator::{Future, HttpRequest};
         use crate::client::retries::RetryStrategy;
         use aws_smithy_async::rt::sleep::AsyncSleep;
         use aws_smithy_async::time::TimeSource;
@@ -537,11 +537,7 @@ impl RuntimeComponentsBuilder {
         #[derive(Debug)]
         struct FakeConnector;
         impl HttpConnector for FakeConnector {
-            fn call(
-                &self,
-                _: crate::client::orchestrator::HttpRequest,
-            ) -> crate::client::orchestrator::BoxFuture<crate::client::orchestrator::HttpResponse>
-            {
+            fn call(&self, _: HttpRequest) -> HttpConnectorFuture {
                 unreachable!("fake connector must be overridden for this test")
             }
         }
