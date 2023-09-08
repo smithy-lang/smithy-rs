@@ -8,6 +8,7 @@ use crate::client::identity::no_auth::NoAuthIdentityResolver;
 use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
 use crate::client::retries::strategy::{NeverRetryStrategy, StandardRetryStrategy};
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
@@ -228,6 +229,11 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 
     pub fn sleep_impl(mut self, async_sleep: SharedAsyncSleep) -> Self {
         self.runtime_components.set_sleep_impl(Some(async_sleep));
+        self
+    }
+
+    pub fn time_source(mut self, time_source: SharedTimeSource) -> Self {
+        self.runtime_components.set_time_source(Some(time_source));
         self
     }
 
