@@ -37,7 +37,7 @@ mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
 /// Defines types that work with HTTP types
-pub mod http;
+mod http;
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
