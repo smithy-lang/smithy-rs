@@ -357,12 +357,7 @@ async fn try_attempt(
             OrchestratorError::other("No HTTP connector was available to send this request. \
                 Enable the `rustls` crate feature or set a connector to fix this.")
         ));
-        connector.call(request).await.map_err(|err| {
-            match err.downcast() {
-                Ok(connector_error) => OrchestratorError::connector(*connector_error),
-                Err(box_err) => OrchestratorError::other(box_err)
-            }
-        })
+        connector.call(request).await.map_err(OrchestratorError::connector)
     });
     trace!(response = ?response, "received response from service");
     ctx.set_response(response);
@@ -444,7 +439,9 @@ mod tests {
     use aws_smithy_runtime_api::client::auth::{
         AuthSchemeOptionResolverParams, SharedAuthSchemeOptionResolver,
     };
-    use aws_smithy_runtime_api::client::connectors::{HttpConnector, SharedHttpConnector};
+    use aws_smithy_runtime_api::client::connectors::{
+        HttpConnector, HttpConnectorFuture, SharedHttpConnector,
+    };
     use aws_smithy_runtime_api::client::endpoint::{
         EndpointResolverParams, SharedEndpointResolver,
     };
@@ -456,7 +453,7 @@ mod tests {
         FinalizerInterceptorContextRef,
     };
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
-    use aws_smithy_runtime_api::client::orchestrator::{BoxFuture, Future, HttpRequest};
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
@@ -494,11 +491,11 @@ mod tests {
     }
 
     impl HttpConnector for OkConnector {
-        fn call(&self, _request: HttpRequest) -> BoxFuture<HttpResponse> {
-            Box::pin(Future::ready(Ok(::http::Response::builder()
+        fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
+            HttpConnectorFuture::ready(Ok(::http::Response::builder()
                 .status(200)
                 .body(SdkBody::empty())
-                .expect("OK response is valid"))))
+                .expect("OK response is valid")))
         }
     }
 
