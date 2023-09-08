@@ -326,7 +326,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
     use crate::client::connectors::test_util::{capture_request, ConnectionEvent, EventConnector};
