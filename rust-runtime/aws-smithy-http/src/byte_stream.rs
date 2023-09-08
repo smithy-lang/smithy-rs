@@ -136,7 +136,6 @@ use std::task::{Context, Poll};
 
 #[cfg(feature = "rt-tokio")]
 mod bytestream_util;
-use crate::futures_stream_adapter::FuturesStreamCompatByteStream;
 #[cfg(feature = "rt-tokio")]
 pub use bytestream_util::Length;
 
@@ -418,7 +417,9 @@ impl ByteStream {
     /// # }
     /// ```
     pub fn into_async_read(self) -> impl tokio::io::AsyncRead {
-        tokio_util::io::StreamReader::new(FuturesStreamCompatByteStream::new(self))
+        tokio_util::io::StreamReader::new(
+            crate::futures_stream_adapter::FuturesStreamCompatByteStream::new(self),
+        )
     }
 
     /// Given a function to modify an [`SdkBody`], run it on the `SdkBody` inside this `Bytestream`.

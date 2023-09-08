@@ -72,41 +72,7 @@ impl<T, E: std::error::Error + Send + Sync + 'static> Stream
 mod tests {
     use super::*;
     use aws_smithy_async::future::fn_stream::FnStream;
-    use aws_smithy_eventstream::error::Error;
-    use aws_smithy_eventstream::frame::MarshallMessage;
-    use aws_smithy_eventstream::frame::{Message, NoOpSigner};
     use futures_core::stream::Stream;
-
-    #[derive(Debug, Eq, PartialEq)]
-    struct TestMessage(String);
-
-    #[derive(Debug)]
-    struct Marshaller;
-    impl MarshallMessage for Marshaller {
-        type Input = TestMessage;
-
-        fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
-            Ok(Message::new(input.0.as_bytes().to_vec()))
-        }
-    }
-    #[derive(Debug)]
-    struct ErrorMarshaller;
-    impl MarshallMessage for ErrorMarshaller {
-        type Input = TestServiceError;
-
-        fn marshall(&self, _input: Self::Input) -> Result<Message, Error> {
-            Err(Message::read_from(&b""[..]).expect_err("this should always fail"))
-        }
-    }
-
-    #[derive(Debug)]
-    struct TestServiceError;
-    impl std::fmt::Display for TestServiceError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "TestServiceError")
-        }
-    }
-    impl std::error::Error for TestServiceError {}
 
     fn check_compatible_with_hyper_wrap_stream<S, O, E>(stream: S) -> S
     where
@@ -117,8 +83,53 @@ mod tests {
         stream
     }
 
-    #[cfg(feature = "event-stream")]
     #[test]
+    fn test_byte_stream_stream_can_be_made_compatible_with_hyper_wrap_stream() {
+        let stream = ByteStream::from_static(b"Hello world");
+        check_compatible_with_hyper_wrap_stream(FuturesStreamCompatByteStream::new(stream));
+    }
+
+    #[cfg(feature = "event-stream")]
+    mod tests_event_stream {
+        use aws_smithy_eventstream::error::Error;
+        use aws_smithy_eventstream::frame::MarshallMessage;
+        use aws_smithy_eventstream::frame::Message;
+
+        #[derive(Debug, Eq, PartialEq)]
+        pub(crate) struct TestMessage(pub(crate) String);
+
+        #[derive(Debug)]
+        pub(crate) struct Marshaller;
+        impl MarshallMessage for Marshaller {
+            type Input = TestMessage;
+
+            fn marshall(&self, input: Self::Input) -> Result<Message, Error> {
+                Ok(Message::new(input.0.as_bytes().to_vec()))
+            }
+        }
+        #[derive(Debug)]
+        pub(crate) struct ErrorMarshaller;
+        impl MarshallMessage for ErrorMarshaller {
+            type Input = TestServiceError;
+
+            fn marshall(&self, _input: Self::Input) -> Result<Message, Error> {
+                Err(Message::read_from(&b""[..]).expect_err("this should always fail"))
+            }
+        }
+
+        #[derive(Debug)]
+        pub(crate) struct TestServiceError;
+        impl std::fmt::Display for TestServiceError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "TestServiceError")
+            }
+        }
+        impl std::error::Error for TestServiceError {}
+    }
+    use tests_event_stream::*;
+
+    #[test]
+    #[cfg(feature = "event-stream")]
     fn test_message_adapter_stream_can_be_made_compatible_with_hyper_wrap_stream() {
         let stream = FnStream::new(|tx| {
             Box::pin(async move {
@@ -130,15 +141,9 @@ mod tests {
             crate::event_stream::MessageStreamAdapter::<TestMessage, TestServiceError>::new(
                 Marshaller,
                 ErrorMarshaller,
-                NoOpSigner {},
+                aws_smithy_eventstream::frame::NoOpSigner {},
                 stream,
             ),
         ));
-    }
-
-    #[test]
-    fn test_byte_stream_stream_can_be_made_compatible_with_hyper_wrap_stream() {
-        let stream = ByteStream::from_static(b"Hello world");
-        check_compatible_with_hyper_wrap_stream(FuturesStreamCompatByteStream::new(stream));
     }
 }
