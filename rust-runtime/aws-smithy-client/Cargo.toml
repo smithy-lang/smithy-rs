@@ -33,6 +33,10 @@ hyper = { version = "0.14.26", default-features = false, optional = true }
 # https://github.com/rust-lang/cargo/issues/1596
 hyper-rustls = { version = "0.24", optional = true, features = ["rustls-native-certs", "http2"] }
 hyper-tls = { version = "0.5.0", optional = true }
+# This forces a more recent version of `openssl-sys` to be brought in.
+# Without this `cargo minimal-versions check` would fail in a container whose base image is `amazonlinux:2023`
+# with the failure symptom: https://github.com/sfackler/rust-openssl/issues/1724
+openssl = { version = "0.10.52", optional = true }
 rustls = { version = "0.21.1", optional = true }
 lazy_static = { version = "1", optional = true }
 pin-project-lite = "0.2.7"
@@ -45,6 +49,8 @@ tracing = "0.1"
 [dev-dependencies]
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
 hyper-tls = { version = "0.5.0" }
+# Dependency on `openssl` above needs to be repeated here.
+openssl = "0.10.52"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }

@@ -85,6 +85,60 @@ references = ["smithy-rs#2960"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = "Fix code generation for union members with the `@httpPayload` trait."
+references = ["smithy-rs#2969", "smithy-rs#1896"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Make `bucket` required for request construction for S3. When `bucket` is not set, a **different** operation than intended can be triggered."
+references = ["smithy-rs#1668", "aws-sdk-rust#873", "smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Required members with @contextParam are now treated as client-side required."
+references = ["smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "`aws_smithy_client::hyper_ext::Adapter` was moved/renamed to `aws_smithy_runtime::client::connectors::hyper_connector::HyperConnector`."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Test connectors moved into `aws_smithy_runtime::client::connectors::test_util` behind the `test-util` feature."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "DVR's RecordingConnection and ReplayingConnection were renamed to RecordingConnector and ReplayingConnector respectively."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "TestConnection was renamed to EventConnector."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Remove `once_cell` from public API"
+references = ["smithy-rs#2973"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Remove `once_cell` from public API"
+references = ["smithy-rs#2973"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
 [[aws-sdk-rust]]
 message = """
 The `futures_core::stream::Stream` trait has been removed from public API. It should not affect usual SDK use cases, but it does require code upgrade for a small number of cases. The notable example is Transcribe streaming when streaming data is created via a `stream!` macro from the `async-stream` crate. The use of that macro needs to be replaced with `aws_smithy_async::future::fn_stream::FnStream`. See https://github.com/awslabs/smithy-rs/discussions/2952 for more details.

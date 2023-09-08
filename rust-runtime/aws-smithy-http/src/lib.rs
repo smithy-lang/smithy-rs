@@ -31,7 +31,6 @@ pub mod endpoint;
 pub mod futures_stream_adapter;
 pub mod header;
 pub mod http;
-pub mod http_versions;
 pub mod label;
 pub mod middleware;
 pub mod operation;
