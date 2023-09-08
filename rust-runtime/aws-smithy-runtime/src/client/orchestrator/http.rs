@@ -4,8 +4,8 @@
  */
 
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, SensitiveOutput};
+use aws_smithy_types::config_bag::ConfigBag;
 use bytes::{Buf, Bytes};
 use http_body::Body;
 use pin_utils::pin_mut;
@@ -36,13 +36,6 @@ pub(crate) async fn read_body(response: &mut HttpResponse) -> Result<(), <SdkBod
     std::mem::swap(&mut body, response.body_mut());
 
     Ok(())
-}
-
-/// Marker value stored in the config bag to indicate that a response body should be redacted.
-#[derive(Debug)]
-pub struct SensitiveOutput;
-impl Storable for SensitiveOutput {
-    type Storer = StoreReplace<Self>;
 }
 
 pub(crate) fn log_response_body(response: &HttpResponse, cfg: &ConfigBag) {

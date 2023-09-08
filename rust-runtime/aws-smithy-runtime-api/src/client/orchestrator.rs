@@ -71,6 +71,14 @@ impl Storable for LoadedRequestBody {
     type Storer = StoreReplace<Self>;
 }
 
+/// Marker type stored in the config bag to indicate that a response body should be redacted.
+#[derive(Debug)]
+pub struct SensitiveOutput;
+
+impl Storable for SensitiveOutput {
+    type Storer = StoreReplace<Self>;
+}
+
 #[derive(Debug)]
 enum ErrorKind<E> {
     /// An error occurred within an interceptor.
