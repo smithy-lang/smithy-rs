@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::retries::classifiers::run_classifiers_on_ctx;
 use crate::client::retries::client_rate_limiter::{ClientRateLimiter, RequestReason};
 use crate::client::retries::strategy::standard::ReleaseResult::{
     APermitWasReleased, NoPermitWasReleased,
@@ -10,9 +11,8 @@ use crate::client::retries::strategy::standard::ReleaseResult::{
 use crate::client::retries::token_bucket::TokenBucket;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::retries::{
-    ClassifyRetry, RequestAttempts, RetryReason, RetryStrategy, ShouldAttempt,
-};
+use aws_smithy_runtime_api::client::retries::classifiers::RetryClassifierResult;
+use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
@@ -102,7 +102,7 @@ impl StandardRetryStrategy {
         &self,
         runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
-        retry_reason: Option<&RetryReason>,
+        retry_reason: &RetryClassifierResult,
     ) -> Result<Duration, ShouldAttempt> {
         let request_attempts = cfg
             .load::<RequestAttempts>()
@@ -111,8 +111,8 @@ impl StandardRetryStrategy {
         let token_bucket = cfg.load::<TokenBucket>();
 
         match retry_reason {
-            Some(RetryReason::Explicit(backoff)) => Ok(*backoff),
-            Some(RetryReason::Error(kind)) => {
+            RetryClassifierResult::Explicit(backoff) => Ok(*backoff),
+            RetryClassifierResult::Error(kind) => {
                 update_rate_limiter_if_exists(
                     runtime_components,
                     cfg,
@@ -145,8 +145,7 @@ impl StandardRetryStrategy {
                     Ok(Duration::from_secs_f64(backoff).min(self.max_backoff))
                 }
             }
-            Some(_) => unreachable!("RetryReason is non-exhaustive"),
-            None => {
+            RetryClassifierResult::DontRetry => {
                 update_rate_limiter_if_exists(runtime_components, cfg, false);
                 debug!(
                     attempts = request_attempts,
@@ -155,6 +154,7 @@ impl StandardRetryStrategy {
                 );
                 Err(ShouldAttempt::No)
             }
+            _ => unreachable!("RetryClassifierResult is non-exhaustive"),
         }
     }
 }
@@ -242,22 +242,19 @@ impl RetryStrategy for StandardRetryStrategy {
             return Ok(ShouldAttempt::No);
         }
 
-        // Run the classifiers against the context to determine if we should retry
-        let retry_classifiers = runtime_components
-            .retry_classifiers()
-            .ok_or("retry classifiers are required by the retry configuration")?;
-        let retry_reason = retry_classifiers.classify_retry(ctx);
+        // Run the classifier against the context to determine if we should retry
+        let retry_classifiers = runtime_components.retry_classifiers();
+        let classifier_result = run_classifiers_on_ctx(retry_classifiers, ctx);
 
         // Calculate the appropriate backoff time.
-        let backoff = match self.calculate_backoff(runtime_components, cfg, retry_reason.as_ref()) {
+        let backoff = match self.calculate_backoff(runtime_components, cfg, &classifier_result) {
             Ok(value) => value,
             // In some cases, backoff calculation will decide that we shouldn't retry at all.
             Err(value) => return Ok(value),
         };
         debug!(
             "attempt #{request_attempts} failed with {:?}; retrying after {:?}",
-            retry_reason.expect("the match statement above ensures this is not None"),
-            backoff,
+            classifier_result, backoff,
         );
 
         Ok(ShouldAttempt::YesAfterDelay(backoff))
@@ -316,9 +313,10 @@ fn get_seconds_since_unix_epoch(runtime_components: &RuntimeComponents) -> f64 {
 mod tests {
     use super::*;
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-    use aws_smithy_runtime_api::client::retries::{
-        AlwaysRetry, ClassifyRetry, RetryClassifiers, RetryReason, RetryStrategy,
+    use aws_smithy_runtime_api::client::retries::classifiers::{
+        ClassifyRetry, RetryClassifierResult, SharedRetryClassifier,
     };
+    use aws_smithy_runtime_api::client::retries::{AlwaysRetry, RetryStrategy};
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::Layer;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
@@ -350,9 +348,7 @@ mod tests {
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::other("doesn't matter")));
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifiers(Some(
-                RetryClassifiers::new().with_classifier(AlwaysRetry(error_kind)),
-            ))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(error_kind)))
             .build()
             .unwrap();
         let mut layer = Layer::new("test");
@@ -429,12 +425,12 @@ mod tests {
 
     #[derive(Debug)]
     struct PresetReasonRetryClassifier {
-        retry_reasons: Mutex<Vec<RetryReason>>,
+        retry_reasons: Mutex<Vec<RetryClassifierResult>>,
     }
 
     #[cfg(feature = "test-util")]
     impl PresetReasonRetryClassifier {
-        fn new(mut retry_reasons: Vec<RetryReason>) -> Self {
+        fn new(mut retry_reasons: Vec<RetryClassifierResult>) -> Self {
             // We'll pop the retry_reasons in reverse order so we reverse the list to fix that.
             retry_reasons.reverse();
             Self {
@@ -444,7 +440,11 @@ mod tests {
     }
 
     impl ClassifyRetry for PresetReasonRetryClassifier {
-        fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
+        fn classify_retry(
+            &self,
+            ctx: &InterceptorContext,
+            _: Option<RetryClassifierResult>,
+        ) -> Option<RetryClassifierResult> {
             if ctx.output_or_error().map(|it| it.is_ok()).unwrap_or(false) {
                 return None;
             }
@@ -464,12 +464,11 @@ mod tests {
 
     #[cfg(feature = "test-util")]
     fn setup_test(
-        retry_reasons: Vec<RetryReason>,
+        retry_reasons: Vec<RetryClassifierResult>,
     ) -> (ConfigBag, RuntimeComponents, InterceptorContext) {
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifiers(Some(
-                RetryClassifiers::new()
-                    .with_classifier(PresetReasonRetryClassifier::new(retry_reasons)),
+            .with_retry_classifier(SharedRetryClassifier::new(
+                PresetReasonRetryClassifier::new(retry_reasons),
             ))
             .build()
             .unwrap();
@@ -484,7 +483,8 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn eventual_success() {
-        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, mut ctx) =
+            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -514,7 +514,8 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_more_attempts() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) =
+            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(3);
@@ -542,7 +543,8 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_quota() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) =
+            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -565,8 +567,8 @@ mod tests {
     #[test]
     fn quota_replenishes_on_success() {
         let (mut cfg, rc, mut ctx) = setup_test(vec![
-            RetryReason::Error(ErrorKind::TransientError),
-            RetryReason::Explicit(Duration::from_secs(1)),
+            RetryClassifierResult::Error(ErrorKind::TransientError),
+            RetryClassifierResult::Explicit(Duration::from_secs(1)),
         ]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
@@ -599,8 +601,9 @@ mod tests {
     #[test]
     fn quota_replenishes_on_first_try_success() {
         const PERMIT_COUNT: usize = 20;
-        let (mut cfg, rc, mut ctx) =
-            setup_test(vec![RetryReason::Error(ErrorKind::TransientError)]);
+        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryClassifierResult::Error(
+            ErrorKind::TransientError,
+        )]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(u32::MAX);
@@ -650,7 +653,8 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn backoff_timing() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) =
+            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -690,7 +694,8 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn max_backoff_time() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryReason::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) =
+            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5)

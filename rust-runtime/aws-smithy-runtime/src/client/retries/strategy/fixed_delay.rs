@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::retries::classifiers::run_classifiers_on_ctx;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::retries::{
-    ClassifyRetry, RequestAttempts, RetryReason, RetryStrategy, ShouldAttempt,
-};
+use aws_smithy_runtime_api::client::retries::classifiers::RetryClassifierResult;
+use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::time::Duration;
+use tracing::debug;
 
 /// A retry policy used in tests. This relies on an error classifier already present in the config bag.
 /// If a server response is retryable, it will be retried after a fixed delay.
@@ -72,31 +73,29 @@ impl RetryStrategy for FixedDelayRetryStrategy {
             return Ok(ShouldAttempt::No);
         }
 
-        let retry_classifiers = runtime_components
-            .retry_classifiers()
-            .expect("a retry classifier is set");
-        let retry_reason = retry_classifiers.classify_retry(ctx);
+        let retry_classifiers = runtime_components.retry_classifiers();
+        let classifier_result = run_classifiers_on_ctx(retry_classifiers, ctx);
 
-        let backoff = match retry_reason {
-            Some(RetryReason::Explicit(_)) => self.fixed_delay,
-            Some(RetryReason::Error(_)) => self.fixed_delay,
-            Some(_) => {
-                unreachable!("RetryReason is non-exhaustive. Therefore, we need to cover this unreachable case.")
-            }
-            None => {
-                tracing::trace!(
+        let backoff = match classifier_result {
+            RetryClassifierResult::Explicit(_) => self.fixed_delay,
+            RetryClassifierResult::Error(_) => self.fixed_delay,
+            RetryClassifierResult::DontRetry => {
+                debug!(
                     attempts = request_attempts.attempts(),
                     max_attempts = self.max_attempts,
                     "encountered unretryable error"
                 );
                 return Ok(ShouldAttempt::No);
             }
+            _ => {
+                unreachable!("RetryClassifierResult is non-exhaustive. Therefore, we need to cover this unreachable case.")
+            }
         };
 
-        tracing::debug!(
+        debug!(
             "attempt {} failed with {:?}; retrying after {:?}",
             request_attempts.attempts(),
-            retry_reason,
+            classifier_result,
             backoff
         );
 

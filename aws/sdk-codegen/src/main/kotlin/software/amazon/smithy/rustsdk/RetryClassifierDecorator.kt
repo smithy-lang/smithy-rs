@@ -10,6 +10,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -24,42 +26,48 @@ class RetryClassifierDecorator : ClientCodegenDecorator {
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> = baseCustomizations +
         OperationRetryClassifiersFeature(codegenContext, operation)
+
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> = baseCustomizations +
+        ServiceRetryClassifiersFeature(codegenContext)
 }
 
 class OperationRetryClassifiersFeature(
     codegenContext: ClientCodegenContext,
-    operation: OperationShape,
+    val operation: OperationShape,
 ) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
-    private val smithyRuntime = RuntimeType.smithyRuntime(runtimeConfig)
-    private val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
-    private val codegenScope = arrayOf(
-        // Classifiers
-        "SmithyErrorClassifier" to smithyRuntime.resolve("client::retries::classifier::SmithyErrorClassifier"),
-        "AmzRetryAfterHeaderClassifier" to awsRuntime.resolve("retries::classifier::AmzRetryAfterHeaderClassifier"),
-        "ModeledAsRetryableClassifier" to smithyRuntime.resolve("client::retries::classifier::ModeledAsRetryableClassifier"),
-        "AwsErrorCodeClassifier" to awsRuntime.resolve("retries::classifier::AwsErrorCodeClassifier"),
-        "HttpStatusCodeClassifier" to smithyRuntime.resolve("client::retries::classifier::HttpStatusCodeClassifier"),
-        // Other Types
-        "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
-        "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-        "OperationError" to codegenContext.symbolProvider.symbolForOperationError(operation),
-        "OrchestratorError" to smithyRuntimeApi.resolve("client::orchestrator::OrchestratorError"),
-        "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),
-    )
+    private val symbolProvider = codegenContext.symbolProvider
 
     override fun section(section: OperationSection) = when (section) {
-        is OperationSection.RetryClassifier -> writable {
+        is OperationSection.RetryClassifiers -> writable {
+            section.withRetryClassifier(this) {
+                rustTemplate(
+                    "#{AwsErrorCodeClassifier}::<#{OperationError}>::new().into()",
+                    *RuntimeType.preludeScope,
+                    "AwsErrorCodeClassifier" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("retries::classifiers::AwsErrorCodeClassifier"),
+                    "OperationError" to symbolProvider.symbolForOperationError(operation),
+                )
+            }
+        }
+
+        else -> emptySection
+    }
+}
+
+class ServiceRetryClassifiersFeature(
+    codegenContext: ClientCodegenContext,
+) : ServiceRuntimePluginCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+
+    override fun section(section: ServiceRuntimePluginSection) = when (section) {
+        is ServiceRuntimePluginSection.RegisterRuntimeComponents -> writable {
             rustTemplate(
-                """
-                .with_classifier(#{SmithyErrorClassifier}::<#{OperationError}>::new())
-                .with_classifier(#{AmzRetryAfterHeaderClassifier})
-                .with_classifier(#{ModeledAsRetryableClassifier}::<#{OperationError}>::new())
-                .with_classifier(#{AwsErrorCodeClassifier}::<#{OperationError}>::new())
-                .with_classifier(#{HttpStatusCodeClassifier}::default())
-                """,
-                *codegenScope,
+                "runtime_components.push_retry_classifier(#{AmzRetryAfterHeaderClassifier}::default().into());",
+                *RuntimeType.preludeScope,
+                "AmzRetryAfterHeaderClassifier" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("retries::classifiers::AmzRetryAfterHeaderClassifier"),
             )
         }
 

@@ -144,12 +144,14 @@ class FluentClientGenerator(
                     /// If you experience this panic, it can be fixed by setting the `sleep_impl`, or by disabling
                     /// retries and timeouts.
                     pub fn from_conf(conf: crate::Config) -> Self {
-                        let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                        let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
+                        let has_retry_config = conf.retry_config().map(#{RetryConfig}::has_retry).unwrap_or_default();
+                        let has_timeout_config = conf.timeout_config().map(#{TimeoutConfig}::has_timeouts).unwrap_or_default();
                         let sleep_impl = conf.sleep_impl();
-                        if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
-                            panic!("An async sleep implementation is required for retries or timeouts to work. \
-                                    Set the `sleep_impl` on the Config passed into this function to fix this panic.");
+                        if (has_retry_config || has_timeout_config) && sleep_impl.is_none() {
+                            panic!(
+                                "An async sleep implementation is required for retries or timeouts to work. \
+                                 Set the `sleep_impl` on the Config passed into this function to fix this panic."
+                            );
                         }
 
                         Self {
@@ -169,7 +171,7 @@ class FluentClientGenerator(
                 }
                 """,
                 *clientScope,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig, customizations),
             )
         }
 
@@ -470,7 +472,7 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig, customizations: List<FluentClientCustomization>): RuntimeType =
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
         rustTemplate(
             """

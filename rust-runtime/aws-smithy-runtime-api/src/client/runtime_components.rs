@@ -18,7 +18,8 @@ use crate::client::connectors::SharedHttpConnector;
 use crate::client::endpoint::SharedEndpointResolver;
 use crate::client::identity::{ConfiguredIdentityResolver, SharedIdentityResolver};
 use crate::client::interceptors::SharedInterceptor;
-use crate::client::retries::{RetryClassifiers, SharedRetryStrategy};
+use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
+use crate::client::retries::SharedRetryStrategy;
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_async::time::SharedTimeSource;
 use std::fmt;
@@ -196,7 +197,7 @@ declare_runtime_components! {
 
         interceptors: Vec<SharedInterceptor>,
 
-        retry_classifiers: Option<RetryClassifiers>,
+        retry_classifiers: Vec<SharedRetryClassifier>,
 
         #[required]
         retry_strategy: Option<SharedRetryStrategy>,
@@ -241,9 +242,9 @@ impl RuntimeComponents {
         self.interceptors.iter().map(|s| s.value.clone())
     }
 
-    /// Returns the retry classifiers.
-    pub fn retry_classifiers(&self) -> Option<&RetryClassifiers> {
-        self.retry_classifiers.as_ref().map(|s| &s.value)
+    /// Returns an iterator over the retry classifiers.
+    pub fn retry_classifiers(&self) -> impl Iterator<Item = SharedRetryClassifier> + '_ {
+        self.retry_classifiers.iter().map(|s| s.value.clone())
     }
 
     /// Returns the retry strategy.
@@ -419,22 +420,24 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Returns the retry classifiers.
-    pub fn retry_classifiers(&self) -> Option<&RetryClassifiers> {
-        self.retry_classifiers.as_ref().map(|s| &s.value)
+    pub fn retry_classifiers(&self) -> impl Iterator<Item = SharedRetryClassifier> + '_ {
+        self.retry_classifiers.iter().map(|s| s.value.clone())
     }
 
-    /// Sets the retry classifiers.
-    pub fn set_retry_classifiers(
-        &mut self,
-        retry_classifiers: Option<RetryClassifiers>,
-    ) -> &mut Self {
-        self.retry_classifiers = retry_classifiers.map(|s| Tracked::new(self.builder_name, s));
+    /// Adds a retry classifier.
+    pub fn push_retry_classifier(&mut self, retry_classifier: SharedRetryClassifier) -> &mut Self {
+        self.retry_classifiers
+            .push(Tracked::new(self.builder_name, retry_classifier));
+        self.retry_classifiers
+            .sort_by(|a, b| a.value.priority().cmp(&b.value.priority()));
         self
     }
 
-    /// Sets the retry classifiers.
-    pub fn with_retry_classifiers(mut self, retry_classifiers: Option<RetryClassifiers>) -> Self {
-        self.retry_classifiers = retry_classifiers.map(|s| Tracked::new(self.builder_name, s));
+    /// Adds a retry classifier.
+    pub fn with_retry_classifier(mut self, retry_classifier: SharedRetryClassifier) -> Self {
+        self.push_retry_classifier(retry_classifier);
+        self.retry_classifiers
+            .sort_by(|a, b| a.value.priority().cmp(&b.value.priority()));
         self
     }
 
@@ -622,7 +625,6 @@ impl RuntimeComponentsBuilder {
             .with_endpoint_resolver(Some(SharedEndpointResolver::new(FakeEndpointResolver)))
             .with_http_connector(Some(SharedHttpConnector::new(FakeConnector)))
             .with_identity_resolver(AuthSchemeId::new("fake"), SharedIdentityResolver::new(FakeIdentityResolver))
-            .with_retry_classifiers(Some(RetryClassifiers::new()))
             .with_retry_strategy(Some(SharedRetryStrategy::new(FakeRetryStrategy)))
             .with_sleep_impl(Some(SharedAsyncSleep::new(FakeSleep)))
             .with_time_source(Some(SharedTimeSource::new(FakeTimeSource)))
@@ -643,7 +645,7 @@ impl fmt::Display for BuildError {
 
 /// A trait for retrieving a shared identity resolver.
 ///
-/// This trait exists so that [`AuthScheme::identity_resolver`](crate::client::auth::AuthScheme::identity_resolver)
+/// This trait exists so that [`AuthScheme::identity_resolver`]
 /// can have access to configured identity resolvers without having access to all the runtime components.
 pub trait GetIdentityResolver: Send + Sync {
     /// Returns the requested identity resolver if it is set.

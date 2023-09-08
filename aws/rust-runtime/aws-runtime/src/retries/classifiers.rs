@@ -4,9 +4,14 @@
  */
 
 use aws_smithy_http::http::HttpHeaders;
+use aws_smithy_runtime::client::retries::classifiers::{
+    ModeledAsRetryableClassifier, SmithyErrorClassifier,
+};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
+use aws_smithy_runtime_api::client::retries::classifiers::{
+    ClassifyRetry, RetryClassifierPriority, RetryClassifierResult, SharedRetryClassifier,
+};
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
 use std::error::Error as StdError;
@@ -48,11 +53,24 @@ impl<E> AwsErrorCodeClassifier<E> {
     }
 }
 
+impl<E> From<AwsErrorCodeClassifier<E>> for SharedRetryClassifier
+where
+    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
+{
+    fn from(value: AwsErrorCodeClassifier<E>) -> Self {
+        Self::new(value)
+    }
+}
+
 impl<E> ClassifyRetry for AwsErrorCodeClassifier<E>
 where
     E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
 {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
+    fn classify_retry(
+        &self,
+        ctx: &InterceptorContext,
+        _: Option<RetryClassifierResult>,
+    ) -> Option<RetryClassifierResult> {
         let error = ctx
             .output_or_error()?
             .err()
@@ -61,9 +79,9 @@ where
 
         if let Some(error_code) = error.code() {
             if THROTTLING_ERRORS.contains(&error_code) {
-                return Some(RetryReason::Error(ErrorKind::ThrottlingError));
+                return Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError));
             } else if TRANSIENT_ERRORS.contains(&error_code) {
-                return Some(RetryReason::Error(ErrorKind::TransientError));
+                return Some(RetryClassifierResult::Error(ErrorKind::TransientError));
             }
         };
 
@@ -73,10 +91,14 @@ where
     fn name(&self) -> &'static str {
         "AWS Error Code"
     }
+
+    fn priority(&self) -> RetryClassifierPriority {
+        RetryClassifierPriority::run_after(ModeledAsRetryableClassifier::<()>::priority())
+    }
 }
 
 /// A retry classifier that checks for `x-amz-retry-after` headers. If one is found, a
-/// [`RetryReason::Explicit`] is returned containing the duration to wait before retrying.
+/// [`RetryClassifierResult::Explicit`] is returned containing the duration to wait before retrying.
 #[derive(Debug, Default)]
 pub struct AmzRetryAfterHeaderClassifier;
 
@@ -87,19 +109,33 @@ impl AmzRetryAfterHeaderClassifier {
     }
 }
 
+impl From<AmzRetryAfterHeaderClassifier> for SharedRetryClassifier {
+    fn from(value: AmzRetryAfterHeaderClassifier) -> Self {
+        Self::new(value)
+    }
+}
+
 impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
+    fn classify_retry(
+        &self,
+        ctx: &InterceptorContext,
+        _: Option<RetryClassifierResult>,
+    ) -> Option<RetryClassifierResult> {
         ctx.response()
             .and_then(|res| res.http_headers().get("x-amz-retry-after"))
             .and_then(|header| header.to_str().ok())
             .and_then(|header| header.parse::<u64>().ok())
             .map(|retry_after_delay| {
-                RetryReason::Explicit(std::time::Duration::from_millis(retry_after_delay))
+                RetryClassifierResult::Explicit(std::time::Duration::from_millis(retry_after_delay))
             })
     }
 
     fn name(&self) -> &'static str {
         "'Retry After' Header"
+    }
+
+    fn priority(&self) -> RetryClassifierPriority {
+        RetryClassifierPriority::run_after(SmithyErrorClassifier::<()>::priority())
     }
 }
 
@@ -108,6 +144,7 @@ mod test {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{Error, Input};
+    use aws_smithy_runtime_api::client::retries::classifiers::RetryClassifierResult;
     use aws_smithy_types::error::ErrorMetadata;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
     use std::fmt;
@@ -170,8 +207,8 @@ mod test {
         ))));
 
         assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Error(ErrorKind::ThrottlingError))
+            policy.classify_retry(&ctx, None),
+            Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError))
         );
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
@@ -179,8 +216,8 @@ mod test {
             CodedError::new("RequestTimeout"),
         ))));
         assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Error(ErrorKind::TransientError))
+            policy.classify_retry(&ctx, None),
+            Some(RetryClassifierResult::Error(ErrorKind::TransientError))
         )
     }
 
@@ -195,8 +232,8 @@ mod test {
         ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
 
         assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Error(ErrorKind::ThrottlingError))
+            policy.classify_retry(&ctx, None),
+            Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError))
         );
     }
 
@@ -215,8 +252,8 @@ mod test {
         ))));
 
         assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Explicit(Duration::from_millis(5000))),
+            policy.classify_retry(&ctx, None),
+            Some(RetryClassifierResult::Explicit(Duration::from_millis(5000))),
         );
     }
 }
