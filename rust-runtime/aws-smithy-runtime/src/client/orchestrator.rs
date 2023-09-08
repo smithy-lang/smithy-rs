@@ -9,7 +9,7 @@
 use self::auth::orchestrate_auth;
 use crate::client::interceptors::Interceptors;
 use crate::client::orchestrator::endpoints::orchestrate_endpoint;
-use crate::client::orchestrator::http::read_body;
+use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
@@ -36,6 +36,7 @@ use tracing::{debug, debug_span, instrument, trace, Instrument};
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
+/// Defines types that work with HTTP types
 mod http;
 
 macro_rules! halt {
@@ -386,6 +387,7 @@ async fn try_attempt(
                 .map_err(OrchestratorError::response)
                 .and_then(|_| {
                     let _span = debug_span!("deserialize_nonstreaming").entered();
+                    log_response_body(response, cfg);
                     response_deserializer.deserialize_nonstreaming(response)
                 }),
         }
