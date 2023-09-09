@@ -90,7 +90,7 @@ class PaginatorGenerator private constructor(
         "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
         "SdkError" to RuntimeType.sdkError(runtimeConfig),
         "client" to RuntimeType.smithyClient(runtimeConfig),
-        "fn_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::fn_stream"),
+        "pagination_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::pagination_stream"),
 
         // External Types
         "Stream" to RuntimeType.TokioStream.resolve("Stream"),
@@ -141,13 +141,14 @@ class PaginatorGenerator private constructor(
 
                 /// Create the pagination stream
                 ///
-                /// _Note:_ No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next)).
-                pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin} {
+                /// _Note:_ No requests will be dispatched until the stream is used
+                /// (e.g. with the [`.next().await`](aws_smithy_async::future::pagination_stream::PaginationStream::next) method).
+                pub fn send(self) -> #{pagination_stream}::PaginationStream<#{item_type}> {
                     // Move individual fields out of self for the borrow checker
                     let builder = self.builder;
                     let handle = self.handle;
                     #{runtime_plugin_init}
-                    #{fn_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
+                    #{pagination_stream}::PaginationStream::new(#{pagination_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
                         let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
                             #{Ok}(input) => input,
@@ -177,7 +178,7 @@ class PaginatorGenerator private constructor(
                                 return
                             }
                         }
-                    }))
+                    })))
                 }
             }
             """,
@@ -257,11 +258,12 @@ class PaginatorGenerator private constructor(
                 impl ${paginatorName}Items {
                     /// Create the pagination stream
                     ///
-                    /// _Note: No requests will be dispatched until the stream is used (eg. with [`.next().await`](tokio_stream::StreamExt::next))._
+                    /// _Note_: No requests will be dispatched until the stream is used
+                    /// (e.g. with the [`.next().await`](aws_smithy_async::future::pagination_stream::PaginationStream::next) method).
                     ///
-                    /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](tokio_stream::StreamExt::collect).
-                    pub fn send(self) -> impl #{Stream}<Item = #{item_type}> + #{Unpin} {
-                        #{fn_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
+                    /// To read the entirety of the paginator, use [`.collect::<Result<Vec<_>, _>()`](aws_smithy_async::future::pagination_stream::PaginationStream::collect).
+                    pub fn send(self) -> #{pagination_stream}::PaginationStream<#{item_type}> {
+                        #{pagination_stream}::TryFlatMap::new(self.0.send()).flat_map(|page| #{extract_items}(page).unwrap_or_default().into_iter())
                     }
                 }
 
