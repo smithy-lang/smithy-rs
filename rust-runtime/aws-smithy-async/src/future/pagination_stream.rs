@@ -116,7 +116,7 @@ impl<Item> FnStream<Item> {
 
     /// Attempts to pull out the next value of this stream, returning `None` if the stream is
     /// exhausted.
-    pub fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Item>> {
         let mut me = self.project();
         match me.rx.poll_recv(cx) {
             Poll::Ready(item) => Poll::Ready(item),
