@@ -150,3 +150,15 @@ message = "Fix regression with redacting sensitive HTTP response bodies."
 references = ["smithy-rs#2926", "smithy-rs#2972"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "The `futures_core::stream::Stream` trait has been removed from public API. It should not affect usual SDK use cases. If your code uses paginators, you do not need to use the `Stream` trait or its exntension traits, but only the `next`, `try_next`, `collect` methods are supported on `PaginationStream`. Other stream operations made available through the trait or its extension traits are not supported, but we should be able to add them as needed in a backward compatible manner."
+references = ["smithy-rs#2978"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The `futures_core::stream::Stream` trait has been removed from public API. [`FnStream`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.FnStream.html) only supports `next`, `try_next`, and `collect` methods. [`TryFlatMap::flat_map`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.TryFlatMap.html#method.flat_map) returns [`PaginationStream`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.PaginationStream.html), which should be preferred to `FnStream` at an interface level. For stream operations previously made available through the trait or its extension traits, we should be able to add them as needed in a backward compatible manner."
+references = ["smithy-rs#2978"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
