@@ -85,20 +85,7 @@ class IdempotencyTokenGenerator(
                     }
                 }
             }
-            is OperationSection.MutateInput -> writable {
-                rustTemplate(
-                    """
-                    if ${section.input}.$memberName.is_none() {
-                        ${section.input}.$memberName = #{Some}(${section.config}.idempotency_token_provider.make_idempotency_token());
-                    }
-                    """,
-                    *preludeScope,
-                )
-            }
             else -> emptySection
         }
     }
-
-    override fun consumesSelf(): Boolean = idempotencyTokenMember != null
-    override fun mutSelf(): Boolean = idempotencyTokenMember != null
 }

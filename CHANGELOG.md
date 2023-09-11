@@ -1,4 +1,16 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+August 22nd, 2023
+=================
+**Breaking Changes:**
+- :bug::warning: (client, [smithy-rs#2931](https://github.com/awslabs/smithy-rs/issues/2931), [aws-sdk-rust#875](https://github.com/awslabs/aws-sdk-rust/issues/875)) Fixed re-exported `SdkError` type. The previous release had the wrong type for `SdkError` when generating code for orchestrator mode, which caused projects to fail to compile when upgrading.
+
+**New this release:**
+- (client, [smithy-rs#2904](https://github.com/awslabs/smithy-rs/issues/2904)) `RuntimeComponents` and `RuntimeComponentsBuilder` are now re-exported in generated clients so that implementing a custom interceptor or runtime plugin doens't require directly depending on `aws-smithy-runtime-api`.
+- :bug: (client, [smithy-rs#2914](https://github.com/awslabs/smithy-rs/issues/2914), [aws-sdk-rust#825](https://github.com/awslabs/aws-sdk-rust/issues/825)) Fix incorrect summary docs for builders
+- :bug: (client, [smithy-rs#2934](https://github.com/awslabs/smithy-rs/issues/2934), [aws-sdk-rust#872](https://github.com/awslabs/aws-sdk-rust/issues/872)) Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level.
+- :bug: (client, [smithy-rs#2935](https://github.com/awslabs/smithy-rs/issues/2935)) Fix `SDK::Endpoint` built-in for `@endpointRuleSet`.
+
+
 August 1st, 2023
 ================
 **Breaking Changes:**

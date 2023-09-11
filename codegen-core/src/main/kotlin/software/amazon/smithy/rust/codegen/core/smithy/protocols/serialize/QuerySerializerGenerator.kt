@@ -124,6 +124,10 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         TODO("$protocolName doesn't support payload serialization")
     }
 
+    override fun unsetUnion(union: UnionShape): RuntimeType {
+        TODO("AwsQuery doesn't support payload serialization")
+    }
+
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         val inputShape = operationShape.inputShape(model)
         return protocolFunctions.serializeFn(inputShape, fnNameSuffix = "input") { fnName ->

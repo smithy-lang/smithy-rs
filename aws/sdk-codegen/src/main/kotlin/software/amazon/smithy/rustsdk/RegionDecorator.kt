@@ -5,16 +5,15 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.aws.traits.auth.SigV4Trait
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -82,7 +81,11 @@ class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
     override val order: Byte = 0
 
-    private fun usesRegion(codegenContext: ClientCodegenContext) = codegenContext.getBuiltIn(Builtins.REGION) != null
+    // Services that have an endpoint ruleset that references the SDK::Region built in, or
+    // that use SigV4, both need a configurable region.
+    private fun usesRegion(codegenContext: ClientCodegenContext) =
+        codegenContext.getBuiltIn(Builtins.REGION) != null || ServiceIndex.of(codegenContext.model)
+            .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -91,14 +94,6 @@ class RegionDecorator : ClientCodegenDecorator {
         return baseCustomizations.extendIf(usesRegion(codegenContext)) {
             RegionProviderConfig(codegenContext)
         }
-    }
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations.extendIf(usesRegion(codegenContext)) { RegionConfigPlugin() }
     }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
@@ -208,25 +203,6 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                     }
                     """,
                     *codegenScope,
-                )
-            }
-
-            else -> emptySection
-        }
-    }
-}
-
-class RegionConfigPlugin : OperationCustomization() {
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateRequest -> writable {
-                // Allow the region to be late-inserted via another method
-                rust(
-                    """
-                    if let Some(region) = &${section.config}.region {
-                        ${section.request}.properties_mut().insert(region.clone());
-                    }
-                    """,
                 )
             }
 

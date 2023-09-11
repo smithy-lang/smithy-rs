@@ -12,5 +12,6 @@ import { App } from "aws-cdk-lib";
 import { CanaryStack } from "../lib/aws-sdk-rust/canary-stack";
 
 const app = new App();
+const env = { region: "us-west-2" };
 
-new CanaryStack(app, "aws-sdk-rust-canary-stack", {});
+new CanaryStack(app, "aws-sdk-rust-canary-stack", { env });

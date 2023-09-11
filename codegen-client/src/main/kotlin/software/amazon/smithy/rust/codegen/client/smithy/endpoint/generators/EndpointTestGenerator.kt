@@ -144,14 +144,12 @@ internal class EndpointTestGenerator(
                             "let mut out = #{HashMap}::<String, #{Document}>::new();",
                             *codegenScope,
                         )
-                        // TODO(https://github.com/awslabs/smithy/pull/1555): remove sort by name when upgrading to
-                        //   Smithy version with this PR merged
-                        val keys = mutableListOf<Identifier>()
-                        value.forEach { id, _ -> keys.add(id) }
-                        keys.sortedBy { it.name.value }.forEach { identifier ->
-                            val v = value.get(identifier)
+                        val ids = mutableListOf<Identifier>()
+                        value.forEach { id, _ -> ids.add(id) }
+                        ids.forEach { id ->
+                            val v = value.get(id)
                             rust(
-                                "out.insert(${identifier.toString().dq()}.to_string(), #W.into());",
+                                "out.insert(${id.toString().dq()}.to_string(), #W.into());",
                                 // When writing into the hashmap, it always needs to be an owned type
                                 generateValue(v),
                             )

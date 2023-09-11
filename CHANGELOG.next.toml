@@ -11,28 +11,10 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[aws-sdk-rust]]
-message = "`RuntimeComponents` are now re-exported so that implementing a custom interceptor doens't require directly depending on `aws-smithy-runtime-api`."
-references = ["smithy-rs#2904", "aws-sdk-rust#862"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
 [[smithy-rs]]
-message = "`RuntimeComponents` and `RuntimeComponentsBuilder` are now re-exported in generated clients so that implementing a custom interceptor or runtime plugin doens't require directly depending on `aws-smithy-runtime-api`."
-references = ["smithy-rs#2904"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix incorrect summary docs for builders"
-references = ["smithy-rs#2914", "aws-sdk-rust#825"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Fix requests to S3 with `no_credentials` set."
-references = ["smithy-rs#2907", "aws-sdk-rust#864"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
+message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
+references = ["smithy-rs#2909"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -67,3 +49,120 @@ For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy
 references = ["smithy-rs#2916", "smithy-rs#1767"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+All versions of SigningParams have been updated to contain an [`Identity`](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/identity/struct.Identity.html)
+as opposed to AWS credentials in `&str` form. [Read more](https://github.com/awslabs/aws-sdk-rust/discussions/868).
+"""
+references = ["smithy-rs#2913"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Correctly identify HTTP 200 responses from S3 with `<Error>` as the root Element as errors. **Note**: This a behavior change and will change the error type returned by the SDK in some cases."
+references = ["smithy-rs#2958", "aws-sdk-rust#873"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Allow `no_credentials` to be used with all S3 operations."
+references = ["smithy-rs#2955", "aws-sdk-rust#878"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Generate a region setter when a model uses SigV4."
+references = ["smithy-rs#2960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix code generation for union members with the `@httpPayload` trait."
+references = ["smithy-rs#2969", "smithy-rs#1896"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Make `bucket` required for request construction for S3. When `bucket` is not set, a **different** operation than intended can be triggered."
+references = ["smithy-rs#1668", "aws-sdk-rust#873", "smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Required members with @contextParam are now treated as client-side required."
+references = ["smithy-rs#2964"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "`aws_smithy_client::hyper_ext::Adapter` was moved/renamed to `aws_smithy_runtime::client::connectors::hyper_connector::HyperConnector`."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Test connectors moved into `aws_smithy_runtime::client::connectors::test_util` behind the `test-util` feature."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "DVR's RecordingConnection and ReplayingConnection were renamed to RecordingConnector and ReplayingConnector respectively."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "TestConnection was renamed to EventConnector."
+references = ["smithy-rs#2970"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Remove `once_cell` from public API."
+references = ["smithy-rs#2973"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Remove `once_cell` from public API."
+references = ["smithy-rs#2973"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix regression with redacting sensitive HTTP response bodies."
+references = ["smithy-rs#2926", "smithy-rs#2972"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix regression with redacting sensitive HTTP response bodies."
+references = ["smithy-rs#2926", "smithy-rs#2972"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"

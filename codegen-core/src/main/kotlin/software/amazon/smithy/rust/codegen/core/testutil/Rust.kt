@@ -111,7 +111,7 @@ object TestWorkspace {
                 // help rust select the right version when we run cargo test
                 // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
                 //  method as we do for runtime crate versions
-                "[toolchain]\nchannel = \"1.69.0\"\n",
+                "[toolchain]\nchannel = \"1.70.0\"\n",
             )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()

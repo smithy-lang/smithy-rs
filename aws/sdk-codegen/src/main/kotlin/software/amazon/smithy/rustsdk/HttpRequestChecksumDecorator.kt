@@ -40,20 +40,6 @@ private fun RuntimeConfig.awsInlineableHttpRequestChecksum() = RuntimeType.forIn
     ),
 )
 
-// TODO(enableNewSmithyRuntimeCleanup): Delete this method
-fun RuntimeConfig.awsInlineableBodyWithChecksumMiddleware() = RuntimeType.forInlineDependency(
-    InlineAwsDependency.forRustFile(
-        "http_body_checksum_middleware", visibility = Visibility.PUBCRATE,
-        CargoDependency.Http,
-        CargoDependency.HttpBody,
-        CargoDependency.smithyHttp(this),
-        CargoDependency.smithyChecksums(this),
-        CargoDependency.smithyTypes(this),
-        CargoDependency.Bytes,
-        CargoDependency.Tracing,
-    ),
-)
-
 class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
     override val order: Byte = 0
@@ -80,8 +66,6 @@ private fun HttpChecksumTrait.requestAlgorithmMember(
 private fun HttpChecksumTrait.checksumAlgorithmToStr(
     codegenContext: ClientCodegenContext,
     operationShape: OperationShape,
-    // TODO(enableNewSmithyRuntimeCleanup): Remove `algorithmWasCloned` (it should always be false)
-    algorithmWasCloned: Boolean,
 ): Writable {
     val runtimeConfig = codegenContext.runtimeConfig
     val requestAlgorithmMember = this.requestAlgorithmMember(codegenContext, operationShape)
@@ -89,11 +73,6 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
 
     return {
         if (requestAlgorithmMember != null) {
-            if (algorithmWasCloned) {
-                // User may set checksum for requests, and we need to call as_ref before we can convert the algorithm to a &str
-                rust("let checksum_algorithm = $requestAlgorithmMember.as_ref();")
-            }
-
             if (isRequestChecksumRequired) {
                 // Checksums are required, fall back to MD5
                 rust("""let checksum_algorithm = checksum_algorithm.map(|algorithm| algorithm.as_str()).or(Some("md5"));""")
@@ -162,44 +141,9 @@ class HttpRequestChecksumCustomization(
                             "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
                                 codegenContext,
                                 operationShape,
-                                algorithmWasCloned = false,
                             ),
                         )
                     }
-                }
-            }
-            // TODO(enableNewSmithyRuntimeCleanup): Delete `is OperationSection.MutateInput`
-            is OperationSection.MutateInput -> {
-                // Various other things will consume the input struct before we can get at the checksum algorithm
-                // field within it. This ensures that we preserve a copy of it. It's an enum so cloning is cheap.
-                if (requestAlgorithmMember != null) {
-                    rust("let $requestAlgorithmMember = self.$requestAlgorithmMember().cloned();")
-                }
-            }
-            // TODO(enableNewSmithyRuntimeCleanup): Delete `is OperationSection.MutateRequest`
-            is OperationSection.MutateRequest -> {
-                // Return early if no request checksum can be set nor is it required
-                if (checksumTrait.isRequestChecksumRequired || requestAlgorithmMember != null) {
-                    // `add_checksum_calculation_to_request` handles both streaming and in-memory request bodies.
-                    rustTemplate(
-                        """
-                        ${section.request} = ${section.request}.augment(|mut req, properties| {
-                            #{checksum_algorithm_to_str:W}
-                            if let Some(checksum_algorithm) = checksum_algorithm {
-                                #{add_checksum_calculation_to_request}(&mut req, properties, checksum_algorithm)?;
-                            }
-                            Result::<_, #{BuildError}>::Ok(req)
-                        })?;
-                        """,
-                        "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
-                            codegenContext,
-                            operationShape,
-                            algorithmWasCloned = true,
-                        ),
-                        "add_checksum_calculation_to_request" to runtimeConfig.awsInlineableBodyWithChecksumMiddleware()
-                            .resolve("add_checksum_calculation_to_request"),
-                        "BuildError" to runtimeConfig.operationBuildError(),
-                    )
                 }
             }
             else -> { }

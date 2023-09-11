@@ -163,7 +163,7 @@ impl ValidateRequest {
         };
         match (actual_str, expected_str) {
             (Ok(actual), Ok(expected)) => assert_ok(validate_body(actual, expected, media_type)),
-            _ => assert_eq!(actual.body().bytes(), expected.body().bytes()),
+            _ => assert_eq!(expected.body().bytes(), actual.body().bytes()),
         };
     }
 }
@@ -577,7 +577,7 @@ pub mod wire_mock {
                     rx.await.ok();
                     tracing::info!("server shutdown!");
                 });
-            spawn(async move { server.await });
+            spawn(server);
             Self {
                 event_log: wire_events,
                 bind_addr: listener_addr,

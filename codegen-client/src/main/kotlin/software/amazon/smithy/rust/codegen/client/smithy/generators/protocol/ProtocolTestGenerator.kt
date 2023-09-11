@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
@@ -20,8 +21,8 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.EndpointPrefixGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -233,7 +234,16 @@ class DefaultProtocolTestGenerator(
             // https://github.com/awslabs/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
             host.orNull()?.also { host ->
                 val withScheme = "http://$host"
-                when (val bindings = EndpointPrefixGenerator.endpointTraitBindings(codegenContext, operationShape)) {
+                val bindings = operationShape.getTrait(EndpointTrait::class.java).map { epTrait ->
+                    EndpointTraitBindings(
+                        codegenContext.model,
+                        codegenContext.symbolProvider,
+                        codegenContext.runtimeConfig,
+                        operationShape,
+                        epTrait,
+                    )
+                }.orNull()
+                when (bindings) {
                     null -> rust("let endpoint_prefix = None;")
                     else -> {
                         withBlock("let input = ", ";") {

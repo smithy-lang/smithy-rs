@@ -74,7 +74,7 @@ async fn three_retries_and_then_success() {
     let path = "tests/data/request-information-headers/three-retries_and-then-success.json";
     let conn = dvr::ReplayingConnection::from_file(path).unwrap();
     let config = aws_sdk_s3::Config::builder()
-        .credentials_provider(Credentials::for_tests())
+        .credentials_provider(Credentials::for_tests_with_session_token())
         .region(Region::new("us-east-1"))
         .http_connector(DynConnector::new(conn.clone()))
         .time_source(SharedTimeSource::new(time_source.clone()))

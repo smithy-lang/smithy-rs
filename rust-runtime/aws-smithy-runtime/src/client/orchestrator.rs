@@ -9,7 +9,7 @@
 use self::auth::orchestrate_auth;
 use crate::client::interceptors::Interceptors;
 use crate::client::orchestrator::endpoints::orchestrate_endpoint;
-use crate::client::orchestrator::http::read_body;
+use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_http::body::SdkBody;
@@ -36,6 +36,7 @@ use tracing::{debug, debug_span, instrument, trace, Instrument};
 mod auth;
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
+/// Defines types that work with HTTP types
 mod http;
 
 macro_rules! halt {
@@ -164,7 +165,7 @@ pub async fn invoke_with_stop_point(
 /// Apply configuration is responsible for apply runtime plugins to the config bag, as well as running
 /// `read_before_execution` interceptors. If a failure occurs due to config construction, `invoke`
 /// will raise it to the user. If an interceptor fails, then `invoke`
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 fn apply_configuration(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -183,7 +184,7 @@ fn apply_configuration(
         .build()?)
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn try_op(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -316,7 +317,7 @@ async fn try_op(
     }
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn try_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -356,12 +357,7 @@ async fn try_attempt(
             OrchestratorError::other("No HTTP connector was available to send this request. \
                 Enable the `rustls` crate feature or set a connector to fix this.")
         ));
-        connector.call(request).await.map_err(|err| {
-            match err.downcast() {
-                Ok(connector_error) => OrchestratorError::connector(*connector_error),
-                Err(box_err) => OrchestratorError::other(box_err)
-            }
-        })
+        connector.call(request).await.map_err(OrchestratorError::connector)
     });
     trace!(response = ?response, "received response from service");
     ctx.set_response(response);
@@ -391,6 +387,7 @@ async fn try_attempt(
                 .map_err(OrchestratorError::response)
                 .and_then(|_| {
                     let _span = debug_span!("deserialize_nonstreaming").entered();
+                    log_response_body(response, cfg);
                     response_deserializer.deserialize_nonstreaming(response)
                 }),
         }
@@ -404,7 +401,7 @@ async fn try_attempt(
     run_interceptors!(halt_on_err: read_after_deserialization(ctx, runtime_components, cfg));
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn finally_attempt(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -416,7 +413,7 @@ async fn finally_attempt(
     });
 }
 
-#[instrument(skip_all)]
+#[instrument(skip_all, level = "debug")]
 async fn finally_op(
     ctx: &mut InterceptorContext,
     cfg: &mut ConfigBag,
@@ -442,7 +439,9 @@ mod tests {
     use aws_smithy_runtime_api::client::auth::{
         AuthSchemeOptionResolverParams, SharedAuthSchemeOptionResolver,
     };
-    use aws_smithy_runtime_api::client::connectors::{HttpConnector, SharedHttpConnector};
+    use aws_smithy_runtime_api::client::connectors::{
+        HttpConnector, HttpConnectorFuture, SharedHttpConnector,
+    };
     use aws_smithy_runtime_api::client::endpoint::{
         EndpointResolverParams, SharedEndpointResolver,
     };
@@ -454,7 +453,7 @@ mod tests {
         FinalizerInterceptorContextRef,
     };
     use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
-    use aws_smithy_runtime_api::client::orchestrator::{BoxFuture, Future, HttpRequest};
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
@@ -492,11 +491,11 @@ mod tests {
     }
 
     impl HttpConnector for OkConnector {
-        fn call(&self, _request: HttpRequest) -> BoxFuture<HttpResponse> {
-            Box::pin(Future::ready(Ok(::http::Response::builder()
+        fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
+            HttpConnectorFuture::ready(Ok(::http::Response::builder()
                 .status(200)
                 .body(SdkBody::empty())
-                .expect("OK response is valid"))))
+                .expect("OK response is valid")))
         }
     }
 
@@ -531,7 +530,10 @@ mod tests {
             Some(layer.freeze())
         }
 
-        fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+        fn runtime_components(
+            &self,
+            _: &RuntimeComponentsBuilder,
+        ) -> Cow<'_, RuntimeComponentsBuilder> {
             Cow::Borrowed(&self.builder)
         }
     }
@@ -600,7 +602,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for FailingInterceptorsClientRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -617,7 +619,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for FailingInterceptorsOperationRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -901,7 +903,7 @@ mod tests {
                 }
             }
             impl RuntimePlugin for InterceptorsTestOperationRuntimePlugin {
-                fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+                fn runtime_components(&self, _: &RuntimeComponentsBuilder) -> Cow<'_, RuntimeComponentsBuilder> {
                     Cow::Borrowed(&self.0)
                 }
             }
@@ -1240,7 +1242,10 @@ mod tests {
             builder: RuntimeComponentsBuilder,
         }
         impl RuntimePlugin for TestInterceptorRuntimePlugin {
-            fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+            fn runtime_components(
+                &self,
+                _: &RuntimeComponentsBuilder,
+            ) -> Cow<'_, RuntimeComponentsBuilder> {
                 Cow::Borrowed(&self.builder)
             }
         }

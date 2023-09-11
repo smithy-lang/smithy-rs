@@ -212,13 +212,20 @@ fn calculate_signing_params<'a>(
     request: &'a SignableRequest<'a>,
     params: &'a SigningParams<'a>,
 ) -> Result<(CalculatedParams, String), SigningError> {
+    let creds = params
+        .credentials()
+        .ok_or_else(SigningError::unsupported_identity_type)?;
     let creq = CanonicalRequest::from(request, params)?;
 
     let encoded_creq = &sha256_hex_string(creq.to_string().as_bytes());
     let string_to_sign =
         StringToSign::new(params.time, params.region, params.name, encoded_creq).to_string();
-    let signing_key =
-        generate_signing_key(params.secret_key, params.time, params.region, params.name);
+    let signing_key = generate_signing_key(
+        creds.secret_access_key(),
+        params.time,
+        params.region,
+        params.name,
+    );
     let signature = calculate_signature(signing_key, string_to_sign.as_bytes());
     tracing::trace!(canonical_request = %creq, string_to_sign = %string_to_sign, "calculated signing parameters");
 
@@ -235,7 +242,7 @@ fn calculate_signing_params<'a>(
         (param::X_AMZ_SIGNATURE, Cow::Owned(signature.clone())),
     ];
 
-    if let Some(security_token) = params.security_token {
+    if let Some(security_token) = creds.session_token() {
         signing_params.push((
             param::X_AMZ_SECURITY_TOKEN,
             Cow::Owned(security_token.to_string()),
@@ -255,6 +262,9 @@ fn calculate_signing_headers<'a>(
     request: &'a SignableRequest<'a>,
     params: &'a SigningParams<'a>,
 ) -> Result<SigningOutput<Vec<Header>>, SigningError> {
+    let creds = params
+        .credentials()
+        .ok_or_else(SigningError::unsupported_identity_type)?;
     // Step 1: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-create-canonical-request.html.
     let creq = CanonicalRequest::from(request, params)?;
     tracing::trace!(canonical_request = %creq);
@@ -264,8 +274,12 @@ fn calculate_signing_headers<'a>(
     let sts = StringToSign::new(params.time, params.region, params.name, encoded_creq);
 
     // Step 3: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-calculate-signature.html
-    let signing_key =
-        generate_signing_key(params.secret_key, params.time, params.region, params.name);
+    let signing_key = generate_signing_key(
+        creds.secret_access_key(),
+        params.time,
+        params.region,
+        params.name,
+    );
     let signature = calculate_signature(signing_key, sts.to_string().as_bytes());
 
     // Step 4: https://docs.aws.amazon.com/en_pv/general/latest/gr/sigv4-add-signature-to-request.html
@@ -274,8 +288,7 @@ fn calculate_signing_headers<'a>(
     add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
     headers.push(Header {
         key: "authorization",
-        value: build_authorization_header(params.access_key, &creq, sts, &signature),
-
+        value: build_authorization_header(creds.access_key_id(), &creq, sts, &signature),
         sensitive: false,
     });
     if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
@@ -287,7 +300,7 @@ fn calculate_signing_headers<'a>(
         );
     }
 
-    if let Some(security_token) = params.security_token {
+    if let Some(security_token) = creds.session_token() {
         add_header(
             &mut headers,
             header::X_AMZ_SECURITY_TOKEN,
@@ -327,7 +340,6 @@ fn build_authorization_header(
 
 #[cfg(test)]
 mod tests {
-    use super::sign;
     use crate::date_time::test_parsers::parse_date_time;
     use crate::http_request::sign::SignableRequest;
     use crate::http_request::test::{
@@ -336,6 +348,7 @@ mod tests {
     use crate::http_request::{
         SessionTokenMode, SignableBody, SignatureLocation, SigningParams, SigningSettings,
     };
+    use aws_credential_types::Credentials;
     use http::{HeaderValue, Request};
     use pretty_assertions::assert_eq;
     use proptest::proptest;
@@ -366,9 +379,7 @@ mod tests {
     fn test_sign_vanilla_with_headers() {
         let settings = SigningSettings::default();
         let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
@@ -377,9 +388,9 @@ mod tests {
 
         let original = test_request("get-vanilla-query-order-key-case");
         let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
+        let out = crate::http_request::sign(signable, &params).unwrap();
         assert_eq!(
-            "b97d918cfa904a5beff61c982a1b6f458b799221646efd99d3219ec94cdf2500",
+            "5557820e7380d585310524bd93d51a08d7757fb5efd7344ee12088f2b0860947",
             out.signature
         );
 
@@ -395,9 +406,7 @@ mod tests {
         let test = "double-encode-path";
         let settings = SigningSettings::default();
         let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
@@ -406,9 +415,9 @@ mod tests {
 
         let original = test_request(test);
         let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
+        let out = crate::http_request::sign(signable, &params).unwrap();
         assert_eq!(
-            "6f871eb157f326fa5f7439eb88ca200048635950ce7d6037deda56f0c95d4364",
+            "57d157672191bac40bae387e48bbe14b15303c001fdbb01f4abf295dccb09705",
             out.signature
         );
 
@@ -427,9 +436,7 @@ mod tests {
             ..Default::default()
         };
         let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
@@ -438,9 +445,9 @@ mod tests {
 
         let original = test_request("get-vanilla-query-order-key-case");
         let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
+        let out = crate::http_request::sign(signable, &params).unwrap();
         assert_eq!(
-            "f25aea20f8c722ece3b363fc5d60cc91add973f9b64c42ba36fa28d57afe9019",
+            "ecce208e4b4f7d7e3a4cc22ced6acc2ad1d170ee8ba87d7165f6fa4b9aff09ab",
             out.signature
         );
 
@@ -455,9 +462,7 @@ mod tests {
     fn test_sign_headers_utf8() {
         let settings = SigningSettings::default();
         let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
@@ -471,9 +476,9 @@ mod tests {
             .unwrap()
             .into();
         let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
+        let out = crate::http_request::sign(signable, &params).unwrap();
         assert_eq!(
-            "4596b207a7fc6bdf18725369bc0cd7022cf20efbd2c19730549f42d1a403648e",
+            "55e16b31f9bde5fd04f9d3b780dd2b5e5f11a5219001f91a8ca9ec83eaf1618f",
             out.signature
         );
 
@@ -491,9 +496,9 @@ mod tests {
                 "authorization",
                 HeaderValue::from_str(
                     "AWS4-HMAC-SHA256 \
-                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        Credential=ANOTREAL/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;some-header;x-amz-date, \
-                        Signature=4596b207a7fc6bdf18725369bc0cd7022cf20efbd2c19730549f42d1a403648e",
+                        Signature=55e16b31f9bde5fd04f9d3b780dd2b5e5f11a5219001f91a8ca9ec83eaf1618f",
                 )
                 .unwrap(),
             )
@@ -509,9 +514,7 @@ mod tests {
             ..Default::default()
         };
         let mut params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
@@ -523,13 +526,15 @@ mod tests {
             .body("")
             .unwrap()
             .into();
-        let out_without_session_token = sign(SignableRequest::from(&original), &params).unwrap();
-        params.security_token = Some("notarealsessiontoken");
+        let out_without_session_token =
+            crate::http_request::sign(SignableRequest::from(&original), &params).unwrap();
+        let identity = Credentials::for_tests_with_session_token().into();
+        params.identity = &identity;
 
         let out_with_session_token_but_excluded =
-            sign(SignableRequest::from(&original), &params).unwrap();
+            crate::http_request::sign(SignableRequest::from(&original), &params).unwrap();
         assert_eq!(
-            "d2445d2d58e01146627c1e498dc0b4749d0cecd2cab05c5349ed132c083914e8",
+            "ab32de057edf094958d178b3c91f3c8d5c296d526b11da991cd5773d09cea560",
             out_with_session_token_but_excluded.signature
         );
         assert_eq!(
@@ -552,9 +557,9 @@ mod tests {
                 "authorization",
                 HeaderValue::from_str(
                     "AWS4-HMAC-SHA256 \
-                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        Credential=ANOTREAL/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;x-amz-date, \
-                        Signature=d2445d2d58e01146627c1e498dc0b4749d0cecd2cab05c5349ed132c083914e8",
+                        Signature=ab32de057edf094958d178b3c91f3c8d5c296d526b11da991cd5773d09cea560",
                 )
                 .unwrap(),
             )
@@ -571,9 +576,7 @@ mod tests {
     fn test_sign_headers_space_trimming() {
         let settings = SigningSettings::default();
         let params = SigningParams {
-            access_key: "AKIDEXAMPLE",
-            secret_key: "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
-            security_token: None,
+            identity: &Credentials::for_tests().into(),
             region: "us-east-1",
             name: "service",
             time: parse_date_time("20150830T123600Z").unwrap(),
@@ -590,9 +593,9 @@ mod tests {
             .unwrap()
             .into();
         let signable = SignableRequest::from(&original);
-        let out = sign(signable, &params).unwrap();
+        let out = crate::http_request::sign(signable, &params).unwrap();
         assert_eq!(
-            "0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
+            "244f2a0db34c97a528f22715fe01b2417b7750c8a95c7fc104a3c48d81d84c08",
             out.signature
         );
 
@@ -613,9 +616,9 @@ mod tests {
                 "authorization",
                 HeaderValue::from_str(
                     "AWS4-HMAC-SHA256 \
-                        Credential=AKIDEXAMPLE/20150830/us-east-1/service/aws4_request, \
+                        Credential=ANOTREAL/20150830/us-east-1/service/aws4_request, \
                         SignedHeaders=host;some-header;x-amz-date, \
-                        Signature=0bd74dbf6f21161f61a1a3a1c313b6a4bc67ec57bf5ea9ae956a63753ca1d7f7",
+                        Signature=244f2a0db34c97a528f22715fe01b2417b7750c8a95c7fc104a3c48d81d84c08",
                 )
                 .unwrap(),
             )
@@ -633,9 +636,7 @@ mod tests {
         ) {
             let settings = SigningSettings::default();
             let params = SigningParams {
-                access_key: "123",
-                secret_key: "asdf",
-                security_token: None,
+                identity: &Credentials::for_tests().into(),
                 region: "us-east-1",
                 name: "foo",
                 time: std::time::SystemTime::UNIX_EPOCH,

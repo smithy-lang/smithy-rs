@@ -69,26 +69,10 @@ class TrimResourceIdCustomization(
     private val codegenContext: ClientCodegenContext,
     private val inputShape: StructureShape,
     private val fieldName: String,
-) :
-    OperationCustomization() {
-    override fun mutSelf(): Boolean = true
-    override fun consumesSelf(): Boolean = true
+) : OperationCustomization() {
 
     override fun section(section: OperationSection): Writable = writable {
         when (section) {
-            // TODO(enableNewSmithyRuntimeCleanup): Delete this `MutateInput` section
-            is OperationSection.MutateInput -> {
-                val trimResourceId =
-                    RuntimeType.forInlineDependency(
-                        InlineAwsDependency.forRustFile("route53_resource_id_preprocessor_middleware"),
-                    )
-                        .resolve("trim_resource_id")
-                rustTemplate(
-                    "#{trim_resource_id}(&mut ${section.input}.$fieldName);",
-                    "trim_resource_id" to trimResourceId,
-                )
-            }
-
             is OperationSection.AdditionalInterceptors -> {
                 section.registerInterceptor(codegenContext.runtimeConfig, this) {
                     val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)

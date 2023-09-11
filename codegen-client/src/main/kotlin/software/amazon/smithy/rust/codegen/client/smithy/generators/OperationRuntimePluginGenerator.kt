@@ -76,7 +76,7 @@ class OperationRuntimePluginGenerator(
                     #{Some}(cfg.freeze())
                 }
 
-                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
                     // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
                     let retry_classifiers = #{RetryClassifiers}::new()
                         #{retry_classifier_customizations};

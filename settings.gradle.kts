@@ -29,7 +29,7 @@ pluginManagement {
 
 buildscript {
     repositories {
-        mavenLocal()
+        /* mavenLocal() */
         mavenCentral()
         google()
     }

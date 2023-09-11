@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Fluen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDocs
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.client.NoClientGenerics
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.DefaultProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -56,16 +55,13 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val runtimeConfig = codegenContext.runtimeConfig
         val types = Types(runtimeConfig)
-        val generics = NoClientGenerics(runtimeConfig)
         FluentClientGenerator(
             codegenContext,
             reexportSmithyClientBuilder = false,
-            generics = generics,
             customizations = listOf(
                 AwsPresignedFluentBuilderMethod(codegenContext),
                 AwsFluentClientDocs(codegenContext),
             ),
-            retryClassifier = AwsRuntimeType.awsHttp(runtimeConfig).resolve("retry::AwsResponseRetryClassifier"),
         ).render(rustCrate, listOf(CustomizableOperationTestHelpers(runtimeConfig)))
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)

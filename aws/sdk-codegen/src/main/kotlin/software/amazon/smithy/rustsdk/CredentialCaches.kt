@@ -5,18 +5,13 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
@@ -25,19 +20,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomizat
 class CredentialsCacheDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsCache"
     override val order: Byte = 0
+
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
         return baseCustomizations + CredentialCacheConfig(codegenContext)
-    }
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations + CredentialsCacheFeature(codegenContext.runtimeConfig)
     }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
@@ -155,23 +143,3 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
         }
     }
 }
-
-class CredentialsCacheFeature(private val runtimeConfig: RuntimeConfig) : OperationCustomization() {
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateRequest -> writable {
-                rust(
-                    """
-                    #T(&mut ${section.request}.properties_mut(), ${section.config}.credentials_cache.clone());
-                    """,
-                    setCredentialsCache(runtimeConfig),
-                )
-            }
-
-            else -> emptySection
-        }
-    }
-}
-
-fun setCredentialsCache(runtimeConfig: RuntimeConfig) =
-    AwsRuntimeType.awsHttp(runtimeConfig).resolve("auth::set_credentials_cache")
