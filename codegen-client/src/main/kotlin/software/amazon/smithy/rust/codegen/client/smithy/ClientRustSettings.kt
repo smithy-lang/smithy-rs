@@ -101,7 +101,7 @@ data class ClientCodegenConfig(
         private val defaultEventStreamAllowList: Set<String> = emptySet()
         private const val defaultIncludeEndpointUrlConfig = true
         private const val defaultEnableUserConfigurableRuntimePlugins = true
-        private val defaultNullabilityCheckMode = "CLIENT"
+        private const val defaultNullabilityCheckMode = "CLIENT"
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {

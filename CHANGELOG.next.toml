@@ -35,15 +35,14 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "Velfi"
 
 [[aws-sdk-rust]]
-message = "Struct members modeled as required are no longer wrapped in `Option`s. For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929)."
+message = "Struct members modeled as required are no longer wrapped in `Option`s [when possible](https://smithy.io/2.0/spec/aggregate-types.html#structure-member-optionality). For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929)."
 references = ["smithy-rs#2916", "aws-sdk-rust#536"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "Velfi"
 
 [[smithy-rs]]
 message = """
-Support for Smithy IDLv2 nullability can now be enabled by setting `generateOptionsForRequiredShapes = false` in your codegen config.
-This will render `@required` struct members without an `Option`.
+Support for Smithy IDLv2 nullability is now enabled by default. You can maintain the old behavior by setting `nullabilityCheckMode: "CLIENT_ZERO_VALUE_V1" in your codegen config.
 For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929).
 """
 references = ["smithy-rs#2916", "smithy-rs#1767"]
