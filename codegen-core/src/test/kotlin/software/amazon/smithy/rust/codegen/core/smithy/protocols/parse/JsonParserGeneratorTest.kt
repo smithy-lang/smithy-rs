@@ -48,7 +48,11 @@ class JsonParserGeneratorTest {
             s: String,
             top: Top,
             unit: Unit,
+            defaultString: DefaultString
         }
+
+        @default("Foo")
+        string DefaultString
 
         @enum([{name: "FOO", value: "FOO"}])
         string FooEnum
@@ -108,7 +112,7 @@ class JsonParserGeneratorTest {
             output: OpOutput,
             errors: [Error]
         }
-    """.asSmithyModel()
+    """.asSmithyModel(smithyVersion = "2.0")
 
     @Test
     fun `generates valid deserializers`() {
@@ -185,6 +189,14 @@ class JsonParserGeneratorTest {
                 // error with message
                 let error_output = ${format(errorParser)}(br#"{"message": "hello"}"#, test_error::Error::builder()).unwrap().build();
                 assert_eq!(error_output.message.expect("message should be set"), "hello");
+                """,
+            )
+
+            unitTest(
+                "union_default",
+                """
+                let input = br#"{ "top": { "choice": { "defaultString": null } } }"#;
+                let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).expect_err("cannot be null");
                 """,
             )
         }

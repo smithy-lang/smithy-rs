@@ -36,10 +36,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.errorCorrectingBuilder
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -59,13 +59,16 @@ import software.amazon.smithy.utils.StringUtils
  * Class describing a JSON parser section that can be used in a customization.
  */
 sealed class JsonParserSection(name: String) : Section(name) {
-    data class BeforeBoxingDeserializedMember(val shape: MemberShape) : JsonParserSection("BeforeBoxingDeserializedMember")
+    data class BeforeBoxingDeserializedMember(val shape: MemberShape) :
+        JsonParserSection("BeforeBoxingDeserializedMember")
 
-    data class AfterTimestampDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterTimestampDeserializedMember")
+    data class AfterTimestampDeserializedMember(val shape: MemberShape) :
+        JsonParserSection("AfterTimestampDeserializedMember")
 
     data class AfterBlobDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterBlobDeserializedMember")
 
-    data class AfterDocumentDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterDocumentDeserializedMember")
+    data class AfterDocumentDeserializedMember(val shape: MemberShape) :
+        JsonParserSection("AfterDocumentDeserializedMember")
 }
 
 /**
@@ -251,6 +254,7 @@ class JsonParserGenerator(
                                     deserializeMember(member)
                                 }
                             }
+
                             CodegenTarget.SERVER -> {
                                 if (symbolProvider.toSymbol(member).isOptional()) {
                                     withBlock("builder = builder.${member.setterName()}(", ");") {
@@ -512,7 +516,14 @@ class JsonParserGenerator(
                     if (returnSymbolToParse.isUnconstrained) {
                         rust("Ok(Some(builder))")
                     } else {
-                        rust("Ok(Some(builder.build()))")
+                        rustTemplate(
+                            """
+                            Ok(Some(
+                                    #{correct_errors}(builder)
+                                        .map_err(|err|#{Error}::custom_source("Response was invalid", err))?
+                            ))""",
+                            "correct_errors" to errorCorrectingBuilder(shape, symbolProvider, model), *codegenScope,
+                        )
                     }
                 }
             }
@@ -604,14 +615,10 @@ class JsonParserGenerator(
     }
 
     private fun RustWriter.unwrapOrDefaultOrError(member: MemberShape, checkValueSet: Boolean) {
-        if (symbolProvider.toSymbol(member).canUseDefault() && !checkValueSet) {
-            rust(".unwrap_or_default()")
-        } else {
-            rustTemplate(
-                ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
-                *codegenScope,
-            )
-        }
+        rustTemplate(
+            ".ok_or_else(|| #{Error}::custom(\"value for '${escape(member.memberName)}' cannot be null\"))?",
+            *codegenScope,
+        )
     }
 
     private fun RustWriter.objectKeyLoop(hasMembers: Boolean, inner: Writable) {

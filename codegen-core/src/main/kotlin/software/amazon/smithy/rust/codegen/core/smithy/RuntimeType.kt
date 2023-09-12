@@ -204,7 +204,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          *
          * Prelude docs: https://doc.rust-lang.org/std/prelude/index.html#prelude-contents
          */
-        val preludeScope by lazy {
+        val preludeScope: Array<Pair<String, Any>> by lazy {
             arrayOf(
                 // Rust 1.0
                 "Copy" to std.resolve("marker::Copy"),

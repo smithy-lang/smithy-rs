@@ -27,7 +27,6 @@ class EndpointTypesGenerator(
     val tests: List<EndpointTestCase>,
 ) {
     val params: Parameters = rules?.parameters ?: Parameters.builder().build()
-    private val runtimeConfig = codegenContext.runtimeConfig
     private val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
     private val stdlib = customizations
         .flatMap { it.customRuntimeFunctions(codegenContext) }
@@ -41,7 +40,6 @@ class EndpointTypesGenerator(
     }
 
     fun paramsStruct(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsStruct()
-    fun paramsBuilder(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsBuilder()
     fun defaultResolver(): RuntimeType? =
         rules?.let { EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(it) }
 

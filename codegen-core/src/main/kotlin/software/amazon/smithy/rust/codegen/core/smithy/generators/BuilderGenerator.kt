@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplat
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -32,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -41,7 +41,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -181,14 +180,15 @@ class BuilderGenerator(
     private fun renderBuildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = hasFallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
+        val fb =
+            "#{Result}<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
         val returnType = when (fallibleBuilder) {
-            true -> "#{Result}<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+            true -> fb
             false -> implBlockWriter.format(outputSymbol)
         }
         implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
         implBlockWriter.rustBlockTemplate("pub fn build(self) -> $returnType", *preludeScope) {
             conditionalBlockTemplate("#{Ok}(", ")", conditional = fallibleBuilder, *preludeScope) {
-                // If a wrapper is specified, use the `::new` associated function to construct the wrapper
                 coreBuilder(this)
             }
         }
@@ -369,6 +369,27 @@ class BuilderGenerator(
         }
     }
 
+    internal fun errorCorrectingBuilder(writer: RustWriter) {
+        val outputSymbol = symbolProvider.toSymbol(shape)
+        val fb =
+            "#{Result}<${writer.format(outputSymbol)}, ${writer.format(runtimeConfig.operationBuildError())}>"
+        writer.rustBlockTemplate(
+            "pub(crate) fn build_with_error_correction(self) -> $fb",
+            *preludeScope,
+        ) {
+            val fallibleBuilder = hasFallibleBuilder(shape, symbolProvider)
+            if (fallibleBuilder) {
+                rustTemplate(
+                    "#{Ok}(#{Builder})",
+                    *preludeScope,
+                    "Builder" to writable { coreBuilder(this, errorCorrection = true) },
+                )
+            } else {
+                rustTemplate("#{Ok}(self.build())", *preludeScope)
+            }
+        }
+    }
+
     /**
      * The core builder of the inner type. If the structure requires a fallible builder, this may use `?` to return
      * errors.
@@ -380,24 +401,39 @@ class BuilderGenerator(
      * }
      * ```
      */
-    private fun coreBuilder(writer: RustWriter) {
+    private fun coreBuilder(writer: RustWriter, errorCorrection: Boolean = false) {
         writer.rustBlock("#T", structureSymbol) {
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val default = memberSymbol.defaultValue()
                 withBlock("$memberName: self.$memberName", ",") {
-                    // Write the modifier
-                    when {
-                        !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
-                        !memberSymbol.isOptional() -> withBlock(
-                            ".ok_or_else(||",
-                            ")?",
-                        ) { missingRequiredField(memberName) }
+                    // Resolve a default value or return null
+                    val generator = DefaultValueGenerator(runtimeConfig, symbolProvider, model)
+                    val default = generator.defaultValue(member)
+                    if (!memberSymbol.isOptional()) {
+                        if (default != null) {
+                            rust(".unwrap_or_else(#T)", default)
+                        } else {
+                            if (errorCorrection) {
+                                generator.errorCorrection(member)?.also { correction -> rust(".or_else(||#T)", correction) }
+                            }
+                            withBlock(
+                                ".ok_or_else(||",
+                                ")?",
+                            ) { missingRequiredField(memberName) }
+                        }
                     }
                 }
             }
             writeCustomizations(customizations, BuilderSection.AdditionalFieldsInBuild(shape))
+        }
+    }
+}
+
+fun errorCorrectingBuilder(shape: StructureShape, symbolProvider: RustSymbolProvider, model: Model): RuntimeType {
+    return RuntimeType.forInlineFun("${symbolProvider.symbolForBuilder(shape).name}::build_with_error_correction", symbolProvider.moduleForBuilder(shape)) {
+        implBlock(symbolProvider.symbolForBuilder(shape)) {
+            BuilderGenerator(model, symbolProvider, shape, listOf()).errorCorrectingBuilder(this)
         }
     }
 }
