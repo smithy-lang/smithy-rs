@@ -118,7 +118,7 @@ class ServerBuilderInstantiator(private val symbolProvider: RustSymbolProvider, 
         }
     }
 
-    override fun finalizeBuilder(builder: String, shape: StructureShape): Writable = writable {
+    override fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable?): Writable = writable {
         val returnSymbolToParse = symbolParseFn(shape)
         if (returnSymbolToParse.isUnconstrained) {
             rust(builder)
