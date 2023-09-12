@@ -89,6 +89,8 @@ fun MemberShape.enforceRequired(
         return field
     }
     val shape = this
+    val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
+    val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
     val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
         codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
     )
