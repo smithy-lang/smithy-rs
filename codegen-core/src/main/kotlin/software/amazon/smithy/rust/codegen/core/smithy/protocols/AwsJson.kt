@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
@@ -148,6 +149,7 @@ open class AwsJson(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
+            builderInstantiator = ClientBuilderInstantiator(codegenContext.symbolProvider),
         )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =

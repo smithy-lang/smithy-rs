@@ -33,17 +33,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator.Companion.hasFallibleBuilder
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
-import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
@@ -60,13 +58,16 @@ import software.amazon.smithy.utils.StringUtils
  * Class describing a JSON parser section that can be used in a customization.
  */
 sealed class JsonParserSection(name: String) : Section(name) {
-    data class BeforeBoxingDeserializedMember(val shape: MemberShape) : JsonParserSection("BeforeBoxingDeserializedMember")
+    data class BeforeBoxingDeserializedMember(val shape: MemberShape) :
+        JsonParserSection("BeforeBoxingDeserializedMember")
 
-    data class AfterTimestampDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterTimestampDeserializedMember")
+    data class AfterTimestampDeserializedMember(val shape: MemberShape) :
+        JsonParserSection("AfterTimestampDeserializedMember")
 
     data class AfterBlobDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterBlobDeserializedMember")
 
-    data class AfterDocumentDeserializedMember(val shape: MemberShape) : JsonParserSection("AfterDocumentDeserializedMember")
+    data class AfterDocumentDeserializedMember(val shape: MemberShape) :
+        JsonParserSection("AfterDocumentDeserializedMember")
 }
 
 /**
@@ -94,6 +95,7 @@ class JsonParserGenerator(
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
     private val customizations: List<JsonParserCustomization> = listOf(),
+    private val builderInstantiator: BuilderInstantiator,
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -246,30 +248,7 @@ class JsonParserGenerator(
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${jsonName(member).dq()} =>") {
-                        when (codegenTarget) {
-                            CodegenTarget.CLIENT -> {
-                                withBlock("builder = builder.${member.setterName()}(", ");") {
-                                    deserializeMember(member)
-                                }
-                            }
-                            CodegenTarget.SERVER -> {
-                                if (symbolProvider.toSymbol(member).isOptional()) {
-                                    withBlock("builder = builder.${member.setterName()}(", ");") {
-                                        deserializeMember(member)
-                                    }
-                                } else {
-                                    rust("if let Some(v) = ")
-                                    deserializeMember(member)
-                                    rust(
-                                        """
-                                        {
-                                            builder = builder.${member.setterName()}(v);
-                                        }
-                                        """,
-                                    )
-                                }
-                            }
-                        }
+                        builderInstantiator.setField("builder", writable { deserializeMember(member) }, member)(this)
                     }
                 }
                 rustTemplate("_ => #{skip_value}(tokens)?", *codegenScope)
@@ -509,20 +488,17 @@ class JsonParserGenerator(
                         "Builder" to symbolProvider.symbolForBuilder(shape),
                     )
                     deserializeStructInner(shape.members())
-
-                    if (codegenContext.target == CodegenTarget.SERVER) {
-                        if (returnSymbolToParse.isUnconstrained) {
-                            rust("Ok(Some(builder))")
-                        } else {
-                            rust("Ok(Some(builder.build()))")
-                        }
-                    } else {
-                        if (hasFallibleBuilder(shape, symbolProvider)) {
-                            rust("Ok(Some(builder.build()?))")
-                        } else {
-                            rust("Ok(Some(builder.build()))")
-                        }
-                    }
+                    val builder = builderInstantiator.finalizeBuilder(
+                        "builder",
+                        shape,
+                        writable {
+                            rustTemplate(
+                                """|err|#{Error}::custom_source("Response was invalid", err)""",
+                                *codegenScope,
+                            )
+                        },
+                    )
+                    rustTemplate("Ok(Some(#{builder}))", "builder" to builder)
                 }
             }
         }

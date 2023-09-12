@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -120,6 +121,7 @@ class JsonParserGeneratorTest {
             codegenContext,
             HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
             ::restJsonFieldName,
+            builderInstantiator = ClientBuilderInstantiator(symbolProvider),
         )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
         val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))

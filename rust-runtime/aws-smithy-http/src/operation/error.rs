@@ -5,7 +5,6 @@
 
 //! Errors for operations
 
-use aws_smithy_json::deserialize::error::DeserializeError;
 use aws_smithy_types::date_time::DateTimeFormatError;
 use http::uri::InvalidUri;
 use std::borrow::Cow;
@@ -184,23 +183,5 @@ impl Error for BuildError {
             BuildErrorKind::InvalidUri { source, .. } => Some(source as _),
             BuildErrorKind::InvalidField { .. } | BuildErrorKind::MissingField { .. } => None,
         }
-    }
-}
-
-impl From<BuildError> for DeserializeError {
-    fn from(build_error: BuildError) -> Self {
-        DeserializeError::custom_source(
-            "deserialization failed because a required field was missing",
-            build_error,
-        )
-    }
-}
-
-#[cfg(feature = "event-stream")]
-impl From<BuildError> for aws_smithy_eventstream::error::Error {
-    fn from(build_error: BuildError) -> Self {
-        aws_smithy_eventstream::error::Error::unmarshalling(format!(
-            "error unmarshalling failed because a required field was missing: {build_error}"
-        ))
     }
 }

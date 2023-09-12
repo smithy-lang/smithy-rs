@@ -29,10 +29,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -356,10 +358,18 @@ class EventStreamUnmarshallerGenerator(
                                     builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
                                         #{OpError}::${member.target.name}(
-                                            builder.build()${if (builderIsFallible) { "?" } else { "" }}
+                                            #{build}
                                         )
                                     ))
                                     """,
+                                    "build" to ClientBuilderInstantiator(symbolProvider).finalizeBuilder(
+                                        "builder", target,
+                                        writable {
+                                            rustTemplate(
+                                                """|err|#{Error}::unmarshalling(format!("{}", err))""", *codegenScope,
+                                            )
+                                        },
+                                    ),
                                     "parser" to parser,
                                     *codegenScope,
                                 )

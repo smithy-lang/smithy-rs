@@ -129,6 +129,34 @@ fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
 // Getter names will never hit a reserved word and therefore never need escaping.
 fun MemberShape.getterName() = "get_${this.memberName.toSnakeCase()}"
 
+interface BuilderInstantiator {
+    fun setField(builder: String, value: Writable, e: MemberShape): Writable
+    fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable? = null): Writable
+}
+
+class ClientBuilderInstantiator(private val symbolProvider: RustSymbolProvider) : BuilderInstantiator {
+    override fun setField(builder: String, value: Writable, e: MemberShape): Writable {
+        return writable {
+            rustTemplate("$builder = $builder.${e.setterName()}(#{value})", "value" to value)
+        }
+    }
+
+    override fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable?): Writable = writable {
+        if (BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+            rustTemplate(
+                "$builder.build()#{mapErr}?",
+                "mapErr" to (
+                    mapErr?.map {
+                        rust(".map_err(#T)", it)
+                    } ?: writable { }
+                    ),
+            )
+        } else {
+            rust("$builder.build()")
+        }
+    }
+}
+
 class BuilderGenerator(
     private val model: Model,
     private val symbolProvider: RustSymbolProvider,
