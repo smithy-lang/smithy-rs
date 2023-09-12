@@ -57,6 +57,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtoc
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializerParams
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializerRenderer
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
@@ -86,6 +88,23 @@ import java.util.logging.Logger
  */
 sealed class ServerHttpBoundProtocolSection(name: String) : Section(name) {
     data class AfterTimestampDeserializedMember(val shape: MemberShape) : ServerHttpBoundProtocolSection("AfterTimestampDeserializedMember")
+
+    /**
+     * Represent a section for rendering the return type of serialized stream payload.
+     *
+     * When overriding the `section` method, this should render [Symbol] for that return type.
+     */
+    data class TypeOfSerializedStreamPayload(val params: StreamPayloadSerializerParams) :
+        ServerHttpBoundProtocolSection("TypeOfSerializedStreamPayload")
+
+    /**
+     * Represent a section for rendering the serialized stream payload.
+     *
+     * When overriding the `section` method, this should render either the payload as-is or the payload wrapped
+     * with a new-type that implements the `futures_core::stream::Stream` trait.
+     */
+    data class WrapStreamPayload(val params: StreamPayloadSerializerParams) :
+        ServerHttpBoundProtocolSection("WrapStreamPayload")
 }
 
 /**
@@ -114,9 +133,40 @@ class ServerHttpBoundProtocolGenerator(
     }
 }
 
+/**
+ * Server implementation of the [StreamPayloadSerializerRenderer] interface.
+ *
+ * The implementation of each method is delegated to [customizations]. Regular server codegen and python server
+ * have different requirements for how to render stream payload serializers, and they express their requirements
+ * through customizations, specifically with [TypeOfSerializedStreamPayload] and [WrapStreamPayload].
+ */
+private class ServerStreamPayloadSerializerRenderer(private val customizations: List<ServerHttpBoundProtocolCustomization>) :
+    StreamPayloadSerializerRenderer {
+    override fun renderOutputType(writer: RustWriter, params: StreamPayloadSerializerParams) {
+        for (customization in customizations) {
+            customization.section(
+                ServerHttpBoundProtocolSection.TypeOfSerializedStreamPayload(
+                    params,
+                ),
+            )(writer)
+        }
+    }
+
+    override fun renderPayload(writer: RustWriter, params: StreamPayloadSerializerParams) {
+        for (customization in customizations) {
+            customization.section(
+                ServerHttpBoundProtocolSection.WrapStreamPayload(
+                    params,
+                ),
+            )(writer)
+        }
+    }
+}
+
 class ServerHttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
     protocol: Protocol,
+    customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
 ) : ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
     codegenContext, protocol, HttpMessageType.RESPONSE,
     renderEventStreamBody = { writer, params ->
@@ -137,6 +187,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
         )
     },
+    ServerStreamPayloadSerializerRenderer(customizations),
 )
 
 /*
@@ -538,7 +589,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let {
-            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
+            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol, customizations)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(", "));", *codegenScope) {
                 payloadGenerator.generatePayload(this, "output", operationShape)
             }
@@ -707,7 +758,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     #{SmithyHttpServer}::protocol::content_type_header_classifier(
-                        &parts.headers, 
+                        &parts.headers,
                         Some("$expectedRequestContentType"),
                     )?;
                     input = #{parser}(bytes.as_ref(), input)?;
