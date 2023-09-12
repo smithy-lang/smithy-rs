@@ -209,9 +209,6 @@ fn to_connector_error(err: hyper::Error) -> ConnectorError {
     if err.is_incomplete_message() {
         return ConnectorError::other(err.into(), Some(ErrorKind::TransientError));
     }
-    if err.is_closed() {
-        return ConnectorError::io(err.into());
-    }
     if let Some(h2_err) = find_source::<h2::Error>(&err) {
         if h2_err.is_go_away()
             || (h2_err.is_reset() && h2_err.reason() == Some(Reason::REFUSED_STREAM))
