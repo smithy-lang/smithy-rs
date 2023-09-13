@@ -516,14 +516,16 @@ class JsonParserGenerator(
                     if (returnSymbolToParse.isUnconstrained) {
                         rust("Ok(Some(builder))")
                     } else {
-                        rustTemplate(
-                            """
-                            Ok(Some(
-                                    #{correct_errors}(builder)
-                                        .map_err(|err|#{Error}::custom_source("Response was invalid", err))?
-                            ))""",
-                            "correct_errors" to errorCorrectingBuilder(shape, symbolProvider, model), *codegenScope,
-                        )
+                        val errorCorrection = errorCorrectingBuilder(shape, symbolProvider, model)
+                        if (errorCorrection != null) {
+                            rustTemplate(
+                                """
+                            Ok(Some(#{correct_errors}(builder).map_err(|err|#{Error}::custom_source("Response was invalid", err))?))""",
+                                "correct_errors" to errorCorrection, *codegenScope,
+                            )
+                        } else {
+                            rust("Ok(Some(builder.build()))")
+                        }
                     }
                 }
             }

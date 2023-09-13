@@ -488,8 +488,16 @@ class XmlBindingTraitParserGenerator(
                 } else {
                     rust("let _ = decoder;")
                 }
-                val correcting = errorCorrectingBuilder(shape, symbolProvider, model)
-                rustTemplate("Ok(#{correcting}(builder).map_err(|_|#{XmlDecodeError}::custom(\"missing field\"))?)", "correcting" to correcting, *codegenScope)
+                val errorCorrection = errorCorrectingBuilder(shape, symbolProvider, model)
+                if (errorCorrection != null) {
+                    rustTemplate(
+                        """
+                            Ok(#{correct_errors}(builder).map_err(|err|#{XmlDecodeError}::custom_source("Response was invalid", err))?)""",
+                        "correct_errors" to errorCorrection, *codegenScope,
+                    )
+                } else {
+                    rust("Ok(builder.build())")
+                }
             }
         }
         rust("#T(&mut ${ctx.tag})", nestedParser)

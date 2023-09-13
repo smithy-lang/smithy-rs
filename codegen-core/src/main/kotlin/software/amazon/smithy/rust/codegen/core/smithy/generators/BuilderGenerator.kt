@@ -430,7 +430,10 @@ class BuilderGenerator(
     }
 }
 
-fun errorCorrectingBuilder(shape: StructureShape, symbolProvider: RustSymbolProvider, model: Model): RuntimeType {
+fun errorCorrectingBuilder(shape: StructureShape, symbolProvider: RustSymbolProvider, model: Model): RuntimeType? {
+    if (!BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
+        return null
+    }
     return RuntimeType.forInlineFun("${symbolProvider.symbolForBuilder(shape).name}::build_with_error_correction", symbolProvider.moduleForBuilder(shape)) {
         implBlock(symbolProvider.symbolForBuilder(shape)) {
             BuilderGenerator(model, symbolProvider, shape, listOf()).errorCorrectingBuilder(this)
