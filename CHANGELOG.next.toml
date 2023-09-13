@@ -162,3 +162,15 @@ message = "The `futures_core::stream::Stream` trait has been removed from public
 references = ["smithy-rs#2978"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations made available through the trait or its extension traits are not supported, but we should be able to add them as needed in a backward compatible manner."
+references = ["smithy-rs#2983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations made available through the trait or its extension traits are not supported, but we should be able to add them as needed in a backward compatible manner."
+references = ["smithy-rs#2983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
