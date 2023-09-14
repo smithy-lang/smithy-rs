@@ -30,6 +30,11 @@ fun Writable.map(f: RustWriter.(Writable) -> Unit): Writable {
     return writable { f(self) }
 }
 
+/** Returns Some(..arg) */
+fun Writable.some(): Writable {
+    return this.map { rust("Some(#T)", it) }
+}
+
 fun Writable.isNotEmpty(): Boolean = !this.isEmpty()
 
 operator fun Writable.plus(other: Writable): Writable {

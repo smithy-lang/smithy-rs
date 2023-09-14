@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -19,18 +18,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
-
-/**
- * Server enums do not have an `Unknown` variant like client enums do, so constructing an enum from
- * a string is a fallible operation (hence `try_from`). It's ok to panic here if construction fails,
- * since this is only used in protocol tests.
- */
-private fun enumFromStringFn(enumSymbol: Symbol, data: String): Writable = writable {
-    rust(
-        """#T::try_from($data).expect("this is only used in tests")""",
-        enumSymbol,
-    )
-}
 
 class ServerAfterInstantiatingValueConstrainItIfNecessary(val codegenContext: CodegenContext) :
     InstantiatorCustomization() {
@@ -82,7 +69,6 @@ fun serverInstantiator(codegenContext: CodegenContext) =
         codegenContext.model,
         codegenContext.runtimeConfig,
         ServerBuilderKindBehavior(codegenContext),
-        ::enumFromStringFn,
         defaultsForRequiredFields = true,
         customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
     )

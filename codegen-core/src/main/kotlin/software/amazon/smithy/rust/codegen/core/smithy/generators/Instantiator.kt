@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
@@ -18,12 +18,14 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -84,11 +86,6 @@ open class Instantiator(
     private val runtimeConfig: RuntimeConfig,
     /** Behavior of the builder type used for structure shapes. */
     private val builderKindBehavior: BuilderKindBehavior,
-    /**
-     * A function that given a symbol for an enum shape and a string, returns a writable to instantiate the enum with
-     * the string value.
-     **/
-    private val enumFromStringFn: (Symbol, String) -> Writable,
     /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
     private val customizations: List<InstantiatorCustomization> = listOf(),
@@ -131,64 +128,7 @@ open class Instantiator(
             // Members, supporting potentially optional members
             is MemberShape -> renderMember(writer, shape, data, ctx)
 
-            // Wrapped Shapes
-            is TimestampShape -> {
-                val node = (data as NumberNode)
-                val num = BigDecimal(node.toString())
-                val wholePart = num.toInt()
-                val fractionalPart = num.remainder(BigDecimal.ONE)
-                writer.rust(
-                    "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
-                    RuntimeType.dateTime(runtimeConfig),
-                )
-            }
-
-            /**
-             * ```rust
-             * Blob::new("arg")
-             * ```
-             */
-            is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
-                writer.rust(
-                    "#T::from_static(b${(data as StringNode).value.dq()})",
-                    RuntimeType.byteStream(runtimeConfig),
-                )
-            } else {
-                writer.rust(
-                    "#T::new(${(data as StringNode).value.dq()})",
-                    RuntimeType.blob(runtimeConfig),
-                )
-            }
-
-            // Simple Shapes
-            is StringShape -> renderString(writer, shape, data as StringNode)
-            is NumberShape -> when (data) {
-                is StringNode -> {
-                    val numberSymbol = symbolProvider.toSymbol(shape)
-                    // support Smithy custom values, such as Infinity
-                    writer.rust(
-                        """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
-                        numberSymbol,
-                        RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
-                    )
-                }
-
-                is NumberNode -> writer.write(data.value)
-            }
-
-            is BooleanShape -> writer.rust(data.asBooleanNode().get().toString())
-            is DocumentShape -> writer.rustBlock("") {
-                val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
-                rustTemplate(
-                    """
-                    let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
-                    let mut tokens = #{json_token_iter}(json_bytes).peekable();
-                    #{expect_document}(&mut tokens).expect("well formed json")
-                    """,
-                    "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
-                    "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
-                )
-            }
+            is SimpleShape -> PrimitiveInstantiator(runtimeConfig, symbolProvider).instantiate(shape, data)(writer)
 
             else -> writer.writeWithNoFormatting("todo!() /* $shape $data */")
         }
@@ -214,7 +154,11 @@ open class Instantiator(
                 ")",
                 // The conditions are not commutative: note client builders always take in `Option<T>`.
                 conditional = symbol.isOptional() ||
-                    (model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(memberShape)),
+                    (
+                        model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(
+                            memberShape,
+                        )
+                        ),
                 *preludeScope,
             ) {
                 writer.conditionalBlockTemplate(
@@ -238,7 +182,8 @@ open class Instantiator(
         }
     }
 
-    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) = renderList(writer, shape, data, ctx)
+    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) =
+        renderList(writer, shape, data, ctx)
 
     /**
      * ```rust
@@ -317,22 +262,18 @@ open class Instantiator(
         }
     }
 
-    private fun renderString(writer: RustWriter, shape: StringShape, arg: StringNode) {
-        val data = writer.escape(arg.value).dq()
-        if (!shape.hasTrait<EnumTrait>()) {
-            writer.rust("$data.to_owned()")
-        } else {
-            val enumSymbol = symbolProvider.toSymbol(shape)
-            writer.rustTemplate("#{EnumFromStringFn:W}", "EnumFromStringFn" to enumFromStringFn(enumSymbol, data))
-        }
-    }
-
     /**
      * ```rust
      * MyStruct::builder().field_1("hello").field_2(5).build()
      * ```
      */
-    private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, headers: Map<String, String>, ctx: Ctx) {
+    private fun renderStructure(
+        writer: RustWriter,
+        shape: StructureShape,
+        data: ObjectNode,
+        headers: Map<String, String>,
+        ctx: Ctx,
+    ) {
         writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
 
         renderStructureMembers(writer, shape, data, headers, ctx)
@@ -414,5 +355,79 @@ open class Instantiator(
         is BooleanShape -> Node.from(false)
         is DocumentShape -> Node.objectNode()
         else -> throw CodegenException("Unrecognized shape `$shape`")
+    }
+}
+
+class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private val symbolProvider: SymbolProvider) {
+    fun instantiate(shape: SimpleShape, data: Node): Writable = writable {
+        when (shape) {
+            // Simple Shapes
+            is TimestampShape -> {
+                val node = (data as NumberNode)
+                val num = BigDecimal(node.toString())
+                val wholePart = num.toInt()
+                val fractionalPart = num.remainder(BigDecimal.ONE)
+                rust(
+                    "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
+                    RuntimeType.dateTime(runtimeConfig),
+                )
+            }
+
+            /**
+             * ```rust
+             * Blob::new("arg")
+             * ```
+             */
+            is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
+                rust(
+                    "#T::from_static(b${(data as StringNode).value.dq()})",
+                    RuntimeType.byteStream(runtimeConfig),
+                )
+            } else {
+                rust(
+                    "#T::new(${(data as StringNode).value.dq()})",
+                    RuntimeType.blob(runtimeConfig),
+                )
+            }
+
+            is StringShape -> renderString(shape, data as StringNode)(this)
+            is NumberShape -> when (data) {
+                is StringNode -> {
+                    val numberSymbol = symbolProvider.toSymbol(shape)
+                    // support Smithy custom values, such as Infinity
+                    rust(
+                        """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
+                        numberSymbol,
+                        RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
+                    )
+                }
+
+                is NumberNode -> write(data.value)
+            }
+
+            is BooleanShape -> rust(data.asBooleanNode().get().toString())
+            is DocumentShape -> rustBlock("") {
+                val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
+                rustTemplate(
+                    """
+                    let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
+                    let mut tokens = #{json_token_iter}(json_bytes).peekable();
+                    #{expect_document}(&mut tokens).expect("well formed json")
+                    """,
+                    "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+                    "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
+                )
+            }
+        }
+    }
+
+    private fun renderString(shape: StringShape, arg: StringNode): Writable = {
+        val data = escape(arg.value).dq()
+        if (shape.hasTrait<EnumTrait>() || shape is EnumShape) {
+            val enumSymbol = symbolProvider.toSymbol(shape)
+            rust("$data.parse::<#T>().unwrap()", enumSymbol)
+        } else {
+            rust("$data.to_owned()")
+        }
     }
 }
