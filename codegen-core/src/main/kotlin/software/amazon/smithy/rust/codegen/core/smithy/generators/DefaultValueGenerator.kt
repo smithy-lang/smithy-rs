@@ -39,15 +39,17 @@ class DefaultValueGenerator(
 ) {
     private val instantiator = PrimitiveInstantiator(runtimeConfig, symbolProvider)
 
+    data class DefaultValue(val isRustDefault: Boolean, val expr: Writable)
+
     /** Returns the default value as set by the defaultValue trait */
-    fun defaultValue(member: MemberShape): Writable? {
+    fun defaultValue(member: MemberShape): DefaultValue? {
         val target = model.expectShape(member.target)
         return when (val default = symbolProvider.toSymbol(member).defaultValue()) {
             is Default.NoDefault -> null
-            is Default.RustDefault -> writable("Default::default")
+            is Default.RustDefault -> DefaultValue(isRustDefault = true, writable("Default::default"))
             is Default.NonZeroDefault -> {
                 val instantiation = instantiator.instantiate(target as SimpleShape, default.value)
-                writable { rust("||#T", instantiation) }
+                DefaultValue(isRustDefault = false, writable { rust("||#T", instantiation) })
             }
         }
     }
@@ -62,10 +64,12 @@ class DefaultValueGenerator(
             when (target) {
                 is EnumShape -> rustTemplate(""""no value was set".parse::<#{Shape}>().ok()""", "Shape" to symbol)
                 is BooleanShape, is NumberShape, is StringShape, is DocumentShape, is ListShape, is MapShape -> rust("Some(Default::default())")
-                is StructureShape -> rust(
-                    "#T::default().build_with_error_correction().ok()",
-                    symbolProvider.symbolForBuilder(target),
+                is StructureShape -> rustTemplate(
+                    "#{error_correct}(#{Builder}::default()).ok()",
+                    "Builder" to symbolProvider.symbolForBuilder(target),
+                    "error_correct" to errorCorrectingBuilder(target, symbolProvider, model)!!,
                 )
+
                 is TimestampShape -> instantiator.instantiate(target, Node.from(0)).some()(this)
                 is BlobShape -> instantiator.instantiate(target, Node.from("")).some()(this)
 

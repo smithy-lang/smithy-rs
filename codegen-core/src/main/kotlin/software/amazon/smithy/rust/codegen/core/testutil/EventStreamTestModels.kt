@@ -129,7 +129,7 @@ object EventStreamTestModels {
             validTestUnion = """{"Foo":"hello"}""",
             validSomeError = """{"Message":"some error"}""",
             validUnmodeledError = """{"Message":"unmodeled error"}""",
-        ) { RestJson(it) },
+        ) { RestJson(it, enableErrorCorrection = false) },
 
         //
         // awsJson1_1
@@ -145,7 +145,7 @@ object EventStreamTestModels {
             validTestUnion = """{"Foo":"hello"}""",
             validSomeError = """{"Message":"some error"}""",
             validUnmodeledError = """{"Message":"unmodeled error"}""",
-        ) { AwsJson(it, AwsJsonVersion.Json11) },
+        ) { AwsJson(it, AwsJsonVersion.Json11, enableErrorCorrection = false) },
 
         //
         // restXml

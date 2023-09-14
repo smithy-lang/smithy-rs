@@ -59,7 +59,7 @@ class RestJsonHttpBindingResolver(
     }
 }
 
-open class RestJson(val codegenContext: CodegenContext) : Protocol {
+open class RestJson(val codegenContext: CodegenContext, private val enableErrorCorrection: Boolean) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -95,7 +95,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         listOf("x-amzn-errortype" to errorShape.id.name)
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
+        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, enableErrorCorrection = enableErrorCorrection)
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)

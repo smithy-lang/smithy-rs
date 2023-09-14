@@ -33,11 +33,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.errorCorrectingBuilder
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -95,6 +97,7 @@ class JsonParserGenerator(
     private val returnSymbolToParse: (Shape) -> ReturnSymbolToParse = { shape ->
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
+    private val enableErrorCorrection: Boolean,
     private val customizations: List<JsonParserCustomization> = listOf(),
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
@@ -515,17 +518,20 @@ class JsonParserGenerator(
                     // Only call `build()` if the builder is not fallible. Otherwise, return the builder.
                     if (returnSymbolToParse.isUnconstrained) {
                         rust("Ok(Some(builder))")
-                    } else {
+                    } else if (enableErrorCorrection && BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
                         val errorCorrection = errorCorrectingBuilder(shape, symbolProvider, model)
-                        if (errorCorrection != null) {
-                            rustTemplate(
-                                """
-                            Ok(Some(#{correct_errors}(builder).map_err(|err|#{Error}::custom_source("Response was invalid", err))?))""",
-                                "correct_errors" to errorCorrection, *codegenScope,
-                            )
+                        val buildExpr = if (errorCorrection != null) {
+                            writable { rustTemplate("#{correct_errors}(builder)", "correctErrors" to errorCorrection) }
                         } else {
-                            rust("Ok(Some(builder.build()))")
+                            writable { rustTemplate("builder.build()") }
                         }
+                        rustTemplate(
+                            """Ok(Some(#{build}.map_err(|err|#{Error}::custom_source("Response was invalid", err))?))""",
+                            "build" to buildExpr,
+                            *codegenScope,
+                        )
+                    } else {
+                        rust("Ok(Some(builder.build()))")
                     }
                 }
             }

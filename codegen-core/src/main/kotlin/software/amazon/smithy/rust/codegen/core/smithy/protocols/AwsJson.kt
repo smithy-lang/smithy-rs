@@ -122,6 +122,7 @@ class AwsJsonSerializerGenerator(
 open class AwsJson(
     val codegenContext: CodegenContext,
     val awsJsonVersion: AwsJsonVersion,
+    val enableErrorCorrection: Boolean,
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val errorScope = arrayOf(
@@ -148,6 +149,7 @@ open class AwsJson(
             codegenContext,
             httpBindingResolver,
             ::awsJsonFieldName,
+            enableErrorCorrection = enableErrorCorrection,
         )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =

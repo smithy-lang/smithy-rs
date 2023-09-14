@@ -412,7 +412,11 @@ class BuilderGenerator(
                     val default = generator.defaultValue(member)
                     if (!memberSymbol.isOptional()) {
                         if (default != null) {
-                            rust(".unwrap_or_else(#T)", default)
+                            if (default.isRustDefault) {
+                                rust(".unwrap_or_default()")
+                            } else {
+                                rust(".unwrap_or_else(#T)", default)
+                            }
                         } else {
                             if (errorCorrection) {
                                 generator.errorCorrection(member)?.also { correction -> rust(".or_else(||#T)", correction) }

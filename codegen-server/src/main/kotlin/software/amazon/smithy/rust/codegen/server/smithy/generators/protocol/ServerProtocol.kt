@@ -113,6 +113,7 @@ fun jsonParserGenerator(
         httpBindingResolver,
         jsonName,
         returnSymbolToParseFn(codegenContext),
+        enableErrorCorrection = false,
         listOf(
             ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(codegenContext),
         ) + additionalParserCustomizations,
@@ -122,7 +123,7 @@ class ServerAwsJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     awsJsonVersion: AwsJsonVersion,
     private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
-) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
+) : AwsJson(serverCodegenContext, awsJsonVersion, enableErrorCorrection = false), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolModulePath: String
@@ -186,7 +187,7 @@ private fun restRouterType(runtimeConfig: RuntimeConfig) =
 class ServerRestJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
-) : RestJson(serverCodegenContext), ServerProtocol {
+) : RestJson(serverCodegenContext, enableErrorCorrection = false), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolModulePath: String = "rest_json_1"
