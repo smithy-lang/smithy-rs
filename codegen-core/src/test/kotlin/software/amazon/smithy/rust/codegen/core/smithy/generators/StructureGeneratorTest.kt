@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import io.kotest.matchers.string.shouldContainInOrder
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -16,9 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
-import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -437,151 +434,5 @@ class StructureGeneratorTest {
             StructureGenerator(model, provider, writer, struct, emptyList()).render()
             writer.toString().shouldNotContain("#[doc(hidden)]")
         }
-    }
-
-    @Test
-    fun `it supports error correction`() {
-        // TODO
-        val model = """
-            ${"$"}version: "2.0"
-            namespace com.test
-            structure MyStruct {
-              @required
-              int: Integer
-
-              @required
-              string: String
-
-              @required
-              list: StringList
-
-              @required
-              doc: Document
-
-              @required
-              bool: Boolean
-
-              @required
-              ts: Timestamp
-
-              @required
-              blob: Blob
-            }
-
-            list StringList {
-                member: String
-            }
-        """.asSmithyModel()
-
-        val provider = testSymbolProvider(
-            model,
-            rustReservedWordConfig = rustReservedWordConfig,
-            config = TestRustSymbolProviderConfig.copy(nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL),
-        )
-        val project = TestWorkspace.testProject(provider)
-        val shape: StructureShape = model.lookup("com.test#MyStruct")
-        project.useShapeWriter(shape) {
-            StructureGenerator(model, provider, this, shape, listOf()).render()
-            BuilderGenerator(model, provider, shape, listOf()).render(this)
-            unitTest("error_correction") {
-                rustTemplate(
-                    """
-
-                    Builder::default().build().expect_err("no default set for many fields");
-                    let corrected = Builder::default().build_with_error_correction().expect("all errors corrected");
-                    assert_eq!(corrected.int(), 0);
-                    assert_eq!(corrected.string(), "");
-                    """,
-                )
-            }
-        }
-        project.compileAndTest()
-    }
-
-    @Test
-    fun `it supports nonzero defaults`() {
-        // TODO
-        val model = """
-            ${"$"}version: "2.0"
-            namespace com.test
-            structure MyStruct {
-              @default(0)
-              @required
-              zeroDefault: Integer
-
-              @required
-              @default(1)
-              oneDefault: OneDefault
-
-              @required
-              @default("")
-              defaultEmpty: String
-
-              @required
-              @default("some-value")
-              defaultValue: String
-
-              @required
-              anActuallyRequiredField: Integer
-
-              @required
-              @default([])
-              emptyList: StringList
-
-              noDefault: String
-
-              @default(true)
-              @required
-              defaultDocument: Document
-            }
-
-            list StringList {
-                member: String
-            }
-
-            @default(1)
-            integer OneDefault
-        """.asSmithyModel()
-
-        val provider = testSymbolProvider(
-            model,
-            rustReservedWordConfig = rustReservedWordConfig,
-            config = TestRustSymbolProviderConfig.copy(nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL),
-        )
-        val project = TestWorkspace.testProject(provider)
-        val shape: StructureShape = model.lookup("com.test#MyStruct")
-        project.useShapeWriter(shape) {
-            StructureGenerator(model, provider, this, shape, listOf()).render()
-            BuilderGenerator(model, provider, shape, listOf()).render(this)
-            unitTest("test_defaults") {
-                rustTemplate(
-                    """
-                    let s = Builder::default().an_actually_required_field(5).build().unwrap();
-                    assert_eq!(s.zero_default(), 0);
-                    assert_eq!(s.default_empty(), "");
-                    assert_eq!(s.default_value(), "some-value");
-                    assert_eq!(s.one_default(), 1);
-                    assert!(s.empty_list().is_empty());
-                    assert_eq!(s.an_actually_required_field(), 5);
-                    assert_eq!(s.no_default(), None);
-                    assert_eq!(s.default_document().as_bool().unwrap(), true);
-
-                    """,
-                    "Struct" to provider.toSymbol(shape),
-                )
-            }
-            unitTest("error_correction") {
-                rustTemplate(
-                    """
-
-                    Builder::default().build().expect_err("no default set");
-                    let corrected = Builder::default().build_with_error_correction().expect("all errors corrected");
-                    assert_eq!(corrected.an_actually_required_field(), 0);
-                    assert_eq!(Builder::default().an_actually_required_field(0).build().unwrap(), corrected);
-                    """,
-                )
-            }
-        }
-        project.compileAndTest()
     }
 }

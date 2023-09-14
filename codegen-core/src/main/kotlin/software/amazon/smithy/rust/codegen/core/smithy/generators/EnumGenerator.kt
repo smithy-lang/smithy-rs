@@ -232,6 +232,8 @@ open class EnumGenerator(
             },
         )
 
+        enumType.implFromStr(context)(this)
+
         rustTemplate(
             """
             impl<T> #{From}<T> for ${context.enumName} where T: #{AsRef}<str> {
@@ -239,6 +241,7 @@ open class EnumGenerator(
                     ${context.enumName}(s.as_ref().to_owned())
                 }
             }
+
             """,
             *preludeScope,
         )

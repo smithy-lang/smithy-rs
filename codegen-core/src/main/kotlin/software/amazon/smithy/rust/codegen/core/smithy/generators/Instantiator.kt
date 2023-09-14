@@ -30,6 +30,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
@@ -422,11 +423,11 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
 
     private fun renderString(shape: StringShape, arg: StringNode): Writable = {
         val data = escape(arg.value).dq()
-        if (shape !is EnumShape) {
-            rust("$data.to_owned()")
-        } else {
+        if (shape.hasTrait<EnumTrait>() || shape is EnumShape) {
             val enumSymbol = symbolProvider.toSymbol(shape)
             rust("$data.parse::<#T>().unwrap()", enumSymbol)
+        } else {
+            rust("$data.to_owned()")
         }
     }
 }

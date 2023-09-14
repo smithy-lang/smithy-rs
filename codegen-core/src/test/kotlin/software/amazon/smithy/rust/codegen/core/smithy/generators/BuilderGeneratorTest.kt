@@ -7,17 +7,24 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
+import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
@@ -137,6 +144,138 @@ internal class BuilderGeneratorTest {
         }
         project.withModule(provider.moduleForBuilder(secretStructure)) {
             BuilderGenerator(model, provider, secretStructure, emptyList()).render(this)
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `it supports error correction`() {
+        val model = """
+            ${"$"}version: "2.0"
+            namespace com.test
+            structure MyStruct {
+              @required
+              int: Integer
+
+              @required
+              string: String
+
+              @required
+              list: StringList
+
+              @required
+              doc: Document
+
+              @required
+              bool: Boolean
+
+              @required
+              ts: Timestamp
+
+              @required
+              blob: Blob
+            }
+
+            list StringList {
+                member: String
+            }
+        """.asSmithyModel()
+
+        val provider = testSymbolProvider(
+            model,
+            rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
+            config = TestRustSymbolProviderConfig.copy(nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL),
+        )
+        val project = TestWorkspace.testProject(provider)
+        val shape: StructureShape = model.lookup("com.test#MyStruct")
+        shape.renderWithModelBuilder(model, provider, project)
+        project.unitTest {
+            rustTemplate(
+                """
+
+                #{Builder}::default().build().expect_err("no default set for many fields");
+                let corrected = #{correct_errors}(#{Builder}::default()).expect("all errors corrected");
+                assert_eq!(corrected.int(), 0);
+                assert_eq!(corrected.string(), "");
+                """,
+                "Builder" to provider.symbolForBuilder(shape),
+                "correct_errors" to errorCorrectingBuilder(shape, provider, model)!!,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `it supports nonzero defaults`() {
+        val model = """
+            ${"$"}version: "2.0"
+            namespace com.test
+            structure MyStruct {
+              @default(0)
+              @required
+              zeroDefault: Integer
+
+              @required
+              @default(1)
+              oneDefault: OneDefault
+
+              @required
+              @default("")
+              defaultEmpty: String
+
+              @required
+              @default("some-value")
+              defaultValue: String
+
+              @required
+              anActuallyRequiredField: Integer
+
+              @required
+              @default([])
+              emptyList: StringList
+
+              noDefault: String
+
+              @default(true)
+              @required
+              defaultDocument: Document
+            }
+
+            list StringList {
+                member: String
+            }
+
+            @default(1)
+            integer OneDefault
+        """.asSmithyModel()
+
+        val provider = testSymbolProvider(
+            model,
+            rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
+            config = TestRustSymbolProviderConfig.copy(nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL),
+        )
+        val project = TestWorkspace.testProject(provider)
+        val shape: StructureShape = model.lookup("com.test#MyStruct")
+        project.useShapeWriter(shape) {
+            StructureGenerator(model, provider, this, shape, listOf()).render()
+            BuilderGenerator(model, provider, shape, listOf()).render(this)
+            unitTest("test_defaults") {
+                rustTemplate(
+                    """
+                    let s = Builder::default().an_actually_required_field(5).build().unwrap();
+                    assert_eq!(s.zero_default(), 0);
+                    assert_eq!(s.default_empty(), "");
+                    assert_eq!(s.default_value(), "some-value");
+                    assert_eq!(s.one_default(), 1);
+                    assert!(s.empty_list().is_empty());
+                    assert_eq!(s.an_actually_required_field(), 5);
+                    assert_eq!(s.no_default(), None);
+                    assert_eq!(s.default_document().as_bool().unwrap(), true);
+
+                    """,
+                    "Struct" to provider.toSymbol(shape),
+                )
+            }
         }
         project.compileAndTest()
     }
