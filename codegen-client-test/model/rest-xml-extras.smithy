@@ -21,6 +21,9 @@ service RestXmlExtras {
         StringHeader,
         CreateFoo,
         RequiredMember,
+        // TODO(https://github.com/awslabs/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
+        // They're being added in https://github.com/smithy-lang/smithy/pull/1908
+        HttpPayloadWithUnion,
     ]
 }
 
@@ -256,4 +259,97 @@ operation RequiredMember {
 structure RequiredMemberInputOutput {
     @required
     requiredString: String
+}
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/2968): Delete the HttpPayloadWithUnion tests below once Smithy vends them
+// They're being added in https://github.com/smithy-lang/smithy/pull/1908
+
+/// This example serializes a union in the payload.
+@idempotent
+@http(uri: "/HttpPayloadWithUnion", method: "PUT")
+operation HttpPayloadWithUnion {
+    input: HttpPayloadWithUnionInputOutput,
+    output: HttpPayloadWithUnionInputOutput
+}
+
+apply HttpPayloadWithUnion @httpRequestTests([
+    {
+        id: "RestXmlHttpPayloadWithUnion",
+        documentation: "Serializes a union in the payload.",
+        protocol: restXml,
+        method: "PUT",
+        uri: "/HttpPayloadWithUnion",
+        body: """
+              <UnionPayload>
+                  <greeting>hello</greeting>
+              </UnionPayload>""",
+        bodyMediaType: "application/xml",
+        headers: {
+            "Content-Type": "application/xml",
+        },
+        requireHeaders: [
+            "Content-Length"
+        ],
+        params: {
+            nested: {
+                greeting: "hello"
+            }
+        }
+    },
+    {
+        id: "RestXmlHttpPayloadWithUnsetUnion",
+        documentation: "No payload is sent if the union has no value.",
+        protocol: restXml,
+        method: "PUT",
+        uri: "/HttpPayloadWithUnion",
+        body: "",
+        headers: {
+            "Content-Type": "application/xml",
+            "Content-Length": "0"
+        },
+        params: {}
+    }
+])
+
+apply HttpPayloadWithUnion @httpResponseTests([
+    {
+        id: "RestXmlHttpPayloadWithUnion",
+        documentation: "Serializes a union in the payload.",
+        protocol: restXml,
+        code: 200,
+        body: """
+              <UnionPayload>
+                  <greeting>hello</greeting>
+              </UnionPayload>""",
+        bodyMediaType: "application/xml",
+        headers: {
+            "Content-Type": "application/xml",
+        },
+        params: {
+            nested: {
+                greeting: "hello"
+            }
+        }
+    },
+    {
+        id: "RestXmlHttpPayloadWithUnsetUnion",
+        documentation: "No payload is sent if the union has no value.",
+        protocol: restXml,
+        code: 200,
+        body: "",
+        headers: {
+            "Content-Type": "application/xml",
+            "Content-Length": "0"
+        },
+        params: {}
+    }
+])
+
+structure HttpPayloadWithUnionInputOutput {
+    @httpPayload
+    nested: UnionPayload,
+}
+
+union UnionPayload {
+    greeting: String
 }
