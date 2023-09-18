@@ -24,25 +24,32 @@ use tracing::trace;
 enum AuthOrchestrationError {
     NoMatchingAuthScheme,
     BadAuthSchemeEndpointConfig(Cow<'static, str>),
-    AuthSchemeEndpointConfigMismatch(String),
+    AuthSchemeEndpointConfigMismatch {
+        desired_scheme: String,
+        supported_schemes: String,
+    },
 }
 
 impl AuthOrchestrationError {
     fn auth_scheme_endpoint_config_mismatch<'a>(
-        auth_schemes: impl Iterator<Item = &'a Document>,
+        desired_scheme: impl Into<String>,
+        supported_schemes: impl Iterator<Item = &'a Document>,
     ) -> Self {
-        Self::AuthSchemeEndpointConfigMismatch(
-            auth_schemes
-                .flat_map(|s| match s {
-                    Document::Object(map) => match map.get("name") {
-                        Some(Document::String(name)) => Some(name.as_str()),
-                        _ => None,
-                    },
+        let supported_schemes = supported_schemes
+            .flat_map(|s| match s {
+                Document::Object(map) => match map.get("name") {
+                    Some(Document::String(name)) => Some(name.as_str()),
                     _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
+                },
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Self::AuthSchemeEndpointConfigMismatch {
+            desired_scheme: desired_scheme.into(),
+            supported_schemes,
+        }
     }
 }
 
@@ -53,11 +60,13 @@ impl fmt::Display for AuthOrchestrationError {
                 "no auth scheme matched auth scheme options. This is a bug. Please file an issue.",
             ),
             Self::BadAuthSchemeEndpointConfig(message) => f.write_str(message),
-            Self::AuthSchemeEndpointConfigMismatch(supported_schemes) => {
+            Self::AuthSchemeEndpointConfigMismatch {
+                desired_scheme,
+                supported_schemes,
+            } => {
                 write!(f,
-                    "selected auth scheme / endpoint config mismatch. Couldn't find `sigv4` endpoint config for this endpoint. \
-                    The authentication schemes supported by this endpoint are: {:?}",
-                    supported_schemes
+                    "selected auth scheme / endpoint config mismatch. Couldn't find `{desired_scheme}` endpoint config for this endpoint. \
+                    The authentication schemes supported by this endpoint are: {supported_schemes:?}"
                 )
             }
         }
@@ -150,7 +159,10 @@ fn extract_endpoint_auth_scheme_config(
             config_scheme_id == Some(scheme_id.as_str())
         })
         .ok_or_else(|| {
-            AuthOrchestrationError::auth_scheme_endpoint_config_mismatch(auth_schemes.iter())
+            AuthOrchestrationError::auth_scheme_endpoint_config_mismatch(
+                scheme_id.as_str(),
+                auth_schemes.iter(),
+            )
         })?;
     Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
 }

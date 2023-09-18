@@ -212,7 +212,7 @@ mod test {
         let req = AwsAuthStage.apply(req).expect("should succeed");
         assert_eq!(
             req.properties().get(),
-            Some(&SigningRegion::from(Region::new("us-east-override")))
+            Some(&SigningRegion::from_static("us-east-override"))
         );
         assert_eq!(
             req.properties().get(),

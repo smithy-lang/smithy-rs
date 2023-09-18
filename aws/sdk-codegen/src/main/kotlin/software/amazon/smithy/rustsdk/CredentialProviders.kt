@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -68,8 +69,10 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
     private val codegenScope = arrayOf(
         *preludeScope,
         "Credentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials"),
-        "ProvideCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider::ProvideCredentials"),
-        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider::SharedCredentialsProvider"),
+        "ProvideCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+            .resolve("provider::ProvideCredentials"),
+        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+            .resolve("provider::SharedCredentialsProvider"),
         "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
     )
 
@@ -118,24 +121,35 @@ class CredentialsIdentityResolverRegistration(
         when (section) {
             is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 rustBlockTemplate("if let Some(credentials_cache) = ${section.serviceConfigName}.credentials_cache()") {
+                    val codegenScope = arrayOf(
+                        "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                            .resolve("identity::credentials::CredentialsIdentityResolver"),
+                        "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::identity::SharedIdentityResolver"),
+                        "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                            .resolve("auth::sigv4a::SCHEME_ID"),
+                        "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                            .resolve("auth::sigv4::SCHEME_ID"),
+                    )
+
+                    rustTemplate(
+                        """
+                        let shared_identity_resolver = #{SharedIdentityResolver}::new(
+                            #{CredentialsIdentityResolver}::new(credentials_cache)
+                        );
+                        """,
+                        *codegenScope,
+                    )
+                    Attribute.featureGate("sigv4a").render(this)
                     section.registerIdentityResolver(this) {
-                        rustTemplate(
-                            """
-                            #{SIGV4_SCHEME_ID},
-                            #{SharedIdentityResolver}::new(
-                                #{CredentialsIdentityResolver}::new(credentials_cache),
-                            ),
-                            """,
-                            "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                                .resolve("auth::sigv4::SCHEME_ID"),
-                            "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                                .resolve("identity::credentials::CredentialsIdentityResolver"),
-                            "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                                .resolve("client::identity::SharedIdentityResolver"),
-                        )
+                        rustTemplate("#{SIGV4A_SCHEME_ID}, shared_identity_resolver.clone(),", *codegenScope)
+                    }
+                    section.registerIdentityResolver(this) {
+                        rustTemplate("#{SIGV4_SCHEME_ID}, shared_identity_resolver,", *codegenScope)
                     }
                 }
             }
+
             else -> {}
         }
     }

@@ -567,6 +567,9 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         fun not(vararg attrMacros: Writable): Writable = macroWithArgs("not", *attrMacros)
 
         fun feature(feature: String) = writable("feature = ${feature.dq()}")
+        fun featureGate(featureName: String): Attribute {
+            return Attribute(cfg(feature(featureName)))
+        }
 
         fun deprecated(since: String? = null, note: String? = null): Writable {
             val optionalFields = mutableListOf<Writable>()

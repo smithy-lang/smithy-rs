@@ -57,9 +57,7 @@ fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
 }
 
 private fun promotedBuiltins(parameter: Parameter) =
-    parameter.builtIn == Builtins.FIPS.builtIn ||
-        parameter.builtIn == Builtins.DUALSTACK.builtIn ||
-        parameter.builtIn == Builtins.SDK_ENDPOINT.builtIn
+    parameter == Builtins.FIPS || parameter == Builtins.DUALSTACK || parameter == Builtins.SDK_ENDPOINT
 
 private fun configParamNewtype(parameter: Parameter, name: String, runtimeConfig: RuntimeConfig): RuntimeType {
     val type = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
@@ -199,9 +197,6 @@ val PromotedBuiltInsDecorators =
         decoratorForBuiltIn(Builtins.DUALSTACK),
         decoratorForBuiltIn(
             Builtins.SDK_ENDPOINT,
-            ConfigParam.Builder()
-                .name("endpoint_url")
-                .type(RuntimeType.String.toSymbol())
-                .setterDocs(endpointUrlDocs),
+            ConfigParam.Builder().name("endpoint_url").type(RuntimeType.String.toSymbol()).setterDocs(endpointUrlDocs),
         ),
     ).toTypedArray()

@@ -86,3 +86,44 @@ impl SigningRegion {
 impl Storable for SigningRegion {
     type Storer = StoreReplace<Self>;
 }
+
+// The region set to use when signing Sigv4a requests
+///
+/// Generally, user code will not need to interact with `SigningRegionSet`. See `[Region](crate::Region)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SigningRegionSet(Cow<'static, str>);
+
+impl From<Region> for SigningRegionSet {
+    fn from(inp: Region) -> Self {
+        SigningRegionSet(inp.0)
+    }
+}
+
+impl From<&'static str> for SigningRegionSet {
+    fn from(region: &'static str) -> Self {
+        Self::from_static(region)
+    }
+}
+
+impl SigningRegionSet {
+    /// Create a `SigningRegionSet` from a static str.
+    pub const fn from_static(region_set: &'static str) -> Self {
+        SigningRegionSet(Cow::Borrowed(region_set))
+    }
+
+    /// Create a new `SigningRegionSet` from a list of regions.
+    pub fn from_vec(vec: Vec<String>) -> Self {
+        let set = vec.join(", ");
+        Self(Cow::Owned(set))
+    }
+}
+
+impl Storable for SigningRegionSet {
+    type Storer = StoreReplace<Self>;
+}
+
+impl AsRef<str> for SigningRegionSet {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
