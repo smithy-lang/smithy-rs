@@ -150,3 +150,9 @@ message = "Fix regression with redacting sensitive HTTP response bodies."
 references = ["smithy-rs#2926", "smithy-rs#2972"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Omit fractional seconds from `date-time` format."
+references = ["smithy-rs#2831"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "rschmitt"

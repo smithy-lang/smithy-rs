@@ -388,7 +388,7 @@ mod test {
         let date_time = DateTime::from_fractional_secs(1576540098, 0.52);
         assert_eq!(
             date_time.fmt(Format::DateTime).unwrap(),
-            "2019-12-16T23:48:18.52Z"
+            "2019-12-16T23:48:18Z"
         );
         assert_eq!(
             date_time.fmt(Format::EpochSeconds).unwrap(),

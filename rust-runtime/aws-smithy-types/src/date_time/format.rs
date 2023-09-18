@@ -452,7 +452,7 @@ pub(crate) mod rfc3339 {
             )
             .into()
         }
-        let (year, month, day, hour, minute, second, micros) = {
+        let (year, month, day, hour, minute, second) = {
             let s = OffsetDateTime::from_unix_timestamp_nanos(date_time.as_nanos())
                 .map_err(out_of_range)?;
             (
@@ -462,7 +462,6 @@ pub(crate) mod rfc3339 {
                 s.hour(),
                 s.minute(),
                 s.second(),
-                s.microsecond(),
             )
         };
 
@@ -479,25 +478,8 @@ pub(crate) mod rfc3339 {
             year, month, day, hour, minute, second
         )
         .unwrap();
-        format_subsecond_fraction(&mut out, micros);
         out.push('Z');
         Ok(out)
-    }
-
-    /// Formats sub-second fraction for RFC-3339 (including the '.').
-    /// Expects to be called with a number of `micros` between 0 and 999_999 inclusive.
-    fn format_subsecond_fraction(into: &mut String, micros: u32) {
-        debug_assert!(micros < 1_000_000);
-        if micros > 0 {
-            into.push('.');
-            let (mut remaining, mut place) = (micros, 100_000);
-            while remaining > 0 {
-                let digit = (remaining / place) % 10;
-                into.push(char::from(b'0' + (digit as u8)));
-                remaining -= digit * place;
-                place /= 10;
-            }
-        }
     }
 }
 
@@ -623,7 +605,7 @@ mod tests {
             rfc3339::format(&DateTime::from_secs(-62_135_596_800)).unwrap()
         );
         assert_eq!(
-            "9999-12-31T23:59:59.999999Z",
+            "9999-12-31T23:59:59Z",
             rfc3339::format(&DateTime::from_secs_and_nanos(253402300799, 999_999_999)).unwrap()
         );
 

@@ -309,7 +309,7 @@ mod tests {
         object.finish();
 
         assert_eq!(
-            r#"{"epoch_seconds":5.2,"date_time":"2021-05-24T15:34:50.123Z","http_date":"Wed, 21 Oct 2015 07:28:00 GMT"}"#,
+            r#"{"epoch_seconds":5.2,"date_time":"2021-05-24T15:34:50Z","http_date":"Wed, 21 Oct 2015 07:28:00 GMT"}"#,
             &output,
         )
     }
@@ -340,7 +340,7 @@ mod tests {
         array.finish();
 
         assert_eq!(
-            r#"[5.2,"2021-05-24T15:34:50.123Z","Wed, 21 Oct 2015 07:28:00 GMT"]"#,
+            r#"[5.2,"2021-05-24T15:34:50Z","Wed, 21 Oct 2015 07:28:00 GMT"]"#,
             &output,
         )
     }
