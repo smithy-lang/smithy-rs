@@ -142,11 +142,12 @@ fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String =
 internal fun testSymbolProvider(
     model: Model,
     rustReservedWordConfig: RustReservedWordConfig? = null,
+    config: RustSymbolProviderConfig = TestRustSymbolProviderConfig,
 ): RustSymbolProvider = SymbolVisitor(
     testRustSettings(),
     model,
     ServiceShape.builder().version("test").id("test#Service").build(),
-    TestRustSymbolProviderConfig,
+    config,
 ).let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(Attribute.NonExhaustive)) }
     .let {
         RustReservedWordSymbolProvider(
