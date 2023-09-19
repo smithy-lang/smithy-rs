@@ -131,7 +131,7 @@ impl SdkBody {
         Self {
             inner: Inner::Once { inner: None },
             rebuild: Some(Arc::new(|| Inner::Once { inner: None })),
-            bytes_contents: None,
+            bytes_contents: Some(Bytes::new()),
         }
     }
 
@@ -197,8 +197,11 @@ impl SdkBody {
         }
     }
 
-    /// Given a function to modify an `SdkBody`, run that function against this `SdkBody` before
-    /// returning the result. **This function MUST NOT alter the contents of the body.**
+    /// Update this `SdkBody` with `map`. **This function MUST NOT alert the data of the body.**
+    ///
+    /// This function is useful for adding metadata like progress tracking to an [`SdkBody`] that
+    /// does not alter the actual byte data. If your mapper alters the contents of the body, use [`SdkBody::map`]
+    /// instead.
     pub fn map_preserve_contents(
         self,
         f: impl Fn(SdkBody) -> SdkBody + Sync + Send + 'static,
