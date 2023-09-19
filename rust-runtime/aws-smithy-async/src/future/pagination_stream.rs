@@ -29,10 +29,7 @@ impl<Item> PaginationStream<Item> {
     }
 
     /// Consumes and returns the next `Item` from this stream.
-    pub async fn next(&mut self) -> Option<Item>
-    where
-        Self: Unpin,
-    {
+    pub async fn next(&mut self) -> Option<Item> {
         self.0.next().await
     }
 
