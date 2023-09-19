@@ -54,6 +54,7 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+serde = { version = "1", features = ["derive"] }
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
@@ -61,6 +62,7 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
     "aws-sdk-s3",
     "aws-sdk-ec2",
     "aws-sdk-transcribestreaming",
+    "aws-sdk-dynamodb",
 ];
 
 lazy_static! {

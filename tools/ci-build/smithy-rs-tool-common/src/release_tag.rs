@@ -69,7 +69,7 @@ impl FromStr for ReleaseTag {
                 original: value.into(),
             }))
         } else {
-            bail!("Tag `{value}` doesn't match a known format")
+            bail!("Tag `{value}` doesn't match a known format. Expected a `vX.X.X` or `release-<date>`")
         }
     }
 }

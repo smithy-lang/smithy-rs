@@ -3,18 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_config::retry::RetryConfigBuilder;
+use aws_config::timeout::TimeoutConfig;
 use aws_config::SdkConfig;
+use aws_sdk_s3::error::DisplayErrorContext;
 use canary::{get_canaries_to_run, CanaryEnv};
 use lambda_runtime::{Context as LambdaContext, Error};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::env;
-use std::future::Future;
+use std::future::{ready, Future};
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
-use tracing::{info, info_span, Instrument};
+use tracing::{error, info, info_span, Instrument};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::EnvFilter;
 use tracing_texray::TeXRayLayer;
@@ -87,9 +90,42 @@ impl lambda_runtime::Handler<Value, Value> for LambdaMain {
     type Error = Error;
     type Fut = Pin<Box<dyn Future<Output = Result<Value, Error>>>>;
 
-    fn call(&self, _: Value, _: LambdaContext) -> Self::Fut {
-        Box::pin(lambda_main(self.sdk_config.clone()))
+    fn call(&self, v: Value, ctx: LambdaContext) -> Self::Fut {
+        match serde_json::from_value(v) {
+            Ok(Action::DoNothing) => Box::pin(ready(Ok(Value::String("ok".to_string())))),
+            Ok(Action::BenchDynamo) => Box::pin(bench_dynamo(self.sdk_config.clone())),
+            Err(_) => Box::pin(lambda_main(self.sdk_config.clone())),
+        }
     }
+}
+
+#[derive(serde::Deserialize)]
+#[serde(tag = "action")]
+enum Action {
+    DoNothing,
+    BenchDynamo,
+}
+
+async fn bench_dynamo(sdk_config: SdkConfig) -> Result<Value, Error> {
+    let timeout_config = TimeoutConfig::builder()
+        .operation_timeout(Duration::from_millis(200))
+        .operation_attempt_timeout(Duration::from_millis(50))
+        .build();
+    let retry_config = RetryConfigBuilder::new()
+        .max_attempts(3)
+        .initial_backoff(Duration::from_millis(25))
+        .build();
+
+    let dynamo_config = aws_sdk_dynamodb::config::Builder::from(&sdk_config)
+        .timeout_config(timeout_config)
+        .retry_config(retry_config)
+        .build();
+    let client_dynamodb = aws_sdk_dynamodb::Client::from_conf(dynamo_config);
+    let tables = client_dynamodb.list_tables().send().await.map_err(|e| {
+        error!(err = %DisplayErrorContext(&e));
+        e
+    })?;
+    Ok(Value::from(tables.table_names.unwrap_or_default().len()))
 }
 
 async fn lambda_main(sdk_config: SdkConfig) -> Result<Value, Error> {

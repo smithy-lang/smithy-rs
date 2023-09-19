@@ -635,6 +635,7 @@ dependencies = [
  "sha1",
  "smithy-rs-tool-common",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "zip",

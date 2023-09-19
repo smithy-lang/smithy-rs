@@ -34,6 +34,7 @@ use crate::build_bundle::BuildBundleArgs;
 use aws_sdk_cloudwatch as cloudwatch;
 use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
+use sha1::digest::typenum::op;
 use std::collections::HashMap;
 
 lazy_static::lazy_static! {
@@ -105,6 +106,14 @@ pub struct RunArgs {
     /// The ARN of the role that the Lambda will execute as
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_execution_role_arn: Option<String>,
+
+    /// Error if a git --reset is indicated
+    #[clap(long)]
+    no_reset: bool,
+
+    /// Delete the lambda after invocation
+    #[clap(long)]
+    preserve_lambda: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -117,6 +126,8 @@ struct Options {
     lambda_code_s3_bucket_name: String,
     lambda_test_s3_bucket_name: String,
     lambda_execution_role_arn: String,
+    preserve_lambda: bool,
+    no_reset: bool,
 }
 
 impl Options {
@@ -150,6 +161,8 @@ impl Options {
                 lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
                 lambda_test_s3_bucket_name: value.inner.lambda_test_s3_bucket_name,
                 lambda_execution_role_arn: value.inner.lambda_execution_role_arn,
+                preserve_lambda: run_opt.preserve_lambda,
+                no_reset: run_opt.no_reset,
             })
         } else {
             Ok(Options {
@@ -161,6 +174,8 @@ impl Options {
                 lambda_code_s3_bucket_name: run_opt.lambda_code_s3_bucket_name.expect("required"),
                 lambda_test_s3_bucket_name: run_opt.lambda_test_s3_bucket_name.expect("required"),
                 lambda_execution_role_arn: run_opt.lambda_execution_role_arn.expect("required"),
+                preserve_lambda: run_opt.preserve_lambda,
+                no_reset: run_opt.no_reset,
             })
         }
     }
@@ -230,10 +245,10 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
     env::set_current_dir(smithy_rs_root.join("tools/ci-cdk/canary-lambda"))
         .context("failed to change working directory")?;
 
-    if let Some(sdk_release_tag) = &options.sdk_release_tag {
-        use_correct_revision(&smithy_rs, sdk_release_tag)
+    /*if let Some(sdk_release_tag) = &options.sdk_release_tag {
+        use_correct_revision(&smithy_rs, sdk_release_tag, options.no_reset)
             .context(here!("failed to select correct revision of smithy-rs"))?;
-    }
+    }*/
 
     info!("Building the canary...");
     let bundle_path = build_bundle(options).await?;
@@ -254,8 +269,9 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
     .context(here!())?;
 
     info!(
-        "Creating the canary Lambda function named {}...",
-        bundle_name
+        "Creating the canary Lambda function named {} in {}...",
+        bundle_name,
+        config.region().unwrap(),
     );
     create_lambda_fn(
         lambda_client.clone(),
@@ -274,15 +290,23 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
     let invoke_result = invoke_lambda(lambda_client.clone(), bundle_name).await;
     let invoke_time = invoke_start_time.elapsed().expect("time in range");
 
-    info!("Deleting the canary Lambda...");
-    delete_lambda_fn(lambda_client, bundle_name)
-        .await
-        .context(here!())?;
+    if !options.preserve_lambda {
+        info!("Deleting the canary Lambda...");
+        delete_lambda_fn(lambda_client, bundle_name)
+            .await
+            .context(here!())?;
+    } else {
+        info!("Leaving the lambda around")
+    }
 
     invoke_result.map(|_| invoke_time)
 }
 
-fn use_correct_revision(smithy_rs: &dyn Git, sdk_release_tag: &ReleaseTag) -> Result<()> {
+fn use_correct_revision(
+    smithy_rs: &dyn Git,
+    sdk_release_tag: &ReleaseTag,
+    no_reset: bool,
+) -> Result<()> {
     if let Some((pinned_release_tag, commit_hash)) = PINNED_SMITHY_RS_VERSIONS
         .iter()
         .find(|(pinned_release_tag, _)| pinned_release_tag >= sdk_release_tag)
@@ -290,6 +314,9 @@ fn use_correct_revision(smithy_rs: &dyn Git, sdk_release_tag: &ReleaseTag) -> Re
         info!("SDK `{pinned_release_tag}` requires smithy-rs@{commit_hash} to successfully compile the canary");
         // Reset to the revision rather than checkout since the very act of running the
         // canary-runner can make the working tree dirty by modifying the Cargo.lock file
+        if no_reset {
+            bail!("Running git reset was prohibited by arguments")
+        }
         smithy_rs.hard_reset(commit_hash).context(here!())?;
     }
     Ok(())
@@ -346,7 +373,7 @@ async fn create_lambda_fn(
     let env_builder = match expected_speech_text_by_transcribe {
         Some(expected_speech_text_by_transcribe) => Environment::builder()
             .variables("RUST_BACKTRACE", "1")
-            .variables("RUST_LOG", "info")
+            .variables("RUST_LOG", "debug")
             .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
             .variables(
                 "CANARY_EXPECTED_TRANSCRIBE_RESULT",
@@ -406,7 +433,7 @@ async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Resu
         .function_name(bundle_name)
         .invocation_type(InvocationType::RequestResponse)
         .log_type(LogType::Tail)
-        .payload(Blob::new(&b"{}"[..]))
+        .payload(Blob::new(&b"{\"action\":\"BenchDynamo\"}"[..]))
         .send()
         .await
         .context(here!("failed to invoke the canary Lambda"))?;
@@ -487,7 +514,9 @@ mod tests {
                 cdk_output: Some("../cdk-outputs.json".into()),
                 lambda_code_s3_bucket_name: None,
                 lambda_test_s3_bucket_name: None,
-                lambda_execution_role_arn: None
+                lambda_execution_role_arn: None,
+                no_reset: false,
+                preserve_lambda: true,
             },
             RunArgs::try_parse_from([
                 "run",
@@ -516,6 +545,8 @@ mod tests {
             "bucket-for-test",
             "--lambda-execution-role-arn",
             "arn:aws:lambda::role/exe-role",
+            "--delete-lambda",
+            "false",
         ])
         .unwrap();
         assert_eq!(
@@ -528,6 +559,8 @@ mod tests {
                 lambda_code_s3_bucket_name: "bucket-for-code".to_owned(),
                 lambda_test_s3_bucket_name: "bucket-for-test".to_owned(),
                 lambda_execution_role_arn: "arn:aws:lambda::role/exe-role".to_owned(),
+                preserve_lambda: false,
+                no_reset: false
             },
             Options::load_from(run_args).unwrap(),
         );

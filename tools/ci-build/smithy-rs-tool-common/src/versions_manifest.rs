@@ -57,13 +57,15 @@ impl VersionsManifest {
             "https://raw.githubusercontent.com/awslabs/aws-sdk-rust/{}/versions.toml",
             tag
         );
-        let manifest_contents = reqwest::get(manifest_url)
+        let manifest_contents = reqwest::get(manifest_url.clone())
             .await
             .context("failed to download release manifest")?
             .text()
             .await
             .context("failed to download release manifest content")?;
-        Self::from_str(&manifest_contents).context("failed to parse versions.toml file")
+        Self::from_str(&manifest_contents)
+            .context(manifest_url)
+            .context("failed to parse versions.toml file")
     }
 
     pub fn write_to_file(&self, path: impl AsRef<Path>) -> Result<()> {

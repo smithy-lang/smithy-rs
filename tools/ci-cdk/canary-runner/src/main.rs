@@ -8,6 +8,7 @@ use tracing_subscriber::{filter::EnvFilter, prelude::*};
 
 mod build_bundle;
 mod generate_matrix;
+mod invoke;
 mod run;
 
 #[derive(Debug, Parser, Eq, PartialEq)]
@@ -24,6 +25,8 @@ pub(crate) enum Args {
     /// Builds, uploads, and invokes the canary as a Lambda
     #[clap(alias = "run")]
     Run(run::RunArgs),
+
+    Invoke(invoke::InvokeArgs),
 }
 
 #[tokio::main]
@@ -40,7 +43,8 @@ async fn main() -> anyhow::Result<()> {
     match opt {
         Args::BuildBundle(subopt) => build_bundle::build_bundle(subopt).await.map(|_| ()),
         Args::GenerateMatrix(subopt) => generate_matrix::generate_matrix(subopt).await,
-        Args::Run(subopt) => run::run(subopt).await,
+        Args::Run(subopt) => run::run(dbg!(subopt)).await,
+        Args::Invoke(subopt) => invoke::invoke(subopt).await,
     }
 }
 
