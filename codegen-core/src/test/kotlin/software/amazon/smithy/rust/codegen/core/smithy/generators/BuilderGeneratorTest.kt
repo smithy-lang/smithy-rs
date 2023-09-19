@@ -150,7 +150,6 @@ internal class BuilderGeneratorTest {
     @Test
     fun `it supports nonzero defaults`() {
         val model = """
-            ${"$"}version: "2.0"
             namespace com.test
             structure MyStruct {
               @default(0)
@@ -180,7 +179,7 @@ internal class BuilderGeneratorTest {
             }
             @default(1)
             integer OneDefault
-        """.asSmithyModel()
+        """.asSmithyModel(smithyVersion = "2.0")
 
         val provider = testSymbolProvider(
             model,
