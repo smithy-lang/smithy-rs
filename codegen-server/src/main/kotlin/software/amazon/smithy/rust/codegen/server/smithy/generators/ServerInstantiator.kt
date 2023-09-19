@@ -95,8 +95,7 @@ fun serverInstantiator(codegenContext: CodegenContext) =
 class ServerBuilderInstantiator(
     private val symbolProvider: RustSymbolProvider,
     private val symbolParseFn: (Shape) -> ReturnSymbolToParse,
-) :
-    BuilderInstantiator {
+) : BuilderInstantiator {
     override fun setField(builder: String, value: Writable, field: MemberShape): Writable {
         // Server builders have the ability to have non-optional fields. When one of these fields is used,
         // we need to use `if let(...)` to only set the field when it is present.
@@ -109,11 +108,11 @@ class ServerBuilderInstantiator(
                         #{setter}
                     }
                     """,
-                    "value" to value, "setter" to setFieldBase(builder, writable(n), field),
+                    "value" to value, "setter" to setFieldWithSetter(builder, writable(n), field),
                 )
             }
         } else {
-            setFieldBase(builder, value, field)
+            setFieldWithSetter(builder, value, field)
         }
     }
 

@@ -21,7 +21,7 @@ fun ClientCodegenContext.builderInstantiator(): BuilderInstantiator = ClientBuil
 
 class ClientBuilderInstantiator(private val symbolProvider: RustSymbolProvider) : BuilderInstantiator {
     override fun setField(builder: String, value: Writable, field: MemberShape): Writable {
-        return setFieldBase(builder, value, field)
+        return setFieldWithSetter(builder, value, field)
     }
 
     override fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable?): Writable = writable {
