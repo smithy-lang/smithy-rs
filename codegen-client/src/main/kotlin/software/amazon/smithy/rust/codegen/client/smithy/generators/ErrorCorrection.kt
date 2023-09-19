@@ -18,6 +18,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -34,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerat
 import software.amazon.smithy.rust.codegen.core.smithy.generators.PrimitiveInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeFunctionName
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -56,10 +58,10 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
     }
     val instantiator = PrimitiveInstantiator(runtimeConfig, symbolProvider)
     return writable {
-        when (target) {
-            is EnumShape -> rustTemplate(""""no value was set".parse::<#{Shape}>().ok()""", "Shape" to targetSymbol)
-            is BooleanShape, is NumberShape, is StringShape, is DocumentShape, is ListShape, is MapShape -> rust("Some(Default::default())")
-            is StructureShape -> rustTemplate(
+        when {
+            target is EnumShape || target.hasTrait<EnumTrait>() -> rustTemplate(""""no value was set".parse::<#{Shape}>().ok()""", "Shape" to targetSymbol)
+            target is BooleanShape || target is NumberShape || target is StringShape || target is DocumentShape || target is ListShape || target is MapShape -> rust("Some(Default::default())")
+            target is StructureShape -> rustTemplate(
                 "{ let builder = #{Builder}::default(); #{instantiate} }",
                 "Builder" to symbolProvider.symbolForBuilder(target),
                 "instantiate" to builderInstantiator().finalizeBuilder("builder", target).map {
@@ -72,10 +74,9 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
                     it.plus { rustTemplate(".map(#{Box}::new)", *preludeScope) }
                 },
             )
-
-            is TimestampShape -> instantiator.instantiate(target, Node.from(0)).some()(this)
-            is BlobShape -> instantiator.instantiate(target, Node.from("")).some()(this)
-            is UnionShape -> rust("Some(#T::Unknown)", targetSymbol)
+            target is TimestampShape -> instantiator.instantiate(target, Node.from(0)).some()(this)
+            target is BlobShape -> instantiator.instantiate(target, Node.from("")).some()(this)
+            target is UnionShape -> rust("Some(#T::Unknown)", targetSymbol)
         }
     }
 }

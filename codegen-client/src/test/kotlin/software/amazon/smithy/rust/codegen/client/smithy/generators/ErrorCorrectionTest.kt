@@ -86,10 +86,10 @@ class ErrorCorrectionTest {
         clientIntegrationTest(model) { ctx, crate ->
             crate.lib {
                 val codegenCtx =
-                    arrayOf("correct_errors" to ctx.correctErrors(shape), "Shape" to ctx.symbolProvider.toSymbol(shape))
+                    arrayOf("correct_errors" to ctx.correctErrors(shape)!!, "Shape" to ctx.symbolProvider.toSymbol(shape))
                 rustTemplate(
                     """
-                    /// docs
+                    /// avoid unused warnings
                 pub fn use_fn_publicly() { #{correct_errors}(#{Shape}::builder()); } """,
                     *codegenCtx,
                 )
