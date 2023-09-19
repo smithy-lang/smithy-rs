@@ -156,3 +156,9 @@ message = "Source defaults from the default trait instead of implicitly based on
 references = ["smithy-rs#2985"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "[Behavior Break!] Endpoint resolution moved so that it takes place _after_ the `read_before_signing`/`modify_before_signing` hooks. Previously, the endpoint would have been available to interceptors implementing these hooks. This will only affect you if you have custom interceptors that read the endpoint."
+references = ["smithy-rs#2926", "smithy-rs#2972"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
