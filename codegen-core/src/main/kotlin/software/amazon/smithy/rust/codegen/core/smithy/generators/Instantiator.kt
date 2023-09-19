@@ -425,7 +425,7 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
         val data = escape(arg.value).dq()
         if (shape.hasTrait<EnumTrait>() || shape is EnumShape) {
             val enumSymbol = symbolProvider.toSymbol(shape)
-            rust("$data.parse::<#T>().unwrap()", enumSymbol)
+            rust("""$data.parse::<#T>().expect("static value validated to member")""", enumSymbol)
         } else {
             rust("$data.to_owned()")
         }

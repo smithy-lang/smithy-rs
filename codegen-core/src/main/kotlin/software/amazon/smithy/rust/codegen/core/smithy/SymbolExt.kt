@@ -104,6 +104,9 @@ sealed class Default {
      */
     object RustDefault : Default()
 
+    /**
+     * This symbol has a custom default value different from `Default::default`
+     */
     data class NonZeroDefault(val value: Node) : Default()
 }
 

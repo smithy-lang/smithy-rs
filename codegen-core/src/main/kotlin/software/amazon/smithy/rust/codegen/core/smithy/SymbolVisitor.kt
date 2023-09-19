@@ -116,7 +116,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  */
 open class SymbolVisitor(
     settings: CoreRustSettings,
-    override val model: Model,
+    final override val model: Model,
     private val serviceShape: ServiceShape?,
     override val config: RustSymbolProviderConfig,
 ) : RustSymbolProvider, ShapeVisitor<Symbol> {
@@ -272,8 +272,7 @@ open class SymbolVisitor(
             when (val value = trait.toNode()) {
                 Node.from(""), Node.from(0), Node.from(false), Node.arrayNode(), Node.objectNode() -> Default.RustDefault
                 Node.nullNode() -> Default.NoDefault
-                else -> { Default.NonZeroDefault(value)
-                }
+                else -> Default.NonZeroDefault(value)
             }
         } ?: Default.NoDefault
         // Handle boxing first, so we end up with Option<Box<_>>, not Box<Option<_>>.
