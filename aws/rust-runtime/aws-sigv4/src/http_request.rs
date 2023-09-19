@@ -153,7 +153,7 @@ impl<'a> SigningParams<'a> {
     }
 
     #[cfg(test)]
-    /// Set the [PayloadChecksumKind] for the signing params.
+    /// Set the [`PayloadChecksumKind`] for the signing params.
     pub fn set_payload_checksum_kind(&mut self, kind: PayloadChecksumKind) {
         let settings = self.settings_mut();
 
@@ -161,7 +161,7 @@ impl<'a> SigningParams<'a> {
     }
 
     #[cfg(test)]
-    /// Set the [SessionTokenMode] for the signing params.
+    /// Set the [`SessionTokenMode`] for the signing params.
     pub fn set_session_token_mode(&mut self, mode: SessionTokenMode) {
         let settings = self.settings_mut();
 
