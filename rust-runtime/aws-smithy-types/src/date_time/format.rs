@@ -129,7 +129,6 @@ pub(crate) mod epoch_seconds {
 }
 
 pub(crate) mod http_date {
-    use super::remove_trailing_zeros;
     use crate::date_time::format::{
         DateTimeFormatError, DateTimeFormatErrorKind, DateTimeParseError, DateTimeParseErrorKind,
         NANOS_PER_SECOND,
@@ -151,8 +150,7 @@ pub(crate) mod http_date {
     /// - HTTP date does not support years before `0001`—this will cause a panic.
     /// - If you _don't_ want subsecond precision (e.g. if you want strict adherence to the spec),
     ///   you need to zero-out the date-time before formatting
-    /// - If subsecond nanos are 0, no fractional seconds are added
-    /// - If subsecond nanos are nonzero, 3 digits of fractional seconds are added
+    /// - Subsecond nanos are not emitted
     pub(crate) fn format(date_time: &DateTime) -> Result<String, DateTimeFormatError> {
         fn out_of_range<E: std::fmt::Display>(cause: E) -> DateTimeFormatError {
             DateTimeFormatErrorKind::OutOfRange(
@@ -241,16 +239,6 @@ pub(crate) mod http_date {
         let second = structured.second();
         push_digit(&mut out, second / 10);
         push_digit(&mut out, second % 10);
-
-        // If non-zero nanos, push a 3-digit fractional second
-        let millis = structured.millisecond();
-        if millis != 0 {
-            out.push('.');
-            push_digit(&mut out, (millis / 100 % 10) as u8);
-            push_digit(&mut out, (millis / 10 % 10) as u8);
-            push_digit(&mut out, (millis % 10) as u8);
-            remove_trailing_zeros(&mut out);
-        }
 
         out.push_str(" GMT");
         Ok(out)
