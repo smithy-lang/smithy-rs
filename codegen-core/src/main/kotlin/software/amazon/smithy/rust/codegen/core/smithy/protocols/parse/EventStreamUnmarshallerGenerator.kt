@@ -53,6 +53,7 @@ class EventStreamUnmarshallerGenerator(
     private val unionShape: UnionShape,
 ) {
     private val model = codegenContext.model
+    private val builderInstantiator = codegenContext.builderInstantiator()
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -339,6 +340,7 @@ class EventStreamUnmarshallerGenerator(
                     // TODO(EventStream): Errors on the operation can be disjoint with errors in the union,
                     //  so we need to generate a new top-level Error type for each event stream union.
                     when (codegenTarget) {
+                        // TODO(https://github.com/awslabs/smithy-rs/issues/1970) It should be possible to unify these branches now
                         CodegenTarget.CLIENT -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser().errorParser(target)
@@ -352,9 +354,19 @@ class EventStreamUnmarshallerGenerator(
                                         })?;
                                     builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::${member.target.name}(builder.build())
+                                        #{OpError}::${member.target.name}(
+                                            #{build}
+                                        )
                                     ))
                                     """,
+                                    "build" to builderInstantiator.finalizeBuilder(
+                                        "builder", target,
+                                        mapErr = {
+                                            rustTemplate(
+                                                """|err|#{Error}::unmarshalling(format!("{}", err))""", *codegenScope,
+                                            )
+                                        },
+                                    ),
                                     "parser" to parser,
                                     *codegenScope,
                                 )
