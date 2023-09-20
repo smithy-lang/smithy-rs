@@ -122,10 +122,9 @@ ARG wasm_pack_version=0.11.0
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
-# should be changed to 13.0.0 when released
-ARG cargo_wasmtime_version=d1d8893d2e66409662bad7f9ec65050a218be681
+ARG cargo_wasmtime_version=13.0.0
 ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} install wasmtime-cli --features="component-model" --locked --git https://github.com/bytecodealliance/wasmtime --rev ${cargo_wasmtime_version}
+RUN cargo +${rust_nightly_version} install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
 FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.20.0

@@ -5,7 +5,7 @@ target = "wasm32-wasi"
 rustflags = ["-C", "opt-level=1"]
 runner = [
     "wasmtime",
-    "run",
+    "--disable-cache",
     "--preview2",
     "--wasi-modules=experimental-wasi-http",
 ]

@@ -43,5 +43,5 @@ cargo check --tests
 # Running WebAssembly (WASI) specific integration tests
 pushd "${tmp_dir}/aws/sdk/integration-tests/webassembly" &>/dev/null
 cargo check --tests
-cargo test -- --nocapture
+RUST_TEST_NOCAPTURE=1 cargo test
 popd
