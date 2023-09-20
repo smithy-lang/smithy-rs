@@ -140,16 +140,14 @@ pub(crate) mod http_date {
     // This code is taken from https://github.com/pyfisch/httpdate and modified under an
     // Apache 2.0 License. Modifications:
     // - Removed use of unsafe
-    // - Add serialization and deserialization of subsecond nanos
+    // - Add deserialization of subsecond nanos
     //
-    /// Format a `DateTime` in the HTTP date format (imf-fixdate) with added support for subsecond precision
+    /// Format a `DateTime` in the HTTP date format (imf-fixdate)
     ///
     /// Example: "Mon, 16 Dec 2019 23:48:18 GMT"
     ///
     /// Some notes:
     /// - HTTP date does not support years before `0001`—this will cause a panic.
-    /// - If you _don't_ want subsecond precision (e.g. if you want strict adherence to the spec),
-    ///   you need to zero-out the date-time before formatting
     /// - Subsecond nanos are not emitted
     pub(crate) fn format(date_time: &DateTime) -> Result<String, DateTimeFormatError> {
         fn out_of_range<E: std::fmt::Display>(cause: E) -> DateTimeFormatError {
