@@ -138,7 +138,7 @@ internal fun RustSymbolProvider.shapeModuleName(serviceShape: ServiceShape?, sha
     )
 
 /** Creates a unique name for a ser/de function. */
-internal fun RustSymbolProvider.shapeFunctionName(serviceShape: ServiceShape?, shape: Shape): String {
+fun RustSymbolProvider.shapeFunctionName(serviceShape: ServiceShape?, shape: Shape): String {
     val containerName = when (shape) {
         is MemberShape -> model.expectShape(shape.container).contextName(serviceShape).toSnakeCase()
         else -> shape.contextName(serviceShape).toSnakeCase()
