@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.JsonParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.JsonSerializerGenerator
@@ -96,7 +95,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         listOf("x-amzn-errortype" to errorShape.id.name)
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName, builderInstantiator = ClientBuilderInstantiator(codegenContext.symbolProvider))
+        JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)

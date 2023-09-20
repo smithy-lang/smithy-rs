@@ -33,15 +33,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
@@ -95,7 +96,6 @@ class JsonParserGenerator(
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
     private val customizations: List<JsonParserCustomization> = listOf(),
-    private val builderInstantiator: BuilderInstantiator,
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -103,6 +103,7 @@ class JsonParserGenerator(
     private val codegenTarget = codegenContext.target
     private val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val builderInstantiator = codegenContext.builderInstantiator()
     private val codegenScope = arrayOf(
         "Error" to smithyJson.resolve("deserialize::error::DeserializeError"),
         "expect_blob_or_null" to smithyJson.resolve("deserialize::token::expect_blob_or_null"),
@@ -248,7 +249,31 @@ class JsonParserGenerator(
             rustBlock("match key.to_unescaped()?.as_ref()") {
                 for (member in members) {
                     rustBlock("${jsonName(member).dq()} =>") {
-                        builderInstantiator.setField("builder", writable { deserializeMember(member) }, member)(this)
+                        when (codegenTarget) {
+                            CodegenTarget.CLIENT -> {
+                                withBlock("builder = builder.${member.setterName()}(", ");") {
+                                    deserializeMember(member)
+                                }
+                            }
+
+                            CodegenTarget.SERVER -> {
+                                if (symbolProvider.toSymbol(member).isOptional()) {
+                                    withBlock("builder = builder.${member.setterName()}(", ");") {
+                                        deserializeMember(member)
+                                    }
+                                } else {
+                                    rust("if let Some(v) = ")
+                                    deserializeMember(member)
+                                    rust(
+                                        """
+                                        {
+                                            builder = builder.${member.setterName()}(v);
+                                        }
+                                        """,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
                 rustTemplate("_ => #{skip_value}(tokens)?", *codegenScope)
@@ -262,7 +287,7 @@ class JsonParserGenerator(
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
             is BlobShape -> deserializeBlob(memberShape)
-            is TimestampShape -> deserializeTimestamp(memberShape)
+            is TimestampShape -> deserializeTimestamp(target, memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is StructureShape -> deserializeStruct(target)
@@ -336,7 +361,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeTimestamp(member: MemberShape) {
+    private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
@@ -489,16 +514,13 @@ class JsonParserGenerator(
                     )
                     deserializeStructInner(shape.members())
                     val builder = builderInstantiator.finalizeBuilder(
-                        "builder",
-                        shape,
-                        writable {
-                            rustTemplate(
-                                """|err|#{Error}::custom_source("Response was invalid", err)""",
-                                *codegenScope,
-                            )
-                        },
-                    )
-                    rustTemplate("Ok(Some(#{builder}))", "builder" to builder)
+                        "builder", shape,
+                    ) {
+                        rustTemplate(
+                            """|err|#{Error}::custom_source("Response was invalid", err)""", *codegenScope,
+                        )
+                    }
+                    rust("Ok(Some(#T))", builder)
                 }
             }
         }

@@ -29,12 +29,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -56,6 +53,7 @@ class EventStreamUnmarshallerGenerator(
     private val unionShape: UnionShape,
 ) {
     private val model = codegenContext.model
+    private val builderInstantiator = codegenContext.builderInstantiator()
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenTarget = codegenContext.target
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -339,14 +337,13 @@ class EventStreamUnmarshallerGenerator(
             rust(header)
             for (member in syntheticUnion.errorMembers) {
                 rustBlock("${member.memberName.dq()} $matchOperator ") {
-                    val target = model.expectShape(member.target, StructureShape::class.java)
-                    val builder = symbolProvider.symbolForBuilder(target)
-                    val builderIsFallible = BuilderGenerator.hasFallibleBuilder(target, symbolProvider)
-                    val parser = protocol.structuredDataParser().errorParser(target)
                     // TODO(EventStream): Errors on the operation can be disjoint with errors in the union,
                     //  so we need to generate a new top-level Error type for each event stream union.
                     when (codegenTarget) {
+                        // TODO(https://github.com/awslabs/smithy-rs/issues/1970) It should be possible to unify these branches now
                         CodegenTarget.CLIENT -> {
+                            val target = model.expectShape(member.target, StructureShape::class.java)
+                            val parser = protocol.structuredDataParser().errorParser(target)
                             if (parser != null) {
                                 rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                                 rustTemplate(
@@ -362,9 +359,9 @@ class EventStreamUnmarshallerGenerator(
                                         )
                                     ))
                                     """,
-                                    "build" to ClientBuilderInstantiator(symbolProvider).finalizeBuilder(
+                                    "build" to builderInstantiator.finalizeBuilder(
                                         "builder", target,
-                                        writable {
+                                        mapErr = {
                                             rustTemplate(
                                                 """|err|#{Error}::unmarshalling(format!("{}", err))""", *codegenScope,
                                             )
@@ -377,12 +374,10 @@ class EventStreamUnmarshallerGenerator(
                         }
 
                         CodegenTarget.SERVER -> {
-                            val mut = if (parser != null) {
-                                " mut"
-                            } else {
-                                ""
-                            }
-                            rust("let$mut builder = #T::default();", builder)
+                            val target = model.expectShape(member.target, StructureShape::class.java)
+                            val parser = protocol.structuredDataParser().errorParser(target)
+                            val mut = if (parser != null) { " mut" } else { "" }
+                            rust("let$mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
                             if (parser != null) {
                                 rustTemplate(
                                     """
@@ -399,7 +394,7 @@ class EventStreamUnmarshallerGenerator(
                                 """
                                 return Ok(#{UnmarshalledMessage}::Error(
                                     #{OpError}::${member.target.name}(
-                                        builder.build()${if (builderIsFallible) { "?" } else { "" }}
+                                        builder.build()
                                     )
                                 ))
                                 """,

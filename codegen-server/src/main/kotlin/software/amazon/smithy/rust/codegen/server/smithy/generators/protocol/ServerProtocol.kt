@@ -11,15 +11,10 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ClientBuilderInstantiator
-import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
@@ -97,37 +92,6 @@ interface ServerProtocol : Protocol {
             .toType().resolve("protocol::$protocolModulePath::runtime_error::RuntimeError")
 }
 
-class ServerBuilderInstantiator(private val symbolProvider: RustSymbolProvider, private val symbolParseFn: (Shape) -> ReturnSymbolToParse) :
-    BuilderInstantiator {
-    override fun setField(builder: String, value: Writable, e: MemberShape): Writable {
-        val setValue = { v: Writable -> ClientBuilderInstantiator(symbolProvider).setField(builder, v, e) }
-        return if (!symbolProvider.toSymbol(e).isOptional()) {
-            writable {
-                val n = safeName()
-                rustTemplate(
-                    """
-                    if let Some($n) = #{value} {
-                        #{setter}
-                    }
-                    """,
-                    "value" to value, "setter" to setValue(writable(n)),
-                )
-            }
-        } else {
-            setValue(value)
-        }
-    }
-
-    override fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable?): Writable = writable {
-        val returnSymbolToParse = symbolParseFn(shape)
-        if (returnSymbolToParse.isUnconstrained) {
-            rust(builder)
-        } else {
-            rust("$builder.build()")
-        }
-    }
-}
-
 fun returnSymbolToParseFn(codegenContext: ServerCodegenContext): (Shape) -> ReturnSymbolToParse {
     fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =
         if (shape.canReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)) {
@@ -152,14 +116,13 @@ fun jsonParserGenerator(
         listOf(
             ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(codegenContext),
         ) + additionalParserCustomizations,
-        ServerBuilderInstantiator(codegenContext.symbolProvider, returnSymbolToParseFn(codegenContext)),
     )
 
 class ServerAwsJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     awsJsonVersion: AwsJsonVersion,
     private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
-) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
+) : AwsJson(serverCodegenContext, awsJsonVersion, serverCodegenContext.builderInstantiator()), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolModulePath: String
@@ -169,7 +132,12 @@ class ServerAwsJsonProtocol(
         }
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::awsJsonFieldName, additionalParserCustomizations)
+        jsonParserGenerator(
+            serverCodegenContext,
+            httpBindingResolver,
+            ::awsJsonFieldName,
+            additionalParserCustomizations,
+        )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
@@ -208,9 +176,11 @@ class ServerAwsJsonProtocol(
     override fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::rejection::RequestRejection")
+
     override fun responseRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::rejection::ResponseRejection")
+
     override fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
@@ -229,7 +199,12 @@ class ServerRestJsonProtocol(
     override val protocolModulePath: String = "rest_json_1"
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::restJsonFieldName, additionalParserCustomizations)
+        jsonParserGenerator(
+            serverCodegenContext,
+            httpBindingResolver,
+            ::restJsonFieldName,
+            additionalParserCustomizations,
+        )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
@@ -294,6 +269,7 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonPa
                 rust(".map(|x| x.into())")
             }
         }
+
         else -> emptySection
     }
 }

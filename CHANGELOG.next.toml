@@ -165,3 +165,9 @@ message = "Fix regression with redacting sensitive HTTP response bodies."
 references = ["smithy-rs#2926", "smithy-rs#2972"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Source defaults from the default trait instead of implicitly based on type. This has minimal changes in the generated code."
+references = ["smithy-rs#2985"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"

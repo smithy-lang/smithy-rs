@@ -56,7 +56,8 @@ async fn create_table(client: &Client, table_name: &str) {
             ProvisionedThroughput::builder()
                 .read_capacity_units(10)
                 .write_capacity_units(10)
-                .build(),
+                .build()
+                .unwrap(),
         )
         .send()
         .await

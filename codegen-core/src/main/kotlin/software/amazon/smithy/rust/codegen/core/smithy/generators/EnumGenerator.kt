@@ -232,6 +232,20 @@ open class EnumGenerator(
             },
         )
 
+        // Add an infallible FromStr implementation for uniformity
+        rustTemplate(
+            """
+            impl ::std::str::FromStr for ${context.enumName} {
+                type Err = ::std::convert::Infallible;
+
+                fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
+                    #{Ok}(${context.enumName}::from(s))
+                }
+            }
+            """,
+            *preludeScope,
+        )
+
         rustTemplate(
             """
             impl<T> #{From}<T> for ${context.enumName} where T: #{AsRef}<str> {
@@ -239,6 +253,7 @@ open class EnumGenerator(
                     ${context.enumName}(s.as_ref().to_owned())
                 }
             }
+
             """,
             *preludeScope,
         )
