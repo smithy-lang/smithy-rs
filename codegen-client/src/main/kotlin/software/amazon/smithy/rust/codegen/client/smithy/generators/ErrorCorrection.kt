@@ -49,7 +49,6 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
     if (!member.isRequired) {
         return null
     }
-    symbolProvider.toSymbol(member)
     val target = model.expectShape(member.target)
     val memberSymbol = symbolProvider.toSymbol(member)
     val targetSymbol = symbolProvider.toSymbol(target)

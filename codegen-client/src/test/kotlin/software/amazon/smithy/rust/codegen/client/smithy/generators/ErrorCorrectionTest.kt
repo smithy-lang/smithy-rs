@@ -104,10 +104,19 @@ class ErrorCorrectionTest {
                         assert_eq!(shape.nested().unwrap().a(), Some(""));
                         // don't default non-required fields
                         assert_eq!(shape.not_required(), None);
+
+                        // set defaults for everything else
                         assert_eq!(shape.blob().unwrap().as_ref(), &[]);
+
+                        assert_eq!(shape.list_value(), Some(&[][..]));
+                        assert!(shape.map_value().unwrap().is_empty());
+                        assert_eq!(shape.double_list_value(), Some(&[][..]));
+
+                        // enums and unions become unknown variants
+                        assert!(matches!(shape.r##enum(), Some(crate::types::Enum::Unknown(_))));
+                        assert!(shape.union().unwrap().is_unknown());
                         """,
                         *codegenCtx,
-
                     )
                 }
             }
