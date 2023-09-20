@@ -106,6 +106,7 @@ val allCodegenTests = listOf(
         "pokemon-service-awsjson-client",
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
+    ClientTest("aws.protocoltests.json#RequiredValue", "required-values"),
 ).map(ClientTest::toCodegenTest)
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
