@@ -88,6 +88,7 @@ class JsonSerializerGeneratorTest {
             member: Top
         }
 
+        @input
         structure OpInput {
             @httpHeader("x-test")
             someHeader: String,
@@ -121,7 +122,7 @@ class JsonSerializerGeneratorTest {
         val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
 
-        val project = TestWorkspace.testProject(testSymbolProvider(model))
+        val project = TestWorkspace.testProject(symbolProvider)
         project.lib {
             unitTest(
                 "json_serializers",
@@ -226,6 +227,7 @@ class JsonSerializerGeneratorTest {
             member: Top
         }
 
+        @input
         structure OpInput {
             @httpHeader("x-test")
             someHeader: String,
@@ -312,7 +314,7 @@ class JsonSerializerGeneratorTest {
                         .extra(45)
                         .build()
                         $maybeUnwrap
-                ).build().unwrap();
+                ).boolean(false).build().unwrap();
                 ${format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
                 """,
             )
