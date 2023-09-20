@@ -180,7 +180,7 @@ internal fun testCodegenContext(
     codegenTarget,
 ) {
     override fun builderInstantiator(): BuilderInstantiator {
-        return DefaultBuilderInstantiator()
+        return DefaultBuilderInstantiator(codegenTarget == CodegenTarget.CLIENT, symbolProvider)
     }
 }
 
