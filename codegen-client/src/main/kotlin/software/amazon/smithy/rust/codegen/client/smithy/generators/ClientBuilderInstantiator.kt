@@ -34,11 +34,11 @@ class ClientBuilderInstantiator(private val clientCodegenContext: ClientCodegenC
         }
         if (BuilderGenerator.hasFallibleBuilder(shape, clientCodegenContext.symbolProvider)) {
             rustTemplate(
-                "#{builder}.build()#{mapErr}?",
+                "#{builder}.build()#{mapErr}",
                 "builder" to builderW,
                 "mapErr" to (
                     mapErr?.map {
-                        rust(".map_err(#T)", it)
+                        rust(".map_err(#T)?", it)
                     } ?: writable { }
                     ),
             )

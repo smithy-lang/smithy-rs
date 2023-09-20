@@ -26,7 +26,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
@@ -261,18 +260,15 @@ class ProtocolParserGenerator(
             }
         }
 
-        val err = if (BuilderGenerator.hasFallibleBuilder(outputShape, symbolProvider)) {
-            ".map_err(${format(errorSymbol)}::unhandled)?"
-        } else {
-            ""
+        val mapErr = writable {
+            rust("#T::unhandled", errorSymbol)
         }
 
         writeCustomizations(
             customizations,
             OperationSection.MutateOutput(customizations, operationShape, "_response_headers"),
         )
-
-        rust("output.build()$err")
+        codegenContext.builderInstantiator().finalizeBuilder("output", outputShape, mapErr)(this)
     }
 
     /**

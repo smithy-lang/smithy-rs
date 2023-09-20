@@ -4,16 +4,29 @@ $version: "2.0"
 namespace aws.protocoltests.json
 
 use aws.protocols#awsJson1_0
+use aws.protocols#restXml
 use smithy.test#httpResponseTests
 
 @awsJson1_0
-service RequiredValue {
+service RequiredValueJson {
     operations: [SayHello],
     version: "1"
 }
 
-operation SayHello { output: TestOutput }
 
+@restXml
+service RequiredValueXml {
+    operations: [SayHelloXml],
+    version: "1"
+}
+
+@http(method: "POST", uri: "/")
+operation SayHello { output: TestOutputDocument }
+
+@http(method: "POST", uri: "/")
+operation SayHelloXml { output: TestOutput }
+
+structure TestOutputDocument with [TestStruct] { innerField: Nested, @required document: Document }
 structure TestOutput with [TestStruct] { innerField: Nested }
 
 @mixin
@@ -28,8 +41,6 @@ structure TestStruct {
     mapValue: ListMap,
     @required
     doubleListValue: DoubleList
-    @required
-    document: Document
     @required
     nested: Nested
     @required
@@ -71,7 +82,7 @@ map ListMap {
 }
 
 apply SayHello @httpResponseTests([{
-                                         id: "error_recovery",
+                                         id: "error_recovery_json",
                                          protocol: awsJson1_0,
                                          params: {
                                              union: { A: 5 },
@@ -86,5 +97,23 @@ apply SayHello @httpResponseTests([{
                                              nested: { a: "" }
                                          },
                                          code: 200,
-                                         body: "{}"
+                                         body: "{\"union\": { \"A\": 5 }, \"enum\": \"A\" }"
                                      }])
+
+apply SayHelloXml @httpResponseTests([{
+                                       id: "error_recovery_xml",
+                                       protocol: restXml,
+                                       params: {
+                                           union: { A: 5 },
+                                           enum: "A",
+                                           foo: "",
+                                           byteValue: 0,
+                                           blob: "",
+                                           listValue: [],
+                                           mapValue: {},
+                                           doubleListValue: []
+                                           nested: { a: "" }
+                                       },
+                                       code: 200,
+                                       body: "<TestOutput><union><A>5</A></union><enum>A</enum></TestOutput>"
+                                   }])
