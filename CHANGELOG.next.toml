@@ -152,7 +152,7 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "ysaito1001"
 
 [[smithy-rs]]
-message = "Omit fractional seconds from `date-time` format."
+message = "Omit fractional seconds from `http-date` format."
 references = ["smithy-rs#2831", "aws-sdk-rust#818"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
 author = "rschmitt"
