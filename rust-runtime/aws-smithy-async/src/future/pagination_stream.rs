@@ -29,10 +29,7 @@ impl<Item> PaginationStream<Item> {
     }
 
     /// Consumes and returns the next `Item` from this stream.
-    pub async fn next(&mut self) -> Option<Item>
-    where
-        Self: Unpin,
-    {
+    pub async fn next(&mut self) -> Option<Item> {
         self.0.next().await
     }
 
@@ -46,6 +43,11 @@ impl<T, E> PaginationStream<Result<T, E>> {
     /// Yields the next item in the stream or returns an error if an error is encountered.
     pub async fn try_next(&mut self) -> Result<Option<T>, E> {
         self.next().await.transpose()
+    }
+
+    /// Convenience method for `.collect::<Result<Vec<_>, _>()`.
+    pub async fn try_collect(self) -> Result<Vec<T>, E> {
+        self.collect::<Result<Vec<T>, E>>().await
     }
 }
 pin_project! {
@@ -151,6 +153,11 @@ impl<T, E> FnStream<Result<T, E>> {
     /// Yields the next item in the stream or returns an error if an error is encountered.
     pub async fn try_next(&mut self) -> Result<Option<T>, E> {
         self.next().await.transpose()
+    }
+
+    /// Convenience method for `.collect::<Result<Vec<_>, _>()`.
+    pub async fn try_collect(self) -> Result<Vec<T>, E> {
+        self.collect::<Result<Vec<T>, E>>().await
     }
 }
 
@@ -328,7 +335,7 @@ mod test {
         struct Output {
             items: Vec<u8>,
         }
-        let stream = FnStream::new(|tx| {
+        let stream: FnStream<Result<_, &str>> = FnStream::new(|tx| {
             Box::pin(async move {
                 tx.send(Ok(Output {
                     items: vec![1, 2, 3],
@@ -346,7 +353,7 @@ mod test {
             Ok(vec![1, 2, 3, 4, 5, 6]),
             TryFlatMap::new(PaginationStream::new(stream))
                 .flat_map(|output| output.items.into_iter())
-                .collect::<Result<Vec<_>, &str>>()
+                .try_collect()
                 .await,
         );
     }
@@ -371,7 +378,7 @@ mod test {
             Err("bummer"),
             TryFlatMap::new(PaginationStream::new(stream))
                 .flat_map(|output| output.items.into_iter())
-                .collect::<Result<Vec<_>, &str>>()
+                .try_collect()
                 .await
         )
     }

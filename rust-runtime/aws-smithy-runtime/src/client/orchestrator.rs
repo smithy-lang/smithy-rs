@@ -38,6 +38,9 @@ mod auth;
 pub mod endpoints;
 /// Defines types that work with HTTP types
 mod http;
+/// Utility for making one-off unmodeled requests with the orchestrator.
+#[doc(hidden)]
+pub mod operation;
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
