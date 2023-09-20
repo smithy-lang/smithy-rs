@@ -39,6 +39,6 @@ data class ClientCodegenContext(
 ) {
     val enableUserConfigurableRuntimePlugins: Boolean get() = settings.codegenConfig.enableUserConfigurableRuntimePlugins
     override fun builderInstantiator(): BuilderInstantiator {
-        return ClientBuilderInstantiator(symbolProvider)
+        return ClientBuilderInstantiator(this)
     }
 }
