@@ -71,6 +71,14 @@ impl Storable for LoadedRequestBody {
     type Storer = StoreReplace<Self>;
 }
 
+/// Marker type stored in the config bag to indicate that a response body should be redacted.
+#[derive(Debug)]
+pub struct SensitiveOutput;
+
+impl Storable for SensitiveOutput {
+    type Storer = StoreReplace<Self>;
+}
+
 #[derive(Debug)]
 enum ErrorKind<E> {
     /// An error occurred within an interceptor.
@@ -219,6 +227,20 @@ impl<E> OrchestratorError<E> {
                 }
             }
         }
+    }
+
+    /// Maps the error type in `ErrorKind::Operation`
+    #[doc(hidden)]
+    pub fn map_operation_error<E2>(self, map: impl FnOnce(E) -> E2) -> OrchestratorError<E2> {
+        let kind = match self.kind {
+            ErrorKind::Connector { source } => ErrorKind::Connector { source },
+            ErrorKind::Operation { err } => ErrorKind::Operation { err: map(err) },
+            ErrorKind::Interceptor { source } => ErrorKind::Interceptor { source },
+            ErrorKind::Response { source } => ErrorKind::Response { source },
+            ErrorKind::Timeout { source } => ErrorKind::Timeout { source },
+            ErrorKind::Other { source } => ErrorKind::Other { source },
+        };
+        OrchestratorError { kind }
     }
 }
 

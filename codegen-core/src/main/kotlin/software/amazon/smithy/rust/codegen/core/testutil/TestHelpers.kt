@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -88,7 +89,11 @@ private object CodegenCoreTestModules {
             eventStream: UnionShape,
         ): RustModule.LeafModule = ErrorsTestModule
 
-        override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule {
+        override fun moduleForBuilder(
+            context: ModuleProviderContext,
+            shape: Shape,
+            symbol: Symbol,
+        ): RustModule.LeafModule {
             val builderNamespace = RustReservedWords.escapeIfNeeded("test_" + symbol.name.toSnakeCase())
             return RustModule.new(
                 builderNamespace,
@@ -142,11 +147,12 @@ fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String =
 internal fun testSymbolProvider(
     model: Model,
     rustReservedWordConfig: RustReservedWordConfig? = null,
+    config: RustSymbolProviderConfig = TestRustSymbolProviderConfig,
 ): RustSymbolProvider = SymbolVisitor(
     testRustSettings(),
     model,
     ServiceShape.builder().version("test").id("test#Service").build(),
-    TestRustSymbolProviderConfig,
+    config,
 ).let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(Attribute.NonExhaustive)) }
     .let {
         RustReservedWordSymbolProvider(
@@ -161,7 +167,7 @@ internal fun testCodegenContext(
     serviceShape: ServiceShape? = null,
     settings: CoreRustSettings = testRustSettings(),
     codegenTarget: CodegenTarget = CodegenTarget.CLIENT,
-): CodegenContext = CodegenContext(
+): CodegenContext = object : CodegenContext(
     model,
     testSymbolProvider(model),
     TestModuleDocProvider,
@@ -171,11 +177,16 @@ internal fun testCodegenContext(
     ShapeId.from("test#Protocol"),
     settings,
     codegenTarget,
-)
+) {
+    override fun builderInstantiator(): BuilderInstantiator {
+        return DefaultBuilderInstantiator()
+    }
+}
 
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
+
 fun StructureShape.renderWithModelBuilder(
     model: Model,
     symbolProvider: RustSymbolProvider,

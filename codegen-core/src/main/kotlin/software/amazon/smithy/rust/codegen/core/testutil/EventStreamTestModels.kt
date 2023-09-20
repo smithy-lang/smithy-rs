@@ -145,7 +145,7 @@ object EventStreamTestModels {
             validTestUnion = """{"Foo":"hello"}""",
             validSomeError = """{"Message":"some error"}""",
             validUnmodeledError = """{"Message":"unmodeled error"}""",
-        ) { AwsJson(it, AwsJsonVersion.Json11) },
+        ) { AwsJson(it, AwsJsonVersion.Json11, builderInstantiator = DefaultBuilderInstantiator()) },
 
         //
         // restXml

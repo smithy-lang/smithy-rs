@@ -128,13 +128,31 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = "Remove `once_cell` from public API"
+message = "Remove `once_cell` from public API."
 references = ["smithy-rs#2973"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[smithy-rs]]
-message = "Remove `once_cell` from public API"
+message = "Remove `once_cell` from public API."
 references = ["smithy-rs#2973"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix regression with redacting sensitive HTTP response bodies."
+references = ["smithy-rs#2926", "smithy-rs#2972"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix regression with redacting sensitive HTTP response bodies."
+references = ["smithy-rs#2926", "smithy-rs#2972"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Source defaults from the default trait instead of implicitly based on type. This has minimal changes in the generated code."
+references = ["smithy-rs#2985"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
