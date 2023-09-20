@@ -383,7 +383,7 @@ mod tests {
             "Action=SomeAction\
             &Version=1.0\
             &epoch_seconds=5.2\
-            &date_time=2021-05-24T15%3A34%3A50Z\
+            &date_time=2021-05-24T15%3A34%3A50.123Z\
             &http_date=Wed%2C%2021%20Oct%202015%2007%3A28%3A00%20GMT\
             ",
             out
