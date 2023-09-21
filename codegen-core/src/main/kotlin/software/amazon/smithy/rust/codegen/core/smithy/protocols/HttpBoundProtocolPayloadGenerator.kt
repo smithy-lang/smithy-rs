@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext
@@ -64,7 +63,6 @@ class HttpBoundProtocolPayloadGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val codegenScope = arrayOf(
-        *preludeScope,
         "hyper" to CargoDependency.HyperWithStream.toType(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "BuildError" to runtimeConfig.operationBuildError(),
