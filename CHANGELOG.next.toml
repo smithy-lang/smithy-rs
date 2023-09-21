@@ -167,6 +167,12 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "ysaito1001"
 
 [[smithy-rs]]
+message = "Omit fractional seconds from `http-date` format."
+references = ["smithy-rs#2831", "aws-sdk-rust#818"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "rschmitt"
+
+[[smithy-rs]]
 message = "Source defaults from the default trait instead of implicitly based on type. This has minimal changes in the generated code."
 references = ["smithy-rs#2985"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
