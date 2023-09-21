@@ -3,7 +3,7 @@ RFC: Collection Defaults
 =============
 
 <!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
-> Status: Accepted
+> Status: Implemented
 >
 > Applies to: client
 
@@ -78,5 +78,5 @@ No, many existing APIs don't have the default trait.
 Changes checklist
 -----------------
 Estimated total work: 2 days
-- [ ] Update accessor method generation to auto flatten lists
-- [ ] Update docs for accessors to guide users to `.field.is_some()` if they MUST determine if the field was set.
+- [x] Update accessor method generation to auto flatten lists
+- [x] Update docs for accessors to guide users to `.field.is_some()` if they MUST determine if the field was set.
