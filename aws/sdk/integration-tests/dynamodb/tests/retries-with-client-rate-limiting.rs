@@ -86,14 +86,14 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3));
-    assert_eq!(res.table_names(), Some(expected_table_names.as_slice()));
+    assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Three requests should have been made, two failing & one success
     assert_eq!(conn.requests().len(), 3);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3 + 1));
-    assert_eq!(res.table_names(), Some(expected_table_names.as_slice()));
+    assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Two requests should have been made, one failing & one success (plus previous requests)
     assert_eq!(conn.requests().len(), 5);
 
@@ -141,7 +141,7 @@ async fn test_adaptive_retries_with_throttling_errors() {
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(40));
-    assert_eq!(res.table_names(), Some(expected_table_names.as_slice()));
+    assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Three requests should have been made, two failing & one success
     assert_eq!(conn.requests().len(), 3);
 
@@ -149,7 +149,7 @@ async fn test_adaptive_retries_with_throttling_errors() {
     let res = client.list_tables().send().await.unwrap();
     assert!(Duration::from_secs(48) < sleep_impl.total_duration());
     assert!(Duration::from_secs(49) > sleep_impl.total_duration());
-    assert_eq!(res.table_names(), Some(expected_table_names.as_slice()));
+    assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Two requests should have been made, one failing & one success (plus previous requests)
     assert_eq!(conn.requests().len(), 5);
 }
