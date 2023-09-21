@@ -35,6 +35,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-model:$smithyVersion")
 }
 
 fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
@@ -48,7 +49,7 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "nullabilityCheckMode": ${getNullabilityCheckMode()}
+                "nullabilityCheckMode": \"${getNullabilityCheckMode()}\"
             },
             "customizationConfig": {
                 "awsSdk": {

@@ -16,7 +16,7 @@ use std::marker::PhantomData;
 // This function is only used to strip prefixes from resource IDs at the time they're passed as
 // input to a request. Resource IDs returned in responses may or may not include a prefix.
 /// Strip the resource type prefix from resource ID return
-fn trim_resource_id(resource_id: &mut String) {
+fn trim_resource_id(resource_id: &mut Option<String>) {
     const PREFIXES: &[&str] = &[
         "/hostedzone/",
         "hostedzone/",
@@ -27,8 +27,12 @@ fn trim_resource_id(resource_id: &mut String) {
     ];
 
     for prefix in PREFIXES {
-        if let Some(trimmed_id) = resource_id.strip_prefix(prefix) {
-            *resource_id = trimmed_id.to_string();
+        if let Some(id) = resource_id
+            .as_deref()
+            .unwrap_or_default()
+            .strip_prefix(prefix)
+        {
+            *resource_id = Some(id.to_string());
             return;
         }
     }
@@ -36,7 +40,7 @@ fn trim_resource_id(resource_id: &mut String) {
 
 pub(crate) struct Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String>,
+    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
 {
     get_mut_resource_id: G,
     _phantom: PhantomData<T>,
@@ -44,7 +48,7 @@ where
 
 impl<G, T> fmt::Debug for Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String>,
+    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Route53ResourceIdInterceptor").finish()
@@ -53,7 +57,7 @@ where
 
 impl<G, T> Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String>,
+    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
 {
     pub(crate) fn new(get_mut_resource_id: G) -> Self {
         Self {
@@ -65,7 +69,7 @@ where
 
 impl<G, T> Interceptor for Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> Option<&'a mut String> + Send + Sync,
+    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String> + Send + Sync,
     T: fmt::Debug + Send + Sync + 'static,
 {
     fn name(&self) -> &'static str {
@@ -79,9 +83,8 @@ where
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let input: &mut T = context.input_mut().downcast_mut().expect("correct type");
-        if let Some(field) = (self.get_mut_resource_id)(input) {
-            trim_resource_id(field)
-        }
+        let field = (self.get_mut_resource_id)(input);
+        trim_resource_id(field);
         Ok(())
     }
 }
@@ -93,39 +96,48 @@ mod test {
     #[test]
     fn does_not_change_regular_zones() {
         struct OperationInput {
-            resource: String,
+            resource: Option<String>,
         }
 
         let mut operation = OperationInput {
-            resource: "Z0441723226OZ66S5ZCNZ".to_string(),
+            resource: Some("Z0441723226OZ66S5ZCNZ".to_string()),
         };
         trim_resource_id(&mut operation.resource);
-        assert_eq!(&operation.resource, "Z0441723226OZ66S5ZCNZ");
+        assert_eq!(
+            &operation.resource.unwrap_or_default(),
+            "Z0441723226OZ66S5ZCNZ"
+        );
     }
 
     #[test]
     fn sanitizes_prefixed_zone() {
         struct OperationInput {
-            change_id: String,
+            change_id: Option<String>,
         }
 
         let mut operation = OperationInput {
-            change_id: "/change/Z0441723226OZ66S5ZCNZ".to_string(),
+            change_id: Some("/change/Z0441723226OZ66S5ZCNZ".to_string()),
         };
         trim_resource_id(&mut operation.change_id);
-        assert_eq!(&operation.change_id, "Z0441723226OZ66S5ZCNZ");
+        assert_eq!(
+            &operation.change_id.unwrap_or_default(),
+            "Z0441723226OZ66S5ZCNZ"
+        );
     }
 
     #[test]
     fn allow_no_leading_slash() {
         struct OperationInput {
-            hosted_zone: String,
+            hosted_zone: Option<String>,
         }
 
         let mut operation = OperationInput {
-            hosted_zone: "hostedzone/Z0441723226OZ66S5ZCNZ".to_string(),
+            hosted_zone: Some("hostedzone/Z0441723226OZ66S5ZCNZ".to_string()),
         };
         trim_resource_id(&mut operation.hosted_zone);
-        assert_eq!(&operation.hosted_zone, "Z0441723226OZ66S5ZCNZ");
+        assert_eq!(
+            &operation.hosted_zone.unwrap_or_default(),
+            "Z0441723226OZ66S5ZCNZ"
+        );
     }
 }

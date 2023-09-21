@@ -122,7 +122,7 @@ class ServerAwsJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     awsJsonVersion: AwsJsonVersion,
     private val additionalParserCustomizations: List<JsonParserCustomization> = listOf(),
-) : AwsJson(serverCodegenContext, awsJsonVersion, serverCodegenContext.builderInstantiator()), ServerProtocol {
+) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolModulePath: String

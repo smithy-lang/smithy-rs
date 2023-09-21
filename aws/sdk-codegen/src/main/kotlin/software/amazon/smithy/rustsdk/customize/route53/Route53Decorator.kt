@@ -80,11 +80,10 @@ class TrimResourceIdCustomization(
                         RuntimeType.forInlineDependency(
                             InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
                         ).resolve("Route53ResourceIdInterceptor")
-
                     rustTemplate(
                         """
                         #{Route53ResourceIdInterceptor}::new(|input: &mut #{Input}| {
-                            input.$fieldName.as_mut()
+                            &mut input.$fieldName
                         })
                         """,
                         "Input" to codegenContext.symbolProvider.toSymbol(inputShape),
