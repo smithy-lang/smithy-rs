@@ -77,7 +77,6 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
     }
 
     open fun asMemberShape(container: StructureShape): MemberShape? {
-        println(container.members())
         return container.members().firstOrNull { member -> member.memberName.lowercase() == "requestid" }
     }
 

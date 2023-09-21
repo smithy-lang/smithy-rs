@@ -40,58 +40,41 @@ dependencies {
 
 fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
 
-val allCodegenTests = listOf(
-    CodegenTest(
-        "com.amazonaws.apigateway#BackplaneControlService",
-        "apigateway",
-        imports = listOf("models/apigateway-rules.smithy"),
-        extraConfig = """
-            ,
-            "codegen": {
-                "includeFluentClient": false,
-                "nullabilityCheckMode": "${getNullabilityCheckMode()}"
-            },
-            "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false
-                }
-            }
+fun baseTest(service: String, module: String, imports: List<String> = listOf()): CodegenTest {
+    return CodegenTest(
+        service = service,
+        module = module,
+        imports = imports,
+        extraCodegenConfig = """
+            "includeFluentClient": false,
+            "nullabilityCheckMode": "${getNullabilityCheckMode()}"
         """,
-    ),
-    CodegenTest(
-        "com.amazonaws.testservice#TestService",
-        "endpoint-test-service",
-        imports = listOf("models/single-static-endpoint.smithy"),
         extraConfig = """
-            ,
-            "codegen": {
-                "includeFluentClient": false,
-                "nullabilityCheckMode": "${getNullabilityCheckMode()}"
-            },
-            "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false
-                }
-            }
-        """,
-    ),
-    CodegenTest(
-        "com.amazonaws.testservice#RequiredValues",
-        "required-values",
-        imports = listOf("models/required-value-test.smithy"),
-        extraConfig = """
-            ,
-            "codegen": {
-                "includeFluentClient": false,
-                "nullabilityCheckMode": "${getNullabilityCheckMode()}"
-            },
-            "customizationConfig": {
+            , "customizationConfig": {
                 "awsSdk": {
                     "generateReadme": false,
                     "requireEndpointResolver": false
                 }
             }
         """,
+    )
+}
+
+val allCodegenTests = listOf(
+    baseTest(
+        "com.amazonaws.apigateway#BackplaneControlService",
+        "apigateway",
+        imports = listOf("models/apigateway-rules.smithy"),
+    ),
+    baseTest(
+        "com.amazonaws.testservice#TestService",
+        "endpoint-test-service",
+        imports = listOf("models/single-static-endpoint.smithy"),
+    ),
+    baseTest(
+        "com.amazonaws.testservice#RequiredValues",
+        "required-values",
+        imports = listOf("models/required-value-test.smithy"),
     ),
 )
 
