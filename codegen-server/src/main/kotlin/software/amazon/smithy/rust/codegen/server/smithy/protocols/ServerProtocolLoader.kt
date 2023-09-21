@@ -10,30 +10,38 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJsonVersion
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolLoader
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
+import software.amazon.smithy.rust.codegen.core.util.isOutputEventStream
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 
 class StreamPayloadSerializerCustomization() : ServerHttpBoundProtocolCustomization() {
     override fun section(section: ServerHttpBoundProtocolSection): Writable = when (section) {
-        is ServerHttpBoundProtocolSection.TypeOfSerializedStreamPayload -> writable {
-            rust(
-                "#T",
-                RuntimeType.futuresStreamCompatByteStream(section.params.runtimeConfig).toSymbol(),
-            )
-        }
-
         is ServerHttpBoundProtocolSection.WrapStreamPayload -> writable {
-            rustTemplate(
-                "#{FuturesStreamCompatByteStream}::new(${section.params.payloadName!!})",
-                "FuturesStreamCompatByteStream" to RuntimeType.futuresStreamCompatByteStream(section.params.runtimeConfig),
-            )
+            if (section.params.shape.isOutputEventStream(section.params.codegenContext.model)) {
+                // Event stream payload, of type `aws_smithy_http::event_stream::MessageStreamAdapter`, already
+                // implements the `Stream` trait, so no need to wrap it in the new-type.
+                section.params.payloadGenerator.generatePayload(this, section.params.shapeName, section.params.shape)
+            } else {
+                // Otherwise, the stream payload is `aws_smithy_http::byte_stream::ByteStream`. We wrap it in the
+                // new-type to enable the `Stream` trait.
+                withBlockTemplate(
+                    "#{FuturesStreamCompatByteStream}::new(",
+                    ")",
+                    "FuturesStreamCompatByteStream" to RuntimeType.futuresStreamCompatByteStream(section.params.codegenContext.runtimeConfig),
+                ) {
+                    section.params.payloadGenerator.generatePayload(
+                        this,
+                        section.params.shapeName,
+                        section.params.shape,
+                    )
+                }
+            }
         }
 
         else -> emptySection

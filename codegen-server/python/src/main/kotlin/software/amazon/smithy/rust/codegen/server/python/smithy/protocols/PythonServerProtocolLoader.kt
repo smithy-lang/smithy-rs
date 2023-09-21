@@ -67,28 +67,6 @@ class PythonServerAfterDeserializedMemberServerHttpBoundCustomization() :
 }
 
 /**
- * Customization class used to determine the type of serialized stream payload and how it should be wrapped in a
- * new-type wrapper to enable `futures_core::stream::Stream` trait.
- */
-class PythonServerStreamPayloadSerializerCustomization() : ServerHttpBoundProtocolCustomization() {
-    override fun section(section: ServerHttpBoundProtocolSection): Writable = when (section) {
-        is ServerHttpBoundProtocolSection.TypeOfSerializedStreamPayload -> writable {
-            // `aws_smithy_http_server_python::types::ByteStream` already implements
-            // `futures::stream::Stream`, so no need to wrap it in a futures' stream-compatible
-            // wrapper.
-            rust("#T", section.params.symbolProvider.toSymbol(section.params.member))
-        }
-
-        is ServerHttpBoundProtocolSection.WrapStreamPayload -> writable {
-            // payloadName is always non-null within WrapStreamAfterPayloadGenerated
-            rust(section.params.payloadName!!)
-        }
-
-        else -> emptySection
-    }
-}
-
-/**
  * Customization class used to force casting a `Vec<DateTime>` into one a Python `Vec<DateTime>`
  */
 class PythonServerAfterDeserializedMemberHttpBindingCustomization(private val runtimeConfig: RuntimeConfig) :
@@ -97,6 +75,23 @@ class PythonServerAfterDeserializedMemberHttpBindingCustomization(private val ru
         is HttpBindingSection.AfterDeserializingIntoADateTimeOfHttpHeaders -> writable {
             rust(".into_iter().map(#T::from).collect()", PythonServerRuntimeType.dateTime(runtimeConfig).toSymbol())
         }
+        else -> emptySection
+    }
+}
+
+/**
+ * Customization class used to determine how serialized stream payload should be rendered for the Python server.
+ *
+ * In this customization, we do not need to wrap the payload in a new-type wrapper to enable the
+ * `futures_core::stream::Stream` trait since the payload in question has a type
+ * `aws_smithy_http_server_python::types::ByteStream` which already implements the `Stream` trait.
+ */
+class PythonServerStreamPayloadSerializerCustomization() : ServerHttpBoundProtocolCustomization() {
+    override fun section(section: ServerHttpBoundProtocolSection): Writable = when (section) {
+        is ServerHttpBoundProtocolSection.WrapStreamPayload -> writable {
+            section.params.payloadGenerator.generatePayload(this, section.params.shapeName, section.params.shape)
+        }
+
         else -> emptySection
     }
 }

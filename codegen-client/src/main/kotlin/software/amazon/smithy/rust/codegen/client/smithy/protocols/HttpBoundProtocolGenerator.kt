@@ -7,32 +7,12 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializerParams
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.StreamPayloadSerializerRenderer
-
-private class ClientStreamPayloadSerializerRenderer : StreamPayloadSerializerRenderer {
-    override fun renderOutputType(writer: RustWriter, params: StreamPayloadSerializerParams) {
-        writer.rust(
-            "#T",
-            RuntimeType.futuresStreamCompatByteStream(params.runtimeConfig).toSymbol(),
-        )
-    }
-
-    override fun renderPayload(writer: RustWriter, params: StreamPayloadSerializerParams) {
-        writer.rust(
-            "#T::new(${params.payloadName!!})",
-            RuntimeType.futuresStreamCompatByteStream(params.runtimeConfig),
-        )
-    }
-}
 
 class ClientHttpBoundProtocolPayloadGenerator(
     codegenContext: ClientCodegenContext,
@@ -61,5 +41,4 @@ class ClientHttpBoundProtocolPayloadGenerator(
             "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
         )
     },
-    ClientStreamPayloadSerializerRenderer(),
 )

@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -18,12 +17,11 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpMessageType
@@ -53,38 +51,11 @@ data class EventStreamBodyParams(
     val additionalPayloadContext: AdditionalPayloadContext,
 )
 
-data class StreamPayloadSerializerParams(
-    val symbolProvider: SymbolProvider,
-    val runtimeConfig: RuntimeConfig,
-    val member: MemberShape,
-    val payloadName: String?,
-)
-
-/**
- * An interface to help customize how to render a stream payload serializer.
- *
- * When the output of the serializer is passed to `hyper::body::Body::wrap_stream`,
- * it requires what's passed to implement `futures_core::stream::Stream` trait.
- * However, a certain type, such as `aws_smithy_http::byte_stream::ByteStream` does not
- * implement the trait, so we need to wrap it with a new-type that does implement the trait.
- *
- * Each implementing type of the interface can choose whether the payload should be wrapped
- * with such a new-type or should simply be used as-is.
- */
-interface StreamPayloadSerializerRenderer {
-    /** Renders the return type of stream payload serializer **/
-    fun renderOutputType(writer: RustWriter, params: StreamPayloadSerializerParams)
-
-    /** Renders the stream payload **/
-    fun renderPayload(writer: RustWriter, params: StreamPayloadSerializerParams)
-}
-
 class HttpBoundProtocolPayloadGenerator(
     codegenContext: CodegenContext,
     private val protocol: Protocol,
     private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
     private val renderEventStreamBody: (RustWriter, EventStreamBodyParams) -> Unit,
-    private val streamPayloadSerializerRenderer: StreamPayloadSerializerRenderer,
 ) : ProtocolPayloadGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -269,22 +240,17 @@ class HttpBoundProtocolPayloadGenerator(
     ) {
         val ref = if (payloadMetadata.takesOwnership) "" else "&"
         val serializer = protocolFunctions.serializeFn(member, fnNameSuffix = "http_payload") { fnName ->
-            rustTemplate(
-                "pub(crate) fn $fnName(payload: $ref#{Member}) -> #{Result}<",
-                "Member" to symbolProvider.toSymbol(member),
-                *codegenScope,
-            )
-            if (member.isStreaming(model)) {
-                streamPayloadSerializerRenderer.renderOutputType(
-                    this,
-                    StreamPayloadSerializerParams(symbolProvider, runtimeConfig, member, null),
-                )
+            val outputT = if (member.isStreaming(model)) {
+                symbolProvider.toSymbol(member)
             } else {
-                rust("#T", RuntimeType.ByteSlab.toSymbol())
+                RuntimeType.ByteSlab.toSymbol()
             }
-            rustTemplate(", #{BuildError}>", *codegenScope)
-
-            withBlockTemplate("{", "}", *codegenScope) {
+            rustBlockTemplate(
+                "pub fn $fnName(payload: $ref#{Member}) -> Result<#{outputT}, #{BuildError}>",
+                "Member" to symbolProvider.toSymbol(member),
+                "outputT" to outputT,
+                *codegenScope,
+            ) {
                 val asRef = if (payloadMetadata.takesOwnership) "" else ".as_ref()"
 
                 if (symbolProvider.toSymbol(member).isOptional()) {
@@ -339,10 +305,8 @@ class HttpBoundProtocolPayloadGenerator(
             is BlobShape -> {
                 // Write the raw blob to the payload.
                 if (member.isStreaming(model)) {
-                    streamPayloadSerializerRenderer.renderPayload(
-                        this,
-                        StreamPayloadSerializerParams(symbolProvider, runtimeConfig, member, payloadName),
-                    )
+                    // Return the `ByteStream`.
+                    rust(payloadName)
                 } else {
                     // Convert the `Blob` into a `Vec<u8>` and return it.
                     rust("$payloadName.into_inner()")
