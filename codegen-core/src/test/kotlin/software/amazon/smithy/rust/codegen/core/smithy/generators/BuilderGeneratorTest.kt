@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
-import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -184,7 +183,7 @@ internal class BuilderGeneratorTest {
         val provider = testSymbolProvider(
             model,
             rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
-            config = TestRustSymbolProviderConfig.copy(nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL),
+            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL,
         )
         val project = TestWorkspace.testProject(provider)
         val shape: StructureShape = model.lookup("com.test#MyStruct")

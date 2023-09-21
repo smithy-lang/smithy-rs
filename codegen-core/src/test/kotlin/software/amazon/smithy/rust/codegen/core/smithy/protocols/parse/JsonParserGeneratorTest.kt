@@ -149,7 +149,7 @@ class JsonParserGeneratorTest {
                 let top = output.top.expect("top");
                 assert_eq!(Some(45), top.extra);
                 assert_eq!(Some("something".to_string()), top.field);
-                assert_eq!(Some(Choice::Int(5)), top.choice);
+                assert_eq!(Choice::Int(5), top.choice);
                 """,
             )
             unitTest(
@@ -166,7 +166,7 @@ class JsonParserGeneratorTest {
                 // unknown variant
                 let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
                 let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).unwrap().build();
-                assert!(output.top.unwrap().choice.unwrap().is_unknown());
+                assert!(output.top.unwrap().choice.is_unknown());
                 """,
             )
 

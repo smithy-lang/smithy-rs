@@ -476,6 +476,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.parseStructure(shape: StructureShape, ctx: Ctx) {
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = protocolFunctions.deserializeFn(shape) { fnName ->
+            Attribute.AllowNeedlessQuestionMark.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
                 *codegenScope, "Shape" to symbol,
@@ -493,7 +494,7 @@ class XmlBindingTraitParserGenerator(
                     shape,
                     mapErr = {
                         rustTemplate(
-                            """.map_err(|_|#{XmlDecodeError}::custom("missing field"))?""",
+                            """|_|#{XmlDecodeError}::custom("missing field")""",
                             *codegenScope,
                         )
                     },

@@ -141,7 +141,7 @@ open class Instantiator(
     private fun renderMember(writer: RustWriter, memberShape: MemberShape, data: Node, ctx: Ctx) {
         val targetShape = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
-        if (data is NullNode) {
+        if (data is NullNode && !targetShape.isDocumentShape) {
             check(symbol.isOptional()) {
                 "A null node was provided for $memberShape but the symbol was not optional. This is invalid input data."
             }

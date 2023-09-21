@@ -105,10 +105,10 @@ private object CodegenCoreTestModules {
     }
 }
 
-val TestRustSymbolProviderConfig = RustSymbolProviderConfig(
+fun testRustSymbolProviderConfig(nullabilityCheckMode: NullableIndex.CheckMode) = RustSymbolProviderConfig(
     runtimeConfig = TestRuntimeConfig,
     renameExceptions = true,
-    nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+    nullabilityCheckMode = nullabilityCheckMode,
     moduleProvider = CodegenCoreTestModules.TestModuleProvider,
 )
 
@@ -147,12 +147,12 @@ fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String =
 internal fun testSymbolProvider(
     model: Model,
     rustReservedWordConfig: RustReservedWordConfig? = null,
-    config: RustSymbolProviderConfig = TestRustSymbolProviderConfig,
+    nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
 ): RustSymbolProvider = SymbolVisitor(
     testRustSettings(),
     model,
     ServiceShape.builder().version("test").id("test#Service").build(),
-    config,
+    testRustSymbolProviderConfig(nullabilityCheckMode),
 ).let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(Attribute.NonExhaustive)) }
     .let {
         RustReservedWordSymbolProvider(
@@ -167,9 +167,10 @@ internal fun testCodegenContext(
     serviceShape: ServiceShape? = null,
     settings: CoreRustSettings = testRustSettings(),
     codegenTarget: CodegenTarget = CodegenTarget.CLIENT,
+    nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
 ): CodegenContext = object : CodegenContext(
     model,
-    testSymbolProvider(model),
+    testSymbolProvider(model, nullabilityCheckMode = nullabilityCheckMode),
     TestModuleDocProvider,
     serviceShape
         ?: model.serviceShapes.firstOrNull()
@@ -179,14 +180,13 @@ internal fun testCodegenContext(
     codegenTarget,
 ) {
     override fun builderInstantiator(): BuilderInstantiator {
-        return DefaultBuilderInstantiator()
+        return DefaultBuilderInstantiator(codegenTarget == CodegenTarget.CLIENT, symbolProvider)
     }
 }
 
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
  */
-
 fun StructureShape.renderWithModelBuilder(
     model: Model,
     symbolProvider: RustSymbolProvider,
