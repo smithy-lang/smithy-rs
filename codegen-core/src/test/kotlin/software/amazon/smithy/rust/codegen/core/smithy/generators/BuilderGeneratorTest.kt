@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
-import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -150,7 +149,6 @@ internal class BuilderGeneratorTest {
     @Test
     fun `it supports nonzero defaults`() {
         val model = """
-            ${"$"}version: "2.0"
             namespace com.test
             structure MyStruct {
               @default(0)
@@ -180,12 +178,12 @@ internal class BuilderGeneratorTest {
             }
             @default(1)
             integer OneDefault
-        """.asSmithyModel()
+        """.asSmithyModel(smithyVersion = "2.0")
 
         val provider = testSymbolProvider(
             model,
             rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
-            config = TestRustSymbolProviderConfig.copy(nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL),
+            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL,
         )
         val project = TestWorkspace.testProject(provider)
         val shape: StructureShape = model.lookup("com.test#MyStruct")
