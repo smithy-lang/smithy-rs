@@ -87,9 +87,6 @@ RUN set -eux; \
     cargo install --locked --path tools/ci-build/difftags; \
     cargo install --locked --path tools/ci-build/sdk-lints; \
     cargo install --locked --path tools/ci-build/sdk-versioner; \
-    mkdir -p /opt/cargo/git/db; \
-    chmod g+rw -R /opt/cargo/git; \
-    chmod g+rw -R /opt/cargo/bin; \
     chmod g+rw -R /opt/cargo/registry
 
 FROM install_rust AS cargo_deny
