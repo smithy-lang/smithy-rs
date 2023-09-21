@@ -693,7 +693,7 @@ mod tests {
             http_date::format(&DateTime::from_secs(-62_135_596_800)).unwrap()
         );
         assert_eq!(
-            "Fri, 31 Dec 9999 23:59:59.999 GMT",
+            "Fri, 31 Dec 9999 23:59:59 GMT",
             http_date::format(&DateTime::from_secs_and_nanos(253402300799, 999_999_999)).unwrap()
         );
 
