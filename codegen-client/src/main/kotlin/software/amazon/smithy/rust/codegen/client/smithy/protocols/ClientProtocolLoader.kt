@@ -63,9 +63,9 @@ private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
     ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol =
         if (compatibleWithAwsQuery(codegenContext.serviceShape, version)) {
-            AwsQueryCompatible(codegenContext, AwsJson(codegenContext, version, codegenContext.builderInstantiator()))
+            AwsQueryCompatible(codegenContext, AwsJson(codegenContext, version))
         } else {
-            AwsJson(codegenContext, version, codegenContext.builderInstantiator())
+            AwsJson(codegenContext, version)
         }
 
     override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =

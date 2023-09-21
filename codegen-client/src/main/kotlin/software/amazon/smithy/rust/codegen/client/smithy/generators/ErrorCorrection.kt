@@ -58,8 +58,15 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
     val instantiator = PrimitiveInstantiator(runtimeConfig, symbolProvider)
     return writable {
         when {
-            target is EnumShape || target.hasTrait<EnumTrait>() -> rustTemplate(""""no value was set".parse::<#{Shape}>().ok()""", "Shape" to targetSymbol)
-            target is BooleanShape || target is NumberShape || target is StringShape || target is DocumentShape || target is ListShape || target is MapShape -> rust("Some(Default::default())")
+            target is EnumShape || target.hasTrait<EnumTrait>() -> rustTemplate(
+                """"no value was set".parse::<#{Shape}>().ok()""",
+                "Shape" to targetSymbol,
+            )
+
+            target is BooleanShape || target is NumberShape || target is StringShape || target is DocumentShape || target is ListShape || target is MapShape -> rust(
+                "Some(Default::default())",
+            )
+
             target is StructureShape -> rustTemplate(
                 "{ let builder = #{Builder}::default(); #{instantiate} }",
                 "Builder" to symbolProvider.symbolForBuilder(target),
@@ -73,6 +80,7 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
                     it.plus { rustTemplate(".map(#{Box}::new)", *preludeScope) }
                 },
             )
+
             target is TimestampShape -> instantiator.instantiate(target, Node.from(0)).some()(this)
             target is BlobShape -> instantiator.instantiate(target, Node.from("")).some()(this)
             target is UnionShape -> rust("Some(#T::Unknown)", targetSymbol)
