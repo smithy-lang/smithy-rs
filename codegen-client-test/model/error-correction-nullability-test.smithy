@@ -20,11 +20,20 @@ service RequiredValueXml {
     version: "1"
 }
 
-@http(method: "POST", uri: "/")
-operation SayHello { output: TestOutputDocument }
+@error("client")
+structure Error {
+    @required
+    requestId: String
+
+    @required
+    message: String
+}
 
 @http(method: "POST", uri: "/")
-operation SayHelloXml { output: TestOutput }
+operation SayHello { output: TestOutputDocument, errors: [Error] }
+
+@http(method: "POST", uri: "/")
+operation SayHelloXml { output: TestOutput, errors: [Error] }
 
 structure TestOutputDocument with [TestStruct] { innerField: Nested, @required document: Document }
 structure TestOutput with [TestStruct] { innerField: Nested }

@@ -1,6 +1,6 @@
 $version: "1.0"
 
-namespace com.amazonaws.requiredvalues
+namespace com.amazonaws.testservice
 
 @restJson1
 @title("Test Service")

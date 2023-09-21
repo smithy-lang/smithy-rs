@@ -75,6 +75,23 @@ val allCodegenTests = listOf(
             }
         """,
     ),
+    CodegenTest(
+        "com.amazonaws.testservice#RequiredValues",
+        "required-values",
+        imports = listOf("models/required-value-test.smithy"),
+        extraConfig = """
+            ,
+            "codegen": {
+                "includeFluentClient": false,
+                "nullabilityCheckMode": ${getNullabilityCheckMode()}
+            },
+            "customizationConfig": {
+                "awsSdk": {
+                    "generateReadme": false
+                }
+            }
+        """,
+    ),
 )
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
