@@ -49,7 +49,7 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "nullabilityCheckMode": \"${getNullabilityCheckMode()}\"
+                "nullabilityCheckMode": "${getNullabilityCheckMode()}"
             },
             "customizationConfig": {
                 "awsSdk": {
@@ -66,7 +66,7 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "nullabilityCheckMode": ${getNullabilityCheckMode()}
+                "nullabilityCheckMode": "${getNullabilityCheckMode()}"
             },
             "customizationConfig": {
                 "awsSdk": {
@@ -83,11 +83,12 @@ val allCodegenTests = listOf(
             ,
             "codegen": {
                 "includeFluentClient": false,
-                "nullabilityCheckMode": ${getNullabilityCheckMode()}
+                "nullabilityCheckMode": "${getNullabilityCheckMode()}"
             },
             "customizationConfig": {
                 "awsSdk": {
-                    "generateReadme": false
+                    "generateReadme": false,
+                    "requireEndpointResolver": false
                 }
             }
         """,

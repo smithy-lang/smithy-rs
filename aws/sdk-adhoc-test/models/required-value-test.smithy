@@ -2,6 +2,9 @@ $version: "1.0"
 
 namespace com.amazonaws.testservice
 
+use aws.api#service
+use aws.protocols#restJson1
+
 @restJson1
 @title("Test Service")
 @service(sdkId: "Test")
@@ -10,11 +13,12 @@ service RequiredValues {
     operations: [TestOperation]
 }
 
+@http(method: "GET", uri: "/")
 operation TestOperation {
     errors: [Error]
 }
 
-@error
+@error("client")
 structure Error {
     @required
     requestId: String
