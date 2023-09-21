@@ -97,24 +97,24 @@ class ErrorCorrectionTest {
                     rustTemplate(
                         """
                         let builder = #{correct_errors}(#{Shape}::builder().foo("abcd"));
-                        let shape = builder.build();
+                        let shape = builder.build().unwrap();
                         // don't override a field already set
-                        assert_eq!(shape.foo(), Some("abcd"));
+                        assert_eq!(shape.foo(), "abcd");
                         // set nested fields
-                        assert_eq!(shape.nested().unwrap().a(), Some(""));
+                        assert_eq!(shape.nested().a(), "");
                         // don't default non-required fields
                         assert_eq!(shape.not_required(), None);
 
                         // set defaults for everything else
-                        assert_eq!(shape.blob().unwrap().as_ref(), &[]);
+                        assert_eq!(shape.blob().as_ref(), &[]);
 
-                        assert_eq!(shape.list_value(), Some(&[][..]));
-                        assert!(shape.map_value().unwrap().is_empty());
-                        assert_eq!(shape.double_list_value(), Some(&[][..]));
+                        assert!(shape.list_value().is_empty());
+                        assert!(shape.map_value().is_empty());
+                        assert!(shape.double_list_value().is_empty());
 
                         // enums and unions become unknown variants
-                        assert!(matches!(shape.r##enum(), Some(crate::types::Enum::Unknown(_))));
-                        assert!(shape.union().unwrap().is_unknown());
+                        assert!(matches!(shape.r##enum(), crate::types::Enum::Unknown(_)));
+                        assert!(shape.union().is_unknown());
                         """,
                         *codegenCtx,
                     )
