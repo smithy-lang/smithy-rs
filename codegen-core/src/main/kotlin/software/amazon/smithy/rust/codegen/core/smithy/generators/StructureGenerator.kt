@@ -63,7 +63,7 @@ open class StructureGenerator(
     private val writer: RustWriter,
     private val shape: StructureShape,
     private val customizations: List<StructureCustomization>,
-    private val structSettings: StructSettings = StructSettings(flattenVecAccessors = true),
+    private val structSettings: StructSettings,
 ) {
     companion object {
         /** Reserved struct member names */
