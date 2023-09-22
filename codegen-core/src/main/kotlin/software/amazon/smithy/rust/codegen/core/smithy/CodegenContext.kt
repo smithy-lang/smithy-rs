@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 
 /**
  * [CodegenContext] contains code-generation context that is _common to all_  smithy-rs plugins.
@@ -90,6 +91,8 @@ abstract class CodegenContext(
     fun expectModuleDocProvider(): ModuleDocProvider = checkNotNull(moduleDocProvider) {
         "A ModuleDocProvider must be set on the CodegenContext"
     }
+
+    fun structSettings() = StructSettings(settings.codegenConfig.flattenCollectionAccessors)
 
     abstract fun builderInstantiator(): BuilderInstantiator
 }
