@@ -55,12 +55,15 @@ sealed class StructureSection(name: String) : Section(name) {
 /** Customizations for StructureGenerator */
 abstract class StructureCustomization : NamedCustomization<StructureSection>()
 
+data class StructSettings(val flattenVecAccessors: Boolean)
+
 open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
     private val customizations: List<StructureCustomization>,
+    private val structSettings: StructSettings = StructSettings(flattenVecAccessors = true),
 ) {
     companion object {
         /** Reserved struct member names */
@@ -137,7 +140,7 @@ open class StructureGenerator(
                 var unwrapOrDefault = false
                 val returnType = when {
                     // Automatically flatten vecs
-                    memberType is RustType.Option && memberType.stripOuter<RustType.Option>() is RustType.Vec -> {
+                    structSettings.flattenVecAccessors && memberType is RustType.Option && memberType.stripOuter<RustType.Option>() is RustType.Vec -> {
                         unwrapOrDefault = true
                         memberType.stripOuter<RustType.Option>().asDeref().asRef()
                     }

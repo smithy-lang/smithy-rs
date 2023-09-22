@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
@@ -223,6 +224,7 @@ class ClientCodegenVisitor(
                         this,
                         shape,
                         codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                        structSettings = StructSettings(settings.codegenConfig.flattenCollectionAccessors),
                     ).render()
 
                     implBlock(symbolProvider.toSymbol(shape)) {
