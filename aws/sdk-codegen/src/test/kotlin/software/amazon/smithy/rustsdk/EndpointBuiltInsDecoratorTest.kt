@@ -41,7 +41,7 @@ class EndpointBuiltInsDecoratorTest {
                     "endpoint": {
                         "url": "{endpoint}"
                         "properties": {
-                            "authSchemes": [{"name": "sigv4","signingRegion": "{region}"}]
+                            "authSchemes": [{"name": "sigv4","signingRegion": "{region}", "signingName": "dontcare"}]
                         }
                     }
                 },
@@ -53,7 +53,7 @@ class EndpointBuiltInsDecoratorTest {
                     "endpoint": {
                         "url": "https://WRONG/"
                         "properties": {
-                            "authSchemes": [{"name": "sigv4", "signingRegion": "{region}"}]
+                            "authSchemes": [{"name": "sigv4", "signingRegion": "{region}", "signingName": "dontcare"}]
                         }
                     }
                 }
