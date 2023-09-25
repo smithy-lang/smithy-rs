@@ -155,7 +155,7 @@ impl Signer for SigV4aSigner {
         let request_time = runtime_components.time_source().unwrap_or_default().now();
 
         if identity.data::<Credentials>().is_none() {
-            Err(SigV4SigningError::WrongIdentityType(identity.clone()).into())
+            return Err(SigV4SigningError::WrongIdentityType(identity.clone()).into());
         }
 
         let settings = Self::settings(&operation_config);
