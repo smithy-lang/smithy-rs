@@ -73,23 +73,29 @@ pub(super) async fn orchestrate_auth(
                     "resolved auth scheme, identity resolver, and signing implementation"
                 );
 
-                let auth_scheme_endpoint_config =
-                    extract_endpoint_auth_scheme_config(endpoint, scheme_id)?;
-                trace!(auth_scheme_endpoint_config = ?auth_scheme_endpoint_config, "extracted auth scheme endpoint config");
+                match extract_endpoint_auth_scheme_config(endpoint, scheme_id) {
+                    Ok(auth_scheme_endpoint_config) => {
+                        trace!(auth_scheme_endpoint_config = ?auth_scheme_endpoint_config, "extracted auth scheme endpoint config");
 
-                let identity = identity_resolver.resolve_identity(cfg).await?;
-                trace!(identity = ?identity, "resolved identity");
+                        let identity = identity_resolver.resolve_identity(cfg).await?;
+                        trace!(identity = ?identity, "resolved identity");
 
-                trace!("signing request");
-                let request = ctx.request_mut().expect("set during serialization");
-                signer.sign_http_request(
-                    request,
-                    &identity,
-                    auth_scheme_endpoint_config,
-                    runtime_components,
-                    cfg,
-                )?;
-                return Ok(());
+                        trace!("signing request");
+                        let request = ctx.request_mut().expect("set during serialization");
+                        signer.sign_http_request(
+                            request,
+                            &identity,
+                            auth_scheme_endpoint_config,
+                            runtime_components,
+                            cfg,
+                        )?;
+                        return Ok(());
+                    }
+                    Err(AuthOrchestrationError::NoMatchingAuthScheme) => {
+                        continue;
+                    }
+                    Err(other_err) => return Err(other_err.into()),
+                }
             }
         }
     }
@@ -116,14 +122,17 @@ fn extract_endpoint_auth_scheme_config(
             ))
         }
     };
-    let auth_scheme_config = auth_schemes.iter().find(|doc| {
-        let config_scheme_id = doc
-            .as_object()
-            .and_then(|object| object.get("name"))
-            .and_then(Document::as_string);
-        config_scheme_id == Some(scheme_id.as_str())
-    });
-    Ok(AuthSchemeEndpointConfig::from(auth_scheme_config))
+    let auth_scheme_config = auth_schemes
+        .iter()
+        .find(|doc| {
+            let config_scheme_id = doc
+                .as_object()
+                .and_then(|object| object.get("name"))
+                .and_then(Document::as_string);
+            config_scheme_id == Some(scheme_id.as_str())
+        })
+        .ok_or_else(|| AuthOrchestrationError::NoMatchingAuthScheme)?;
+    Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
 }
 
 #[cfg(all(test, feature = "test-util"))]
