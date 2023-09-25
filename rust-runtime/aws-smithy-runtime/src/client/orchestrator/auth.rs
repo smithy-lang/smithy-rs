@@ -131,7 +131,7 @@ fn extract_endpoint_auth_scheme_config(
                 .and_then(Document::as_string);
             config_scheme_id == Some(scheme_id.as_str())
         })
-        .ok_or_else(|| AuthOrchestrationError::NoMatchingAuthScheme)?;
+        .ok_or(AuthOrchestrationError::NoMatchingAuthScheme)?;
     Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
 }
 
