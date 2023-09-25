@@ -137,11 +137,16 @@ class RegionDecorator : ClientCodegenDecorator {
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
                         AwsBuiltIns.REGION.builtIn -> writable {
-                            rustTemplate(
-                                "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
-                                "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
-                            )
+                            if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
+                                rustTemplate(
+                                    "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
+                                    "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+                                )
+                            } else {
+                                rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())")
+                            }
                         }
+
                         else -> null
                     }
                 }
@@ -170,6 +175,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
         *preludeScope,
         "Region" to region.resolve("Region"),
     )
+
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.ConfigStruct -> {
@@ -177,6 +183,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                     rustTemplate("pub(crate) region: #{Option}<#{Region}>,", *codegenScope)
                 }
             }
+
             ServiceConfig.ConfigImpl -> {
                 if (runtimeMode.generateOrchestrator) {
                     rustTemplate(
