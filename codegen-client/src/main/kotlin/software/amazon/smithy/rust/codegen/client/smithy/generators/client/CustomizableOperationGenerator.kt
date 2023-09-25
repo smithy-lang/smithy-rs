@@ -155,6 +155,7 @@ class CustomizableOperationGenerator(
                 .resolve("client::interceptors::MapRequestInterceptor"),
             "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::interceptors::MutateRequestInterceptor"),
+            "PhantomData" to RuntimeType.Phantom,
             "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
             "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
             "SendResult" to ClientRustModule.Client.customize.toType()
@@ -185,14 +186,28 @@ class CustomizableOperationGenerator(
                 rustTemplate(
                     """
                     /// `CustomizableOperation` allows for configuring a single operation invocation before it is sent.
-                    pub struct CustomizableOperation<T, E> {
-                        pub(crate) customizable_send: #{Box}<dyn #{CustomizableSend}<T, E>>,
-                        pub(crate) config_override: #{Option}<crate::config::Builder>,
-                        pub(crate) interceptors: Vec<#{SharedInterceptor}>,
-                        pub(crate) runtime_plugins: Vec<#{SharedRuntimePlugin}>,
+                    pub struct CustomizableOperation<T, E, B> {
+                        customizable_send: B,
+                        config_override: #{Option}<crate::config::Builder>,
+                        interceptors: Vec<#{SharedInterceptor}>,
+                        runtime_plugins: Vec<#{SharedRuntimePlugin}>,
+                        _output: #{PhantomData}<T>,
+                        _error: #{PhantomData}<E>,
                     }
 
-                    impl<T, E> CustomizableOperation<T, E> {
+                    impl<T, E, B> CustomizableOperation<T, E, B> {
+                        /// Creates a new `CustomizableOperation` from `customizable_send`.
+                        pub(crate) fn new(customizable_send: B) -> Self {
+                            Self {
+                                customizable_send,
+                                config_override: #{None},
+                                interceptors: vec![],
+                                runtime_plugins: vec![],
+                                _output: #{PhantomData},
+                                _error: #{PhantomData}
+                            }
+                        }
+
                         /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                         ///
                         /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
@@ -265,6 +280,7 @@ class CustomizableOperationGenerator(
                         ) -> #{SendResult}<T, E>
                         where
                             E: std::error::Error + #{Send} + #{Sync} + 'static,
+                            B: #{CustomizableSend}<T, E>,
                         {
                             let mut config_override = if let Some(config_override) = self.config_override {
                                 config_override
@@ -279,7 +295,7 @@ class CustomizableOperationGenerator(
                                 config_override.push_runtime_plugin(plugin);
                             });
 
-                            (self.customizable_send)(config_override).await
+                            self.customizable_send.send(config_override).await
                         }
 
                         #{additional_methods}
@@ -311,14 +327,12 @@ class CustomizableOperationGenerator(
                     >,
                 >;
 
-                pub trait CustomizableSend<T, E>:
-                    #{FnOnce}(crate::config::Builder) -> BoxFuture<SendResult<T, E>>
-                {}
-
-                impl<F, T, E> CustomizableSend<T, E> for F
-                where
-                    F: #{FnOnce}(crate::config::Builder) -> BoxFuture<SendResult<T, E>>
-                {}
+                pub trait CustomizableSend<T, E>: #{Send} + #{Sync} {
+                    // Takes an owned `self` as the implementation will internally call methods that take `self`.
+                    // If it took `&self`, that would make this trait object safe, but some implementing types do not
+                    // derive `Clone`, unable to yield `self` from `&self`.
+                    fn send(self, config_override: crate::config::Builder) -> BoxFuture<SendResult<T, E>>;
+                }
                 """,
                 *preludeScope,
                 "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)

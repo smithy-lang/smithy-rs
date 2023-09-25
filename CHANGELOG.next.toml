@@ -10,3 +10,39 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "Update MSRV to Rust 1.70.0"
+references = ["smithy-rs#2948"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
+references = ["smithy-rs#2944", "smithy-rs#2951"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Generate a region setter when a model uses SigV4."
+references = ["smithy-rs#2960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix code generation for union members with the `@httpPayload` trait."
+references = ["smithy-rs#2969", "smithy-rs#1896"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "jdisanti"
