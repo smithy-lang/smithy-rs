@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -41,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -89,6 +87,8 @@ fun MemberShape.enforceRequired(
         return field
     }
     val shape = this
+    val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
+    val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
     val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
         codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
     )
@@ -385,15 +385,22 @@ class BuilderGenerator(
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val default = memberSymbol.defaultValue()
                 withBlock("$memberName: self.$memberName", ",") {
-                    // Write the modifier
-                    when {
-                        !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
-                        !memberSymbol.isOptional() -> withBlock(
-                            ".ok_or_else(||",
-                            ")?",
-                        ) { missingRequiredField(memberName) }
+                    val generator = DefaultValueGenerator(runtimeConfig, symbolProvider, model)
+                    val default = generator.defaultValue(member)
+                    if (!memberSymbol.isOptional()) {
+                        if (default != null) {
+                            if (default.isRustDefault) {
+                                rust(".unwrap_or_default()")
+                            } else {
+                                rust(".unwrap_or_else(#T)", default.expr)
+                            }
+                        } else {
+                            withBlock(
+                                ".ok_or_else(||",
+                                ")?",
+                            ) { missingRequiredField(memberName) }
+                        }
                     }
                 }
             }

@@ -36,7 +36,7 @@ async fn simple_integration_test_http2() {
 
 async fn simple_integration_test_with_client(client: PokemonClient) {
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
-    assert_eq!(0, service_statistics_out.calls_count.unwrap());
+    assert_eq!(0, service_statistics_out.calls_count);
 
     let pokemon_species_output = client
         .get_pokemon_species()
@@ -44,10 +44,10 @@ async fn simple_integration_test_with_client(client: PokemonClient) {
         .send()
         .await
         .unwrap();
-    assert_eq!("pikachu", pokemon_species_output.name().unwrap());
+    assert_eq!("pikachu", pokemon_species_output.name());
 
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
-    assert_eq!(1, service_statistics_out.calls_count.unwrap());
+    assert_eq!(1, service_statistics_out.calls_count);
 
     let pokemon_species_error = client
         .get_pokemon_species()
@@ -64,7 +64,7 @@ async fn simple_integration_test_with_client(client: PokemonClient) {
     );
 
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
-    assert_eq!(2, service_statistics_out.calls_count.unwrap());
+    assert_eq!(2, service_statistics_out.calls_count);
 
     let _health_check = client.check_health().send().await.unwrap();
 }

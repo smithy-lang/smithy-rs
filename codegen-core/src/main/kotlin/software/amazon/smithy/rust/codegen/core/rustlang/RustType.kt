@@ -494,6 +494,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     }
 
     companion object {
+        val AllowNeedlessQuestionMark = Attribute(allow("clippy::needless_question_mark"))
         val AllowClippyBoxedLocal = Attribute(allow("clippy::boxed_local"))
         val AllowClippyLetAndReturn = Attribute(allow("clippy::let_and_return"))
         val AllowClippyNeedlessBorrow = Attribute(allow("clippy::needless_borrow"))

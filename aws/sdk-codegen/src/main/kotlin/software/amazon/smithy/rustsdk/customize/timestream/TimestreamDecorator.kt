@@ -60,12 +60,12 @@ class TimestreamDecorator : ClientCodegenDecorator {
                         client.describe_endpoints().send().await.map_err(|e| {
                             #{ResolveEndpointError}::from_source("failed to call describe_endpoints", e)
                         })?;
-                    let endpoint = describe_endpoints.endpoints().unwrap().get(0).unwrap();
+                    let endpoint = describe_endpoints.endpoints().get(0).unwrap();
                     let expiry = client.config().time_source().expect("checked when ep discovery was enabled").now()
                         + #{Duration}::from_secs(endpoint.cache_period_in_minutes() as u64 * 60);
                     Ok((
                         #{Endpoint}::builder()
-                            .url(format!("https://{}", endpoint.address().unwrap()))
+                            .url(format!("https://{}", endpoint.address()))
                             .build(),
                         expiry,
                     ))

@@ -132,7 +132,12 @@ class ServerAwsJsonProtocol(
         }
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::awsJsonFieldName, additionalParserCustomizations)
+        jsonParserGenerator(
+            serverCodegenContext,
+            httpBindingResolver,
+            ::awsJsonFieldName,
+            additionalParserCustomizations,
+        )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerAwsJsonSerializerGenerator(serverCodegenContext, httpBindingResolver, awsJsonVersion)
@@ -171,9 +176,11 @@ class ServerAwsJsonProtocol(
     override fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::rejection::RequestRejection")
+
     override fun responseRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::rejection::ResponseRejection")
+
     override fun runtimeError(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
             .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
@@ -192,7 +199,12 @@ class ServerRestJsonProtocol(
     override val protocolModulePath: String = "rest_json_1"
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
-        jsonParserGenerator(serverCodegenContext, httpBindingResolver, ::restJsonFieldName, additionalParserCustomizations)
+        jsonParserGenerator(
+            serverCodegenContext,
+            httpBindingResolver,
+            ::restJsonFieldName,
+            additionalParserCustomizations,
+        )
 
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
@@ -257,6 +269,7 @@ class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonPa
                 rust(".map(|x| x.into())")
             }
         }
+
         else -> emptySection
     }
 }
