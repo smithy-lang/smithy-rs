@@ -16,7 +16,6 @@
 
 use crate::imds::client::error::{ImdsError, TokenError, TokenErrorKind};
 use aws_credential_types::cache::ExpiringCache;
-use aws_sdk_sso::config::RuntimeComponents;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
@@ -33,7 +32,7 @@ use aws_smithy_runtime_api::client::orchestrator::{
     Future, HttpRequest, HttpResponse, OrchestratorError,
 };
 use aws_smithy_runtime_api::client::runtime_components::{
-    GetIdentityResolver, RuntimeComponentsBuilder,
+    GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
 use aws_smithy_types::config_bag::ConfigBag;

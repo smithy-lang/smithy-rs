@@ -13,7 +13,6 @@ use crate::json_credentials::{parse_json_credentials, JsonCredentials, Refreshab
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials;
-use aws_sdk_sso::config::interceptors::InterceptorContext;
 use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::SdkError;
@@ -23,7 +22,7 @@ use aws_smithy_runtime::client::retries::classifier::{
     HttpStatusCodeClassifier, SmithyErrorClassifier,
 };
 use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
-use aws_smithy_runtime_api::client::interceptors::context::Error;
+use aws_smithy_runtime_api::client::interceptors::context::{Error, InterceptorContext};
 use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, OrchestratorError, SensitiveOutput,
 };

@@ -14,8 +14,7 @@ use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_runtime::user_agent::UserAgentInterceptor;
-use aws_sdk_sso::config::interceptors::InterceptorContext;
-use aws_sdk_sso::config::{SharedAsyncSleep, SharedInterceptor};
+use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_client::http_connector::ConnectorSettings;
@@ -30,6 +29,8 @@ use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
 use aws_smithy_runtime_api::client::endpoint::{
     EndpointResolver, EndpointResolverParams, SharedEndpointResolver,
 };
+use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
 use aws_smithy_runtime_api::client::orchestrator::{
     Future, HttpResponse, OrchestratorError, SensitiveOutput,
 };
@@ -605,8 +606,6 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
 pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
-    use aws_sdk_sso::config::interceptors::InterceptorContext;
-    use aws_sdk_sso::error::DisplayErrorContext;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_client::erase::DynConnector;
@@ -614,9 +613,12 @@ pub(crate) mod test {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
-    use aws_smithy_runtime_api::client::interceptors::context::{Input, Output};
+    use aws_smithy_runtime_api::client::interceptors::context::{
+        Input, InterceptorContext, Output,
+    };
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::retries::ClassifyRetry;
+    use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
     use http::header::USER_AGENT;
     use http::Uri;
