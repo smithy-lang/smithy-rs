@@ -24,33 +24,6 @@ use tracing::trace;
 enum AuthOrchestrationError {
     NoMatchingAuthScheme,
     BadAuthSchemeEndpointConfig(Cow<'static, str>),
-    AuthSchemeEndpointConfigMismatch {
-        desired_scheme: String,
-        supported_schemes: String,
-    },
-}
-
-impl AuthOrchestrationError {
-    fn auth_scheme_endpoint_config_mismatch<'a>(
-        desired_scheme: impl Into<String>,
-        supported_schemes: impl Iterator<Item = &'a Document>,
-    ) -> Self {
-        let supported_schemes = supported_schemes
-            .flat_map(|s| match s {
-                Document::Object(map) => match map.get("name") {
-                    Some(Document::String(name)) => Some(name.as_str()),
-                    _ => None,
-                },
-                _ => None,
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        Self::AuthSchemeEndpointConfigMismatch {
-            desired_scheme: desired_scheme.into(),
-            supported_schemes,
-        }
-    }
 }
 
 impl fmt::Display for AuthOrchestrationError {
@@ -60,15 +33,6 @@ impl fmt::Display for AuthOrchestrationError {
                 "no auth scheme matched auth scheme options. This is a bug. Please file an issue.",
             ),
             Self::BadAuthSchemeEndpointConfig(message) => f.write_str(message),
-            Self::AuthSchemeEndpointConfigMismatch {
-                desired_scheme,
-                supported_schemes,
-            } => {
-                write!(f,
-                    "selected auth scheme / endpoint config mismatch. Couldn't find `{desired_scheme}` endpoint config for this endpoint. \
-                    The authentication schemes supported by this endpoint are: {supported_schemes:?}"
-                )
-            }
         }
     }
 }
@@ -85,6 +49,9 @@ pub(super) async fn orchestrate_auth(
         .expect("auth scheme option resolver params must be set");
     let option_resolver = runtime_components.auth_scheme_option_resolver();
     let options = option_resolver.resolve_auth_scheme_options(params)?;
+    let endpoint = cfg
+        .load::<Endpoint>()
+        .expect("endpoint added to config bag by endpoint orchestrator");
 
     trace!(
         auth_scheme_option_resolver_params = ?params,
@@ -92,8 +59,11 @@ pub(super) async fn orchestrate_auth(
         "orchestrating auth",
     );
 
+    // Iterate over IDs of possibly-supported auth schemes
     for &scheme_id in options.as_ref() {
+        // For each ID, try to resolve the corresponding auth scheme.
         if let Some(auth_scheme) = runtime_components.auth_scheme(scheme_id) {
+            // Use the resolved auth scheme to resolve an identity
             if let Some(identity_resolver) = auth_scheme.identity_resolver(runtime_components) {
                 let signer = auth_scheme.signer();
                 trace!(
@@ -103,9 +73,6 @@ pub(super) async fn orchestrate_auth(
                     "resolved auth scheme, identity resolver, and signing implementation"
                 );
 
-                let endpoint = cfg
-                    .load::<Endpoint>()
-                    .expect("endpoint added to config bag by endpoint orchestrator");
                 let auth_scheme_endpoint_config =
                     extract_endpoint_auth_scheme_config(endpoint, scheme_id)?;
                 trace!(auth_scheme_endpoint_config = ?auth_scheme_endpoint_config, "extracted auth scheme endpoint config");
@@ -149,22 +116,14 @@ fn extract_endpoint_auth_scheme_config(
             ))
         }
     };
-    let auth_scheme_config = auth_schemes
-        .iter()
-        .find(|doc| {
-            let config_scheme_id = doc
-                .as_object()
-                .and_then(|object| object.get("name"))
-                .and_then(Document::as_string);
-            config_scheme_id == Some(scheme_id.as_str())
-        })
-        .ok_or_else(|| {
-            AuthOrchestrationError::auth_scheme_endpoint_config_mismatch(
-                scheme_id.as_str(),
-                auth_schemes.iter(),
-            )
-        })?;
-    Ok(AuthSchemeEndpointConfig::from(Some(auth_scheme_config)))
+    let auth_scheme_config = auth_schemes.iter().find(|doc| {
+        let config_scheme_id = doc
+            .as_object()
+            .and_then(|object| object.get("name"))
+            .and_then(Document::as_string);
+        config_scheme_id == Some(scheme_id.as_str())
+    });
+    Ok(AuthSchemeEndpointConfig::from(auth_scheme_config))
 }
 
 #[cfg(all(test, feature = "test-util"))]
