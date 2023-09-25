@@ -1018,7 +1018,7 @@ mod tests {
         let mut headers = vec![];
         add_header(&mut headers, "some-header", "foo", false);
         add_header(&mut headers, "some-other-header", "bar", false);
-        let instructions = SigningInstructions::new(headers.into(), vec![]);
+        let instructions = SigningInstructions::new(headers, vec![]);
 
         let mut request = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")

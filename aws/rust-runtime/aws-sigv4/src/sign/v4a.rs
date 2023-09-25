@@ -8,7 +8,6 @@ use bytes::{BufMut, BytesMut};
 use num_bigint::BigInt;
 use once_cell::sync::Lazy;
 use p256::ecdsa::{signature::Signer, DerSignature, SigningKey};
-use p256::elliptic_curve::Curve;
 use std::io::Write;
 use std::time::SystemTime;
 use zeroize::Zeroizing;
