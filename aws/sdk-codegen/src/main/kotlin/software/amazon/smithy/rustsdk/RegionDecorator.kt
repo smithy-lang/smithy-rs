@@ -9,7 +9,7 @@ import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
@@ -87,7 +87,7 @@ class RegionDecorator : ClientCodegenDecorator {
     // Services that have an endpoint ruleset that references the SDK::Region built in, or
     // that use SigV4, both need a configurable region.
     private fun usesRegion(codegenContext: ClientCodegenContext) =
-        codegenContext.getBuiltIn(Builtins.REGION) != null || ServiceIndex.of(codegenContext.model)
+        codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null || ServiceIndex.of(codegenContext.model)
             .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
 
     override fun configCustomizations(
@@ -136,7 +136,7 @@ class RegionDecorator : ClientCodegenDecorator {
             object : EndpointCustomization {
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
-                        Builtins.REGION.builtIn -> writable {
+                        AwsBuiltIns.REGION.builtIn -> writable {
                             if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
                                 rustTemplate(
                                     "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
@@ -146,12 +146,13 @@ class RegionDecorator : ClientCodegenDecorator {
                                 rust("$configRef.region.as_ref().map(|r|r.as_ref().to_owned())")
                             }
                         }
+
                         else -> null
                     }
                 }
 
                 override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
-                    if (name != Builtins.REGION.builtIn.get()) {
+                    if (name != AwsBuiltIns.REGION.builtIn.get()) {
                         return null
                     }
                     return writable {
@@ -174,6 +175,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
         *preludeScope,
         "Region" to region.resolve("Region"),
     )
+
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.ConfigStruct -> {
@@ -181,6 +183,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                     rustTemplate("pub(crate) region: #{Option}<#{Region}>,", *codegenScope)
                 }
             }
+
             ServiceConfig.ConfigImpl -> {
                 if (runtimeMode.generateOrchestrator) {
                     rustTemplate(

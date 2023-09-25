@@ -386,7 +386,8 @@ class DefaultProtocolTestGenerator(
                 });
                 """,
                 "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-                "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
+                "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc)
+                    .resolve("client::ser_de::SharedResponseDeserializer"),
                 "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
                 "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
                 "RuntimePlugin" to RT.runtimePlugin(rc),
@@ -628,6 +629,9 @@ class DefaultProtocolTestGenerator(
             "SDKAppliedContentEncoding_ec2Query",
             "SDKAppliedContentEncoding_restJson1",
             "SDKAppliedContentEncoding_restXml",
+            "AwsJson11DeserializeIgnoreType",
+            "AwsJson10DeserializeIgnoreType",
+            "RestJsonDeserializeIgnoreType",
         )
     }
 }
