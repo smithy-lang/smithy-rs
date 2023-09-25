@@ -186,6 +186,14 @@ class BuilderGenerator(
             false -> implBlockWriter.format(outputSymbol)
         }
         implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
+        val trulyRequiredMembers = members.filter { trulyRequired(it) }
+        if (trulyRequiredMembers.isNotEmpty()) {
+            implBlockWriter.docs("This method will fail if any of the following fields are not set:")
+            trulyRequiredMembers.forEach {
+                val memberName = symbolProvider.toMemberName(it)
+                implBlockWriter.docs("- [`$memberName`](#T::$memberName)", symbolProvider.symbolForBuilder(shape))
+            }
+        }
         implBlockWriter.rustBlockTemplate("pub fn build(self) -> $returnType", *preludeScope) {
             conditionalBlockTemplate("#{Ok}(", ")", conditional = fallibleBuilder, *preludeScope) {
                 // If a wrapper is specified, use the `::new` associated function to construct the wrapper
@@ -216,6 +224,9 @@ class BuilderGenerator(
         val input = coreType.asArgument("input")
 
         writer.documentShape(member, model)
+        if (member.isRequired) {
+            writer.docs("This field is required.")
+        }
         writer.deprecatedShape(member)
         writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             rustTemplate("self.$memberName = #{Some}(${input.value});", *preludeScope)
@@ -367,6 +378,10 @@ class BuilderGenerator(
                 *preludeScope,
             )
         }
+    }
+
+    private fun trulyRequired(member: MemberShape) = symbolProvider.toSymbol(member).let {
+        !it.isOptional() && !it.canUseDefault()
     }
 
     /**

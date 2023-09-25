@@ -531,7 +531,7 @@ private fun generateOperationShapeDocs(
             else -> "(undocumented)"
         }
 
-        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink): $docs"
+        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink):<br>required: **${memberShape.isRequired}**<br>$docs<br>"
     }
 }
 

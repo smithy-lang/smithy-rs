@@ -14,7 +14,7 @@
 [[smithy-rs]]
 message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
 references = ["smithy-rs#2909"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -176,6 +176,12 @@ author = "rschmitt"
 message = "Source defaults from the default trait instead of implicitly based on type. This has minimal changes in the generated code."
 references = ["smithy-rs#2985"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Produce better docs when items are marked @required"
+references = ["smithy-rs#2996"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
 
 [[smithy-rs]]
