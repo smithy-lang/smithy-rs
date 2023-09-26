@@ -70,7 +70,7 @@ impl fmt::Debug for Token {
 
 /// Token Runtime Plugin
 ///
-/// This runtime plugin wires up the necessary componetns to load/cache a token
+/// This runtime plugin wires up the necessary components to load/cache a token
 /// when required and handle caching/expiry. This token will get attached to the
 /// request to IMDS on the `x-aws-ec2-metadata-token` header.
 #[derive(Debug)]
@@ -178,8 +178,11 @@ fn parse_token_response(response: &HttpResponse, now: SystemTime) -> Result<Toke
         403 => return Err(TokenErrorKind::Forbidden.into()),
         _ => {}
     }
-    let value = HeaderValue::from_bytes(response.body().bytes().expect("non-streaming response"))
-        .map_err(|_| TokenErrorKind::InvalidToken)?;
+    let mut value =
+        HeaderValue::from_bytes(response.body().bytes().expect("non-streaming response"))
+            .map_err(|_| TokenErrorKind::InvalidToken)?;
+    value.set_sensitive(true);
+
     let ttl: u64 = response
         .headers()
         .get(X_AWS_EC2_METADATA_TOKEN_TTL_SECONDS)
