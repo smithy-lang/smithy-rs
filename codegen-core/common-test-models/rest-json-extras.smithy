@@ -65,9 +65,6 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
-        // They're being added in https://github.com/smithy-lang/smithy/pull/1908
-        HttpPayloadWithUnion,
     ],
     errors: [ExtraError]
 }
