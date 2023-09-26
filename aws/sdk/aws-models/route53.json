@@ -263,6 +263,7 @@
                     "arnNamespace": "route53",
                     "cloudFormationName": "Route53",
                     "cloudTrailEventSource": "route53.amazonaws.com",
+                    "docId": "route53-2013-04-01",
                     "endpointPrefix": "route53"
                 },
                 "aws.auth#sigv4": {
