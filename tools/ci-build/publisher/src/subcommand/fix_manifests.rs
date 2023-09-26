@@ -10,7 +10,7 @@
 //! version numbers in addition to the dependency path.
 
 use crate::fs::Fs;
-use crate::package::{discover_manifests, parse_version};
+use crate::package::{discover_manifests, parse_version, SemVer};
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -24,6 +24,8 @@ use toml::Value;
 use tracing::{debug, info};
 
 mod validate;
+
+const AWS_SDK_CRATE_NAME_PREFIX: &str = "aws-sdk-";
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Mode {
@@ -162,8 +164,14 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
             .ok_or_else(|| {
                 anyhow::Error::msg(format!("{:?} is missing a package version", manifest.path))
             })?;
-        let version = parse_version(&manifest.path, version)?;
-        versions.insert(name.into(), VersionWithMetadata { version, publish });
+        let version = parse_version::<SemVer>(&manifest.path, version)?;
+        versions.insert(
+            name.into(),
+            VersionWithMetadata {
+                version: version.try_into_semver().unwrap(),
+                publish,
+            },
+        );
     }
     Ok(Versions(versions))
 }
@@ -188,6 +196,12 @@ fn fix_dep_set(versions: &VersionView, key: &str, metadata: &mut Value) -> Resul
     Ok(changed)
 }
 
+// Update a version of `dep_name` that has a path dependency to be that appearing in `versions`.
+//
+// While doing so, we will use the tilde version requirement so customers can update patch versions
+// automatically. Specifically, we use tilde versions of the form `~major.minor` (e.g. `~1.2`) so
+// it can support the range of versions `>=1.2.0, <1.3.0`. See
+// https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#tilde-requirements
 fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Result<usize> {
     if !table.contains_key("path") {
         return Ok(0);
@@ -196,9 +210,18 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
         Some(version) => version.to_string(),
         None => bail!("version not found for crate {}", dep_name),
     };
+    let package_version = if dep_name.starts_with(AWS_SDK_CRATE_NAME_PREFIX) {
+        // For a crate that depends on an SDK crate (e.g. `aws-config` depending on `aws-sdk-sts`),
+        // we do _not_ want to turn the version of the SDK crate into a tilde version because
+        // customers may depend on that SDK crate by themselves, causing multiple versions of it
+        // to be brought in to their crate graph.
+        package_version
+    } else {
+        convert_to_tilde_requirement(&package_version)?
+    };
     let previous_version = table.insert(
         "version".into(),
-        toml::Value::String(package_version.to_string()),
+        toml::Value::String(package_version.clone()),
     );
     match previous_version {
         None => Ok(1),
@@ -208,6 +231,21 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
             Ok(1)
         }
     }
+}
+
+// Convert `package_version` into a tilde version requirement
+//
+// For instance, given `package_version` like 0.12.3, the function returns `~0.12`.
+fn convert_to_tilde_requirement(package_version: &str) -> Result<String> {
+    // `package_version` is from the `semver` crate which requires versions to have 3 components,
+    // major, minor, and patch. So it is safe to assume its string value follows that format.
+    let package_version = match package_version.rfind('.') {
+        // Here, we're interested in the `major.minor` part.
+        Some(index) => &package_version[0..index],
+        None => bail!("{} did not have any dots in it", package_version),
+    };
+
+    Ok("~".to_string() + package_version)
 }
 
 fn fix_dep_sets(versions: &VersionView, metadata: &mut toml::Value) -> Result<usize> {
@@ -412,7 +450,7 @@ mod tests {
                 \n\
                 [local_something]\n\
                 path = \"../local_something\"\n\
-                version = \"1.1.3\"\n\
+                version = \"~1.1\"\n\
             ",
             actual_deps.to_string()
         );
@@ -424,7 +462,7 @@ mod tests {
                 \n\
                 [local_dev_something]\n\
                 path = \"../local_dev_something\"\n\
-                version = \"0.1.0\"\n\
+                version = \"~0.1\"\n\
             ",
             actual_dev_deps.to_string()
         );
@@ -436,9 +474,40 @@ mod tests {
                 \n\
                 [local_build_something]\n\
                 path = \"../local_build_something\"\n\
-                version = \"0.2.0\"\n\
+                version = \"~0.2\"\n\
             ",
             actual_build_deps.to_string()
+        );
+    }
+
+    #[test]
+    fn sdk_crate_version_should_not_be_turned_into_tilde_requirement() {
+        let manifest = br#"
+            [package]
+            name = "test"
+            version = "1.2.0-preview"
+
+            [dependencies]
+            aws-sdk-example = { path = "../aws/sdk/example" }
+        "#;
+        let metadata = toml::from_slice(manifest).unwrap();
+        let mut manifest = Manifest {
+            path: "test".into(),
+            metadata,
+        };
+        let versions = &[("aws-sdk-example", "0.2.0", true)];
+        let versions = make_versions(versions.iter());
+
+        fix_dep_sets(&versions.published(), &mut manifest.metadata).expect("success");
+
+        let actual_deps = &manifest.metadata["dependencies"];
+        assert_eq!(
+            "\
+                [aws-sdk-example]\n\
+                path = \"../aws/sdk/example\"\n\
+                version = \"0.2.0\"\n\
+            ",
+            actual_deps.to_string()
         );
     }
 

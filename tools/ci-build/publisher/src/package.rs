@@ -15,22 +15,90 @@ use smithy_rs_tool_common::package::PackageCategory;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::error::Error as StdError;
 use std::fmt;
+use std::fmt::Formatter;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use tokio::fs;
 use tracing::warn;
+
+/// A trait that marks a type that can be created from `&str` and turned into `LenientVersion`
+pub trait ParseIntoLenientVersion {
+    type ParsedT: FromStr<Err = Self::Err> + Into<LenientVersion>;
+    type Err: Into<BoxError>;
+}
+
+/// A type that indicates the `SemVer` variant of `LenientVersion` will be created as a result of
+/// parsing
+pub struct SemVer;
+impl ParseIntoLenientVersion for SemVer {
+    type ParsedT = Version;
+    type Err = semver::Error;
+}
+
+/// A type that indicates the `Lenient` variant of `LenientVersion` will be created as a result of
+/// parsing
+pub struct Lenient;
+impl ParseIntoLenientVersion for Lenient {
+    type ParsedT = String;
+    type Err = std::convert::Infallible;
+}
+
+/// An enum that handles both semver as well as string values that do not adhere to the semver
+/// specification.
+///
+/// Most of the time, the `SemVer` variant will be used when manifest files are parsed into an
+/// in-memory data structure. The `Lenient` variant is used when the `fix_manifests` subcommand
+/// and the `generate_version_manifest` subcommand are executed, allowing the tilde version
+/// requirements to be rendered into the manifest files.
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub enum LenientVersion {
+    SemVer(Version),
+    Lenient(String),
+}
+
+impl LenientVersion {
+    pub fn try_into_semver(self) -> Option<Version> {
+        match self {
+            LenientVersion::SemVer(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+impl From<Version> for LenientVersion {
+    fn from(version: Version) -> Self {
+        LenientVersion::SemVer(version)
+    }
+}
+
+impl From<String> for LenientVersion {
+    fn from(s: String) -> Self {
+        LenientVersion::Lenient(s)
+    }
+}
+
+impl fmt::Display for LenientVersion {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let version = match self {
+            LenientVersion::SemVer(v) => v.to_string(),
+            LenientVersion::Lenient(s) => s.clone(),
+        };
+        write!(f, "{}", version)
+    }
+}
 
 /// Information required to identify a package (crate).
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PackageHandle {
     pub name: String,
-    pub version: Version,
+    pub version: LenientVersion,
 }
 
 impl PackageHandle {
-    pub fn new(name: impl Into<String>, version: Version) -> Self {
+    pub fn new(name: impl Into<String>, version: impl Into<LenientVersion>) -> Self {
         Self {
             name: name.into(),
-            version,
+            version: version.into(),
         }
     }
 }
@@ -145,7 +213,7 @@ pub async fn discover_and_validate_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
-    let packages = discover_packages(fs, path.as_ref().into())
+    let packages = discover_packages::<Lenient>(fs, path.as_ref().into())
         .await?
         .into_iter()
         .filter(|package| package.publish == Publish::Allowed)
@@ -170,7 +238,7 @@ pub enum Error {
     #[error("{0:?} missing version in dependency {1}")]
     MissingVersion(PathBuf, String),
     #[error("crate {0} has multiple versions: {1} and {2}")]
-    MultipleVersions(String, Version, Version),
+    MultipleVersions(String, LenientVersion, LenientVersion),
 }
 
 /// Discovers all Cargo.toml files under the given path recursively
@@ -192,18 +260,28 @@ pub async fn discover_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
 }
 
 /// Discovers and parses all Cargo.toml files that are packages (as opposed to being exclusively workspaces)
-pub async fn discover_packages(fs: Fs, path: PathBuf) -> Result<Vec<Package>> {
+pub async fn discover_packages<P: ParseIntoLenientVersion>(
+    fs: Fs,
+    path: PathBuf,
+) -> Result<Vec<Package>> {
     let manifest_paths = discover_manifests(path).await?;
-    read_packages(fs, manifest_paths).await
+    read_packages::<P>(fs, manifest_paths).await
 }
 
-/// Parses a semver version number and adds additional error context when parsing fails.
-pub fn parse_version(manifest_path: &Path, version: &str) -> Result<Version, Error> {
-    Version::parse(version)
+/// Parses `version` into `LenientVersion` and adds additional error context when parsing fails.
+pub fn parse_version<P: ParseIntoLenientVersion>(
+    manifest_path: &Path,
+    version: &str,
+) -> Result<LenientVersion, Error> {
+    P::ParsedT::from_str(version)
+        .map(|ver| ver.into())
         .map_err(|err| Error::InvalidCrateVersion(manifest_path.into(), version.into(), err.into()))
 }
 
-fn read_dependencies(path: &Path, dependencies: &DepsSet) -> Result<Vec<PackageHandle>> {
+fn read_dependencies<P: ParseIntoLenientVersion>(
+    path: &Path,
+    dependencies: &DepsSet,
+) -> Result<Vec<PackageHandle>> {
     let mut result = Vec::new();
     for (name, metadata) in dependencies {
         match metadata {
@@ -213,7 +291,7 @@ fn read_dependencies(path: &Path, dependencies: &DepsSet) -> Result<Vec<PackageH
                     let version = detailed
                         .version
                         .as_ref()
-                        .map(|version| parse_version(path, version))
+                        .map(|version| parse_version::<P>(path, version))
                         .ok_or_else(|| Error::MissingVersion(path.into(), name.into()))??;
                     result.push(PackageHandle::new(name, version));
                 }
@@ -224,12 +302,15 @@ fn read_dependencies(path: &Path, dependencies: &DepsSet) -> Result<Vec<PackageH
 }
 
 /// Returns `Ok(None)` when the Cargo.toml is a workspace rather than a package
-fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Option<Package>> {
+fn read_package<P: ParseIntoLenientVersion>(
+    path: &Path,
+    manifest_bytes: &[u8],
+) -> Result<Option<Package>> {
     let manifest = Manifest::from_slice(manifest_bytes)
         .with_context(|| format!("failed to load package manifest for {:?}", path))?;
     if let Some(package) = manifest.package {
         let name = package.name;
-        let version = parse_version(path, &package.version)?;
+        let version = parse_version::<P>(path, &package.version)?;
         let handle = PackageHandle { name, version };
         let publish = match package.publish {
             cargo_toml::Publish::Flag(true) => Publish::Allowed,
@@ -237,10 +318,12 @@ fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Option<Package>> {
         };
 
         let mut local_dependencies = BTreeSet::new();
-        local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?.into_iter());
-        local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?.into_iter());
         local_dependencies
-            .extend(read_dependencies(path, &manifest.build_dependencies)?.into_iter());
+            .extend(read_dependencies::<P>(path, &manifest.dependencies)?.into_iter());
+        local_dependencies
+            .extend(read_dependencies::<P>(path, &manifest.dev_dependencies)?.into_iter());
+        local_dependencies
+            .extend(read_dependencies::<P>(path, &manifest.build_dependencies)?.into_iter());
         Ok(Some(Package::new(
             handle,
             path,
@@ -255,7 +338,7 @@ fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Option<Package>> {
 /// Validates that all of the publishable crates use consistent version numbers
 /// across all of their local dependencies.
 fn validate_packages(packages: &[Package]) -> Result<()> {
-    let mut versions: BTreeMap<String, Version> = BTreeMap::new();
+    let mut versions: BTreeMap<String, LenientVersion> = BTreeMap::new();
     let track_version = &mut |handle: &PackageHandle| -> Result<(), Error> {
         if let Some(version) = versions.get(&handle.name) {
             if *version != handle.version {
@@ -282,11 +365,14 @@ fn validate_packages(packages: &[Package]) -> Result<()> {
     Ok(())
 }
 
-pub async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Package>> {
+pub async fn read_packages<P: ParseIntoLenientVersion>(
+    fs: Fs,
+    manifest_paths: Vec<PathBuf>,
+) -> Result<Vec<Package>> {
     let mut result = Vec::new();
     for path in &manifest_paths {
         let contents: Vec<u8> = fs.read_file(path).await?;
-        if let Some(package) = read_package(path, &contents)? {
+        if let Some(package) = read_package::<P>(path, &contents)? {
             result.push(package);
         }
     }
@@ -338,8 +424,8 @@ mod tests {
     use semver::Version;
     use std::path::PathBuf;
 
-    fn version(version: &str) -> Version {
-        Version::parse(version).unwrap()
+    fn version(version: &str) -> LenientVersion {
+        Version::parse(version).unwrap().into()
     }
 
     #[test]
@@ -363,7 +449,7 @@ mod tests {
         "#;
         let path: PathBuf = "test/Cargo.toml".into();
 
-        let package = read_package(&path, manifest)
+        let package = read_package::<SemVer>(&path, manifest)
             .expect("parse success")
             .expect("is a package");
         assert_eq!("test", package.handle.name);
@@ -393,7 +479,7 @@ mod tests {
 
         let error = format!(
             "{}",
-            read_package(&path, manifest).expect_err("should fail")
+            read_package::<SemVer>(&path, manifest).expect_err("should fail")
         );
         assert!(
             error.contains("Invalid crate version"),

@@ -4,7 +4,7 @@
  */
 
 use crate::fs::Fs;
-use crate::package::discover_packages;
+use crate::package::{discover_packages, Lenient};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
@@ -70,7 +70,7 @@ pub async fn subcommand_generate_version_manifest(
         (None, Some(output_location)) => output_location,
         _ => bail!("Only one of `--location` or `--output-location` should be provided"),
     };
-    let packages = discover_packages(Fs::Real, input_location.into())
+    let packages = discover_packages::<Lenient>(Fs::Real, input_location.into())
         .await
         .context("read packages")?;
 

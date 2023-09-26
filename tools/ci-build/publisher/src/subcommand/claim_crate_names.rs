@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use crate::fs::Fs;
-use crate::package::{discover_packages, PackageHandle, Publish};
+use crate::package::{discover_packages, PackageHandle, Publish, SemVer};
 use crate::publish::{has_been_published_on_crates_io, publish};
 use crate::subcommand::publish::correct_owner;
 use crate::{cargo, SDK_REPO_NAME};
@@ -77,7 +77,7 @@ async fn discover_publishable_crate_names(repository_root: &Path) -> anyhow::Res
         fs: Fs,
         path: PathBuf,
     ) -> anyhow::Result<HashSet<String>> {
-        let packages = discover_packages(fs, path).await?;
+        let packages = discover_packages::<SemVer>(fs, path).await?;
         let mut publishable_package_names = HashSet::new();
         for package in packages {
             if let Publish::Allowed = package.publish {
