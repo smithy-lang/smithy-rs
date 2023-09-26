@@ -38,13 +38,13 @@ const DEFAULT_READ_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 
 #[derive(Debug)]
-struct OpInput {
+struct HttpProviderAuth {
     auth: Option<HeaderValue>,
 }
 
 #[derive(Debug)]
 pub(crate) struct HttpCredentialProvider {
-    operation: Operation<OpInput, Credentials, CredentialsError>,
+    operation: Operation<HttpProviderAuth, Credentials, CredentialsError>,
 }
 
 impl HttpCredentialProvider {
@@ -53,7 +53,7 @@ impl HttpCredentialProvider {
     }
 
     pub(crate) async fn credentials(&self, auth: Option<HeaderValue>) -> provider::Result {
-        let credentials = self.operation.invoke(OpInput { auth }).await;
+        let credentials = self.operation.invoke(HttpProviderAuth { auth }).await;
         match credentials {
             Ok(creds) => Ok(creds),
             Err(SdkError::ServiceError(context)) => Err(context.into_err()),
@@ -134,7 +134,7 @@ impl Builder {
         }
         let path = path.into();
         let operation = builder
-            .serializer(move |input: OpInput| {
+            .serializer(move |input: HttpProviderAuth| {
                 let mut http_req = http::Request::builder()
                     .uri(path.clone())
                     .header(ACCEPT, "application/json");
