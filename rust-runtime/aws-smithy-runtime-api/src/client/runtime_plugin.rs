@@ -27,6 +27,8 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use std::sync::Arc;
 
+const DEFAULT_ORDER: Order = Order::Overrides;
+
 /// Runtime plugin ordering.
 ///
 /// There are two runtime plugin "levels" that run in the following order:
@@ -70,7 +72,7 @@ pub trait RuntimePlugin: Debug + Send + Sync {
     /// service runtime plugins will run before [`Overrides`](Order::Overrides)
     /// service runtime plugins.
     fn order(&self) -> Order {
-        Order::Overrides
+        DEFAULT_ORDER
     }
 
     /// Optionally returns additional config that should be added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag).
@@ -139,6 +141,7 @@ impl RuntimePlugin for SharedRuntimePlugin {
 pub struct StaticRuntimePlugin {
     config: Option<FrozenLayer>,
     runtime_components: Option<RuntimeComponentsBuilder>,
+    order: Option<Order>,
 }
 
 impl StaticRuntimePlugin {
@@ -158,9 +161,19 @@ impl StaticRuntimePlugin {
         self.runtime_components = Some(runtime_components);
         self
     }
+
+    /// Changes the order of this runtime plugin.
+    pub fn with_order(mut self, order: Order) -> Self {
+        self.order = Some(order);
+        self
+    }
 }
 
 impl RuntimePlugin for StaticRuntimePlugin {
+    fn order(&self) -> Order {
+        self.order.unwrap_or(DEFAULT_ORDER)
+    }
+
     fn config(&self) -> Option<FrozenLayer> {
         self.config.clone()
     }

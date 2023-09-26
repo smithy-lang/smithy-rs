@@ -14,7 +14,7 @@
 [[smithy-rs]]
 message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
 references = ["smithy-rs#2909"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
@@ -32,6 +32,21 @@ author = "rcoh"
 message = "In sigV4-related code, rename 'signing service' to 'signing name'. This aligns with the terminology used by the endpoint resolver."
 references = ["smithy-rs#2911"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Struct members modeled as required are no longer wrapped in `Option`s [when possible](https://smithy.io/2.0/spec/aggregate-types.html#structure-member-optionality). For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929)."
+references = ["smithy-rs#2916", "aws-sdk-rust#536"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Support for Smithy IDLv2 nullability is now enabled by default. You can maintain the old behavior by setting `nullabilityCheckMode: "CLIENT_ZERO_VALUE_V1" in your codegen config.
+For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929).
+"""
+references = ["smithy-rs#2916", "smithy-rs#1767"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "Velfi"
 
 [[aws-sdk-rust]]
@@ -128,13 +143,43 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = "Remove `once_cell` from public API"
+message = "Remove `once_cell` from public API."
 references = ["smithy-rs#2973"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[smithy-rs]]
-message = "Remove `once_cell` from public API"
+message = "Remove `once_cell` from public API."
 references = ["smithy-rs#2973"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Fix regression with redacting sensitive HTTP response bodies."
+references = ["smithy-rs#2926", "smithy-rs#2972"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Fix regression with redacting sensitive HTTP response bodies."
+references = ["smithy-rs#2926", "smithy-rs#2972"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Omit fractional seconds from `http-date` format."
+references = ["smithy-rs#2831", "aws-sdk-rust#818"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
+author = "rschmitt"
+
+[[smithy-rs]]
+message = "Source defaults from the default trait instead of implicitly based on type. This has minimal changes in the generated code."
+references = ["smithy-rs#2985"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Produce better docs when items are marked @required"
+references = ["smithy-rs#2996"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"

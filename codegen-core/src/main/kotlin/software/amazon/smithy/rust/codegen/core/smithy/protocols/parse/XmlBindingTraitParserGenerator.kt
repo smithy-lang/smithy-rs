@@ -39,7 +39,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -101,6 +100,7 @@ class XmlBindingTraitParserGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenTarget = codegenContext.target
+    private val builderInstantiator = codegenContext.builderInstantiator()
 
     // The symbols we want all the time
     private val codegenScope = arrayOf(
@@ -159,6 +159,7 @@ class XmlBindingTraitParserGenerator(
                     is StructureShape -> {
                         parseStructure(shape, ctx)
                     }
+
                     is UnionShape -> parseUnion(shape, ctx)
                 }
             }
@@ -294,7 +295,10 @@ class XmlBindingTraitParserGenerator(
                 }
                 rust("$builder = $builder.${member.setterName()}($temp);")
             }
-            rustTemplate("_ => return Err(#{XmlDecodeError}::custom(\"expected ${member.xmlName()} tag\"))", *codegenScope)
+            rustTemplate(
+                "_ => return Err(#{XmlDecodeError}::custom(\"expected ${member.xmlName()} tag\"))",
+                *codegenScope,
+            )
         }
     }
 
@@ -359,19 +363,23 @@ class XmlBindingTraitParserGenerator(
                         parsePrimitiveInner(memberShape) {
                             rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
                         }
+
                     is MapShape -> if (memberShape.isFlattened()) {
                         parseFlatMap(target, ctx)
                     } else {
                         parseMap(target, ctx)
                     }
+
                     is CollectionShape -> if (memberShape.isFlattened()) {
                         parseFlatList(target, ctx)
                     } else {
                         parseList(target, ctx)
                     }
+
                     is StructureShape -> {
                         parseStructure(target, ctx)
                     }
+
                     is UnionShape -> parseUnion(target, ctx)
                     else -> PANIC("Unhandled: $target")
                 }
@@ -436,10 +444,16 @@ class XmlBindingTraitParserGenerator(
                     }
                     when (target.renderUnknownVariant()) {
                         true -> rust("_unknown => base = Some(#T::${UnionGenerator.UnknownVariantName}),", symbol)
-                        false -> rustTemplate("""variant => return Err(#{XmlDecodeError}::custom(format!("unexpected union variant: {:?}", variant)))""", *codegenScope)
+                        false -> rustTemplate(
+                            """variant => return Err(#{XmlDecodeError}::custom(format!("unexpected union variant: {:?}", variant)))""",
+                            *codegenScope,
+                        )
                     }
                 }
-                rustTemplate("""base.ok_or_else(||#{XmlDecodeError}::custom("expected union, got nothing"))""", *codegenScope)
+                rustTemplate(
+                    """base.ok_or_else(||#{XmlDecodeError}::custom("expected union, got nothing"))""",
+                    *codegenScope,
+                )
             }
         }
         rust("#T(&mut ${ctx.tag})", nestedParser)
@@ -462,6 +476,7 @@ class XmlBindingTraitParserGenerator(
     private fun RustWriter.parseStructure(shape: StructureShape, ctx: Ctx) {
         val symbol = symbolProvider.toSymbol(shape)
         val nestedParser = protocolFunctions.deserializeFn(shape) { fnName ->
+            Attribute.AllowNeedlessQuestionMark.render(this)
             rustBlockTemplate(
                 "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> Result<#{Shape}, #{XmlDecodeError}>",
                 *codegenScope, "Shape" to symbol,
@@ -474,17 +489,17 @@ class XmlBindingTraitParserGenerator(
                 } else {
                     rust("let _ = decoder;")
                 }
-                withBlock("Ok(builder.build()", ")") {
-                    if (BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {
-                        // NOTE:(rcoh) This branch is unreachable given the current nullability rules.
-                        // Only synthetic inputs can have fallible builders, but synthetic inputs can never be parsed
-                        // (because they're inputs, only outputs will be parsed!)
-
-                        // I'm leaving this branch here so that the binding trait parser generator would work for a server
-                        // side implementation in the future.
-                        rustTemplate(""".map_err(|_|#{XmlDecodeError}::custom("missing field"))?""", *codegenScope)
-                    }
-                }
+                val builder = builderInstantiator.finalizeBuilder(
+                    "builder",
+                    shape,
+                    mapErr = {
+                        rustTemplate(
+                            """|_|#{XmlDecodeError}::custom("missing field")""",
+                            *codegenScope,
+                        )
+                    },
+                )
+                rust("Ok(#T)", builder)
             }
         }
         rust("#T(&mut ${ctx.tag})", nestedParser)
@@ -622,6 +637,7 @@ class XmlBindingTraitParserGenerator(
                     )
                 }
             }
+
             is TimestampShape -> {
                 val timestampFormat =
                     index.determineTimestampFormat(
@@ -629,7 +645,8 @@ class XmlBindingTraitParserGenerator(
                         HttpBinding.Location.DOCUMENT,
                         TimestampFormatTrait.Format.DATE_TIME,
                     )
-                val timestampFormatType = RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
+                val timestampFormatType =
+                    RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
                 withBlock("#T::from_str(", ")", RuntimeType.dateTime(runtimeConfig)) {
                     provider()
                     rust(", #T", timestampFormatType)
@@ -639,6 +656,7 @@ class XmlBindingTraitParserGenerator(
                     *codegenScope,
                 )
             }
+
             is BlobShape -> {
                 withBlock("#T(", ")", RuntimeType.base64Decode(runtimeConfig)) {
                     provider()
@@ -648,6 +666,7 @@ class XmlBindingTraitParserGenerator(
                     *codegenScope,
                 )
             }
+
             else -> PANIC("unexpected shape: $shape")
         }
     }
@@ -660,7 +679,10 @@ class XmlBindingTraitParserGenerator(
                     withBlock("#T::try_from(", ")", enumSymbol) {
                         provider()
                     }
-                    rustTemplate(""".map_err(|e| #{XmlDecodeError}::custom(format!("unknown variant {}", e)))?""", *codegenScope)
+                    rustTemplate(
+                        """.map_err(|e| #{XmlDecodeError}::custom(format!("unknown variant {}", e)))?""",
+                        *codegenScope,
+                    )
                 } else {
                     withBlock("#T::from(", ")", enumSymbol) {
                         provider()
@@ -674,7 +696,8 @@ class XmlBindingTraitParserGenerator(
         }
     }
 
-    private fun convertsToEnumInServer(shape: StringShape) = target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
+    private fun convertsToEnumInServer(shape: StringShape) =
+        target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun MemberShape.xmlName(): XmlName {
         return XmlName(xmlIndex.memberName(this))

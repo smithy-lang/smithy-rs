@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.StringNode
@@ -19,7 +18,6 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
@@ -102,14 +100,11 @@ class InstantiatorTest {
         override fun doesSetterTakeInOption(memberShape: MemberShape) = true
     }
 
-    // This can be empty since the actual behavior is tested in `ClientInstantiatorTest` and `ServerInstantiatorTest`.
-    private fun enumFromStringFn(symbol: Symbol, data: String) = writable { }
-
     @Test
     fun `generate unions`() {
         val union = model.lookup<UnionShape>("com.test#MyUnion")
         val sut =
-            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext))
         val data = Node.parse("""{ "stringVariant": "ok!" }""")
 
         val project = TestWorkspace.testProject(model)
@@ -129,7 +124,7 @@ class InstantiatorTest {
     fun `generate struct builders`() {
         val structure = model.lookup<StructureShape>("com.test#MyStruct")
         val sut =
-            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext))
         val data = Node.parse("""{ "bar": 10, "foo": "hello" }""")
 
         val project = TestWorkspace.testProject(model)
@@ -154,7 +149,7 @@ class InstantiatorTest {
     fun `generate builders for boxed structs`() {
         val structure = model.lookup<StructureShape>("com.test#WithBox")
         val sut =
-            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext))
         val data = Node.parse(
             """
             {
@@ -193,7 +188,7 @@ class InstantiatorTest {
     fun `generate lists`() {
         val data = Node.parse("""["bar", "foo"]""")
         val sut =
-            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext), ::enumFromStringFn)
+            Instantiator(symbolProvider, model, runtimeConfig, BuilderKindBehavior(codegenContext))
 
         val project = TestWorkspace.testProject()
         project.lib {
@@ -214,7 +209,6 @@ class InstantiatorTest {
             model,
             runtimeConfig,
             BuilderKindBehavior(codegenContext),
-            ::enumFromStringFn,
         )
 
         val project = TestWorkspace.testProject(model)
@@ -245,7 +239,6 @@ class InstantiatorTest {
             model,
             runtimeConfig,
             BuilderKindBehavior(codegenContext),
-            ::enumFromStringFn,
         )
         val inner = model.lookup<StructureShape>("com.test#Inner")
 
@@ -278,7 +271,6 @@ class InstantiatorTest {
             model,
             runtimeConfig,
             BuilderKindBehavior(codegenContext),
-            ::enumFromStringFn,
         )
 
         val project = TestWorkspace.testProject(model)
@@ -306,7 +298,6 @@ class InstantiatorTest {
             model,
             runtimeConfig,
             BuilderKindBehavior(codegenContext),
-            ::enumFromStringFn,
         )
         val project = TestWorkspace.testProject(model)
         project.testModule {
