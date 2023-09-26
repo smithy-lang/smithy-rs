@@ -189,3 +189,9 @@ message = "`StaticUriEndpointResolver`'s `uri` constructor now takes a `String` 
 references = ["smithy-rs#2997"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The IMDS Client builder's `build()` method is no longer async."
+references = ["smithy-rs#2997"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
