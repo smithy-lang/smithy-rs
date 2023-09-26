@@ -4,6 +4,7 @@
  */
 
 use crate::client::auth::no_auth::{NoAuthScheme, NO_AUTH_SCHEME_ID};
+use crate::client::http::default_http_client_plugin;
 use crate::client::identity::no_auth::NoAuthIdentityResolver;
 use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
 use crate::client::retries::strategy::{NeverRetryStrategy, StandardRetryStrategy};
@@ -15,8 +16,8 @@ use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptio
 use aws_smithy_runtime_api::client::auth::{
     AuthSchemeOptionResolverParams, SharedAuthScheme, SharedAuthSchemeOptionResolver,
 };
-use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
 use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, SharedEndpointResolver};
+use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
 use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
@@ -33,6 +34,7 @@ use aws_smithy_runtime_api::client::ser_de::{
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::fmt;
 use std::marker::PhantomData;
@@ -189,8 +191,8 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn http_connector(mut self, connector: impl IntoShared<SharedHttpConnector>) -> Self {
-        self.runtime_components.set_http_connector(Some(connector));
+    pub fn http_client(mut self, connector: impl IntoShared<SharedHttpClient>) -> Self {
+        self.runtime_components.set_http_client(Some(connector));
         self
     }
 
@@ -223,6 +225,11 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
+    pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+        self.config.store_put(timeout_config);
+        self
+    }
+
     pub fn no_auth(mut self) -> Self {
         self.config
             .store_put(AuthSchemeOptionResolverParams::new(()));
@@ -239,13 +246,15 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn sleep_impl(mut self, async_sleep: SharedAsyncSleep) -> Self {
-        self.runtime_components.set_sleep_impl(Some(async_sleep));
+    pub fn sleep_impl(mut self, async_sleep: impl IntoShared<SharedAsyncSleep>) -> Self {
+        self.runtime_components
+            .set_sleep_impl(Some(async_sleep.into_shared()));
         self
     }
 
-    pub fn time_source(mut self, time_source: SharedTimeSource) -> Self {
-        self.runtime_components.set_time_source(Some(time_source));
+    pub fn time_source(mut self, time_source: impl IntoShared<SharedTimeSource>) -> Self {
+        self.runtime_components
+            .set_time_source(Some(time_source.into_shared()));
         self
     }
 
@@ -306,11 +315,13 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
-        let mut runtime_plugins = RuntimePlugins::new().with_client_plugin(
-            StaticRuntimePlugin::new()
-                .with_config(self.config.freeze())
-                .with_runtime_components(self.runtime_components),
-        );
+        let mut runtime_plugins = RuntimePlugins::new()
+            .with_client_plugin(default_http_client_plugin())
+            .with_client_plugin(
+                StaticRuntimePlugin::new()
+                    .with_config(self.config.freeze())
+                    .with_runtime_components(self.runtime_components),
+            );
         for runtime_plugin in self.runtime_plugins {
             runtime_plugins = runtime_plugins.with_client_plugin(runtime_plugin);
         }
@@ -323,8 +334,8 @@ impl<I, O, E> OperationBuilder<I, O, E> {
                 .expect("the runtime plugins should succeed");
 
             assert!(
-                components.http_connector().is_some(),
-                "a http_connector is required"
+                components.http_client().is_some(),
+                "a http_client is required"
             );
             assert!(
                 components.endpoint_resolver().is_some(),
@@ -346,6 +357,10 @@ impl<I, O, E> OperationBuilder<I, O, E> {
                 config.load::<EndpointResolverParams>().is_some(),
                 "endpoint resolver params are required"
             );
+            assert!(
+                config.load::<TimeoutConfig>().is_some(),
+                "timeout config is required"
+            );
         }
 
         Operation {
@@ -360,7 +375,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
-    use crate::client::connectors::test_util::{capture_request, ConnectionEvent, EventConnector};
+    use crate::client::http::test_util::{capture_request, ConnectionEvent, EventClient};
     use crate::client::retries::classifier::HttpStatusCodeClassifier;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
     use aws_smithy_http::body::SdkBody;
@@ -378,10 +393,11 @@ mod tests {
         let operation = Operation::builder()
             .service_name("test")
             .operation_name("test")
-            .http_connector(SharedHttpConnector::new(connector))
+            .http_client(connector)
             .endpoint_url("http://localhost:1234")
             .no_auth()
             .no_retry()
+            .timeout_config(TimeoutConfig::disabled())
             .serializer(|input: String| {
                 Ok(http::Request::builder()
                     .body(SdkBody::from(input.as_bytes()))
@@ -408,7 +424,7 @@ mod tests {
 
     #[tokio::test]
     async fn operation_retries() {
-        let connector = EventConnector::new(
+        let connector = EventClient::new(
             vec![
                 ConnectionEvent::new(
                     http::Request::builder()
@@ -436,13 +452,14 @@ mod tests {
         let operation = Operation::builder()
             .service_name("test")
             .operation_name("test")
-            .http_connector(SharedHttpConnector::new(connector.clone()))
+            .http_client(connector.clone())
             .endpoint_url("http://localhost:1234")
             .no_auth()
             .retry_classifiers(
                 RetryClassifiers::new().with_classifier(HttpStatusCodeClassifier::default()),
             )
             .standard_retry(&RetryConfig::standard())
+            .timeout_config(TimeoutConfig::disabled())
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .serializer(|input: String| {
                 Ok(http::Request::builder()

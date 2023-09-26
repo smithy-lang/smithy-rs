@@ -5,9 +5,9 @@
 
 //! Error types for [`ImdsClient`](crate::imds::client::Client)
 
-use aws_smithy_client::SdkError;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::endpoint::error::InvalidEndpointError;
+use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use std::error::Error;
 use std::fmt;

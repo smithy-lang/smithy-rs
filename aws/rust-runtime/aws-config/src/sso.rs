@@ -13,7 +13,6 @@
 use crate::fs_util::{home_dir, Os};
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::provider_config::ProviderConfig;
-
 use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
@@ -21,19 +20,16 @@ use aws_sdk_sso::types::RoleCredentials;
 use aws_sdk_sso::{config::Builder as SsoConfigBuilder, Client as SsoClient, Config as SsoConfig};
 use aws_smithy_json::deserialize::Token;
 use aws_smithy_types::date_time::Format;
+use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::DateTime;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
-
+use ring::digest;
 use std::convert::TryInto;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
-
-use crate::connector::expect_connector;
-use aws_smithy_types::retry::RetryConfig;
-use ring::digest;
 use zeroize::Zeroizing;
 
 /// SSO Credentials Provider
@@ -63,13 +59,9 @@ impl SsoCredentialsProvider {
         let fs = provider_config.fs();
         let env = provider_config.env();
 
-        let mut sso_config = SsoConfig::builder()
-            .http_connector(expect_connector(
-                "The SSO credentials provider",
-                provider_config.connector(&Default::default()),
-            ))
-            .retry_config(RetryConfig::standard());
-        sso_config.set_sleep_impl(provider_config.sleep());
+        let mut sso_config = SsoConfig::builder().retry_config(RetryConfig::standard());
+        sso_config.set_http_client(provider_config.http_client());
+        sso_config.set_sleep_impl(provider_config.sleep_impl());
 
         SsoCredentialsProvider {
             fs,

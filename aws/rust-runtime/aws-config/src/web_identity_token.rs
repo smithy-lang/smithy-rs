@@ -241,7 +241,7 @@ async fn load_credentials(
 #[cfg(test)]
 mod test {
     use crate::provider_config::ProviderConfig;
-    use crate::test_case::no_traffic_connector;
+    use crate::test_case::no_traffic_client;
     use crate::web_identity_token::{
         Builder, ENV_VAR_ROLE_ARN, ENV_VAR_SESSION_NAME, ENV_VAR_TOKEN_FILE,
     };
@@ -256,9 +256,9 @@ mod test {
     async fn unloaded_provider() {
         // empty environment
         let conf = ProviderConfig::empty()
-            .with_sleep(TokioSleep::new())
+            .with_sleep_impl(TokioSleep::new())
             .with_env(Env::from_slice(&[]))
-            .with_http_connector(no_traffic_connector())
+            .with_http_client(no_traffic_client())
             .with_region(Some(Region::from_static("us-east-1")));
 
         let provider = Builder::default().configure(&conf).build();
@@ -279,10 +279,10 @@ mod test {
         let provider = Builder::default()
             .configure(
                 &ProviderConfig::empty()
-                    .with_sleep(TokioSleep::new())
+                    .with_sleep_impl(TokioSleep::new())
                     .with_region(region)
                     .with_env(env)
-                    .with_http_connector(no_traffic_connector()),
+                    .with_http_client(no_traffic_client()),
             )
             .build();
         let err = provider
@@ -311,8 +311,8 @@ mod test {
         let provider = Builder::default()
             .configure(
                 &ProviderConfig::empty()
-                    .with_sleep(TokioSleep::new())
-                    .with_http_connector(no_traffic_connector())
+                    .with_sleep_impl(TokioSleep::new())
+                    .with_http_client(no_traffic_client())
                     .with_region(Some(Region::new("us-east-1")))
                     .with_env(env)
                     .with_fs(fs),

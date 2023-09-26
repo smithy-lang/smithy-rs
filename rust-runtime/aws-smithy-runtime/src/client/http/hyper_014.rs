@@ -5,28 +5,34 @@
 
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
-use aws_smithy_client::http_connector::ConnectorSettings;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::connection::{CaptureSmithyConnection, ConnectionMetadata};
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
-use aws_smithy_runtime_api::client::connectors::{HttpConnector, HttpConnectorFuture};
+use aws_smithy_runtime_api::client::http::{
+    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
+    SharedHttpConnector,
+};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
 use http::{Extensions, Uri};
 use hyper::client::connect::{capture_connection, CaptureConnection, Connection, HttpInfo};
 use hyper::service::Service;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Debug;
+use std::sync::RwLock;
+use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 #[cfg(feature = "tls-rustls")]
 mod default_connector {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-    use aws_smithy_client::http_connector::ConnectorSettings;
+    use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
@@ -61,7 +67,7 @@ mod default_connector {
     });
 
     pub(super) fn base(
-        settings: &ConnectorSettings,
+        settings: &HttpConnectorSettings,
         sleep: Option<SharedAsyncSleep>,
     ) -> super::HyperConnectorBuilder {
         let mut hyper = super::HyperConnector::builder().connector_settings(settings.clone());
@@ -80,9 +86,9 @@ mod default_connector {
     }
 }
 
-/// Given `ConnectorSettings` and an `SharedAsyncSleep`, create a `SharedHttpConnector` from defaults depending on what cargo features are activated.
+/// Given `HttpConnectorSettings` and an `SharedAsyncSleep`, create a `SharedHttpConnector` from defaults depending on what cargo features are activated.
 pub fn default_connector(
-    settings: &ConnectorSettings,
+    settings: &HttpConnectorSettings,
     sleep: Option<SharedAsyncSleep>,
 ) -> Option<SharedHttpConnector> {
     #[cfg(feature = "tls-rustls")]
@@ -94,6 +100,20 @@ pub fn default_connector(
     #[cfg(not(feature = "tls-rustls"))]
     {
         tracing::trace!(settings = ?settings, sleep = ?sleep, "no default connector available");
+        None
+    }
+}
+
+/// Creates a hyper-backed HTTPS client from defaults depending on what cargo features are activated.
+pub fn default_client() -> Option<SharedHttpClient> {
+    #[cfg(feature = "tls-rustls")]
+    {
+        tracing::trace!("creating a new default hyper 0.14.x client");
+        Some(HyperClientBuilder::new().build_https())
+    }
+    #[cfg(not(feature = "tls-rustls"))]
+    {
+        tracing::trace!("no default connector available");
         None
     }
 }
@@ -170,7 +190,7 @@ impl HttpConnector for HyperConnector {
 /// Builder for [`HyperConnector`].
 #[derive(Default, Debug)]
 pub struct HyperConnectorBuilder {
-    connector_settings: Option<ConnectorSettings>,
+    connector_settings: Option<HttpConnectorSettings>,
     sleep_impl: Option<SharedAsyncSleep>,
     client_builder: Option<hyper::client::Builder>,
 }
@@ -228,8 +248,8 @@ impl HyperConnectorBuilder {
     ///
     /// Calling this is only necessary for testing or to use something other than
     /// [`default_async_sleep`].
-    pub fn sleep_impl(mut self, sleep_impl: SharedAsyncSleep) -> Self {
-        self.sleep_impl = Some(sleep_impl);
+    pub fn sleep_impl(mut self, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
+        self.sleep_impl = Some(sleep_impl.into_shared());
         self
     }
 
@@ -243,7 +263,7 @@ impl HyperConnectorBuilder {
     }
 
     /// Configure the HTTP settings for the `HyperAdapter`
-    pub fn connector_settings(mut self, connector_settings: ConnectorSettings) -> Self {
+    pub fn connector_settings(mut self, connector_settings: HttpConnectorSettings) -> Self {
         self.connector_settings = Some(connector_settings);
         self
     }
@@ -251,7 +271,7 @@ impl HyperConnectorBuilder {
     /// Configure the HTTP settings for the `HyperAdapter`
     pub fn set_connector_settings(
         &mut self,
-        connector_settings: Option<ConnectorSettings>,
+        connector_settings: Option<HttpConnectorSettings>,
     ) -> &mut Self {
         self.connector_settings = connector_settings;
         self
@@ -389,6 +409,151 @@ fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option
         next = err.source();
     }
     None
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+struct CacheKey {
+    connect_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
+}
+
+impl From<&HttpConnectorSettings> for CacheKey {
+    fn from(value: &HttpConnectorSettings) -> Self {
+        Self {
+            connect_timeout: value.connect_timeout(),
+            read_timeout: value.read_timeout(),
+        }
+    }
+}
+
+struct HyperClient<F> {
+    connector_cache: RwLock<HashMap<CacheKey, SharedHttpConnector>>,
+    client_builder: hyper::client::Builder,
+    tcp_connector_fn: F,
+}
+
+impl<F> fmt::Debug for HyperClient<F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("HyperClient")
+            .field("connector_cache", &self.connector_cache)
+            .field("client_builder", &self.client_builder)
+            .finish()
+    }
+}
+
+impl<C, F> HttpClient for HyperClient<F>
+where
+    F: Fn() -> C + Send + Sync,
+    C: Clone + Send + Sync + 'static,
+    C: Service<Uri>,
+    C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+    C::Future: Unpin + Send + 'static,
+    C::Error: Into<BoxError>,
+{
+    fn http_connector(
+        &self,
+        settings: &HttpConnectorSettings,
+        components: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        let key = CacheKey::from(settings);
+        let mut connector = self.connector_cache.read().unwrap().get(&key).cloned();
+        if connector.is_none() {
+            let mut cache = self.connector_cache.write().unwrap();
+            // Short-circuit if another thread already wrote a connector to the cache for this key
+            if !cache.contains_key(&key) {
+                let mut builder = HyperConnector::builder()
+                    .hyper_builder(self.client_builder.clone())
+                    .connector_settings(settings.clone());
+                builder.set_sleep_impl(components.sleep_impl());
+
+                let tcp_connector = (self.tcp_connector_fn)();
+                let connector = SharedHttpConnector::new(builder.build(tcp_connector));
+                cache.insert(key.clone(), connector);
+            }
+            connector = cache.get(&key).cloned();
+        }
+
+        connector.expect("cache populated above")
+    }
+}
+
+/// Builder for a hyper-backed [`HttpClient`] implementation.
+///
+/// This builder can be used to customize the underlying TCP connector used, as well as
+/// hyper client configuration.
+#[derive(Clone, Default, Debug)]
+pub struct HyperClientBuilder {
+    client_builder: Option<hyper::client::Builder>,
+}
+
+impl HyperClientBuilder {
+    /// Creates a new builder.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
+    ///
+    /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
+    pub fn hyper_builder(mut self, hyper_builder: hyper::client::Builder) -> Self {
+        self.client_builder = Some(hyper_builder);
+        self
+    }
+
+    /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
+    ///
+    /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
+    pub fn set_hyper_builder(
+        &mut self,
+        hyper_builder: Option<hyper::client::Builder>,
+    ) -> &mut Self {
+        self.client_builder = hyper_builder;
+        self
+    }
+
+    /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    #[cfg(feature = "tls-rustls")]
+    pub fn build_https(self) -> SharedHttpClient {
+        self.build(default_connector::https())
+    }
+
+    /// Create a [`SharedHttpClient`] from this builder and a given connector.
+    ///
+    #[cfg_attr(
+        feature = "tls-rustls",
+        doc = "Use [`build_https`](HyperClientBuilder::build_https) if you don't want to provide a custom TCP connector."
+    )]
+    pub fn build<C>(self, tcp_connector: C) -> SharedHttpClient
+    where
+        C: Clone + Send + Sync + 'static,
+        C: Service<Uri>,
+        C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+        C::Future: Unpin + Send + 'static,
+        C::Error: Into<BoxError>,
+    {
+        SharedHttpClient::new(HyperClient {
+            connector_cache: RwLock::new(HashMap::new()),
+            client_builder: self.client_builder.unwrap_or_default(),
+            tcp_connector_fn: move || tcp_connector.clone(),
+        })
+    }
+
+    #[cfg(test)]
+    fn build_with_fn<C, F>(self, tcp_connector_fn: F) -> SharedHttpClient
+    where
+        F: Fn() -> C + Send + Sync + 'static,
+        C: Clone + Send + Sync + 'static,
+        C: Service<Uri>,
+        C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
+        C::Future: Unpin + Send + 'static,
+        C::Error: Into<BoxError>,
+    {
+        SharedHttpClient::new(HyperClient {
+            connector_cache: RwLock::new(HashMap::new()),
+            client_builder: self.client_builder.unwrap_or_default(),
+            tcp_connector_fn,
+        })
+    }
 }
 
 mod timeout_middleware {
@@ -600,7 +765,6 @@ mod timeout_middleware {
         use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
         use aws_smithy_http::body::SdkBody;
         use aws_smithy_types::error::display::DisplayErrorContext;
-        use aws_smithy_types::timeout::TimeoutConfig;
         use hyper::client::connect::Connected;
         use std::time::Duration;
         use tokio::io::ReadBuf;
@@ -699,11 +863,9 @@ mod timeout_middleware {
         #[tokio::test]
         async fn http_connect_timeout_works() {
             let tcp_connector = NeverConnects::default();
-            let connector_settings = ConnectorSettings::from_timeout_config(
-                &TimeoutConfig::builder()
-                    .connect_timeout(Duration::from_secs(1))
-                    .build(),
-            );
+            let connector_settings = HttpConnectorSettings::builder()
+                .connect_timeout(Duration::from_secs(1))
+                .build();
             let hyper = HyperConnector::builder()
                 .connector_settings(connector_settings)
                 .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
@@ -738,12 +900,10 @@ mod timeout_middleware {
         #[tokio::test]
         async fn http_read_timeout_works() {
             let tcp_connector = NeverReplies::default();
-            let connector_settings = ConnectorSettings::from_timeout_config(
-                &TimeoutConfig::builder()
-                    .connect_timeout(Duration::from_secs(1))
-                    .read_timeout(Duration::from_secs(2))
-                    .build(),
-            );
+            let connector_settings = HttpConnectorSettings::builder()
+                .connect_timeout(Duration::from_secs(1))
+                .read_timeout(Duration::from_secs(2))
+                .build();
             let hyper = HyperConnector::builder()
                 .connector_settings(connector_settings)
                 .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
@@ -778,13 +938,70 @@ mod timeout_middleware {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::client::http::test_util::NeverTcpConnector;
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http::Uri;
     use hyper::client::connect::{Connected, Connection};
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::sync::Arc;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+    #[tokio::test]
+    async fn connector_selection() {
+        // Create a client that increments a count every time it creates a new HyperConnector
+        let creation_count = Arc::new(AtomicU32::new(0));
+        let http_client = HyperClientBuilder::new().build_with_fn({
+            let count = creation_count.clone();
+            move || {
+                count.fetch_add(1, Ordering::Relaxed);
+                NeverTcpConnector::new()
+            }
+        });
+
+        // This configuration should result in 4 separate connectors with different timeout settings
+        let settings = [
+            HttpConnectorSettings::builder()
+                .connect_timeout(Duration::from_secs(3))
+                .build(),
+            HttpConnectorSettings::builder()
+                .read_timeout(Duration::from_secs(3))
+                .build(),
+            HttpConnectorSettings::builder()
+                .connect_timeout(Duration::from_secs(3))
+                .read_timeout(Duration::from_secs(3))
+                .build(),
+            HttpConnectorSettings::builder()
+                .connect_timeout(Duration::from_secs(5))
+                .read_timeout(Duration::from_secs(3))
+                .build(),
+        ];
+
+        // Kick off thousands of parallel tasks that will try to create a connector
+        let components = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut handles = Vec::new();
+        for setting in &settings {
+            for _ in 0..1000 {
+                let client = http_client.clone();
+                handles.push(tokio::spawn({
+                    let setting = setting.clone();
+                    let components = components.clone();
+                    async move {
+                        let _ = client.http_connector(&setting, &components);
+                    }
+                }));
+            }
+        }
+        for handle in handles {
+            handle.await.unwrap();
+        }
+
+        // Verify only 4 connectors were created amidst the chaos
+        assert_eq!(4, creation_count.load(Ordering::Relaxed));
+    }
 
     #[tokio::test]
     async fn hyper_io_error() {

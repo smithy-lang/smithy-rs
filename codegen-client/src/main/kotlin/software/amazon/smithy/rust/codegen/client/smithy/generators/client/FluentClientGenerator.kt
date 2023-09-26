@@ -480,6 +480,7 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                 let mut plugins = #{RuntimePlugins}::new()
+                    .with_client_plugin(#{default_http_client_plugin}())
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
@@ -499,6 +500,8 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
                 .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
             "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "default_http_client_plugin" to RuntimeType.smithyRuntime(runtimeConfig)
+                .resolve("client::http::default_http_client_plugin"),
         )
     }
 

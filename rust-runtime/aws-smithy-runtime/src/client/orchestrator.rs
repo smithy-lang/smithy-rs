@@ -16,7 +16,7 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream::ByteStream;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::connectors::HttpConnector;
+use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::interceptors::context::{
     Error, Input, InterceptorContext, Output, RewindResult,
 };
@@ -30,6 +30,7 @@ use aws_smithy_runtime_api::client::ser_de::{
     RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
 };
 use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::timeout::TimeoutConfig;
 use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
@@ -356,10 +357,18 @@ async fn try_attempt(
     let response = halt_on_err!([ctx] => {
         let request = ctx.take_request().expect("set during serialization");
         trace!(request = ?request, "transmitting request");
-        let connector = halt_on_err!([ctx] => runtime_components.http_connector().ok_or_else(||
+        let http_client = halt_on_err!([ctx] => runtime_components.http_client().ok_or_else(||
             OrchestratorError::other("No HTTP connector was available to send this request. \
                 Enable the `rustls` crate feature or set a connector to fix this.")
         ));
+        let timeout_config = cfg.load::<TimeoutConfig>().expect("timeout config must be set");
+        let settings = {
+            let mut builder = HttpConnectorSettings::builder();
+            builder.set_connect_timeout(timeout_config.connect_timeout());
+            builder.set_read_timeout(timeout_config.read_timeout());
+            builder.build()
+        };
+        let connector = http_client.http_connector(&settings, runtime_components);
         connector.call(request).await.map_err(OrchestratorError::connector)
     });
     trace!(response = ?response, "received response from service");
@@ -442,11 +451,11 @@ mod tests {
     use aws_smithy_runtime_api::client::auth::{
         AuthSchemeOptionResolverParams, SharedAuthSchemeOptionResolver,
     };
-    use aws_smithy_runtime_api::client::connectors::{
-        HttpConnector, HttpConnectorFuture, SharedHttpConnector,
-    };
     use aws_smithy_runtime_api::client::endpoint::{
         EndpointResolverParams, SharedEndpointResolver,
+    };
+    use aws_smithy_runtime_api::client::http::{
+        http_client_fn, HttpConnector, HttpConnectorFuture,
     };
     use aws_smithy_runtime_api::client::interceptors::context::{
         AfterDeserializationInterceptorContextRef, BeforeDeserializationInterceptorContextMut,
@@ -460,6 +469,7 @@ mod tests {
     use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
+    use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
     use std::borrow::Cow;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -515,7 +525,9 @@ mod tests {
                     .with_endpoint_resolver(Some(SharedEndpointResolver::new(
                         StaticUriEndpointResolver::http_localhost(8080),
                     )))
-                    .with_http_connector(Some(SharedHttpConnector::new(OkConnector::new())))
+                    .with_http_client(Some(http_client_fn(|_, _| {
+                        OkConnector::new().into_shared()
+                    })))
                     .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
                         StaticAuthSchemeOptionResolver::new(vec![NO_AUTH_SCHEME_ID]),
                     ))),
@@ -530,6 +542,7 @@ mod tests {
             layer.store_put(EndpointResolverParams::new("dontcare"));
             layer.store_put(SharedRequestSerializer::new(new_request_serializer()));
             layer.store_put(SharedResponseDeserializer::new(new_response_deserializer()));
+            layer.store_put(TimeoutConfig::builder().build());
             Some(layer.freeze())
         }
 

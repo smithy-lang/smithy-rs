@@ -14,8 +14,8 @@
 use crate::client::auth::{
     AuthScheme, AuthSchemeId, SharedAuthScheme, SharedAuthSchemeOptionResolver,
 };
-use crate::client::connectors::SharedHttpConnector;
 use crate::client::endpoint::SharedEndpointResolver;
+use crate::client::http::SharedHttpClient;
 use crate::client::identity::{ConfiguredIdentityResolver, SharedIdentityResolver};
 use crate::client::interceptors::SharedInterceptor;
 use crate::client::retries::{RetryClassifiers, SharedRetryStrategy};
@@ -184,7 +184,7 @@ declare_runtime_components! {
         auth_scheme_option_resolver: Option<SharedAuthSchemeOptionResolver>,
 
         // A connector is not required since a client could technically only be used for presigning
-        http_connector: Option<SharedHttpConnector>,
+        http_client: Option<SharedHttpClient>,
 
         #[required]
         endpoint_resolver: Option<SharedEndpointResolver>,
@@ -219,9 +219,9 @@ impl RuntimeComponents {
         self.auth_scheme_option_resolver.value.clone()
     }
 
-    /// Returns the connector.
-    pub fn http_connector(&self) -> Option<SharedHttpConnector> {
-        self.http_connector.as_ref().map(|s| s.value.clone())
+    /// Returns the HTTP client.
+    pub fn http_client(&self) -> Option<SharedHttpClient> {
+        self.http_client.as_ref().map(|s| s.value.clone())
     }
 
     /// Returns the endpoint resolver.
@@ -290,26 +290,26 @@ impl RuntimeComponentsBuilder {
         self
     }
 
-    /// Returns the HTTP connector.
-    pub fn http_connector(&self) -> Option<SharedHttpConnector> {
-        self.http_connector.as_ref().map(|s| s.value.clone())
+    /// Returns the HTTP client.
+    pub fn http_client(&self) -> Option<SharedHttpClient> {
+        self.http_client.as_ref().map(|s| s.value.clone())
     }
 
-    /// Sets the HTTP connector.
-    pub fn set_http_connector(
+    /// Sets the HTTP client.
+    pub fn set_http_client(
         &mut self,
-        connector: Option<impl IntoShared<SharedHttpConnector>>,
+        connector: Option<impl IntoShared<SharedHttpClient>>,
     ) -> &mut Self {
-        self.http_connector = connector.map(|c| Tracked::new(self.builder_name, c.into_shared()));
+        self.http_client = connector.map(|c| Tracked::new(self.builder_name, c.into_shared()));
         self
     }
 
-    /// Sets the HTTP connector.
-    pub fn with_http_connector(
+    /// Sets the HTTP client.
+    pub fn with_http_client(
         mut self,
-        connector: Option<impl IntoShared<SharedHttpConnector>>,
+        connector: Option<impl IntoShared<SharedHttpClient>>,
     ) -> Self {
-        self.set_http_connector(connector);
+        self.set_http_client(connector);
         self
     }
 
@@ -489,8 +489,11 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the async sleep implementation.
-    pub fn with_sleep_impl(mut self, sleep_impl: Option<SharedAsyncSleep>) -> Self {
-        self.sleep_impl = sleep_impl.map(|s| Tracked::new(self.builder_name, s));
+    pub fn with_sleep_impl(
+        mut self,
+        sleep_impl: Option<impl IntoShared<SharedAsyncSleep>>,
+    ) -> Self {
+        self.sleep_impl = sleep_impl.map(|s| Tracked::new(self.builder_name, s.into_shared()));
         self
     }
 
@@ -506,8 +509,11 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the time source.
-    pub fn with_time_source(mut self, time_source: Option<SharedTimeSource>) -> Self {
-        self.time_source = time_source.map(|s| Tracked::new(self.builder_name, s));
+    pub fn with_time_source(
+        mut self,
+        time_source: Option<impl IntoShared<SharedTimeSource>>,
+    ) -> Self {
+        self.time_source = time_source.map(|s| Tracked::new(self.builder_name, s.into_shared()));
         self
     }
 }
@@ -533,11 +539,11 @@ impl RuntimeComponentsBuilder {
     #[cfg(feature = "test-util")]
     pub fn for_tests() -> Self {
         use crate::client::auth::AuthSchemeOptionResolver;
-        use crate::client::connectors::{HttpConnector, HttpConnectorFuture};
         use crate::client::endpoint::{EndpointResolver, EndpointResolverParams};
+        use crate::client::http::HttpClient;
         use crate::client::identity::Identity;
         use crate::client::identity::IdentityResolver;
-        use crate::client::orchestrator::{Future, HttpRequest};
+        use crate::client::orchestrator::Future;
         use crate::client::retries::RetryStrategy;
         use aws_smithy_async::rt::sleep::AsyncSleep;
         use aws_smithy_async::time::TimeSource;
@@ -557,10 +563,14 @@ impl RuntimeComponentsBuilder {
         }
 
         #[derive(Debug)]
-        struct FakeConnector;
-        impl HttpConnector for FakeConnector {
-            fn call(&self, _: HttpRequest) -> HttpConnectorFuture {
-                unreachable!("fake connector must be overridden for this test")
+        struct FakeClient;
+        impl HttpClient for FakeClient {
+            fn http_connector(
+                &self,
+                _: &crate::client::http::HttpConnectorSettings,
+                _: &RuntimeComponents,
+            ) -> crate::client::http::SharedHttpConnector {
+                unreachable!("fake client must be overridden for this test")
             }
         }
 
@@ -642,7 +652,7 @@ impl RuntimeComponentsBuilder {
             .with_auth_scheme(FakeAuthScheme)
             .with_auth_scheme_option_resolver(Some(FakeAuthSchemeOptionResolver))
             .with_endpoint_resolver(Some(FakeEndpointResolver))
-            .with_http_connector(Some(FakeConnector))
+            .with_http_client(Some(FakeClient))
             .with_identity_resolver(AuthSchemeId::new("fake"), FakeIdentityResolver)
             .with_retry_classifiers(Some(RetryClassifiers::new()))
             .with_retry_strategy(Some(FakeRetryStrategy))

@@ -3,7 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_sdk_s3::config::RuntimeComponents;
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_runtime_api::client::http::{
+    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
+};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::shared::IntoShared;
 
 pub(crate) fn make_request(_req: http::Request<SdkBody>) -> Result<http::Response<SdkBody>, ()> {
     // Consumers here would pass the HTTP request to
@@ -26,4 +32,31 @@ pub(crate) fn make_request(_req: http::Request<SdkBody>) -> Result<http::Respons
     </Owner>
     </ListAllMyBucketsResult>";
     Ok(http::Response::new(SdkBody::from(body)))
+}
+
+#[derive(Default, Debug, Clone)]
+pub(crate) struct WasmHttpConnector;
+impl WasmHttpConnector {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl HttpConnector for WasmHttpConnector {
+    fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        println!("Adapter: sending request...");
+        let res = make_request(request).unwrap();
+        println!("{:?}", res);
+        HttpConnectorFuture::new(async move { Ok(res) })
+    }
+}
+
+impl HttpClient for WasmHttpConnector {
+    fn http_connector(
+        &self,
+        _settings: &HttpConnectorSettings,
+        _components: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        self.clone().into_shared()
+    }
 }

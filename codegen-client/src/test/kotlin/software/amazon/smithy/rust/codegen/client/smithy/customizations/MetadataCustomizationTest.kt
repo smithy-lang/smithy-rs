@@ -81,10 +81,10 @@ class MetadataCustomizationTest {
 
                         let (tx, rx) = ::std::sync::mpsc::channel();
 
-                        let (conn, _captured_request) = #{capture_request}(#{None});
+                        let (http_client, _captured_request) = #{capture_request}(#{None});
                         let client_config = crate::config::Config::builder()
                             .endpoint_resolver("http://localhost:1234/")
-                            .http_connector(conn)
+                            .http_client(http_client)
                             .build();
                         let client = crate::client::Client::from_conf(client_config);
                         let _ = client

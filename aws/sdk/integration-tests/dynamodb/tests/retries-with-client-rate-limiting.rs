@@ -5,10 +5,11 @@
 
 use aws_sdk_dynamodb::config::{Credentials, Region, SharedAsyncSleep};
 use aws_sdk_dynamodb::{config::retry::RetryConfig, error::ProvideErrorMetadata};
+use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_async::test_util::instant_time_and_sleep;
 use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
 use aws_smithy_runtime::client::retries::RetryPartition;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use std::time::{Duration, SystemTime};
@@ -51,20 +52,20 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
 
     let events = vec![
         // First operation
-        (req(), err()),
-        (req(), err()),
-        (req(), ok()),
+        ConnectionEvent::new(req(), err()),
+        ConnectionEvent::new(req(), err()),
+        ConnectionEvent::new(req(), ok()),
         // Second operation
-        (req(), err()),
-        (req(), ok()),
+        ConnectionEvent::new(req(), err()),
+        ConnectionEvent::new(req(), ok()),
         // Third operation will fail, only errors
-        (req(), err()),
-        (req(), err()),
-        (req(), err()),
-        (req(), err()),
+        ConnectionEvent::new(req(), err()),
+        ConnectionEvent::new(req(), err()),
+        ConnectionEvent::new(req(), err()),
+        ConnectionEvent::new(req(), err()),
     ];
 
-    let conn = TestConnection::new(events);
+    let http_client = EventClient::new(events, TokioSleep::new());
     let config = aws_sdk_dynamodb::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
@@ -78,7 +79,7 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
         .retry_partition(RetryPartition::new(
             "test_adaptive_retries_with_no_throttling_errors",
         ))
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .build();
     let expected_table_names = vec!["Test".to_owned()];
 
@@ -88,21 +89,21 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3));
     assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Three requests should have been made, two failing & one success
-    assert_eq!(conn.requests().len(), 3);
+    assert_eq!(http_client.actual_requests().count(), 3);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3 + 1));
     assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Two requests should have been made, one failing & one success (plus previous requests)
-    assert_eq!(conn.requests().len(), 5);
+    assert_eq!(http_client.actual_requests().count(), 5);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config);
     let err = client.list_tables().send().await.unwrap_err();
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3 + 1 + 7),);
     assert_eq!(err.code(), Some("InternalServerError"));
     // four requests should have been made, all failing (plus previous requests)
-    assert_eq!(conn.requests().len(), 9);
+    assert_eq!(http_client.actual_requests().count(), 9);
 }
 
 #[tokio::test]
@@ -111,15 +112,15 @@ async fn test_adaptive_retries_with_throttling_errors() {
 
     let events = vec![
         // First operation
-        (req(), throttling_err()),
-        (req(), throttling_err()),
-        (req(), ok()),
+        ConnectionEvent::new(req(), throttling_err()),
+        ConnectionEvent::new(req(), throttling_err()),
+        ConnectionEvent::new(req(), ok()),
         // Second operation
-        (req(), err()),
-        (req(), ok()),
+        ConnectionEvent::new(req(), err()),
+        ConnectionEvent::new(req(), ok()),
     ];
 
-    let conn = TestConnection::new(events);
+    let http_client = EventClient::new(events, TokioSleep::new());
     let config = aws_sdk_dynamodb::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
@@ -133,7 +134,7 @@ async fn test_adaptive_retries_with_throttling_errors() {
         .retry_partition(RetryPartition::new(
             "test_adaptive_retries_with_throttling_errors",
         ))
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .build();
     let expected_table_names = vec!["Test".to_owned()];
 
@@ -143,7 +144,7 @@ async fn test_adaptive_retries_with_throttling_errors() {
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(40));
     assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Three requests should have been made, two failing & one success
-    assert_eq!(conn.requests().len(), 3);
+    assert_eq!(http_client.actual_requests().count(), 3);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
@@ -151,5 +152,5 @@ async fn test_adaptive_retries_with_throttling_errors() {
     assert!(Duration::from_secs(49) > sleep_impl.total_duration());
     assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Two requests should have been made, one failing & one success (plus previous requests)
-    assert_eq!(conn.requests().len(), 5);
+    assert_eq!(http_client.actual_requests().count(), 5);
 }

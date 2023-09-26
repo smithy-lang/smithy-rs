@@ -7,7 +7,6 @@
 //!
 //! Client for direct access to IMDSv2.
 
-use crate::connector::expect_connector;
 use crate::imds::client::error::{BuildError, ImdsError, InnerImdsError, InvalidEndpointMode};
 use crate::imds::client::token::TokenRuntimePlugin;
 use crate::provider_config::ProviderConfig;
@@ -16,27 +15,18 @@ use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_runtime::user_agent::UserAgentInterceptor;
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::http_connector::ConnectorSettings;
-use aws_smithy_client::SdkError;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
-use aws_smithy_runtime::client::connectors::adapter::DynConnectorAdapter;
+use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy;
 use aws_smithy_runtime_api::client::auth::AuthSchemeOptionResolverParams;
-use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
-use aws_smithy_runtime_api::client::endpoint::{
-    EndpointResolver, EndpointResolverParams, SharedEndpointResolver,
-};
+use aws_smithy_runtime_api::client::endpoint::{EndpointResolver, EndpointResolverParams};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
 use aws_smithy_runtime_api::client::orchestrator::{
     Future, HttpResponse, OrchestratorError, SensitiveOutput,
 };
-use aws_smithy_runtime_api::client::retries::{
-    ClassifyRetry, RetryClassifiers, RetryReason, SharedRetryStrategy,
-};
+use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryClassifiers, RetryReason};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
 use aws_smithy_types::config_bag::{FrozenLayer, Layer};
@@ -44,6 +34,7 @@ use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::os_shim_internal::Env;
+use aws_types::sdk_config::SharedHttpClient;
 use http::Uri;
 use std::borrow::Cow;
 use std::error::Error as _;
@@ -244,7 +235,7 @@ struct ImdsCommonRuntimePlugin {
 
 impl ImdsCommonRuntimePlugin {
     fn new(
-        connector: DynConnector,
+        http_client: Option<SharedHttpClient>,
         endpoint_resolver: ImdsEndpointResolver,
         retry_config: &RetryConfig,
         timeout_config: TimeoutConfig,
@@ -261,17 +252,13 @@ impl ImdsCommonRuntimePlugin {
         Self {
             config: layer.freeze(),
             components: RuntimeComponentsBuilder::new("ImdsCommonRuntimePlugin")
-                .with_http_connector(Some(SharedHttpConnector::new(DynConnectorAdapter::new(
-                    connector,
-                ))))
-                .with_endpoint_resolver(Some(SharedEndpointResolver::new(endpoint_resolver)))
-                .with_interceptor(SharedInterceptor::new(UserAgentInterceptor::new()))
+                .with_http_client(http_client)
+                .with_endpoint_resolver(Some(endpoint_resolver))
+                .with_interceptor(UserAgentInterceptor::new())
                 .with_retry_classifiers(Some(
                     RetryClassifiers::new().with_classifier(ImdsResponseRetryClassifier),
                 ))
-                .with_retry_strategy(Some(SharedRetryStrategy::new(StandardRetryStrategy::new(
-                    retry_config,
-                ))))
+                .with_retry_strategy(Some(StandardRetryStrategy::new(retry_config)))
                 .with_time_source(Some(time_source))
                 .with_sleep_impl(sleep_impl),
         }
@@ -427,11 +414,6 @@ impl Builder {
             .connect_timeout(self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT))
             .read_timeout(self.read_timeout.unwrap_or(DEFAULT_READ_TIMEOUT))
             .build();
-        let connector_settings = ConnectorSettings::from_timeout_config(&timeout_config);
-        let connector = expect_connector(
-            "The IMDS credentials provider",
-            config.connector(&connector_settings),
-        );
         let endpoint_source = self
             .endpoint
             .unwrap_or_else(|| EndpointSource::Env(config.clone()));
@@ -442,12 +424,12 @@ impl Builder {
         let retry_config = RetryConfig::standard()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
         let common_plugin = SharedRuntimePlugin::new(ImdsCommonRuntimePlugin::new(
-            connector,
+            config.http_client(),
             endpoint_resolver,
             &retry_config,
             timeout_config,
             config.time_source(),
-            config.sleep(),
+            config.sleep_impl(),
         ));
         let operation = Operation::builder()
             .service_name("imds")
@@ -608,15 +590,18 @@ pub(crate) mod test {
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::instant_time_and_sleep;
-    use aws_smithy_client::erase::DynConnector;
-    use aws_smithy_client::test_connection::{capture_request, TestConnection};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;
+    use aws_smithy_runtime::client::http::test_util::{
+        capture_request, ConnectionEvent, EventClient,
+    };
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
     use aws_smithy_runtime_api::client::interceptors::context::{
         Input, InterceptorContext, Output,
     };
-    use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+    use aws_smithy_runtime_api::client::orchestrator::{
+        HttpRequest, HttpResponse, OrchestratorError,
+    };
     use aws_smithy_runtime_api::client::retries::ClassifyRetry;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
@@ -647,7 +632,7 @@ pub(crate) mod test {
     const TOKEN_A: &str = "AQAEAFTNrA4eEGx0AQgJ1arIq_Cc-t4tWt3fB0Hd8RKhXlKc5ccvhg==";
     const TOKEN_B: &str = "alternatetoken==";
 
-    pub(crate) fn token_request(base: &str, ttl: u32) -> http::Request<SdkBody> {
+    pub(crate) fn token_request(base: &str, ttl: u32) -> HttpRequest {
         http::Request::builder()
             .uri(format!("{}/latest/api/token", base))
             .header("x-aws-ec2-metadata-token-ttl-seconds", ttl)
@@ -656,15 +641,15 @@ pub(crate) mod test {
             .unwrap()
     }
 
-    pub(crate) fn token_response(ttl: u32, token: &'static str) -> http::Response<&'static str> {
+    pub(crate) fn token_response(ttl: u32, token: &'static str) -> HttpResponse {
         http::Response::builder()
             .status(200)
             .header("X-aws-ec2-metadata-token-ttl-seconds", ttl)
-            .body(token)
+            .body(SdkBody::from(token))
             .unwrap()
     }
 
-    pub(crate) fn imds_request(path: &'static str, token: &str) -> http::Request<SdkBody> {
+    pub(crate) fn imds_request(path: &'static str, token: &str) -> HttpRequest {
         http::Request::builder()
             .uri(Uri::from_static(path))
             .method("GET")
@@ -673,67 +658,71 @@ pub(crate) mod test {
             .unwrap()
     }
 
-    pub(crate) fn imds_response(body: &'static str) -> http::Response<&'static str> {
-        http::Response::builder().status(200).body(body).unwrap()
+    pub(crate) fn imds_response(body: &'static str) -> HttpResponse {
+        http::Response::builder()
+            .status(200)
+            .body(SdkBody::from(body))
+            .unwrap()
     }
 
-    pub(crate) fn make_client<T>(conn: &TestConnection<T>) -> super::Client
-    where
-        SdkBody: From<T>,
-        T: Send + 'static,
-    {
+    pub(crate) fn make_client(http_client: &EventClient) -> super::Client {
         tokio::time::pause();
         super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_sleep(TokioSleep::new())
-                    .with_http_connector(DynConnector::new(conn.clone())),
+                    .with_sleep_impl(TokioSleep::new())
+                    .with_http_client(http_client.clone()),
             )
             .build()
     }
 
+    fn event_client(events: Vec<ConnectionEvent>) -> (Client, EventClient) {
+        let http_client = EventClient::new(events, TokioSleep::new());
+        let client = make_client(&http_client);
+        (client, http_client)
+    }
+
     #[tokio::test]
     async fn client_caches_token() {
-        let connection = TestConnection::new(vec![
-            (
+        let (client, http_client) = event_client(vec![
+            ConnectionEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output"#),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata2", TOKEN_A),
                 imds_response("output2"),
             ),
         ]);
-        let client = make_client(&connection);
         // load once
         let metadata = client.get("/latest/metadata").await.expect("failed");
         assert_eq!("test-imds-output", metadata.as_ref());
         // load again: the cached token should be used
         let metadata = client.get("/latest/metadata2").await.expect("failed");
         assert_eq!("output2", metadata.as_ref());
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     #[tokio::test]
     async fn token_can_expire() {
-        let connection = TestConnection::new(vec![
-            (
+        let (_, http_client) = event_client(vec![
+            ConnectionEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_A),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output1"#),
             ),
-            (
+            ConnectionEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_B),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_B),
                 imds_response(r#"test-imds-output2"#),
             ),
@@ -742,9 +731,9 @@ pub(crate) mod test {
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_http_connector(DynConnector::new(connection.clone()))
+                    .with_http_client(http_client.clone())
                     .with_time_source(time_source.clone())
-                    .with_sleep(sleep),
+                    .with_sleep_impl(sleep),
             )
             .endpoint_mode(EndpointMode::IpV6)
             .token_ttl(Duration::from_secs(600))
@@ -754,7 +743,7 @@ pub(crate) mod test {
         // now the cached credential has expired
         time_source.advance(Duration::from_secs(600));
         let resp2 = client.get("/latest/metadata").await.expect("success");
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
         assert_eq!("test-imds-output1", resp1.as_ref());
         assert_eq!("test-imds-output2", resp2.as_ref());
     }
@@ -762,27 +751,27 @@ pub(crate) mod test {
     /// Tokens are refreshed up to 120 seconds early to avoid using an expired token.
     #[tokio::test]
     async fn token_refresh_buffer() {
-        let connection = TestConnection::new(vec![
-            (
+        let (_, http_client) = event_client(vec![
+            ConnectionEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_A),
             ),
             // t = 0
-            (
+            ConnectionEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output1"#),
             ),
             // t = 400 (no refresh)
-            (
+            ConnectionEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output2"#),
             ),
             // t = 550 (within buffer)
-            (
+            ConnectionEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_B),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_B),
                 imds_response(r#"test-imds-output3"#),
             ),
@@ -791,8 +780,8 @@ pub(crate) mod test {
         let client = super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_sleep(sleep)
-                    .with_http_connector(DynConnector::new(connection.clone()))
+                    .with_sleep_impl(sleep)
+                    .with_http_client(http_client.clone())
                     .with_time_source(time_source.clone()),
             )
             .endpoint_mode(EndpointMode::IpV6)
@@ -805,7 +794,7 @@ pub(crate) mod test {
         let resp2 = client.get("/latest/metadata").await.expect("success");
         time_source.advance(Duration::from_secs(150));
         let resp3 = client.get("/latest/metadata").await.expect("success");
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
         assert_eq!("test-imds-output1", resp1.as_ref());
         assert_eq!("test-imds-output2", resp2.as_ref());
         assert_eq!("test-imds-output3", resp3.as_ref());
@@ -815,21 +804,23 @@ pub(crate) mod test {
     #[tokio::test]
     #[traced_test]
     async fn retry_500() {
-        let connection = TestConnection::new(vec![
-            (
+        let (client, http_client) = event_client(vec![
+            ConnectionEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
-                http::Response::builder().status(500).body("").unwrap(),
+                http::Response::builder()
+                    .status(500)
+                    .body(SdkBody::empty())
+                    .unwrap(),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 imds_response("ok"),
             ),
         ]);
-        let client = make_client(&connection);
         assert_eq!(
             "ok",
             client
@@ -838,11 +829,11 @@ pub(crate) mod test {
                 .expect("success")
                 .as_ref()
         );
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
 
         // all requests should have a user agent header
-        for request in connection.requests().iter() {
-            assert!(request.actual.headers().get(USER_AGENT).is_some());
+        for request in http_client.actual_requests() {
+            assert!(request.headers().get(USER_AGENT).is_some());
         }
     }
 
@@ -850,21 +841,23 @@ pub(crate) mod test {
     #[tokio::test]
     #[traced_test]
     async fn retry_token_failure() {
-        let connection = TestConnection::new(vec![
-            (
+        let (client, http_client) = event_client(vec![
+            ConnectionEvent::new(
                 token_request("http://169.254.169.254", 21600),
-                http::Response::builder().status(500).body("").unwrap(),
+                http::Response::builder()
+                    .status(500)
+                    .body(SdkBody::empty())
+                    .unwrap(),
             ),
-            (
+            ConnectionEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 imds_response("ok"),
             ),
         ]);
-        let client = make_client(&connection);
         assert_eq!(
             "ok",
             client
@@ -873,32 +866,34 @@ pub(crate) mod test {
                 .expect("success")
                 .as_ref()
         );
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     /// 401 error during metadata retrieval must be retried
     #[tokio::test]
     #[traced_test]
     async fn retry_metadata_401() {
-        let connection = TestConnection::new(vec![
-            (
+        let (client, http_client) = event_client(vec![
+            ConnectionEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(0, TOKEN_A),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
-                http::Response::builder().status(401).body("").unwrap(),
+                http::Response::builder()
+                    .status(401)
+                    .body(SdkBody::empty())
+                    .unwrap(),
             ),
-            (
+            ConnectionEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_B),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_B),
                 imds_response("ok"),
             ),
         ]);
-        let client = make_client(&connection);
         assert_eq!(
             "ok",
             client
@@ -907,21 +902,23 @@ pub(crate) mod test {
                 .expect("success")
                 .as_ref()
         );
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     /// 403 responses from IMDS during token acquisition MUST NOT be retried
     #[tokio::test]
     #[traced_test]
     async fn no_403_retry() {
-        let connection = TestConnection::new(vec![(
+        let (client, http_client) = event_client(vec![ConnectionEvent::new(
             token_request("http://169.254.169.254", 21600),
-            http::Response::builder().status(403).body("").unwrap(),
+            http::Response::builder()
+                .status(403)
+                .body(SdkBody::empty())
+                .unwrap(),
         )]);
-        let client = make_client(&connection);
         let err = client.get("/latest/metadata").await.expect_err("no token");
         assert_full_error_contains!(err, "forbidden");
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     /// Successful responses should classify as `RetryKind::Unnecessary`
@@ -944,24 +941,23 @@ pub(crate) mod test {
     // since tokens are sent as headers, the tokens need to be valid header values
     #[tokio::test]
     async fn invalid_token() {
-        let connection = TestConnection::new(vec![(
+        let (client, http_client) = event_client(vec![ConnectionEvent::new(
             token_request("http://169.254.169.254", 21600),
-            token_response(21600, "replaced").map(|_| vec![1, 0]),
+            token_response(21600, "invalid\nheader\nvalue\0"),
         )]);
-        let client = make_client(&connection);
         let err = client.get("/latest/metadata").await.expect_err("no token");
         assert_full_error_contains!(err, "invalid token");
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     #[tokio::test]
     async fn non_utf8_response() {
-        let connection = TestConnection::new(vec![
-            (
+        let (client, http_client) = event_client(vec![
+            ConnectionEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A).map(SdkBody::from),
             ),
-            (
+            ConnectionEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 http::Response::builder()
                     .status(200)
@@ -969,10 +965,9 @@ pub(crate) mod test {
                     .unwrap(),
             ),
         ]);
-        let client = make_client(&connection);
         let err = client.get("/latest/metadata").await.expect_err("no token");
         assert_full_error_contains!(err, "invalid UTF-8");
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     /// Verify that the end-to-end real client has a 1-second connect timeout
@@ -1042,12 +1037,12 @@ pub(crate) mod test {
     }
 
     async fn check(test_case: ImdsConfigTest) {
-        let (server, watcher) = capture_request(None);
+        let (http_client, watcher) = capture_request(None);
         let provider_config = ProviderConfig::no_configuration()
-            .with_sleep(TokioSleep::new())
+            .with_sleep_impl(TokioSleep::new())
             .with_env(Env::from(test_case.env))
             .with_fs(Fs::from_map(test_case.fs))
-            .with_http_connector(DynConnector::new(server));
+            .with_http_client(http_client);
         let mut imds_client = Client::builder().configure(&provider_config);
         if let Some(endpoint_override) = test_case.endpoint_override {
             imds_client = imds_client.endpoint(endpoint_override.parse::<Uri>().unwrap());

@@ -7,15 +7,17 @@
 
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_client::erase::boxclone::BoxFuture;
 use aws_smithy_http::endpoint::{ResolveEndpoint, ResolveEndpointError};
 use aws_smithy_types::endpoint::Endpoint;
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::oneshot::{Receiver, Sender};
+
+type BoxFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 
 /// Endpoint reloader
 #[must_use]

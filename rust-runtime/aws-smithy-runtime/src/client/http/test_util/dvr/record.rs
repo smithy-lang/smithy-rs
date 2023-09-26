@@ -8,10 +8,12 @@ use super::{
     Version,
 };
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime_api::client::connectors::{
-    HttpConnector, HttpConnectorFuture, SharedHttpConnector,
+use aws_smithy_runtime_api::client::http::{
+    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::shared::IntoShared;
 use http_body::Body;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -19,21 +21,21 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::{fs, io};
 use tokio::task::JoinHandle;
 
-/// Recording Connection Wrapper
+/// Recording client
 ///
-/// RecordingConnector wraps an inner connection and records all traffic, enabling traffic replay.
+/// `RecordingClient` wraps an inner connection and records all traffic, enabling traffic replay.
 #[derive(Clone, Debug)]
-pub struct RecordingConnector {
+pub struct RecordingClient {
     pub(crate) data: Arc<Mutex<Vec<Event>>>,
     pub(crate) num_events: Arc<AtomicUsize>,
     pub(crate) inner: SharedHttpConnector,
 }
 
 #[cfg(all(feature = "tls-rustls"))]
-impl RecordingConnector {
-    /// Construct a recording connection wrapping a default HTTPS implementation
+impl RecordingClient {
+    /// Construct a recording connection wrapping a default HTTPS implementation without any timeouts.
     pub fn https() -> Self {
-        use crate::client::connectors::hyper_connector::HyperConnector;
+        use crate::client::http::hyper_014::HyperConnector;
         Self {
             data: Default::default(),
             num_events: Arc::new(AtomicUsize::new(0)),
@@ -42,13 +44,13 @@ impl RecordingConnector {
     }
 }
 
-impl RecordingConnector {
+impl RecordingClient {
     /// Create a new recording connection from a connection
-    pub fn new(underlying_connector: SharedHttpConnector) -> Self {
+    pub fn new(underlying_connector: impl IntoShared<SharedHttpConnector>) -> Self {
         Self {
             data: Default::default(),
             num_events: Arc::new(AtomicUsize::new(0)),
-            inner: underlying_connector,
+            inner: underlying_connector.into_shared(),
         }
     }
 
@@ -141,7 +143,7 @@ fn record_body(
     })
 }
 
-impl HttpConnector for RecordingConnector {
+impl HttpConnector for RecordingClient {
     fn call(&self, mut request: HttpRequest) -> HttpConnectorFuture {
         let event_id = self.next_id();
         // A request has three phases:
@@ -198,5 +200,15 @@ impl HttpConnector for RecordingConnector {
             }
         };
         HttpConnectorFuture::new(fut)
+    }
+}
+
+impl HttpClient for RecordingClient {
+    fn http_connector(
+        &self,
+        _: &HttpConnectorSettings,
+        _: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        self.clone().into_shared()
     }
 }

@@ -6,14 +6,15 @@
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3control::config::{Credentials, Region};
 use aws_sdk_s3control::Client;
-use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
 use aws_types::SdkConfig;
 use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn test_signer() {
-    let conn = TestConnection::new(vec![(
+    let http_client = EventClient::new(vec![ConnectionEvent::new(
         http::Request::builder()
             .header("authorization",
                     "AWS4-HMAC-SHA256 Credential=ANOTREAL/20211112/us-east-1/s3/aws4_request, \
@@ -22,13 +23,13 @@ async fn test_signer() {
             .uri("https://test-bucket.s3-control.us-east-1.amazonaws.com/v20180820/accesspoint")
             .body(SdkBody::empty())
             .unwrap(),
-        http::Response::builder().status(200).body("").unwrap(),
-    )]);
+        http::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
+    )], TokioSleep::new());
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(
             Credentials::for_tests_with_session_token(),
         ))
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .region(Region::new("us-east-1"))
         .build();
     let client = Client::new(&sdk_config);
@@ -46,5 +47,5 @@ async fn test_signer() {
         .await
         .expect_err("empty response");
 
-    conn.assert_requests_match(&[]);
+    http_client.assert_requests_match(&[]);
 }

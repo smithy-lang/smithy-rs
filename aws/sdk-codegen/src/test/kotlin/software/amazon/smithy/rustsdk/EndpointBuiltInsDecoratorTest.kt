@@ -87,28 +87,34 @@ class EndpointBuiltInsDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn endpoint_url_built_in_works() {
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .uri("https://RIGHT/SomeOperation")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{EventClient}::new(
+                            vec![#{ConnectionEvent}::new(
+                                http::Request::builder()
+                                    .uri("https://RIGHT/SomeOperation")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap()
+                            )],
+                            #{TokioSleep}::new(),
+                        );
                         let config = Config::builder()
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .region(Region::new("us-east-1"))
                             .endpoint_url("https://RIGHT")
                             .build();
                         let client = Client::from_conf(config);
                         dbg!(client.some_operation().send().await).expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     "tokio" to CargoDependency.Tokio.toDevDependency().withFeature("rt").withFeature("macros").toType(),
-                    "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                        .toDevDependency().withFeature("test-util").toType()
-                        .resolve("test_connection::TestConnection"),
+                    "EventClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::EventClient"),
+                    "ConnectionEvent" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::ConnectionEvent"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                    "TokioSleep" to RuntimeType.smithyAsync(codegenContext.runtimeConfig)
+                        .resolve("rt::sleep::TokioSleep"),
                 )
             }
         }

@@ -7,21 +7,24 @@ use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
-use aws_smithy_runtime_api::client::connectors::{HttpConnector, HttpConnectorFuture};
+use aws_smithy_runtime_api::client::http::{
+    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
+};
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::shared::IntoShared;
 use http::header::{HeaderName, CONTENT_TYPE};
-use std::fmt::Debug;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 type ConnectionEvents = Vec<ConnectionEvent>;
 
-/// Test data for the [`EventConnector`].
+/// Test data for the [`EventClient`].
 ///
 /// Each `ConnectionEvent` represents one HTTP request and response
 /// through the connector. Optionally, a latency value can be set to simulate
-/// network latency (done via async sleep in the `EventConnector`).
+/// network latency (done via async sleep in the `EventClient`).
 #[derive(Debug)]
 pub struct ConnectionEvent {
     latency: Duration,
@@ -112,26 +115,68 @@ impl ValidateRequest {
     }
 }
 
-/// Request/response event-driven connector for use in tests.
+/// Request/response event-driven client for use in tests.
 ///
 /// A basic test connection. It will:
 /// - Respond to requests with a preloaded series of responses
 /// - Record requests for future examination
-#[derive(Debug, Clone)]
-pub struct EventConnector {
+#[derive(Clone, Debug)]
+pub struct EventClient {
     data: Arc<Mutex<ConnectionEvents>>,
     requests: Arc<Mutex<Vec<ValidateRequest>>>,
     sleep_impl: SharedAsyncSleep,
 }
 
-impl EventConnector {
+impl EventClient {
     /// Creates a new event connector.
-    pub fn new(mut data: ConnectionEvents, sleep_impl: impl Into<SharedAsyncSleep>) -> Self {
+    pub fn new(mut data: ConnectionEvents, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
         data.reverse();
-        EventConnector {
+        EventClient {
             data: Arc::new(Mutex::new(data)),
             requests: Default::default(),
-            sleep_impl: sleep_impl.into(),
+            sleep_impl: sleep_impl.into_shared(),
+        }
+    }
+
+    /// Returns an iterator over the actual requests that were made.
+    pub fn actual_requests(&self) -> impl Iterator<Item = &HttpRequest> + '_ {
+        // The iterator trait doesn't allow us to specify a lifetime on `self` in the `next()` method,
+        // so we have to do some unsafe code in order to actually implement this iterator without
+        // angering the borrow checker.
+        struct Iter<'a> {
+            // We store an exclusive lock to the data so that the data is completely immutable
+            _guard: MutexGuard<'a, Vec<ValidateRequest>>,
+            // We store a pointer into the immutable data for accessing it later
+            values: *const ValidateRequest,
+            len: usize,
+            next_index: usize,
+        }
+        impl<'a> Iterator for Iter<'a> {
+            type Item = &'a HttpRequest;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                // Safety: check the next index is in bounds
+                if self.next_index >= self.len {
+                    None
+                } else {
+                    // Safety: It is OK to offset into the pointer and dereference since we did a bounds check.
+                    // It is OK to assign lifetime 'a to the reference since we hold the mutex guard for all of lifetime 'a.
+                    let next = unsafe {
+                        let offset = self.values.add(self.next_index);
+                        &*offset
+                    };
+                    self.next_index += 1;
+                    Some(&next.actual)
+                }
+            }
+        }
+
+        let guard = self.requests.lock().unwrap();
+        Iter {
+            values: guard.as_ptr(),
+            len: guard.len(),
+            _guard: guard,
+            next_index: 0,
         }
     }
 
@@ -162,7 +207,7 @@ impl EventConnector {
     }
 }
 
-impl HttpConnector for EventConnector {
+impl HttpConnector for EventClient {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         let (res, simulated_latency) = if let Some(event) = self.data.lock().unwrap().pop() {
             self.requests.lock().unwrap().push(ValidateRequest {
@@ -173,7 +218,10 @@ impl HttpConnector for EventConnector {
             (Ok(event.res.map(SdkBody::from)), event.latency)
         } else {
             (
-                Err(ConnectorError::other("No more data".into(), None)),
+                Err(ConnectorError::other(
+                    "EventClient: no more test data available to respond with".into(),
+                    None,
+                )),
                 Duration::from_secs(0),
             )
         };
@@ -183,5 +231,15 @@ impl HttpConnector for EventConnector {
             sleep.await;
             res
         })
+    }
+}
+
+impl HttpClient for EventClient {
+    fn http_connector(
+        &self,
+        _: &HttpConnectorSettings,
+        _: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        self.clone().into_shared()
     }
 }

@@ -11,7 +11,6 @@ async fn do_endpoint_discovery() {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_async::test_util::controlled_time_and_sleep;
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-    use aws_smithy_client::dvr::{MediaType, ReplayingConnection};
     use aws_types::region::Region;
     use aws_types::SdkConfig;
     use std::time::{Duration, UNIX_EPOCH};
@@ -23,7 +22,7 @@ async fn do_endpoint_discovery() {
     let start = UNIX_EPOCH + Duration::from_secs(1234567890);
     let (ts, sleep, mut gate) = controlled_time_and_sleep(start);
     let config = SdkConfig::builder()
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .region(Region::from_static("us-west-2"))
         .sleep_impl(SharedAsyncSleep::new(sleep))
         .credentials_provider(SharedCredentialsProvider::new(

@@ -5,7 +5,6 @@
 
 //! Assume credentials for a role through the AWS Security Token Service (STS).
 
-use crate::connector::expect_connector;
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
@@ -13,10 +12,11 @@ use aws_sdk_sts::operation::assume_role::builders::AssumeRoleFluentBuilder;
 use aws_sdk_sts::operation::assume_role::AssumeRoleError;
 use aws_sdk_sts::types::PolicyDescriptorType;
 use aws_sdk_sts::Client as StsClient;
-use aws_smithy_client::erase::DynConnector;
 use aws_smithy_http::result::SdkError;
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::region::Region;
+use aws_types::sdk_config::SharedHttpClient;
 use std::time::Duration;
 use tracing::Instrument;
 
@@ -168,12 +168,14 @@ impl AssumeRoleProviderBuilder {
         self
     }
 
-    /// If the `rustls` or `nativetls` features are enabled, this field is optional and a default
-    /// backing connection will be provided.
-    pub fn connection(mut self, conn: impl aws_smithy_client::bounds::SmithyConnector) -> Self {
+    /// Set the HTTP client to use.
+    ///
+    /// If the `rustls` feature is enabled, this field is optional and a default
+    /// backing HTTP client will be provided.
+    pub fn http_client(mut self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
         let conf = match self.conf {
-            Some(conf) => conf.with_http_connector(DynConnector::new(conn)),
-            None => ProviderConfig::default().with_http_connector(DynConnector::new(conn)),
+            Some(conf) => conf.with_http_client(http_client),
+            None => ProviderConfig::default().with_http_client(http_client),
         };
         self.conf = Some(conf);
         self
@@ -212,12 +214,9 @@ impl AssumeRoleProviderBuilder {
             .credentials_cache(credentials_cache)
             .credentials_provider(provider)
             .time_source(conf.time_source())
-            .region(self.region.clone())
-            .http_connector(expect_connector(
-                "The AssumeRole credentials provider",
-                conf.connector(&Default::default()),
-            ));
-        config.set_sleep_impl(conf.sleep());
+            .region(self.region.clone());
+        config.set_sleep_impl(conf.sleep_impl());
+        config.set_http_client(conf.http_client());
 
         let session_name = self.session_name.unwrap_or_else(|| {
             super::util::default_session_name("assume-role-provider", conf.time_source().now())
@@ -295,21 +294,22 @@ mod test {
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_async::time::StaticTimeSource;
-    use aws_smithy_client::erase::DynConnector;
-    use aws_smithy_client::test_connection::{capture_request, TestConnection};
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime::client::http::test_util::{
+        capture_request, ConnectionEvent, EventClient,
+    };
     use aws_types::region::Region;
     use std::time::{Duration, UNIX_EPOCH};
 
     #[tokio::test]
     async fn configures_session_length() {
-        let (server, request) = capture_request(None);
+        let (http_client, request) = capture_request(None);
         let provider_conf = ProviderConfig::empty()
-            .with_sleep(TokioSleep::new())
+            .with_sleep_impl(TokioSleep::new())
             .with_time_source(StaticTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
             ))
-            .with_http_connector(DynConnector::new(server));
+            .with_http_client(http_client);
         let provider = AssumeRoleProvider::builder("myrole")
             .configure(&provider_conf)
             .region(Region::new("us-east-1"))
@@ -325,25 +325,25 @@ mod test {
 
     #[tokio::test]
     async fn provider_does_not_cache_credentials_by_default() {
-        let conn = TestConnection::new(vec![
-            (http::Request::new(SdkBody::from("request body")),
+        let http_client = EventClient::new(vec![
+            ConnectionEvent::new(http::Request::new(SdkBody::from("request body")),
             http::Response::builder().status(200).body(SdkBody::from(
                 "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n  <AssumeRoleResult>\n    <AssumedRoleUser>\n      <AssumedRoleId>AROAR42TAWARILN3MNKUT:assume-role-from-profile-1632246085998</AssumedRoleId>\n      <Arn>arn:aws:sts::130633740322:assumed-role/assume-provider-test/assume-role-from-profile-1632246085998</Arn>\n    </AssumedRoleUser>\n    <Credentials>\n      <AccessKeyId>ASIARCORRECT</AccessKeyId>\n      <SecretAccessKey>secretkeycorrect</SecretAccessKey>\n      <SessionToken>tokencorrect</SessionToken>\n      <Expiration>2009-02-13T23:31:30Z</Expiration>\n    </Credentials>\n  </AssumeRoleResult>\n  <ResponseMetadata>\n    <RequestId>d9d47248-fd55-4686-ad7c-0fb7cd1cddd7</RequestId>\n  </ResponseMetadata>\n</AssumeRoleResponse>\n"
             )).unwrap()),
-            (http::Request::new(SdkBody::from("request body")),
+            ConnectionEvent::new(http::Request::new(SdkBody::from("request body")),
             http::Response::builder().status(200).body(SdkBody::from(
                 "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n  <AssumeRoleResult>\n    <AssumedRoleUser>\n      <AssumedRoleId>AROAR42TAWARILN3MNKUT:assume-role-from-profile-1632246085998</AssumedRoleId>\n      <Arn>arn:aws:sts::130633740322:assumed-role/assume-provider-test/assume-role-from-profile-1632246085998</Arn>\n    </AssumedRoleUser>\n    <Credentials>\n      <AccessKeyId>ASIARCORRECT</AccessKeyId>\n      <SecretAccessKey>TESTSECRET</SecretAccessKey>\n      <SessionToken>tokencorrect</SessionToken>\n      <Expiration>2009-02-13T23:33:30Z</Expiration>\n    </Credentials>\n  </AssumeRoleResult>\n  <ResponseMetadata>\n    <RequestId>c2e971c2-702d-4124-9b1f-1670febbea18</RequestId>\n  </ResponseMetadata>\n</AssumeRoleResponse>\n"
             )).unwrap()),
-        ]);
+        ], TokioSleep::new());
 
         let (testing_time_source, sleep) = instant_time_and_sleep(
             UNIX_EPOCH + Duration::from_secs(1234567890 - 120), // 1234567890 since UNIX_EPOCH is 2009-02-13T23:31:30Z
         );
 
         let provider_conf = ProviderConfig::empty()
-            .with_sleep(sleep)
+            .with_sleep_impl(sleep)
             .with_time_source(testing_time_source.clone())
-            .with_http_connector(DynConnector::new(conn));
+            .with_http_client(http_client);
         let credentials_list = std::sync::Arc::new(std::sync::Mutex::new(vec![
             Credentials::new(
                 "test",
