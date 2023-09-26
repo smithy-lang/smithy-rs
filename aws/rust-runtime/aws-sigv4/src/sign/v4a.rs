@@ -7,7 +7,8 @@ use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use num_bigint::BigInt;
 use once_cell::sync::Lazy;
-use p256::ecdsa::{signature::Signer, DerSignature, SigningKey};
+use p256::ecdsa::signature::Signer;
+use p256::ecdsa::{Signature, SigningKey};
 use std::io::Write;
 use std::time::SystemTime;
 use zeroize::Zeroizing;
@@ -28,7 +29,12 @@ static BIG_N_MINUS_2: Lazy<BigInt> = Lazy::new(|| {
 /// Calculates a Sigv4a signature
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
     let signing_key = SigningKey::from_bytes(signing_key.as_ref().into()).unwrap();
-    let signature: DerSignature = signing_key.sign(string_to_sign);
+    let signature: Signature = signing_key.sign(string_to_sign);
+    // This conversion sucks but we have to do it afaict. Because we also use
+    // the HMAC crate, we have to use a compatible (and therefore older) version
+    // of the p256 crate. That older version requires us to convert between
+    // signature types instead of using DER-encoded signatures directly.
+    let signature = signature.to_der();
     hex::encode(signature.as_ref())
 }
 
@@ -65,7 +71,7 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
         if k0 <= *BIG_N_MINUS_2 {
             let pk = k0 + BigInt::from(1i32);
             let d = Zeroizing::new(pk.to_bytes_be().1);
-            break SigningKey::from_slice(&d).unwrap();
+            break SigningKey::from_bytes(&d).unwrap();
         }
 
         *counter = counter

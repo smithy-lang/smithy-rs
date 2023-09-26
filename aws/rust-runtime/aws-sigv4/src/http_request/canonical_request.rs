@@ -24,13 +24,14 @@ use std::fmt;
 use std::str::FromStr;
 use std::time::SystemTime;
 
+#[cfg(feature = "sigv4a")]
+pub(crate) mod sigv4a;
+
 pub(crate) mod header {
     pub(crate) const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
     pub(crate) const X_AMZ_DATE: &str = "x-amz-date";
     pub(crate) const X_AMZ_SECURITY_TOKEN: &str = "x-amz-security-token";
     pub(crate) const X_AMZ_USER_AGENT: &str = "x-amz-user-agent";
-    #[cfg(feature = "sigv4a")]
-    pub(crate) const X_AMZ_REGION_SET: &str = "x-amz-region-set";
 }
 
 pub(crate) mod param {
@@ -41,8 +42,6 @@ pub(crate) mod param {
     pub(crate) const X_AMZ_SECURITY_TOKEN: &str = "X-Amz-Security-Token";
     pub(crate) const X_AMZ_SIGNED_HEADERS: &str = "X-Amz-SignedHeaders";
     pub(crate) const X_AMZ_SIGNATURE: &str = "X-Amz-Signature";
-    #[cfg(feature = "sigv4a")]
-    pub(crate) const X_AMZ_REGION_SET: &str = "X-Amz-Region-Set";
 }
 
 pub(crate) const HMAC_256: &str = "AWS4-HMAC-SHA256";
@@ -271,7 +270,7 @@ impl<'a> CanonicalRequest<'a> {
             #[cfg(feature = "sigv4a")]
             if let Some(region_set) = params.region_set() {
                 let header = HeaderValue::from_str(region_set)?;
-                canonical_headers.insert(header::X_AMZ_REGION_SET, header);
+                canonical_headers.insert(sigv4a::header::X_AMZ_REGION_SET, header);
             }
         }
 
@@ -334,7 +333,7 @@ impl<'a> CanonicalRequest<'a> {
 
             #[cfg(feature = "sigv4a")]
             if let Some(regions) = values.region_set {
-                add_param(&mut params, param::X_AMZ_REGION_SET, regions);
+                add_param(&mut params, sigv4a::param::X_AMZ_REGION_SET, regions);
             }
 
             add_param(&mut params, param::X_AMZ_ALGORITHM, values.algorithm);

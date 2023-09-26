@@ -134,12 +134,8 @@ impl SigV4Signer {
             (None, None) => Ok(Cow::Borrowed(operation_config)),
             (region, name) => {
                 let mut operation_config = operation_config.clone();
-                if region.is_some() {
-                    operation_config.region = region;
-                }
-                if name.is_some() {
-                    operation_config.name = name;
-                }
+                operation_config.region = region.or(operation_config.region);
+                operation_config.name = name.or(operation_config.name);
                 Ok(Cow::Owned(operation_config))
             }
         }

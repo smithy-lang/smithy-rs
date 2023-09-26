@@ -62,7 +62,6 @@ async fn dual_stack() {
     );
 }
 
-#[cfg(feature = "sigv4a")]
 #[tokio::test]
 async fn multi_region_access_points() {
     let (captured_request, client) = test_client(|b| b);
@@ -72,9 +71,22 @@ async fn multi_region_access_points() {
         .key("blah")
         .send()
         .await;
+    let captured_request = captured_request.expect_request();
     assert_eq!(
-        captured_request.expect_request().uri().to_string(),
+        captured_request.uri().to_string(),
         "https://mfzwi23gnjvgw.mrap.accesspoint.s3-global.amazonaws.com/blah?x-id=GetObject"
+    );
+    let auth_header = captured_request.headers().get("AUTHORIZATION").unwrap();
+    let auth_header = auth_header.to_str().unwrap();
+    // Verifies that the sigv4a signing algorithm was used, that the signing scope doesn't include a region, and that the x-amz-region-set header was signed.
+    let expected_start =
+        "AWS4-ECDSA-P256-SHA256 Credential=ANOTREAL/20230926/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-region-set;x-amz-user-agent, Signature=";
+
+    assert!(
+        auth_header.starts_with(expected_start),
+        "expected auth header to start with {} but it was {}",
+        expected_start,
+        auth_header
     );
 }
 

@@ -79,11 +79,15 @@ impl Default for SigningOptions {
 /// for a given operation
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct SigV4OperationSigningConfig {
-    /// AWS Region to sign for.
+    /// AWS region to sign for.
+    ///
+    /// For an up-to-date list of AWS regions, see https://docs.aws.amazon.com/general/latest/gr/rande.html
     pub region: Option<SigningRegion>,
-    /// AWS Region to sign for.
+    /// AWS region set to sign for.
+    ///
+    /// A comma-separated list of AWS regions. Examples include typical AWS regions as well as 'wildcard' regions
     pub region_set: Option<SigningRegionSet>,
-    /// AWS Service to sign for.
+    /// AWS service to sign for.
     pub name: Option<SigningName>,
     /// Signing options.
     pub signing_options: SigningOptions,
@@ -157,19 +161,7 @@ impl fmt::Display for SigV4SigningError {
     }
 }
 
-impl StdError for SigV4SigningError {
-    fn source(&self) -> Option<&(dyn StdError + 'static)> {
-        match self {
-            Self::MissingOperationSigningConfig => None,
-            Self::MissingSigningRegion => None,
-            #[cfg(feature = "sigv4a")]
-            Self::MissingSigningRegionSet => None,
-            Self::MissingSigningName => None,
-            Self::WrongIdentityType(_) => None,
-            Self::BadTypeInEndpointAuthSchemeConfig(_) => None,
-        }
-    }
-}
+impl StdError for SigV4SigningError {}
 
 fn extract_endpoint_auth_scheme_signing_name(
     endpoint_config: &AuthSchemeEndpointConfig<'_>,
@@ -192,29 +184,6 @@ fn extract_endpoint_auth_scheme_signing_region(
         Some(Document::String(s)) => Ok(Some(SigningRegion::from(Region::new(s.clone())))),
         None => Ok(None),
         _ => Err(UnexpectedType("signingRegion")),
-    }
-}
-
-#[cfg(feature = "sigv4a")]
-fn extract_endpoint_auth_scheme_signing_region_set(
-    endpoint_config: &AuthSchemeEndpointConfig<'_>,
-) -> Result<Option<SigningRegionSet>, SigV4SigningError> {
-    use aws_smithy_types::Document::Array;
-    use SigV4SigningError::BadTypeInEndpointAuthSchemeConfig as UnexpectedType;
-
-    match extract_field_from_endpoint_config("signingRegionSet", endpoint_config) {
-        Some(Array(docs)) => {
-            // The service defines the region set as a string array. Here, we convert it to a comma separated list.
-            let regions: Vec<String> = docs
-                .iter()
-                .filter_map(|doc| doc.as_string())
-                .map(ToString::to_string)
-                .collect();
-
-            Ok(Some(SigningRegionSet::from_vec(regions)))
-        }
-        None => Ok(None),
-        _it => Err(UnexpectedType("signingRegionSet")),
     }
 }
 

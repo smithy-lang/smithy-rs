@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.supportedAuthSchemes
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -113,7 +114,7 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
 }
 
 class CredentialsIdentityResolverRegistration(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
 ) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
 
@@ -140,9 +141,12 @@ class CredentialsIdentityResolverRegistration(
                         """,
                         *codegenScope,
                     )
-                    Attribute.featureGate("sigv4a").render(this)
-                    section.registerIdentityResolver(this) {
-                        rustTemplate("#{SIGV4A_SCHEME_ID}, shared_identity_resolver.clone(),", *codegenScope)
+
+                    if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                        Attribute.featureGate("sigv4a").render(this)
+                        section.registerIdentityResolver(this) {
+                            rustTemplate("#{SIGV4A_SCHEME_ID}, shared_identity_resolver.clone(),", *codegenScope)
+                        }
                     }
                     section.registerIdentityResolver(this) {
                         rustTemplate("#{SIGV4_SCHEME_ID}, shared_identity_resolver,", *codegenScope)

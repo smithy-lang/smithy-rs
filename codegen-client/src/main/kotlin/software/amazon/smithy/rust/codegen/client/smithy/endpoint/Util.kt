@@ -115,7 +115,9 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
     }
 }
 
-/** Returns the service name, or a default value if the service doesn't have a title trait */
+/**
+ * Returns a service's supported auth schemes
+ */
 fun ServiceShape.supportedAuthSchemes(): Set<String> =
     this.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typecheck() }
         ?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()

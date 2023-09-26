@@ -260,7 +260,10 @@ fn calculate_signing_params<'a>(
     #[cfg(feature = "sigv4a")]
     if let Some(region_set) = params.region_set() {
         if params.signature_version() == SignatureVersion::V4a {
-            signing_params.push((param::X_AMZ_REGION_SET, Cow::Owned(region_set.to_owned())));
+            signing_params.push((
+                crate::http_request::canonical_request::sigv4a::param::X_AMZ_REGION_SET,
+                Cow::Owned(region_set.to_owned()),
+            ));
         }
     }
 
@@ -361,7 +364,7 @@ fn calculate_signing_headers<'a>(
             add_header(&mut headers, header::X_AMZ_DATE, &values.date_time, false);
             add_header(
                 &mut headers,
-                header::X_AMZ_REGION_SET,
+                crate::http_request::canonical_request::sigv4a::header::X_AMZ_REGION_SET,
                 params.region_set,
                 false,
             );
@@ -501,7 +504,7 @@ mod tests {
         use crate::http_request::canonical_request::{CanonicalRequest, StringToSign};
         use crate::http_request::{sign, test, SigningParams};
         use crate::sign::v4a;
-        use p256::ecdsa::signature::Verifier;
+        use p256::ecdsa::signature::{Signature, Verifier};
         use p256::ecdsa::{DerSignature, SigningKey};
         use pretty_assertions::assert_eq;
 
@@ -550,6 +553,9 @@ mod tests {
             let signing_key =
                 v4a::generate_signing_key(creds.access_key_id(), creds.secret_access_key());
             let sig = DerSignature::from_bytes(&hex::decode(out.signature).unwrap()).unwrap();
+            let sig = sig
+                .try_into()
+                .expect("DER-style signatures are always convertible into fixed-size signatures");
 
             let signing_key = SigningKey::from_bytes(signing_key.as_ref().into()).unwrap();
             let peer_public_key = signing_key.verifying_key();

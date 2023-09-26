@@ -74,7 +74,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
             // Add optional feature for SigV4a support
-            rustCrate.mergeFeature(Feature("sigv4a", false, listOf("aws-runtime/sigv4a")))
+            rustCrate.mergeFeature(Feature("sigv4a", true, listOf("aws-runtime/sigv4a")))
         }
     }
 }

@@ -9,11 +9,11 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-sign-http = ["http", "percent-encoding", "form_urlencoded"]
-sign-eventstream = ["aws-smithy-eventstream"]
-http0-compat = ["http"]
 default = ["sign-http"]
-sigv4a = ["p256", "num-bigint", "zeroize", "ring"]
+http0-compat = ["dep:http"]
+sign-http = ["dep:http", "dep:percent-encoding", "dep:form_urlencoded"]
+sign-eventstream = ["dep:aws-smithy-eventstream"]
+sigv4a = ["dep:p256", "dep:num-bigint", "dep:zeroize", "dep:ring"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
@@ -27,7 +27,7 @@ hmac = "0.12"
 http = { version = "0.2", optional = true }
 num-bigint = { version = "0.4", optional = true }
 once_cell = "1.8"
-p256 = { version = "0.13.2", features = ["ecdsa"], optional = true }
+p256 = { version = "0.11", features = ["ecdsa"], optional = true }
 percent-encoding = { version = "2.1", optional = true }
 regex = "1.5"
 ring = { version = "0.16", optional = true }
