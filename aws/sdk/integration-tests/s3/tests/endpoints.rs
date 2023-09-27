@@ -69,6 +69,11 @@ async fn multi_region_access_points() {
         .get_object()
         .bucket("arn:aws:s3::123456789012:accesspoint/mfzwi23gnjvgw.mrap")
         .key("blah")
+        .customize()
+        .await
+        .unwrap()
+        .request_time_for_tests(UNIX_EPOCH + Duration::from_secs(1624036048))
+        .user_agent_for_tests()
         .send()
         .await;
     let captured_request = captured_request.expect_request();
@@ -80,7 +85,7 @@ async fn multi_region_access_points() {
     let auth_header = auth_header.to_str().unwrap();
     // Verifies that the sigv4a signing algorithm was used, that the signing scope doesn't include a region, and that the x-amz-region-set header was signed.
     let expected_start =
-        "AWS4-ECDSA-P256-SHA256 Credential=ANOTREAL/20230926/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-region-set;x-amz-user-agent, Signature=";
+        "AWS4-ECDSA-P256-SHA256 Credential=ANOTREAL/20210618/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-region-set;x-amz-user-agent, Signature=";
 
     assert!(
         auth_header.starts_with(expected_start),

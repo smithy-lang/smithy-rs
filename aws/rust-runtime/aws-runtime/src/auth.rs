@@ -81,7 +81,7 @@ impl Default for SigningOptions {
 pub struct SigV4OperationSigningConfig {
     /// AWS region to sign for.
     ///
-    /// For an up-to-date list of AWS regions, see https://docs.aws.amazon.com/general/latest/gr/rande.html
+    /// For an up-to-date list of AWS regions, see <https://docs.aws.amazon.com/general/latest/gr/rande.html>
     pub region: Option<SigningRegion>,
     /// AWS region set to sign for.
     ///
