@@ -183,3 +183,9 @@ message = "Produce better docs when items are marked @required"
 references = ["smithy-rs#2996"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add support for Sigv4A request signing. Sigv4a signing will be used automatically when appropriate for a given operation. Currently, it's used for S3 and EventBridge."
+references = ["smithy-rs#1797"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
