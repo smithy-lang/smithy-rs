@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Types to support stream-like operations for paginators.
+//! Provides types to support stream-like operations for paginators.
 
 use crate::future::pagination_stream::collect::sealed::Collectable;
 use std::future::Future;
@@ -12,10 +12,40 @@ pub mod collect;
 pub mod fn_stream;
 use fn_stream::FnStream;
 
-/// A wrapper around [`FnStream`].
+/// Stream specifically made to support paginators.
 ///
-/// This type provides the same set of methods as [`FnStream`], but that is meant to be used
-/// internally and not by external users.
+/// `PaginationStream` provides two primary mechanisms for accessing stream of data.
+/// 1. With [`.next()`](PaginationStream::next) (or [`try_next()`](PaginationStream::try_next)):
+///
+/// ```no_run
+/// # async fn docs() {
+/// # use aws_smithy_async::future::pagination_stream::PaginationStream;
+/// # fn operation_to_yield_paginator<T>() -> PaginationStream<T> {
+/// #     todo!()
+/// # }
+/// # struct Page;
+/// let mut stream: PaginationStream<Page> = operation_to_yield_paginator();
+/// while let Some(page) = stream.next().await {
+///     // process `page`
+/// }
+/// # }
+/// ```
+/// 2. With [`.collect()`](PaginationStream::collect) (or [`try_collect()`](PaginationStream::try_collect)):
+///
+/// ```no_run
+/// # async fn docs() {
+/// # use aws_smithy_async::future::pagination_stream::PaginationStream;
+/// # fn operation_to_yield_paginator<T>() -> PaginationStream<T> {
+/// #     todo!()
+/// # }
+/// # struct Page;
+/// let mut stream: PaginationStream<Page> = operation_to_yield_paginator();
+/// let result = stream.collect::<Vec<Page>>().await;
+/// # }
+/// ```
+///
+/// [`PaginationStream`] is implemented in terms of [`FnStream`], but the latter is meant to be
+/// used internally and not by external users.
 #[derive(Debug)]
 pub struct PaginationStream<Item>(FnStream<Item>);
 
