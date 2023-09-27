@@ -459,7 +459,6 @@ mod tests {
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-    use aws_smithy_runtime_api::client::runtime_plugin::SharedRuntimePlugin;
     use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
     use std::borrow::Cow;
@@ -630,10 +629,10 @@ mod tests {
 
             let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
-                .with_client_plugin(SharedRuntimePlugin::new(FailingInterceptorsClientRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(TestOperationRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(NoAuthRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(FailingInterceptorsOperationRuntimePlugin::new()));
+                .with_client_plugin(FailingInterceptorsClientRuntimePlugin::new())
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
+                .with_operation_plugin(FailingInterceptorsOperationRuntimePlugin::new());
             let actual = invoke("test", "test", input, &runtime_plugins)
                 .await
                 .expect_err("should error");
@@ -914,9 +913,9 @@ mod tests {
 
             let input = Input::doesnt_matter();
             let runtime_plugins = RuntimePlugins::new()
-                .with_operation_plugin(SharedRuntimePlugin::new(TestOperationRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(NoAuthRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(InterceptorsTestOperationRuntimePlugin::new()));
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
+                .with_operation_plugin(InterceptorsTestOperationRuntimePlugin::new());
             let actual = invoke("test", "test", input, &runtime_plugins)
                 .await
                 .expect_err("should error");
@@ -1156,8 +1155,8 @@ mod tests {
     async fn test_stop_points() {
         let runtime_plugins = || {
             RuntimePlugins::new()
-                .with_operation_plugin(SharedRuntimePlugin::new(TestOperationRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(NoAuthRuntimePlugin::new()))
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
         };
 
         // StopPoint::None should result in a response getting set since orchestration doesn't stop
@@ -1257,12 +1256,12 @@ mod tests {
         let interceptor = TestInterceptor::default();
         let runtime_plugins = || {
             RuntimePlugins::new()
-                .with_operation_plugin(SharedRuntimePlugin::new(TestOperationRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(NoAuthRuntimePlugin::new()))
-                .with_operation_plugin(SharedRuntimePlugin::new(TestInterceptorRuntimePlugin {
+                .with_operation_plugin(TestOperationRuntimePlugin::new())
+                .with_operation_plugin(NoAuthRuntimePlugin::new())
+                .with_operation_plugin(TestInterceptorRuntimePlugin {
                     builder: RuntimeComponentsBuilder::new("test")
                         .with_interceptor(SharedInterceptor::new(interceptor.clone())),
-                }))
+                })
         };
 
         // StopPoint::BeforeTransmit will exit right before sending the request, so there should be no response

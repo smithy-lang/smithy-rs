@@ -453,11 +453,11 @@ impl Builder {
             .service_name("imds")
             .operation_name("get")
             .runtime_plugin(common_plugin.clone())
-            .runtime_plugin(SharedRuntimePlugin::new(TokenRuntimePlugin::new(
+            .runtime_plugin(TokenRuntimePlugin::new(
                 common_plugin,
                 config.time_source(),
                 self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
-            )))
+            ))
             .serializer(|path| {
                 Ok(http::Request::builder()
                     .uri(path)

@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -172,7 +173,7 @@ class AwsPresignedFluentBuilderMethod(
                 &self.handle.conf,
                 self.config_override,
             )
-                .with_client_plugin(#{SharedRuntimePlugin}::new(#{SigV4PresigningRuntimePlugin}::new(presigning_config, #{payload_override})))
+                .with_client_plugin(#{SigV4PresigningRuntimePlugin}::new(presigning_config, #{payload_override}))
                 #{alternate_presigning_serializer_registration};
 
             let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
@@ -192,7 +193,6 @@ class AwsPresignedFluentBuilderMethod(
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
             "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors")
                 .resolve("SharedInterceptor"),
-            "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
             "SigV4PresigningRuntimePlugin" to AwsRuntimeType.presigningInterceptor(runtimeConfig)
                 .resolve("SigV4PresigningRuntimePlugin"),
             "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
@@ -224,10 +224,7 @@ class AwsPresignedFluentBuilderMethod(
             },
             "alternate_presigning_serializer_registration" to writable {
                 if (presignableOp.hasModelTransforms()) {
-                    rustTemplate(
-                        ".with_operation_plugin(#{SharedRuntimePlugin}::new(AlternatePresigningSerializerRuntimePlugin))",
-                        "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(codegenContext.runtimeConfig),
-                    )
+                    rust(".with_operation_plugin(AlternatePresigningSerializerRuntimePlugin)")
                 }
             },
             "payload_override" to writable {

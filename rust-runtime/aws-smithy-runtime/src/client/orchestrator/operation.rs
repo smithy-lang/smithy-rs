@@ -30,6 +30,7 @@ use aws_smithy_runtime_api::client::runtime_plugin::{
 use aws_smithy_runtime_api::client::ser_de::{
     RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
 };
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::retry::RetryConfig;
 use std::borrow::Cow;
@@ -253,8 +254,8 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn runtime_plugin(mut self, runtime_plugin: SharedRuntimePlugin) -> Self {
-        self.runtime_plugins.push(runtime_plugin);
+    pub fn runtime_plugin(mut self, runtime_plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
+        self.runtime_plugins.push(runtime_plugin.into_shared());
         self
     }
 
@@ -305,12 +306,11 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
-        let mut runtime_plugins =
-            RuntimePlugins::new().with_client_plugin(SharedRuntimePlugin::new(
-                StaticRuntimePlugin::new()
-                    .with_config(self.config.freeze())
-                    .with_runtime_components(self.runtime_components),
-            ));
+        let mut runtime_plugins = RuntimePlugins::new().with_client_plugin(
+            StaticRuntimePlugin::new()
+                .with_config(self.config.freeze())
+                .with_runtime_components(self.runtime_components),
+        );
         for runtime_plugin in self.runtime_plugins {
             runtime_plugins = runtime_plugins.with_client_plugin(runtime_plugin);
         }

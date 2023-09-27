@@ -22,6 +22,8 @@ use crate::box_error::BoxError;
 use crate::client::runtime_components::{
     RuntimeComponentsBuilder, EMPTY_RUNTIME_COMPONENTS_BUILDER,
 };
+use crate::impl_shared_conversions;
+use crate::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer};
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -113,7 +115,7 @@ pub trait RuntimePlugin: Debug + Send + Sync {
 pub struct SharedRuntimePlugin(Arc<dyn RuntimePlugin>);
 
 impl SharedRuntimePlugin {
-    /// Returns a new [`SharedRuntimePlugin`].
+    /// Creates a new [`SharedRuntimePlugin`].
     pub fn new(plugin: impl RuntimePlugin + 'static) -> Self {
         Self(Arc::new(plugin))
     }
@@ -135,6 +137,8 @@ impl RuntimePlugin for SharedRuntimePlugin {
         self.0.runtime_components(current_components)
     }
 }
+
+impl_shared_conversions!(convert SharedRuntimePlugin from RuntimePlugin using SharedRuntimePlugin::new);
 
 /// Runtime plugin that simply returns the config and components given at construction time.
 #[derive(Default, Debug)]
@@ -190,10 +194,11 @@ impl RuntimePlugin for StaticRuntimePlugin {
 }
 
 macro_rules! insert_plugin {
-    ($vec:expr, $plugin:ident) => {{
+    ($vec:expr, $plugin:expr) => {{
         // Insert the plugin in the correct order
+        let plugin = $plugin;
         let mut insert_index = 0;
-        let order = $plugin.order();
+        let order = plugin.order();
         for (index, other_plugin) in $vec.iter().enumerate() {
             let other_order = other_plugin.order();
             if other_order <= order {
@@ -202,7 +207,7 @@ macro_rules! insert_plugin {
                 break;
             }
         }
-        $vec.insert(insert_index, $plugin);
+        $vec.insert(insert_index, plugin);
     }};
 }
 
@@ -235,13 +240,13 @@ impl RuntimePlugins {
         Default::default()
     }
 
-    pub fn with_client_plugin(mut self, plugin: SharedRuntimePlugin) -> Self {
-        insert_plugin!(self.client_plugins, plugin);
+    pub fn with_client_plugin(mut self, plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
+        insert_plugin!(self.client_plugins, plugin.into_shared());
         self
     }
 
-    pub fn with_operation_plugin(mut self, plugin: SharedRuntimePlugin) -> Self {
-        insert_plugin!(self.operation_plugins, plugin);
+    pub fn with_operation_plugin(mut self, plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
+        insert_plugin!(self.operation_plugins, plugin.into_shared());
         self
     }
 
@@ -279,7 +284,7 @@ mod tests {
 
     #[test]
     fn can_add_runtime_plugin_implementors_to_runtime_plugins() {
-        RuntimePlugins::new().with_client_plugin(SharedRuntimePlugin::new(SomeStruct));
+        RuntimePlugins::new().with_client_plugin(SomeStruct);
     }
 
     #[test]
@@ -417,8 +422,8 @@ mod tests {
         // Emulate assembling a full runtime plugins list and using it to apply configuration
         let plugins = RuntimePlugins::new()
             // intentionally configure the plugins in the reverse order
-            .with_client_plugin(SharedRuntimePlugin::new(Plugin2))
-            .with_client_plugin(SharedRuntimePlugin::new(Plugin1));
+            .with_client_plugin(Plugin2)
+            .with_client_plugin(Plugin1);
         let mut cfg = ConfigBag::base();
         let components = plugins.apply_client_configuration(&mut cfg).unwrap();
 
@@ -441,5 +446,26 @@ mod tests {
         // which will only be possible if they were run in the correct order
         assert_eq!("1", resp.headers().get("rp1").unwrap());
         assert_eq!("1", resp.headers().get("rp2").unwrap());
+    }
+
+    #[test]
+    fn shared_runtime_plugin_new_specialization() {
+        #[derive(Debug)]
+        struct RP;
+        impl RuntimePlugin for RP {}
+
+        use crate::shared::IntoShared;
+        let shared1 = SharedRuntimePlugin::new(RP);
+        let shared2: SharedRuntimePlugin = shared1.clone().into_shared();
+        assert_eq!(
+            "SharedRuntimePlugin(RP)",
+            format!("{shared1:?}"),
+            "precondition: RP shows up in the debug format"
+        );
+        assert_eq!(
+            format!("{shared1:?}"),
+            format!("{shared2:?}"),
+            "it should not nest the shared runtime plugins"
+        );
     }
 }

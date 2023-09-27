@@ -117,13 +117,11 @@ impl Builder {
             )))
             .endpoint_url(endpoint)
             .no_auth()
-            .runtime_plugin(SharedRuntimePlugin::new(
-                StaticRuntimePlugin::new().with_config({
-                    let mut layer = Layer::new("SensitiveOutput");
-                    layer.store_put(SensitiveOutput);
-                    layer.freeze()
-                }),
-            ));
+            .runtime_plugin(StaticRuntimePlugin::new().with_config({
+                let mut layer = Layer::new("SensitiveOutput");
+                layer.store_put(SensitiveOutput);
+                layer.freeze()
+            }));
         if let Some(sleep_impl) = provider_config.sleep() {
             builder = builder
                 .standard_retry(&RetryConfig::standard())

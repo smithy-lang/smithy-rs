@@ -25,6 +25,7 @@ use std::sync::Arc;
 pub mod context;
 pub mod error;
 
+use crate::impl_shared_conversions;
 pub use error::InterceptorError;
 
 macro_rules! interceptor_trait_fn {
@@ -630,6 +631,8 @@ impl Deref for SharedInterceptor {
         &self.interceptor
     }
 }
+
+impl_shared_conversions!(convert SharedInterceptor from Interceptor using SharedInterceptor::new);
 
 /// Generalized interceptor disabling interface
 ///
