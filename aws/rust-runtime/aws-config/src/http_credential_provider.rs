@@ -27,7 +27,7 @@ use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, OrchestratorError, SensitiveOutput,
 };
 use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryClassifiers, RetryReason};
-use aws_smithy_runtime_api::client::runtime_plugin::{SharedRuntimePlugin, StaticRuntimePlugin};
+use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
 use aws_smithy_types::config_bag::Layer;
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 use http::header::{ACCEPT, AUTHORIZATION};

@@ -189,7 +189,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn http_connector(mut self, connector: SharedHttpConnector) -> Self {
+    pub fn http_connector(mut self, connector: impl IntoShared<SharedHttpConnector>) -> Self {
         self.runtime_components.set_http_connector(Some(connector));
         self
     }
@@ -249,7 +249,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn interceptor(mut self, interceptor: SharedInterceptor) -> Self {
+    pub fn interceptor(mut self, interceptor: impl IntoShared<SharedInterceptor>) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
     }
