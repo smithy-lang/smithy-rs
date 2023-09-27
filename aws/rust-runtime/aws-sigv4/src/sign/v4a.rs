@@ -28,7 +28,7 @@ static BIG_N_MINUS_2: Lazy<BigInt> = Lazy::new(|| {
 
 /// Calculates a Sigv4a signature
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
-    let signing_key = SigningKey::from_bytes(signing_key.as_ref().into()).unwrap();
+    let signing_key = SigningKey::from_bytes(signing_key.as_ref()).unwrap();
     let signature: Signature = signing_key.sign(string_to_sign);
     // This conversion sucks but we have to do it afaict. Because we also use
     // the HMAC crate, we have to use a compatible (and therefore older) version

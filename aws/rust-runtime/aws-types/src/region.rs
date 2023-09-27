@@ -130,8 +130,8 @@ impl<'a> FromIterator<&'a str> for SigningRegionSet {
             s.push_str(region);
         }
 
-        // If more than one region is present in the iter, separate regions with commas
-        while let Some(region) = iter.next() {
+        // If more than one region is present in the iter, separate remaining regions with commas
+        for region in iter {
             s.push_str(", ");
             s.push_str(region);
         }

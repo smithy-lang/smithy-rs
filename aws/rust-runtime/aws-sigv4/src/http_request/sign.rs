@@ -557,7 +557,7 @@ mod tests {
                 .try_into()
                 .expect("DER-style signatures are always convertible into fixed-size signatures");
 
-            let signing_key = SigningKey::from_bytes(signing_key.as_ref().into()).unwrap();
+            let signing_key = SigningKey::from_bytes(signing_key.as_ref()).unwrap();
             let peer_public_key = signing_key.verifying_key();
             let sts = actual_string_to_sign.as_bytes();
             peer_public_key.verify(sts, &sig).unwrap();
