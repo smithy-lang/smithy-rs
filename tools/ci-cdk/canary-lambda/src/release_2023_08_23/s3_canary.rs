@@ -8,8 +8,8 @@ use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
-use aws_sdk_s3::presigning::config::PresigningConfig;
-use s3::types::ByteStream;
+use s3::presigning::PresigningConfig;
+use s3::primitives::ByteStream;
 use std::time::Duration;
 use uuid::Uuid;
 

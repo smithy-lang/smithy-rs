@@ -7,7 +7,7 @@ use crate::mk_canary;
 use anyhow::bail;
 
 use aws_sdk_ec2 as ec2;
-use aws_sdk_ec2::model::InstanceType;
+use aws_sdk_ec2::types::InstanceType;
 
 use crate::CanaryEnv;
 use tokio_stream::StreamExt;
@@ -30,7 +30,7 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
     let mut num_pages = 0;
     while let Some(page) = history.try_next().await? {
         let items_in_page = page.spot_price_history.unwrap_or_default().len();
-        if items_in_page > page_size as usize {
+        if items_in_page > page_size {
             bail!(
                 "failed to retrieve results of correct page size (expected {}, got {})",
                 page_size,
@@ -60,7 +60,7 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
 
 #[cfg(test)]
 mod test {
-    use crate::paginator_canary::paginator_canary;
+    use crate::current_canary::paginator_canary::paginator_canary;
 
     #[tokio::test]
     async fn test_paginator() {

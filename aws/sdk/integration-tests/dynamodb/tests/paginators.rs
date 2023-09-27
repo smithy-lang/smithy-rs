@@ -6,8 +6,6 @@
 use std::collections::HashMap;
 use std::iter::FromIterator;
 
-use tokio_stream::StreamExt;
-
 use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::{Client, Config};
