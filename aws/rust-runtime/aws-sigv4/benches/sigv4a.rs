@@ -9,8 +9,8 @@ use std::hint::black_box;
 
 pub fn generate_signing_key(c: &mut Criterion) {
     c.bench_function("generate_signing_key", |b| {
-        b.iter(|| {
-            black_box({
+        black_box({
+            b.iter(|| {
                 let _ = v4a::generate_signing_key(
                     "AKIAIOSFODNN7EXAMPLE",
                     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
