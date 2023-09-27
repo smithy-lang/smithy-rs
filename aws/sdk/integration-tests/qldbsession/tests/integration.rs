@@ -3,18 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_qldbsession as qldbsession;
+use aws_sdk_qldbsession::config::{Config, Credentials, Region};
+use aws_sdk_qldbsession::types::StartSessionRequest;
+use aws_sdk_qldbsession::Client;
 use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
 use http::Uri;
-use qldbsession::config::{Config, Credentials, Region};
-use qldbsession::types::StartSessionRequest;
-use qldbsession::Client;
 use std::time::{Duration, UNIX_EPOCH};
-
-// TODO(DVR): having the full HTTP requests right in the code is a bit gross, consider something
-// like https://github.com/davidbarsky/sigv4/blob/master/aws-sigv4/src/lib.rs#L283-L315 to store
-// the requests/responses externally
 
 #[tokio::test]
 async fn signv4_use_correct_service_name() {
@@ -46,7 +41,8 @@ async fn signv4_use_correct_service_name() {
         .start_session(
             StartSessionRequest::builder()
                 .ledger_name("not-real-ledger")
-                .build(),
+                .build()
+                .unwrap(),
         )
         .customize()
         .await

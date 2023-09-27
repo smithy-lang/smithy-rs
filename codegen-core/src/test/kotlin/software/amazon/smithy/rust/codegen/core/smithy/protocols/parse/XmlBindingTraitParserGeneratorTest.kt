@@ -81,7 +81,7 @@ internal class XmlBindingTraitParserGeneratorTest {
             extra: Long,
 
             @xmlName("prefix:local")
-            renamedWithPrefix: String
+            renamedWithPrefix: String,
         }
 
         @http(uri: "/top", method: "POST")

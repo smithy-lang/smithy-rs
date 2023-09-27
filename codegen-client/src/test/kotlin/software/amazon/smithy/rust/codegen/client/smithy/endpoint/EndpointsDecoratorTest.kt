@@ -109,6 +109,7 @@ class EndpointsDecoratorTest {
             input: TestOperationInput
         }
 
+        @input
         structure TestOperationInput {
             @contextParam(name: "Bucket")
             @required
