@@ -239,6 +239,8 @@ pub enum Error {
     MissingVersion(PathBuf, String),
     #[error("crate {0} has multiple versions: {1} and {2}")]
     MultipleVersions(String, LenientVersion, LenientVersion),
+    #[error("multiple version requirements have been specified for crate {0}: {1} and {2}")]
+    MultipleVersionRequirements(String, LenientVersion, LenientVersion),
 }
 
 /// Discovers all Cargo.toml files under the given path recursively
@@ -339,26 +341,45 @@ fn read_package<P: ParseIntoLenientVersion>(
 /// across all of their local dependencies.
 fn validate_packages(packages: &[Package]) -> Result<()> {
     let mut versions: BTreeMap<String, LenientVersion> = BTreeMap::new();
-    let track_version = &mut |handle: &PackageHandle| -> Result<(), Error> {
-        if let Some(version) = versions.get(&handle.name) {
+    let mut version_requirements: BTreeMap<String, LenientVersion> = BTreeMap::new();
+    let track_version = &mut |handle: &PackageHandle,
+                              map: &mut BTreeMap<String, LenientVersion>|
+     -> Option<(String, LenientVersion, LenientVersion)> {
+        if let Some(version) = map.get(&handle.name) {
             if *version != handle.version {
-                Err(Error::MultipleVersions(
+                Some((
                     (&handle.name).into(),
-                    versions[&handle.name].clone(),
+                    map[&handle.name].clone(),
                     handle.version.clone(),
                 ))
             } else {
-                Ok(())
+                None
             }
         } else {
-            versions.insert(handle.name.clone(), handle.version.clone());
-            Ok(())
+            map.insert(handle.name.clone(), handle.version.clone());
+            None
         }
     };
     for package in packages {
-        track_version(&package.handle)?;
+        track_version(&package.handle, &mut versions)
+            .map(|collision| {
+                Err(Error::MultipleVersions(
+                    collision.0,
+                    collision.1,
+                    collision.2,
+                ))
+            })
+            .unwrap_or(Ok(()))?;
         for dependency in &package.local_dependencies {
-            track_version(dependency)?;
+            track_version(dependency, &mut version_requirements)
+                .map(|collision| {
+                    Err(Error::MultipleVersionRequirements(
+                        collision.0,
+                        collision.1,
+                        collision.2,
+                    ))
+                })
+                .unwrap_or(Ok(()))?;
         }
     }
 
@@ -612,7 +633,7 @@ mod tests {
         ])
         .expect_err("fail");
         assert_eq!(
-            "crate A has multiple versions: 1.1.0 and 1.0.0",
+            "multiple version requirements have been specified for crate A: 1.1.0 and 1.0.0",
             format!("{}", error)
         );
     }
