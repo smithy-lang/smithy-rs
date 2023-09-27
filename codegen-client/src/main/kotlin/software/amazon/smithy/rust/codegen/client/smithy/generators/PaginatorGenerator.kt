@@ -148,7 +148,7 @@ class PaginatorGenerator private constructor(
                     let builder = self.builder;
                     let handle = self.handle;
                     #{runtime_plugin_init}
-                    #{pagination_stream}::PaginationStream::new(#{pagination_stream}::FnStream::new(move |tx| #{Box}::pin(async move {
+                    #{pagination_stream}::PaginationStream::new(#{pagination_stream}::fn_stream::FnStream::new(move |tx| #{Box}::pin(async move {
                         // Build the input for the first time. If required fields are missing, this is where we'll produce an early error.
                         let mut input = match builder.build().map_err(#{SdkError}::construction_failure) {
                             #{Ok}(input) => input,
