@@ -8,12 +8,93 @@
 //! The standard [`From`](std::convert::From)/[`Into`](std::convert::Into) traits can't be
 //! used for this purpose due to the blanket implementation of `Into`.
 //!
-//! This implementation also adds a [`maybe_shared`] method and [`impl_shared_conversions`]
+//! This implementation also adds a [`maybe_shared`] method and [`impl_shared_conversions`](crate::impl_shared_conversions)
 //! macro to trivially avoid nesting shared types with other shared types.
+//!
+//! # What is a shared type?
+//!
+//! A shared type is a new-type around a `Send + Sync` reference counting smart pointer
+//! (i.e., an [`Arc`](std::sync::Arc)) around an object-safe trait. Shared types are
+//! used to share a trait object among multiple threads/clients/requests.
+#![cfg_attr(
+    feature = "client",
+    doc = "
+For example, [`SharedHttpConnector`](crate::client::connectors::SharedHttpConnector), is
+a shared type for the [`HttpConnector`](crate::client::connectors::HttpConnector) trait,
+which allows for sharing a single HTTP connector instance (and its connection pool) among multiple clients.
+"
+)]
+//!
+//! A shared type implements the [`FromUnshared`] trait, which allows any implementation
+//! of the trait it wraps to easily be converted into it.
+//!
+#![cfg_attr(
+    feature = "client",
+    doc = "
+To illustrate, let's examine the
+[`RuntimePlugin`](crate::client::runtime_plugin::RuntimePlugin)/[`SharedRuntimePlugin`](crate::client::runtime_plugin::SharedRuntimePlugin)
+duo.
+The following instantiates a concrete implementation of the `RuntimePlugin` trait.
+We can do `RuntimePlugin` things on this instance.
+
+```rust,no_run
+use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
+
+let some_plugin = StaticRuntimePlugin::new();
+```
+
+We can convert this instance into a shared type in two different ways.
+
+```rust,no_run
+# use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
+# let some_plugin = StaticRuntimePlugin::new();
+use aws_smithy_runtime_api::client::runtime_plugin::SharedRuntimePlugin;
+use aws_smithy_runtime_api::shared::{IntoShared, FromUnshared};
+
+// Using the `IntoShared` trait
+let shared: SharedRuntimePlugin = some_plugin.into_shared();
+
+// Using the `FromUnshared` trait:
+# let some_plugin = StaticRuntimePlugin::new();
+let shared = SharedRuntimePlugin::from_unshared(some_plugin);
+```
+
+The `IntoShared` trait is useful for making functions that take any `RuntimePlugin` impl and convert it to a shared type.
+For example, this function will convert the given `plugin` argument into a `SharedRuntimePlugin`.
+
+```rust,no_run
+# use aws_smithy_runtime_api::client::runtime_plugin::{SharedRuntimePlugin, StaticRuntimePlugin};
+# use aws_smithy_runtime_api::shared::{IntoShared, FromUnshared};
+fn take_shared(plugin: impl IntoShared<SharedRuntimePlugin>) {
+    let _plugin: SharedRuntimePlugin = plugin.into_shared();
+}
+```
+
+This can be called with different types, and even if a `SharedRuntimePlugin` is passed in, it won't nest that
+`SharedRuntimePlugin` inside of another `SharedRuntimePlugin`.
+
+```rust,no_run
+# use aws_smithy_runtime_api::client::runtime_plugin::{SharedRuntimePlugin, StaticRuntimePlugin};
+# use aws_smithy_runtime_api::shared::{IntoShared, FromUnshared};
+# fn take_shared(plugin: impl IntoShared<SharedRuntimePlugin>) {
+#     let _plugin: SharedRuntimePlugin = plugin.into_shared();
+# }
+// Automatically converts it to `SharedRuntimePlugin(StaticRuntimePlugin)`
+take_shared(StaticRuntimePlugin::new());
+
+// This is OK.
+// It create a `SharedRuntimePlugin(StaticRuntimePlugin))`
+// instead of a nested `SharedRuntimePlugin(SharedRuntimePlugin(StaticRuntimePlugin)))`
+take_shared(SharedRuntimePlugin::new(StaticRuntimePlugin::new()));
+```
+"
+)]
 
 use std::any::{Any, TypeId};
 
 /// Like the `From` trait, but for converting to a shared type.
+///
+/// See the [module docs](crate::shared) for information about shared types.
 pub trait FromUnshared<Unshared> {
     /// Creates a shared type from an unshared type.
     fn from_unshared(value: Unshared) -> Self;
@@ -22,6 +103,8 @@ pub trait FromUnshared<Unshared> {
 /// Like the `Into` trait, but for (efficiently) converting into a shared type.
 ///
 /// If the type is already a shared type, it won't be nested in another shared type.
+///
+/// See the [module docs](crate::shared) for information about shared types.
 pub trait IntoShared<Shared> {
     /// Creates a shared type from an unshared type.
     fn into_shared(self) -> Shared;
@@ -37,6 +120,8 @@ where
 }
 
 /// Given a `value`, determine if that value is already shared. If it is, return it. Otherwise, wrap it in a shared type.
+///
+/// See the [module docs](crate::shared) for information about shared types.
 pub fn maybe_shared<Shared, MaybeShared, F>(value: MaybeShared, ctor: F) -> Shared
 where
     Shared: 'static,
@@ -59,6 +144,8 @@ where
 }
 
 /// Implements `FromUnshared` for a shared type.
+///
+/// See the [`shared` module docs](crate::shared) for information about shared types.
 ///
 /// # Example
 /// ```rust,no_run

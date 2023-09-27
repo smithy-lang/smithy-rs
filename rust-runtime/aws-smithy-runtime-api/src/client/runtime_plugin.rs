@@ -58,7 +58,7 @@ pub enum Order {
 
 /// Runtime plugin trait
 ///
-/// A `RuntimePlugin` is the unit of configuration for augmenting the SDK with new behavior.
+/// A `RuntimePlugin` is the unit of configuration for augmenting the client with new behavior.
 ///
 /// Runtime plugins can register interceptors, set runtime components, and modify configuration.
 pub trait RuntimePlugin: Debug + Send + Sync {
