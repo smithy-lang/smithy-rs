@@ -49,8 +49,8 @@ open class CoreCodegenConfig(
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
             if (node.isPresent) {
                 CoreCodegenConfig(
-                    node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
-                    node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
+                    formatTimeoutSeconds = node.get().getNumberMemberOrDefault("formatTimeoutSeconds", defaultFormatTimeoutSeconds).toInt(),
+                    debugMode = node.get().getBooleanMemberOrDefault("debugMode", defaultDebugMode),
                 )
             } else {
                 CoreCodegenConfig(
