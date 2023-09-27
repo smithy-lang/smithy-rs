@@ -22,8 +22,7 @@ use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, SharedAuthScheme,
-    SharedAuthSchemeOptionResolver, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
 };
 use aws_smithy_runtime_api::client::identity::{
     Identity, IdentityResolver, SharedIdentityResolver,
@@ -86,17 +85,13 @@ impl TokenRuntimePlugin {
     ) -> Self {
         Self {
             components: RuntimeComponentsBuilder::new("TokenRuntimePlugin")
-                .with_auth_scheme(SharedAuthScheme::new(TokenAuthScheme::new()))
-                .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(
-                    StaticAuthSchemeOptionResolver::new(vec![IMDS_TOKEN_AUTH_SCHEME]),
-                )))
+                .with_auth_scheme(TokenAuthScheme::new())
+                .with_auth_scheme_option_resolver(Some(StaticAuthSchemeOptionResolver::new(vec![
+                    IMDS_TOKEN_AUTH_SCHEME,
+                ])))
                 .with_identity_resolver(
                     IMDS_TOKEN_AUTH_SCHEME,
-                    SharedIdentityResolver::new(TokenResolver::new(
-                        common_plugin,
-                        time_source,
-                        token_ttl,
-                    )),
+                    TokenResolver::new(common_plugin, time_source, token_ttl),
                 ),
         }
     }
