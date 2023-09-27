@@ -21,6 +21,7 @@ use std::sync::Arc;
 use tokio::sync::OnceCell;
 
 use crate::connector::default_connector;
+use crate::default_provider::use_dual_stack;
 use crate::profile;
 
 use crate::profile::profile_file::ProfileFiles;
@@ -42,6 +43,8 @@ pub struct ProviderConfig {
     connector: HttpConnector,
     sleep: Option<SharedAsyncSleep>,
     region: Option<Region>,
+    use_fips: Option<bool>,
+    use_dual_stack: Option<bool>,
     /// An AWS profile created from `ProfileFiles` and a `profile_name`
     parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
     /// A list of [std::path::Path]s to profile files
@@ -57,6 +60,8 @@ impl Debug for ProviderConfig {
             .field("fs", &self.fs)
             .field("sleep", &self.sleep)
             .field("region", &self.region)
+            .field("use_fips", &self.use_fips)
+            .field("use_dual_stack", &self.use_dual_stack)
             .finish()
     }
 }
@@ -76,6 +81,8 @@ impl Default for ProviderConfig {
             connector,
             sleep: default_async_sleep(),
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
@@ -104,6 +111,8 @@ impl ProviderConfig {
             connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             profile_name_override: None,
         }
     }
@@ -144,6 +153,8 @@ impl ProviderConfig {
             connector: HttpConnector::Prebuilt(None),
             sleep: None,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
@@ -161,6 +172,8 @@ impl ProviderConfig {
             connector: HttpConnector::Prebuilt(None),
             sleep,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             profile_name_override: None,
         }
     }
@@ -219,6 +232,16 @@ impl ProviderConfig {
         self.region.clone()
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn use_fips(&self) -> Option<bool> {
+        self.use_fips.clone()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn use_dual_stack(&self) -> Option<bool> {
+        self.use_dual_stack.clone()
+    }
+
     pub(crate) async fn try_profile(&self) -> Result<&ProfileSet, &ProfileFileLoadError> {
         let parsed_profile = self
             .parsed_profile
@@ -246,6 +269,18 @@ impl ProviderConfig {
     /// Override the region for the configuration
     pub fn with_region(mut self, region: Option<Region>) -> Self {
         self.region = region;
+        self
+    }
+
+    /// Override the `use_fips` setting.
+    pub fn with_use_fips(mut self, use_fips: Option<bool>) -> Self {
+        self.use_fips = use_fips;
+        self
+    }
+
+    /// Override the `use_dual_stack` setting.
+    pub fn with_use_dual_stack(mut self, use_dual_stack: Option<bool>) -> Self {
+        self.use_dual_stack = use_dual_stack;
         self
     }
 
@@ -283,6 +318,25 @@ impl ProviderConfig {
         use crate::default_provider::region::DefaultRegionChain;
         let provider_chain = DefaultRegionChain::builder().configure(&self).build();
         self.with_region(provider_chain.region().await)
+    }
+
+    /// Use the [default use_fips provider](crate::default_provider::use_fips::use_fips_provider) to set the
+    /// `use_fips` setting for this configuration
+    ///
+    /// Note: the `env` and `fs` already set on this provider will be used when loading the default region.
+    pub async fn load_default_use_fips(self) -> Self {
+        let use_fips = crate::default_provider::use_fips::use_fips_provider(&self).await;
+        self.with_use_fips(use_fips)
+    }
+
+    /// Use the [default use_dual_stack provider](crate::default_provider::use_dual_stack::use_dual_stack_provider) to set the
+    /// `use_dual_stack` setting for this configuration
+    ///
+    /// Note: the `env` and `fs` already set on this provider will be used when loading the default region.
+    pub async fn load_default_use_dual_stack(self) -> Self {
+        let use_dual_stack =
+            crate::default_provider::use_dual_stack::use_dual_stack_provider(&self).await;
+        self.with_use_dual_stack(use_dual_stack)
     }
 
     pub(crate) fn with_fs(self, fs: Fs) -> Self {

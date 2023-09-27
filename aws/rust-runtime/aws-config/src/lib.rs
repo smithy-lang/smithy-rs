@@ -589,6 +589,11 @@ mod loader {
                         .with_http_connector(http_connector.clone())
                 })
                 .with_profile_config(self.profile_files_override, self.profile_name_override);
+            let conf = conf
+                .load_default_use_fips()
+                .await
+                .load_default_use_dual_stack()
+                .await;
             let region = if let Some(provider) = self.region {
                 provider.region().await
             } else {

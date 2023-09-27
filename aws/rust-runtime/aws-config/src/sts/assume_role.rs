@@ -216,7 +216,9 @@ impl AssumeRoleProviderBuilder {
             .http_connector(expect_connector(
                 "The AssumeRole credentials provider",
                 conf.connector(&Default::default()),
-            ));
+            ))
+            .use_fips(conf.use_fips().unwrap_or_default())
+            .use_dual_stack(conf.use_dual_stack().unwrap_or_default());
         config.set_sleep_impl(conf.sleep());
 
         let session_name = self.session_name.unwrap_or_else(|| {
@@ -321,6 +323,59 @@ mod test {
         let req = request.expect_request();
         let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
         assert!(str_body.contains("1234567"), "{}", str_body);
+    }
+
+    #[tokio::test]
+    async fn configures_fips_endpoint() {
+        let (server, request) = capture_request(None);
+        let provider_conf = ProviderConfig::empty()
+            .with_sleep(TokioSleep::new())
+            .with_time_source(StaticTimeSource::new(
+                UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
+            ))
+            .with_use_fips(Some(true))
+            .with_http_connector(DynConnector::new(server));
+        let provider = AssumeRoleProvider::builder("myrole")
+            .configure(&provider_conf)
+            .region(Region::new("us-east-1"))
+            .session_length(Duration::from_secs(1234567))
+            .build(provide_credentials_fn(|| async {
+                Ok(Credentials::for_tests())
+            }));
+        let _ = provider.provide_credentials().await;
+        let req = request.expect_request();
+        let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
+        assert!(str_body.contains("1234567"), "{}", str_body);
+        assert!(req.uri().host().unwrap().contains("sts-fips"));
+    }
+
+    #[tokio::test]
+    async fn configures_fips_endpoint_from_env() {
+        let (server, request) = capture_request(None);
+        let provider_conf = ProviderConfig::empty()
+            .with_env(aws_types::os_shim_internal::Env::from_slice(&[(
+                "AWS_USE_FIPS_ENDPOINT",
+                "true",
+            )]))
+            .with_sleep(TokioSleep::new())
+            .with_time_source(StaticTimeSource::new(
+                UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
+            ))
+            .with_http_connector(DynConnector::new(server))
+            .load_default_use_fips()
+            .await;
+        let provider = AssumeRoleProvider::builder("myrole")
+            .configure(&provider_conf)
+            .region(Region::new("us-east-1"))
+            .session_length(Duration::from_secs(1234567))
+            .build(provide_credentials_fn(|| async {
+                Ok(Credentials::for_tests())
+            }));
+        let _ = provider.provide_credentials().await;
+        let req = request.expect_request();
+        let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
+        assert!(str_body.contains("1234567"), "{}", str_body);
+        assert!(req.uri().host().unwrap().contains("sts-fips"));
     }
 
     #[tokio::test]

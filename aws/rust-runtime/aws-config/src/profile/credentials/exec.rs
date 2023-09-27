@@ -143,8 +143,8 @@ impl ProviderChain {
                 tracing::info!(role_arn = ?role_arn, "which will be used to assume a role");
                 AssumeRoleProvider {
                     role_arn: role_arn.role_arn.into(),
-                    external_id: role_arn.external_id.map(|id| id.into()),
-                    session_name: role_arn.session_name.map(|id| id.into()),
+                    external_id: role_arn.external_id.map(Into::into),
+                    session_name: role_arn.session_name.map(Into::into),
                     time_source: provider_config.time_source(),
                 }
             })

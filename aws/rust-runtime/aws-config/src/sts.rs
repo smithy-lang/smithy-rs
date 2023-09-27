@@ -24,7 +24,9 @@ impl crate::provider_config::ProviderConfig {
             ))
             .retry_config(RetryConfig::standard())
             .region(self.region())
-            .time_source(self.time_source());
+            .time_source(self.time_source())
+            .use_fips(self.use_fips().unwrap_or_default())
+            .use_dual_stack(self.use_dual_stack().unwrap_or_default());
         builder.set_sleep_impl(self.sleep());
         builder
     }
