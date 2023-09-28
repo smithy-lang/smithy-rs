@@ -183,3 +183,9 @@ message = "Produce better docs when items are marked @required"
 references = ["smithy-rs#2996"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Manifest files for SDK crates now specify [tilde version requirements](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#tilde-requirements) for runtime crates (i.e. those under `aws/rust-runtime` and `rust-runtime`), allowing customers to only update patch versions without bumping a minor version."
+references = ["smithy-rs#3009"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
