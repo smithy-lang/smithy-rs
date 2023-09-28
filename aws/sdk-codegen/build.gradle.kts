@@ -27,6 +27,7 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-aws-endpoints:$smithyVersion")
 }
 
 val generateAwsRuntimeCrateVersion by tasks.registering {

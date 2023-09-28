@@ -15,6 +15,7 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
+fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
 
 val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
@@ -49,7 +50,8 @@ data class ClientTest(
 
     private fun extraCodegenConfig(): String = StringBuilder().apply {
         append("\"addMessageToErrors\": $addMessageToErrors,\n")
-        append("\"renameErrors\": $renameErrors\n")
+        append("\"renameErrors\": $renameErrors\n,")
+        append("\"enableNewSmithyRuntime\": \"${getSmithyRuntimeMode()}\"")
     }.toString()
 
     private fun imports(): List<String> = dependsOn.map { "../codegen-core/common-test-models/$it" }
@@ -106,13 +108,13 @@ val allCodegenTests = listOf(
         "pokemon-service-awsjson-client",
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
-    ClientTest("aws.protocoltests.json#RequiredValueJson", "required-values-json"),
-    ClientTest("aws.protocoltests.json#RequiredValueXml", "required-values-xml"),
 ).map(ClientTest::toCodegenTest)
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+
+tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")

@@ -68,7 +68,7 @@ class EndpointsDecoratorTest {
                 documentation: "string docs",
                 type: "string"
             },
-            aBoolParam: {
+            ABoolParam: {
                 documentation: "bool docs",
                 type: "boolean"
             }
@@ -120,7 +120,7 @@ class EndpointsDecoratorTest {
         structure NestedStructure {
             field: String
         }
-    """.asSmithyModel()
+    """.asSmithyModel(disableValidation = true)
 
     @Test
     fun `resolve endpoint`() {

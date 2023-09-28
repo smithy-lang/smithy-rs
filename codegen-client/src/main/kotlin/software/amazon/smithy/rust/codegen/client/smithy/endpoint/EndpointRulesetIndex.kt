@@ -25,7 +25,7 @@ class EndpointRulesetIndex : KnowledgeIndex {
         serviceShape,
     ) {
         serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }
-            ?.also { it.typecheck() }
+            ?.also { it.typeCheck() }
     }
 
     fun endpointTests(serviceShape: ServiceShape) =
