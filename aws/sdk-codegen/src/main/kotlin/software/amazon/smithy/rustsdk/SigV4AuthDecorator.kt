@@ -21,9 +21,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.featureGateBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -48,8 +48,10 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig).resolve("auth")
         rust("#T,", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
         if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
-            Attribute.featureGate("sigv4a").render(this)
-            rust("#T,", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
+            featureGateBlock("sigv4a") {
+                rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
+            }
+            rust(",")
         }
     }
 
@@ -149,9 +151,10 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
                 }
 
                 if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
-                    Attribute.featureGate("sigv4a").render(this)
-                    section.registerAuthScheme(this) {
-                        rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)
+                    featureGateBlock("sigv4a") {
+                        section.registerAuthScheme(this) {
+                            rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)
+                        }
                     }
                 }
             }

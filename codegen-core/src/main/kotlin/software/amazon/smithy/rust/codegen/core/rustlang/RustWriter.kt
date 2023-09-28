@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -436,6 +437,13 @@ private fun Element.changeInto(tagName: String) {
 /** Write an `impl` block for the given symbol */
 fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
     rustBlock("impl ${symbol.name}") {
+        block()
+    }
+}
+
+/** Write a `#[cfg(feature = "...")]` block for the given feature */
+fun RustWriter.featureGateBlock(feature: String, block: Writable) {
+    rustBlock("##[cfg(feature = ${feature.dq()})]") {
         block()
     }
 }

@@ -10,12 +10,12 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
-import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
-import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
-import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
+import software.amazon.smithy.rulesengine.language.syntax.rule.RuleValueVisitor
 import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointStdLib
@@ -75,7 +75,7 @@ fun Parameter.memberName(): String {
 fun ContextParamTrait.memberName(): String = this.name.unsafeToRustName()
 
 /**
- * Returns the symbol for a given parameter. This enables [RustWriter] to generate the correct [RustType].
+ * Returns the symbol for a given parameter. This enables [software.amazon.smithy.rust.codegen.core.rustlang.RustWriter] to generate the correct [RustType].
  */
 fun Parameter.symbol(): Symbol {
     val rustType = when (this.type) {
@@ -98,10 +98,10 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
     }
 
     override fun visitEndpointRule(endpoint: Endpoint): Set<String> {
-        return endpoint.properties.getOrDefault(Identifier.of("authSchemes"), Literal.tuple(listOf())).asTuple()
+        return endpoint.properties.getOrDefault(Identifier.of("authSchemes"), Literal.tupleLiteral(listOf())).asTupleLiteral()
             .orNull()?.let {
             it.map { authScheme ->
-                authScheme.asRecord().get()[Identifier.of("name")]!!.asString().get().expectLiteral()
+                authScheme.asRecordLiteral().get()[Identifier.of("name")]!!.asStringLiteral().get().expectLiteral()
             }
         }?.toHashSet() ?: hashSetOf()
     }
@@ -119,5 +119,5 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
  * Returns a service's supported auth schemes
  */
 fun ServiceShape.supportedAuthSchemes(): Set<String> =
-    this.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typecheck() }
+    this.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }?.also { it.typeCheck() }
         ?.let { AuthSchemeLister.authSchemesForRuleset(it) } ?: setOf()

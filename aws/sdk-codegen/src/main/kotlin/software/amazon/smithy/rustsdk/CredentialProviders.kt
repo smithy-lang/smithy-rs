@@ -14,8 +14,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.featureGateBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -143,9 +143,10 @@ class CredentialsIdentityResolverRegistration(
                     )
 
                     if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
-                        Attribute.featureGate("sigv4a").render(this)
-                        section.registerIdentityResolver(this) {
-                            rustTemplate("#{SIGV4A_SCHEME_ID}, shared_identity_resolver.clone(),", *codegenScope)
+                        featureGateBlock("sigv4a") {
+                            section.registerIdentityResolver(this) {
+                                rustTemplate("#{SIGV4A_SCHEME_ID}, shared_identity_resolver.clone()", *codegenScope)
+                            }
                         }
                     }
                     section.registerIdentityResolver(this) {
