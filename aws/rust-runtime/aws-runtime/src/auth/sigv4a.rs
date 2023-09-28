@@ -225,7 +225,6 @@ mod tests {
     use aws_smithy_runtime_api::client::auth::AuthSchemeEndpointConfig;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::Document;
-    use aws_types::region::SigningRegionSet;
     use aws_types::SigningName;
     use std::borrow::Cow;
     use std::collections::HashMap;
@@ -250,7 +249,7 @@ mod tests {
         )
         .into();
         let operation_config = SigV4OperationSigningConfig {
-            region_set: Some(SigningRegionSet::from_static("test")),
+            region_set: Some("test".into()),
             name: Some(SigningName::from_static("test")),
             signing_options: SigningOptions {
                 double_uri_encode: true,
@@ -278,7 +277,7 @@ mod tests {
     fn endpoint_config_overrides_region_and_service() {
         let mut layer = Layer::new("test");
         layer.store_put(SigV4OperationSigningConfig {
-            region_set: Some(SigningRegionSet::from_static("test")),
+            region_set: Some("test".into()),
             name: Some(SigningName::from_static("override-this-service")),
             ..Default::default()
         });
@@ -299,7 +298,7 @@ mod tests {
 
         assert_eq!(
             result.region_set,
-            Some(SigningRegionSet::from_static("us-east-override"))
+            Some("us-east-override".into())
         );
         assert_eq!(result.name, Some(SigningName::from_static("qldb-override")));
         assert!(matches!(result, Cow::Owned(_)));
@@ -309,7 +308,7 @@ mod tests {
     fn endpoint_config_supports_fallback_when_region_or_service_are_unset() {
         let mut layer = Layer::new("test");
         layer.store_put(SigV4OperationSigningConfig {
-            region_set: Some(SigningRegionSet::from_static("us-east-1")),
+            region_set: Some("us-east-1".into()),
             name: Some(SigningName::from_static("qldb")),
             ..Default::default()
         });
@@ -320,7 +319,7 @@ mod tests {
 
         assert_eq!(
             result.region_set,
-            Some(SigningRegionSet::from_static("us-east-1"))
+            Some("us-east-1".into())
         );
         assert_eq!(result.name, Some(SigningName::from_static("qldb")));
         assert!(matches!(result, Cow::Borrowed(_)));

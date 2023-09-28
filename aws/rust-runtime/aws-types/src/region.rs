@@ -101,23 +101,7 @@ impl From<Region> for SigningRegionSet {
 
 impl From<&'static str> for SigningRegionSet {
     fn from(region: &'static str) -> Self {
-        Self::from_static(region)
-    }
-}
-
-impl SigningRegionSet {
-    /// Create a `SigningRegionSet` from a static str.
-    ///
-    /// ## Example
-    ///
-    /// ```rust
-    /// use aws_types::region::SigningRegionSet;
-    ///
-    /// // When setting multiple regions, use a comma-separated list.
-    /// let region_set = SigningRegionSet::from_static("us-east-1, us-east-2, us-west-1");
-    /// ```
-    pub const fn from_static(region_set: &'static str) -> Self {
-        SigningRegionSet(Cow::Borrowed(region_set))
+        SigningRegionSet(Cow::Borrowed(region))
     }
 }
 
@@ -132,7 +116,7 @@ impl<'a> FromIterator<&'a str> for SigningRegionSet {
 
         // If more than one region is present in the iter, separate remaining regions with commas
         for region in iter {
-            s.push_str(", ");
+            s.push(',');
             s.push_str(region);
         }
 
