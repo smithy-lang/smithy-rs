@@ -296,10 +296,7 @@ mod tests {
         let cfg = ConfigBag::of_layers(vec![layer]);
         let result = SigV4aSigner::extract_operation_config(config, &cfg).expect("success");
 
-        assert_eq!(
-            result.region_set,
-            Some("us-east-override".into())
-        );
+        assert_eq!(result.region_set, Some("us-east-override".into()));
         assert_eq!(result.name, Some(SigningName::from_static("qldb-override")));
         assert!(matches!(result, Cow::Owned(_)));
     }
@@ -317,10 +314,7 @@ mod tests {
 
         let result = SigV4aSigner::extract_operation_config(config, &cfg).expect("success");
 
-        assert_eq!(
-            result.region_set,
-            Some("us-east-1".into())
-        );
+        assert_eq!(result.region_set, Some("us-east-1".into()));
         assert_eq!(result.name, Some(SigningName::from_static("qldb")));
         assert!(matches!(result, Cow::Borrowed(_)));
     }
