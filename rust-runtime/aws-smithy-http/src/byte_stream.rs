@@ -293,7 +293,7 @@ impl ByteStream {
 
     /// Attempt to pull out the next value of this stream, returning `None` if the stream is
     /// exhausted.
-    pub(crate) fn poll_next(
+    pub fn poll_next(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Bytes, Error>>> {
