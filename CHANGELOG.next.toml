@@ -185,6 +185,24 @@ meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" 
 author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "The `futures_core::stream::Stream` trait has been removed from public API. It should not affect usual SDK use cases. If your code uses paginators, you do not need to use the `Stream` trait or its exntension traits, but only the `next`, `try_next`, `collect`, and `try_collect` methods are supported on `PaginationStream`. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner. Finally, `fn_stream` has been moved to be a child module of `pagination_stream`."
+references = ["smithy-rs#2978"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The `futures_core::stream::Stream` trait has been removed from public API. `FnStream` only supports `next`, `try_next`, `collect`, and `try_collect` methods. [`TryFlatMap::flat_map`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.TryFlatMap.html#method.flat_map) returns [`PaginationStream`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.PaginationStream.html), which should be preferred to `FnStream` at an interface level. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner. Finally, `fn_stream` has been moved to be a child module of `pagination_stream`."
+references = ["smithy-rs#2978"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Python middleware can set URI. This can be used to route a request to a different handler."
+references = ["smithy-rs#3005"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "drganjoo"
+
+[[aws-sdk-rust]]
 message = "Manifest files for SDK crates now specify [tilde version requirements](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#tilde-requirements) for runtime crates (i.e. those under `aws/rust-runtime` and `rust-runtime`), allowing customers to only update patch versions without bumping a minor version."
 references = ["smithy-rs#3009"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
