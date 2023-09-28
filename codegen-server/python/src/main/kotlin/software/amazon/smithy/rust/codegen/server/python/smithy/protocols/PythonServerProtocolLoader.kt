@@ -61,6 +61,7 @@ class PythonServerAfterDeserializedMemberServerHttpBoundCustomization() :
         is ServerHttpBoundProtocolSection.AfterTimestampDeserializedMember -> writable {
             rust(".into()")
         }
+
         else -> emptySection
     }
 }
@@ -78,6 +79,23 @@ class PythonServerAfterDeserializedMemberHttpBindingCustomization(private val ru
     }
 }
 
+/**
+ * Customization class used to determine how serialized stream payload should be rendered for the Python server.
+ *
+ * In this customization, we do not need to wrap the payload in a new-type wrapper to enable the
+ * `futures_core::stream::Stream` trait since the payload in question has a type
+ * `aws_smithy_http_server_python::types::ByteStream` which already implements the `Stream` trait.
+ */
+class PythonServerStreamPayloadSerializerCustomization() : ServerHttpBoundProtocolCustomization() {
+    override fun section(section: ServerHttpBoundProtocolSection): Writable = when (section) {
+        is ServerHttpBoundProtocolSection.WrapStreamPayload -> writable {
+            section.params.payloadGenerator.generatePayload(this, section.params.shapeName, section.params.shape)
+        }
+
+        else -> emptySection
+    }
+}
+
 class PythonServerProtocolLoader(
     private val supportedProtocols: ProtocolMap<ServerProtocolGenerator, ServerCodegenContext>,
 ) : ProtocolLoader<ServerProtocolGenerator, ServerCodegenContext>(supportedProtocols) {
@@ -91,6 +109,7 @@ class PythonServerProtocolLoader(
                     ),
                     additionalServerHttpBoundProtocolCustomizations = listOf(
                         PythonServerAfterDeserializedMemberServerHttpBoundCustomization(),
+                        PythonServerStreamPayloadSerializerCustomization(),
                     ),
                     additionalHttpBindingCustomizations = listOf(
                         PythonServerAfterDeserializedMemberHttpBindingCustomization(runtimeConfig),
@@ -103,6 +122,7 @@ class PythonServerProtocolLoader(
                     ),
                     additionalServerHttpBoundProtocolCustomizations = listOf(
                         PythonServerAfterDeserializedMemberServerHttpBoundCustomization(),
+                        PythonServerStreamPayloadSerializerCustomization(),
                     ),
                     additionalHttpBindingCustomizations = listOf(
                         PythonServerAfterDeserializedMemberHttpBindingCustomization(runtimeConfig),
@@ -115,6 +135,7 @@ class PythonServerProtocolLoader(
                     ),
                     additionalServerHttpBoundProtocolCustomizations = listOf(
                         PythonServerAfterDeserializedMemberServerHttpBoundCustomization(),
+                        PythonServerStreamPayloadSerializerCustomization(),
                     ),
                     additionalHttpBindingCustomizations = listOf(
                         PythonServerAfterDeserializedMemberHttpBindingCustomization(runtimeConfig),

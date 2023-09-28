@@ -179,6 +179,28 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
 
 [[smithy-rs]]
+message = """
+Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. This is enabled by default for clients and can be disabled by updating your smithy-build.json with the following setting:
+```json
+{
+  "codegen": {
+    "flattenCollectionAccessors": false,
+    ...
+  }
+}
+```
+"""
+references = ["smithy-rs#2995"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+
+[[aws-sdk-rust]]
+message = "Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. To determine if the field was actually set use `.<field_name>.is_some()`."
+references = ["smithy-rs#2995"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
 message = "Produce better docs when items are marked @required"
 references = ["smithy-rs#2996"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
@@ -203,7 +225,19 @@ meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "drganjoo"
 
 [[aws-sdk-rust]]
-message = "Manifest files for SDK crates now specify [tilde version requirements](https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#tilde-requirements) for runtime crates (i.e. those under `aws/rust-runtime` and `rust-runtime`), allowing customers to only update patch versions without bumping a minor version."
-references = ["smithy-rs#3009"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+message = "Add support for Sigv4A request signing. Sigv4a signing will be used automatically when appropriate for a given operation. Currently, it's used for S3 and EventBridge."
+references = ["smithy-rs#1797"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner."
+references = ["smithy-rs#2983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner."
+references = ["smithy-rs#2983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"

@@ -9,7 +9,7 @@
 
 use crate::middleware::Signature;
 use aws_sigv4::event_stream::{sign_empty_message, sign_message};
-use aws_sigv4::SigningParams;
+use aws_sigv4::sign::v4;
 use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
 use aws_smithy_http::property_bag::{PropertyBag, SharedPropertyBag};
 use aws_smithy_runtime_api::client::identity::Identity;
@@ -44,8 +44,8 @@ impl SigV4MessageSigner {
         }
     }
 
-    fn signing_params(&self) -> SigningParams<()> {
-        let builder = SigningParams::builder()
+    fn signing_params(&self) -> v4::SigningParams<()> {
+        let builder = v4::SigningParams::builder()
             .identity(&self.identity)
             .region(self.signing_region.as_ref())
             .name(self.signing_name.as_ref())
@@ -59,7 +59,7 @@ impl SignMessage for SigV4MessageSigner {
     fn sign(&mut self, message: Message) -> Result<Message, SignMessageError> {
         let (signed_message, signature) = {
             let params = self.signing_params();
-            sign_message(&message, &self.last_signature, &params).into_parts()
+            sign_message(&message, &self.last_signature, &params)?.into_parts()
         };
         self.last_signature = signature;
         Ok(signed_message)
@@ -68,7 +68,9 @@ impl SignMessage for SigV4MessageSigner {
     fn sign_empty(&mut self) -> Option<Result<Message, SignMessageError>> {
         let (signed_message, signature) = {
             let params = self.signing_params();
-            sign_empty_message(&self.last_signature, &params).into_parts()
+            sign_empty_message(&self.last_signature, &params)
+                .expect("signing an empty message will always succeed.")
+                .into_parts()
         };
         self.last_signature = signature;
         Some(Ok(signed_message))
@@ -140,7 +142,7 @@ impl SigV4Signer {
         }
     }
 
-    fn signing_params(properties: &PropertyBag) -> SigningParams<()> {
+    fn signing_params(properties: &PropertyBag) -> v4::SigningParams<()> {
         // Every single one of these values would have been retrieved during the initial request,
         // so we can safely assume they all exist in the property bag at this point.
         let identity = properties.get::<Identity>().unwrap();
@@ -150,7 +152,7 @@ impl SigV4Signer {
             .get::<SystemTime>()
             .copied()
             .unwrap_or_else(SystemTime::now);
-        let builder = SigningParams::builder()
+        let builder = v4::SigningParams::builder()
             .identity(identity)
             .region(region.as_ref())
             .name(name.as_ref())
@@ -176,7 +178,7 @@ impl SignMessage for SigV4Signer {
 
         let (signed_message, signature) = {
             let params = Self::signing_params(&properties);
-            sign_message(&message, self.last_signature.as_ref().unwrap(), &params).into_parts()
+            sign_message(&message, self.last_signature.as_ref().unwrap(), &params)?.into_parts()
         };
         self.last_signature = Some(signature);
         Ok(signed_message)
@@ -190,7 +192,9 @@ impl SignMessage for SigV4Signer {
         }
         let (signed_message, signature) = {
             let params = Self::signing_params(&properties);
-            sign_empty_message(self.last_signature.as_ref().unwrap(), &params).into_parts()
+            sign_empty_message(self.last_signature.as_ref().unwrap(), &params)
+                .ok()?
+                .into_parts()
         };
         self.last_signature = Some(signature);
         Some(Ok(signed_message))
