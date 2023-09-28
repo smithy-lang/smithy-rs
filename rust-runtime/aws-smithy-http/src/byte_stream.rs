@@ -302,6 +302,9 @@ impl ByteStream {
 
     /// Consume and return the next item in the `ByteStream` or return an error if an error is
     /// encountered.
+    ///
+    /// Similar to the [`next`](ByteStream::next) method, but this returns a `Result<Option<Bytes>, Error>` rather than
+    /// an `Option<Result<Bytes, Error>>`, making for easy use with the `?` operator.
     pub async fn try_next(&mut self) -> Result<Option<Bytes>, Error> {
         self.next().await.transpose()
     }
