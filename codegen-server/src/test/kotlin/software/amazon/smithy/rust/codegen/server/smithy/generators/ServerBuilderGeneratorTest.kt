@@ -45,7 +45,7 @@ class ServerBuilderGeneratorTest {
             val writer = this
             val shape = model.lookup<StructureShape>("test#Credentials")
 
-            StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList()).render()
+            StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList(), codegenContext.structSettings()).render()
             val builderGenerator = ServerBuilderGenerator(
                 codegenContext,
                 shape,

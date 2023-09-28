@@ -294,6 +294,7 @@ open class ServerCodegenVisitor(
                 this,
                 shape,
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                structSettings = codegenContext.structSettings(),
             ).render()
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->

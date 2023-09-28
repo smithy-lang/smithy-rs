@@ -179,6 +179,28 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
 
 [[smithy-rs]]
+message = """
+Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. This is enabled by default for clients and can be disabled by updating your smithy-build.json with the following setting:
+```json
+{
+  "codegen": {
+    "flattenCollectionAccessors": false,
+    ...
+  }
+}
+```
+"""
+references = ["smithy-rs#2995"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+
+[[aws-sdk-rust]]
+message = "Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. To determine if the field was actually set use `.<field_name>.is_some()`."
+references = ["smithy-rs#2995"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
 message = "Produce better docs when items are marked @required"
 references = ["smithy-rs#2996"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
