@@ -19,7 +19,7 @@ use std::fmt::Formatter;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tokio::fs;
-use tracing::warn;
+use tracing::{error, warn};
 
 /// A trait that marks a type that can be created from `&str` and turned into `LenientVersion`
 pub trait ParseIntoLenientVersion {
@@ -340,46 +340,49 @@ fn read_package<P: ParseIntoLenientVersion>(
 /// Validates that all of the publishable crates use consistent version numbers
 /// across all of their local dependencies.
 fn validate_packages(packages: &[Package]) -> Result<()> {
-    let mut versions: BTreeMap<String, LenientVersion> = BTreeMap::new();
-    let mut version_requirements: BTreeMap<String, LenientVersion> = BTreeMap::new();
-    let track_version = &mut |handle: &PackageHandle,
-                              map: &mut BTreeMap<String, LenientVersion>|
-     -> Option<(String, LenientVersion, LenientVersion)> {
+    fn track_version<F>(
+        handle: &PackageHandle,
+        map: &mut BTreeMap<String, LenientVersion>,
+        error_generator: F,
+    ) -> Result<(), Error>
+    where
+        F: FnOnce(String, LenientVersion, LenientVersion) -> Result<(), Error>,
+    {
         if let Some(version) = map.get(&handle.name) {
             if *version != handle.version {
-                Some((
+                error_generator(
                     (&handle.name).into(),
                     map[&handle.name].clone(),
                     handle.version.clone(),
-                ))
+                )
             } else {
-                None
+                Ok(())
             }
         } else {
             map.insert(handle.name.clone(), handle.version.clone());
-            None
+            Ok(())
         }
-    };
+    }
+    let mut versions: BTreeMap<String, LenientVersion> = BTreeMap::new();
+    let mut version_requirements: BTreeMap<String, LenientVersion> = BTreeMap::new();
     for package in packages {
-        track_version(&package.handle, &mut versions)
-            .map(|collision| {
-                Err(Error::MultipleVersions(
-                    collision.0,
-                    collision.1,
-                    collision.2,
-                ))
-            })
-            .unwrap_or(Ok(()))?;
+        track_version(
+            &package.handle,
+            &mut versions,
+            |crate_name, version_a, version_b| {
+                Err(Error::MultipleVersions(crate_name, version_a, version_b))
+            },
+        )?;
         for dependency in &package.local_dependencies {
-            track_version(dependency, &mut version_requirements)
-                .map(|collision| {
+            track_version(
+                dependency,
+                &mut version_requirements,
+                |crate_name, version_a, version_b| {
                     Err(Error::MultipleVersionRequirements(
-                        collision.0,
-                        collision.1,
-                        collision.2,
+                        crate_name, version_a, version_b,
                     ))
-                })
-                .unwrap_or(Ok(()))?;
+                },
+            )?;
         }
     }
 
