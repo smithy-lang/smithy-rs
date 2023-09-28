@@ -9,11 +9,12 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.rulesengine.language.stdlib.BooleanEquals
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
-import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
-import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
-import software.amazon.smithy.rulesengine.language.syntax.expr.Template
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Template
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.BooleanEquals
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.StringEquals
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -29,8 +30,8 @@ internal class ExprGeneratorTest {
 
     @Test
     fun generateExprs() {
-        val boolEq = Expression.of(true).equal(true)
-        val strEq = Expression.of("helloworld").equal("goodbyeworld").not()
+        val boolEq = BooleanEquals.ofExpressions(Expression.of(true), Expression.of(true))
+        val strEq = StringEquals.ofExpressions(Expression.of("helloworld"), Expression.of("goodbyeworld")).not()
         val combined = BooleanEquals.ofExpressions(boolEq, strEq)
         TestWorkspace.testProject().unitTest {
             val generator = ExpressionGenerator(Ownership.Borrowed, testContext)
@@ -42,10 +43,10 @@ internal class ExprGeneratorTest {
 
     @Test
     fun generateLiterals1() {
-        val literal = Literal.record(
+        val literal = Literal.recordLiteral(
             mutableMapOf(
-                Identifier.of("this") to Literal.integer(5),
-                Identifier.of("that") to Literal.string(
+                Identifier.of("this") to Literal.integerLiteral(5),
+                Identifier.of("that") to Literal.stringLiteral(
                     Template.fromString("static"),
                 ),
             ),
