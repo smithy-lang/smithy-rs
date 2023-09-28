@@ -26,6 +26,7 @@ use smithy.rules#endpointTests
                     "authSchemes": [{
                                         "name": "sigv4",
                                         "signingRegion": "{Region}",
+                                        "signingName": "blah"
                                     }]
                 }
             }
@@ -33,6 +34,24 @@ use smithy.rules#endpointTests
     ]
 })
 @endpointTests({"version": "1", "testCases": [
+    {
+        "documentation": "region set",
+        "expect": {
+            "endpoint": {
+                "url": "https://prod.us-east-1.api.myservice.aws.dev",
+                "properties": {
+                    "authSchemes": [{
+                                        "name": "sigv4",
+                                        "signingRegion": "us-east-1",
+                                        "signingName": "blah"
+                                    }]
+
+                }
+            }
+        },
+        "params": { "Region": "us-east-1" }
+        "operationInputs": [ ]
+    },
     {
         "documentation": "region should fallback to the default",
         "expect": {
@@ -42,6 +61,7 @@ use smithy.rules#endpointTests
                     "authSchemes": [{
                                         "name": "sigv4",
                                         "signingRegion": "us-east-2",
+                                        "signingName": "blah"
                                     }]
 
                 }

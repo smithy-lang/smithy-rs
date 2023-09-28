@@ -4,10 +4,12 @@
  */
 
 use crate::middleware::Signature;
+pub use aws_sigv4::http_request::SignableBody;
 use aws_sigv4::http_request::{
     sign, PayloadChecksumKind, PercentEncodingMode, SessionTokenMode, SignableRequest,
     SignatureLocation, SigningParams, SigningSettings, UriPathNormalizationMode,
 };
+use aws_sigv4::sign::v4;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime_api::client::identity::Identity;
 use aws_types::region::SigningRegion;
@@ -15,7 +17,6 @@ use aws_types::SigningName;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
-pub use aws_sigv4::http_request::SignableBody;
 pub type SigningError = aws_sigv4::http_request::SigningError;
 
 const EXPIRATION_WARNING: &str = "Presigned request will expire before the given \
@@ -170,13 +171,13 @@ impl SigV4Signer {
             }
         }
 
-        let builder = SigningParams::builder()
+        let builder = v4::SigningParams::builder()
             .identity(identity)
             .region(request_config.region.as_ref())
             .name(request_config.name.as_ref())
             .time(request_config.request_ts)
             .settings(settings);
-        builder.build().expect("all required fields set")
+        builder.build().expect("all required fields set").into()
     }
 
     /// Sign a request using the SigV4 Protocol
