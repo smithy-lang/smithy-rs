@@ -223,3 +223,9 @@ message = "Python middleware can set URI. This can be used to route a request to
 references = ["smithy-rs#3005"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
 author = "drganjoo"
+
+[[aws-sdk-rust]]
+message = "Add support for Sigv4A request signing. Sigv4a signing will be used automatically when appropriate for a given operation. Currently, it's used for S3 and EventBridge."
+references = ["smithy-rs#1797"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"

@@ -129,9 +129,6 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
 
     fun generateInput(testOperationInput: EndpointTestOperationInput) = writable {
         val operationName = testOperationInput.operationName.toSnakeCase()
-        if (test.isSigV4a()) {
-            Attribute.shouldPanic("no request was received").render(this)
-        }
         tokioTest(safeName("operation_input_test_$operationName")) {
             rustTemplate(
                 """
