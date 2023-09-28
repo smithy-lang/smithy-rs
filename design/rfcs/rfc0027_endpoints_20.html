@@ -584,7 +584,7 @@ overriding higher priority ones.</p>
 </details>
 <h4 id="loading-values-for-builtins"><a class="header" href="#loading-values-for-builtins">Loading values for builtIns</a></h4>
 <p>The fundamental point of builtIn values is enabling <em>other</em> code generators to define where these values come from.
-Because of that, we will need to expose the ability to customize builtIns. One way to do this is with a new
+Because of that, we will need to expose the ability to customize AwsBuiltIns. One way to do this is with a new
 customization type, <code>EndpointCustomization</code>:</p>
 <pre><code class="language-kotlin">fun endpointCustomizations(
     clientCodegenContext: C,
