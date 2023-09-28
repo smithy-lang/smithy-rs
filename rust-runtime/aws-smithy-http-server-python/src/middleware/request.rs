@@ -10,7 +10,10 @@ use std::sync::Arc;
 
 use aws_smithy_http_server::body::Body;
 use http::{request::Parts, Request};
-use pyo3::{exceptions::PyRuntimeError, prelude::*};
+use pyo3::{
+    exceptions::{PyRuntimeError, PyValueError},
+    prelude::*,
+};
 use tokio::sync::Mutex;
 
 use super::{PyHeaderMap, PyMiddlewareError};
@@ -74,6 +77,25 @@ impl PyRequest {
             .as_ref()
             .map(|parts| parts.uri.to_string())
             .ok_or_else(|| PyMiddlewareError::RequestGone.into())
+    }
+
+    /// Sets the URI of this request.
+    ///
+    /// :type str:
+    #[setter]
+    fn set_uri(&mut self, uri_str: String) -> PyResult<()> {
+        self.parts.as_mut().map_or_else(
+            || Err(PyMiddlewareError::RequestGone.into()),
+            |parts| {
+                parts.uri = uri_str.parse().map_err(|e: http::uri::InvalidUri| {
+                    PyValueError::new_err(format!(
+                        "URI `{}` cannot be parsed. Error: {}",
+                        uri_str, e
+                    ))
+                })?;
+                Ok(())
+            },
+        )
     }
 
     /// Return the HTTP version of this request.

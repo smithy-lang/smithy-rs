@@ -474,7 +474,7 @@ class EndpointParamsDecorator(
 #### Loading values for builtIns
 
 The fundamental point of builtIn values is enabling _other_ code generators to define where these values come from.
-Because of that, we will need to expose the ability to customize builtIns. One way to do this is with a new
+Because of that, we will need to expose the ability to customize AwsBuiltIns. One way to do this is with a new
 customization type, `EndpointCustomization`:
 
 ```kotlin

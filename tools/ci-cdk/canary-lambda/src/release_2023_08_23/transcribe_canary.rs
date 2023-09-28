@@ -9,10 +9,10 @@ use async_stream::stream;
 use aws_config::SdkConfig;
 use aws_sdk_transcribestreaming as transcribe;
 use bytes::BufMut;
-use transcribe::model::{
+use transcribe::primitives::Blob;
+use transcribe::types::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
-use transcribe::types::Blob;
 
 const CHUNK_SIZE: usize = 8192;
 use crate::canary::CanaryEnv;

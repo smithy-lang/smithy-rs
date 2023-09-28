@@ -137,9 +137,13 @@ fun testRustSettings(
 )
 
 private const val SmithyVersion = "1.0"
-fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion): Model {
+fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion, disableValidation: Boolean = false): Model {
     val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
-    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
+    val assembler = Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed)
+    if (disableValidation) {
+        assembler.disableValidation()
+    }
+    return assembler.assemble()
         .unwrap()
 }
 

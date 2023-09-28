@@ -6,8 +6,9 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
-import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
-import software.amazon.smithy.rulesengine.language.syntax.expr.Template
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Template
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -24,13 +25,13 @@ import java.util.stream.Stream
  * The `Document` type is used to support generating JSON-like documents
  */
 class LiteralGenerator(private val ownership: Ownership, private val context: Context) :
-    Literal.Vistor<Writable> {
+    LiteralVisitor<Writable> {
     private val runtimeConfig = context.runtimeConfig
     private val codegenScope = arrayOf(
         "Document" to RuntimeType.document(runtimeConfig),
         "HashMap" to RuntimeType.HashMap,
     )
-    override fun visitBool(b: Boolean) = writable {
+    override fun visitBoolean(b: Boolean) = writable {
         rust(b.toString())
     }
 
