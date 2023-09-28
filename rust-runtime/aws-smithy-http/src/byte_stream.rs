@@ -284,6 +284,9 @@ impl ByteStream {
     }
 
     /// Return the next item in the `ByteStream`.
+    ///
+    /// There is also a sibling method [`try_next`](ByteStream::try_next), which returns a `Result<Option<Bytes>, Error>`
+    /// instead of an `Option<Result<Bytes, Error>>`.
     pub async fn next(&mut self) -> Option<Result<Bytes, Error>> {
         Some(self.inner.next().await?.map_err(Error::streaming))
     }
