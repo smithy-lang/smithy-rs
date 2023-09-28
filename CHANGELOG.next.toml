@@ -195,3 +195,9 @@ message = "The `futures_core::stream::Stream` trait has been removed from public
 references = ["smithy-rs#2978"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Python middleware can set URI. This can be used to route a request to a different handler."
+references = ["smithy-rs#3005"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "drganjoo"
