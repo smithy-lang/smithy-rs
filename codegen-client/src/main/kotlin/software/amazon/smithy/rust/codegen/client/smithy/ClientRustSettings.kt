@@ -82,6 +82,7 @@ data class ClientRustSettings(
 data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
+    override val flattenCollectionAccessors: Boolean = defaultFlattenAccessors,
     val nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
     val renameExceptions: Boolean = defaultRenameExceptions,
     val includeFluentClient: Boolean = defaultIncludeFluentClient,
@@ -92,7 +93,7 @@ data class ClientCodegenConfig(
     val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
     val enableUserConfigurableRuntimePlugins: Boolean = defaultEnableUserConfigurableRuntimePlugins,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode,
+    formatTimeoutSeconds, debugMode, defaultFlattenAccessors,
 ) {
     companion object {
         private const val defaultRenameExceptions = true
@@ -103,10 +104,14 @@ data class ClientCodegenConfig(
         private const val defaultEnableUserConfigurableRuntimePlugins = true
         private const val defaultNullabilityCheckMode = "CLIENT"
 
+        // Note: only clients default to true, servers default to false
+        private const val defaultFlattenAccessors = true
+
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenAccessors),
                     debugMode = coreCodegenConfig.debugMode,
                     eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList").map { array ->
                         array.toList().mapNotNull { node ->
