@@ -197,6 +197,7 @@ class CustomizableOperationGenerator(
 
                     impl<T, E, B> CustomizableOperation<T, E, B> {
                         /// Creates a new `CustomizableOperation` from `customizable_send`.
+                        ##[allow(dead_code)] // unused when a service does not provide any operations
                         pub(crate) fn new(customizable_send: B) -> Self {
                             Self {
                                 customizable_send,
