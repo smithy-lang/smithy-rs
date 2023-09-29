@@ -134,7 +134,7 @@ pub struct ValidateRequest {
 impl ValidateRequest {
     pub fn assert_matches(&self, ignore_headers: &[HeaderName]) {
         let (actual, expected) = (&self.actual, &self.expected);
-        assert_eq!(actual.uri(), expected.uri());
+        assert_eq!(expected.uri(), actual.uri());
         for (name, value) in expected.headers() {
             if !ignore_headers.contains(name) {
                 let actual_header = actual

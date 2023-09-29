@@ -241,3 +241,15 @@ message = "The `futures_core::stream::Stream` trait has been removed from [`Byte
 references = ["smithy-rs#2983"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`StaticUriEndpointResolver`'s `uri` constructor now takes a `String` instead of a `Uri`."
+references = ["smithy-rs#2997"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The IMDS Client builder's `build()` method is no longer async."
+references = ["smithy-rs#2997"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"

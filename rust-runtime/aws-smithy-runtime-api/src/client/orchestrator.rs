@@ -25,7 +25,8 @@ use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::{ConnectorError, SdkError};
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use bytes::Bytes;
-use std::fmt::Debug;
+use std::error::Error as StdError;
+use std::fmt;
 use std::future::Future as StdFuture;
 use std::pin::Pin;
 
@@ -244,6 +245,35 @@ impl<E> OrchestratorError<E> {
     }
 }
 
+impl<E> StdError for OrchestratorError<E>
+where
+    E: StdError + 'static,
+{
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        Some(match &self.kind {
+            ErrorKind::Connector { source } => source as _,
+            ErrorKind::Operation { err } => err as _,
+            ErrorKind::Interceptor { source } => source as _,
+            ErrorKind::Response { source } => source.as_ref(),
+            ErrorKind::Timeout { source } => source.as_ref(),
+            ErrorKind::Other { source } => source.as_ref(),
+        })
+    }
+}
+
+impl<E> fmt::Display for OrchestratorError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self.kind {
+            ErrorKind::Connector { .. } => "connector error",
+            ErrorKind::Operation { .. } => "operation error",
+            ErrorKind::Interceptor { .. } => "interceptor error",
+            ErrorKind::Response { .. } => "response error",
+            ErrorKind::Timeout { .. } => "timeout",
+            ErrorKind::Other { .. } => "an unknown error occurred",
+        })
+    }
+}
+
 fn convert_dispatch_error<O>(
     err: BoxError,
     response: Option<HttpResponse>,
@@ -262,7 +292,7 @@ fn convert_dispatch_error<O>(
 
 impl<E> From<InterceptorError> for OrchestratorError<E>
 where
-    E: Debug + std::error::Error + 'static,
+    E: fmt::Debug + std::error::Error + 'static,
 {
     fn from(err: InterceptorError) -> Self {
         Self::interceptor(err)
