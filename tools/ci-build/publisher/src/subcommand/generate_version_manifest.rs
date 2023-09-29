@@ -7,7 +7,6 @@ use crate::fs::Fs;
 use crate::package::{discover_packages, VersionRequirement};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use semver::Version;
 use serde::Deserialize;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::package::PackageCategory;
@@ -135,8 +134,8 @@ fn generate_release_metadata(
     }
 }
 
-fn parse_version(name: &str, value: &str) -> Result<Version> {
-    match Version::parse(value) {
+fn parse_version(name: &str, value: &str) -> Result<semver::Version> {
+    match semver::Version::parse(value) {
         Ok(version) => Ok(version),
         Err(err) => bail!(
             "Failed to parse version number `{}` from `{}`: {}",

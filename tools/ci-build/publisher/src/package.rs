@@ -262,7 +262,7 @@ pub async fn discover_packages<P: ParseIntoVersion>(fs: Fs, path: PathBuf) -> Re
     read_packages::<P>(fs, manifest_paths).await
 }
 
-/// Parses `version` into `LenientVersion` and adds additional error context when parsing fails.
+/// Parses `version` into [`Version`] and adds additional error context when parsing fails.
 pub fn parse_version<P: ParseIntoVersion>(
     manifest_path: &Path,
     version: &str,

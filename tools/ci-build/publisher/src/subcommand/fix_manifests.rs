@@ -14,7 +14,6 @@ use crate::package::{discover_manifests, parse_version, SemVer};
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use semver::Version;
 use smithy_rs_tool_common::ci::running_in_ci;
 use smithy_rs_tool_common::package::SDK_PREFIX;
 use std::collections::BTreeMap;
@@ -94,7 +93,7 @@ enum FilterType {
 }
 struct VersionView<'a>(&'a Versions, FilterType);
 impl VersionView<'_> {
-    fn get(&self, crate_name: &str) -> Option<&Version> {
+    fn get(&self, crate_name: &str) -> Option<&semver::Version> {
         let version = match (self.1, self.0 .0.get(crate_name)) {
             (FilterType::AllCrates, version) => version,
             (FilterType::PublishedOnly, v @ Some(VersionWithMetadata { publish: true, .. })) => v,
@@ -113,20 +112,20 @@ impl Versions {
         VersionView(self, FilterType::PublishedOnly)
     }
 
-    fn published_crates(&self) -> impl Iterator<Item = (&str, &Version)> + '_ {
+    fn published_crates(&self) -> impl Iterator<Item = (&str, &semver::Version)> + '_ {
         self.0
             .iter()
             .filter(|(_, v)| v.publish)
             .map(|(k, v)| (k.as_str(), &v.version))
     }
 
-    fn get(&self, crate_name: &str) -> Option<&Version> {
+    fn get(&self, crate_name: &str) -> Option<&semver::Version> {
         self.0.get(crate_name).map(|v| &v.version)
     }
 }
 
 struct VersionWithMetadata {
-    version: Version,
+    version: semver::Version,
     publish: bool,
 }
 
@@ -230,7 +229,7 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
 // For instance, given `package_version` like `0.12.3`, the function returns `~0.12`.
 // The fact that this function takes a `semver::Version` means one can only convert a complete
 // semver `x.y.z` into a tilde version requirement, but not those like `0.21.0-alpha.1`.
-fn convert_to_tilde_requirement(package_version: &Version) -> Result<String> {
+fn convert_to_tilde_requirement(package_version: &semver::Version) -> Result<String> {
     // `package_version` is from the `semver` crate which requires versions to have 3 components,
     // major, minor, and patch. So it is safe to assume its string value follows that format.
     let package_version = package_version.to_string();
@@ -359,7 +358,7 @@ mod tests {
                 (
                     name.to_string(),
                     VersionWithMetadata {
-                        version: Version::parse(&version).unwrap(),
+                        version: semver::Version::parse(&version).unwrap(),
                         publish,
                     },
                 )
