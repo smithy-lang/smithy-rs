@@ -602,4 +602,22 @@ impl SdkConfig {
     pub fn builder() -> Builder {
         Builder::default()
     }
+
+    /// Convert this [`SdkConfig`] back to a builder to enable modification
+    pub fn to_builder(self) -> Builder {
+        Builder {
+            app_name: self.app_name,
+            credentials_cache: self.credentials_cache,
+            credentials_provider: self.credentials_provider,
+            region: self.region,
+            endpoint_url: self.endpoint_url,
+            retry_config: self.retry_config,
+            sleep_impl: self.sleep_impl,
+            time_source: self.time_source,
+            timeout_config: self.timeout_config,
+            http_connector: self.http_connector,
+            use_fips: self.use_fips,
+            use_dual_stack: self.use_dual_stack,
+        }
+    }
 }

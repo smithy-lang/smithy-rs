@@ -808,13 +808,18 @@ mod loader {
                 movable.fetch_add(1, Ordering::Relaxed);
                 http::Response::new("ok!")
             });
-            let config = from_env().http_connector(conn.clone()).load().await;
+            let config = from_env()
+                .fs(Fs::from_slice(&[]))
+                .env(Env::from_slice(&[]))
+                .http_connector(conn.clone())
+                .load()
+                .await;
             config
                 .credentials_provider()
                 .unwrap()
                 .provide_credentials()
                 .await
-                .expect_err("no traffic is allowed");
+                .expect_err("did not expect credentials to be loaded—no traffic is allowed");
             let num_requests = num_requests.load(Ordering::Relaxed);
             assert!(num_requests > 0, "{}", num_requests);
         }
