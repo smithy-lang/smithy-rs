@@ -53,7 +53,7 @@ impl StaticTimeSource {
     }
 
     /// Creates a new static time source from the provided number of seconds since the UNIX epoch
-    pub fn new_from_epoch(epoch_secs: u64) -> Self {
+    pub fn from_secs(epoch_secs: u64) -> Self {
         Self::new(UNIX_EPOCH + Duration::from_secs(epoch_secs))
     }
 }

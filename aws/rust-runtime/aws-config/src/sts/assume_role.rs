@@ -433,7 +433,7 @@ mod test {
             ]))
             .use_dual_stack(true)
             .use_fips(true)
-            .time_source(StaticTimeSource::new_from_epoch(1234567890))
+            .time_source(StaticTimeSource::from_secs(1234567890))
             .http_connector(server)
             .load()
             .await;
