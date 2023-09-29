@@ -10,7 +10,6 @@ use crate::sort::dependency_order;
 use crate::RUST_SDK_CI_OWNER;
 use anyhow::{Context, Result};
 use cargo_toml::{Dependency, DepsSet, Manifest};
-use semver::Version;
 use smithy_rs_tool_common::package::PackageCategory;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::error::Error as StdError;
@@ -21,24 +20,27 @@ use std::str::FromStr;
 use tokio::fs;
 use tracing::{error, warn};
 
-/// A trait that marks a type that can be created from `&str` and turned into `LenientVersion`
-pub trait ParseIntoLenientVersion {
-    type ParsedT: FromStr<Err = Self::Err> + Into<LenientVersion>;
+/// A trait that marks a type that can be created from `&str` and turned into
+/// [`Version`]
+///
+/// This trait is purely for convenience to reduce the number of generic parameters for functions,
+/// that is, the functions only need to have a single generic parameter that implements this trait
+/// instead of having to specify `ParsedT` and `Err` separately.
+pub trait ParseIntoVersion {
+    type ParsedT: FromStr<Err = Self::Err> + Into<Version>;
     type Err: Into<BoxError>;
 }
 
-/// A type that indicates the `SemVer` variant of `LenientVersion` will be created as a result of
-/// parsing
+/// A type that indicates the `SemVer` variant of [`Version`] will be created as a result of parsing
 pub struct SemVer;
-impl ParseIntoLenientVersion for SemVer {
-    type ParsedT = Version;
+impl ParseIntoVersion for SemVer {
+    type ParsedT = semver::Version;
     type Err = semver::Error;
 }
 
-/// A type that indicates the `Lenient` variant of `LenientVersion` will be created as a result of
-/// parsing
-pub struct Lenient;
-impl ParseIntoLenientVersion for Lenient {
+/// A type that indicates the `Lenient` variant of [`Version`] will be created as a result of parsing
+pub struct VersionRequirement;
+impl ParseIntoVersion for VersionRequirement {
     type ParsedT = String;
     type Err = std::convert::Infallible;
 }
@@ -47,41 +49,34 @@ impl ParseIntoLenientVersion for Lenient {
 /// specification.
 ///
 /// Most of the time, the `SemVer` variant will be used when manifest files are parsed into an
-/// in-memory data structure. The `Lenient` variant is used when the `fix_manifests` subcommand
-/// and the `generate_version_manifest` subcommand are executed, allowing the tilde version
-/// requirements to be rendered into the manifest files.
+/// in-memory data structure. Those version strings can appear under the `[package]` section as
+/// well as the dependency table within a manifest file.
+/// The `VersionRequirement` variant is used when the `fix_manifests` subcommand and the
+/// `generate_version_manifest` subcommand are executed, allowing version strings to be parsed into
+/// tilde version requirements.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum LenientVersion {
-    SemVer(Version),
-    Lenient(String),
+pub enum Version {
+    SemVer(semver::Version),
+    VersionRequirement(String),
 }
 
-impl LenientVersion {
-    pub fn try_into_semver(self) -> Option<Version> {
-        match self {
-            LenientVersion::SemVer(v) => Some(v),
-            _ => None,
-        }
+impl From<semver::Version> for Version {
+    fn from(version: semver::Version) -> Self {
+        Version::SemVer(version)
     }
 }
 
-impl From<Version> for LenientVersion {
-    fn from(version: Version) -> Self {
-        LenientVersion::SemVer(version)
-    }
-}
-
-impl From<String> for LenientVersion {
+impl From<String> for Version {
     fn from(s: String) -> Self {
-        LenientVersion::Lenient(s)
+        Version::VersionRequirement(s)
     }
 }
 
-impl fmt::Display for LenientVersion {
+impl fmt::Display for Version {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let version = match self {
-            LenientVersion::SemVer(v) => v.to_string(),
-            LenientVersion::Lenient(s) => s.clone(),
+            Version::SemVer(v) => v.to_string(),
+            Version::VersionRequirement(s) => s.clone(),
         };
         write!(f, "{}", version)
     }
@@ -91,11 +86,11 @@ impl fmt::Display for LenientVersion {
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct PackageHandle {
     pub name: String,
-    pub version: LenientVersion,
+    pub version: Version,
 }
 
 impl PackageHandle {
-    pub fn new(name: impl Into<String>, version: impl Into<LenientVersion>) -> Self {
+    pub fn new(name: impl Into<String>, version: impl Into<Version>) -> Self {
         Self {
             name: name.into(),
             version: version.into(),
@@ -213,7 +208,7 @@ pub async fn discover_and_validate_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
-    let packages = discover_packages::<Lenient>(fs, path.as_ref().into())
+    let packages = discover_packages::<VersionRequirement>(fs, path.as_ref().into())
         .await?
         .into_iter()
         .filter(|package| package.publish == Publish::Allowed)
@@ -238,9 +233,9 @@ pub enum Error {
     #[error("{0:?} missing version in dependency {1}")]
     MissingVersion(PathBuf, String),
     #[error("crate {0} has multiple versions: {1} and {2}")]
-    MultipleVersions(String, LenientVersion, LenientVersion),
+    MultipleVersions(String, Version, Version),
     #[error("multiple version requirements have been specified for crate {0}: {1} and {2}")]
-    MultipleVersionRequirements(String, LenientVersion, LenientVersion),
+    MultipleVersionRequirements(String, Version, Version),
 }
 
 /// Discovers all Cargo.toml files under the given path recursively
@@ -262,25 +257,21 @@ pub async fn discover_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
 }
 
 /// Discovers and parses all Cargo.toml files that are packages (as opposed to being exclusively workspaces)
-pub async fn discover_packages<P: ParseIntoLenientVersion>(
-    fs: Fs,
-    path: PathBuf,
-) -> Result<Vec<Package>> {
+pub async fn discover_packages<P: ParseIntoVersion>(fs: Fs, path: PathBuf) -> Result<Vec<Package>> {
     let manifest_paths = discover_manifests(path).await?;
     read_packages::<P>(fs, manifest_paths).await
 }
 
 /// Parses `version` into `LenientVersion` and adds additional error context when parsing fails.
-pub fn parse_version<P: ParseIntoLenientVersion>(
+pub fn parse_version<P: ParseIntoVersion>(
     manifest_path: &Path,
     version: &str,
-) -> Result<LenientVersion, Error> {
+) -> Result<P::ParsedT, Error> {
     P::ParsedT::from_str(version)
-        .map(|ver| ver.into())
         .map_err(|err| Error::InvalidCrateVersion(manifest_path.into(), version.into(), err.into()))
 }
 
-fn read_dependencies<P: ParseIntoLenientVersion>(
+fn read_dependencies<P: ParseIntoVersion>(
     path: &Path,
     dependencies: &DepsSet,
 ) -> Result<Vec<PackageHandle>> {
@@ -304,7 +295,7 @@ fn read_dependencies<P: ParseIntoLenientVersion>(
 }
 
 /// Returns `Ok(None)` when the Cargo.toml is a workspace rather than a package
-fn read_package<P: ParseIntoLenientVersion>(
+fn read_package<P: ParseIntoVersion>(
     path: &Path,
     manifest_bytes: &[u8],
 ) -> Result<Option<Package>> {
@@ -313,7 +304,7 @@ fn read_package<P: ParseIntoLenientVersion>(
     if let Some(package) = manifest.package {
         let name = package.name;
         let version = parse_version::<P>(path, &package.version)?;
-        let handle = PackageHandle { name, version };
+        let handle = PackageHandle::new(name, version);
         let publish = match package.publish {
             cargo_toml::Publish::Flag(true) => Publish::Allowed,
             _ => Publish::NotAllowed,
@@ -342,11 +333,11 @@ fn read_package<P: ParseIntoLenientVersion>(
 fn validate_packages(packages: &[Package]) -> Result<()> {
     fn track_version<F>(
         handle: &PackageHandle,
-        map: &mut BTreeMap<String, LenientVersion>,
+        map: &mut BTreeMap<String, Version>,
         error_generator: F,
     ) -> Result<(), Error>
     where
-        F: FnOnce(String, LenientVersion, LenientVersion) -> Result<(), Error>,
+        F: FnOnce(String, Version, Version) -> Result<(), Error>,
     {
         if let Some(version) = map.get(&handle.name) {
             if *version != handle.version {
@@ -363,8 +354,8 @@ fn validate_packages(packages: &[Package]) -> Result<()> {
             Ok(())
         }
     }
-    let mut versions: BTreeMap<String, LenientVersion> = BTreeMap::new();
-    let mut version_requirements: BTreeMap<String, LenientVersion> = BTreeMap::new();
+    let mut versions: BTreeMap<String, Version> = BTreeMap::new();
+    let mut version_requirements: BTreeMap<String, Version> = BTreeMap::new();
     for package in packages {
         track_version(
             &package.handle,
@@ -389,7 +380,7 @@ fn validate_packages(packages: &[Package]) -> Result<()> {
     Ok(())
 }
 
-pub async fn read_packages<P: ParseIntoLenientVersion>(
+pub async fn read_packages<P: ParseIntoVersion>(
     fs: Fs,
     manifest_paths: Vec<PathBuf>,
 ) -> Result<Vec<Package>> {
@@ -445,11 +436,10 @@ fn batch_packages(packages: Vec<Package>) -> Result<Vec<PackageBatch>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use semver::Version;
     use std::path::PathBuf;
 
-    fn version(version: &str) -> LenientVersion {
-        Version::parse(version).unwrap().into()
+    fn version(version: &str) -> Version {
+        semver::Version::parse(version).unwrap().into()
     }
 
     #[test]
@@ -514,11 +504,11 @@ mod tests {
 
     fn package(name: &str, dependencies: &[&str]) -> Package {
         Package::new(
-            PackageHandle::new(name, Version::parse("1.0.0").unwrap()),
+            PackageHandle::new(name, semver::Version::parse("1.0.0").unwrap()),
             format!("{}/Cargo.toml", name),
             dependencies
                 .iter()
-                .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
+                .map(|d| PackageHandle::new(*d, semver::Version::parse("1.0.0").unwrap()))
                 .collect(),
             Publish::Allowed,
         )
@@ -596,11 +586,11 @@ mod tests {
 
     fn pkg_ver(name: &str, version: &str, dependencies: &[(&str, &str)]) -> Package {
         Package::new(
-            PackageHandle::new(name, Version::parse(version).unwrap()),
+            PackageHandle::new(name, semver::Version::parse(version).unwrap()),
             format!("{}/Cargo.toml", name),
             dependencies
                 .iter()
-                .map(|p| PackageHandle::new(p.0, Version::parse(p.1).unwrap()))
+                .map(|p| PackageHandle::new(p.0, semver::Version::parse(p.1).unwrap()))
                 .collect(),
             Publish::Allowed,
         )

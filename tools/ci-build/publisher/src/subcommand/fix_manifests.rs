@@ -164,13 +164,7 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
                 anyhow::Error::msg(format!("{:?} is missing a package version", manifest.path))
             })?;
         let version = parse_version::<SemVer>(&manifest.path, version)?;
-        versions.insert(
-            name.into(),
-            VersionWithMetadata {
-                version: version.try_into_semver().unwrap(),
-                publish,
-            },
-        );
+        versions.insert(name.into(), VersionWithMetadata { version, publish });
     }
     Ok(Versions(versions))
 }
@@ -215,7 +209,7 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
         // to be brought in to their crate graph.
         package_version.to_string()
     } else {
-        convert_to_tilde_requirement(&package_version)?
+        convert_to_tilde_requirement(package_version)?
     };
     let previous_version = table.insert(
         "version".into(),
