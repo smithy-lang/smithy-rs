@@ -249,10 +249,16 @@ mod test {
     #[ignore]
     #[tokio::test]
     async fn crate_published_works() {
-        let handle = PackageHandle::new("aws-smithy-http", "0.27.0-alpha.1".parse().unwrap());
+        let handle = PackageHandle::new(
+            "aws-smithy-http",
+            "0.27.0-alpha.1".parse::<String>().unwrap(),
+        );
         assert!(is_published(&handle).await.expect("failed"));
         // we will never publish this version
-        let handle = PackageHandle::new("aws-smithy-http", "0.21.0-alpha.1".parse().unwrap());
+        let handle = PackageHandle::new(
+            "aws-smithy-http",
+            "0.21.0-alpha.1".parse::<String>().unwrap(),
+        );
         assert!(!is_published(&handle).await.expect("failed"));
     }
 }
