@@ -233,7 +233,7 @@ impl AssumeRoleProviderBuilder {
     /// Build a credentials provider for this role.
     ///
     /// Base credentials will be used from the [`SdkConfig`] set via [`Self::configure`] or loaded
-    /// from [`aws_config::from_env`] if `configure` was never called.
+    /// from [`aws_config::from_env`](crate::from_env) if `configure` was never called.
     pub async fn build(self) -> AssumeRoleProvider {
         let mut conf = match self.sdk_config {
             Some(conf) => conf,
