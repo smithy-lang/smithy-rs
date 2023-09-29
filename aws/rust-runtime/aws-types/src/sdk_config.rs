@@ -603,8 +603,13 @@ impl SdkConfig {
         Builder::default()
     }
 
+    /// Convert this [`SdkConfig`] into a [`Builder`] by cloning it first
+    pub fn to_builder(&self) -> Builder {
+        self.clone().into_builder()
+    }
+
     /// Convert this [`SdkConfig`] back to a builder to enable modification
-    pub fn to_builder(self) -> Builder {
+    pub fn into_builder(self) -> Builder {
         Builder {
             app_name: self.app_name,
             credentials_cache: self.credentials_cache,

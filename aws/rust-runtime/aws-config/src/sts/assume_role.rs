@@ -241,7 +241,7 @@ impl AssumeRoleProviderBuilder {
         };
         // ignore a credentials cache set from SdkConfig
         conf = conf
-            .to_builder()
+            .into_builder()
             .credentials_cache(
                 self.credentials_cache
                     .unwrap_or(CredentialsCache::no_caching()),
@@ -250,7 +250,7 @@ impl AssumeRoleProviderBuilder {
 
         if conf.credentials_cache().is_none() {}
         if let Some(region) = self.region_override {
-            conf = conf.to_builder().region(region).build()
+            conf = conf.into_builder().region(region).build()
         }
 
         let config = aws_sdk_sts::config::Builder::from(&conf);
@@ -286,7 +286,7 @@ impl AssumeRoleProviderBuilder {
             None => crate::load_from_env().await,
         };
         let conf = conf
-            .to_builder()
+            .into_builder()
             .credentials_provider(SharedCredentialsProvider::new(provider))
             .build();
         self.sdk_config = Some(conf);
