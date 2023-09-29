@@ -206,16 +206,15 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
     if !table.contains_key("path") {
         return Ok(0);
     }
-    let package_version = match versions.get(dep_name) {
-        Some(version) => version.to_string(),
-        None => bail!("version not found for crate {}", dep_name),
-    };
+    let package_version = versions
+        .get(dep_name)
+        .ok_or_else(|| anyhow::Error::msg(format!("version not found for crate {dep_name}")))?;
     let package_version = if dep_name.starts_with(AWS_SDK_CRATE_NAME_PREFIX) {
         // For a crate that depends on an SDK crate (e.g. `aws-config` depending on `aws-sdk-sts`),
         // we do _not_ want to turn the version of the SDK crate into a tilde version because
         // customers may depend on that SDK crate by themselves, causing multiple versions of it
         // to be brought in to their crate graph.
-        package_version
+        package_version.to_string()
     } else {
         convert_to_tilde_requirement(&package_version)?
     };
@@ -235,10 +234,13 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
 
 // Convert `package_version` into a tilde version requirement
 //
-// For instance, given `package_version` like 0.12.3, the function returns `~0.12`.
-fn convert_to_tilde_requirement(package_version: &str) -> Result<String> {
+// For instance, given `package_version` like `0.12.3`, the function returns `~0.12`.
+// The fact that this function takes a `semver::Version` means one can only convert a complete
+// semver `x.y.z` into a tilde version requirement, but not those like `0.21.0-alpha.1`.
+fn convert_to_tilde_requirement(package_version: &Version) -> Result<String> {
     // `package_version` is from the `semver` crate which requires versions to have 3 components,
     // major, minor, and patch. So it is safe to assume its string value follows that format.
+    let package_version = package_version.to_string();
     let package_version = match package_version.rfind('.') {
         // Here, we're interested in the `major.minor` part.
         Some(index) => &package_version[0..index],
