@@ -248,7 +248,7 @@ impl AssumeRoleProviderBuilder {
             )
             .build();
 
-        if conf.credentials_cache().is_none() {}
+        // set a region override if one exists
         if let Some(region) = self.region_override {
             conf = conf.into_builder().region(region).build()
         }
