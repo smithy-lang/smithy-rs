@@ -7,14 +7,17 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowDeprecated
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.Default
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.setDefault
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -37,8 +40,8 @@ internal class BuilderGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(inner) {
             rust("##![allow(deprecated)]")
-            StructureGenerator(model, provider, this, inner, emptyList()).render()
-            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            generator(model, provider, this, inner).render()
+            generator(model, provider, this, struct).render()
             implBlock(provider.toSymbol(struct)) {
                 BuilderGenerator.renderConvenienceMethod(this, provider, struct)
             }
@@ -73,8 +76,8 @@ internal class BuilderGeneratorTest {
 
         project.moduleFor(StructureGeneratorTest.struct) {
             AllowDeprecated.render(this)
-            StructureGenerator(model, provider, this, inner, emptyList()).render()
-            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            generator(model, provider, this, inner).render()
+            generator(model, provider, this, struct).render()
             implBlock(provider.toSymbol(struct)) {
                 BuilderGenerator.renderConvenienceMethod(this, provider, struct)
             }
@@ -94,12 +97,14 @@ internal class BuilderGeneratorTest {
         project.compileAndTest()
     }
 
+    private fun generator(model: Model, provider: RustSymbolProvider, writer: RustWriter, shape: StructureShape) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
+
     @Test
     fun `builder for a struct with sensitive fields should implement the debug trait as such`() {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(credentials) {
-            StructureGenerator(model, provider, this, credentials, emptyList()).render()
+            generator(model, provider, this, credentials).render()
             implBlock(provider.toSymbol(credentials)) {
                 BuilderGenerator.renderConvenienceMethod(this, provider, credentials)
             }
@@ -126,7 +131,7 @@ internal class BuilderGeneratorTest {
         val provider = testSymbolProvider(model)
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(secretStructure) {
-            StructureGenerator(model, provider, this, secretStructure, emptyList()).render()
+            generator(model, provider, this, secretStructure).render()
             implBlock(provider.toSymbol(secretStructure)) {
                 BuilderGenerator.renderConvenienceMethod(this, provider, secretStructure)
             }
@@ -188,7 +193,7 @@ internal class BuilderGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape: StructureShape = model.lookup("com.test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(model, provider, this, shape, listOf()).render()
+            generator(model, provider, this, shape).render()
             BuilderGenerator(model, provider, shape, listOf()).render(this)
             unitTest("test_defaults") {
                 rustTemplate(

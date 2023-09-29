@@ -179,10 +179,80 @@ meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
 
 [[smithy-rs]]
+message = """
+Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. This is enabled by default for clients and can be disabled by updating your smithy-build.json with the following setting:
+```json
+{
+  "codegen": {
+    "flattenCollectionAccessors": false,
+    ...
+  }
+}
+```
+"""
+references = ["smithy-rs#2995"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+
+[[aws-sdk-rust]]
+message = "Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. To determine if the field was actually set use `.<field_name>.is_some()`."
+references = ["smithy-rs#2995"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
 message = "Produce better docs when items are marked @required"
 references = ["smithy-rs#2996"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The `futures_core::stream::Stream` trait has been removed from public API. It should not affect usual SDK use cases. If your code uses paginators, you do not need to use the `Stream` trait or its exntension traits, but only the `next`, `try_next`, `collect`, and `try_collect` methods are supported on `PaginationStream`. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner. Finally, `fn_stream` has been moved to be a child module of `pagination_stream`."
+references = ["smithy-rs#2978"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The `futures_core::stream::Stream` trait has been removed from public API. `FnStream` only supports `next`, `try_next`, `collect`, and `try_collect` methods. [`TryFlatMap::flat_map`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.TryFlatMap.html#method.flat_map) returns [`PaginationStream`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.PaginationStream.html), which should be preferred to `FnStream` at an interface level. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner. Finally, `fn_stream` has been moved to be a child module of `pagination_stream`."
+references = ["smithy-rs#2978"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Python middleware can set URI. This can be used to route a request to a different handler."
+references = ["smithy-rs#3005"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "server" }
+author = "drganjoo"
+
+[[aws-sdk-rust]]
+message = "Add support for Sigv4A request signing. Sigv4a signing will be used automatically when appropriate for a given operation. Currently, it's used for S3 and EventBridge."
+references = ["smithy-rs#1797"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner."
+references = ["smithy-rs#2983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner."
+references = ["smithy-rs#2983"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`StaticUriEndpointResolver`'s `uri` constructor now takes a `String` instead of a `Uri`."
+references = ["smithy-rs#2997"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The IMDS Client builder's `build()` method is no longer async."
+references = ["smithy-rs#2997"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
 
 [[aws-sdk-rust]]
 message = "`ProviderConfig` will now respect both `use_fips` and `use_dual_stack` when those settings are configured in a user's environment or profile."

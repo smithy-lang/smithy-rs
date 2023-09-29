@@ -433,7 +433,7 @@ class FluentClientGenerator(
                         """
                         /// Create a paginator for this request
                         ///
-                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
+                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
                         pub fn into_paginator(self) -> #{Paginator} {
                             #{Paginator}::new(self.handle, self.inner)
                         }

@@ -14,7 +14,6 @@ use bytes::Buf;
 use bytes_utils::SegmentedBuf;
 use http::header::HeaderName;
 use ring::digest::{Context, Digest, SHA256};
-use tokio_stream::StreamExt;
 
 const TREE_HASH_HEADER: &str = "x-amz-sha256-tree-hash";
 const X_AMZ_CONTENT_SHA256: &str = "x-amz-content-sha256";

@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
@@ -145,7 +146,7 @@ fun StructureShape.serverRenderWithModelBuilder(
     writer: RustWriter,
     protocol: ServerProtocol? = null,
 ) {
-    StructureGenerator(model, symbolProvider, writer, this, emptyList()).render()
+    StructureGenerator(model, symbolProvider, writer, this, emptyList(), StructSettings(false)).render()
     val serverCodegenContext = serverTestCodegenContext(model)
     // Note that this always uses `ServerBuilderGenerator` and _not_ `ServerBuilderGeneratorWithoutPublicConstrainedTypes`,
     // regardless of the `publicConstrainedTypes` setting.

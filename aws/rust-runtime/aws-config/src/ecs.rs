@@ -55,7 +55,7 @@ use aws_credential_types::provider::{self, error::CredentialsError, future, Prov
 use aws_smithy_client::erase::boxclone::BoxCloneService;
 use aws_smithy_http::endpoint::apply_endpoint;
 use aws_smithy_types::error::display::DisplayErrorContext;
-use http::uri::{InvalidUri, Scheme};
+use http::uri::{InvalidUri, PathAndQuery, Scheme};
 use http::{HeaderValue, Uri};
 use tower::{Service, ServiceExt};
 
@@ -166,6 +166,15 @@ impl Provider {
             Err(EcsConfigurationError::NotConfigured) => return Provider::NotConfigured,
             Err(err) => return Provider::InvalidConfiguration(err),
         };
+        let path = uri.path().to_string();
+        let endpoint = {
+            let mut parts = uri.into_parts();
+            parts.path_and_query = Some(PathAndQuery::from_static("/"));
+            Uri::from_parts(parts)
+        }
+        .expect("parts will be valid")
+        .to_string();
+
         let http_provider = HttpCredentialProvider::builder()
             .configure(&provider_config)
             .connector_settings(
@@ -174,7 +183,7 @@ impl Provider {
                     .read_timeout(DEFAULT_READ_TIMEOUT)
                     .build(),
             )
-            .build("EcsContainer", uri);
+            .build("EcsContainer", &endpoint, path);
         Provider::Configured(http_provider)
     }
 
