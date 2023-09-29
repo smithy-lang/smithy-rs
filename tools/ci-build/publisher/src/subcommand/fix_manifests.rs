@@ -236,7 +236,15 @@ fn convert_to_tilde_requirement(package_version: &semver::Version) -> Result<Str
     let package_version = package_version.to_string();
     let package_version = match package_version.rfind('.') {
         // Here, we're interested in the `major.minor` part.
-        Some(index) => &package_version[0..index],
+        Some(index) => {
+            assert_eq!(
+                2,
+                package_version.chars().filter(|&c| c == '.').count(),
+                "The number of `.` in {} is not 2",
+                package_version
+            );
+            &package_version[0..index]
+        }
         None => bail!("{} did not have any dots in it", package_version),
     };
 
