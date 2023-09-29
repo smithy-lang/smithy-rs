@@ -16,6 +16,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use smithy_rs_tool_common::ci::running_in_ci;
+use smithy_rs_tool_common::package::SDK_PREFIX;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -24,8 +25,6 @@ use toml::Value;
 use tracing::{debug, info};
 
 mod validate;
-
-const AWS_SDK_CRATE_NAME_PREFIX: &str = "aws-sdk-";
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum Mode {
@@ -209,7 +208,7 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
     let package_version = versions
         .get(dep_name)
         .ok_or_else(|| anyhow::Error::msg(format!("version not found for crate {dep_name}")))?;
-    let package_version = if dep_name.starts_with(AWS_SDK_CRATE_NAME_PREFIX) {
+    let package_version = if dep_name.starts_with(SDK_PREFIX) {
         // For a crate that depends on an SDK crate (e.g. `aws-config` depending on `aws-sdk-sts`),
         // we do _not_ want to turn the version of the SDK crate into a tilde version because
         // customers may depend on that SDK crate by themselves, causing multiple versions of it
