@@ -12,7 +12,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-client-hyper = ["aws-smithy-client/client-hyper"]
+client-hyper = ["aws-smithy-client/client-hyper", "aws-smithy-runtime/connector-hyper"]
 rustls = ["aws-smithy-client/rustls", "client-hyper"]
 native-tls = []
 allow-compilation = [
@@ -31,7 +31,10 @@ aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", de
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-tower" }
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
+aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
+aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
+aws-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-runtime" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 hyper = { version = "0.14.26", default-features = false }
 time = { version = "0.3.4", features = ["parsing"] }
@@ -52,6 +55,7 @@ hex = { version = "0.4.3", optional = true }
 zeroize = { version = "1", optional = true }
 
 [dev-dependencies]
+aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 futures-util = { version = "0.3.16", default-features = false }
 tracing-test = "0.2.1"
 tracing-subscriber = { version = "0.3.16", features = ["fmt", "json"] }

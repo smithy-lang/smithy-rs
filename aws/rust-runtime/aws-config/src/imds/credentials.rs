@@ -9,8 +9,7 @@
 //! This credential provider will NOT fallback to IMDSv1. Ensure that IMDSv2 is enabled on your instances.
 
 use super::client::error::ImdsError;
-use crate::imds;
-use crate::imds::client::LazyClient;
+use crate::imds::{self, Client};
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
@@ -50,7 +49,7 @@ impl StdError for ImdsCommunicationError {
 /// _Note: This credentials provider will NOT fallback to the IMDSv1 flow._
 #[derive(Debug)]
 pub struct ImdsCredentialsProvider {
-    client: LazyClient,
+    client: Client,
     env: Env,
     profile: Option<String>,
     time_source: SharedTimeSource,
@@ -110,12 +109,7 @@ impl Builder {
         let env = provider_config.env();
         let client = self
             .imds_override
-            .map(LazyClient::from_ready_client)
-            .unwrap_or_else(|| {
-                imds::Client::builder()
-                    .configure(&provider_config)
-                    .build_lazy()
-            });
+            .unwrap_or_else(|| imds::Client::builder().configure(&provider_config).build());
         ImdsCredentialsProvider {
             client,
             env,
@@ -156,23 +150,14 @@ impl ImdsCredentialsProvider {
         }
     }
 
-    /// Load an inner IMDS client from the OnceCell
-    async fn client(&self) -> Result<&imds::Client, CredentialsError> {
-        self.client.client().await.map_err(|build_error| {
-            // need to format the build error since we don't own it and it can't be cloned
-            CredentialsError::invalid_configuration(format!("{}", build_error))
-        })
-    }
-
     /// Retrieve the instance profile from IMDS
     async fn get_profile_uncached(&self) -> Result<String, CredentialsError> {
         match self
-            .client()
-            .await?
+            .client
             .get("/latest/meta-data/iam/security-credentials/")
             .await
         {
-            Ok(profile) => Ok(profile),
+            Ok(profile) => Ok(profile.as_ref().into()),
             Err(ImdsError::ErrorResponse(context))
                 if context.response().status().as_u16() == 404 =>
             {
@@ -223,9 +208,11 @@ impl ImdsCredentialsProvider {
 
     async fn retrieve_credentials(&self) -> provider::Result {
         if self.imds_disabled() {
-            tracing::debug!("IMDS disabled because $AWS_EC2_METADATA_DISABLED was set to `true`");
+            tracing::debug!(
+                "IMDS disabled because AWS_EC2_METADATA_DISABLED env var was set to `true`"
+            );
             return Err(CredentialsError::not_loaded(
-                "IMDS disabled by $AWS_ECS_METADATA_DISABLED",
+                "IMDS disabled by AWS_ECS_METADATA_DISABLED env var",
             ));
         }
         tracing::debug!("loading credentials from IMDS");
@@ -235,15 +222,14 @@ impl ImdsCredentialsProvider {
         };
         tracing::debug!(profile = %profile, "loaded profile");
         let credentials = self
-            .client()
-            .await?
-            .get(&format!(
+            .client
+            .get(format!(
                 "/latest/meta-data/iam/security-credentials/{}",
                 profile
             ))
             .await
             .map_err(CredentialsError::provider_error)?;
-        match parse_json_credentials(&credentials) {
+        match parse_json_credentials(credentials.as_ref()) {
             Ok(JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id,
                 secret_access_key,
@@ -296,19 +282,16 @@ impl ImdsCredentialsProvider {
 
 #[cfg(test)]
 mod test {
-    use std::time::{Duration, UNIX_EPOCH};
-
+    use super::*;
     use crate::imds::client::test::{
         imds_request, imds_response, make_client, token_request, token_response,
-    };
-    use crate::imds::credentials::{
-        ImdsCredentialsProvider, WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY,
     };
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_client::erase::DynConnector;
     use aws_smithy_client::test_connection::TestConnection;
+    use std::time::{Duration, UNIX_EPOCH};
     use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
@@ -338,7 +321,7 @@ mod test {
                 ),
             ]);
         let client = ImdsCredentialsProvider::builder()
-            .imds_client(make_client(&connection).await)
+            .imds_client(make_client(&connection))
             .build();
         let creds1 = client.provide_credentials().await.expect("valid creds");
         let creds2 = client.provide_credentials().await.expect("valid creds");
@@ -376,9 +359,7 @@ mod test {
             .with_time_source(time_source);
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
-            .build()
-            .await
-            .expect("valid client");
+            .build();
         let provider = ImdsCredentialsProvider::builder()
             .configure(&provider_config)
             .imds_client(client)
@@ -422,9 +403,7 @@ mod test {
             .with_time_source(time_source);
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
-            .build()
-            .await
-            .expect("valid client");
+            .build();
         let provider = ImdsCredentialsProvider::builder()
             .configure(&provider_config)
             .imds_client(client)
@@ -443,9 +422,7 @@ mod test {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
             .endpoint(http::Uri::from_static("http://240.0.0.0"))
-            .build()
-            .await
-            .expect("valid client");
+            .build();
         let expected = aws_credential_types::Credentials::for_tests();
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(client)
@@ -463,18 +440,16 @@ mod test {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
             .endpoint(http::Uri::from_static("http://240.0.0.0"))
-            .build()
-            .await
-            .expect("valid client");
+            .build();
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(client)
             // no fallback credentials provided
             .build();
         let actual = provider.provide_credentials().await;
-        assert!(matches!(
-            actual,
-            Err(aws_credential_types::provider::error::CredentialsError::CredentialsNotLoaded(_))
-        ));
+        assert!(
+            matches!(actual, Err(CredentialsError::CredentialsNotLoaded(_))),
+            "\nexpected: Err(CredentialsError::CredentialsNotLoaded(_))\nactual: {actual:?}"
+        );
     }
 
     #[tokio::test]
@@ -484,9 +459,7 @@ mod test {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
             .endpoint(http::Uri::from_static("http://240.0.0.0"))
-            .build()
-            .await
-            .expect("valid client");
+            .build();
         let expected = aws_credential_types::Credentials::for_tests();
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(client)
@@ -536,7 +509,7 @@ mod test {
                 ),
             ]);
         let provider = ImdsCredentialsProvider::builder()
-            .imds_client(make_client(&connection).await)
+            .imds_client(make_client(&connection))
             .build();
         let creds1 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");

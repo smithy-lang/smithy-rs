@@ -30,9 +30,9 @@ use aws_smithy_runtime_api::client::runtime_plugin::{
 use aws_smithy_runtime_api::client::ser_de::{
     RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
 };
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::retry::RetryConfig;
-use http::Uri;
 use std::borrow::Cow;
 use std::fmt;
 use std::marker::PhantomData;
@@ -100,12 +100,24 @@ impl<F, O, E> fmt::Debug for FnDeserializer<F, O, E> {
 
 /// Orchestrates execution of a HTTP request without any modeled input or output.
 #[doc(hidden)]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Operation<I, O, E> {
     service_name: Cow<'static, str>,
     operation_name: Cow<'static, str>,
     runtime_plugins: RuntimePlugins,
     _phantom: PhantomData<(I, O, E)>,
+}
+
+// Manual Clone implementation needed to get rid of Clone bounds on I, O, and E
+impl<I, O, E> Clone for Operation<I, O, E> {
+    fn clone(&self) -> Self {
+        Self {
+            service_name: self.service_name.clone(),
+            operation_name: self.operation_name.clone(),
+            runtime_plugins: self.runtime_plugins.clone(),
+            _phantom: self._phantom,
+        }
+    }
 }
 
 impl Operation<(), (), ()> {
@@ -177,7 +189,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn http_connector(mut self, connector: SharedHttpConnector) -> Self {
+    pub fn http_connector(mut self, connector: impl IntoShared<SharedHttpConnector>) -> Self {
         self.runtime_components.set_http_connector(Some(connector));
         self
     }
@@ -186,7 +198,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self.config.store_put(EndpointResolverParams::new(()));
         self.runtime_components
             .set_endpoint_resolver(Some(SharedEndpointResolver::new(
-                StaticUriEndpointResolver::uri(Uri::try_from(url).expect("valid URI")),
+                StaticUriEndpointResolver::uri(url),
             )));
         self
     }
@@ -237,13 +249,13 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn interceptor(mut self, interceptor: SharedInterceptor) -> Self {
+    pub fn interceptor(mut self, interceptor: impl IntoShared<SharedInterceptor>) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
     }
 
-    pub fn runtime_plugin(mut self, runtime_plugin: SharedRuntimePlugin) -> Self {
-        self.runtime_plugins.push(runtime_plugin);
+    pub fn runtime_plugin(mut self, runtime_plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
+        self.runtime_plugins.push(runtime_plugin.into_shared());
         self
     }
 
@@ -294,26 +306,6 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
-        assert!(
-            self.runtime_components.http_connector().is_some(),
-            "a http_connector is required"
-        );
-        assert!(
-            self.runtime_components.endpoint_resolver().is_some(),
-            "a endpoint_resolver is required"
-        );
-        assert!(
-            self.runtime_components.retry_strategy().is_some(),
-            "a retry_strategy is required"
-        );
-        assert!(
-            self.config.load::<SharedRequestSerializer>().is_some(),
-            "a serializer is required"
-        );
-        assert!(
-            self.config.load::<SharedResponseDeserializer>().is_some(),
-            "a deserializer is required"
-        );
         let mut runtime_plugins = RuntimePlugins::new().with_client_plugin(
             StaticRuntimePlugin::new()
                 .with_config(self.config.freeze())
@@ -321,6 +313,39 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         );
         for runtime_plugin in self.runtime_plugins {
             runtime_plugins = runtime_plugins.with_client_plugin(runtime_plugin);
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            let mut config = ConfigBag::base();
+            let components = runtime_plugins
+                .apply_client_configuration(&mut config)
+                .expect("the runtime plugins should succeed");
+
+            assert!(
+                components.http_connector().is_some(),
+                "a http_connector is required"
+            );
+            assert!(
+                components.endpoint_resolver().is_some(),
+                "a endpoint_resolver is required"
+            );
+            assert!(
+                components.retry_strategy().is_some(),
+                "a retry_strategy is required"
+            );
+            assert!(
+                config.load::<SharedRequestSerializer>().is_some(),
+                "a serializer is required"
+            );
+            assert!(
+                config.load::<SharedResponseDeserializer>().is_some(),
+                "a deserializer is required"
+            );
+            assert!(
+                config.load::<EndpointResolverParams>().is_some(),
+                "endpoint resolver params are required"
+            );
         }
 
         Operation {
