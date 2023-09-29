@@ -592,6 +592,9 @@ class DefaultProtocolTestGenerator(
             "SDKAppliedContentEncoding_ec2Query",
             "SDKAppliedContentEncoding_restJson1",
             "SDKAppliedContentEncoding_restXml",
+            "AwsJson11DeserializeIgnoreType",
+            "AwsJson10DeserializeIgnoreType",
+            "RestJsonDeserializeIgnoreType",
         )
     }
 }

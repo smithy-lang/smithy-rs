@@ -223,6 +223,7 @@ class ClientCodegenVisitor(
                         this,
                         shape,
                         codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                        structSettings = codegenContext.structSettings(),
                     ).render()
 
                     implBlock(symbolProvider.toSymbol(shape)) {
@@ -246,6 +247,7 @@ class ClientCodegenVisitor(
                     shape,
                     errorTrait,
                     codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                    codegenContext.structSettings(),
                 )
                 errorGenerator::renderStruct to errorGenerator::renderBuilder
             }

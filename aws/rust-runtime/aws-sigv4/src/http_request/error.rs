@@ -108,7 +108,7 @@ impl CanonicalRequestError {
         }
     }
 
-    pub(crate) fn unsupported_credential_type() -> Self {
+    pub(crate) fn unsupported_identity_type() -> Self {
         Self {
             kind: CanonicalRequestErrorKind::UnsupportedIdentityType,
         }
