@@ -935,7 +935,7 @@ mod timeout_middleware {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod test {
     use super::*;
     use crate::client::http::test_util::NeverTcpConnector;

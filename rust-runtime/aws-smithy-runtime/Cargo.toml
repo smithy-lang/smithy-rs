@@ -19,7 +19,6 @@ rt-tokio = ["tokio/rt"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
-aws-smithy-client = { path = "../aws-smithy-client" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
