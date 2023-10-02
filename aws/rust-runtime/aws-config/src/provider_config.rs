@@ -286,13 +286,13 @@ impl ProviderConfig {
     }
 
     /// Override the `use_fips` setting.
-    pub fn with_use_fips(mut self, use_fips: Option<bool>) -> Self {
+    pub(crate) fn with_use_fips(mut self, use_fips: Option<bool>) -> Self {
         self.use_fips = use_fips;
         self
     }
 
     /// Override the `use_dual_stack` setting.
-    pub fn with_use_dual_stack(mut self, use_dual_stack: Option<bool>) -> Self {
+    pub(crate) fn with_use_dual_stack(mut self, use_dual_stack: Option<bool>) -> Self {
         self.use_dual_stack = use_dual_stack;
         self
     }
