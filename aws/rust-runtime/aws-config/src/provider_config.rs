@@ -5,27 +5,25 @@
 
 //! Configuration Options for Credential Providers
 
+use crate::connector::{default_connector, expect_connector};
+use crate::profile;
+use crate::profile::profile_file::ProfileFiles;
+use crate::profile::{ProfileFileLoadError, ProfileSet};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_client::erase::DynConnector;
 use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_smithy_types::retry::RetryConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::{
     http_connector::{ConnectorSettings, HttpConnector},
     region::Region,
+    SdkConfig,
 };
 use std::borrow::Cow;
-
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-
-use crate::connector::default_connector;
-use crate::default_provider::use_dual_stack;
-use crate::profile;
-
-use crate::profile::profile_file::ProfileFiles;
-use crate::profile::{ProfileFileLoadError, ProfileSet};
 
 /// Configuration options for Credential Providers
 ///
@@ -194,6 +192,21 @@ impl ProviderConfig {
         Self::without_region().load_default_region().await
     }
 
+    pub(crate) fn client_config(&self, feature_name: &str) -> SdkConfig {
+        let mut builder = SdkConfig::builder()
+            .http_connector(expect_connector(
+                &format!("The {feature_name} features of aws-config"),
+                self.connector(&Default::default()),
+            ))
+            .retry_config(RetryConfig::standard())
+            .region(self.region())
+            .time_source(self.time_source())
+            .use_fips(self.use_fips().unwrap_or_default())
+            .use_dual_stack(self.use_dual_stack().unwrap_or_default());
+        builder.set_sleep_impl(self.sleep());
+        builder.build()
+    }
+
     // When all crate features are disabled, these accessors are unused
 
     #[allow(dead_code)]
@@ -323,7 +336,7 @@ impl ProviderConfig {
     /// Use the [default use_fips provider](crate::default_provider::use_fips::use_fips_provider) to set the
     /// `use_fips` setting for this configuration
     ///
-    /// Note: the `env` and `fs` already set on this provider will be used when loading the default region.
+    /// Note: the `env` and `fs` already set on this provider will be used when loading the default value.
     pub async fn load_default_use_fips(self) -> Self {
         let use_fips = crate::default_provider::use_fips::use_fips_provider(&self).await;
         self.with_use_fips(use_fips)
@@ -332,7 +345,7 @@ impl ProviderConfig {
     /// Use the [default use_dual_stack provider](crate::default_provider::use_dual_stack::use_dual_stack_provider) to set the
     /// `use_dual_stack` setting for this configuration
     ///
-    /// Note: the `env` and `fs` already set on this provider will be used when loading the default region.
+    /// Note: the `env` and `fs` already set on this provider will be used when loading the default value.
     pub async fn load_default_use_dual_stack(self) -> Self {
         let use_dual_stack =
             crate::default_provider::use_dual_stack::use_dual_stack_provider(&self).await;

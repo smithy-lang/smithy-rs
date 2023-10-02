@@ -342,6 +342,7 @@ impl ProvideCredentials for AssumeRoleProvider {
 
 #[cfg(test)]
 mod test {
+    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::sts::AssumeRoleProvider;
     use aws_credential_types::credential_fn::provide_credentials_fn;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
@@ -353,7 +354,7 @@ mod test {
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::region::Region;
     use aws_types::SdkConfig;
     use http::header::AUTHORIZATION;
@@ -362,7 +363,7 @@ mod test {
     #[tokio::test]
     async fn configures_session_length() {
         let (server, request) = capture_request(None);
-        let provider_conf = SdkConfig::builder()
+        let sdk_config = SdkConfig::builder()
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .time_source(StaticTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
@@ -371,7 +372,7 @@ mod test {
             .region(Region::from_static("this-will-be-overridden"))
             .build();
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
+            .configure(&sdk_config)
             .region(Region::new("us-east-1"))
             .session_length(Duration::from_secs(1234567))
             .build_from_provider(provide_credentials_fn(|| async {
@@ -388,7 +389,7 @@ mod test {
     #[tokio::test]
     async fn loads_region_from_sdk_config() {
         let (server, request) = capture_request(None);
-        let provider_conf = SdkConfig::builder()
+        let sdk_config = SdkConfig::builder()
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .time_source(StaticTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
@@ -397,14 +398,12 @@ mod test {
             .credentials_provider(SharedCredentialsProvider::new(provide_credentials_fn(
                 || async {
                     panic!("don't call me — will be overridden");
-                    #[allow(unreachable_code)]
-                    Ok(Credentials::for_tests())
                 },
             )))
             .region(Region::from_static("us-west-2"))
             .build();
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
+            .configure(&sdk_config)
             .session_length(Duration::from_secs(1234567))
             .build_from_provider(provide_credentials_fn(|| async {
                 Ok(Credentials::for_tests())
@@ -460,55 +459,52 @@ mod test {
     }
 
     #[tokio::test]
-    async fn configures_fips_endpoint() {
+    async fn configures_fips_endpoint_from_env() {
         let (server, request) = capture_request(None);
-        let provider_conf = ProviderConfig::empty()
-            .with_sleep(TokioSleep::new())
-            .with_time_source(StaticTimeSource::new(
-                UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
-            ))
-            .with_use_fips(Some(true))
-            .with_http_connector(DynConnector::new(server));
+        let sdk_config = crate::from_env()
+            .region(Region::from_static("us-east-1"))
+            .env(Env::from_slice(&[("AWS_USE_FIPS_ENDPOINT", "true")]))
+            .http_connector(server)
+            .load()
+            .await;
+        assert!(sdk_config.use_fips().unwrap_or_default());
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
-            .region(Region::new("us-east-1"))
-            .session_length(Duration::from_secs(1234567))
-            .build(provide_credentials_fn(|| async {
+            .configure(&sdk_config)
+            .build_from_provider(provide_credentials_fn(|| async {
                 Ok(Credentials::for_tests())
-            }));
+            }))
+            .await;
         let _ = provider.provide_credentials().await;
         let req = request.expect_request();
-        let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
-        assert!(str_body.contains("1234567"), "{}", str_body);
         assert!(req.uri().host().unwrap().contains("sts-fips"));
     }
 
     #[tokio::test]
-    async fn configures_fips_endpoint_from_env() {
+    async fn configures_fips_endpoint_from_profile() {
         let (server, request) = capture_request(None);
-        let provider_conf = ProviderConfig::empty()
-            .with_env(aws_types::os_shim_internal::Env::from_slice(&[(
-                "AWS_USE_FIPS_ENDPOINT",
-                "true",
+        let sdk_config = crate::from_env()
+            .region(Region::from_static("us-east-1"))
+            .profile_files(
+                ProfileFiles::builder()
+                    .with_file(ProfileFileKind::Config, "conf")
+                    .build(),
+            )
+            .fs(Fs::from_slice(&[(
+                "conf",
+                "[default]\nuse_fips_endpoint = true",
             )]))
-            .with_sleep(TokioSleep::new())
-            .with_time_source(StaticTimeSource::new(
-                UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
-            ))
-            .with_http_connector(DynConnector::new(server))
-            .load_default_use_fips()
+            .http_connector(server)
+            .load()
             .await;
+        assert!(sdk_config.use_fips().unwrap_or_default());
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
-            .region(Region::new("us-east-1"))
-            .session_length(Duration::from_secs(1234567))
-            .build(provide_credentials_fn(|| async {
+            .configure(&sdk_config)
+            .build_from_provider(provide_credentials_fn(|| async {
                 Ok(Credentials::for_tests())
-            }));
+            }))
+            .await;
         let _ = provider.provide_credentials().await;
         let req = request.expect_request();
-        let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
-        assert!(str_body.contains("1234567"), "{}", str_body);
         assert!(req.uri().host().unwrap().contains("sts-fips"));
     }
 
@@ -529,7 +525,7 @@ mod test {
             UNIX_EPOCH + Duration::from_secs(1234567890 - 120), // 1234567890 since UNIX_EPOCH is 2009-02-13T23:31:30Z
         );
 
-        let provider_conf = SdkConfig::builder()
+        let sdk_config = SdkConfig::builder()
             .sleep_impl(SharedAsyncSleep::new(sleep))
             .time_source(testing_time_source.clone())
             .http_connector(DynConnector::new(conn))
@@ -552,7 +548,7 @@ mod test {
         ]));
         let credentials_list_cloned = credentials_list.clone();
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
+            .configure(&sdk_config)
             .region(Region::new("us-east-1"))
             .build_from_provider(provide_credentials_fn(move || {
                 let list = credentials_list.clone();
