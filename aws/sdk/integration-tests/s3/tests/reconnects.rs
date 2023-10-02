@@ -6,10 +6,12 @@
 use aws_sdk_s3::config::retry::{ReconnectMode, RetryConfig};
 use aws_sdk_s3::config::{Credentials, Region, SharedAsyncSleep};
 use aws_smithy_async::rt::sleep::TokioSleep;
+use aws_smithy_runtime::client::http::test_util::wire::{ReplayedEvent, WireMockServer};
+use aws_smithy_runtime::{ev, match_events};
 
 #[tokio::test]
 async fn test_disable_reconnect_on_503() {
-    let mock = WireLevelTestConnection::spinup(vec![
+    let mock = WireMockServer::start(vec![
         ReplayedEvent::status(503),
         ReplayedEvent::status(503),
         ReplayedEvent::with_body("here-is-your-object"),
@@ -49,7 +51,7 @@ async fn test_disable_reconnect_on_503() {
 
 #[tokio::test]
 async fn test_enabling_reconnect_on_503() {
-    let mock = WireLevelTestConnection::spinup(vec![
+    let mock = WireMockServer::start(vec![
         ReplayedEvent::status(503),
         ReplayedEvent::status(503),
         ReplayedEvent::with_body("here-is-your-object"),

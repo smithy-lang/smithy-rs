@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_runtime::client::http::test_util::dvr::{MediaType, ReplayingClient};
+
 #[tokio::test]
 async fn do_endpoint_discovery() {
     use aws_credential_types::provider::SharedCredentialsProvider;
@@ -17,7 +19,7 @@ async fn do_endpoint_discovery() {
 
     let _logs = aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs();
 
-    let conn = ReplayingConnection::from_file("tests/traffic.json").unwrap();
+    let http_client = ReplayingClient::from_file("tests/traffic.json").unwrap();
     //let conn = aws_smithy_client::dvr::RecordingConnection::new(conn);
     let start = UNIX_EPOCH + Duration::from_secs(1234567890);
     let (ts, sleep, mut gate) = controlled_time_and_sleep(start);
@@ -64,15 +66,16 @@ async fn do_endpoint_discovery() {
         .unwrap();
     // if you want to update this test:
     // conn.dump_to_file("tests/traffic.json").unwrap();
-    conn.validate_body_and_headers(
-        Some(&[
-            "x-amz-security-token",
-            "x-amz-date",
-            "content-type",
-            "x-amz-target",
-        ]),
-        MediaType::Json,
-    )
-    .await
-    .unwrap();
+    http_client
+        .validate_body_and_headers(
+            Some(&[
+                "x-amz-security-token",
+                "x-amz-date",
+                "content-type",
+                "x-amz-target",
+            ]),
+            MediaType::Json,
+        )
+        .await
+        .unwrap();
 }

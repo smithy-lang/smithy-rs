@@ -538,7 +538,7 @@ impl HyperClientBuilder {
         })
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "test-util"))]
     fn build_with_fn<C, F>(self, tcp_connector_fn: F) -> SharedHttpClient
     where
         F: Fn() -> C + Send + Sync + 'static,
