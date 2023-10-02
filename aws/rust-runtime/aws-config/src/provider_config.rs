@@ -337,7 +337,7 @@ impl ProviderConfig {
     /// `use_fips` setting for this configuration
     ///
     /// Note: the `env` and `fs` already set on this provider will be used when loading the default value.
-    pub async fn load_default_use_fips(self) -> Self {
+    pub(crate) async fn load_default_use_fips(self) -> Self {
         let use_fips = crate::default_provider::use_fips::use_fips_provider(&self).await;
         self.with_use_fips(use_fips)
     }
@@ -346,7 +346,7 @@ impl ProviderConfig {
     /// `use_dual_stack` setting for this configuration
     ///
     /// Note: the `env` and `fs` already set on this provider will be used when loading the default value.
-    pub async fn load_default_use_dual_stack(self) -> Self {
+    pub(crate) async fn load_default_use_dual_stack(self) -> Self {
         let use_dual_stack =
             crate::default_provider::use_dual_stack::use_dual_stack_provider(&self).await;
         self.with_use_dual_stack(use_dual_stack)
