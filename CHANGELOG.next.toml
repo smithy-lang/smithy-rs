@@ -255,6 +255,14 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = """The API for [`AssumeRoleProvider`](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html) has been updated to derive configuration from [`SdkConfig`](https://docs.rs/aws-config/latest/aws_config/struct.SdkConfig.html) instead of `ProviderConfig`.
+
+For more information, see the [Change Log Discussion](https://github.com/awslabs/aws-sdk-rust/discussions/906)"""
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+references = ["smithy-rs#3014"]
+author = "rcoh"
+
+[[aws-sdk-rust]]
 message = "`ProviderConfig` will now respect both `use_fips` and `use_dual_stack` when those settings are configured in a user's environment or profile."
 references = ["aws-sdk-rust#882", "smithy-rs#3007"]
 meta = { "breaking" = false, "tada" = true, "bug" = true }

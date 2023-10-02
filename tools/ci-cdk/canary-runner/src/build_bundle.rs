@@ -66,7 +66,7 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
 // The elements in this `Vec` should be sorted in an ascending order by the release date.
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
-        ReleaseTag::from_str("release-2023-08-23").unwrap(), // last version before `Stream` trait removal
+        ReleaseTag::from_str("release-2023-09-25").unwrap(), // last version before `Stream` trait removal
     ];
 }
 
@@ -442,7 +442,7 @@ aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 
 [features]
 latest = []
-"release-2023-08-23" = []
+"release-2023-09-25" = []
 default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::Path("some/sdk/path".into())).expect("success")
@@ -506,7 +506,7 @@ aws-sdk-transcribestreaming = "0.16.0"
 
 [features]
 latest = []
-"release-2023-08-23" = []
+"release-2023-09-25" = []
 default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::VersionsManifest {
@@ -524,7 +524,7 @@ default = ["latest"]
                     .collect(),
                     release: None,
                 },
-                release_tag: ReleaseTag::from_str("release-2023-08-26").unwrap(),
+                release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
             })
             .expect("success")
         );
@@ -585,14 +585,14 @@ default = ["latest"]
             }),
         );
         assert_eq!(
-            "release-2023-08-23".to_string(),
+            "release-2023-09-25".to_string(),
             enabled_feature(&CrateSource::VersionsManifest {
                 versions: versions.clone(),
-                release_tag: "release-2023-08-23".parse().unwrap(),
+                release_tag: "release-2023-09-25".parse().unwrap(),
             }),
         );
         assert_eq!(
-            "release-2023-08-23".to_string(),
+            "release-2023-09-25".to_string(),
             enabled_feature(&CrateSource::VersionsManifest {
                 versions,
                 release_tag: "release-2023-01-13".parse().unwrap(),
