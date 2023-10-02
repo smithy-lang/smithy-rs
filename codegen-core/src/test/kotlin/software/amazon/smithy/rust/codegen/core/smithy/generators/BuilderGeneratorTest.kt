@@ -177,12 +177,24 @@ internal class BuilderGeneratorTest {
               @default(true)
               @required
               defaultDocument: Document
+
+              @clientOptional
+              @required
+              @default([])
+              requiredButOptional: StringList
+
+              @default(1)
+              @clientOptional
+              @required
+              reqOptInt: OneDefault
+
             }
             list StringList {
                 member: String
             }
             @default(1)
             integer OneDefault
+
         """.asSmithyModel(smithyVersion = "2.0")
 
         val provider = testSymbolProvider(
@@ -207,6 +219,7 @@ internal class BuilderGeneratorTest {
                     assert_eq!(s.an_actually_required_field(), 5);
                     assert_eq!(s.no_default(), None);
                     assert_eq!(s.default_document().as_bool().unwrap(), true);
+                    assert_eq!(s.required_but_optional, Some(vec![]));
                     """,
                     "Struct" to provider.toSymbol(shape),
                 )

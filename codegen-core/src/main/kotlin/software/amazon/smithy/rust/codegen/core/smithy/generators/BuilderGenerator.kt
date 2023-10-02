@@ -416,6 +416,8 @@ class BuilderGenerator(
                                 ")?",
                             ) { missingRequiredField(memberName) }
                         }
+                    } else if (member.isRequired && default != null) {
+                        rust(".or_else(|| Some((#T)()))", default.expr)
                     }
                 }
             }
