@@ -6,8 +6,8 @@
 //! Utilities for mocking at the socket level
 //!
 //! Other tools in this module actually operate at the `http::Request` / `http::Response` level. This
-//! is useful, but it shortcuts the HTTP implementation (e.g. Hyper). [`wire_mock::WireLevelTestConnection`] binds
-//! to an actual socket on the host
+//! is useful, but it shortcuts the HTTP implementation (e.g. Hyper). [`WireMockServer`] binds
+//! to an actual socket on the host.
 //!
 //! # Examples
 //! ```no_run
@@ -61,7 +61,7 @@ use std::task::{Context, Poll};
 use tokio::spawn;
 use tokio::sync::oneshot;
 
-/// An event recorded by [`WireLevelTestConnection`]
+/// An event recorded by [`WireMockServer`].
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum RecordedEvent {
@@ -281,7 +281,7 @@ impl WireMockServer {
         }
     }
 
-    /// Prebuilt [`HttpClient`] with correctly wired DNS resolver
+    /// Prebuilt [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) with correctly wired DNS resolver.
     ///
     /// **Note**: This must be used in tandem with [`Self::dns_resolver`]
     pub fn http_client(&self) -> SharedHttpClient {
