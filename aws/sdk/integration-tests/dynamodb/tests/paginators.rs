@@ -9,10 +9,11 @@ use std::iter::FromIterator;
 use aws_credential_types::Credentials;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::{Client, Config};
-use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
-use aws_smithy_runtime::client::http::test_util::{capture_request, ConnectionEvent, EventClient};
+use aws_smithy_runtime::client::http::test_util::{
+    capture_request, ReplayEvent, StaticReplayClient,
+};
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_types::region::Region;
 use aws_types::sdk_config::SharedHttpClient;
@@ -59,12 +60,11 @@ fn mk_response(body: &'static str) -> http::Response<SdkBody> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn paginators_loop_until_completion() {
-    let http_client = EventClient::new(
-        vec![
-            ConnectionEvent::new(
-                mk_request(r#"{"TableName":"test-table","Limit":32}"#),
-                mk_response(
-                    r#"{
+    let http_client = StaticReplayClient::new(vec![
+        ReplayEvent::new(
+            mk_request(r#"{"TableName":"test-table","Limit":32}"#),
+            mk_response(
+                r#"{
                             "Count": 1,
                             "Items": [{
                                 "PostedBy": {
@@ -75,14 +75,14 @@ async fn paginators_loop_until_completion() {
                                 "PostedBy": { "S": "joe@example.com" }
                             }
                         }"#,
-                ),
             ),
-            ConnectionEvent::new(
-                mk_request(
-                    r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
-                ),
-                mk_response(
-                    r#"{
+        ),
+        ReplayEvent::new(
+            mk_request(
+                r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
+            ),
+            mk_response(
+                r#"{
                             "Count": 1,
                             "Items": [{
                                 "PostedBy": {
@@ -90,11 +90,9 @@ async fn paginators_loop_until_completion() {
                                 }
                             }]
                         }"#,
-                ),
             ),
-        ],
-        TokioSleep::new(),
-    );
+        ),
+    ]);
     let client = Client::from_conf(stub_config(http_client.clone()));
     let mut paginator = client
         .scan()
@@ -141,11 +139,10 @@ async fn paginators_loop_until_completion() {
 #[tokio::test]
 async fn paginators_handle_errors() {
     // LastEvaluatedKey is set but there is only one response in the test connection
-    let http_client = EventClient::new(
-        vec![ConnectionEvent::new(
-            mk_request(r#"{"TableName":"test-table","Limit":32}"#),
-            mk_response(
-                r#"{
+    let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+        mk_request(r#"{"TableName":"test-table","Limit":32}"#),
+        mk_response(
+            r#"{
                    "Count": 1,
                    "Items": [{
                        "PostedBy": {
@@ -156,10 +153,8 @@ async fn paginators_handle_errors() {
                        "PostedBy": { "S": "joe@example.com" }
                    }
                }"#,
-            ),
-        )],
-        TokioSleep::new(),
-    );
+        ),
+    )]);
     let client = Client::from_conf(stub_config(http_client.clone()));
     let mut rows = client
         .scan()
@@ -194,21 +189,18 @@ async fn paginators_stop_on_duplicate_token_by_default() {
         }
     }"#;
     // send the same response twice with the same pagination token
-    let http_client = EventClient::new(
-        vec![
-            ConnectionEvent::new(
-                mk_request(r#"{"TableName":"test-table","Limit":32}"#),
-                mk_response(response),
+    let http_client = StaticReplayClient::new(vec![
+        ReplayEvent::new(
+            mk_request(r#"{"TableName":"test-table","Limit":32}"#),
+            mk_response(response),
+        ),
+        ReplayEvent::new(
+            mk_request(
+                r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
             ),
-            ConnectionEvent::new(
-                mk_request(
-                    r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
-                ),
-                mk_response(response),
-            ),
-        ],
-        TokioSleep::new(),
-    );
+            mk_response(response),
+        ),
+    ]);
     let client = Client::from_conf(stub_config(http_client.clone()));
     let mut rows = client
         .scan()
@@ -250,27 +242,24 @@ async fn paginators_can_continue_on_duplicate_token() {
         }
     }"#;
     // send the same response twice with the same pagination token
-    let http_client = EventClient::new(
-        vec![
-            ConnectionEvent::new(
-                mk_request(r#"{"TableName":"test-table","Limit":32}"#),
-                mk_response(response),
+    let http_client = StaticReplayClient::new(vec![
+        ReplayEvent::new(
+            mk_request(r#"{"TableName":"test-table","Limit":32}"#),
+            mk_response(response),
+        ),
+        ReplayEvent::new(
+            mk_request(
+                r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
             ),
-            ConnectionEvent::new(
-                mk_request(
-                    r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
-                ),
-                mk_response(response),
+            mk_response(response),
+        ),
+        ReplayEvent::new(
+            mk_request(
+                r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
             ),
-            ConnectionEvent::new(
-                mk_request(
-                    r#"{"TableName":"test-table","Limit":32,"ExclusiveStartKey":{"PostedBy":{"S":"joe@example.com"}}}"#,
-                ),
-                mk_response(response),
-            ),
-        ],
-        TokioSleep::new(),
-    );
+            mk_response(response),
+        ),
+    ]);
     let client = Client::from_conf(stub_config(http_client.clone()));
     let mut rows = client
         .scan()

@@ -4,9 +4,8 @@
  */
 
 use aws_sdk_ec2::{config::Credentials, config::Region, types::InstanceType, Client, Config};
-use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
+use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::shared::IntoShared;
 
@@ -30,19 +29,16 @@ async fn paginators_handle_empty_tokens() {
             <spotPriceHistorySet/>
             <nextToken></nextToken>
         </DescribeSpotPriceHistoryResponse>"#;
-    let http_client = EventClient::new(
-        vec![ConnectionEvent::new(
-            http::Request::builder()
-                .uri("https://ec2.us-east-1.amazonaws.com/")
-                .body(request.into())
-                .unwrap(),
-            http::Response::builder()
-                .status(200)
-                .body(SdkBody::from(response))
-                .unwrap(),
-        )],
-        TokioSleep::new(),
-    );
+    let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+        http::Request::builder()
+            .uri("https://ec2.us-east-1.amazonaws.com/")
+            .body(request.into())
+            .unwrap(),
+        http::Response::builder()
+            .status(200)
+            .body(SdkBody::from(response))
+            .unwrap(),
+    )]);
     let client = Client::from_conf(stub_config(http_client.clone()));
     let instance_type = InstanceType::from("g5.48xlarge");
     let mut paginator = client
@@ -69,19 +65,16 @@ async fn paginators_handle_unset_tokens() {
             <requestId>edf3e86c-4baf-47c1-9228-9a5ea09542e8</requestId>
             <spotPriceHistorySet/>
         </DescribeSpotPriceHistoryResponse>"#;
-    let http_client = EventClient::new(
-        vec![ConnectionEvent::new(
-            http::Request::builder()
-                .uri("https://ec2.us-east-1.amazonaws.com/")
-                .body(request.into())
-                .unwrap(),
-            http::Response::builder()
-                .status(200)
-                .body(SdkBody::from(response))
-                .unwrap(),
-        )],
-        TokioSleep::new(),
-    );
+    let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+        http::Request::builder()
+            .uri("https://ec2.us-east-1.amazonaws.com/")
+            .body(request.into())
+            .unwrap(),
+        http::Response::builder()
+            .status(200)
+            .body(SdkBody::from(response))
+            .unwrap(),
+    )]);
     let client = Client::from_conf(stub_config(http_client.clone()));
     let instance_type = InstanceType::from("g5.48xlarge");
     let mut paginator = client

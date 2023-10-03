@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
 use aws_smithy_runtime_api::client::http::{
@@ -16,52 +14,39 @@ use aws_smithy_runtime_api::shared::IntoShared;
 use http::header::{HeaderName, CONTENT_TYPE};
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
 
-type ConnectionEvents = Vec<ConnectionEvent>;
+type ReplayEvents = Vec<ReplayEvent>;
 
-/// Test data for the [`EventClient`].
+/// Test data for the [`StaticReplayClient`].
 ///
-/// Each `ConnectionEvent` represents one HTTP request and response
-/// through the connector. Optionally, a latency value can be set to simulate
-/// network latency (done via async sleep in the `EventClient`).
+/// Each `ReplayEvent` represents one HTTP request and response
+/// through the connector.
 #[derive(Debug)]
-pub struct ConnectionEvent {
-    latency: Duration,
-    req: HttpRequest,
-    res: HttpResponse,
+pub struct ReplayEvent {
+    request: HttpRequest,
+    response: HttpResponse,
 }
 
-impl ConnectionEvent {
-    /// Creates a new `ConnectionEvent`.
-    pub fn new(req: HttpRequest, res: HttpResponse) -> Self {
-        Self {
-            res,
-            req,
-            latency: Duration::from_secs(0),
-        }
-    }
-
-    /// Add simulated latency to this `ConnectionEvent`
-    pub fn with_latency(mut self, latency: Duration) -> Self {
-        self.latency = latency;
-        self
+impl ReplayEvent {
+    /// Creates a new `ReplayEvent`.
+    pub fn new(request: HttpRequest, response: HttpResponse) -> Self {
+        Self { request, response }
     }
 
     /// Returns the test request.
     pub fn request(&self) -> &HttpRequest {
-        &self.req
+        &self.request
     }
 
     /// Returns the test response.
     pub fn response(&self) -> &HttpResponse {
-        &self.res
+        &self.response
     }
 }
 
-impl From<(HttpRequest, HttpResponse)> for ConnectionEvent {
-    fn from((req, res): (HttpRequest, HttpResponse)) -> Self {
-        Self::new(req, res)
+impl From<(HttpRequest, HttpResponse)> for ReplayEvent {
+    fn from((request, response): (HttpRequest, HttpResponse)) -> Self {
+        Self::new(request, response)
     }
 }
 
@@ -115,26 +100,65 @@ impl ValidateRequest {
     }
 }
 
-/// Request/response event-driven client for use in tests.
+/// Request/response replaying client for use in tests.
 ///
-/// A basic test connection. It will:
-/// - Respond to requests with a preloaded series of responses
-/// - Record requests for future examination
+/// This mock client takes a list of request/response pairs named [`ReplayEvent`]. While the client
+/// is in use, the responses will be given in the order they appear in the list regardless of what
+/// the actual request was. The actual request is recorded, but otherwise not validated against what
+/// is in the [`ReplayEvent`]. Later, after the client is finished being used, the
+/// [`assert_requests_match`] method can be used to validate the requests.
+///
+/// This utility is simpler than [DVR], and thus, is good for tests that don't need
+/// to record and replay real traffic.
+///
+/// # Example
+///
+/// ```no_run
+/// use aws_smithy_runtime::client::http::test_util::StaticReplayClient;
+/// use aws_smithy_runtime_api::shared::IntoShared;
+///
+/// let http_client = StaticReplayClient::new(
+///     vec![
+///         // Event that covers the first request/response
+///         ReplayEvent::new(
+///             // If `assert_requests_match` is called later, then this request will be matched
+///             // against the actual request that was made.
+///             http::Request::builder().uri("http://localhost:1234/foo").body(SdkBody::empty()).unwrap(),
+///             // This response will be given to the first request regardless of whether it matches the request above.
+///             http::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
+///         ),
+///         // The next ReplayEvent covers the second request/response pair...
+///     ]
+/// ).into_shared();
+///
+/// # /*
+/// let config = my_generated_client::Config::builder()
+///     .http_client(http_client.clone())
+///     .build();
+/// let client = my_generated_client::Client::from_conf(config);
+/// # */
+///
+/// // Do stuff with client...
+///
+/// // When you're done, assert the requests match what you expected
+/// http_client.assert_requests_match(&[]);
+/// ```
+///
+/// [`assert_requests_match`]: crate::client::http::test_util::StaticReplayClient::assert_requests_match
+/// [DVR]: crate::client::http::test_util::dvr
 #[derive(Clone, Debug)]
-pub struct EventClient {
-    data: Arc<Mutex<ConnectionEvents>>,
+pub struct StaticReplayClient {
+    data: Arc<Mutex<ReplayEvents>>,
     requests: Arc<Mutex<Vec<ValidateRequest>>>,
-    sleep_impl: SharedAsyncSleep,
 }
 
-impl EventClient {
+impl StaticReplayClient {
     /// Creates a new event connector.
-    pub fn new(mut data: ConnectionEvents, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
+    pub fn new(mut data: ReplayEvents) -> Self {
         data.reverse();
-        EventClient {
+        StaticReplayClient {
             data: Arc::new(Mutex::new(data)),
             requests: Default::default(),
-            sleep_impl: sleep_impl.into_shared(),
         }
     }
 
@@ -207,34 +231,27 @@ impl EventClient {
     }
 }
 
-impl HttpConnector for EventClient {
+impl HttpConnector for StaticReplayClient {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        let (res, simulated_latency) = if let Some(event) = self.data.lock().unwrap().pop() {
+        let res = if let Some(event) = self.data.lock().unwrap().pop() {
             self.requests.lock().unwrap().push(ValidateRequest {
-                expected: event.req,
+                expected: event.request,
                 actual: request,
             });
 
-            (Ok(event.res.map(SdkBody::from)), event.latency)
+            Ok(event.response)
         } else {
-            (
-                Err(ConnectorError::other(
-                    "EventClient: no more test data available to respond with".into(),
-                    None,
-                )),
-                Duration::from_secs(0),
-            )
+            Err(ConnectorError::other(
+                "StaticReplayClient: no more test data available to respond with".into(),
+                None,
+            ))
         };
 
-        let sleep = self.sleep_impl.sleep(simulated_latency);
-        HttpConnectorFuture::new(async move {
-            sleep.await;
-            res
-        })
+        HttpConnectorFuture::new(async move { res })
     }
 }
 
-impl HttpClient for EventClient {
+impl HttpClient for StaticReplayClient {
     fn http_connector(
         &self,
         _: &HttpConnectorSettings,

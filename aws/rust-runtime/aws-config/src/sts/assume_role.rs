@@ -351,7 +351,7 @@ mod test {
     use aws_smithy_async::time::StaticTimeSource;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::client::http::test_util::{
-        capture_request, ConnectionEvent, EventClient,
+        capture_request, ReplayEvent, StaticReplayClient,
     };
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
     use aws_types::os_shim_internal::Env;
@@ -462,16 +462,16 @@ mod test {
 
     #[tokio::test]
     async fn provider_does_not_cache_credentials_by_default() {
-        let http_client = EventClient::new(vec![
-            ConnectionEvent::new(http::Request::new(SdkBody::from("request body")),
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(http::Request::new(SdkBody::from("request body")),
             http::Response::builder().status(200).body(SdkBody::from(
                 "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n  <AssumeRoleResult>\n    <AssumedRoleUser>\n      <AssumedRoleId>AROAR42TAWARILN3MNKUT:assume-role-from-profile-1632246085998</AssumedRoleId>\n      <Arn>arn:aws:sts::130633740322:assumed-role/assume-provider-test/assume-role-from-profile-1632246085998</Arn>\n    </AssumedRoleUser>\n    <Credentials>\n      <AccessKeyId>ASIARCORRECT</AccessKeyId>\n      <SecretAccessKey>secretkeycorrect</SecretAccessKey>\n      <SessionToken>tokencorrect</SessionToken>\n      <Expiration>2009-02-13T23:31:30Z</Expiration>\n    </Credentials>\n  </AssumeRoleResult>\n  <ResponseMetadata>\n    <RequestId>d9d47248-fd55-4686-ad7c-0fb7cd1cddd7</RequestId>\n  </ResponseMetadata>\n</AssumeRoleResponse>\n"
             )).unwrap()),
-            ConnectionEvent::new(http::Request::new(SdkBody::from("request body")),
+            ReplayEvent::new(http::Request::new(SdkBody::from("request body")),
             http::Response::builder().status(200).body(SdkBody::from(
                 "<AssumeRoleResponse xmlns=\"https://sts.amazonaws.com/doc/2011-06-15/\">\n  <AssumeRoleResult>\n    <AssumedRoleUser>\n      <AssumedRoleId>AROAR42TAWARILN3MNKUT:assume-role-from-profile-1632246085998</AssumedRoleId>\n      <Arn>arn:aws:sts::130633740322:assumed-role/assume-provider-test/assume-role-from-profile-1632246085998</Arn>\n    </AssumedRoleUser>\n    <Credentials>\n      <AccessKeyId>ASIARCORRECT</AccessKeyId>\n      <SecretAccessKey>TESTSECRET</SecretAccessKey>\n      <SessionToken>tokencorrect</SessionToken>\n      <Expiration>2009-02-13T23:33:30Z</Expiration>\n    </Credentials>\n  </AssumeRoleResult>\n  <ResponseMetadata>\n    <RequestId>c2e971c2-702d-4124-9b1f-1670febbea18</RequestId>\n  </ResponseMetadata>\n</AssumeRoleResponse>\n"
             )).unwrap()),
-        ], TokioSleep::new());
+        ]);
 
         let (testing_time_source, sleep) = instant_time_and_sleep(
             UNIX_EPOCH + Duration::from_secs(1234567890 - 120), // 1234567890 since UNIX_EPOCH is 2009-02-13T23:31:30Z

@@ -444,7 +444,7 @@ mod test {
     use aws_smithy_async::future::never::Never;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_runtime_api::client::dns::DnsFuture;
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_types::os_shim_internal::Env;
@@ -637,13 +637,10 @@ mod test {
             ("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials"),
             ("AWS_CONTAINER_AUTHORIZATION_TOKEN", "Basic password"),
         ]);
-        let http_client = EventClient::new(
-            vec![ConnectionEvent::new(
-                creds_request("http://169.254.170.2/credentials", Some("Basic password")),
-                ok_creds_response(),
-            )],
-            TokioSleep::new(),
-        );
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            creds_request("http://169.254.170.2/credentials", Some("Basic password")),
+            ok_creds_response(),
+        )]);
         let provider = provider(env, http_client.clone());
         let creds = provider
             .provide_credentials()
@@ -656,22 +653,19 @@ mod test {
     #[tokio::test]
     async fn retry_5xx() {
         let env = Env::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
-        let http_client = EventClient::new(
-            vec![
-                ConnectionEvent::new(
-                    creds_request("http://169.254.170.2/credentials", None),
-                    http::Response::builder()
-                        .status(500)
-                        .body(SdkBody::empty())
-                        .unwrap(),
-                ),
-                ConnectionEvent::new(
-                    creds_request("http://169.254.170.2/credentials", None),
-                    ok_creds_response(),
-                ),
-            ],
-            TokioSleep::new(),
-        );
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                creds_request("http://169.254.170.2/credentials", None),
+                http::Response::builder()
+                    .status(500)
+                    .body(SdkBody::empty())
+                    .unwrap(),
+            ),
+            ReplayEvent::new(
+                creds_request("http://169.254.170.2/credentials", None),
+                ok_creds_response(),
+            ),
+        ]);
         tokio::time::pause();
         let provider = provider(env, http_client.clone());
         let creds = provider
@@ -684,13 +678,10 @@ mod test {
     #[tokio::test]
     async fn load_valid_creds_no_auth() {
         let env = Env::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
-        let http_client = EventClient::new(
-            vec![ConnectionEvent::new(
-                creds_request("http://169.254.170.2/credentials", None),
-                ok_creds_response(),
-            )],
-            TokioSleep::new(),
-        );
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            creds_request("http://169.254.170.2/credentials", None),
+            ok_creds_response(),
+        )]);
         let provider = provider(env, http_client.clone());
         let creds = provider
             .provide_credentials()

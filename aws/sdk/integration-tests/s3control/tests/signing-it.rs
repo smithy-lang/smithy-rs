@@ -6,15 +6,14 @@
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3control::config::{Credentials, Region};
 use aws_sdk_s3control::Client;
-use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
+use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 use aws_types::SdkConfig;
 use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn test_signer() {
-    let http_client = EventClient::new(vec![ConnectionEvent::new(
+    let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
         http::Request::builder()
             .header("authorization",
                     "AWS4-HMAC-SHA256 Credential=ANOTREAL/20211112/us-east-1/s3/aws4_request, \
@@ -24,7 +23,7 @@ async fn test_signer() {
             .body(SdkBody::empty())
             .unwrap(),
         http::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
-    )], TokioSleep::new());
+    )]);
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(
             Credentials::for_tests_with_session_token(),

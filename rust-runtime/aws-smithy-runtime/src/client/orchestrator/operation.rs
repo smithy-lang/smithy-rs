@@ -375,7 +375,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
-    use crate::client::http::test_util::{capture_request, ConnectionEvent, EventClient};
+    use crate::client::http::test_util::{capture_request, ReplayEvent, StaticReplayClient};
     use crate::client::retries::classifier::HttpStatusCodeClassifier;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
     use aws_smithy_http::body::SdkBody;
@@ -424,31 +424,28 @@ mod tests {
 
     #[tokio::test]
     async fn operation_retries() {
-        let connector = EventClient::new(
-            vec![
-                ConnectionEvent::new(
-                    http::Request::builder()
-                        .uri("http://localhost:1234/")
-                        .body(SdkBody::from(&b"what are you?"[..]))
-                        .unwrap(),
-                    http::Response::builder()
-                        .status(503)
-                        .body(SdkBody::from(&b""[..]))
-                        .unwrap(),
-                ),
-                ConnectionEvent::new(
-                    http::Request::builder()
-                        .uri("http://localhost:1234/")
-                        .body(SdkBody::from(&b"what are you?"[..]))
-                        .unwrap(),
-                    http::Response::builder()
-                        .status(418)
-                        .body(SdkBody::from(&b"I'm a teapot!"[..]))
-                        .unwrap(),
-                ),
-            ],
-            SharedAsyncSleep::new(TokioSleep::new()),
-        );
+        let connector = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                http::Request::builder()
+                    .uri("http://localhost:1234/")
+                    .body(SdkBody::from(&b"what are you?"[..]))
+                    .unwrap(),
+                http::Response::builder()
+                    .status(503)
+                    .body(SdkBody::from(&b""[..]))
+                    .unwrap(),
+            ),
+            ReplayEvent::new(
+                http::Request::builder()
+                    .uri("http://localhost:1234/")
+                    .body(SdkBody::from(&b"what are you?"[..]))
+                    .unwrap(),
+                http::Response::builder()
+                    .status(418)
+                    .body(SdkBody::from(&b"I'm a teapot!"[..]))
+                    .unwrap(),
+            ),
+        ]);
         let operation = Operation::builder()
             .service_name("test")
             .operation_name("test")

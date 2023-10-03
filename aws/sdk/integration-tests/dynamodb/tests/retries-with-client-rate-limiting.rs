@@ -5,11 +5,10 @@
 
 use aws_sdk_dynamodb::config::{Credentials, Region, SharedAsyncSleep};
 use aws_sdk_dynamodb::{config::retry::RetryConfig, error::ProvideErrorMetadata};
-use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_async::test_util::instant_time_and_sleep;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
+use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 use aws_smithy_runtime::client::retries::RetryPartition;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use std::time::{Duration, SystemTime};
@@ -52,20 +51,20 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
 
     let events = vec![
         // First operation
-        ConnectionEvent::new(req(), err()),
-        ConnectionEvent::new(req(), err()),
-        ConnectionEvent::new(req(), ok()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), ok()),
         // Second operation
-        ConnectionEvent::new(req(), err()),
-        ConnectionEvent::new(req(), ok()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), ok()),
         // Third operation will fail, only errors
-        ConnectionEvent::new(req(), err()),
-        ConnectionEvent::new(req(), err()),
-        ConnectionEvent::new(req(), err()),
-        ConnectionEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
     ];
 
-    let http_client = EventClient::new(events, TokioSleep::new());
+    let http_client = StaticReplayClient::new(events);
     let config = aws_sdk_dynamodb::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
@@ -112,15 +111,15 @@ async fn test_adaptive_retries_with_throttling_errors() {
 
     let events = vec![
         // First operation
-        ConnectionEvent::new(req(), throttling_err()),
-        ConnectionEvent::new(req(), throttling_err()),
-        ConnectionEvent::new(req(), ok()),
+        ReplayEvent::new(req(), throttling_err()),
+        ReplayEvent::new(req(), throttling_err()),
+        ReplayEvent::new(req(), ok()),
         // Second operation
-        ConnectionEvent::new(req(), err()),
-        ConnectionEvent::new(req(), ok()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), ok()),
     ];
 
-    let http_client = EventClient::new(events, TokioSleep::new());
+    let http_client = StaticReplayClient::new(events);
     let config = aws_sdk_dynamodb::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))

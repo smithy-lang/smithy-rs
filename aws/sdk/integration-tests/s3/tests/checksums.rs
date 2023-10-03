@@ -9,9 +9,10 @@ use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::types::ChecksumMode;
 use aws_sdk_s3::Client;
 use aws_sdk_s3::{operation::get_object::GetObjectOutput, types::ChecksumAlgorithm};
-use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::client::http::test_util::{capture_request, ConnectionEvent, EventClient};
+use aws_smithy_runtime::client::http::test_util::{
+    capture_request, ReplayEvent, StaticReplayClient,
+};
 use http::header::AUTHORIZATION;
 use http::{HeaderValue, Uri};
 use std::time::{Duration, UNIX_EPOCH};
@@ -23,9 +24,9 @@ use tracing_test::traced_test;
 fn new_checksum_validated_response_test_connection(
     checksum_header_name: &'static str,
     checksum_header_value: &'static str,
-) -> EventClient {
-    EventClient::new(vec![
-        ConnectionEvent::new(http::Request::builder()
+) -> StaticReplayClient {
+    StaticReplayClient::new(vec![
+        ReplayEvent::new(http::Request::builder()
              .header("x-amz-checksum-mode", "ENABLED")
              .header("user-agent", "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0")
              .header("x-amz-date", "20210618T170728Z")
@@ -47,7 +48,7 @@ fn new_checksum_validated_response_test_connection(
              .header("accept-ranges", "bytes")
              .status(http::StatusCode::from_u16(200).unwrap())
              .body(SdkBody::from(r#"Hello world"#)).unwrap()),
-    ], TokioSleep::new())
+    ])
 }
 
 async fn test_checksum_on_streaming_response(

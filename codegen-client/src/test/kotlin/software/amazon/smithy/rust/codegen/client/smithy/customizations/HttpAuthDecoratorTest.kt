@@ -17,15 +17,13 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 class HttpAuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
-        "ConnectionEvent" to CargoDependency.smithyRuntime(runtimeConfig)
+        "ReplayEvent" to CargoDependency.smithyRuntime(runtimeConfig)
             .toDevDependency().withFeature("test-util").toType()
-            .resolve("client::http::test_util::ConnectionEvent"),
-        "EventClient" to CargoDependency.smithyRuntime(runtimeConfig)
+            .resolve("client::http::test_util::ReplayEvent"),
+        "StaticReplayClient" to CargoDependency.smithyRuntime(runtimeConfig)
             .toDevDependency().withFeature("test-util").toType()
-            .resolve("client::http::test_util::EventClient"),
+            .resolve("client::http::test_util::StaticReplayClient"),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "TokioSleep" to CargoDependency.smithyAsync(runtimeConfig).withFeature("rt-tokio").toType()
-            .resolve("rt::sleep::TokioSleep"),
     )
 
     @Test
@@ -39,15 +37,14 @@ class HttpAuthDecoratorTest {
                     async fn use_api_key_auth_when_api_key_provided() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
-                            #{TokioSleep}::new(),
                         );
 
                         let config = $moduleName::Config::builder()
@@ -71,8 +68,8 @@ class HttpAuthDecoratorTest {
                     async fn use_basic_auth_when_basic_auth_login_provided() {
                         use aws_smithy_runtime_api::client::identity::http::Login;
 
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
                                     .uri("http://localhost:1234/SomeOperation")
@@ -80,7 +77,6 @@ class HttpAuthDecoratorTest {
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
-                            #{TokioSleep}::new(),
                         );
 
                         let config = $moduleName::Config::builder()
@@ -113,15 +109,14 @@ class HttpAuthDecoratorTest {
                     async fn api_key_applied_to_query_string() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
-                            #{TokioSleep}::new(),
                         );
 
                         let config = $moduleName::Config::builder()
@@ -154,8 +149,8 @@ class HttpAuthDecoratorTest {
                     async fn api_key_applied_to_headers() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .header("authorization", "ApiKey some-api-key")
                                     .uri("http://localhost:1234/SomeOperation")
@@ -163,7 +158,6 @@ class HttpAuthDecoratorTest {
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
-                            #{TokioSleep}::new(),
                         );
 
                         let config = $moduleName::Config::builder()
@@ -196,8 +190,8 @@ class HttpAuthDecoratorTest {
                     async fn basic_auth() {
                         use aws_smithy_runtime_api::client::identity::http::Login;
 
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
                                     .uri("http://localhost:1234/SomeOperation")
@@ -205,7 +199,6 @@ class HttpAuthDecoratorTest {
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
-                            #{TokioSleep}::new(),
                         );
 
                         let config = $moduleName::Config::builder()
@@ -238,8 +231,8 @@ class HttpAuthDecoratorTest {
                     async fn basic_auth() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .header("authorization", "Bearer some-token")
                                     .uri("http://localhost:1234/SomeOperation")
@@ -247,7 +240,6 @@ class HttpAuthDecoratorTest {
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
-                            #{TokioSleep}::new(),
                         );
 
                         let config = $moduleName::Config::builder()
@@ -278,15 +270,14 @@ class HttpAuthDecoratorTest {
                 rustTemplate(
                     """
                     async fn optional_auth() {
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
                             )],
-                            #{TokioSleep}::new(),
                         );
 
                         let config = $moduleName::Config::builder()

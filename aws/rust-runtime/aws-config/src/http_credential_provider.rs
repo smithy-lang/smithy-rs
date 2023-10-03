@@ -217,13 +217,14 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
 mod test {
     use super::*;
     use aws_credential_types::provider::error::CredentialsError;
-    use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
     use http::{Request, Response, Uri};
     use std::time::SystemTime;
 
-    async fn provide_creds(http_client: EventClient) -> Result<Credentials, CredentialsError> {
+    async fn provide_creds(
+        http_client: StaticReplayClient,
+    ) -> Result<Credentials, CredentialsError> {
         let provider_config = ProviderConfig::default().with_http_client(http_client.clone());
         let provider = HttpCredentialProvider::builder()
             .configure(&provider_config)
@@ -231,8 +232,8 @@ mod test {
         provider.credentials(None).await
     }
 
-    fn successful_req_resp() -> ConnectionEvent {
-        ConnectionEvent::new(
+    fn successful_req_resp() -> ReplayEvent {
+        ReplayEvent::new(
             Request::builder()
                 .uri(Uri::from_static("http://localhost:1234/some-creds"))
                 .body(SdkBody::empty())
@@ -253,7 +254,7 @@ mod test {
 
     #[tokio::test]
     async fn successful_response() {
-        let http_client = EventClient::new(vec![successful_req_resp()], TokioSleep::new());
+        let http_client = StaticReplayClient::new(vec![successful_req_resp()]);
         let creds = provide_creds(http_client.clone()).await.expect("success");
         assert_eq!("MUA...", creds.access_key_id());
         assert_eq!("/7PC5om....", creds.secret_access_key());
@@ -267,22 +268,19 @@ mod test {
 
     #[tokio::test]
     async fn retry_nonparseable_response() {
-        let http_client = EventClient::new(
-            vec![
-                ConnectionEvent::new(
-                    Request::builder()
-                        .uri(Uri::from_static("http://localhost:1234/some-creds"))
-                        .body(SdkBody::empty())
-                        .unwrap(),
-                    Response::builder()
-                        .status(200)
-                        .body(SdkBody::from(r#"not json"#))
-                        .unwrap(),
-                ),
-                successful_req_resp(),
-            ],
-            TokioSleep::new(),
-        );
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                Request::builder()
+                    .uri(Uri::from_static("http://localhost:1234/some-creds"))
+                    .body(SdkBody::empty())
+                    .unwrap(),
+                Response::builder()
+                    .status(200)
+                    .body(SdkBody::from(r#"not json"#))
+                    .unwrap(),
+            ),
+            successful_req_resp(),
+        ]);
         let creds = provide_creds(http_client.clone()).await.expect("success");
         assert_eq!("MUA...", creds.access_key_id());
         http_client.assert_requests_match(&[]);
@@ -290,22 +288,19 @@ mod test {
 
     #[tokio::test]
     async fn retry_error_code() {
-        let http_client = EventClient::new(
-            vec![
-                ConnectionEvent::new(
-                    Request::builder()
-                        .uri(Uri::from_static("http://localhost:1234/some-creds"))
-                        .body(SdkBody::empty())
-                        .unwrap(),
-                    Response::builder()
-                        .status(500)
-                        .body(SdkBody::from(r#"it broke"#))
-                        .unwrap(),
-                ),
-                successful_req_resp(),
-            ],
-            TokioSleep::new(),
-        );
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                Request::builder()
+                    .uri(Uri::from_static("http://localhost:1234/some-creds"))
+                    .body(SdkBody::empty())
+                    .unwrap(),
+                Response::builder()
+                    .status(500)
+                    .body(SdkBody::from(r#"it broke"#))
+                    .unwrap(),
+            ),
+            successful_req_resp(),
+        ]);
         let creds = provide_creds(http_client.clone()).await.expect("success");
         assert_eq!("MUA...", creds.access_key_id());
         http_client.assert_requests_match(&[]);
@@ -313,8 +308,7 @@ mod test {
 
     #[tokio::test]
     async fn explicit_error_not_retriable() {
-        let http_client = EventClient::new(
-            vec![ConnectionEvent::new(
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
             Request::builder()
                 .uri(Uri::from_static("http://localhost:1234/some-creds"))
                 .body(SdkBody::empty())
@@ -325,9 +319,7 @@ mod test {
                     r#"{ "Code": "Error", "Message": "There was a problem, it was your fault" }"#,
                 ))
                 .unwrap(),
-        )],
-            TokioSleep::new(),
-        );
+        )]);
         let err = provide_creds(http_client.clone())
             .await
             .expect_err("it should fail");

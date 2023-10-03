@@ -586,7 +586,7 @@ pub(crate) mod test {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;
     use aws_smithy_runtime::client::http::test_util::{
-        capture_request, ConnectionEvent, EventClient,
+        capture_request, ReplayEvent, StaticReplayClient,
     };
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
     use aws_smithy_runtime_api::client::interceptors::context::{
@@ -658,7 +658,7 @@ pub(crate) mod test {
             .unwrap()
     }
 
-    pub(crate) fn make_client(http_client: &EventClient) -> super::Client {
+    pub(crate) fn make_client(http_client: &StaticReplayClient) -> super::Client {
         tokio::time::pause();
         super::Client::builder()
             .configure(
@@ -669,8 +669,8 @@ pub(crate) mod test {
             .build()
     }
 
-    fn event_client(events: Vec<ConnectionEvent>) -> (Client, EventClient) {
-        let http_client = EventClient::new(events, TokioSleep::new());
+    fn event_client(events: Vec<ReplayEvent>) -> (Client, StaticReplayClient) {
+        let http_client = StaticReplayClient::new(events);
         let client = make_client(&http_client);
         (client, http_client)
     }
@@ -678,15 +678,15 @@ pub(crate) mod test {
     #[tokio::test]
     async fn client_caches_token() {
         let (client, http_client) = event_client(vec![
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output"#),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata2", TOKEN_A),
                 imds_response("output2"),
             ),
@@ -703,19 +703,19 @@ pub(crate) mod test {
     #[tokio::test]
     async fn token_can_expire() {
         let (_, http_client) = event_client(vec![
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_A),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output1"#),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_B),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_B),
                 imds_response(r#"test-imds-output2"#),
             ),
@@ -745,26 +745,26 @@ pub(crate) mod test {
     #[tokio::test]
     async fn token_refresh_buffer() {
         let (_, http_client) = event_client(vec![
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_A),
             ),
             // t = 0
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output1"#),
             ),
             // t = 400 (no refresh)
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_A),
                 imds_response(r#"test-imds-output2"#),
             ),
             // t = 550 (within buffer)
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_B),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://[fd00:ec2::254]/latest/metadata", TOKEN_B),
                 imds_response(r#"test-imds-output3"#),
             ),
@@ -798,18 +798,18 @@ pub(crate) mod test {
     #[traced_test]
     async fn retry_500() {
         let (client, http_client) = event_client(vec![
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 http::Response::builder()
                     .status(500)
                     .body(SdkBody::empty())
                     .unwrap(),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 imds_response("ok"),
             ),
@@ -835,18 +835,18 @@ pub(crate) mod test {
     #[traced_test]
     async fn retry_token_failure() {
         let (client, http_client) = event_client(vec![
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 http::Response::builder()
                     .status(500)
                     .body(SdkBody::empty())
                     .unwrap(),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 imds_response("ok"),
             ),
@@ -867,22 +867,22 @@ pub(crate) mod test {
     #[traced_test]
     async fn retry_metadata_401() {
         let (client, http_client) = event_client(vec![
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(0, TOKEN_A),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 http::Response::builder()
                     .status(401)
                     .body(SdkBody::empty())
                     .unwrap(),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_B),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_B),
                 imds_response("ok"),
             ),
@@ -902,7 +902,7 @@ pub(crate) mod test {
     #[tokio::test]
     #[traced_test]
     async fn no_403_retry() {
-        let (client, http_client) = event_client(vec![ConnectionEvent::new(
+        let (client, http_client) = event_client(vec![ReplayEvent::new(
             token_request("http://169.254.169.254", 21600),
             http::Response::builder()
                 .status(403)
@@ -934,7 +934,7 @@ pub(crate) mod test {
     // since tokens are sent as headers, the tokens need to be valid header values
     #[tokio::test]
     async fn invalid_token() {
-        let (client, http_client) = event_client(vec![ConnectionEvent::new(
+        let (client, http_client) = event_client(vec![ReplayEvent::new(
             token_request("http://169.254.169.254", 21600),
             token_response(21600, "invalid\nheader\nvalue\0"),
         )]);
@@ -946,11 +946,11 @@ pub(crate) mod test {
     #[tokio::test]
     async fn non_utf8_response() {
         let (client, http_client) = event_client(vec![
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A).map(SdkBody::from),
             ),
-            ConnectionEvent::new(
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/metadata", TOKEN_A),
                 http::Response::builder()
                     .status(200)

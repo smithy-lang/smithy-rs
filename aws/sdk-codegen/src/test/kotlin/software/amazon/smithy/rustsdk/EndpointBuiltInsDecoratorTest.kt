@@ -87,15 +87,14 @@ class EndpointBuiltInsDecoratorTest {
 
                     ##[#{tokio}::test]
                     async fn endpoint_url_built_in_works() {
-                        let http_client = #{EventClient}::new(
-                            vec![#{ConnectionEvent}::new(
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
                                 http::Request::builder()
                                     .uri("https://RIGHT/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
                                 http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap()
                             )],
-                            #{TokioSleep}::new(),
                         );
                         let config = Config::builder()
                             .http_client(http_client.clone())
@@ -108,13 +107,11 @@ class EndpointBuiltInsDecoratorTest {
                     }
                     """,
                     "tokio" to CargoDependency.Tokio.toDevDependency().withFeature("rt").withFeature("macros").toType(),
-                    "EventClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                        .resolve("client::http::test_util::EventClient"),
-                    "ConnectionEvent" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                        .resolve("client::http::test_util::ConnectionEvent"),
+                    "StaticReplayClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::StaticReplayClient"),
+                    "ReplayEvent" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::ReplayEvent"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-                    "TokioSleep" to RuntimeType.smithyAsync(codegenContext.runtimeConfig)
-                        .resolve("rt::sleep::TokioSleep"),
                 )
             }
         }

@@ -6,15 +6,14 @@
 use aws_sdk_qldbsession::config::{Config, Credentials, Region};
 use aws_sdk_qldbsession::types::StartSessionRequest;
 use aws_sdk_qldbsession::Client;
-use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
+use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 use http::Uri;
 use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn signv4_use_correct_service_name() {
-    let http_client = EventClient::new(vec![ConnectionEvent::new(
+    let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
         http::Request::builder()
             .header("content-type", "application/x-amz-json-1.0")
             .header("x-amz-target", "QLDBSession.SendCommand")
@@ -29,7 +28,7 @@ async fn signv4_use_correct_service_name() {
         http::Response::builder()
             .status(http::StatusCode::from_u16(200).unwrap())
             .body(SdkBody::from(r#"{}"#)).unwrap()),
-    ], TokioSleep::new());
+    ]);
     let conf = Config::builder()
         .http_client(http_client.clone())
         .region(Region::new("us-east-1"))

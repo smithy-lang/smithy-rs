@@ -113,27 +113,24 @@ mod test {
     use aws_sdk_sts::config::Region;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
     use tracing_test::traced_test;
 
     #[tokio::test]
     async fn load_region() {
-        let http_client = EventClient::new(
-            vec![
-                ConnectionEvent::new(
-                    token_request("http://169.254.169.254", 21600),
-                    token_response(21600, "token"),
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, "token"),
+            ),
+            ReplayEvent::new(
+                imds_request(
+                    "http://169.254.169.254/latest/meta-data/placement/region",
+                    "token",
                 ),
-                ConnectionEvent::new(
-                    imds_request(
-                        "http://169.254.169.254/latest/meta-data/placement/region",
-                        "token",
-                    ),
-                    imds_response("eu-west-1"),
-                ),
-            ],
-            TokioSleep::new(),
-        );
+                imds_response("eu-west-1"),
+            ),
+        ]);
         let provider = ImdsRegionProvider::builder()
             .configure(
                 &ProviderConfig::no_configuration()
@@ -150,16 +147,13 @@ mod test {
     #[traced_test]
     #[tokio::test]
     async fn no_region_imds_disabled() {
-        let http_client = EventClient::new(
-            vec![ConnectionEvent::new(
-                token_request("http://169.254.169.254", 21600),
-                http::Response::builder()
-                    .status(403)
-                    .body(SdkBody::empty())
-                    .unwrap(),
-            )],
-            TokioSleep::new(),
-        );
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
+            token_request("http://169.254.169.254", 21600),
+            http::Response::builder()
+                .status(403)
+                .body(SdkBody::empty())
+                .unwrap(),
+        )]);
         let provider = ImdsRegionProvider::builder()
             .configure(
                 &ProviderConfig::no_configuration()
