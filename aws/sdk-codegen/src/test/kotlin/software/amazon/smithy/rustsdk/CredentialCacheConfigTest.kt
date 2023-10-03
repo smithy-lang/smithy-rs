@@ -58,15 +58,11 @@ internal class CredentialCacheConfigTest {
                     .resolve("Credentials"),
                 "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::CredentialsCache"),
-                "ProvideCachedCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                    .resolve("cache::ProvideCachedCredentials"),
                 "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
                 "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::runtime_plugin::RuntimePlugin"),
                 "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::SharedCredentialsCache"),
-                "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                    .resolve("provider::SharedCredentialsProvider"),
             )
             rustCrate.testModule {
                 unitTest(
@@ -112,58 +108,6 @@ internal class CredentialCacheConfigTest {
 
                         // this should cause `panic!`
                         let _ = sut.config().unwrap();
-                        """,
-                        *codegenScope,
-                    )
-                }
-
-                tokioTest("test_overriding_cache_and_provider_leads_to_shared_credentials_cache_in_layer") {
-                    rustTemplate(
-                        """
-                        use #{ProvideCachedCredentials};
-                        use #{RuntimePlugin};
-
-                        let client_config = crate::config::Config::builder()
-                            .credentials_provider(#{Credentials}::for_tests())
-                            .build();
-                        let client_config_layer = client_config.config;
-
-                        // make sure test credentials are set in the client config level
-                        assert_eq!(#{Credentials}::for_tests(),
-                            client_config_layer
-                            .load::<#{SharedCredentialsCache}>()
-                            .unwrap()
-                            .provide_cached_credentials()
-                            .await
-                            .unwrap()
-                        );
-
-                        let credentials = #{Credentials}::new(
-                            "test",
-                            "test",
-                            #{None},
-                            #{None},
-                            "test",
-                        );
-                        let config_override = crate::config::Config::builder()
-                            .credentials_cache(#{CredentialsCache}::lazy())
-                            .credentials_provider(credentials.clone());
-                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
-                            config_override,
-                            client_config_layer,
-                            &client_config.runtime_components,
-                        );
-                        let sut_layer = sut.config().unwrap();
-
-                        // make sure `.provide_cached_credentials` returns credentials set through `config_override`
-                        assert_eq!(credentials,
-                            sut_layer
-                            .load::<#{SharedCredentialsCache}>()
-                            .unwrap()
-                            .provide_cached_credentials()
-                            .await
-                            .unwrap()
-                        );
                         """,
                         *codegenScope,
                     )

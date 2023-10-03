@@ -217,7 +217,6 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                             #{Some}(credentials_provider),
                         ) => {
                             let credentials_cache = credentials_cache.create_cache(credentials_provider);
-                            resolver.config_mut().store_put(credentials_cache.clone());
                             resolver.runtime_components_mut().push_identity_resolver(
                                 #{SIGV4_SCHEME_ID},
                                 #{SharedIdentityResolver}::new(
