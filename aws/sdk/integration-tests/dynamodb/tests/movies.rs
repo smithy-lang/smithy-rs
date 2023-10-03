@@ -20,7 +20,6 @@ use http::Uri;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::time::Duration;
-use tokio::time::Instant;
 
 async fn create_table(client: &Client, table_name: &str) {
     client
