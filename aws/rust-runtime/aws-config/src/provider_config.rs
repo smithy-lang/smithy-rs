@@ -333,25 +333,6 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
-    /// Use the [default use_fips provider](crate::default_provider::use_fips::use_fips_provider) to set the
-    /// `use_fips` setting for this configuration
-    ///
-    /// Note: the `env` and `fs` already set on this provider will be used when loading the default value.
-    pub(crate) async fn load_default_use_fips(self) -> Self {
-        let use_fips = crate::default_provider::use_fips::use_fips_provider(&self).await;
-        self.with_use_fips(use_fips)
-    }
-
-    /// Use the [default use_dual_stack provider](crate::default_provider::use_dual_stack::use_dual_stack_provider) to set the
-    /// `use_dual_stack` setting for this configuration
-    ///
-    /// Note: the `env` and `fs` already set on this provider will be used when loading the default value.
-    pub(crate) async fn load_default_use_dual_stack(self) -> Self {
-        let use_dual_stack =
-            crate::default_provider::use_dual_stack::use_dual_stack_provider(&self).await;
-        self.with_use_dual_stack(use_dual_stack)
-    }
-
     pub(crate) fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
