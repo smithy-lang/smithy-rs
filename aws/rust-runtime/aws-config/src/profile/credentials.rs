@@ -483,8 +483,7 @@ mod test {
     }
 
     make_test!(e2e_assume_role);
-    make_test!(e2e_fips_and_dual_stack_profile);
-    make_test!(e2e_fips_and_dual_stack_env);
+    make_test!(e2e_fips_and_dual_stack_sts);
     make_test!(empty_config);
     make_test!(retry_on_error);
     make_test!(invalid_config);
