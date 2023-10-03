@@ -247,12 +247,12 @@ impl ProviderConfig {
 
     #[allow(dead_code)]
     pub(crate) fn use_fips(&self) -> Option<bool> {
-        self.use_fips.clone()
+        self.use_fips
     }
 
     #[allow(dead_code)]
     pub(crate) fn use_dual_stack(&self) -> Option<bool> {
-        self.use_dual_stack.clone()
+        self.use_dual_stack
     }
 
     pub(crate) async fn try_profile(&self) -> Result<&ProfileSet, &ProfileFileLoadError> {
