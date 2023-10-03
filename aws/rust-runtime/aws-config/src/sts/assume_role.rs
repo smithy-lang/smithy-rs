@@ -342,7 +342,6 @@ impl ProvideCredentials for AssumeRoleProvider {
 
 #[cfg(test)]
 mod test {
-    use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::sts::AssumeRoleProvider;
     use aws_credential_types::credential_fn::provide_credentials_fn;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
@@ -354,7 +353,7 @@ mod test {
     use aws_smithy_client::test_connection::{capture_request, TestConnection};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::Env;
     use aws_types::region::Region;
     use aws_types::SdkConfig;
     use http::header::AUTHORIZATION;
@@ -456,56 +455,6 @@ mod test {
         );
         // ensure that FIPS & DualStack are also respected
         assert_eq!("https://sts-fips.us-west-17.api.aws/", req.uri())
-    }
-
-    #[tokio::test]
-    async fn configures_fips_endpoint_from_env() {
-        let (server, request) = capture_request(None);
-        let sdk_config = crate::from_env()
-            .region(Region::from_static("us-east-1"))
-            .env(Env::from_slice(&[("AWS_USE_FIPS_ENDPOINT", "true")]))
-            .http_connector(server)
-            .load()
-            .await;
-        assert!(sdk_config.use_fips().unwrap_or_default());
-        let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&sdk_config)
-            .build_from_provider(provide_credentials_fn(|| async {
-                Ok(Credentials::for_tests())
-            }))
-            .await;
-        let _ = provider.provide_credentials().await;
-        let req = request.expect_request();
-        assert!(req.uri().host().unwrap().contains("sts-fips"));
-    }
-
-    #[tokio::test]
-    async fn configures_fips_endpoint_from_profile() {
-        let (server, request) = capture_request(None);
-        let sdk_config = crate::from_env()
-            .region(Region::from_static("us-east-1"))
-            .profile_files(
-                ProfileFiles::builder()
-                    .with_file(ProfileFileKind::Config, "conf")
-                    .build(),
-            )
-            .fs(Fs::from_slice(&[(
-                "conf",
-                "[default]\nuse_fips_endpoint = true",
-            )]))
-            .http_connector(server)
-            .load()
-            .await;
-        assert!(sdk_config.use_fips().unwrap_or_default());
-        let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&sdk_config)
-            .build_from_provider(provide_credentials_fn(|| async {
-                Ok(Credentials::for_tests())
-            }))
-            .await;
-        let _ = provider.provide_credentials().await;
-        let req = request.expect_request();
-        assert!(req.uri().host().unwrap().contains("sts-fips"));
     }
 
     #[tokio::test]

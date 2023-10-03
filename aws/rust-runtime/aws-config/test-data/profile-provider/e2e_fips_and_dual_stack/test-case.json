@@ -1,0 +1,12 @@
+{
+  "name": "e2e_fips_and_dual_stack",
+  "docs": "end to end successful role assumption with FIPS and dual stack enabled",
+  "result": {
+    "Ok": {
+      "access_key_id": "ASIARTESTID",
+      "secret_access_key": "TESTSECRETKEY",
+      "session_token": "TESTSESSIONTOKEN",
+      "expiry": 1628193482
+    }
+  }
+}

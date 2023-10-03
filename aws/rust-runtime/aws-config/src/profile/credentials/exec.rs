@@ -11,7 +11,6 @@ use crate::provider_config::ProviderConfig;
 use crate::sso::{SsoCredentialsProvider, SsoProviderConfig};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
-use aws_credential_types::credential_fn::provide_credentials_fn;
 use aws_credential_types::provider::{
     self, error::CredentialsError, ProvideCredentials, SharedCredentialsProvider,
 };
@@ -38,12 +37,7 @@ impl AssumeRoleProvider {
     ) -> provider::Result {
         let config = sdk_config
             .to_builder()
-            .credentials_provider(SharedCredentialsProvider::new(provide_credentials_fn(
-                move || {
-                    let input_credentials = input_credentials.clone();
-                    async { Ok(input_credentials) }
-                },
-            )))
+            .credentials_provider(SharedCredentialsProvider::new(input_credentials))
             .build();
         let client = StsClient::new(&config);
         let session_name = &self.session_name.as_ref().cloned().unwrap_or_else(|| {

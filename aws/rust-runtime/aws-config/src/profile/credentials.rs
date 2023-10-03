@@ -22,8 +22,6 @@
 //! - `exec` which contains a chain representation of providers to implement passing bootstrapped credentials
 //! through a series of providers.
 
-use crate::profile::credentials::exec::named::NamedProviderFactory;
-use crate::profile::credentials::exec::ProviderChain;
 use crate::profile::parser::ProfileFileLoadError;
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::Profile;
@@ -141,7 +139,7 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 #[doc = include_str!("location_of_profile_files.md")]
 #[derive(Debug)]
 pub struct ProfileFileCredentialsProvider {
-    factory: NamedProviderFactory,
+    factory: exec::named::NamedProviderFactory,
     sdk_config: SdkConfig,
     provider_config: ProviderConfig,
 }
@@ -452,8 +450,8 @@ impl Builder {
 
 async fn build_provider_chain(
     provider_config: &ProviderConfig,
-    factory: &NamedProviderFactory,
-) -> Result<ProviderChain, ProfileFileError> {
+    factory: &exec::named::NamedProviderFactory,
+) -> Result<exec::ProviderChain, ProfileFileError> {
     let profile_set = provider_config
         .try_profile()
         .await
@@ -485,6 +483,7 @@ mod test {
     }
 
     make_test!(e2e_assume_role);
+    make_test!(e2e_fips_and_dual_stack);
     make_test!(empty_config);
     make_test!(retry_on_error);
     make_test!(invalid_config);
