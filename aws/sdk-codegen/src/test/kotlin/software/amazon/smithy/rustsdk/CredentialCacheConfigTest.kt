@@ -19,10 +19,13 @@ internal class CredentialCacheConfigTest {
         namespace com.example
         use aws.protocols#awsJson1_0
         use aws.api#service
+        use aws.auth#sigv4
         use smithy.rules#endpointRuleSet
 
         @service(sdkId: "Some Value")
         @awsJson1_0
+        @sigv4(name: "dontcare")
+        @auth([sigv4])
         @endpointRuleSet({
             "version": "1.0",
             "rules": [{
@@ -39,7 +42,6 @@ internal class CredentialCacheConfigTest {
             version: "1"
         }
 
-        @optionalAuth
         operation SayHello { input: TestInput }
         structure TestInput {
            foo: String,
@@ -58,6 +60,7 @@ internal class CredentialCacheConfigTest {
                     .resolve("cache::CredentialsCache"),
                 "ProvideCachedCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::ProvideCachedCredentials"),
+                "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
                 "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::runtime_plugin::RuntimePlugin"),
                 "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
@@ -182,6 +185,39 @@ internal class CredentialCacheConfigTest {
                         assert!(sut_layer
                             .load::<#{SharedCredentialsCache}>()
                             .is_none());
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                tokioTest("test_specifying_credentials_provider_only_at_operation_level_should_work") {
+                    // per https://github.com/awslabs/aws-sdk-rust/issues/901
+                    rustTemplate(
+                        """
+                        let client_config = crate::config::Config::builder().build();
+                        let client = crate::client::Client::from_conf(client_config);
+
+                        let credentials = #{Credentials}::new(
+                            "test",
+                            "test",
+                            #{None},
+                            #{None},
+                            "test",
+                        );
+                        let operation_config_override = crate::config::Config::builder()
+                            .credentials_cache(#{CredentialsCache}::no_caching())
+                            .credentials_provider(credentials.clone())
+                            .region(#{Region}::new("us-west-2"));
+
+                        let _ = client
+                            .say_hello()
+                            .customize()
+                            .await
+                            .unwrap()
+                            .config_override(operation_config_override)
+                            .send()
+                            .await
+                            .expect("success");
                         """,
                         *codegenScope,
                     )
