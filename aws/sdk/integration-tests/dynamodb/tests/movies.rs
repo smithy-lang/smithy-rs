@@ -4,6 +4,7 @@
  */
 
 use aws_sdk_dynamodb as dynamodb;
+use aws_smithy_async::assert_elapsed;
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::client::http::test_util::{ConnectionEvent, EventClient};
@@ -129,17 +130,6 @@ async fn wait_for_ready_table(client: &Client, table_name: &str) {
     }
 }
 
-/// Validate that time has passed with a 5ms tolerance
-///
-/// This is to account for some non-determinism in the Tokio timer
-fn assert_time_passed(initial: Instant, passed: Duration) {
-    let now = tokio::time::Instant::now();
-    let delta = now - initial;
-    if (delta.as_millis() as i128 - passed.as_millis() as i128).abs() > 5 {
-        assert_eq!(delta, passed)
-    }
-}
-
 /// A partial reimplementation of https://docs.amazonaws.cn/en_us/amazondynamodb/latest/developerguide/GettingStarted.Ruby.html
 /// in Rust
 ///
@@ -165,7 +155,11 @@ async fn movies_it() {
     let waiter_start = tokio::time::Instant::now();
     wait_for_ready_table(&client, table_name).await;
 
-    assert_time_passed(waiter_start, Duration::from_secs(4));
+    assert_elapsed!(
+        waiter_start,
+        Duration::from_secs(4),
+        Duration::from_millis(10)
+    );
     // data.json contains 2 movies from 2013
     let data = match serde_json::from_str(include_str!("data.json")).expect("should be valid JSON")
     {

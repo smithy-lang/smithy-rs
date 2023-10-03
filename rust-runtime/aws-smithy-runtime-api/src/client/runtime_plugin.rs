@@ -265,7 +265,7 @@ impl RuntimePlugins {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::{RuntimePlugin, RuntimePlugins};
     use crate::client::http::{
