@@ -13,8 +13,6 @@ use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_runtime::user_agent::UserAgentInterceptor;
-use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_http::result::SdkError;
@@ -34,7 +32,6 @@ use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::os_shim_internal::Env;
-use aws_types::sdk_config::SharedHttpClient;
 use http::Uri;
 use std::borrow::Cow;
 use std::error::Error as _;
@@ -235,12 +232,10 @@ struct ImdsCommonRuntimePlugin {
 
 impl ImdsCommonRuntimePlugin {
     fn new(
-        http_client: Option<SharedHttpClient>,
+        config: &ProviderConfig,
         endpoint_resolver: ImdsEndpointResolver,
         retry_config: &RetryConfig,
         timeout_config: TimeoutConfig,
-        time_source: SharedTimeSource,
-        sleep_impl: Option<SharedAsyncSleep>,
     ) -> Self {
         let mut layer = Layer::new("ImdsCommonRuntimePlugin");
         layer.store_put(AuthSchemeOptionResolverParams::new(()));
@@ -252,15 +247,15 @@ impl ImdsCommonRuntimePlugin {
         Self {
             config: layer.freeze(),
             components: RuntimeComponentsBuilder::new("ImdsCommonRuntimePlugin")
-                .with_http_client(http_client)
+                .with_http_client(config.http_client())
                 .with_endpoint_resolver(Some(endpoint_resolver))
                 .with_interceptor(UserAgentInterceptor::new())
                 .with_retry_classifiers(Some(
                     RetryClassifiers::new().with_classifier(ImdsResponseRetryClassifier),
                 ))
                 .with_retry_strategy(Some(StandardRetryStrategy::new(retry_config)))
-                .with_time_source(Some(time_source))
-                .with_sleep_impl(sleep_impl),
+                .with_time_source(Some(config.time_source()))
+                .with_sleep_impl(config.sleep_impl()),
         }
     }
 }
@@ -424,12 +419,10 @@ impl Builder {
         let retry_config = RetryConfig::standard()
             .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
         let common_plugin = SharedRuntimePlugin::new(ImdsCommonRuntimePlugin::new(
-            config.http_client(),
+            &config,
             endpoint_resolver,
             &retry_config,
             timeout_config,
-            config.time_source(),
-            config.sleep_impl(),
         ));
         let operation = Operation::builder()
             .service_name("imds")
