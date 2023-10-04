@@ -255,20 +255,13 @@ fn convert_to_tilde_requirement(package_version: &semver::Version) -> Result<Str
 //
 // Each input can be either a semver-compliant version or a tilde version requirement.
 fn versions_match(prev_version: &Value, current_version: &str) -> bool {
-    fn maybe_strip_tilde(s: &str) -> &str {
-        if s.starts_with("~") {
-            &s[1..]
-        } else {
-            s
-        }
-    }
     match prev_version.as_str() {
         Some(prev_version) => {
             if prev_version == current_version {
                 return true;
             }
-            let prev_version = maybe_strip_tilde(prev_version);
-            let current_version = maybe_strip_tilde(current_version);
+            let prev_version = prev_version.strip_prefix('~').unwrap_or(prev_version);
+            let current_version = current_version.strip_prefix('~').unwrap_or(current_version);
             prev_version.starts_with(current_version) || current_version.starts_with(prev_version)
         }
         _ => false,
