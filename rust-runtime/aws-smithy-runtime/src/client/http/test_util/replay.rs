@@ -114,22 +114,20 @@ impl ValidateRequest {
 /// # Example
 ///
 /// ```no_run
-/// use aws_smithy_runtime::client::http::test_util::StaticReplayClient;
-/// use aws_smithy_runtime_api::shared::IntoShared;
+/// use aws_smithy_http::body::SdkBody;
+/// use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 ///
-/// let http_client = StaticReplayClient::new(
-///     vec![
-///         // Event that covers the first request/response
-///         ReplayEvent::new(
-///             // If `assert_requests_match` is called later, then this request will be matched
-///             // against the actual request that was made.
-///             http::Request::builder().uri("http://localhost:1234/foo").body(SdkBody::empty()).unwrap(),
-///             // This response will be given to the first request regardless of whether it matches the request above.
-///             http::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
-///         ),
-///         // The next ReplayEvent covers the second request/response pair...
-///     ]
-/// ).into_shared();
+/// let http_client = StaticReplayClient::new(vec![
+///     // Event that covers the first request/response
+///     ReplayEvent::new(
+///         // If `assert_requests_match` is called later, then this request will be matched
+///         // against the actual request that was made.
+///         http::Request::builder().uri("http://localhost:1234/foo").body(SdkBody::empty()).unwrap(),
+///         // This response will be given to the first request regardless of whether it matches the request above.
+///         http::Response::builder().status(200).body(SdkBody::empty()).unwrap(),
+///     ),
+///     // The next ReplayEvent covers the second request/response pair...
+/// ]);
 ///
 /// # /*
 /// let config = my_generated_client::Config::builder()

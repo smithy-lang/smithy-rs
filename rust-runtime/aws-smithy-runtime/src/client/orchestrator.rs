@@ -358,8 +358,8 @@ async fn try_attempt(
         let request = ctx.take_request().expect("set during serialization");
         trace!(request = ?request, "transmitting request");
         let http_client = halt_on_err!([ctx] => runtime_components.http_client().ok_or_else(||
-            OrchestratorError::other("No HTTP connector was available to send this request. \
-                Enable the `rustls` crate feature or set a connector to fix this.")
+            OrchestratorError::other("No HTTP client was available to send this request. \
+                Enable the `rustls` crate feature or configure a HTTP client to fix this.")
         ));
         let timeout_config = cfg.load::<TimeoutConfig>().expect("timeout config must be set");
         let settings = {

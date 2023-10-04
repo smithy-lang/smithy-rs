@@ -22,7 +22,6 @@ pub struct ManualTimeSource {
     log: Arc<Mutex<Vec<Duration>>>,
 }
 
-#[cfg(feature = "test-util")]
 impl ManualTimeSource {
     /// Get the number of seconds since the UNIX Epoch as an f64.
     ///

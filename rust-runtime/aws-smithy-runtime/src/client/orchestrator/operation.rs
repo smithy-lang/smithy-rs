@@ -335,7 +335,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 
             assert!(
                 components.http_client().is_some(),
-                "a http_client is required"
+                "a http_client is required. Enable the `rustls` crate feature or configure a HTTP client to fix this."
             );
             assert!(
                 components.endpoint_resolver().is_some(),
