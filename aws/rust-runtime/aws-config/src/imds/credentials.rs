@@ -284,7 +284,7 @@ impl ImdsCredentialsProvider {
 mod test {
     use super::*;
     use crate::imds::client::test::{
-        imds_request, imds_response, make_client, token_request, token_response,
+        imds_request, imds_response, make_imds_client, token_request, token_response,
     };
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
@@ -321,7 +321,7 @@ mod test {
             ),
         ]);
         let client = ImdsCredentialsProvider::builder()
-            .imds_client(make_client(&http_client))
+            .imds_client(make_imds_client(&http_client))
             .build();
         let creds1 = client.provide_credentials().await.expect("valid creds");
         let creds2 = client.provide_credentials().await.expect("valid creds");
@@ -509,7 +509,7 @@ mod test {
                 ),
             ]);
         let provider = ImdsCredentialsProvider::builder()
-            .imds_client(make_client(&http_client))
+            .imds_client(make_imds_client(&http_client))
             .build();
         let creds1 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");

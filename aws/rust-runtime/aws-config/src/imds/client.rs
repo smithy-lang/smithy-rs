@@ -582,7 +582,7 @@ pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
-    use aws_smithy_async::test_util::instant_time_and_sleep;
+    use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;
     use aws_smithy_runtime::client::http::test_util::{
@@ -658,26 +658,26 @@ pub(crate) mod test {
             .unwrap()
     }
 
-    pub(crate) fn make_client(http_client: &StaticReplayClient) -> super::Client {
+    pub(crate) fn make_imds_client(http_client: &StaticReplayClient) -> super::Client {
         tokio::time::pause();
         super::Client::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_sleep_impl(TokioSleep::new())
+                    .with_sleep_impl(InstantSleep::unlogged())
                     .with_http_client(http_client.clone()),
             )
             .build()
     }
 
-    fn event_client(events: Vec<ReplayEvent>) -> (Client, StaticReplayClient) {
+    fn mock_imds_client(events: Vec<ReplayEvent>) -> (Client, StaticReplayClient) {
         let http_client = StaticReplayClient::new(events);
-        let client = make_client(&http_client);
+        let client = make_imds_client(&http_client);
         (client, http_client)
     }
 
     #[tokio::test]
     async fn client_caches_token() {
-        let (client, http_client) = event_client(vec![
+        let (client, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
@@ -702,7 +702,7 @@ pub(crate) mod test {
 
     #[tokio::test]
     async fn token_can_expire() {
-        let (_, http_client) = event_client(vec![
+        let (_, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_A),
@@ -744,7 +744,7 @@ pub(crate) mod test {
     /// Tokens are refreshed up to 120 seconds early to avoid using an expired token.
     #[tokio::test]
     async fn token_refresh_buffer() {
-        let (_, http_client) = event_client(vec![
+        let (_, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
                 token_response(600, TOKEN_A),
@@ -797,7 +797,7 @@ pub(crate) mod test {
     #[tokio::test]
     #[traced_test]
     async fn retry_500() {
-        let (client, http_client) = event_client(vec![
+        let (client, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
@@ -834,7 +834,7 @@ pub(crate) mod test {
     #[tokio::test]
     #[traced_test]
     async fn retry_token_failure() {
-        let (client, http_client) = event_client(vec![
+        let (client, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 http::Response::builder()
@@ -866,7 +866,7 @@ pub(crate) mod test {
     #[tokio::test]
     #[traced_test]
     async fn retry_metadata_401() {
-        let (client, http_client) = event_client(vec![
+        let (client, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(0, TOKEN_A),
@@ -902,7 +902,7 @@ pub(crate) mod test {
     #[tokio::test]
     #[traced_test]
     async fn no_403_retry() {
-        let (client, http_client) = event_client(vec![ReplayEvent::new(
+        let (client, http_client) = mock_imds_client(vec![ReplayEvent::new(
             token_request("http://169.254.169.254", 21600),
             http::Response::builder()
                 .status(403)
@@ -934,7 +934,7 @@ pub(crate) mod test {
     // since tokens are sent as headers, the tokens need to be valid header values
     #[tokio::test]
     async fn invalid_token() {
-        let (client, http_client) = event_client(vec![ReplayEvent::new(
+        let (client, http_client) = mock_imds_client(vec![ReplayEvent::new(
             token_request("http://169.254.169.254", 21600),
             token_response(21600, "invalid\nheader\nvalue\0"),
         )]);
@@ -945,7 +945,7 @@ pub(crate) mod test {
 
     #[tokio::test]
     async fn non_utf8_response() {
-        let (client, http_client) = event_client(vec![
+        let (client, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A).map(SdkBody::from),

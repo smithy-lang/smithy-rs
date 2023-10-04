@@ -138,6 +138,13 @@ impl InstantSleep {
         Self { log }
     }
 
+    /// Create an `InstantSleep` without passing in a shared log.
+    pub fn unlogged() -> Self {
+        Self {
+            log: Default::default(),
+        }
+    }
+
     /// Return the sleep durations that were logged by this `InstantSleep`.
     pub fn logs(&self) -> Vec<Duration> {
         self.log.lock().unwrap().iter().cloned().collect()
