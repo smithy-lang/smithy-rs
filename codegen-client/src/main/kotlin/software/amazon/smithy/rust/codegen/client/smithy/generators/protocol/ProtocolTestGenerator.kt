@@ -435,7 +435,7 @@ class DefaultProtocolTestGenerator(
             // When we generate a body instead of a stub, drop the trailing `;` and enable the assertion
             assertOk(rustWriter) {
                 rustWriter.write(
-                    "#T(&body, ${
+                    "#T(body, ${
                         rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
                     RT.protocolTest(rc, "validate_body"),
@@ -592,6 +592,9 @@ class DefaultProtocolTestGenerator(
             "SDKAppliedContentEncoding_ec2Query",
             "SDKAppliedContentEncoding_restJson1",
             "SDKAppliedContentEncoding_restXml",
+            "AwsJson11DeserializeIgnoreType",
+            "AwsJson10DeserializeIgnoreType",
+            "RestJsonDeserializeIgnoreType",
         )
     }
 }

@@ -204,7 +204,7 @@ impl Builder {
         WebIdentityTokenCredentialsProvider {
             source,
             fs: conf.fs(),
-            sts_client: StsClient::from_conf(conf.sts_client_config().build()),
+            sts_client: StsClient::new(&conf.client_config("STS")),
             time_source: conf.time_source(),
         }
     }

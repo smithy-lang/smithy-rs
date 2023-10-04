@@ -20,6 +20,7 @@ use crate::client::identity::{ConfiguredIdentityResolver, SharedIdentityResolver
 use crate::client::interceptors::SharedInterceptor;
 use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
 use crate::client::retries::SharedRetryStrategy;
+use crate::shared::IntoShared;
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_async::time::SharedTimeSource;
 use std::fmt;
@@ -274,17 +275,17 @@ impl RuntimeComponentsBuilder {
     /// Sets the auth scheme option resolver.
     pub fn set_auth_scheme_option_resolver(
         &mut self,
-        auth_scheme_option_resolver: Option<SharedAuthSchemeOptionResolver>,
+        auth_scheme_option_resolver: Option<impl IntoShared<SharedAuthSchemeOptionResolver>>,
     ) -> &mut Self {
         self.auth_scheme_option_resolver =
-            auth_scheme_option_resolver.map(|r| Tracked::new(self.builder_name, r));
+            auth_scheme_option_resolver.map(|r| Tracked::new(self.builder_name, r.into_shared()));
         self
     }
 
     /// Sets the auth scheme option resolver.
     pub fn with_auth_scheme_option_resolver(
         mut self,
-        auth_scheme_option_resolver: Option<SharedAuthSchemeOptionResolver>,
+        auth_scheme_option_resolver: Option<impl IntoShared<SharedAuthSchemeOptionResolver>>,
     ) -> Self {
         self.set_auth_scheme_option_resolver(auth_scheme_option_resolver);
         self
@@ -296,13 +297,19 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the HTTP connector.
-    pub fn set_http_connector(&mut self, connector: Option<SharedHttpConnector>) -> &mut Self {
-        self.http_connector = connector.map(|c| Tracked::new(self.builder_name, c));
+    pub fn set_http_connector(
+        &mut self,
+        connector: Option<impl IntoShared<SharedHttpConnector>>,
+    ) -> &mut Self {
+        self.http_connector = connector.map(|c| Tracked::new(self.builder_name, c.into_shared()));
         self
     }
 
     /// Sets the HTTP connector.
-    pub fn with_http_connector(mut self, connector: Option<SharedHttpConnector>) -> Self {
+    pub fn with_http_connector(
+        mut self,
+        connector: Option<impl IntoShared<SharedHttpConnector>>,
+    ) -> Self {
         self.set_http_connector(connector);
         self
     }
@@ -315,16 +322,17 @@ impl RuntimeComponentsBuilder {
     /// Sets the endpoint resolver.
     pub fn set_endpoint_resolver(
         &mut self,
-        endpoint_resolver: Option<SharedEndpointResolver>,
+        endpoint_resolver: Option<impl IntoShared<SharedEndpointResolver>>,
     ) -> &mut Self {
-        self.endpoint_resolver = endpoint_resolver.map(|s| Tracked::new(self.builder_name, s));
+        self.endpoint_resolver =
+            endpoint_resolver.map(|s| Tracked::new(self.builder_name, s.into_shared()));
         self
     }
 
     /// Sets the endpoint resolver.
     pub fn with_endpoint_resolver(
         mut self,
-        endpoint_resolver: Option<SharedEndpointResolver>,
+        endpoint_resolver: Option<impl IntoShared<SharedEndpointResolver>>,
     ) -> Self {
         self.set_endpoint_resolver(endpoint_resolver);
         self
@@ -336,14 +344,17 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Adds an auth scheme.
-    pub fn push_auth_scheme(&mut self, auth_scheme: SharedAuthScheme) -> &mut Self {
+    pub fn push_auth_scheme(
+        &mut self,
+        auth_scheme: impl IntoShared<SharedAuthScheme>,
+    ) -> &mut Self {
         self.auth_schemes
-            .push(Tracked::new(self.builder_name, auth_scheme));
+            .push(Tracked::new(self.builder_name, auth_scheme.into_shared()));
         self
     }
 
     /// Adds an auth scheme.
-    pub fn with_auth_scheme(mut self, auth_scheme: SharedAuthScheme) -> Self {
+    pub fn with_auth_scheme(mut self, auth_scheme: impl IntoShared<SharedAuthScheme>) -> Self {
         self.push_auth_scheme(auth_scheme);
         self
     }
@@ -352,11 +363,11 @@ impl RuntimeComponentsBuilder {
     pub fn push_identity_resolver(
         &mut self,
         scheme_id: AuthSchemeId,
-        identity_resolver: SharedIdentityResolver,
+        identity_resolver: impl IntoShared<SharedIdentityResolver>,
     ) -> &mut Self {
         self.identity_resolvers.push(Tracked::new(
             self.builder_name,
-            ConfiguredIdentityResolver::new(scheme_id, identity_resolver),
+            ConfiguredIdentityResolver::new(scheme_id, identity_resolver.into_shared()),
         ));
         self
     }
@@ -365,7 +376,7 @@ impl RuntimeComponentsBuilder {
     pub fn with_identity_resolver(
         mut self,
         scheme_id: AuthSchemeId,
-        identity_resolver: SharedIdentityResolver,
+        identity_resolver: impl IntoShared<SharedIdentityResolver>,
     ) -> Self {
         self.push_identity_resolver(scheme_id, identity_resolver);
         self
@@ -387,14 +398,17 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Adds an interceptor.
-    pub fn push_interceptor(&mut self, interceptor: SharedInterceptor) -> &mut Self {
+    pub fn push_interceptor(
+        &mut self,
+        interceptor: impl IntoShared<SharedInterceptor>,
+    ) -> &mut Self {
         self.interceptors
-            .push(Tracked::new(self.builder_name, interceptor));
+            .push(Tracked::new(self.builder_name, interceptor.into_shared()));
         self
     }
 
     /// Adds an interceptor.
-    pub fn with_interceptor(mut self, interceptor: SharedInterceptor) -> Self {
+    pub fn with_interceptor(mut self, interceptor: impl IntoShared<SharedInterceptor>) -> Self {
         self.push_interceptor(interceptor);
         self
     }
@@ -447,14 +461,22 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the retry strategy.
-    pub fn set_retry_strategy(&mut self, retry_strategy: Option<SharedRetryStrategy>) -> &mut Self {
-        self.retry_strategy = retry_strategy.map(|s| Tracked::new(self.builder_name, s));
+    pub fn set_retry_strategy(
+        &mut self,
+        retry_strategy: Option<impl IntoShared<SharedRetryStrategy>>,
+    ) -> &mut Self {
+        self.retry_strategy =
+            retry_strategy.map(|s| Tracked::new(self.builder_name, s.into_shared()));
         self
     }
 
     /// Sets the retry strategy.
-    pub fn with_retry_strategy(mut self, retry_strategy: Option<SharedRetryStrategy>) -> Self {
-        self.retry_strategy = retry_strategy.map(|s| Tracked::new(self.builder_name, s));
+    pub fn with_retry_strategy(
+        mut self,
+        retry_strategy: Option<impl IntoShared<SharedRetryStrategy>>,
+    ) -> Self {
+        self.retry_strategy =
+            retry_strategy.map(|s| Tracked::new(self.builder_name, s.into_shared()));
         self
     }
 
@@ -620,12 +642,12 @@ impl RuntimeComponentsBuilder {
         }
 
         Self::new("aws_smithy_runtime_api::client::runtime_components::RuntimeComponentBuilder::for_tests")
-            .with_auth_scheme(SharedAuthScheme::new(FakeAuthScheme))
-            .with_auth_scheme_option_resolver(Some(SharedAuthSchemeOptionResolver::new(FakeAuthSchemeOptionResolver)))
-            .with_endpoint_resolver(Some(SharedEndpointResolver::new(FakeEndpointResolver)))
-            .with_http_connector(Some(SharedHttpConnector::new(FakeConnector)))
-            .with_identity_resolver(AuthSchemeId::new("fake"), SharedIdentityResolver::new(FakeIdentityResolver))
-            .with_retry_strategy(Some(SharedRetryStrategy::new(FakeRetryStrategy)))
+            .with_auth_scheme(FakeAuthScheme)
+            .with_auth_scheme_option_resolver(Some(FakeAuthSchemeOptionResolver))
+            .with_endpoint_resolver(Some(FakeEndpointResolver))
+            .with_http_connector(Some(FakeConnector))
+            .with_identity_resolver(AuthSchemeId::new("fake"), FakeIdentityResolver)
+            .with_retry_strategy(Some(FakeRetryStrategy))
             .with_sleep_impl(Some(SharedAsyncSleep::new(FakeSleep)))
             .with_time_source(Some(SharedTimeSource::new(FakeTimeSource)))
     }

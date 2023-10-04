@@ -31,6 +31,7 @@
 //! The Smithy clients have no knowledge of such concepts.
 
 use crate::client::orchestrator::{HttpRequest, HttpResponse};
+use crate::impl_shared_conversions;
 use aws_smithy_async::future::now_or_later::NowOrLater;
 use aws_smithy_http::result::ConnectorError;
 use pin_project_lite::pin_project;
@@ -117,3 +118,5 @@ impl HttpConnector for SharedHttpConnector {
         (*self.0).call(request)
     }
 }
+
+impl_shared_conversions!(convert SharedHttpConnector from HttpConnector using SharedHttpConnector::new);

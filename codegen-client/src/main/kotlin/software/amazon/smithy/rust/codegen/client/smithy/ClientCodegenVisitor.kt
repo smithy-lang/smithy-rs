@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -77,10 +76,11 @@ class ClientCodegenVisitor(
         val rustSymbolProviderConfig = RustSymbolProviderConfig(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = settings.codegenConfig.renameExceptions,
-            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+            nullabilityCheckMode = settings.codegenConfig.nullabilityCheckMode,
             moduleProvider = ClientModuleProvider,
             nameBuilderFor = { symbol -> "${symbol.name}Builder" },
         )
+
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
         val (protocol, generator) = ClientProtocolLoader(
@@ -223,6 +223,7 @@ class ClientCodegenVisitor(
                         this,
                         shape,
                         codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                        structSettings = codegenContext.structSettings(),
                     ).render()
 
                     implBlock(symbolProvider.toSymbol(shape)) {
@@ -246,6 +247,7 @@ class ClientCodegenVisitor(
                     shape,
                     errorTrait,
                     codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                    codegenContext.structSettings(),
                 )
                 errorGenerator::renderStruct to errorGenerator::renderBuilder
             }

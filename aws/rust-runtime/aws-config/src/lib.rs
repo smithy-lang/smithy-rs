@@ -589,6 +589,23 @@ mod loader {
                         .with_http_connector(http_connector.clone())
                 })
                 .with_profile_config(self.profile_files_override, self.profile_name_override);
+
+            let use_fips = if let Some(use_fips) = self.use_fips {
+                Some(use_fips)
+            } else {
+                use_fips_provider(&conf).await
+            };
+
+            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
+                Some(use_dual_stack)
+            } else {
+                use_dual_stack_provider(&conf).await
+            };
+
+            let conf = conf
+                .with_use_fips(use_fips)
+                .with_use_dual_stack(use_dual_stack);
+
             let region = if let Some(provider) = self.region {
                 provider.region().await
             } else {
@@ -646,18 +663,6 @@ mod loader {
                 }))
             } else {
                 None
-            };
-
-            let use_fips = if let Some(use_fips) = self.use_fips {
-                Some(use_fips)
-            } else {
-                use_fips_provider(&conf).await
-            };
-
-            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
-                Some(use_dual_stack)
-            } else {
-                use_dual_stack_provider(&conf).await
             };
 
             let mut builder = SdkConfig::builder()
@@ -808,13 +813,18 @@ mod loader {
                 movable.fetch_add(1, Ordering::Relaxed);
                 http::Response::new("ok!")
             });
-            let config = from_env().http_connector(conn.clone()).load().await;
+            let config = from_env()
+                .fs(Fs::from_slice(&[]))
+                .env(Env::from_slice(&[]))
+                .http_connector(conn.clone())
+                .load()
+                .await;
             config
                 .credentials_provider()
                 .unwrap()
                 .provide_credentials()
                 .await
-                .expect_err("no traffic is allowed");
+                .expect_err("did not expect credentials to be loaded—no traffic is allowed");
             let num_requests = num_requests.load(Ordering::Relaxed);
             assert!(num_requests > 0, "{}", num_requests);
         }

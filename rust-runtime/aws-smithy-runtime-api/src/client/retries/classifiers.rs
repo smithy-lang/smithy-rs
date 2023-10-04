@@ -6,6 +6,7 @@
 //! Classifier for determining if a retry is necessary and related code.
 
 use crate::client::interceptors::context::InterceptorContext;
+use crate::impl_shared_conversions;
 use aws_smithy_types::retry::ErrorKind;
 use std::fmt;
 use std::sync::Arc;
@@ -110,6 +111,8 @@ pub trait ClassifyRetry: Send + Sync + fmt::Debug {
         RetryClassifierPriority::default()
     }
 }
+
+impl_shared_conversions!(convert SharedRetryClassifier from ClassifyRetry using SharedRetryClassifier::new);
 
 #[derive(Debug, Clone)]
 /// Retry classifier used by the retry strategy to classify responses as retryable or not.

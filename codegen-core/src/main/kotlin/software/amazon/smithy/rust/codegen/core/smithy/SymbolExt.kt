@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -102,6 +103,11 @@ sealed class Default {
      * This symbol should use the Rust `std::default::Default` when unset
      */
     object RustDefault : Default()
+
+    /**
+     * This symbol has a custom default value different from `Default::default`
+     */
+    data class NonZeroDefault(val value: Node) : Default()
 }
 
 /**

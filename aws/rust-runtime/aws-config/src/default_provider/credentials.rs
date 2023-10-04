@@ -306,6 +306,9 @@ mod test {
     #[cfg(feature = "credentials-sso")]
     make_test!(sso_no_token_file);
 
+    #[cfg(feature = "credentials-sso")]
+    make_test!(e2e_fips_and_dual_stack_sso);
+
     #[tokio::test]
     async fn profile_name_override() {
         let conf =

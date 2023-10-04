@@ -10,6 +10,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 event-stream = ["dep:aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
 test-util = []
+sigv4a = ["aws-sigv4/sigv4a"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }

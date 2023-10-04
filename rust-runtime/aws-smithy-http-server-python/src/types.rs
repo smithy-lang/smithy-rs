@@ -31,7 +31,6 @@ use pyo3::{
     prelude::*,
 };
 use tokio::{runtime::Handle, sync::Mutex};
-use tokio_stream::StreamExt;
 
 use crate::PyError;
 

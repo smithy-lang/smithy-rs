@@ -10,7 +10,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
@@ -72,17 +71,9 @@ sealed class OperationSection(name: String) : Section(name) {
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalInterceptors") {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
-            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
-                """
-                .with_interceptor(
-                    #{SharedInterceptor}::new(
-                        #{interceptor}
-                    ) as _
-                )
-                """,
+                ".with_interceptor(#{interceptor})",
                 "interceptor" to interceptor,
-                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }

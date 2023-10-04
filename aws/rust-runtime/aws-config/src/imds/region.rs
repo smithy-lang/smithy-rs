@@ -8,8 +8,7 @@
 //! Load region from IMDS from `/latest/meta-data/placement/region`
 //! This provider has a 5 second timeout.
 
-use crate::imds;
-use crate::imds::client::LazyClient;
+use crate::imds::{self, Client};
 use crate::meta::region::{future, ProvideRegion};
 use crate::provider_config::ProviderConfig;
 use aws_smithy_types::error::display::DisplayErrorContext;
@@ -22,7 +21,7 @@ use tracing::Instrument;
 /// This provider is included in the default region chain, so it does not need to be used manually.
 #[derive(Debug)]
 pub struct ImdsRegionProvider {
-    client: LazyClient,
+    client: Client,
     env: Env,
 }
 
@@ -49,11 +48,10 @@ impl ImdsRegionProvider {
             tracing::debug!("not using IMDS to load region, IMDS is disabled");
             return None;
         }
-        let client = self.client.client().await.ok()?;
-        match client.get(REGION_PATH).await {
+        match self.client.get(REGION_PATH).await {
             Ok(region) => {
-                tracing::debug!(region = %region, "loaded region from IMDS");
-                Some(Region::new(region))
+                tracing::debug!(region = %region.as_ref(), "loaded region from IMDS");
+                Some(Region::new(String::from(region)))
             }
             Err(err) => {
                 tracing::warn!(err = %DisplayErrorContext(&err), "failed to load region from IMDS");
@@ -99,12 +97,7 @@ impl Builder {
         let provider_config = self.provider_config.unwrap_or_default();
         let client = self
             .imds_client_override
-            .map(LazyClient::from_ready_client)
-            .unwrap_or_else(|| {
-                imds::Client::builder()
-                    .configure(&provider_config)
-                    .build_lazy()
-            });
+            .unwrap_or_else(|| imds::Client::builder().configure(&provider_config).build());
         ImdsRegionProvider {
             client,
             env: provider_config.env(),

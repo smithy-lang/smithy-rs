@@ -18,6 +18,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::impl_shared_conversions;
 pub use aws_smithy_types::retry::ErrorKind;
 #[cfg(feature = "test-util")]
 pub use test_util::AlwaysRetry;
@@ -43,6 +44,8 @@ impl ShouldAttempt {
         }
     }
 }
+
+impl_shared_conversions!(convert SharedRetryStrategy from RetryStrategy using SharedRetryStrategy::new);
 
 /// Decider for whether or not to attempt a request, and when.
 ///

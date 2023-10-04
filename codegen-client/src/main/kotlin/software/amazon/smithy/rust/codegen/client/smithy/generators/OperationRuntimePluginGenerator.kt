@@ -129,10 +129,6 @@ class OperationRuntimePluginGenerator(
         if (authSchemeOptions.any { it is AuthSchemeOption.CustomResolver }) {
             throw IllegalStateException("AuthSchemeOption.CustomResolver is unimplemented")
         } else {
-            val authOptionsMap = authSchemeOptions.associate {
-                val option = it as AuthSchemeOption.StaticAuthSchemeOption
-                option.schemeShapeId to option
-            }
             withBlockTemplate(
                 """
                 .with_auth_scheme_option_resolver(#{Some}(
@@ -145,10 +141,19 @@ class OperationRuntimePluginGenerator(
                 var noSupportedAuthSchemes = true
                 val authSchemes = ServiceIndex.of(codegenContext.model)
                     .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
+
                 for (schemeShapeId in authSchemes.keys) {
-                    val authOption = authOptionsMap[schemeShapeId]
-                    if (authOption != null) {
-                        authOption.constructor(this)
+                    val optionsForScheme = authSchemeOptions.filter {
+                        when (it) {
+                            is AuthSchemeOption.CustomResolver -> false
+                            is AuthSchemeOption.StaticAuthSchemeOption -> {
+                                it.schemeShapeId == schemeShapeId
+                            }
+                        }
+                    }
+
+                    if (optionsForScheme.isNotEmpty()) {
+                        optionsForScheme.forEach { (it as AuthSchemeOption.StaticAuthSchemeOption).constructor(this) }
                         noSupportedAuthSchemes = false
                     } else {
                         logger.warning(
@@ -158,9 +163,11 @@ class OperationRuntimePluginGenerator(
                     }
                 }
                 if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
-                    val authOption = authOptionsMap[noAuthSchemeShapeId]
+                    val authOption = authSchemeOptions.find {
+                        it is AuthSchemeOption.StaticAuthSchemeOption && it.schemeShapeId == noAuthSchemeShapeId
+                    }
                         ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")
-                    authOption.constructor(this)
+                    (authOption as AuthSchemeOption.StaticAuthSchemeOption).constructor(this)
                 }
             }
         }

@@ -4,19 +4,36 @@
  */
 
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_runtime_api::client::connectors::{HttpConnector, HttpConnectorFuture};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
 
+#[derive(Debug)]
+struct Inner {
+    response: Option<http::Response<SdkBody>>,
+    sender: Option<oneshot::Sender<HttpRequest>>,
+}
+
 /// Test Connection to capture a single request
 #[derive(Debug, Clone)]
 pub struct CaptureRequestHandler(Arc<Mutex<Inner>>);
 
-#[derive(Debug)]
-struct Inner {
-    _response: Option<http::Response<SdkBody>>,
-    _sender: Option<oneshot::Sender<HttpRequest>>,
+impl HttpConnector for CaptureRequestHandler {
+    fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        let mut inner = self.0.lock().unwrap();
+        inner
+            .sender
+            .take()
+            .expect("already sent")
+            .send(request)
+            .expect("channel not ready");
+        HttpConnectorFuture::ready(Ok(inner
+            .response
+            .take()
+            .expect("could not handle second request")))
+    }
 }
 
 /// Receiver for [`CaptureRequestHandler`](CaptureRequestHandler)
@@ -71,13 +88,13 @@ pub fn capture_request(
     let (tx, rx) = oneshot::channel();
     (
         CaptureRequestHandler(Arc::new(Mutex::new(Inner {
-            _response: Some(response.unwrap_or_else(|| {
+            response: Some(response.unwrap_or_else(|| {
                 http::Response::builder()
                     .status(200)
                     .body(SdkBody::empty())
                     .expect("unreachable")
             })),
-            _sender: Some(tx),
+            sender: Some(tx),
         }))),
         CaptureRequestReceiver { receiver: rx },
     )

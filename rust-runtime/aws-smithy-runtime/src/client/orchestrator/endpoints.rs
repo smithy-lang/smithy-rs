@@ -24,21 +24,22 @@ use tracing::trace;
 /// An endpoint resolver that uses a static URI.
 #[derive(Clone, Debug)]
 pub struct StaticUriEndpointResolver {
-    endpoint: Uri,
+    endpoint: String,
 }
 
 impl StaticUriEndpointResolver {
     /// Create a resolver that resolves to `http://localhost:{port}`.
     pub fn http_localhost(port: u16) -> Self {
         Self {
-            endpoint: Uri::from_str(&format!("http://localhost:{port}"))
-                .expect("all u16 values are valid ports"),
+            endpoint: format!("http://localhost:{port}"),
         }
     }
 
     /// Create a resolver that resolves to the given URI.
-    pub fn uri(endpoint: Uri) -> Self {
-        Self { endpoint }
+    pub fn uri(endpoint: impl Into<String>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+        }
     }
 }
 
