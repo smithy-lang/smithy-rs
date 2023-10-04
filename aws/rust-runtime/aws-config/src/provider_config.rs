@@ -12,9 +12,11 @@ use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_smithy_types::retry::RetryConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use aws_types::sdk_config::SharedHttpClient;
+use aws_types::SdkConfig;
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -36,6 +38,8 @@ pub struct ProviderConfig {
     http_client: Option<SharedHttpClient>,
     sleep_impl: Option<SharedAsyncSleep>,
     region: Option<Region>,
+    use_fips: Option<bool>,
+    use_dual_stack: Option<bool>,
     /// An AWS profile created from `ProfileFiles` and a `profile_name`
     parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
     /// A list of [std::path::Path]s to profile files
@@ -53,6 +57,8 @@ impl Debug for ProviderConfig {
             .field("http_client", &self.http_client)
             .field("sleep_impl", &self.sleep_impl)
             .field("region", &self.region)
+            .field("use_fips", &self.use_fips)
+            .field("use_dual_stack", &self.use_dual_stack)
             .field("profile_name_override", &self.profile_name_override)
             .finish()
     }
@@ -67,6 +73,8 @@ impl Default for ProviderConfig {
             http_client: None,
             sleep_impl: default_async_sleep(),
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
@@ -95,6 +103,8 @@ impl ProviderConfig {
             http_client: None,
             sleep_impl: None,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             profile_name_override: None,
         }
     }
@@ -135,6 +145,8 @@ impl ProviderConfig {
             http_client: None,
             sleep_impl: None,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
@@ -155,6 +167,8 @@ impl ProviderConfig {
             http_client: None,
             sleep_impl,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             profile_name_override: None,
         }
     }
@@ -173,6 +187,18 @@ impl ProviderConfig {
     /// ```
     pub async fn with_default_region() -> Self {
         Self::without_region().load_default_region().await
+    }
+
+    pub(crate) fn client_config(&self) -> SdkConfig {
+        let mut builder = SdkConfig::builder()
+            .retry_config(RetryConfig::standard())
+            .region(self.region())
+            .time_source(self.time_source())
+            .use_fips(self.use_fips().unwrap_or_default())
+            .use_dual_stack(self.use_dual_stack().unwrap_or_default());
+        builder.set_http_client(self.http_client.clone());
+        builder.set_sleep_impl(self.sleep_impl.clone());
+        builder.build()
     }
 
     // When all crate features are disabled, these accessors are unused
@@ -207,6 +233,16 @@ impl ProviderConfig {
         self.region.clone()
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn use_fips(&self) -> Option<bool> {
+        self.use_fips
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn use_dual_stack(&self) -> Option<bool> {
+        self.use_dual_stack
+    }
+
     pub(crate) async fn try_profile(&self) -> Result<&ProfileSet, &ProfileFileLoadError> {
         let parsed_profile = self
             .parsed_profile
@@ -234,6 +270,18 @@ impl ProviderConfig {
     /// Override the region for the configuration
     pub fn with_region(mut self, region: Option<Region>) -> Self {
         self.region = region;
+        self
+    }
+
+    /// Override the `use_fips` setting.
+    pub(crate) fn with_use_fips(mut self, use_fips: Option<bool>) -> Self {
+        self.use_fips = use_fips;
+        self
+    }
+
+    /// Override the `use_dual_stack` setting.
+    pub(crate) fn with_use_dual_stack(mut self, use_dual_stack: Option<bool>) -> Self {
+        self.use_dual_stack = use_dual_stack;
         self
     }
 

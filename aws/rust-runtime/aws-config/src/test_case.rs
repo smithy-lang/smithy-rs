@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::default_provider::use_dual_stack::use_dual_stack_provider;
+use crate::default_provider::use_fips::use_fips_provider;
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, ProvideCredentials};
 use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep, TokioSleep};
@@ -235,6 +237,13 @@ impl TestEnvironment {
             .with_sleep_impl(TokioSleep::new())
             .load_default_region()
             .await;
+
+        let use_dual_stack = use_dual_stack_provider(&provider_config).await;
+        let use_fips = use_fips_provider(&provider_config).await;
+        let provider_config = provider_config
+            .with_use_fips(use_fips)
+            .with_use_dual_stack(use_dual_stack);
+
         Ok(TestEnvironment {
             base_dir: dir.into(),
             metadata,
