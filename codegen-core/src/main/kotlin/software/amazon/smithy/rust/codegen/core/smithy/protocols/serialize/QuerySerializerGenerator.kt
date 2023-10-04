@@ -125,11 +125,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
     }
 
     override fun unsetUnion(union: UnionShape): RuntimeType {
-        TODO("AwsQuery doesn't support payload serialization")
-    }
-
-    override fun unsetUnion(union: UnionShape): RuntimeType {
-        TODO("AwsQuery doesn't support payload serialization")
+        TODO("$protocolName doesn't support payload serialization")
     }
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
