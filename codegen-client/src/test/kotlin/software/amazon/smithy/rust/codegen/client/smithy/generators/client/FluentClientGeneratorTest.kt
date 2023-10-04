@@ -129,4 +129,19 @@ class FluentClientGeneratorTest {
             }
         }
     }
+
+    @Test
+    fun `dead-code warning should not be issued when a service has no operations`() {
+        val model = """
+            namespace com.example
+            use aws.protocols#awsJson1_0
+
+            @awsJson1_0
+            service HelloService {
+                version: "1"
+            }
+        """.asSmithyModel()
+
+        clientIntegrationTest(model)
+    }
 }
