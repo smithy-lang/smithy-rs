@@ -187,6 +187,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         """
                         use #{RuntimePlugin};
                         use ::aws_smithy_runtime_api::client::retries::RetryStrategy;
+                        use ::aws_smithy_runtime_api::shared::IntoShared;
 
                         let client_config = crate::config::Config::builder()
                             .retry_config(#{RetryConfig}::standard().with_max_attempts(3))
@@ -203,9 +204,9 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         cfg.push_shared_layer(client_config_layer.clone());
 
                         let retry_classifiers_component = #{RuntimeComponentsBuilder}::new("retry_classifier")
-                            .with_retry_classifiers(#{Some}(
-                                #{RetryClassifiers}::new().with_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError)),
-                            ));
+                            .with_retry_classifier(
+                                #{AlwaysRetry}(#{ErrorKind}::TransientError).into_shared()
+                            );
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
