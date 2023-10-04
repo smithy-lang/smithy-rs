@@ -50,8 +50,7 @@ use crate::http_credential_provider::HttpCredentialProvider;
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_smithy_http::endpoint::apply_endpoint;
-use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::dns::{DnsResolver, SharedDnsResolver};
+use aws_smithy_runtime_api::client::dns::{DnsResolver, ResolveDnsError, SharedDnsResolver};
 use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
@@ -330,7 +329,7 @@ enum InvalidFullUriErrorKind {
     NotLoopback,
 
     /// DNS lookup failed when attempting to resolve the host to an IP Address for validation.
-    DnsLookupFailed(BoxError),
+    DnsLookupFailed(ResolveDnsError),
 }
 
 /// Invalid Full URI
@@ -366,7 +365,7 @@ impl Error for InvalidFullUriError {
         use InvalidFullUriErrorKind::*;
         match &self.kind {
             InvalidUri(err) => Some(err),
-            DnsLookupFailed(err) => Some(&**err as _),
+            DnsLookupFailed(err) => Some(err as _),
             _ => None,
         }
     }
@@ -402,7 +401,7 @@ async fn validate_full_uri(
             let dns = dns.ok_or(InvalidFullUriErrorKind::NoDnsResolver)?;
             dns.resolve_dns(host.to_owned())
                 .await
-                .map_err(InvalidFullUriErrorKind::DnsLookupFailed)?
+                .map_err(|err| InvalidFullUriErrorKind::DnsLookupFailed(ResolveDnsError::new(err)))?
                 .iter()
                     .all(|addr| {
                         if !addr.is_loopback() {
