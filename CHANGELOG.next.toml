@@ -253,3 +253,11 @@ message = "The IMDS Client builder's `build()` method is no longer async."
 references = ["smithy-rs#2997"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """The API for [`AssumeRoleProvider`](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html) has been updated to derive configuration from [`SdkConfig`](https://docs.rs/aws-config/latest/aws_config/struct.SdkConfig.html) instead of `ProviderConfig`.
+
+For more information, see the [Change Log Discussion](https://github.com/awslabs/aws-sdk-rust/discussions/906)"""
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+references = ["smithy-rs#3014"]
+author = "rcoh"
