@@ -37,6 +37,7 @@ regex = "1.5.5"
 serde_urlencoded = "0.7"
 thiserror = "1.0.40"
 tokio = { version = "1.23.1", features = ["full"] }
+tokio-rustls = "0.24"
 tower = { version = "0.4.11", features = ["util", "make"], default-features = false }
 tower-http = { version = "0.3", features = ["add-extension", "map-response-body"] }
 tracing = "0.1.35"
