@@ -348,6 +348,14 @@ impl ProviderConfig {
         }
     }
 
+    /// Deprecated. Don't use.
+    #[deprecated(
+        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
+    )]
+    pub fn with_tcp_connector(self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
+        self.with_http_client(http_client)
+    }
+
     /// Override the HTTP client for this configuration
     ///
     /// Takes an implementation of [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient)
