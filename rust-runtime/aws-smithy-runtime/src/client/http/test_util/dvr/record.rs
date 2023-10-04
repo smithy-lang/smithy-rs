@@ -46,6 +46,9 @@ impl RecordingClient {
 
 impl RecordingClient {
     /// Create a new recording connection from a connection
+    ///
+    /// Takes an implementation of [`HttpConnector`](aws_smithy_runtime_api::client::http::HttpConnector)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn new(underlying_connector: impl IntoShared<SharedHttpConnector>) -> Self {
         Self {
             data: Default::default(),

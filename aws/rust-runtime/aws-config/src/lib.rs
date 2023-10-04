@@ -242,6 +242,7 @@ mod loader {
         }
 
         /// Override the timeout config used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
         /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
         /// provider chain are configured separately.
         ///
@@ -266,25 +267,42 @@ mod loader {
             self
         }
 
-        /// Override the sleep implementation for this [`ConfigLoader`]. The sleep implementation
-        /// is used to create timeout futures.
+        /// Override the sleep implementation for this [`ConfigLoader`].
+        ///
+        /// The sleep implementation is used to create timeout futures.
+        /// You generally won't need to change this unless you're using an async runtime other
+        /// than Tokio.
+        ///
+        /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
+        /// as an argument. All implementations of this trait implement `IntoShared`.
         pub fn sleep_impl(mut self, sleep: impl IntoShared<SharedAsyncSleep>) -> Self {
             // it's possible that we could wrapping an `Arc in an `Arc` and that's OK
             self.sleep = Some(sleep.into_shared());
             self
         }
 
-        /// Set the time source used for tasks like signing requests
+        /// Set the time source used for tasks like signing requests.
+        ///
+        /// You generally won't need to change this unless you're compiling for a target
+        /// that can't provide a default, such as WASM, or unless you're writing a test against
+        /// the client that needs a fixed time.
+        ///
+        /// Takes an implementation of [`TimeSource`](aws_smithy_async::time::TimeSource)
+        /// as an argument. All implementations of this trait implement `IntoShared`.
         pub fn time_source(mut self, time_source: impl IntoShared<SharedTimeSource>) -> Self {
             self.time_source = Some(time_source.into_shared());
             self
         }
 
-        /// Override the [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) for this
-        /// [`ConfigLoader`]. The HTTP client will be used for both AWS services and credentials providers.
+        /// Override the [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) for this [`ConfigLoader`].
+        ///
+        /// The HTTP client will be used for both AWS services and credentials providers.
         ///
         /// If you wish to use a separate HTTP client for credentials providers when creating clients,
         /// then override the HTTP client set with this function on the client-specific `Config`s.
+        ///
+        /// Takes an implementation of [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient)
+        /// as an argument. All implementations of this trait implement `IntoShared`.
         ///
         /// ## Examples
         ///

@@ -248,6 +248,9 @@ impl HyperConnectorBuilder {
     ///
     /// Calling this is only necessary for testing or to use something other than
     /// [`default_async_sleep`].
+    ///
+    /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn sleep_impl(mut self, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
         self.sleep_impl = Some(sleep_impl.into_shared());
         self

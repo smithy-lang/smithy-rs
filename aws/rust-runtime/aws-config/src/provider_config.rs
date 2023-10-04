@@ -290,6 +290,9 @@ impl ProviderConfig {
     }
 
     /// Override the time source for this configuration
+    ///
+    /// Takes an implementation of [`TimeSource`](aws_smithy_async::time::TimeSource)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_time_source(self, time_source: impl IntoShared<SharedTimeSource>) -> Self {
         ProviderConfig {
             time_source: time_source.into_shared(),
@@ -298,6 +301,9 @@ impl ProviderConfig {
     }
 
     /// Override the HTTP client for this configuration
+    ///
+    /// Takes an implementation of [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_http_client(self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
         ProviderConfig {
             http_client: Some(http_client.into_shared()),
@@ -306,6 +312,9 @@ impl ProviderConfig {
     }
 
     /// Override the sleep implementation for this configuration
+    ///
+    /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_sleep_impl(self, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
         ProviderConfig {
             sleep_impl: Some(sleep_impl.into_shared()),

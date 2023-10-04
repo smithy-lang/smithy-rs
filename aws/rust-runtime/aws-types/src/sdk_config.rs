@@ -231,8 +231,12 @@ impl Builder {
         self
     }
 
-    /// Set the sleep implementation for the builder. The sleep implementation is used to create
-    /// timeout futures.
+    /// Set the sleep implementation for the builder.
+    ///
+    /// The sleep implementation is used to create timeout futures.
+    ///
+    /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     ///
     /// _Note:_ If you're using the Tokio runtime, a `TokioSleep` implementation is available in
     /// the `aws-smithy-async` crate.
@@ -401,6 +405,9 @@ impl Builder {
     }
 
     /// Sets the HTTP client to use when making requests.
+    ///
+    /// Takes an implementation of [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     ///
     /// ## Examples
     /// ```no_run

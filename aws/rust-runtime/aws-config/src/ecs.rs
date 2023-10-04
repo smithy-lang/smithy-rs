@@ -274,6 +274,9 @@ impl Builder {
     ///
     /// URIs must refer to loopback addresses. The [`DnsResolver`](aws_smithy_runtime_api::client::dns::DnsResolver)
     /// is used to retrieve IP addresses for a given domain.
+    ///
+    /// Takes an implementation of [`DnsResolver`](aws_smithy_runtime_api::client::dns::DnsResolver)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn dns(mut self, dns: impl IntoShared<SharedDnsResolver>) -> Self {
         self.dns = Some(dns.into_shared());
         self

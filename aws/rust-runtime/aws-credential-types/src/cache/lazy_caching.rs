@@ -178,6 +178,9 @@ mod builder {
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
+        ///
+        /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
+        /// as an argument. All implementations of this trait implement `IntoShared`.
         pub fn sleep_impl(mut self, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
             self.set_sleep_impl(Some(sleep_impl.into_shared()));
             self
@@ -188,6 +191,9 @@ mod builder {
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
+        ///
+        /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
+        /// as an argument. All implementations of this trait implement `IntoShared`.
         pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
             self.sleep_impl = sleep_impl;
             self

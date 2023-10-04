@@ -240,11 +240,19 @@ impl RuntimePlugins {
         Default::default()
     }
 
+    /// Adds a client-level runtime plugin.
+    ///
+    /// Takes an implementation of [`RuntimePlugin`](crate::client::runtime_plugin::RuntimePlugin)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_client_plugin(mut self, plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
         insert_plugin!(self.client_plugins, plugin.into_shared());
         self
     }
 
+    /// Adds an operation-level runtime plugin.
+    ///
+    /// Takes an implementation of [`RuntimePlugin`](crate::client::runtime_plugin::RuntimePlugin)
+    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_operation_plugin(mut self, plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
         insert_plugin!(self.operation_plugins, plugin.into_shared());
         self
