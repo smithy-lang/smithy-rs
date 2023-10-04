@@ -101,8 +101,8 @@ fn extract_extended_request_id(headers: &HeaderMap<HeaderValue>) -> Option<&str>
 #[cfg(test)]
 mod test {
     use super::*;
-    use aws_smithy_client::SdkError;
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::result::SdkError;
     use http::Response;
 
     #[test]

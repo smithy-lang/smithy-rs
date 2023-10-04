@@ -294,6 +294,14 @@ mod loader {
             self
         }
 
+        /// Deprecated. Don't use.
+        #[deprecated(
+            note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
+        )]
+        pub fn http_connector(self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
+            self.http_client(http_client)
+        }
+
         /// Override the [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) for this [`ConfigLoader`].
         ///
         /// The HTTP client will be used for both AWS services and credentials providers.
