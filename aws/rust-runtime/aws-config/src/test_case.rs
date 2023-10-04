@@ -14,6 +14,8 @@ use aws_types::os_shim_internal::{Env, Fs};
 use serde::Deserialize;
 
 use crate::connector::default_connector;
+use crate::default_provider::use_dual_stack::use_dual_stack_provider;
+use crate::default_provider::use_fips::use_fips_provider;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::collections::HashMap;
 use std::env;
@@ -236,6 +238,13 @@ impl TestEnvironment {
             .with_sleep(TokioSleep::new())
             .load_default_region()
             .await;
+
+        let use_dual_stack = use_dual_stack_provider(&provider_config).await;
+        let use_fips = use_fips_provider(&provider_config).await;
+        let provider_config = provider_config
+            .with_use_fips(use_fips)
+            .with_use_dual_stack(use_dual_stack);
+
         Ok(TestEnvironment {
             base_dir: dir.into(),
             metadata,

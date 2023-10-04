@@ -362,7 +362,7 @@ mod test {
     #[tokio::test]
     async fn configures_session_length() {
         let (server, request) = capture_request(None);
-        let provider_conf = SdkConfig::builder()
+        let sdk_config = SdkConfig::builder()
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .time_source(StaticTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
@@ -371,7 +371,7 @@ mod test {
             .region(Region::from_static("this-will-be-overridden"))
             .build();
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
+            .configure(&sdk_config)
             .region(Region::new("us-east-1"))
             .session_length(Duration::from_secs(1234567))
             .build_from_provider(provide_credentials_fn(|| async {
@@ -388,7 +388,7 @@ mod test {
     #[tokio::test]
     async fn loads_region_from_sdk_config() {
         let (server, request) = capture_request(None);
-        let provider_conf = SdkConfig::builder()
+        let sdk_config = SdkConfig::builder()
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .time_source(StaticTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
@@ -397,14 +397,12 @@ mod test {
             .credentials_provider(SharedCredentialsProvider::new(provide_credentials_fn(
                 || async {
                     panic!("don't call me — will be overridden");
-                    #[allow(unreachable_code)]
-                    Ok(Credentials::for_tests())
                 },
             )))
             .region(Region::from_static("us-west-2"))
             .build();
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
+            .configure(&sdk_config)
             .session_length(Duration::from_secs(1234567))
             .build_from_provider(provide_credentials_fn(|| async {
                 Ok(Credentials::for_tests())
@@ -476,7 +474,7 @@ mod test {
             UNIX_EPOCH + Duration::from_secs(1234567890 - 120), // 1234567890 since UNIX_EPOCH is 2009-02-13T23:31:30Z
         );
 
-        let provider_conf = SdkConfig::builder()
+        let sdk_config = SdkConfig::builder()
             .sleep_impl(SharedAsyncSleep::new(sleep))
             .time_source(testing_time_source.clone())
             .http_connector(DynConnector::new(conn))
@@ -499,7 +497,7 @@ mod test {
         ]));
         let credentials_list_cloned = credentials_list.clone();
         let provider = AssumeRoleProvider::builder("myrole")
-            .configure(&provider_conf)
+            .configure(&sdk_config)
             .region(Region::new("us-east-1"))
             .build_from_provider(provide_credentials_fn(move || {
                 let list = credentials_list.clone();

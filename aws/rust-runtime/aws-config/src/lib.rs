@@ -589,6 +589,23 @@ mod loader {
                         .with_http_connector(http_connector.clone())
                 })
                 .with_profile_config(self.profile_files_override, self.profile_name_override);
+
+            let use_fips = if let Some(use_fips) = self.use_fips {
+                Some(use_fips)
+            } else {
+                use_fips_provider(&conf).await
+            };
+
+            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
+                Some(use_dual_stack)
+            } else {
+                use_dual_stack_provider(&conf).await
+            };
+
+            let conf = conf
+                .with_use_fips(use_fips)
+                .with_use_dual_stack(use_dual_stack);
+
             let region = if let Some(provider) = self.region {
                 provider.region().await
             } else {
@@ -646,18 +663,6 @@ mod loader {
                 }))
             } else {
                 None
-            };
-
-            let use_fips = if let Some(use_fips) = self.use_fips {
-                Some(use_fips)
-            } else {
-                use_fips_provider(&conf).await
-            };
-
-            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
-                Some(use_dual_stack)
-            } else {
-                use_dual_stack_provider(&conf).await
             };
 
             let mut builder = SdkConfig::builder()
