@@ -46,3 +46,9 @@ message = "Fix code generation for union members with the `@httpPayload` trait."
 references = ["smithy-rs#2969", "smithy-rs#1896"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fix exclusively setting the credentials provider and/or region at operation config-override time. It's now possible to set the region or credentials when an operation is sent (via `.config_override()`), rather than at client-creation time."
+references = ["smithy-rs#3021", "aws-sdk-rust#901"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"

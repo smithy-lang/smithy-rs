@@ -19,10 +19,13 @@ internal class CredentialCacheConfigTest {
         namespace com.example
         use aws.protocols#awsJson1_0
         use aws.api#service
+        use aws.auth#sigv4
         use smithy.rules#endpointRuleSet
 
         @service(sdkId: "Some Value")
         @awsJson1_0
+        @sigv4(name: "dontcare")
+        @auth([sigv4])
         @endpointRuleSet({
             "version": "1.0",
             "rules": [{
@@ -39,7 +42,6 @@ internal class CredentialCacheConfigTest {
             version: "1"
         }
 
-        @optionalAuth
         operation SayHello { input: TestInput }
         structure TestInput {
            foo: String,
@@ -56,14 +58,11 @@ internal class CredentialCacheConfigTest {
                     .resolve("Credentials"),
                 "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::CredentialsCache"),
-                "ProvideCachedCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                    .resolve("cache::ProvideCachedCredentials"),
+                "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
                 "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::runtime_plugin::RuntimePlugin"),
                 "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::SharedCredentialsCache"),
-                "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                    .resolve("provider::SharedCredentialsProvider"),
             )
             rustCrate.testModule {
                 unitTest(
@@ -114,58 +113,6 @@ internal class CredentialCacheConfigTest {
                     )
                 }
 
-                tokioTest("test_overriding_cache_and_provider_leads_to_shared_credentials_cache_in_layer") {
-                    rustTemplate(
-                        """
-                        use #{ProvideCachedCredentials};
-                        use #{RuntimePlugin};
-
-                        let client_config = crate::config::Config::builder()
-                            .credentials_provider(#{Credentials}::for_tests())
-                            .build();
-                        let client_config_layer = client_config.config;
-
-                        // make sure test credentials are set in the client config level
-                        assert_eq!(#{Credentials}::for_tests(),
-                            client_config_layer
-                            .load::<#{SharedCredentialsCache}>()
-                            .unwrap()
-                            .provide_cached_credentials()
-                            .await
-                            .unwrap()
-                        );
-
-                        let credentials = #{Credentials}::new(
-                            "test",
-                            "test",
-                            #{None},
-                            #{None},
-                            "test",
-                        );
-                        let config_override = crate::config::Config::builder()
-                            .credentials_cache(#{CredentialsCache}::lazy())
-                            .credentials_provider(credentials.clone());
-                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
-                            config_override,
-                            client_config_layer,
-                            &client_config.runtime_components,
-                        );
-                        let sut_layer = sut.config().unwrap();
-
-                        // make sure `.provide_cached_credentials` returns credentials set through `config_override`
-                        assert_eq!(credentials,
-                            sut_layer
-                            .load::<#{SharedCredentialsCache}>()
-                            .unwrap()
-                            .provide_cached_credentials()
-                            .await
-                            .unwrap()
-                        );
-                        """,
-                        *codegenScope,
-                    )
-                }
-
                 unitTest("test_not_overriding_cache_and_provider_leads_to_no_shared_credentials_cache_in_layer") {
                     rustTemplate(
                         """
@@ -182,6 +129,39 @@ internal class CredentialCacheConfigTest {
                         assert!(sut_layer
                             .load::<#{SharedCredentialsCache}>()
                             .is_none());
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                tokioTest("test_specifying_credentials_provider_only_at_operation_level_should_work") {
+                    // per https://github.com/awslabs/aws-sdk-rust/issues/901
+                    rustTemplate(
+                        """
+                        let client_config = crate::config::Config::builder().build();
+                        let client = crate::client::Client::from_conf(client_config);
+
+                        let credentials = #{Credentials}::new(
+                            "test",
+                            "test",
+                            #{None},
+                            #{None},
+                            "test",
+                        );
+                        let operation_config_override = crate::config::Config::builder()
+                            .credentials_cache(#{CredentialsCache}::no_caching())
+                            .credentials_provider(credentials.clone())
+                            .region(#{Region}::new("us-west-2"));
+
+                        let _ = client
+                            .say_hello()
+                            .customize()
+                            .await
+                            .unwrap()
+                            .config_override(operation_config_override)
+                            .send()
+                            .await
+                            .expect("success");
                         """,
                         *codegenScope,
                     )
