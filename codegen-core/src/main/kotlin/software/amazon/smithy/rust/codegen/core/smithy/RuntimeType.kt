@@ -410,7 +410,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun eventStreamSender(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyHttp(runtimeConfig).resolve("event_stream::EventStreamSender")
         fun futuresStreamCompatByteStream(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyHttp(runtimeConfig).resolve("futures_stream_adapter::FuturesStreamCompatByteStream")
+            smithyTypes(runtimeConfig).resolve("futures_stream_adapter::FuturesStreamCompatByteStream")
 
         fun errorMetadata(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::ErrorMetadata")
         fun errorMetadataBuilder(runtimeConfig: RuntimeConfig) =
