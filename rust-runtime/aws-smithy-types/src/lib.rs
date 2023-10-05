@@ -19,6 +19,7 @@ pub mod config_bag;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
+pub mod operation;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;

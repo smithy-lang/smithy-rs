@@ -13,7 +13,10 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 
-pub mod error;
+/// Errors for operations
+pub mod error {
+    pub use aws_smithy_types::operation::error::{BuildError, SerializationError};
+}
 
 /// Metadata attached to an [`Operation`] that identifies the API being called.
 #[derive(Clone, Debug)]
