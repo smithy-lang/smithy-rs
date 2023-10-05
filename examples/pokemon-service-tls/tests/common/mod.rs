@@ -50,8 +50,8 @@ pub fn client_http2_only() -> Client {
     Client::from_conf(config)
 }
 
-/// A `hyper` connector that uses the `native-tls` crate for TLS. To use this in a smithy client,
-/// wrap it in a [aws_smithy_client::hyper_ext::Adapter].
+/// A `hyper` connector that uses the `native-tls` crate for TLS. To use this in a Smithy client,
+/// wrap with a [`HyperClientBuilder`].
 pub type NativeTlsConnector = hyper_tls::HttpsConnector<hyper::client::HttpConnector>;
 
 fn native_tls_connector() -> NativeTlsConnector {
