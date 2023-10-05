@@ -48,6 +48,7 @@ class ConfigOverrideRuntimePluginGenerator(
             }
 
             impl ConfigOverrideRuntimePlugin {
+                ##[allow(dead_code)] // unused when a service does not provide any operations
                 pub(crate) fn new(
                     config_override: Builder,
                     initial_config: #{FrozenLayer},
