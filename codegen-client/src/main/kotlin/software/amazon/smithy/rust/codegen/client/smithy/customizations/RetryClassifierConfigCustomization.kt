@@ -43,15 +43,48 @@ class RetryClassifierConfigCustomization(codegenContext: ClientCodegenContext) :
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
                         """
-                        /// Add a retry classifier to the default chain of retry classifiers.
+                        /// Add type implementing [`ClassifyRetry`](#{ClassifyRetry}) that will be used by the
+                        /// [`RetryStrategy`](#{RetryStrategy}) to determine what responses should be retried.
+                        ///
+                        /// A retry classifier configured by this method will run according to its priority.
+                        ///
+                        /// ## Examples
+                        /// ```no_run
+                        /// ## ##[cfg(test)]
+                        /// ## mod tests {
+                        /// ## ##[test]
+                        /// ## fn example() {
+                        /// ## }
+                        /// ## }
+                        /// ```
                         pub fn retry_classifier(mut self, retry_classifier: impl #{ClassifyRetry} + 'static) -> Self {
                             self.push_retry_classifier(#{SharedRetryClassifier}::new(retry_classifier));
                             self
                         }
 
-                        /// Add a [`SharedRetryClassifier`] to the default chain of retry classifiers.
+                        /// Add a [`SharedRetryClassifier`](#{SharedRetryClassifier}) that will be used by the
+                        /// [`RetryStrategy`](#{RetryStrategy}) to determine what responses should be retried.
+                        ///
+                        /// A retry classifier configured by this method will run according to its priority.
+                        ///
+                        /// ## Examples
+                        /// ```no_run
+                        /// ## ##[cfg(test)]
+                        /// ## mod tests {
+                        /// ## ##[test]
+                        /// ## fn example() {
+                        /// ## }
+                        /// ## }
+                        /// ```
                         pub fn push_retry_classifier(&mut self, retry_classifier: #{SharedRetryClassifier}) -> &mut Self {
                             self.runtime_components.push_retry_classifier(retry_classifier);
+                            self
+                        }
+
+                        /// Set [`SharedRetryClassifier`](#{SharedRetryClassifier})s for the builder, replacing any that
+                        /// were previously set.
+                        pub fn set_retry_classifiers(&mut self, retry_classifiers: impl IntoIterator<Item = #{SharedRetryClassifier}>) -> &mut Self {
+                            self.runtime_components.set_retry_classifiers(retry_classifiers.into_iter());
                             self
                         }
                         """,
@@ -95,7 +128,7 @@ class RetryClassifierOperationCustomization(
 
         val codegenScope = arrayOf(
             *RuntimeType.preludeScope,
-            "SmithyErrorClassifier" to classifiers.resolve("SmithyErrorClassifier"),
+            "TransientErrorClassifier" to classifiers.resolve("TransientErrorClassifier"),
             "ModeledAsRetryableClassifier" to classifiers.resolve("ModeledAsRetryableClassifier"),
             "OperationError" to symbolProvider.symbolForOperationError(operation),
         )
@@ -104,7 +137,7 @@ class RetryClassifierOperationCustomization(
             is OperationSection.RetryClassifiers -> {
                 section.registerRetryClassifier(this) {
                     rustTemplate(
-                        "#{SmithyErrorClassifier}::<#{OperationError}>::new()",
+                        "#{TransientErrorClassifier}::<#{OperationError}>::new()",
                         *codegenScope,
                     )
                 }

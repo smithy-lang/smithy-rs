@@ -15,7 +15,7 @@ use std::time::Duration;
 /// The result of running a [`ClassifyRetry`] on a [`InterceptorContext`].
 #[non_exhaustive]
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub enum RetryClassifierResult {
+pub enum RetryAction {
     /// "A retryable error was received. This is what kind of error it was,
     /// in case that's important."
     Error(ErrorKind),
@@ -25,7 +25,7 @@ pub enum RetryClassifierResult {
     DontRetry,
 }
 
-impl fmt::Display for RetryClassifierResult {
+impl fmt::Display for RetryAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Error(kind) => write!(f, "retry ({kind})"),
@@ -44,8 +44,8 @@ pub enum RetryClassifierPriority {
     HttpStatusCodeClassifier,
     /// The default priority for the [`ModeledAsRetryableClassifier`].
     ModeledAsRetryableClassifier,
-    /// The default priority for the [`SmithyErrorClassifier`].
-    SmithyErrorClassifier,
+    /// The default priority for the [`TransientErrorClassifier`].
+    TransientErrorClassifier,
     /// The priority of some other classifier.
     Other(i8),
 }
@@ -77,7 +77,7 @@ impl RetryClassifierPriority {
         match self {
             Self::HttpStatusCodeClassifier => 0,
             Self::ModeledAsRetryableClassifier => 10,
-            Self::SmithyErrorClassifier => 20,
+            Self::TransientErrorClassifier => 20,
             Self::Other(i) => *i,
         }
     }
@@ -92,12 +92,12 @@ impl Default for RetryClassifierPriority {
 /// Classifies what kind of retry is needed for a given [`InterceptorContext`].
 pub trait ClassifyRetry: Send + Sync + fmt::Debug {
     /// Run this classifier on the [`InterceptorContext`] to determine if the previous request
-    /// should be retried. Returns a [`RetryClassifierResult`].
+    /// should be retried. Returns a [`RetryAction`].
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        result_of_preceding_classifier: Option<RetryClassifierResult>,
-    ) -> Option<RetryClassifierResult>;
+        result_of_preceding_classifier: Option<RetryAction>,
+    ) -> Option<RetryAction>;
 
     /// The name of this retry classifier.
     ///
@@ -129,8 +129,8 @@ impl ClassifyRetry for SharedRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        result_of_preceding_classifier: Option<RetryClassifierResult>,
-    ) -> Option<RetryClassifierResult> {
+        result_of_preceding_classifier: Option<RetryAction>,
+    ) -> Option<RetryAction> {
         self.0.classify_retry(ctx, result_of_preceding_classifier)
     }
 

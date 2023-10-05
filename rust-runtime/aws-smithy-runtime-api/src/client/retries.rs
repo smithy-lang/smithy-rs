@@ -148,10 +148,10 @@ impl Storable for RequestAttempts {
 mod test_util {
     use super::ErrorKind;
     use crate::client::interceptors::context::InterceptorContext;
-    use crate::client::retries::classifiers::{ClassifyRetry, RetryClassifierResult};
+    use crate::client::retries::classifiers::{ClassifyRetry, RetryAction};
 
     /// A retry classifier for testing purposes. This classifier always returns
-    /// `Some(RetryClassifierResult::Error(ErrorKind))` where `ErrorKind` is the value provided when creating
+    /// `Some(RetryAction::Error(ErrorKind))` where `ErrorKind` is the value provided when creating
     /// this classifier.
     #[derive(Debug)]
     pub struct AlwaysRetry(pub ErrorKind);
@@ -160,10 +160,10 @@ mod test_util {
         fn classify_retry(
             &self,
             error: &InterceptorContext,
-            _: Option<RetryClassifierResult>,
-        ) -> Option<RetryClassifierResult> {
+            _: Option<RetryAction>,
+        ) -> Option<RetryAction> {
             tracing::debug!("Retrying error {:?} as an {:?}", error, self.0);
-            Some(RetryClassifierResult::Error(self.0))
+            Some(RetryAction::Error(self.0))
         }
 
         fn name(&self) -> &'static str {

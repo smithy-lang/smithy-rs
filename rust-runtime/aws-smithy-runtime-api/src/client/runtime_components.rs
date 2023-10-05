@@ -438,20 +438,45 @@ impl RuntimeComponentsBuilder {
         self.retry_classifiers.iter().map(|s| s.value.clone())
     }
 
-    /// Adds a retry classifier.
-    pub fn push_retry_classifier(&mut self, retry_classifier: SharedRetryClassifier) -> &mut Self {
+    /// Adds all the given retry_classifiers.
+    pub fn extend_retry_classifiers(
+        &mut self,
+        retry_classifiers: impl Iterator<Item = SharedRetryClassifier>,
+    ) -> &mut Self {
         self.retry_classifiers
-            .push(Tracked::new(self.builder_name, retry_classifier));
-        self.retry_classifiers
-            .sort_by(|a, b| a.value.priority().cmp(&b.value.priority()));
+            .extend(retry_classifiers.map(|s| Tracked::new(self.builder_name, s)));
         self
     }
 
-    /// Adds a retry classifier.
-    pub fn with_retry_classifier(mut self, retry_classifier: SharedRetryClassifier) -> Self {
+    /// Adds an retry_classifier.
+    pub fn push_retry_classifier(
+        &mut self,
+        retry_classifier: impl IntoShared<SharedRetryClassifier>,
+    ) -> &mut Self {
+        self.retry_classifiers.push(Tracked::new(
+            self.builder_name,
+            retry_classifier.into_shared(),
+        ));
+        self
+    }
+
+    /// Adds an retry_classifier.
+    pub fn with_retry_classifier(
+        mut self,
+        retry_classifier: impl IntoShared<SharedRetryClassifier>,
+    ) -> Self {
         self.push_retry_classifier(retry_classifier);
+        self
+    }
+
+    /// Directly sets the retry_classifiers and clears out any that were previously pushed.
+    pub fn set_retry_classifiers(
+        &mut self,
+        retry_classifiers: impl Iterator<Item = SharedRetryClassifier>,
+    ) -> &mut Self {
+        self.retry_classifiers.clear();
         self.retry_classifiers
-            .sort_by(|a, b| a.value.priority().cmp(&b.value.priority()));
+            .extend(retry_classifiers.map(|s| Tracked::new(self.builder_name, s)));
         self
     }
 

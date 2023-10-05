@@ -4,7 +4,7 @@
  */
 
 use aws_sdk_s3::config::interceptors::InterceptorContext;
-use aws_sdk_s3::config::retry::{ClassifyRetry, RetryClassifierResult, RetryConfig};
+use aws_sdk_s3::config::retry::{ClassifyRetry, RetryAction, RetryConfig};
 use aws_sdk_s3::config::SharedAsyncSleep;
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_client::test_connection::TestConnection;
@@ -32,8 +32,8 @@ impl ClassifyRetry for CustomRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
-    ) -> Option<RetryClassifierResult> {
+        _: Option<RetryAction>,
+    ) -> Option<RetryAction> {
         *self.counter.lock().unwrap() += 1;
 
         // Interceptors may call this classifier before a response is received. If a response was received,
@@ -46,7 +46,7 @@ impl ClassifyRetry for CustomRetryClassifier {
             );
         }
 
-        Some(RetryClassifierResult::DontRetry)
+        Some(RetryAction::DontRetry)
     }
 
     fn name(&self) -> &'static str {

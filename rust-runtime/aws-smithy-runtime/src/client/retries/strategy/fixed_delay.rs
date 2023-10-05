@@ -6,7 +6,7 @@
 use crate::client::retries::classifiers::run_classifiers_on_ctx;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::retries::classifiers::RetryClassifierResult;
+use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
@@ -77,9 +77,9 @@ impl RetryStrategy for FixedDelayRetryStrategy {
         let classifier_result = run_classifiers_on_ctx(retry_classifiers, ctx);
 
         let backoff = match classifier_result {
-            RetryClassifierResult::Explicit(_) => self.fixed_delay,
-            RetryClassifierResult::Error(_) => self.fixed_delay,
-            RetryClassifierResult::DontRetry => {
+            RetryAction::Explicit(_) => self.fixed_delay,
+            RetryAction::Error(_) => self.fixed_delay,
+            RetryAction::DontRetry => {
                 debug!(
                     attempts = request_attempts.attempts(),
                     max_attempts = self.max_attempts,
@@ -88,7 +88,7 @@ impl RetryStrategy for FixedDelayRetryStrategy {
                 return Ok(ShouldAttempt::No);
             }
             _ => {
-                unreachable!("RetryClassifierResult is non-exhaustive. Therefore, we need to cover this unreachable case.")
+                unreachable!("RetryAction is non-exhaustive. Therefore, we need to cover this unreachable case.")
             }
         };
 

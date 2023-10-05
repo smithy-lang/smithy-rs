@@ -11,7 +11,7 @@ use crate::client::retries::strategy::standard::ReleaseResult::{
 use crate::client::retries::token_bucket::TokenBucket;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::retries::classifiers::RetryClassifierResult;
+use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
@@ -102,7 +102,7 @@ impl StandardRetryStrategy {
         &self,
         runtime_components: &RuntimeComponents,
         cfg: &ConfigBag,
-        retry_reason: &RetryClassifierResult,
+        retry_reason: &RetryAction,
     ) -> Result<Duration, ShouldAttempt> {
         let request_attempts = cfg
             .load::<RequestAttempts>()
@@ -111,8 +111,8 @@ impl StandardRetryStrategy {
         let token_bucket = cfg.load::<TokenBucket>();
 
         match retry_reason {
-            RetryClassifierResult::Explicit(backoff) => Ok(*backoff),
-            RetryClassifierResult::Error(kind) => {
+            RetryAction::Explicit(backoff) => Ok(*backoff),
+            RetryAction::Error(kind) => {
                 update_rate_limiter_if_exists(
                     runtime_components,
                     cfg,
@@ -145,7 +145,7 @@ impl StandardRetryStrategy {
                     Ok(Duration::from_secs_f64(backoff).min(self.max_backoff))
                 }
             }
-            RetryClassifierResult::DontRetry => {
+            RetryAction::DontRetry => {
                 update_rate_limiter_if_exists(runtime_components, cfg, false);
                 debug!(
                     attempts = request_attempts,
@@ -154,7 +154,7 @@ impl StandardRetryStrategy {
                 );
                 Err(ShouldAttempt::No)
             }
-            _ => unreachable!("RetryClassifierResult is non-exhaustive"),
+            _ => unreachable!("RetryAction is non-exhaustive"),
         }
     }
 }
@@ -314,7 +314,7 @@ mod tests {
     use super::*;
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
     use aws_smithy_runtime_api::client::retries::classifiers::{
-        ClassifyRetry, RetryClassifierResult, SharedRetryClassifier,
+        ClassifyRetry, RetryAction, SharedRetryClassifier,
     };
     use aws_smithy_runtime_api::client::retries::{AlwaysRetry, RetryStrategy};
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
@@ -425,12 +425,12 @@ mod tests {
 
     #[derive(Debug)]
     struct PresetReasonRetryClassifier {
-        retry_reasons: Mutex<Vec<RetryClassifierResult>>,
+        retry_reasons: Mutex<Vec<RetryAction>>,
     }
 
     #[cfg(feature = "test-util")]
     impl PresetReasonRetryClassifier {
-        fn new(mut retry_reasons: Vec<RetryClassifierResult>) -> Self {
+        fn new(mut retry_reasons: Vec<RetryAction>) -> Self {
             // We'll pop the retry_reasons in reverse order so we reverse the list to fix that.
             retry_reasons.reverse();
             Self {
@@ -443,8 +443,8 @@ mod tests {
         fn classify_retry(
             &self,
             ctx: &InterceptorContext,
-            _: Option<RetryClassifierResult>,
-        ) -> Option<RetryClassifierResult> {
+            _: Option<RetryAction>,
+        ) -> Option<RetryAction> {
             if ctx.output_or_error().map(|it| it.is_ok()).unwrap_or(false) {
                 return None;
             }
@@ -464,7 +464,7 @@ mod tests {
 
     #[cfg(feature = "test-util")]
     fn setup_test(
-        retry_reasons: Vec<RetryClassifierResult>,
+        retry_reasons: Vec<RetryAction>,
     ) -> (ConfigBag, RuntimeComponents, InterceptorContext) {
         let rc = RuntimeComponentsBuilder::for_tests()
             .with_retry_classifier(SharedRetryClassifier::new(
@@ -483,8 +483,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn eventual_success() {
-        let (mut cfg, rc, mut ctx) =
-            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -514,8 +513,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_more_attempts() {
-        let (mut cfg, rc, ctx) =
-            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(3);
@@ -543,8 +541,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_quota() {
-        let (mut cfg, rc, ctx) =
-            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -567,8 +564,8 @@ mod tests {
     #[test]
     fn quota_replenishes_on_success() {
         let (mut cfg, rc, mut ctx) = setup_test(vec![
-            RetryClassifierResult::Error(ErrorKind::TransientError),
-            RetryClassifierResult::Explicit(Duration::from_secs(1)),
+            RetryAction::Error(ErrorKind::TransientError),
+            RetryAction::Explicit(Duration::from_secs(1)),
         ]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
@@ -601,9 +598,8 @@ mod tests {
     #[test]
     fn quota_replenishes_on_first_try_success() {
         const PERMIT_COUNT: usize = 20;
-        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryClassifierResult::Error(
-            ErrorKind::TransientError,
-        )]);
+        let (mut cfg, rc, mut ctx) =
+            setup_test(vec![RetryAction::Error(ErrorKind::TransientError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(u32::MAX);
@@ -653,8 +649,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn backoff_timing() {
-        let (mut cfg, rc, ctx) =
-            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -694,8 +689,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn max_backoff_time() {
-        let (mut cfg, rc, ctx) =
-            setup_test(vec![RetryClassifierResult::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5)

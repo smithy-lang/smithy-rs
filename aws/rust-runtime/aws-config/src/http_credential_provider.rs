@@ -19,7 +19,7 @@ use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime::client::connectors::adapter::DynConnectorAdapter;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::classifiers::{
-    HttpStatusCodeClassifier, SmithyErrorClassifier,
+    HttpStatusCodeClassifier, TransientErrorClassifier,
 };
 use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, InterceptorContext};
@@ -27,9 +27,7 @@ use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, OrchestratorError, SensitiveOutput,
 };
 use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
-use aws_smithy_runtime_api::client::retries::classifiers::{
-    RetryClassifierPriority, RetryClassifierResult,
-};
+use aws_smithy_runtime_api::client::retries::classifiers::{RetryAction, RetryClassifierPriority};
 use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
 use aws_smithy_types::config_bag::Layer;
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
@@ -123,7 +121,7 @@ impl Builder {
                 //   - Non-parseable 200 responses.
                 .retry_classifier(HttpCredentialRetryClassifier)
                 // Socket errors and network timeouts
-                .retry_classifier(SmithyErrorClassifier::<Error>::new())
+                .retry_classifier(TransientErrorClassifier::<Error>::new())
                 // 5xx errors
                 .retry_classifier(HttpStatusCodeClassifier::default())
                 .sleep_impl(sleep_impl);
@@ -204,8 +202,8 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        previous_result: Option<RetryClassifierResult>,
-    ) -> Option<RetryClassifierResult> {
+        previous_result: Option<RetryAction>,
+    ) -> Option<RetryAction> {
         if previous_result.is_some() {
             // Never second-guess a result from a higher-priority classifier
             return previous_result;
@@ -224,7 +222,7 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
             .zip(ctx.response().map(HttpResponse::status))
         {
             if matches!(err, CredentialsError::Unhandled { .. }) && status.is_success() {
-                return Some(RetryClassifierResult::Error(ErrorKind::ServerError));
+                return Some(RetryAction::Error(ErrorKind::ServerError));
             }
         }
 

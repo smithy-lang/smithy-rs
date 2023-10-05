@@ -10,7 +10,7 @@ use aws_smithy_client::test_connection::infallible_connection_fn;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, InterceptorContext};
 use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, OrchestratorError};
-use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryClassifierResult};
+use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
 use aws_smithy_types::retry::ErrorKind;
 use bytes::Bytes;
 use kms::operation::create_alias::CreateAliasError;
@@ -52,7 +52,7 @@ async fn errors_are_retryable() {
     ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
     let retry_kind = classifier.classify_retry(&ctx, None);
     assert_eq!(
-        Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError)),
+        Some(RetryAction::Error(ErrorKind::ThrottlingError)),
         retry_kind
     );
 }
@@ -74,7 +74,7 @@ async fn unmodeled_errors_are_retryable() {
     ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
     let retry_kind = classifier.classify_retry(&ctx, None);
     assert_eq!(
-        Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError)),
+        Some(RetryAction::Error(ErrorKind::ThrottlingError)),
         retry_kind
     );
 }

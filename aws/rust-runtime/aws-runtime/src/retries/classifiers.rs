@@ -5,12 +5,12 @@
 
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_runtime::client::retries::classifiers::{
-    ModeledAsRetryableClassifier, SmithyErrorClassifier,
+    ModeledAsRetryableClassifier, TransientErrorClassifier,
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::classifiers::{
-    ClassifyRetry, RetryClassifierPriority, RetryClassifierResult,
+    ClassifyRetry, RetryAction, RetryClassifierPriority,
 };
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
@@ -60,8 +60,8 @@ where
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        previous_result: Option<RetryClassifierResult>,
-    ) -> Option<RetryClassifierResult> {
+        previous_result: Option<RetryAction>,
+    ) -> Option<RetryAction> {
         if previous_result.is_some() {
             // Never second-guess a result from a higher-priority classifier
             return previous_result;
@@ -75,9 +75,9 @@ where
 
         if let Some(error_code) = error.code() {
             if THROTTLING_ERRORS.contains(&error_code) {
-                return Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError));
+                return Some(RetryAction::Error(ErrorKind::ThrottlingError));
             } else if TRANSIENT_ERRORS.contains(&error_code) {
-                return Some(RetryClassifierResult::Error(ErrorKind::TransientError));
+                return Some(RetryAction::Error(ErrorKind::TransientError));
             }
         };
 
@@ -94,7 +94,7 @@ where
 }
 
 /// A retry classifier that checks for `x-amz-retry-after` headers. If one is found, a
-/// [`RetryClassifierResult::Explicit`] is returned containing the duration to wait before retrying.
+/// [`RetryAction::Explicit`] is returned containing the duration to wait before retrying.
 #[derive(Debug, Default)]
 pub struct AmzRetryAfterHeaderClassifier;
 
@@ -109,8 +109,8 @@ impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        previous_result: Option<RetryClassifierResult>,
-    ) -> Option<RetryClassifierResult> {
+        previous_result: Option<RetryAction>,
+    ) -> Option<RetryAction> {
         if previous_result.is_some() {
             // Never second-guess a result from a higher-priority classifier
             return previous_result;
@@ -121,7 +121,7 @@ impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
             .and_then(|header| header.to_str().ok())
             .and_then(|header| header.parse::<u64>().ok())
             .map(|retry_after_delay| {
-                RetryClassifierResult::Explicit(std::time::Duration::from_millis(retry_after_delay))
+                RetryAction::Explicit(std::time::Duration::from_millis(retry_after_delay))
             })
     }
 
@@ -130,7 +130,7 @@ impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
     }
 
     fn priority(&self) -> RetryClassifierPriority {
-        RetryClassifierPriority::run_after(SmithyErrorClassifier::<()>::priority())
+        RetryClassifierPriority::run_after(TransientErrorClassifier::<()>::priority())
     }
 }
 
@@ -139,7 +139,7 @@ mod test {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{Error, Input};
-    use aws_smithy_runtime_api::client::retries::classifiers::RetryClassifierResult;
+    use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
     use aws_smithy_types::error::ErrorMetadata;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
     use std::fmt;
@@ -203,7 +203,7 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError))
+            Some(RetryAction::Error(ErrorKind::ThrottlingError))
         );
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
@@ -212,7 +212,7 @@ mod test {
         ))));
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryClassifierResult::Error(ErrorKind::TransientError))
+            Some(RetryAction::Error(ErrorKind::TransientError))
         )
     }
 
@@ -228,7 +228,7 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryClassifierResult::Error(ErrorKind::ThrottlingError))
+            Some(RetryAction::Error(ErrorKind::ThrottlingError))
         );
     }
 
@@ -248,7 +248,7 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryClassifierResult::Explicit(Duration::from_millis(5000))),
+            Some(RetryAction::Explicit(Duration::from_millis(5000))),
         );
     }
 }
