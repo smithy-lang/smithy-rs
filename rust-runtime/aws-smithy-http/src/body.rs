@@ -7,4 +7,4 @@
 
 //TODO(runtimeCratesVersioningCleanup): Re-point those who use the following reexport to
 // `aws_smithy_types` and remove the `body` module.
-pub use aws_smithy_types::body::{Error, SdkBody};
+pub use aws_smithy_types::body::{BoxBody, Error, SdkBody};
