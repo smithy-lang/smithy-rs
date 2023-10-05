@@ -115,6 +115,7 @@ impl Builder {
             .http_connector(SharedHttpConnector::new(DynConnectorAdapter::new(
                 connector,
             )))
+            .with_connection_poisoning()
             .endpoint_url(endpoint)
             .no_auth()
             .runtime_plugin(StaticRuntimePlugin::new().with_config({

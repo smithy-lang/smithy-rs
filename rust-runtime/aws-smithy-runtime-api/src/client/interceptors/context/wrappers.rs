@@ -173,14 +173,6 @@ impl<'a, I, O, E> BeforeDeserializationInterceptorContextMut<'a, I, O, E> {
     pub fn response_mut(&mut self) -> &mut Response {
         expect!(self, response_mut)
     }
-
-    #[doc(hidden)]
-    /// Downgrade this helper struct, returning the underlying InterceptorContext. There's no good
-    /// reason to use this unless you're writing tests or you have to interact with an API that
-    /// doesn't support the helper structs.
-    pub fn inner_mut(&mut self) -> &'_ mut InterceptorContext<I, O, E> {
-        self.inner
-    }
 }
 
 //
@@ -205,6 +197,14 @@ impl<'a, I, O, E> AfterDeserializationInterceptorContextRef<'a, I, O, E> {
     /// Returns a reference to the deserialized output or error.
     pub fn output_or_error(&self) -> Result<&O, &OrchestratorError<E>> {
         expect!(self, output_or_error)
+    }
+
+    #[doc(hidden)]
+    /// Downgrade this helper struct, returning the underlying InterceptorContext. There's no good
+    /// reason to use this unless you're writing tests or you have to interact with an API that
+    /// doesn't support the helper structs.
+    pub fn inner(&self) -> &'_ InterceptorContext<I, O, E> {
+        self.inner
     }
 }
 
