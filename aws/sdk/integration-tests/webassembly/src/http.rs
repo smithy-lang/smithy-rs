@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::config::RuntimeComponents;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 
 pub(crate) fn make_request(_req: http::Request<SdkBody>) -> Result<http::Response<SdkBody>, ()> {

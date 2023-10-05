@@ -23,7 +23,6 @@ pub mod test_util;
 pub mod hyper_014;
 
 /// Runtime plugin that provides a default connector. Intended to be used by the generated code.
-#[doc(hidden)]
 pub fn default_http_client_plugin() -> SharedRuntimePlugin {
     let _default: Option<SharedHttpClient> = None;
     #[cfg(feature = "connector-hyper-0-14-x")]
