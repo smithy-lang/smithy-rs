@@ -204,8 +204,13 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
+        previous_result: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
+        if previous_result.is_some() {
+            // Never second-guess a result from a higher-priority classifier
+            return previous_result;
+        }
+
         let output_or_error = ctx.output_or_error()?;
         let error = match output_or_error {
             Ok(_) => return None,

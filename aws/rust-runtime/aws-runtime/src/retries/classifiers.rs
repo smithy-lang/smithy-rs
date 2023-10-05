@@ -10,7 +10,7 @@ use aws_smithy_runtime::client::retries::classifiers::{
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::classifiers::{
-    ClassifyRetry, RetryClassifierPriority, RetryClassifierResult, SharedRetryClassifier,
+    ClassifyRetry, RetryClassifierPriority, RetryClassifierResult,
 };
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
@@ -53,15 +53,6 @@ impl<E> AwsErrorCodeClassifier<E> {
     }
 }
 
-impl<E> From<AwsErrorCodeClassifier<E>> for SharedRetryClassifier
-where
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-{
-    fn from(value: AwsErrorCodeClassifier<E>) -> Self {
-        Self::new(value)
-    }
-}
-
 impl<E> ClassifyRetry for AwsErrorCodeClassifier<E>
 where
     E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
@@ -69,8 +60,13 @@ where
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
+        previous_result: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
+        if previous_result.is_some() {
+            // Never second-guess a result from a higher-priority classifier
+            return previous_result;
+        }
+
         let error = ctx
             .output_or_error()?
             .err()
@@ -109,18 +105,17 @@ impl AmzRetryAfterHeaderClassifier {
     }
 }
 
-impl From<AmzRetryAfterHeaderClassifier> for SharedRetryClassifier {
-    fn from(value: AmzRetryAfterHeaderClassifier) -> Self {
-        Self::new(value)
-    }
-}
-
 impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
+        previous_result: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
+        if previous_result.is_some() {
+            // Never second-guess a result from a higher-priority classifier
+            return previous_result;
+        }
+
         ctx.response()
             .and_then(|res| res.http_headers().get("x-amz-retry-after"))
             .and_then(|header| header.to_str().ok())

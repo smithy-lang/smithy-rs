@@ -14,7 +14,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 class RetryClassifierDecorator : ClientCodegenDecorator {
     override val name: String = "RetryPolicy"
@@ -43,10 +42,9 @@ class OperationRetryClassifiersFeature(
 
     override fun section(section: OperationSection) = when (section) {
         is OperationSection.RetryClassifiers -> writable {
-            section.withRetryClassifier(this) {
+            section.registerRetryClassifier(this) {
                 rustTemplate(
-                    "#{AwsErrorCodeClassifier}::<#{OperationError}>::new().into()",
-                    *RuntimeType.preludeScope,
+                    "#{AwsErrorCodeClassifier}::<#{OperationError}>::new()",
                     "AwsErrorCodeClassifier" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("retries::classifiers::AwsErrorCodeClassifier"),
                     "OperationError" to symbolProvider.symbolForOperationError(operation),
                 )
@@ -64,11 +62,12 @@ class ServiceRetryClassifiersFeature(
 
     override fun section(section: ServiceRuntimePluginSection) = when (section) {
         is ServiceRuntimePluginSection.RegisterRuntimeComponents -> writable {
-            rustTemplate(
-                "runtime_components.push_retry_classifier(#{AmzRetryAfterHeaderClassifier}::default().into());",
-                *RuntimeType.preludeScope,
-                "AmzRetryAfterHeaderClassifier" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("retries::classifiers::AmzRetryAfterHeaderClassifier"),
-            )
+            section.registerRetryClassifier(this) {
+                rustTemplate(
+                    "#{AmzRetryAfterHeaderClassifier}::default()",
+                    "AmzRetryAfterHeaderClassifier" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("retries::classifiers::AmzRetryAfterHeaderClassifier"),
+                )
+            }
         }
 
         else -> emptySection

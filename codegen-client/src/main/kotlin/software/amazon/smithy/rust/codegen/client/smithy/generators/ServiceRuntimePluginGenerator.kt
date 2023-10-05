@@ -66,6 +66,10 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
                 "identity_resolver" to identityResolver,
             )
         }
+
+        fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
+            writer.rust("runtime_components.push_retry_classifier(#T.into_shared());", classifier)
+        }
     }
 }
 typealias ServiceRuntimePluginCustomization = NamedCustomization<ServiceRuntimePluginSection>
@@ -84,8 +88,9 @@ class ServiceRuntimePluginGenerator(
             "Arc" to RuntimeType.Arc,
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
             "Cow" to RuntimeType.Cow,
-            "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+            "IntoShared" to runtimeApi.resolve("shared::IntoShared"),
+            "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
             "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
         )
@@ -108,6 +113,8 @@ class ServiceRuntimePluginGenerator(
 
             impl ServiceRuntimePlugin {
                 pub fn new(_service_config: crate::config::Config) -> Self {
+                    use #{IntoShared};
+
                     let config = { #{config} };
                     let mut runtime_components = #{RuntimeComponentsBuilder}::new("ServiceRuntimePlugin");
                     #{runtime_components}

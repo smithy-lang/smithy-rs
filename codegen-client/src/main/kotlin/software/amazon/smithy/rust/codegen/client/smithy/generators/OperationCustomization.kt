@@ -108,8 +108,8 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("RetryClassifiers") {
-        fun withRetryClassifier(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_retry_classifier(#{plugin})", "plugin" to plugin)
+        fun registerRetryClassifier(writer: RustWriter, plugin: Writable) {
+            writer.rustTemplate(".with_retry_classifier(#{plugin}.into_shared())", "plugin" to plugin)
         }
     }
 }

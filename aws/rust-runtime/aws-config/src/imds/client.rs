@@ -31,11 +31,9 @@ use aws_smithy_runtime_api::client::endpoint::{
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
-use aws_smithy_runtime_api::client::orchestrator::{
-    Future, HttpResponse, OrchestratorError, SensitiveOutput,
-};
+use aws_smithy_runtime_api::client::orchestrator::{Future, OrchestratorError, SensitiveOutput};
 use aws_smithy_runtime_api::client::retries::classifiers::{
-    ClassifyRetry, RetryClassifierPriority, RetryClassifierResult, SharedRetryClassifier,
+    ClassifyRetry, RetryClassifierResult, SharedRetryClassifier,
 };
 use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
@@ -571,30 +569,6 @@ impl EndpointResolver for ImdsEndpointResolver {
 #[derive(Clone, Debug)]
 struct ImdsResponseRetryClassifier;
 
-impl ImdsResponseRetryClassifier {
-    /// Return the priority of this retry classifier.
-    fn priority() -> RetryClassifierPriority {
-        RetryClassifierPriority::default()
-    }
-}
-
-impl ImdsResponseRetryClassifier {
-    fn classify(response: &HttpResponse) -> Option<RetryClassifierResult> {
-        let status = response.status();
-        match status {
-            _ if status.is_server_error() => {
-                Some(RetryClassifierResult::Error(ErrorKind::ServerError))
-            }
-            // 401 indicates that the token has expired, this is retryable
-            _ if status.as_u16() == 401 => {
-                Some(RetryClassifierResult::Error(ErrorKind::ServerError))
-            }
-            // This catch-all includes successful responses that fail to parse. These should not be retried.
-            _ => None,
-        }
-    }
-}
-
 impl ClassifyRetry for ImdsResponseRetryClassifier {
     fn name(&self) -> &'static str {
         "ImdsResponseRetryClassifier"
@@ -603,20 +577,32 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
+        previous_result: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
+        if previous_result.is_some() {
+            // Never second-guess a result from a higher-priority classifier
+            return previous_result;
+        }
+
         if let Some(response) = ctx.response() {
-            Self::classify(response)
+            let status = response.status();
+            match status {
+                _ if status.is_server_error() => {
+                    Some(RetryClassifierResult::Error(ErrorKind::ServerError))
+                }
+                // 401 indicates that the token has expired, this is retryable
+                _ if status.as_u16() == 401 => {
+                    Some(RetryClassifierResult::Error(ErrorKind::ServerError))
+                }
+                // This catch-all includes successful responses that fail to parse. These should not be retried.
+                _ => None,
+            }
         } else {
             // Don't retry timeouts for IMDS, or else it will take ~30 seconds for the default
             // credentials provider chain to fail to provide credentials.
             // Also don't retry non-responses.
             None
         }
-    }
-
-    fn priority(&self) -> RetryClassifierPriority {
-        Self::priority()
     }
 }
 

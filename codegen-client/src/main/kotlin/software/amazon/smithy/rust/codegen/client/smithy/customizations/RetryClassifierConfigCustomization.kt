@@ -70,11 +70,12 @@ class RetryClassifierServiceRuntimePluginCustomization(codegenContext: ClientCod
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
             is ServiceRuntimePluginSection.RegisterRuntimeComponents -> writable {
-                rustTemplate(
-                    "runtime_components.push_retry_classifier(#{HttpStatusCodeClassifier}::default().into());",
-                    *RuntimeType.preludeScope,
-                    "HttpStatusCodeClassifier" to retries.resolve("classifiers::HttpStatusCodeClassifier"),
-                )
+                section.registerRetryClassifier(this) {
+                    rustTemplate(
+                        "#{HttpStatusCodeClassifier}::default()",
+                        "HttpStatusCodeClassifier" to retries.resolve("classifiers::HttpStatusCodeClassifier"),
+                    )
+                }
             }
 
             else -> emptySection
@@ -101,15 +102,15 @@ class RetryClassifierOperationCustomization(
 
         when (section) {
             is OperationSection.RetryClassifiers -> {
-                section.withRetryClassifier(this) {
+                section.registerRetryClassifier(this) {
                     rustTemplate(
-                        "#{SmithyErrorClassifier}::<#{OperationError}>::new().into()",
+                        "#{SmithyErrorClassifier}::<#{OperationError}>::new()",
                         *codegenScope,
                     )
                 }
-                section.withRetryClassifier(this) {
+                section.registerRetryClassifier(this) {
                     rustTemplate(
-                        "#{ModeledAsRetryableClassifier}::<#{OperationError}>::new().into()",
+                        "#{ModeledAsRetryableClassifier}::<#{OperationError}>::new()",
                         *codegenScope,
                     )
                 }

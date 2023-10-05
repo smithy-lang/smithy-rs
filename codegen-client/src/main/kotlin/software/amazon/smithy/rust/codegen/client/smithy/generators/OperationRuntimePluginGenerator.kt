@@ -40,6 +40,7 @@ class OperationRuntimePluginGenerator(
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "Cow" to RuntimeType.Cow,
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+            "IntoShared" to runtimeApi.resolve("shared::IntoShared"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
@@ -77,6 +78,8 @@ class OperationRuntimePluginGenerator(
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                    use #{IntoShared};
+
                     #{Cow}::Owned(
                         #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
                             #{auth_options}

@@ -32,15 +32,6 @@ impl<E> ModeledAsRetryableClassifier<E> {
     }
 }
 
-impl<E> From<ModeledAsRetryableClassifier<E>> for SharedRetryClassifier
-where
-    E: StdError + ProvideErrorKind + Send + Sync + 'static,
-{
-    fn from(value: ModeledAsRetryableClassifier<E>) -> Self {
-        Self::new(value)
-    }
-}
-
 impl<E> ClassifyRetry for ModeledAsRetryableClassifier<E>
 where
     E: StdError + ProvideErrorKind + Send + Sync + 'static,
@@ -48,8 +39,13 @@ where
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
+        previous_result: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
+        if previous_result.is_some() {
+            // Never second-guess a result from a higher-priority classifier
+            return previous_result;
+        }
+
         // Check for a result
         let output_or_error = ctx.output_or_error()?;
         // Check for an error
@@ -96,15 +92,6 @@ impl<E> SmithyErrorClassifier<E> {
     }
 }
 
-impl<E> From<SmithyErrorClassifier<E>> for SharedRetryClassifier
-where
-    E: StdError + Send + Sync + 'static,
-{
-    fn from(value: SmithyErrorClassifier<E>) -> Self {
-        Self::new(value)
-    }
-}
-
 impl<E> ClassifyRetry for SmithyErrorClassifier<E>
 where
     E: StdError + Send + Sync + 'static,
@@ -112,8 +99,13 @@ where
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
+        previous_result: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
+        if previous_result.is_some() {
+            // Never second-guess a result from a higher-priority classifier
+            return previous_result;
+        }
+
         let output_or_error = ctx.output_or_error()?;
         // Check for an error
         let error = match output_or_error {
@@ -174,18 +166,17 @@ impl HttpStatusCodeClassifier {
     }
 }
 
-impl From<HttpStatusCodeClassifier> for SharedRetryClassifier {
-    fn from(value: HttpStatusCodeClassifier) -> Self {
-        Self::new(value)
-    }
-}
-
 impl ClassifyRetry for HttpStatusCodeClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        _: Option<RetryClassifierResult>,
+        previous_result: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
+        if previous_result.is_some() {
+            // Never second-guess a result from a higher-priority classifier
+            return previous_result;
+        }
+
         ctx.response()
             .map(|res| res.status().as_u16())
             .map(|status| self.retryable_status_codes.contains(&status))
@@ -218,7 +209,7 @@ pub fn run_classifiers_on_ctx(
                 "running retry classifier '{}' returned result '{result}'",
                 classifier.name()
             ),
-            None => tracing::debug!(
+            None => tracing::trace!(
                 "running retry classifier '{}' returned no result",
                 classifier.name()
             ),
