@@ -1,6 +1,8 @@
 allowed_external_types = [
     "bytes::bytes::Bytes",
     "bytes::buf::buf_impl::Buf",
+
+    # TODO(https://github.com/awslabs/smithy-rs/issues/3033): Feature gate based on unstable versions
     "http_body::Body",
     "http_body::combinators::box_body::BoxBody",
     "hyper::body::body::Body",
