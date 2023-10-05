@@ -103,6 +103,7 @@ impl Builder {
         let mut builder = Operation::builder()
             .service_name("HttpCredentialProvider")
             .operation_name("LoadCredentials")
+            .with_connection_poisoning()
             .endpoint_url(endpoint)
             .no_auth()
             .timeout_config(

@@ -4,6 +4,7 @@
  */
 
 use crate::client::auth::no_auth::{NoAuthScheme, NO_AUTH_SCHEME_ID};
+use crate::client::http::connection_poisoning::ConnectionPoisoningInterceptor;
 use crate::client::http::default_http_client_plugin;
 use crate::client::identity::no_auth::NoAuthIdentityResolver;
 use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
@@ -261,6 +262,11 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
+    }
+
+    /// Registers the [`ConnectionPoisoningInterceptor`].
+    pub fn with_connection_poisoning(self) -> Self {
+        self.interceptor(ConnectionPoisoningInterceptor::new())
     }
 
     pub fn runtime_plugin(mut self, runtime_plugin: impl RuntimePlugin + 'static) -> Self {
