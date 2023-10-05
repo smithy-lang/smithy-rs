@@ -41,6 +41,7 @@
 
 use crate::client::http::hyper_014::HyperClientBuilder;
 use aws_smithy_async::future::never::Never;
+use aws_smithy_async::future::BoxFuture;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::shared::IntoShared;
 use bytes::Bytes;
@@ -52,10 +53,8 @@ use hyper::{Body, Server};
 use std::collections::HashSet;
 use std::convert::Infallible;
 use std::error::Error;
-use std::future::Future;
 use std::iter::Once;
 use std::net::{SocketAddr, TcpListener};
-use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 use tokio::spawn;
@@ -321,8 +320,6 @@ async fn generate_response_event(event: ReplayedEvent) -> Result<Response<Body>,
     };
     Ok::<_, Infallible>(resp)
 }
-
-type BoxFuture<T, E> = Pin<Box<dyn Future<Output = Result<T, E>> + Send>>;
 
 /// DNS resolver that keeps a log of all lookups
 ///

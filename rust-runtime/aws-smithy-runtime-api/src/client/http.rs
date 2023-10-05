@@ -63,7 +63,7 @@ use std::sync::Arc;
 use std::task::Poll;
 use std::time::Duration;
 
-type BoxFuture = Pin<Box<dyn StdFuture<Output = Result<HttpResponse, ConnectorError>> + Send>>;
+type BoxFuture = aws_smithy_async::future::BoxFuture<HttpResponse, ConnectorError>;
 
 pin_project! {
     /// Future for [`HttpConnector::call`].

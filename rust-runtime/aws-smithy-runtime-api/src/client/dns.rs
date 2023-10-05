@@ -43,7 +43,7 @@ impl StdError for ResolveDnsError {
     }
 }
 
-type BoxFuture<T> = Pin<Box<dyn Future<Output = Result<T, ResolveDnsError>> + Send>>;
+type BoxFuture<T> = aws_smithy_async::future::BoxFuture<T, ResolveDnsError>;
 
 /// New-type for the future returned by the [`DnsResolver`] trait.
 pub struct DnsFuture(NowOrLater<Result<Vec<IpAddr>, ResolveDnsError>, BoxFuture<Vec<IpAddr>>>);
