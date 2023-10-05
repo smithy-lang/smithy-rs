@@ -78,6 +78,7 @@ class OperationRuntimePluginGenerator(
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                    ##[allow(unused-imports)]
                     use #{IntoShared};
 
                     #{Cow}::Owned(

@@ -113,6 +113,7 @@ class ServiceRuntimePluginGenerator(
 
             impl ServiceRuntimePlugin {
                 pub fn new(_service_config: crate::config::Config) -> Self {
+                    ##[allow(unused-imports)]
                     use #{IntoShared};
 
                     let config = { #{config} };
