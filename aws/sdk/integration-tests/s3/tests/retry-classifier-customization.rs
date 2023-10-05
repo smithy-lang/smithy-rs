@@ -4,14 +4,11 @@
  */
 
 use aws_sdk_s3::config::interceptors::InterceptorContext;
-use aws_sdk_s3::config::retry::{ClassifyRetry, ReconnectMode, RetryClassifierResult, RetryConfig};
-use aws_sdk_s3::config::timeout::TimeoutConfig;
-use aws_sdk_s3::config::{Credentials, Region, SharedAsyncSleep};
+use aws_sdk_s3::config::retry::{ClassifyRetry, RetryClassifierResult, RetryConfig};
+use aws_sdk_s3::config::SharedAsyncSleep;
 use aws_smithy_async::rt::sleep::TokioSleep;
-use aws_smithy_client::test_connection::wire_mock::{
-    check_matches, ReplayedEvent, WireLevelTestConnection,
-};
-use aws_smithy_client::{ev, match_events};
+use aws_smithy_client::test_connection::TestConnection;
+use aws_smithy_http::body::SdkBody;
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -34,10 +31,20 @@ impl CustomRetryClassifier {
 impl ClassifyRetry for CustomRetryClassifier {
     fn classify_retry(
         &self,
-        _: &InterceptorContext,
+        ctx: &InterceptorContext,
         _: Option<RetryClassifierResult>,
     ) -> Option<RetryClassifierResult> {
         *self.counter.lock().unwrap() += 1;
+
+        // Interceptors may call this classifier before a response is received. If a response was received,
+        // ensure that it has the expected status code.
+        if let Some(res) = ctx.response() {
+            assert_eq!(
+                res.status(),
+                500,
+                "expected a 500 response from test connection"
+            );
+        }
 
         Some(RetryClassifierResult::DontRetry)
     }
@@ -47,28 +54,38 @@ impl ClassifyRetry for CustomRetryClassifier {
     }
 }
 
+fn req() -> http::Request<SdkBody> {
+    http::Request::builder()
+        .body(SdkBody::from("request body"))
+        .unwrap()
+}
+
+fn ok() -> http::Response<&'static str> {
+    http::Response::builder()
+        .status(200)
+        .body("Hello!")
+        .unwrap()
+}
+
+fn err() -> http::Response<&'static str> {
+    http::Response::builder()
+        .status(500)
+        .body("This was an error")
+        .unwrap()
+}
+
 #[tokio::test]
 async fn test_retry_classifier_customization() {
     tracing_subscriber::fmt::init();
-    let mock = WireLevelTestConnection::spinup(vec![
-        ReplayedEvent::status(503),
-        ReplayedEvent::status(503),
-        ReplayedEvent::with_body("here-is-your-object"),
-    ])
-    .await;
+    let test_connection = TestConnection::new(vec![(req(), err()), (req(), ok())]);
 
     let custom_retry_classifier = CustomRetryClassifier::new();
 
     let config = aws_sdk_s3::Config::builder()
-        .region(Region::from_static("us-east-2"))
-        .credentials_provider(Credentials::for_tests())
+        .with_test_defaults()
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-        .endpoint_url(mock.endpoint_url())
-        .http_connector(mock.http_connector())
-        .retry_config(
-            RetryConfig::standard().with_reconnect_mode(ReconnectMode::ReuseAllConnections),
-        )
-        .timeout_config(TimeoutConfig::disabled())
+        .http_connector(test_connection)
+        .retry_config(RetryConfig::standard())
         .retry_classifier(custom_retry_classifier.clone())
         .build();
 
@@ -81,8 +98,6 @@ async fn test_retry_classifier_customization() {
         .await
         .expect_err("fails without attempting a retry");
 
-    // ensure our classifier was called
-    assert_eq!(1, custom_retry_classifier.counter());
-
-    match_events!(ev!(dns), ev!(connect), ev!(http(503)))(&mock.events());
+    // ensure our custom retry classifier was called at least once.
+    assert_ne!(custom_retry_classifier.counter(), 0);
 }

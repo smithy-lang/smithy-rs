@@ -16,7 +16,7 @@ aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
-aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util"] }
 aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts" }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util", "rt-tokio"] }
 aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "wiremock"] }
