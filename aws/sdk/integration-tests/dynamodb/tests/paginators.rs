@@ -14,9 +14,8 @@ use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
 use aws_smithy_runtime::client::http::test_util::{
     capture_request, ReplayEvent, StaticReplayClient,
 };
-use aws_smithy_runtime_api::shared::IntoShared;
+use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_types::region::Region;
-use aws_types::sdk_config::SharedHttpClient;
 
 fn stub_config(http_client: impl HttpClient + 'static) -> Config {
     Config::builder()

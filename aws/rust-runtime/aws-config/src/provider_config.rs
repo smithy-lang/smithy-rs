@@ -8,8 +8,7 @@
 use crate::profile;
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::{ProfileFileLoadError, ProfileSet};
-use aws_sdk_sso::config::AsyncSleep;
-use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::shared::IntoShared;

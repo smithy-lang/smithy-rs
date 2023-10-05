@@ -246,10 +246,10 @@ mod test {
         Builder, ENV_VAR_ROLE_ARN, ENV_VAR_SESSION_NAME, ENV_VAR_TOKEN_FILE,
     };
     use aws_credential_types::provider::error::CredentialsError;
-    use aws_sdk_sts::config::Region;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::region::Region;
     use std::collections::HashMap;
 
     #[tokio::test]

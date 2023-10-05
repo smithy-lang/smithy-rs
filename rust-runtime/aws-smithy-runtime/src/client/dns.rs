@@ -44,5 +44,5 @@ mod tokio {
     }
 }
 
-#[cfg(feature = "rt-tokio")]
+#[cfg(all(feature = "rt-tokio", not(target_family = "wasm")))]
 pub use self::tokio::TokioDnsResolver;

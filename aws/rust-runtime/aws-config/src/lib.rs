@@ -157,8 +157,7 @@ mod loader {
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::cache::CredentialsCache;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
-    use aws_sdk_sso::config::AsyncSleep;
-    use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
+    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::shared::IntoShared;
