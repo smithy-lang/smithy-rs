@@ -217,7 +217,7 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
     );
     match previous_version {
         None => Ok(1),
-        Some(prev_version) if prev_version.as_str() == Some(&package_version) => Ok(0),
+        Some(prev_version) if versions_match(&prev_version, &package_version) => Ok(0),
         Some(mismatched_version) => {
             tracing::warn!(expected = ?package_version, actual = ?mismatched_version, "version was set but it did not match");
             Ok(1)
@@ -249,6 +249,23 @@ fn convert_to_tilde_requirement(package_version: &semver::Version) -> Result<Str
     };
 
     Ok("~".to_string() + package_version)
+}
+
+// Determines if `prev_version` and `current_version` are considered a match
+//
+// Each input can be either a semver-compliant version or a tilde version requirement.
+fn versions_match(prev_version: &Value, current_version: &str) -> bool {
+    match prev_version.as_str() {
+        Some(prev_version) => {
+            if prev_version == current_version {
+                return true;
+            }
+            let prev_version = prev_version.strip_prefix('~').unwrap_or(prev_version);
+            let current_version = current_version.strip_prefix('~').unwrap_or(current_version);
+            prev_version.starts_with(current_version) || current_version.starts_with(prev_version)
+        }
+        _ => false,
+    }
 }
 
 fn fix_dep_sets(versions: &VersionView, metadata: &mut toml::Value) -> Result<usize> {
@@ -528,6 +545,22 @@ mod tests {
         assert!(is_example_manifest("examples/foo/bar/Cargo.toml"));
         assert!(is_example_manifest(
             "aws-sdk-rust/examples/foo/bar/Cargo.toml"
+        ));
+    }
+
+    #[test]
+    fn test_versions_match() {
+        assert!(versions_match(&Value::String("0.56.1".to_owned()), "~0.56"));
+        assert!(versions_match(&Value::String("~0.56".to_owned()), "0.56.1"));
+        assert!(!versions_match(&Value::String("~0.56".to_owned()), "~0.57"));
+        assert!(!versions_match(&Value::String("~0.57".to_owned()), "~0.56"));
+        assert!(!versions_match(
+            &Value::String("0.56.1".to_owned()),
+            "0.56.2"
+        ));
+        assert!(!versions_match(
+            &Value::String("0.56.1".to_owned()),
+            "0.57.1"
         ));
     }
 }
