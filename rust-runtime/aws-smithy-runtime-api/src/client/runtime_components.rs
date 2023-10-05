@@ -12,16 +12,19 @@
 //! [`RuntimeComponents`](RuntimeComponents).
 
 use crate::client::auth::{
-    AuthScheme, AuthSchemeId, SharedAuthScheme, SharedAuthSchemeOptionResolver,
+    AuthScheme, AuthSchemeId, AuthSchemeOptionResolver, SharedAuthScheme,
+    SharedAuthSchemeOptionResolver,
 };
-use crate::client::endpoint::SharedEndpointResolver;
-use crate::client::http::SharedHttpClient;
-use crate::client::identity::{ConfiguredIdentityResolver, SharedIdentityResolver};
-use crate::client::interceptors::SharedInterceptor;
-use crate::client::retries::{RetryClassifiers, SharedRetryStrategy};
+use crate::client::endpoint::{EndpointResolver, SharedEndpointResolver};
+use crate::client::http::{HttpClient, SharedHttpClient};
+use crate::client::identity::{
+    ConfiguredIdentityResolver, IdentityResolver, SharedIdentityResolver,
+};
+use crate::client::interceptors::{Interceptor, SharedInterceptor};
+use crate::client::retries::{RetryClassifiers, RetryStrategy, SharedRetryStrategy};
 use crate::shared::IntoShared;
-use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use std::fmt;
 
 pub(crate) static EMPTY_RUNTIME_COMPONENTS_BUILDER: RuntimeComponentsBuilder =
@@ -272,12 +275,9 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the auth scheme option resolver.
-    ///
-    /// Takes an implementation of [`AuthSchemeOptionResolver`](crate::client::auth::AuthSchemeOptionResolver)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn set_auth_scheme_option_resolver(
         &mut self,
-        auth_scheme_option_resolver: Option<impl IntoShared<SharedAuthSchemeOptionResolver>>,
+        auth_scheme_option_resolver: Option<impl AuthSchemeOptionResolver + 'static>,
     ) -> &mut Self {
         self.auth_scheme_option_resolver =
             auth_scheme_option_resolver.map(|r| Tracked::new(self.builder_name, r.into_shared()));
@@ -285,12 +285,9 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the auth scheme option resolver.
-    ///
-    /// Takes an implementation of [`AuthSchemeOptionResolver`](crate::client::auth::AuthSchemeOptionResolver)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_auth_scheme_option_resolver(
         mut self,
-        auth_scheme_option_resolver: Option<impl IntoShared<SharedAuthSchemeOptionResolver>>,
+        auth_scheme_option_resolver: Option<impl AuthSchemeOptionResolver + 'static>,
     ) -> Self {
         self.set_auth_scheme_option_resolver(auth_scheme_option_resolver);
         self
@@ -302,25 +299,13 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the HTTP client.
-    ///
-    /// Takes an implementation of [`HttpClient`](crate::client::http::HttpClient)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn set_http_client(
-        &mut self,
-        connector: Option<impl IntoShared<SharedHttpClient>>,
-    ) -> &mut Self {
+    pub fn set_http_client(&mut self, connector: Option<impl HttpClient + 'static>) -> &mut Self {
         self.http_client = connector.map(|c| Tracked::new(self.builder_name, c.into_shared()));
         self
     }
 
     /// Sets the HTTP client.
-    ///
-    /// Takes an implementation of [`HttpClient`](crate::client::http::HttpClient)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_http_client(
-        mut self,
-        connector: Option<impl IntoShared<SharedHttpClient>>,
-    ) -> Self {
+    pub fn with_http_client(mut self, connector: Option<impl HttpClient + 'static>) -> Self {
         self.set_http_client(connector);
         self
     }
@@ -331,12 +316,9 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the endpoint resolver.
-    ///
-    /// Takes an implementation of [`EndpointResolver`](crate::client::endpoint::EndpointResolver)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn set_endpoint_resolver(
         &mut self,
-        endpoint_resolver: Option<impl IntoShared<SharedEndpointResolver>>,
+        endpoint_resolver: Option<impl EndpointResolver + 'static>,
     ) -> &mut Self {
         self.endpoint_resolver =
             endpoint_resolver.map(|s| Tracked::new(self.builder_name, s.into_shared()));
@@ -344,12 +326,9 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the endpoint resolver.
-    ///
-    /// Takes an implementation of [`EndpointResolver`](crate::client::endpoint::EndpointResolver)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_endpoint_resolver(
         mut self,
-        endpoint_resolver: Option<impl IntoShared<SharedEndpointResolver>>,
+        endpoint_resolver: Option<impl EndpointResolver + 'static>,
     ) -> Self {
         self.set_endpoint_resolver(endpoint_resolver);
         self
@@ -361,35 +340,23 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Adds an auth scheme.
-    ///
-    /// Takes an implementation of [`AuthScheme`](crate::client::auth::AuthScheme)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn push_auth_scheme(
-        &mut self,
-        auth_scheme: impl IntoShared<SharedAuthScheme>,
-    ) -> &mut Self {
+    pub fn push_auth_scheme(&mut self, auth_scheme: impl AuthScheme + 'static) -> &mut Self {
         self.auth_schemes
             .push(Tracked::new(self.builder_name, auth_scheme.into_shared()));
         self
     }
 
     /// Adds an auth scheme.
-    ///
-    /// Takes an implementation of [`AuthScheme`](crate::client::auth::AuthScheme)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_auth_scheme(mut self, auth_scheme: impl IntoShared<SharedAuthScheme>) -> Self {
+    pub fn with_auth_scheme(mut self, auth_scheme: impl AuthScheme + 'static) -> Self {
         self.push_auth_scheme(auth_scheme);
         self
     }
 
     /// Adds an identity resolver.
-    ///
-    /// Takes an implementation of [`IdentityResolver`](crate::client::identity::IdentityResolver)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn push_identity_resolver(
         &mut self,
         scheme_id: AuthSchemeId,
-        identity_resolver: impl IntoShared<SharedIdentityResolver>,
+        identity_resolver: impl IdentityResolver + 'static,
     ) -> &mut Self {
         self.identity_resolvers.push(Tracked::new(
             self.builder_name,
@@ -399,13 +366,10 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Adds an identity resolver.
-    ///
-    /// Takes an implementation of [`IdentityResolver`](crate::client::identity::IdentityResolver)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_identity_resolver(
         mut self,
         scheme_id: AuthSchemeId,
-        identity_resolver: impl IntoShared<SharedIdentityResolver>,
+        identity_resolver: impl IdentityResolver + 'static,
     ) -> Self {
         self.push_identity_resolver(scheme_id, identity_resolver);
         self
@@ -427,23 +391,14 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Adds an interceptor.
-    ///
-    /// Takes an implementation of [`Interceptor`](crate::client::interceptors::Interceptor)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn push_interceptor(
-        &mut self,
-        interceptor: impl IntoShared<SharedInterceptor>,
-    ) -> &mut Self {
+    pub fn push_interceptor(&mut self, interceptor: impl Interceptor + 'static) -> &mut Self {
         self.interceptors
             .push(Tracked::new(self.builder_name, interceptor.into_shared()));
         self
     }
 
     /// Adds an interceptor.
-    ///
-    /// Takes an implementation of [`Interceptor`](crate::client::interceptors::Interceptor)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_interceptor(mut self, interceptor: impl IntoShared<SharedInterceptor>) -> Self {
+    pub fn with_interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
         self.push_interceptor(interceptor);
         self
     }
@@ -494,12 +449,9 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the retry strategy.
-    ///
-    /// Takes an implementation of [`RetryStrategy`](crate::client::retries::RetryStrategy)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn set_retry_strategy(
         &mut self,
-        retry_strategy: Option<impl IntoShared<SharedRetryStrategy>>,
+        retry_strategy: Option<impl RetryStrategy + 'static>,
     ) -> &mut Self {
         self.retry_strategy =
             retry_strategy.map(|s| Tracked::new(self.builder_name, s.into_shared()));
@@ -507,12 +459,9 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the retry strategy.
-    ///
-    /// Takes an implementation of [`RetryStrategy`](crate::client::retries::RetryStrategy)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn with_retry_strategy(
         mut self,
-        retry_strategy: Option<impl IntoShared<SharedRetryStrategy>>,
+        retry_strategy: Option<impl RetryStrategy + 'static>,
     ) -> Self {
         self.retry_strategy =
             retry_strategy.map(|s| Tracked::new(self.builder_name, s.into_shared()));
@@ -525,22 +474,13 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the async sleep implementation.
-    ///
-    /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
         self.sleep_impl = sleep_impl.map(|s| Tracked::new(self.builder_name, s));
         self
     }
 
     /// Sets the async sleep implementation.
-    ///
-    /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_sleep_impl(
-        mut self,
-        sleep_impl: Option<impl IntoShared<SharedAsyncSleep>>,
-    ) -> Self {
+    pub fn with_sleep_impl(mut self, sleep_impl: Option<impl AsyncSleep + 'static>) -> Self {
         self.sleep_impl = sleep_impl.map(|s| Tracked::new(self.builder_name, s.into_shared()));
         self
     }
@@ -551,22 +491,13 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Sets the time source.
-    ///
-    /// Takes an implementation of [`TimeSource`](aws_smithy_async::time::TimeSource)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
     pub fn set_time_source(&mut self, time_source: Option<SharedTimeSource>) -> &mut Self {
         self.time_source = time_source.map(|s| Tracked::new(self.builder_name, s));
         self
     }
 
     /// Sets the time source.
-    ///
-    /// Takes an implementation of [`TimeSource`](aws_smithy_async::time::TimeSource)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_time_source(
-        mut self,
-        time_source: Option<impl IntoShared<SharedTimeSource>>,
-    ) -> Self {
+    pub fn with_time_source(mut self, time_source: Option<impl TimeSource + 'static>) -> Self {
         self.time_source = time_source.map(|s| Tracked::new(self.builder_name, s.into_shared()));
         self
     }
@@ -592,15 +523,9 @@ impl RuntimeComponentsBuilder {
     /// Creates a runtime components builder with all the required components filled in with fake (panicking) implementations.
     #[cfg(feature = "test-util")]
     pub fn for_tests() -> Self {
-        use crate::client::auth::AuthSchemeOptionResolver;
-        use crate::client::endpoint::{EndpointResolver, EndpointResolverParams};
-        use crate::client::http::HttpClient;
+        use crate::client::endpoint::EndpointResolverParams;
         use crate::client::identity::Identity;
-        use crate::client::identity::IdentityResolver;
         use crate::client::orchestrator::Future;
-        use crate::client::retries::RetryStrategy;
-        use aws_smithy_async::rt::sleep::AsyncSleep;
-        use aws_smithy_async::time::TimeSource;
         use aws_smithy_types::config_bag::ConfigBag;
         use aws_smithy_types::endpoint::Endpoint;
 

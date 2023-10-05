@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::shared::IntoShared;
 use aws_types::region::Region;
 use aws_types::sdk_config::SharedHttpClient;
 
-fn stub_config(http_client: impl IntoShared<SharedHttpClient>) -> Config {
+fn stub_config(http_client: impl HttpClient + 'static) -> Config {
     Config::builder()
         .region(Region::new("us-east-1"))
         .credentials_provider(Credentials::for_tests())

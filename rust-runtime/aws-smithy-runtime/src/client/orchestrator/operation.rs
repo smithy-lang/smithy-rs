@@ -8,8 +8,8 @@ use crate::client::http::default_http_client_plugin;
 use crate::client::identity::no_auth::NoAuthIdentityResolver;
 use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
 use crate::client::retries::strategy::{NeverRetryStrategy, StandardRetryStrategy};
-use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::time::TimeSource;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
@@ -17,16 +17,16 @@ use aws_smithy_runtime_api::client::auth::{
     AuthSchemeOptionResolverParams, SharedAuthScheme, SharedAuthSchemeOptionResolver,
 };
 use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, SharedEndpointResolver};
-use aws_smithy_runtime_api::client::http::SharedHttpClient;
+use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
-use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
 use aws_smithy_runtime_api::client::retries::{RetryClassifiers, SharedRetryStrategy};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{
-    RuntimePlugins, SharedRuntimePlugin, StaticRuntimePlugin,
+    RuntimePlugin, RuntimePlugins, SharedRuntimePlugin, StaticRuntimePlugin,
 };
 use aws_smithy_runtime_api::client::ser_de::{
     RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
@@ -191,7 +191,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn http_client(mut self, connector: impl IntoShared<SharedHttpClient>) -> Self {
+    pub fn http_client(mut self, connector: impl HttpClient + 'static) -> Self {
         self.runtime_components.set_http_client(Some(connector));
         self
     }
@@ -246,24 +246,24 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn sleep_impl(mut self, async_sleep: impl IntoShared<SharedAsyncSleep>) -> Self {
+    pub fn sleep_impl(mut self, async_sleep: impl AsyncSleep + 'static) -> Self {
         self.runtime_components
             .set_sleep_impl(Some(async_sleep.into_shared()));
         self
     }
 
-    pub fn time_source(mut self, time_source: impl IntoShared<SharedTimeSource>) -> Self {
+    pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
         self.runtime_components
             .set_time_source(Some(time_source.into_shared()));
         self
     }
 
-    pub fn interceptor(mut self, interceptor: impl IntoShared<SharedInterceptor>) -> Self {
+    pub fn interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
     }
 
-    pub fn runtime_plugin(mut self, runtime_plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
+    pub fn runtime_plugin(mut self, runtime_plugin: impl RuntimePlugin + 'static) -> Self {
         self.runtime_plugins.push(runtime_plugin.into_shared());
         self
     }

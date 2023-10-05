@@ -63,9 +63,10 @@ The `IntoShared` trait is useful for making functions that take any `RuntimePlug
 For example, this function will convert the given `plugin` argument into a `SharedRuntimePlugin`.
 
 ```rust,no_run
-# use aws_smithy_runtime_api::client::runtime_plugin::{SharedRuntimePlugin, StaticRuntimePlugin};
-# use aws_smithy_runtime_api::shared::{IntoShared, FromUnshared};
-fn take_shared(plugin: impl IntoShared<SharedRuntimePlugin>) {
+# use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
+use aws_smithy_runtime_api::shared::IntoShared;
+
+fn take_shared(plugin: impl RuntimePlugin + 'static) {
     let _plugin: SharedRuntimePlugin = plugin.into_shared();
 }
 ```
@@ -74,9 +75,9 @@ This can be called with different types, and even if a `SharedRuntimePlugin` is 
 `SharedRuntimePlugin` inside of another `SharedRuntimePlugin`.
 
 ```rust,no_run
-# use aws_smithy_runtime_api::client::runtime_plugin::{SharedRuntimePlugin, StaticRuntimePlugin};
+# use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin, StaticRuntimePlugin};
 # use aws_smithy_runtime_api::shared::{IntoShared, FromUnshared};
-# fn take_shared(plugin: impl IntoShared<SharedRuntimePlugin>) {
+# fn take_shared(plugin: impl RuntimePlugin + 'static) {
 #     let _plugin: SharedRuntimePlugin = plugin.into_shared();
 # }
 // Automatically converts it to `SharedRuntimePlugin(StaticRuntimePlugin)`

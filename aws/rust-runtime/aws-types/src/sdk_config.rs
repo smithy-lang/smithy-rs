@@ -15,8 +15,10 @@ use crate::region::Region;
 
 pub use aws_credential_types::cache::CredentialsCache;
 pub use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_smithy_async::rt::sleep::AsyncSleep;
 pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::shared::IntoShared;
 pub use aws_smithy_types::retry::RetryConfig;
@@ -235,9 +237,6 @@ impl Builder {
     ///
     /// The sleep implementation is used to create timeout futures.
     ///
-    /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    ///
     /// _Note:_ If you're using the Tokio runtime, a `TokioSleep` implementation is available in
     /// the `aws-smithy-async` crate.
     ///
@@ -259,7 +258,7 @@ impl Builder {
     /// let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
     /// let config = SdkConfig::builder().sleep_impl(sleep_impl).build();
     /// ```
-    pub fn sleep_impl(mut self, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
+    pub fn sleep_impl(mut self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         self.set_sleep_impl(Some(sleep_impl.into_shared()));
         self
     }
@@ -406,9 +405,6 @@ impl Builder {
 
     /// Sets the HTTP client to use when making requests.
     ///
-    /// Takes an implementation of [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    ///
     /// ## Examples
     /// ```no_run
     /// # #[cfg(feature = "examples")]
@@ -439,7 +435,7 @@ impl Builder {
     ///     .build();
     /// # }
     /// ```
-    pub fn http_client(mut self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
+    pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
         self.set_http_client(Some(http_client.into_shared()));
         self
     }

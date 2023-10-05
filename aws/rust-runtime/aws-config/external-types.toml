@@ -18,7 +18,6 @@ allowed_external_types = [
    "aws_smithy_http::result::SdkError",
    "aws_smithy_runtime_api::client::dns::SharedDnsResolver",
    "aws_smithy_runtime_api::client::http::SharedHttpClient",
-   "aws_smithy_runtime_api::shared::IntoShared",
    "aws_smithy_types::retry",
    "aws_smithy_types::retry::*",
    "aws_smithy_types::timeout",

@@ -136,8 +136,8 @@ mod builder {
 
     use crate::cache::{CredentialsCache, Inner};
     use crate::provider::SharedCredentialsProvider;
-    use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
-    use aws_smithy_async::time::SharedTimeSource;
+    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
+    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 
     use super::{
         LazyCredentialsCache, DEFAULT_BUFFER_TIME, DEFAULT_BUFFER_TIME_JITTER_FRACTION,
@@ -178,10 +178,7 @@ mod builder {
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
-        ///
-        /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
-        /// as an argument. All implementations of this trait implement `IntoShared`.
-        pub fn sleep_impl(mut self, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
+        pub fn sleep_impl(mut self, sleep_impl: impl AsyncSleep + 'static) -> Self {
             self.set_sleep_impl(Some(sleep_impl.into_shared()));
             self
         }
@@ -191,16 +188,13 @@ mod builder {
         /// This enables use of the `LazyCredentialsCache` with other async runtimes.
         /// If using Tokio as the async runtime, this should be set to an instance of
         /// [`TokioSleep`](aws_smithy_async::rt::sleep::TokioSleep).
-        ///
-        /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
-        /// as an argument. All implementations of this trait implement `IntoShared`.
         pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
             self.sleep_impl = sleep_impl;
             self
         }
 
         #[doc(hidden)] // because they only exist for tests
-        pub fn time_source(mut self, time_source: impl IntoShared<SharedTimeSource>) -> Self {
+        pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
             self.set_time_source(Some(time_source.into_shared()));
             self
         }

@@ -157,8 +157,10 @@ mod loader {
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::cache::CredentialsCache;
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
+    use aws_sdk_sso::config::AsyncSleep;
     use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
-    use aws_smithy_async::time::SharedTimeSource;
+    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
@@ -272,10 +274,7 @@ mod loader {
         /// The sleep implementation is used to create timeout futures.
         /// You generally won't need to change this unless you're using an async runtime other
         /// than Tokio.
-        ///
-        /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
-        /// as an argument. All implementations of this trait implement `IntoShared`.
-        pub fn sleep_impl(mut self, sleep: impl IntoShared<SharedAsyncSleep>) -> Self {
+        pub fn sleep_impl(mut self, sleep: impl AsyncSleep + 'static) -> Self {
             // it's possible that we could wrapping an `Arc in an `Arc` and that's OK
             self.sleep = Some(sleep.into_shared());
             self
@@ -286,10 +285,7 @@ mod loader {
         /// You generally won't need to change this unless you're compiling for a target
         /// that can't provide a default, such as WASM, or unless you're writing a test against
         /// the client that needs a fixed time.
-        ///
-        /// Takes an implementation of [`TimeSource`](aws_smithy_async::time::TimeSource)
-        /// as an argument. All implementations of this trait implement `IntoShared`.
-        pub fn time_source(mut self, time_source: impl IntoShared<SharedTimeSource>) -> Self {
+        pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
             self.time_source = Some(time_source.into_shared());
             self
         }
@@ -298,7 +294,7 @@ mod loader {
         #[deprecated(
             note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
         )]
-        pub fn http_connector(self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
+        pub fn http_connector(self, http_client: impl HttpClient + 'static) -> Self {
             self.http_client(http_client)
         }
 
@@ -308,9 +304,6 @@ mod loader {
         ///
         /// If you wish to use a separate HTTP client for credentials providers when creating clients,
         /// then override the HTTP client set with this function on the client-specific `Config`s.
-        ///
-        /// Takes an implementation of [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient)
-        /// as an argument. All implementations of this trait implement `IntoShared`.
         ///
         /// ## Examples
         ///
@@ -336,7 +329,7 @@ mod loader {
         ///     .await;
         /// # }
         /// ```
-        pub fn http_client(mut self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
+        pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
             self.http_client = Some(http_client.into_shared());
             self
         }

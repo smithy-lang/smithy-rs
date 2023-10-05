@@ -34,6 +34,7 @@ private class HttpConnectorConfigCustomization(
         *preludeScope,
         "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
         "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
+        "HttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::HttpClient"),
         "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
         "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
@@ -70,7 +71,7 @@ private class HttpConnectorConfigCustomization(
                     ##[deprecated(
                         note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
                     )]
-                    pub fn http_connector(self, http_client: impl #{IntoShared}<#{SharedHttpClient}>) -> Self {
+                    pub fn http_connector(self, http_client: impl #{HttpClient} + 'static) -> Self {
                         self.http_client(http_client)
                     }
 
@@ -111,7 +112,7 @@ private class HttpConnectorConfigCustomization(
                     /// ## }
                     /// ## }
                     /// ```
-                    pub fn http_client(mut self, http_client: impl #{IntoShared}<#{SharedHttpClient}>) -> Self {
+                    pub fn http_client(mut self, http_client: impl #{HttpClient} + 'static) -> Self {
                         self.set_http_client(#{Some}(#{IntoShared}::into_shared(http_client)));
                         self
                     }

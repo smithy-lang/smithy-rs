@@ -8,8 +8,10 @@
 use crate::profile;
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::{ProfileFileLoadError, ProfileSet};
+use aws_sdk_sso::config::AsyncSleep;
 use aws_smithy_async::rt::sleep::{default_async_sleep, SharedAsyncSleep};
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::RetryConfig;
@@ -338,10 +340,7 @@ impl ProviderConfig {
     }
 
     /// Override the time source for this configuration
-    ///
-    /// Takes an implementation of [`TimeSource`](aws_smithy_async::time::TimeSource)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_time_source(self, time_source: impl IntoShared<SharedTimeSource>) -> Self {
+    pub fn with_time_source(self, time_source: impl TimeSource + 'static) -> Self {
         ProviderConfig {
             time_source: time_source.into_shared(),
             ..self
@@ -352,15 +351,12 @@ impl ProviderConfig {
     #[deprecated(
         note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
     )]
-    pub fn with_tcp_connector(self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
+    pub fn with_tcp_connector(self, http_client: impl HttpClient + 'static) -> Self {
         self.with_http_client(http_client)
     }
 
     /// Override the HTTP client for this configuration
-    ///
-    /// Takes an implementation of [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_http_client(self, http_client: impl IntoShared<SharedHttpClient>) -> Self {
+    pub fn with_http_client(self, http_client: impl HttpClient + 'static) -> Self {
         ProviderConfig {
             http_client: Some(http_client.into_shared()),
             ..self
@@ -368,10 +364,7 @@ impl ProviderConfig {
     }
 
     /// Override the sleep implementation for this configuration
-    ///
-    /// Takes an implementation of [`AsyncSleep`](aws_smithy_async::rt::sleep::AsyncSleep)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn with_sleep_impl(self, sleep_impl: impl IntoShared<SharedAsyncSleep>) -> Self {
+    pub fn with_sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         ProviderConfig {
             sleep_impl: Some(sleep_impl.into_shared()),
             ..self

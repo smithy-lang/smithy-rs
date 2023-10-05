@@ -274,10 +274,7 @@ impl Builder {
     ///
     /// URIs must refer to loopback addresses. The [`DnsResolver`](aws_smithy_runtime_api::client::dns::DnsResolver)
     /// is used to retrieve IP addresses for a given domain.
-    ///
-    /// Takes an implementation of [`DnsResolver`](aws_smithy_runtime_api::client::dns::DnsResolver)
-    /// as an argument. All implementations of this trait implement `IntoShared`.
-    pub fn dns(mut self, dns: impl IntoShared<SharedDnsResolver>) -> Self {
+    pub fn dns(mut self, dns: impl DnsResolver + 'static) -> Self {
         self.dns = Some(dns.into_shared());
         self
     }
@@ -448,9 +445,9 @@ mod test {
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_runtime_api::client::dns::DnsFuture;
+    use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_types::os_shim_internal::Env;
-    use aws_types::sdk_config::SharedHttpClient;
     use futures_util::FutureExt;
     use http::header::AUTHORIZATION;
     use http::Uri;
@@ -461,10 +458,7 @@ mod test {
     use std::time::{Duration, UNIX_EPOCH};
     use tracing_test::traced_test;
 
-    fn provider(
-        env: Env,
-        http_client: impl IntoShared<SharedHttpClient>,
-    ) -> EcsCredentialsProvider {
+    fn provider(env: Env, http_client: impl HttpClient + 'static) -> EcsCredentialsProvider {
         let provider_config = ProviderConfig::empty()
             .with_env(env)
             .with_http_client(http_client)
