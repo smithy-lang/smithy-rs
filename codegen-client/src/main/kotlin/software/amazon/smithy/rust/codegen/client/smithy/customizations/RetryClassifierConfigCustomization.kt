@@ -21,9 +21,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 class RetryClassifierConfigCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    private val classifiers = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries::classifiers")
+    private val retries = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries")
+    private val classifiers = retries.resolve("classifiers")
     private val codegenScope = arrayOf(
         "ClassifyRetry" to classifiers.resolve("ClassifyRetry"),
+        "RetryStrategy" to retries.resolve("RetryStrategy"),
         "SharedRetryClassifier" to classifiers.resolve("SharedRetryClassifier"),
     )
 

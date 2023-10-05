@@ -201,7 +201,7 @@ pub fn run_classifiers_on_ctx(
     let mut result = None;
 
     for classifier in classifiers {
-        let new_result = classifier.classify_retry(ctx, result);
+        let new_result = classifier.classify_retry(ctx, result.clone());
 
         // Emit a log whenever a new result overrides the result of a higher-priority classifier.
         if new_result != result && new_result.is_none() {

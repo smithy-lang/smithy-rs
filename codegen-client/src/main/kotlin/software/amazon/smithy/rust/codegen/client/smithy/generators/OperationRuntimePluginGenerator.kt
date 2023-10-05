@@ -78,9 +78,6 @@ class OperationRuntimePluginGenerator(
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
-                    ##[allow(unused-imports)]
-                    use #{IntoShared};
-
                     #{Cow}::Owned(
                         #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
                             #{auth_options}

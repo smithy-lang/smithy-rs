@@ -365,6 +365,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 mod tests {
     use super::*;
     use crate::client::connectors::test_util::{capture_request, ConnectionEvent, EventConnector};
+    use crate::client::retries::classifiers::HttpStatusCodeClassifier;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;
@@ -443,6 +444,9 @@ mod tests {
             .endpoint_url("http://localhost:1234")
             .no_auth()
             .standard_retry(&RetryConfig::standard())
+            .retry_classifier(SharedRetryClassifier::new(
+                HttpStatusCodeClassifier::default(),
+            ))
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .serializer(|input: String| {
                 Ok(http::Request::builder()

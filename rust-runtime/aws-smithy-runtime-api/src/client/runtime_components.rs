@@ -18,7 +18,7 @@ use crate::client::connectors::SharedHttpConnector;
 use crate::client::endpoint::SharedEndpointResolver;
 use crate::client::identity::{ConfiguredIdentityResolver, SharedIdentityResolver};
 use crate::client::interceptors::SharedInterceptor;
-use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
+use crate::client::retries::classifiers::SharedRetryClassifier;
 use crate::client::retries::SharedRetryStrategy;
 use crate::shared::IntoShared;
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
@@ -563,8 +563,7 @@ impl RuntimeComponentsBuilder {
         use crate::client::auth::AuthSchemeOptionResolver;
         use crate::client::connectors::{HttpConnector, HttpConnectorFuture};
         use crate::client::endpoint::{EndpointResolver, EndpointResolverParams};
-        use crate::client::identity::Identity;
-        use crate::client::identity::IdentityResolver;
+        use crate::client::identity::{Identity, IdentityResolver};
         use crate::client::orchestrator::{Future, HttpRequest};
         use crate::client::retries::RetryStrategy;
         use aws_smithy_async::rt::sleep::AsyncSleep;
@@ -710,7 +709,7 @@ impl GetIdentityResolver for RuntimeComponents {
 
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
-    use super::*;
+    use crate::client::runtime_components::{RuntimeComponentsBuilder, Tracked};
 
     #[test]
     #[allow(unreachable_pub)]

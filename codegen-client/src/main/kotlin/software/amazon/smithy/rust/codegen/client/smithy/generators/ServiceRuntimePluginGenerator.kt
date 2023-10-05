@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -40,35 +39,20 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
 
     data class RegisterRuntimeComponents(val serviceConfigName: String) : ServiceRuntimePluginSection("RegisterRuntimeComponents") {
         /** Generates the code to register an interceptor */
-        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
-            writer.rustTemplate(
-                """
-                runtime_components.push_interceptor(#{interceptor});
-                """,
-                "interceptor" to interceptor,
-            )
+        fun registerInterceptor(writer: RustWriter, interceptor: Writable) {
+            writer.rust("runtime_components.push_interceptor(#T);", interceptor)
         }
 
         fun registerAuthScheme(writer: RustWriter, authScheme: Writable) {
-            writer.rustTemplate(
-                """
-                runtime_components.push_auth_scheme(#{auth_scheme});
-                """,
-                "auth_scheme" to authScheme,
-            )
+            writer.rust("runtime_components.push_auth_scheme(#T);", authScheme)
         }
 
         fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
-            writer.rustTemplate(
-                """
-                runtime_components.push_identity_resolver(#{identity_resolver});
-                """,
-                "identity_resolver" to identityResolver,
-            )
+            writer.rust("runtime_components.push_identity_resolver(#T);", identityResolver)
         }
 
         fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
-            writer.rust("runtime_components.push_retry_classifier(#T.into_shared());", classifier)
+            writer.rust("runtime_components.push_retry_classifier(#T);", classifier)
         }
     }
 }
@@ -113,9 +97,6 @@ class ServiceRuntimePluginGenerator(
 
             impl ServiceRuntimePlugin {
                 pub fn new(_service_config: crate::config::Config) -> Self {
-                    ##[allow(unused-imports)]
-                    use #{IntoShared};
-
                     let config = { #{config} };
                     let mut runtime_components = #{RuntimeComponentsBuilder}::new("ServiceRuntimePlugin");
                     #{runtime_components}

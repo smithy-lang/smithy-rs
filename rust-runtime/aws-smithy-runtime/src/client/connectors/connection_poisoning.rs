@@ -74,7 +74,7 @@ impl Interceptor for ConnectionPoisoningInterceptor {
             .unwrap_or(ReconnectMode::ReconnectOnTransientError);
         let captured_connection = cfg.load::<CaptureSmithyConnectionWrapper>().cloned();
         let retry_classifier_result =
-            run_classifiers_on_ctx(runtime_components.retry_classifiers(), context.inner());
+            run_classifiers_on_ctx(runtime_components.retry_classifiers(), context.inner_mut());
         let error_is_transient =
             retry_classifier_result == RetryAction::Error(ErrorKind::TransientError);
         let connection_poisoning_is_enabled =

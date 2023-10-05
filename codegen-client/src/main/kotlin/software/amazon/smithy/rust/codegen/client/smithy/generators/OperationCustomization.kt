@@ -109,7 +109,7 @@ sealed class OperationSection(name: String) : Section(name) {
         val operationShape: OperationShape,
     ) : OperationSection("RetryClassifiers") {
         fun registerRetryClassifier(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_retry_classifier(#{plugin}.into_shared())", "plugin" to plugin)
+            writer.rustTemplate(".with_retry_classifier(#{plugin})", "plugin" to plugin)
         }
     }
 }
