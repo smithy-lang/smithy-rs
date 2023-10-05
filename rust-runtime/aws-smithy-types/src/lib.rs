@@ -14,11 +14,19 @@
     unreachable_pub
 )]
 pub mod base64;
+pub mod body;
+pub mod byte_stream;
 /// A typemap for storing configuration.
 pub mod config_bag;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
+// Marked as `doc(hidden)` because a type in the module is used both by this crate and by the code
+// generator, but not by external users. Also, by the module being `doc(hidden)` instead of it being
+// in `rust-runtime/inlineable`, each user won't have to pay the cost of running the module's tests
+// when compiling their generated SDK.
+#[doc(hidden)]
+pub mod futures_stream_adapter;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
