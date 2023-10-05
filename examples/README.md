@@ -26,11 +26,10 @@ installation of Rust, including `cargo`, to compile the generated code.
 (Optional) The [Cargo Lambda](https://cargo-lambda.info/) sub-command for
 `cargo` is required to support the AWS Lambda integration.
 
-
 ## Building
 
 Since these examples require both the server and client SDK to be code-generated
-from their [model](/codegen-server-test/model/pokemon.smithy), a Makefile is
+from their [model](/codegen-core/common-test-models/pokemon.smithy), a Makefile is
 provided to build and run the service. Just run `make` to prepare the first
 build.
 

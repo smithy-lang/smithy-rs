@@ -1,4 +1,4 @@
-$version: "1.0"
+$version: "2"
 
 namespace com.aws.example
 
@@ -158,7 +158,7 @@ operation StreamPokemonRadio {
 @output
 structure StreamPokemonRadioOutput {
     @httpPayload
-    data: StreamingBlob
+    data: StreamingBlob = ""
 }
 
 @streaming
