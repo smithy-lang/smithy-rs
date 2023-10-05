@@ -9,9 +9,6 @@
 # BlueJ files
 *.ctxt
 
-# IntelliJ module file
-*.iml
-
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/
 
