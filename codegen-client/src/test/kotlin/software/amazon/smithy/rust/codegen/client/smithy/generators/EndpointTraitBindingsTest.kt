@@ -16,10 +16,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -70,10 +69,9 @@ internal class EndpointTraitBindingsTest {
                 """,
             )
             implBlock(symbolProvider.toSymbol(model.lookup("test#GetStatusInput"))) {
-                rustBlock(
-                    "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
-                    RuntimeType.smithyHttp(TestRuntimeConfig),
-                    TestRuntimeConfig.operationBuildError(),
+                rustBlockTemplate(
+                    "fn endpoint_prefix(&self) -> std::result::Result<#{endpoint}::EndpointPrefix, #{endpoint}::error::InvalidEndpointError>",
+                    "endpoint" to RuntimeType.smithyHttp(TestRuntimeConfig).resolve("endpoint"),
                 ) {
                     endpointBindingGenerator.render(this, "self")
                 }

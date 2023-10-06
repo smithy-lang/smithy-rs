@@ -70,13 +70,15 @@ pub struct InvalidEndpointError {
 }
 
 impl InvalidEndpointError {
-    pub(super) fn endpoint_must_have_scheme() -> Self {
+    /// Construct a build error for a missing scheme
+    pub fn endpoint_must_have_scheme() -> Self {
         Self {
             kind: InvalidEndpointErrorKind::EndpointMustHaveScheme,
         }
     }
 
-    pub(super) fn failed_to_construct_authority(
+    /// Construct a build error for an invalid authority
+    pub fn failed_to_construct_authority(
         authority: String,
         source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
     ) -> Self {
@@ -88,7 +90,8 @@ impl InvalidEndpointError {
         }
     }
 
-    pub(super) fn failed_to_construct_uri(
+    /// Construct a build error for an invalid URI
+    pub fn failed_to_construct_uri(
         source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
     ) -> Self {
         Self {

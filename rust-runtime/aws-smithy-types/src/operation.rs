@@ -103,7 +103,7 @@ pub mod error {
             }
         }
 
-        /// Construct a build error for a missing field
+        /// Construct a build error for an invalid field
         pub fn invalid_field(field: &'static str, details: impl Into<String>) -> Self {
             Self {
                 kind: BuildErrorKind::InvalidField {
