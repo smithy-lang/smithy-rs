@@ -39,11 +39,11 @@ impl fmt::Display for RetryAction {
 /// about which will run first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetryClassifierPriority {
-    /// The default priority for the [`HttpStatusCodeClassifier`].
+    /// The default priority for the `HttpStatusCodeClassifier`.
     HttpStatusCodeClassifier,
-    /// The default priority for the [`ModeledAsRetryableClassifier`].
+    /// The default priority for the `ModeledAsRetryableClassifier`.
     ModeledAsRetryableClassifier,
-    /// The default priority for the [`TransientErrorClassifier`].
+    /// The default priority for the `TransientErrorClassifier`.
     TransientErrorClassifier,
     /// The priority of some other classifier.
     Other(i8),

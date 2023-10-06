@@ -94,7 +94,8 @@ where
 }
 
 /// A retry classifier that checks for `x-amz-retry-after` headers. If one is found, a
-/// [`RetryAction::Explicit`] is returned containing the duration to wait before retrying.
+/// [`RetryAction::Explicit`](RetryAction) is returned containing the duration to wait
+/// before retrying.
 #[derive(Debug, Default)]
 pub struct AmzRetryAfterHeaderClassifier;
 
