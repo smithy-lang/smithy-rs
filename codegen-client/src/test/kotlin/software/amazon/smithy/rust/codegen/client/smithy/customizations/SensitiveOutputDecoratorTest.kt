@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -18,9 +17,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 class SensitiveOutputDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
         "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-        "TestConnection" to CargoDependency.smithyClient(runtimeConfig)
-            .toDevDependency().withFeature("test-util").toType()
-            .resolve("test_connection::TestConnection"),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
 
@@ -56,7 +52,7 @@ class SensitiveOutputDecoratorTest {
                 rustTemplate(
                     """
                     async fn redacting_sensitive_response_body() {
-                        let (conn, _r) = #{capture_request}(Some(
+                        let (http_client, _r) = #{capture_request}(Some(
                             http::Response::builder()
                                 .status(200)
                                 .body(#{SdkBody}::from(""))
@@ -65,7 +61,7 @@ class SensitiveOutputDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(conn.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.say_hello()

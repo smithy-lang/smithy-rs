@@ -14,8 +14,8 @@ publish = false
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-glacier = { path = "../../build/aws-sdk/sdk/glacier" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test"}
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 bytes = "1.0.0"
 http = "0.2.0"
 tokio = { version = "1.23.1", features = ["full", "test-util"]}

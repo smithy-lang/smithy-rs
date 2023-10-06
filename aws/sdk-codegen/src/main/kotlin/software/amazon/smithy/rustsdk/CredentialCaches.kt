@@ -106,7 +106,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                                 || match sleep {
                                     Some(sleep) => {
                                         #{CredentialsCache}::lazy_builder()
-                                            .sleep(sleep)
+                                            .sleep_impl(sleep)
                                             .into_credentials_cache()
                                     }
                                     None => #{CredentialsCache}::lazy(),

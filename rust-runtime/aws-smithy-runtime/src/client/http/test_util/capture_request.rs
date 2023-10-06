@@ -4,8 +4,12 @@
  */
 
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime_api::client::connectors::{HttpConnector, HttpConnectorFuture};
+use aws_smithy_runtime_api::client::http::{
+    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
+};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::shared::IntoShared;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -33,6 +37,16 @@ impl HttpConnector for CaptureRequestHandler {
             .response
             .take()
             .expect("could not handle second request")))
+    }
+}
+
+impl HttpClient for CaptureRequestHandler {
+    fn http_connector(
+        &self,
+        _: &HttpConnectorSettings,
+        _: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        self.clone().into_shared()
     }
 }
 
@@ -70,9 +84,9 @@ impl CaptureRequestReceiver {
 ///
 /// Example:
 /// ```compile_fail
-/// let (server, request) = capture_request(None);
+/// let (capture_client, request) = capture_request(None);
 /// let conf = aws_sdk_sts::Config::builder()
-///     .http_connector(server)
+///     .http_client(capture_client)
 ///     .build();
 /// let client = aws_sdk_sts::Client::from_conf(conf);
 /// let _ = client.assume_role_with_saml().send().await;

@@ -298,6 +298,7 @@ data class CargoDependency(
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
             .withFeature("client")
+        fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) = smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util")
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
             .withFeature("client")
         fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =

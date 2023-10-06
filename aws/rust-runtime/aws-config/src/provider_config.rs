@@ -5,21 +5,19 @@
 
 //! Configuration Options for Credential Providers
 
-use crate::connector::{default_connector, expect_connector};
 use crate::profile;
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::{ProfileFileLoadError, ProfileSet};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_client::erase::DynConnector;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::http::HttpClient;
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::RetryConfig;
 use aws_types::os_shim_internal::{Env, Fs};
-use aws_types::{
-    http_connector::{ConnectorSettings, HttpConnector},
-    region::Region,
-    SdkConfig,
-};
+use aws_types::region::Region;
+use aws_types::sdk_config::SharedHttpClient;
+use aws_types::SdkConfig;
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
@@ -38,8 +36,8 @@ pub struct ProviderConfig {
     env: Env,
     fs: Fs,
     time_source: SharedTimeSource,
-    connector: HttpConnector,
-    sleep: Option<SharedAsyncSleep>,
+    http_client: Option<SharedHttpClient>,
+    sleep_impl: Option<SharedAsyncSleep>,
     region: Option<Region>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
@@ -56,28 +54,25 @@ impl Debug for ProviderConfig {
         f.debug_struct("ProviderConfig")
             .field("env", &self.env)
             .field("fs", &self.fs)
-            .field("sleep", &self.sleep)
+            .field("time_source", &self.time_source)
+            .field("http_client", &self.http_client)
+            .field("sleep_impl", &self.sleep_impl)
             .field("region", &self.region)
             .field("use_fips", &self.use_fips)
             .field("use_dual_stack", &self.use_dual_stack)
+            .field("profile_name_override", &self.profile_name_override)
             .finish()
     }
 }
 
 impl Default for ProviderConfig {
     fn default() -> Self {
-        let connector = HttpConnector::ConnectorFn(Arc::new(
-            |settings: &ConnectorSettings, sleep: Option<SharedAsyncSleep>| {
-                default_connector(settings, sleep)
-            },
-        ));
-
         Self {
             env: Env::default(),
             fs: Fs::default(),
             time_source: SharedTimeSource::default(),
-            connector,
-            sleep: default_async_sleep(),
+            http_client: None,
+            sleep_impl: default_async_sleep(),
             region: None,
             use_fips: None,
             use_dual_stack: None,
@@ -106,8 +101,8 @@ impl ProviderConfig {
             env,
             fs,
             time_source: SharedTimeSource::new(StaticTimeSource::new(UNIX_EPOCH)),
-            connector: HttpConnector::Prebuilt(None),
-            sleep: None,
+            http_client: None,
+            sleep_impl: None,
             region: None,
             use_fips: None,
             use_dual_stack: None,
@@ -148,8 +143,8 @@ impl ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: SharedTimeSource::default(),
-            connector: HttpConnector::Prebuilt(None),
-            sleep: None,
+            http_client: None,
+            sleep_impl: None,
             region: None,
             use_fips: None,
             use_dual_stack: None,
@@ -160,15 +155,18 @@ impl ProviderConfig {
     }
 
     /// Initializer for ConfigBag to avoid possibly setting incorrect defaults.
-    pub(crate) fn init(time_source: SharedTimeSource, sleep: Option<SharedAsyncSleep>) -> Self {
+    pub(crate) fn init(
+        time_source: SharedTimeSource,
+        sleep_impl: Option<SharedAsyncSleep>,
+    ) -> Self {
         Self {
             parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             env: Env::default(),
             fs: Fs::default(),
             time_source,
-            connector: HttpConnector::Prebuilt(None),
-            sleep,
+            http_client: None,
+            sleep_impl,
             region: None,
             use_fips: None,
             use_dual_stack: None,
@@ -192,18 +190,15 @@ impl ProviderConfig {
         Self::without_region().load_default_region().await
     }
 
-    pub(crate) fn client_config(&self, feature_name: &str) -> SdkConfig {
+    pub(crate) fn client_config(&self) -> SdkConfig {
         let mut builder = SdkConfig::builder()
-            .http_connector(expect_connector(
-                &format!("The {feature_name} features of aws-config"),
-                self.connector(&Default::default()),
-            ))
             .retry_config(RetryConfig::standard())
             .region(self.region())
             .time_source(self.time_source())
             .use_fips(self.use_fips().unwrap_or_default())
             .use_dual_stack(self.use_dual_stack().unwrap_or_default());
-        builder.set_sleep_impl(self.sleep());
+        builder.set_http_client(self.http_client.clone());
+        builder.set_sleep_impl(self.sleep_impl.clone());
         builder.build()
     }
 
@@ -225,19 +220,13 @@ impl ProviderConfig {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn default_connector(&self) -> Option<DynConnector> {
-        self.connector
-            .connector(&Default::default(), self.sleep.clone())
+    pub(crate) fn http_client(&self) -> Option<SharedHttpClient> {
+        self.http_client.clone()
     }
 
     #[allow(dead_code)]
-    pub(crate) fn connector(&self, settings: &ConnectorSettings) -> Option<DynConnector> {
-        self.connector.connector(settings, self.sleep.clone())
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn sleep(&self) -> Option<SharedAsyncSleep> {
-        self.sleep.clone()
+    pub(crate) fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
+        self.sleep_impl.clone()
     }
 
     #[allow(dead_code)]
@@ -350,65 +339,33 @@ impl ProviderConfig {
     }
 
     /// Override the time source for this configuration
-    pub fn with_time_source(
-        self,
-        time_source: impl aws_smithy_async::time::TimeSource + 'static,
-    ) -> Self {
+    pub fn with_time_source(self, time_source: impl TimeSource + 'static) -> Self {
         ProviderConfig {
-            time_source: SharedTimeSource::new(time_source),
+            time_source: time_source.into_shared(),
             ..self
         }
     }
 
-    /// Override the HTTPS connector for this configuration
-    ///
-    /// **Note**: In order to take advantage of late-configured timeout settings, use [`HttpConnector::ConnectorFn`]
-    /// when configuring this connector.
-    pub fn with_http_connector(self, connector: impl Into<HttpConnector>) -> Self {
-        ProviderConfig {
-            connector: connector.into(),
-            ..self
-        }
+    /// Deprecated. Don't use.
+    #[deprecated(
+        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
+    )]
+    pub fn with_tcp_connector(self, http_client: impl HttpClient + 'static) -> Self {
+        self.with_http_client(http_client)
     }
 
-    /// Override the TCP connector for this configuration
-    ///
-    /// This connector MUST provide an HTTPS encrypted connection.
-    ///
-    /// # Stability
-    /// This method may change to support HTTP configuration.
-    #[cfg(feature = "client-hyper")]
-    pub fn with_tcp_connector<C>(self, connector: C) -> Self
-    where
-        C: Clone + Send + Sync + 'static,
-        C: tower::Service<http::Uri>,
-        C::Response: hyper::client::connect::Connection
-            + tokio::io::AsyncRead
-            + tokio::io::AsyncWrite
-            + Send
-            + Unpin
-            + 'static,
-        C::Future: Unpin + Send + 'static,
-        C::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    {
-        let connector_fn = move |settings: &ConnectorSettings, sleep: Option<SharedAsyncSleep>| {
-            let mut builder = aws_smithy_client::hyper_ext::Adapter::builder()
-                .connector_settings(settings.clone());
-            if let Some(sleep) = sleep {
-                builder = builder.sleep_impl(sleep);
-            };
-            Some(DynConnector::new(builder.build(connector.clone())))
-        };
+    /// Override the HTTP client for this configuration
+    pub fn with_http_client(self, http_client: impl HttpClient + 'static) -> Self {
         ProviderConfig {
-            connector: HttpConnector::ConnectorFn(Arc::new(connector_fn)),
+            http_client: Some(http_client.into_shared()),
             ..self
         }
     }
 
     /// Override the sleep implementation for this configuration
-    pub fn with_sleep(self, sleep: impl AsyncSleep + 'static) -> Self {
+    pub fn with_sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         ProviderConfig {
-            sleep: Some(SharedAsyncSleep::new(sleep)),
+            sleep_impl: Some(sleep_impl.into_shared()),
             ..self
         }
     }

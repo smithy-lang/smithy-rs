@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -77,22 +76,16 @@ class FluentClientGeneratorTest {
 
                     ##[test]
                     fn test() {
-                        let connector = #{TestConnection}::<#{SdkBody}>::new(Vec::new());
                         let config = $moduleName::Config::builder()
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(#{NeverClient}::new())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         check_send(client.say_hello().send());
                     }
                     """,
-                    "TestConnection" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.smithyClient(
-                        codegenContext.runtimeConfig,
-                    )
-                        .toDevDependency()
-                        .withFeature("test-util").toType()
-                        .resolve("test_connection::TestConnection"),
-                    "SdkBody" to software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::NeverClient"),
                 )
             }
         }
@@ -107,10 +100,9 @@ class FluentClientGeneratorTest {
                     """
                     ##[test]
                     fn test() {
-                        let connector = #{TestConnection}::<#{SdkBody}>::new(Vec::new());
                         let config = $moduleName::Config::builder()
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(#{NeverClient}::new())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
 
@@ -120,11 +112,8 @@ class FluentClientGeneratorTest {
                         assert_eq!(*input.get_byte_value(), Some(4));
                     }
                     """,
-                    "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                        .toDevDependency()
-                        .withFeature("test-util").toType()
-                        .resolve("test_connection::TestConnection"),
-                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::NeverClient"),
                 )
             }
         }

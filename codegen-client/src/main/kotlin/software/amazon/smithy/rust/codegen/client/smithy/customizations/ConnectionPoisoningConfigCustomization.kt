@@ -26,7 +26,7 @@ class ConnectionPoisoningRuntimePluginCustomization(
                 section.registerInterceptor(this) {
                     rust(
                         "#T::new()",
-                        smithyRuntime(runtimeConfig).resolve("client::connectors::connection_poisoning::ConnectionPoisoningInterceptor"),
+                        smithyRuntime(runtimeConfig).resolve("client::http::connection_poisoning::ConnectionPoisoningInterceptor"),
                     )
                 }
             }

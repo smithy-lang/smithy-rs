@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_client::SdkError;
 use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_http::operation;
+use aws_smithy_http::result::SdkError;
 use aws_smithy_types::error::metadata::{
     Builder as ErrorMetadataBuilder, ErrorMetadata, ProvideErrorMetadata,
 };
@@ -101,8 +101,8 @@ fn extract_extended_request_id(headers: &HeaderMap<HeaderValue>) -> Option<&str>
 #[cfg(test)]
 mod test {
     use super::*;
-    use aws_smithy_client::SdkError;
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_http::result::SdkError;
     use http::Response;
 
     #[test]

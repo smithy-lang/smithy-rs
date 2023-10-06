@@ -90,16 +90,16 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
             )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
-                tokioTest("test_operation_overrides_http_connection") {
+                tokioTest("test_operation_overrides_http_client") {
                     rustTemplate(
                         """
                         use #{AsyncSleep};
 
-                        let (conn, captured_request) = #{capture_request}(#{None});
+                        let (http_client, captured_request) = #{capture_request}(#{None});
                         let expected_url = "http://localhost:1234/";
                         let client_config = crate::config::Config::builder()
                             .endpoint_resolver(expected_url)
-                            .http_connector(#{NeverConnector}::new())
+                            .http_client(#{NeverClient}::new())
                             .build();
                         let client = crate::client::Client::from_conf(client_config.clone());
                         let sleep = #{TokioSleep}::new();
@@ -120,7 +120,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                             .customize()
                             .await
                             .unwrap()
-                            .config_override(crate::config::Config::builder().http_connector(conn))
+                            .config_override(crate::config::Config::builder().http_client(http_client))
                             .send();
 
                         let timeout = #{Timeout}::new(
@@ -144,11 +144,11 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         *codegenScope,
                         "AsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::AsyncSleep"),
                         "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-                        "NeverConnector" to RuntimeType.smithyClient(runtimeConfig)
-                            .resolve("never::NeverConnector"),
+                        "NeverClient" to CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
+                            .resolve("client::http::test_util::NeverClient"),
                         "Timeout" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::timeout::Timeout"),
-                        "TokioSleep" to RuntimeType.smithyAsync(runtimeConfig)
-                            .resolve("rt::sleep::TokioSleep"),
+                        "TokioSleep" to CargoDependency.smithyAsync(runtimeConfig).withFeature("rt-tokio")
+                            .toType().resolve("rt::sleep::TokioSleep"),
                     )
                 }
             }
