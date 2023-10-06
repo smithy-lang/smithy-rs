@@ -24,7 +24,7 @@ use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, OrchestratorError, SensitiveOutput,
 };
 use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
-use aws_smithy_runtime_api::client::retries::classifiers::{RetryAction, RetryClassifierPriority};
+use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
 use aws_smithy_types::config_bag::Layer;
 use aws_smithy_types::retry::{ErrorKind, RetryConfig};
@@ -185,32 +185,16 @@ fn parse_response(
 #[derive(Clone, Debug)]
 struct HttpCredentialRetryClassifier;
 
-impl HttpCredentialRetryClassifier {
-    /// Return the priority of this retry classifier.
-    fn priority() -> RetryClassifierPriority {
-        RetryClassifierPriority::default()
-    }
-}
-
 impl ClassifyRetry for HttpCredentialRetryClassifier {
     fn name(&self) -> &'static str {
         "HttpCredentialRetryClassifier"
     }
 
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        previous_action: Option<RetryAction>,
-    ) -> Option<RetryAction> {
-        if previous_action.is_some() {
-            // Never second-guess the action of a higher-priority classifier
-            return previous_action;
-        }
-
-        let output_or_error = ctx.output_or_error()?;
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        let output_or_error = ctx.output_or_error();
         let error = match output_or_error {
-            Ok(_) => return None,
-            Err(err) => err,
+            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Err(err)) => err,
         };
 
         // Retry non-parseable 200 responses
@@ -220,15 +204,11 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
             .zip(ctx.response().map(HttpResponse::status))
         {
             if matches!(err, CredentialsError::Unhandled { .. }) && status.is_success() {
-                return Some(RetryAction::Retry(ErrorKind::ServerError));
+                return RetryAction::Retry(ErrorKind::ServerError);
             }
         }
 
-        None
-    }
-
-    fn priority(&self) -> RetryClassifierPriority {
-        Self::priority()
+        RetryAction::DontCare
     }
 }
 
@@ -326,7 +306,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn explicit_error_not_retriable() {
+    async fn explicit_error_not_retryable() {
         let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
             Request::builder()
                 .uri(Uri::from_static("http://localhost:1234/some-creds"))

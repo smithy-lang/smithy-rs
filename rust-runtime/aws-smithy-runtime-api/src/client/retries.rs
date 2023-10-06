@@ -157,13 +157,9 @@ mod test_util {
     pub struct AlwaysRetry(pub ErrorKind);
 
     impl ClassifyRetry for AlwaysRetry {
-        fn classify_retry(
-            &self,
-            error: &InterceptorContext,
-            _: Option<RetryAction>,
-        ) -> Option<RetryAction> {
+        fn classify_retry(&self, error: &InterceptorContext) -> RetryAction {
             tracing::debug!("Retrying error {:?} as an {:?}", error, self.0);
-            Some(RetryAction::Retry(self.0))
+            RetryAction::Retry(self.0)
         }
 
         fn name(&self) -> &'static str {

@@ -4,9 +4,6 @@
  */
 
 use aws_smithy_http::http::HttpHeaders;
-use aws_smithy_runtime::client::retries::classifiers::{
-    ModeledAsRetryableClassifier, TransientErrorClassifier,
-};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::classifiers::{
@@ -57,31 +54,29 @@ impl<E> ClassifyRetry for AwsErrorCodeClassifier<E>
 where
     E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
 {
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        previous_action: Option<RetryAction>,
-    ) -> Option<RetryAction> {
-        if previous_action.is_some() {
-            // Never second-guess the action of a higher-priority classifier
-            return previous_action;
-        }
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        // Check for a result
+        let output_or_error = ctx.output_or_error();
+        // Check for an error
+        let error = match output_or_error {
+            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Err(err)) => err,
+        };
 
-        let error = ctx
-            .output_or_error()?
-            .err()
-            .and_then(OrchestratorError::as_operation_error)?
-            .downcast_ref::<E>()?;
+        let error_code = OrchestratorError::as_operation_error(error)
+            .and_then(|err| err.downcast_ref::<E>())
+            .and_then(|err| err.code());
 
-        if let Some(error_code) = error.code() {
+        if let Some(error_code) = error_code {
             if THROTTLING_ERRORS.contains(&error_code) {
-                return Some(RetryAction::Retry(ErrorKind::ThrottlingError));
-            } else if TRANSIENT_ERRORS.contains(&error_code) {
-                return Some(RetryAction::Retry(ErrorKind::TransientError));
+                return RetryAction::Retry(ErrorKind::ThrottlingError);
+            }
+            if TRANSIENT_ERRORS.contains(&error_code) {
+                return RetryAction::Retry(ErrorKind::TransientError);
             }
         };
 
-        None
+        RetryAction::DontCare
     }
 
     fn name(&self) -> &'static str {
@@ -89,7 +84,9 @@ where
     }
 
     fn priority(&self) -> RetryClassifierPriority {
-        RetryClassifierPriority::run_after(ModeledAsRetryableClassifier::<()>::priority())
+        RetryClassifierPriority::with_lower_priority_than(
+            RetryClassifierPriority::modeled_as_retryable_classifier(),
+        )
     }
 }
 
@@ -107,16 +104,7 @@ impl AmzRetryAfterHeaderClassifier {
 }
 
 impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        previous_action: Option<RetryAction>,
-    ) -> Option<RetryAction> {
-        if previous_action.is_some() {
-            // Never second-guess the action of a higher-priority classifier
-            return previous_action;
-        }
-
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         ctx.response()
             .and_then(|res| res.http_headers().get("x-amz-retry-after"))
             .and_then(|header| header.to_str().ok())
@@ -124,6 +112,7 @@ impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
             .map(|retry_after_delay| {
                 RetryAction::RetryAfter(std::time::Duration::from_millis(retry_after_delay))
             })
+            .unwrap_or(RetryAction::DontCare)
     }
 
     fn name(&self) -> &'static str {
@@ -131,7 +120,9 @@ impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
     }
 
     fn priority(&self) -> RetryClassifierPriority {
-        RetryClassifierPriority::run_after(TransientErrorClassifier::<()>::priority())
+        RetryClassifierPriority::with_lower_priority_than(
+            RetryClassifierPriority::transient_error_classifier(),
+        )
     }
 }
 
@@ -203,8 +194,8 @@ mod test {
         ))));
 
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::Retry(ErrorKind::ThrottlingError))
+            policy.classify_retry(&ctx),
+            RetryAction::Retry(ErrorKind::ThrottlingError)
         );
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
@@ -212,8 +203,8 @@ mod test {
             CodedError::new("RequestTimeout"),
         ))));
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::Retry(ErrorKind::TransientError))
+            policy.classify_retry(&ctx),
+            RetryAction::Retry(ErrorKind::TransientError)
         )
     }
 
@@ -228,8 +219,8 @@ mod test {
         ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
 
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::Retry(ErrorKind::ThrottlingError))
+            policy.classify_retry(&ctx),
+            RetryAction::Retry(ErrorKind::ThrottlingError)
         );
     }
 
@@ -248,8 +239,8 @@ mod test {
         ))));
 
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::RetryAfter(Duration::from_millis(5000))),
+            policy.classify_retry(&ctx),
+            RetryAction::RetryAfter(Duration::from_millis(5000))
         );
     }
 }

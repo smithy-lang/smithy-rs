@@ -7,8 +7,8 @@ use aws_sdk_s3::config::interceptors::InterceptorContext;
 use aws_sdk_s3::config::retry::{ClassifyRetry, RetryAction, RetryConfig};
 use aws_sdk_s3::config::SharedAsyncSleep;
 use aws_smithy_async::rt::sleep::TokioSleep;
-use aws_smithy_client::test_connection::TestConnection;
 use aws_smithy_http::body::SdkBody;
+use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
@@ -29,11 +29,7 @@ impl CustomRetryClassifier {
 }
 
 impl ClassifyRetry for CustomRetryClassifier {
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        _: Option<RetryAction>,
-    ) -> Option<RetryAction> {
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         *self.counter.lock().unwrap() += 1;
 
         // Interceptors may call this classifier before a response is received. If a response was received,
@@ -46,7 +42,7 @@ impl ClassifyRetry for CustomRetryClassifier {
             );
         }
 
-        Some(RetryAction::NoRetry)
+        RetryAction::RetryForbidden
     }
 
     fn name(&self) -> &'static str {
@@ -60,31 +56,34 @@ fn req() -> http::Request<SdkBody> {
         .unwrap()
 }
 
-fn ok() -> http::Response<&'static str> {
+fn ok() -> http::Response<SdkBody> {
     http::Response::builder()
         .status(200)
-        .body("Hello!")
+        .body(SdkBody::from("Hello!"))
         .unwrap()
 }
 
-fn err() -> http::Response<&'static str> {
+fn err() -> http::Response<SdkBody> {
     http::Response::builder()
         .status(500)
-        .body("This was an error")
+        .body(SdkBody::from("This was an error"))
         .unwrap()
 }
 
 #[tokio::test]
 async fn test_retry_classifier_customization() {
     tracing_subscriber::fmt::init();
-    let test_connection = TestConnection::new(vec![(req(), err()), (req(), ok())]);
+    let http_client = StaticReplayClient::new(vec![
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), ok()),
+    ]);
 
     let custom_retry_classifier = CustomRetryClassifier::new();
 
     let config = aws_sdk_s3::Config::builder()
         .with_test_defaults()
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-        .http_connector(test_connection)
+        .http_client(http_client)
         .retry_config(RetryConfig::standard())
         .retry_classifier(custom_retry_classifier.clone())
         .build();

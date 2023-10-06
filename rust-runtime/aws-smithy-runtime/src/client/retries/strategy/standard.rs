@@ -145,7 +145,7 @@ impl StandardRetryStrategy {
                     Ok(Duration::from_secs_f64(backoff).min(self.max_backoff))
                 }
             }
-            RetryAction::NoRetry => {
+            RetryAction::RetryForbidden => {
                 update_rate_limiter_if_exists(runtime_components, cfg, false);
                 debug!(
                     attempts = request_attempts,
@@ -440,20 +440,20 @@ mod tests {
     }
 
     impl ClassifyRetry for PresetReasonRetryClassifier {
-        fn classify_retry(
-            &self,
-            ctx: &InterceptorContext,
-            _: Option<RetryAction>,
-        ) -> Option<RetryAction> {
-            if ctx.output_or_error().map(|it| it.is_ok()).unwrap_or(false) {
-                return None;
-            }
+        fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+            // Check for a result
+            let output_or_error = ctx.output_or_error();
+            // Check for an error
+            match output_or_error {
+                Some(Ok(_)) | None => return RetryAction::DontCare,
+                _ => (),
+            };
 
             let mut retry_reasons = self.retry_reasons.lock().unwrap();
             if retry_reasons.len() == 1 {
-                Some(retry_reasons.first().unwrap().clone())
+                retry_reasons.first().unwrap().clone()
             } else {
-                retry_reasons.pop()
+                retry_reasons.pop().unwrap()
             }
         }
 

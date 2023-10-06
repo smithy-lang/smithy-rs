@@ -28,7 +28,7 @@ impl<E> ModeledAsRetryableClassifier<E> {
 
     /// Return the priority of this retry classifier.
     pub fn priority() -> RetryClassifierPriority {
-        RetryClassifierPriority::ModeledAsRetryableClassifier
+        RetryClassifierPriority::modeled_as_retryable_classifier()
     }
 }
 
@@ -36,29 +36,22 @@ impl<E> ClassifyRetry for ModeledAsRetryableClassifier<E>
 where
     E: StdError + ProvideErrorKind + Send + Sync + 'static,
 {
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        previous_action: Option<RetryAction>,
-    ) -> Option<RetryAction> {
-        if previous_action.is_some() {
-            // Never second-guess the action of a higher-priority classifier
-            return previous_action;
-        }
-
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         // Check for a result
-        let output_or_error = ctx.output_or_error()?;
+        let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Ok(_) => return None,
-            Err(err) => err,
+            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Err(err)) => err,
         };
         // Check that the error is an operation error
-        let error = error.as_operation_error()?;
-        // Downcast the error
-        let error = error.downcast_ref::<E>()?;
-        // Check if the error is retryable
-        error.retryable_error_kind().map(RetryAction::Retry)
+        error
+            .as_operation_error()
+            // Downcast the error
+            .and_then(|err| err.downcast_ref::<E>())
+            // Check if the error is retryable
+            .and_then(|err| err.retryable_error_kind().map(RetryAction::Retry))
+            .unwrap_or(RetryAction::DontCare)
     }
 
     fn name(&self) -> &'static str {
@@ -86,7 +79,7 @@ impl<E> TransientErrorClassifier<E> {
 
     /// Return the priority of this retry classifier.
     pub fn priority() -> RetryClassifierPriority {
-        RetryClassifierPriority::TransientErrorClassifier
+        RetryClassifierPriority::transient_error_classifier()
     }
 }
 
@@ -94,33 +87,28 @@ impl<E> ClassifyRetry for TransientErrorClassifier<E>
 where
     E: StdError + Send + Sync + 'static,
 {
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        previous_action: Option<RetryAction>,
-    ) -> Option<RetryAction> {
-        if previous_action.is_some() {
-            // Never second-guess the action of a higher-priority classifier
-            return previous_action;
-        }
-
-        let output_or_error = ctx.output_or_error()?;
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        // Check for a result
+        let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Ok(_) => return None,
-            Err(err) => err,
+            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Err(err)) => err,
         };
 
         if error.is_response_error() || error.is_timeout_error() {
-            Some(RetryAction::Retry(ErrorKind::TransientError))
+            RetryAction::Retry(ErrorKind::TransientError)
         } else if let Some(error) = error.as_connector_error() {
             if error.is_timeout() || error.is_io() {
-                Some(RetryAction::Retry(ErrorKind::TransientError))
+                RetryAction::Retry(ErrorKind::TransientError)
             } else {
-                error.as_other().map(RetryAction::Retry)
+                error
+                    .as_other()
+                    .map(RetryAction::Retry)
+                    .unwrap_or(RetryAction::DontCare)
             }
         } else {
-            None
+            RetryAction::DontCare
         }
     }
 
@@ -160,26 +148,23 @@ impl HttpStatusCodeClassifier {
 
     /// Return the priority of this retry classifier.
     pub fn priority() -> RetryClassifierPriority {
-        RetryClassifierPriority::HttpStatusCodeClassifier
+        RetryClassifierPriority::http_status_code_classifier()
     }
 }
 
 impl ClassifyRetry for HttpStatusCodeClassifier {
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        previous_action: Option<RetryAction>,
-    ) -> Option<RetryAction> {
-        if previous_action.is_some() {
-            // Never second-guess the action of a higher-priority classifier
-            return previous_action;
-        }
-
-        ctx.response()
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        let is_retryable = ctx
+            .response()
             .map(|res| res.status().as_u16())
             .map(|status| self.retryable_status_codes.contains(&status))
-            .unwrap_or_default()
-            .then_some(RetryAction::Retry(ErrorKind::TransientError))
+            .unwrap_or_default();
+
+        if is_retryable {
+            RetryAction::Retry(ErrorKind::TransientError)
+        } else {
+            RetryAction::DontCare
+        }
     }
 
     fn name(&self) -> &'static str {
@@ -198,23 +183,33 @@ pub fn run_classifiers_on_ctx(
     classifiers: impl Iterator<Item = SharedRetryClassifier>,
     ctx: &InterceptorContext,
 ) -> RetryAction {
-    let mut result = None;
+    // By default, don't retry
+    let mut result = RetryAction::DontCare;
 
     for classifier in classifiers {
-        let new_result = classifier.classify_retry(ctx, result.clone());
+        let new_result = classifier.classify_retry(ctx);
 
-        // Emit a log whenever a new result overrides the result of a higher-priority classifier.
-        if new_result != result && new_result.is_none() {
-            tracing::debug!(
-                "Classifier '{}' has overridden the result of a higher-priority classifier",
-                classifier.name()
-            );
+        // If the result is `DontCare`, continue to the next classifier
+        // without overriding any previously-set result.
+        if new_result == RetryAction::DontCare {
+            continue;
         }
 
+        // Otherwise, set the result to the new result.
+        tracing::trace!(
+            "Classifier '{}' set the result of classification to '{}'",
+            classifier.name(),
+            new_result
+        );
         result = new_result;
+
+        // If the result is `RetryForbidden`, stop running classifiers.
+        if result == RetryAction::RetryForbidden {
+            break;
+        }
     }
 
-    result.unwrap_or(RetryAction::NoRetry)
+    result
 }
 
 #[cfg(test)]
@@ -253,8 +248,8 @@ mod test {
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::Retry(ErrorKind::TransientError))
+            policy.classify_retry(&ctx),
+            RetryAction::Retry(ErrorKind::TransientError)
         );
     }
 
@@ -268,7 +263,7 @@ mod test {
             .map(SdkBody::from);
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
-        assert_eq!(policy.classify_retry(&ctx, None), None);
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::DontCare);
     }
 
     #[test]
@@ -302,8 +297,8 @@ mod test {
         ))));
 
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::Retry(ErrorKind::ClientError)),
+            policy.classify_retry(&ctx),
+            RetryAction::Retry(ErrorKind::ClientError),
         );
     }
 
@@ -315,8 +310,8 @@ mod test {
             "I am a response error".into(),
         )));
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::Retry(ErrorKind::TransientError)),
+            policy.classify_retry(&ctx),
+            RetryAction::Retry(ErrorKind::TransientError),
         );
     }
 
@@ -328,8 +323,8 @@ mod test {
             "I am a timeout error".into(),
         )));
         assert_eq!(
-            policy.classify_retry(&ctx, None),
-            Some(RetryAction::Retry(ErrorKind::TransientError)),
+            policy.classify_retry(&ctx),
+            RetryAction::Retry(ErrorKind::TransientError),
         );
     }
 }

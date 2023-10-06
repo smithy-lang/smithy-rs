@@ -57,30 +57,32 @@ impl std::error::Error for OperationError {}
 struct TestRetryClassifier;
 
 impl ClassifyRetry for TestRetryClassifier {
-    fn classify_retry(
-        &self,
-        ctx: &InterceptorContext,
-        previous_action: Option<RetryAction>,
-    ) -> Option<RetryAction> {
-        if previous_action.is_some() {
-            // Never second-guess the action of a higher-priority classifier
-            return previous_action;
-        }
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         tracing::info!("classifying retry for {ctx:?}");
-        let classification = ctx.output_or_error().unwrap().err().and_then(|err| {
-            if let Some(err) = err.as_operation_error() {
-                tracing::info!("its an operation error: {err:?}");
-                let err = err.downcast_ref::<OperationError>().unwrap();
-                Some(RetryAction::Retry(err.0))
+        // Check for a result
+        let output_or_error = ctx.output_or_error();
+        // Check for an error
+        let error = match output_or_error {
+            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Err(err)) => err,
+        };
+
+        let action = if let Some(err) = error.as_operation_error() {
+            tracing::info!("its an operation error: {err:?}");
+            let err = err.downcast_ref::<OperationError>().unwrap();
+            RetryAction::Retry(err.0)
+        } else {
+            tracing::info!("its something else... using other classifiers");
+            let action = TransientErrorClassifier::<OperationError>::new().classify_retry(ctx);
+            if action == RetryAction::DontCare {
+                HttpStatusCodeClassifier::default().classify_retry(ctx)
             } else {
-                tracing::info!("its something else... using other classifiers");
-                TransientErrorClassifier::<OperationError>::new()
-                    .classify_retry(ctx, None)
-                    .or_else(|| HttpStatusCodeClassifier::default().classify_retry(ctx, None))
+                action
             }
-        });
-        tracing::info!("classified as {classification:?}");
-        classification
+        };
+
+        tracing::info!("classified as {action:?}");
+        action
     }
 
     fn name(&self) -> &'static str {
