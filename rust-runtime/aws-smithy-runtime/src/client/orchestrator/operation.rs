@@ -4,6 +4,7 @@
  */
 
 use crate::client::auth::no_auth::{NoAuthScheme, NO_AUTH_SCHEME_ID};
+use crate::client::connectors::connection_poisoning::ConnectionPoisoningInterceptor;
 use crate::client::identity::no_auth::NoAuthIdentityResolver;
 use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
 use crate::client::retries::strategy::{NeverRetryStrategy, StandardRetryStrategy};
@@ -256,6 +257,11 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn interceptor(mut self, interceptor: impl IntoShared<SharedInterceptor>) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
+    }
+
+    /// Registers the [`ConnectionPoisoningInterceptor`].
+    pub fn with_connection_poisoning(self) -> Self {
+        self.interceptor(ConnectionPoisoningInterceptor::new())
     }
 
     pub fn runtime_plugin(mut self, runtime_plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {

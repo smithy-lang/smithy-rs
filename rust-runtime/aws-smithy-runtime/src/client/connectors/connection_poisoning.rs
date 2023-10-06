@@ -7,7 +7,7 @@ use crate::client::retries::classifiers::run_classifiers_on_ctx;
 use aws_smithy_http::connection::{CaptureSmithyConnection, ConnectionMetadata};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
+    AfterDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
@@ -62,9 +62,9 @@ impl Interceptor for ConnectionPoisoningInterceptor {
         Ok(())
     }
 
-    fn modify_before_deserialization(
+    fn read_after_deserialization(
         &self,
-        context: &mut BeforeDeserializationInterceptorContextMut<'_>,
+        context: &AfterDeserializationInterceptorContextRef<'_>,
         runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
@@ -77,6 +77,7 @@ impl Interceptor for ConnectionPoisoningInterceptor {
             run_classifiers_on_ctx(runtime_components.retry_classifiers(), context.inner_mut());
         let error_is_transient =
             retry_classifier_result == RetryAction::Error(ErrorKind::TransientError);
+
         let connection_poisoning_is_enabled =
             reconnect_mode == ReconnectMode::ReconnectOnTransientError;
 

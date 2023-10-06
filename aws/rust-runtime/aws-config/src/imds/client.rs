@@ -455,6 +455,7 @@ impl Builder {
                 config.time_source(),
                 self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
             ))
+            .with_connection_poisoning()
             .serializer(|path| {
                 Ok(http::Request::builder()
                     .uri(path)
