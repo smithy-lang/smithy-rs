@@ -219,6 +219,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     }
 
     pub fn standard_retry(mut self, retry_config: &RetryConfig) -> Self {
+        self.config.store_put(retry_config.clone());
         self.runtime_components
             .set_retry_strategy(Some(SharedRetryStrategy::new(StandardRetryStrategy::new(
                 retry_config,
