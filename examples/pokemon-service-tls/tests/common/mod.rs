@@ -6,7 +6,7 @@
 use std::{fs::File, io::BufReader, process::Command, time::Duration};
 
 use assert_cmd::prelude::*;
-use aws_smithy_client::hyper_ext::Adapter;
+use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use tokio::time::sleep;
 
 use pokemon_service_client::{Client, Config};
@@ -44,7 +44,7 @@ pub fn client_http2_only() -> Client {
         .build();
 
     let config = Config::builder()
-        .http_connector(Adapter::builder().build(connector))
+        .http_client(HyperClientBuilder::new().build(connector))
         .endpoint_url(format!("https://{DEFAULT_DOMAIN}:{DEFAULT_PORT}"))
         .build();
     Client::from_conf(config)
@@ -74,7 +74,7 @@ fn native_tls_connector() -> NativeTlsConnector {
 
 pub fn native_tls_client() -> Client {
     let config = Config::builder()
-        .http_connector(Adapter::builder().build(native_tls_connector()))
+        .http_client(HyperClientBuilder::new().build(native_tls_connector()))
         .endpoint_url(format!("https://{DEFAULT_DOMAIN}:{DEFAULT_PORT}"))
         .build();
     Client::from_conf(config)

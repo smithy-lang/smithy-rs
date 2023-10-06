@@ -7,14 +7,19 @@ use super::{Action, ConnectionId, Direction, Event, NetworkTraffic};
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::ConnectorError;
 use aws_smithy_protocol_test::MediaType;
-use aws_smithy_runtime_api::client::connectors::{HttpConnector, HttpConnectorFuture};
+use aws_smithy_runtime_api::client::http::{
+    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
+};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use bytes::{Bytes, BytesMut};
 use http::{Request, Version};
 use http_body::Body;
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
+use std::fmt;
 use std::ops::DerefMut;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -46,16 +51,25 @@ impl<T> Waitable<T> {
     }
 }
 
-/// Replay traffic recorded by a [`RecordingConnector`](super::RecordingConnector)
-#[derive(Clone, Debug)]
-pub struct ReplayingConnector {
+/// Replay traffic recorded by a [`RecordingClient`](super::RecordingClient)
+#[derive(Clone)]
+pub struct ReplayingClient {
     live_events: Arc<Mutex<HashMap<ConnectionId, VecDeque<Event>>>>,
     verifiable_events: Arc<HashMap<ConnectionId, Request<Bytes>>>,
     num_events: Arc<AtomicUsize>,
     recorded_requests: Arc<Mutex<HashMap<ConnectionId, Waitable<http::Request<Bytes>>>>>,
 }
 
-impl ReplayingConnector {
+// Ideally, this would just derive Debug, but that makes the tests in aws-config think they found AWS secrets
+// when really it's just the test response data they're seeing from the Debug impl of this client.
+// This is just a quick workaround. A better fix can be considered later.
+impl fmt::Debug for ReplayingClient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("test_util::dvr::ReplayingClient")
+    }
+}
+
+impl ReplayingClient {
     fn next_id(&self) -> ConnectionId {
         ConnectionId(self.num_events.fetch_add(1, Ordering::Relaxed))
     }
@@ -204,7 +218,7 @@ impl ReplayingConnector {
             .collect();
         let verifiable_events = Arc::new(verifiable_events);
 
-        ReplayingConnector {
+        ReplayingClient {
             live_events: Arc::new(Mutex::new(event_map)),
             num_events: Arc::new(AtomicUsize::new(0)),
             recorded_requests: Default::default(),
@@ -263,7 +277,7 @@ fn convert_version(version: &str) -> Version {
     }
 }
 
-impl HttpConnector for ReplayingConnector {
+impl HttpConnector for ReplayingClient {
     fn call(&self, mut request: HttpRequest) -> HttpConnectorFuture {
         let event_id = self.next_id();
         tracing::debug!("received event {}: {request:?}", event_id.0);
@@ -347,5 +361,15 @@ impl HttpConnector for ReplayingConnector {
             resp
         };
         HttpConnectorFuture::new(fut)
+    }
+}
+
+impl HttpClient for ReplayingClient {
+    fn http_connector(
+        &self,
+        _: &HttpConnectorSettings,
+        _: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        self.clone().into_shared()
     }
 }

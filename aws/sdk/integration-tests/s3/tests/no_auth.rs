@@ -3,17 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_client::dvr::ReplayingConnection;
 use aws_smithy_protocol_test::MediaType;
+use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 
 #[tokio::test]
 async fn list_objects() {
     let _logs = capture_test_logs();
 
-    let conn = ReplayingConnection::from_file("tests/data/no_auth/list-objects.json").unwrap();
+    let http_client = ReplayingClient::from_file("tests/data/no_auth/list-objects.json").unwrap();
     let config = aws_config::from_env()
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .no_credentials()
         .region("us-east-1")
         .load()
@@ -33,7 +33,8 @@ async fn list_objects() {
         .await;
     dbg!(result).expect("success");
 
-    conn.validate_body_and_headers(None, MediaType::Xml)
+    http_client
+        .validate_body_and_headers(None, MediaType::Xml)
         .await
         .unwrap();
 }
@@ -42,9 +43,10 @@ async fn list_objects() {
 async fn list_objects_v2() {
     let _logs = capture_test_logs();
 
-    let conn = ReplayingConnection::from_file("tests/data/no_auth/list-objects-v2.json").unwrap();
+    let http_client =
+        ReplayingClient::from_file("tests/data/no_auth/list-objects-v2.json").unwrap();
     let config = aws_config::from_env()
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .no_credentials()
         .region("us-east-1")
         .load()
@@ -64,7 +66,8 @@ async fn list_objects_v2() {
         .await;
     dbg!(result).expect("success");
 
-    conn.validate_body_and_headers(None, MediaType::Xml)
+    http_client
+        .validate_body_and_headers(None, MediaType::Xml)
         .await
         .unwrap();
 }
@@ -73,9 +76,9 @@ async fn list_objects_v2() {
 async fn head_object() {
     let _logs = capture_test_logs();
 
-    let conn = ReplayingConnection::from_file("tests/data/no_auth/head-object.json").unwrap();
+    let http_client = ReplayingClient::from_file("tests/data/no_auth/head-object.json").unwrap();
     let config = aws_config::from_env()
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .no_credentials()
         .region("us-east-1")
         .load()
@@ -95,7 +98,8 @@ async fn head_object() {
         .await;
     dbg!(result).expect("success");
 
-    conn.validate_body_and_headers(None, MediaType::Xml)
+    http_client
+        .validate_body_and_headers(None, MediaType::Xml)
         .await
         .unwrap();
 }
@@ -104,9 +108,9 @@ async fn head_object() {
 async fn get_object() {
     let _logs = capture_test_logs();
 
-    let conn = ReplayingConnection::from_file("tests/data/no_auth/get-object.json").unwrap();
+    let http_client = ReplayingClient::from_file("tests/data/no_auth/get-object.json").unwrap();
     let config = aws_config::from_env()
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .no_credentials()
         .region("us-east-1")
         .load()
@@ -126,7 +130,8 @@ async fn get_object() {
         .await;
     dbg!(result).expect("success");
 
-    conn.validate_body_and_headers(None, MediaType::Xml)
+    http_client
+        .validate_body_and_headers(None, MediaType::Xml)
         .await
         .unwrap();
 }

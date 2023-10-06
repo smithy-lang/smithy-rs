@@ -17,9 +17,12 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 class HttpAuthDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
-        "TestConnection" to CargoDependency.smithyClient(runtimeConfig)
+        "ReplayEvent" to CargoDependency.smithyRuntime(runtimeConfig)
             .toDevDependency().withFeature("test-util").toType()
-            .resolve("test_connection::TestConnection"),
+            .resolve("client::http::test_util::ReplayEvent"),
+        "StaticReplayClient" to CargoDependency.smithyRuntime(runtimeConfig)
+            .toDevDependency().withFeature("test-util").toType()
+            .resolve("client::http::test_util::StaticReplayClient"),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
     )
 
@@ -34,25 +37,27 @@ class HttpAuthDecoratorTest {
                     async fn use_api_key_auth_when_api_key_provided() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
 
                         let config = $moduleName::Config::builder()
                             .api_key(Token::new("some-api-key", None))
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
                             .expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
@@ -63,26 +68,28 @@ class HttpAuthDecoratorTest {
                     async fn use_basic_auth_when_basic_auth_login_provided() {
                         use aws_smithy_runtime_api::client::identity::http::Login;
 
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
-                                .uri("http://localhost:1234/SomeOperation")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
+                                    .uri("http://localhost:1234/SomeOperation")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
 
                         let config = $moduleName::Config::builder()
                             .basic_auth_login(Login::new("some-user", "some-pass", None))
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
                             .expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
@@ -102,25 +109,27 @@ class HttpAuthDecoratorTest {
                     async fn api_key_applied_to_query_string() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .uri("http://localhost:1234/SomeOperation?api_key=some-api-key")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
 
                         let config = $moduleName::Config::builder()
                             .api_key(Token::new("some-api-key", None))
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
                             .expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
@@ -140,26 +149,28 @@ class HttpAuthDecoratorTest {
                     async fn api_key_applied_to_headers() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .header("authorization", "ApiKey some-api-key")
-                                .uri("http://localhost:1234/SomeOperation")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .header("authorization", "ApiKey some-api-key")
+                                    .uri("http://localhost:1234/SomeOperation")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
 
                         let config = $moduleName::Config::builder()
                             .api_key(Token::new("some-api-key", None))
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
                             .expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
@@ -179,26 +190,28 @@ class HttpAuthDecoratorTest {
                     async fn basic_auth() {
                         use aws_smithy_runtime_api::client::identity::http::Login;
 
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
-                                .uri("http://localhost:1234/SomeOperation")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
+                                    .uri("http://localhost:1234/SomeOperation")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
 
                         let config = $moduleName::Config::builder()
                             .basic_auth_login(Login::new("some-user", "some-pass", None))
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
                             .expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
@@ -218,26 +231,28 @@ class HttpAuthDecoratorTest {
                     async fn basic_auth() {
                         use aws_smithy_runtime_api::client::identity::http::Token;
 
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .header("authorization", "Bearer some-token")
-                                .uri("http://localhost:1234/SomeOperation")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .header("authorization", "Bearer some-token")
+                                    .uri("http://localhost:1234/SomeOperation")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
 
                         let config = $moduleName::Config::builder()
                             .bearer_token(Token::new("some-token", None))
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
                             .expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
@@ -255,24 +270,26 @@ class HttpAuthDecoratorTest {
                 rustTemplate(
                     """
                     async fn optional_auth() {
-                        let connector = #{TestConnection}::new(vec![(
-                            http::Request::builder()
-                                .uri("http://localhost:1234/SomeOperation")
-                                .body(#{SdkBody}::empty())
-                                .unwrap(),
-                            http::Response::builder().status(200).body("").unwrap(),
-                        )]);
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .uri("http://localhost:1234/SomeOperation")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
 
                         let config = $moduleName::Config::builder()
                             .endpoint_resolver("http://localhost:1234")
-                            .http_connector(connector.clone())
+                            .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         let _ = client.some_operation()
                             .send()
                             .await
                             .expect("success");
-                        connector.assert_requests_match(&[]);
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     *codegenScope(codegenContext.runtimeConfig),

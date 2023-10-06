@@ -18,12 +18,12 @@ mod record;
 mod replay;
 
 pub use aws_smithy_protocol_test::MediaType;
-pub use record::RecordingConnector;
-pub use replay::ReplayingConnector;
+pub use record::RecordingClient;
+pub use replay::ReplayingClient;
 
 /// A complete traffic recording
 ///
-/// A traffic recording can be replayed with [`RecordingConnector`](RecordingConnector)
+/// A traffic recording can be replayed with [`RecordingClient`](RecordingClient)
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NetworkTraffic {
     events: Vec<Event>,
@@ -232,7 +232,7 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::byte_stream::ByteStream;
-    use aws_smithy_runtime_api::client::connectors::{HttpConnector, SharedHttpConnector};
+    use aws_smithy_runtime_api::client::http::{HttpConnector, SharedHttpConnector};
     use bytes::Bytes;
     use http::Uri;
     use std::error::Error;
@@ -244,8 +244,8 @@ mod tests {
         // make a request, then verify that the same traffic was recorded.
         let network_traffic = fs::read_to_string("test-data/example.com.json")?;
         let network_traffic: NetworkTraffic = serde_json::from_str(&network_traffic)?;
-        let inner = ReplayingConnector::new(network_traffic.events.clone());
-        let connection = RecordingConnector::new(SharedHttpConnector::new(inner.clone()));
+        let inner = ReplayingClient::new(network_traffic.events.clone());
+        let connection = RecordingClient::new(SharedHttpConnector::new(inner.clone()));
         let req = http::Request::post("https://www.example.com")
             .body(SdkBody::from("hello world"))
             .unwrap();

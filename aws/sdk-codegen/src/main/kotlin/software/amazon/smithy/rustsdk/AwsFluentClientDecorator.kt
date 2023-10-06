@@ -66,8 +66,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }
-        val awsSmithyClient = "aws-smithy-client"
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsSmithyClient/rustls")))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
     }
 
     override fun libRsCustomizations(
@@ -99,7 +98,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                 let mut ${params.configBuilderName} = ${params.configBuilderName};
                 ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
 
-                let config = ${params.configBuilderName}.http_connector(${params.connectorName}).build();
+                let config = ${params.configBuilderName}.http_client(${params.httpClientName}).build();
                 let ${params.clientName} = #{Client}::from_conf(config);
                 """,
                 "Client" to ClientRustModule.root.toType().resolve("Client"),

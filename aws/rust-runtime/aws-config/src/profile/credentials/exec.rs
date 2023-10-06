@@ -198,7 +198,7 @@ mod test {
     use crate::profile::credentials::exec::ProviderChain;
     use crate::profile::credentials::repr::{BaseProvider, ProfileChain};
     use crate::provider_config::ProviderConfig;
-    use crate::test_case::no_traffic_connector;
+    use crate::test_case::no_traffic_client;
 
     use aws_credential_types::Credentials;
     use std::collections::HashMap;
@@ -222,7 +222,7 @@ mod test {
     fn error_on_unknown_provider() {
         let factory = NamedProviderFactory::new(HashMap::new());
         let chain = ProviderChain::from_repr(
-            &ProviderConfig::empty().with_http_connector(no_traffic_connector()),
+            &ProviderConfig::empty().with_http_client(no_traffic_client()),
             ProfileChain {
                 base: BaseProvider::NamedSource("floozle"),
                 chain: vec![],
