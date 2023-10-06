@@ -46,7 +46,7 @@ impl ClassifyRetry for CustomRetryClassifier {
             );
         }
 
-        Some(RetryAction::DontRetry)
+        Some(RetryAction::NoRetry)
     }
 
     fn name(&self) -> &'static str {

@@ -223,7 +223,7 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
             .zip(ctx.response().map(HttpResponse::status))
         {
             if matches!(err, CredentialsError::Unhandled { .. }) && status.is_success() {
-                return Some(RetryAction::Error(ErrorKind::ServerError));
+                return Some(RetryAction::Retry(ErrorKind::ServerError));
             }
         }
 

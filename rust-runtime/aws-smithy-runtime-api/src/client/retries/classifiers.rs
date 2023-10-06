@@ -16,21 +16,20 @@ use std::time::Duration;
 #[non_exhaustive]
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum RetryAction {
-    /// "A retryable error was received. This is what kind of error it was,
-    /// in case that's important."
-    Error(ErrorKind),
-    /// "The server told us to wait this long before retrying the request."
-    Explicit(Duration),
-    /// "This response should not be retried."
-    DontRetry,
+    /// When an error is received that should be retried, this action is returned.
+    Retry(ErrorKind),
+    /// When the server tells us to retry after a specific time has elapsed, this action is returned.
+    RetryAfter(Duration),
+    /// When a response should not be retried, this action is returned.
+    NoRetry,
 }
 
 impl fmt::Display for RetryAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Error(kind) => write!(f, "retry ({kind})"),
-            Self::Explicit(duration) => write!(f, "retry after {duration:?}"),
-            Self::DontRetry => write!(f, "don't retry"),
+            Self::Retry(kind) => write!(f, "retry ({kind})"),
+            Self::RetryAfter(duration) => write!(f, "retry after {duration:?}"),
+            Self::NoRetry => write!(f, "don't retry"),
         }
     }
 }

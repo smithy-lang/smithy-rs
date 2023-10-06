@@ -111,8 +111,8 @@ impl StandardRetryStrategy {
         let token_bucket = cfg.load::<TokenBucket>();
 
         match retry_reason {
-            RetryAction::Explicit(backoff) => Ok(*backoff),
-            RetryAction::Error(kind) => {
+            RetryAction::RetryAfter(backoff) => Ok(*backoff),
+            RetryAction::Retry(kind) => {
                 update_rate_limiter_if_exists(
                     runtime_components,
                     cfg,
@@ -145,7 +145,7 @@ impl StandardRetryStrategy {
                     Ok(Duration::from_secs_f64(backoff).min(self.max_backoff))
                 }
             }
-            RetryAction::DontRetry => {
+            RetryAction::NoRetry => {
                 update_rate_limiter_if_exists(runtime_components, cfg, false);
                 debug!(
                     attempts = request_attempts,
@@ -483,7 +483,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn eventual_success() {
-        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -513,7 +513,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_more_attempts() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(3);
@@ -541,7 +541,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_quota() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -564,8 +564,8 @@ mod tests {
     #[test]
     fn quota_replenishes_on_success() {
         let (mut cfg, rc, mut ctx) = setup_test(vec![
-            RetryAction::Error(ErrorKind::TransientError),
-            RetryAction::Explicit(Duration::from_secs(1)),
+            RetryAction::Retry(ErrorKind::TransientError),
+            RetryAction::RetryAfter(Duration::from_secs(1)),
         ]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
@@ -599,7 +599,7 @@ mod tests {
     fn quota_replenishes_on_first_try_success() {
         const PERMIT_COUNT: usize = 20;
         let (mut cfg, rc, mut ctx) =
-            setup_test(vec![RetryAction::Error(ErrorKind::TransientError)]);
+            setup_test(vec![RetryAction::Retry(ErrorKind::TransientError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(u32::MAX);
@@ -649,7 +649,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn backoff_timing() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -689,7 +689,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn max_backoff_time() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Error(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5)

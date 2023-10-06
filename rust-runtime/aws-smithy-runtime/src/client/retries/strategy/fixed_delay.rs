@@ -77,9 +77,9 @@ impl RetryStrategy for FixedDelayRetryStrategy {
         let classifier_result = run_classifiers_on_ctx(retry_classifiers, ctx);
 
         let backoff = match classifier_result {
-            RetryAction::Explicit(_) => self.fixed_delay,
-            RetryAction::Error(_) => self.fixed_delay,
-            RetryAction::DontRetry => {
+            RetryAction::RetryAfter(_) => self.fixed_delay,
+            RetryAction::Retry(_) => self.fixed_delay,
+            RetryAction::NoRetry => {
                 debug!(
                     attempts = request_attempts.attempts(),
                     max_attempts = self.max_attempts,

@@ -75,9 +75,9 @@ where
 
         if let Some(error_code) = error.code() {
             if THROTTLING_ERRORS.contains(&error_code) {
-                return Some(RetryAction::Error(ErrorKind::ThrottlingError));
+                return Some(RetryAction::Retry(ErrorKind::ThrottlingError));
             } else if TRANSIENT_ERRORS.contains(&error_code) {
-                return Some(RetryAction::Error(ErrorKind::TransientError));
+                return Some(RetryAction::Retry(ErrorKind::TransientError));
             }
         };
 
@@ -121,7 +121,7 @@ impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
             .and_then(|header| header.to_str().ok())
             .and_then(|header| header.parse::<u64>().ok())
             .map(|retry_after_delay| {
-                RetryAction::Explicit(std::time::Duration::from_millis(retry_after_delay))
+                RetryAction::RetryAfter(std::time::Duration::from_millis(retry_after_delay))
             })
     }
 
@@ -203,7 +203,7 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Error(ErrorKind::ThrottlingError))
+            Some(RetryAction::Retry(ErrorKind::ThrottlingError))
         );
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
@@ -212,7 +212,7 @@ mod test {
         ))));
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Error(ErrorKind::TransientError))
+            Some(RetryAction::Retry(ErrorKind::TransientError))
         )
     }
 
@@ -228,7 +228,7 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Error(ErrorKind::ThrottlingError))
+            Some(RetryAction::Retry(ErrorKind::ThrottlingError))
         );
     }
 
@@ -248,7 +248,7 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Explicit(Duration::from_millis(5000))),
+            Some(RetryAction::RetryAfter(Duration::from_millis(5000))),
         );
     }
 }

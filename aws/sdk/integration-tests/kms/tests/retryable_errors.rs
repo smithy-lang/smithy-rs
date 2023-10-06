@@ -52,7 +52,7 @@ async fn errors_are_retryable() {
     ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
     let retry_kind = classifier.classify_retry(&ctx, None);
     assert_eq!(
-        Some(RetryAction::Error(ErrorKind::ThrottlingError)),
+        Some(RetryAction::Retry(ErrorKind::ThrottlingError)),
         retry_kind
     );
 }
@@ -74,7 +74,7 @@ async fn unmodeled_errors_are_retryable() {
     ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
     let retry_kind = classifier.classify_retry(&ctx, None);
     assert_eq!(
-        Some(RetryAction::Error(ErrorKind::ThrottlingError)),
+        Some(RetryAction::Retry(ErrorKind::ThrottlingError)),
         retry_kind
     );
 }

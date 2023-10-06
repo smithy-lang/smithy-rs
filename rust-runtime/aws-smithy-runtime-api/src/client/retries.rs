@@ -163,7 +163,7 @@ mod test_util {
             _: Option<RetryAction>,
         ) -> Option<RetryAction> {
             tracing::debug!("Retrying error {:?} as an {:?}", error, self.0);
-            Some(RetryAction::Error(self.0))
+            Some(RetryAction::Retry(self.0))
         }
 
         fn name(&self) -> &'static str {

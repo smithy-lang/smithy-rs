@@ -58,7 +58,7 @@ where
         // Downcast the error
         let error = error.downcast_ref::<E>()?;
         // Check if the error is retryable
-        error.retryable_error_kind().map(RetryAction::Error)
+        error.retryable_error_kind().map(RetryAction::Retry)
     }
 
     fn name(&self) -> &'static str {
@@ -112,12 +112,12 @@ where
         };
 
         if error.is_response_error() || error.is_timeout_error() {
-            Some(RetryAction::Error(ErrorKind::TransientError))
+            Some(RetryAction::Retry(ErrorKind::TransientError))
         } else if let Some(error) = error.as_connector_error() {
             if error.is_timeout() || error.is_io() {
-                Some(RetryAction::Error(ErrorKind::TransientError))
+                Some(RetryAction::Retry(ErrorKind::TransientError))
             } else {
-                error.as_other().map(RetryAction::Error)
+                error.as_other().map(RetryAction::Retry)
             }
         } else {
             None
@@ -179,7 +179,7 @@ impl ClassifyRetry for HttpStatusCodeClassifier {
             .map(|res| res.status().as_u16())
             .map(|status| self.retryable_status_codes.contains(&status))
             .unwrap_or_default()
-            .then_some(RetryAction::Error(ErrorKind::TransientError))
+            .then_some(RetryAction::Retry(ErrorKind::TransientError))
     }
 
     fn name(&self) -> &'static str {
@@ -214,7 +214,7 @@ pub fn run_classifiers_on_ctx(
         result = new_result;
     }
 
-    result.unwrap_or(RetryAction::DontRetry)
+    result.unwrap_or(RetryAction::NoRetry)
 }
 
 #[cfg(test)]
@@ -254,7 +254,7 @@ mod test {
         ctx.set_response(res);
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Error(ErrorKind::TransientError))
+            Some(RetryAction::Retry(ErrorKind::TransientError))
         );
     }
 
@@ -303,7 +303,7 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Error(ErrorKind::ClientError)),
+            Some(RetryAction::Retry(ErrorKind::ClientError)),
         );
     }
 
@@ -316,7 +316,7 @@ mod test {
         )));
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Error(ErrorKind::TransientError)),
+            Some(RetryAction::Retry(ErrorKind::TransientError)),
         );
     }
 
@@ -329,7 +329,7 @@ mod test {
         )));
         assert_eq!(
             policy.classify_retry(&ctx, None),
-            Some(RetryAction::Error(ErrorKind::TransientError)),
+            Some(RetryAction::Retry(ErrorKind::TransientError)),
         );
     }
 }
