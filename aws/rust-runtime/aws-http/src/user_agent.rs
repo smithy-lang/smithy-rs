@@ -13,9 +13,9 @@ use std::fmt;
 
 /// AWS User Agent
 ///
-/// Ths struct should be inserted into the [`PropertyBag`](aws_smithy_http::operation::Request::properties)
-/// during operation construction. [`UserAgentStage`](UserAgentStage) reads `AwsUserAgent`
-/// from the property bag and sets the `User-Agent` and `x-amz-user-agent` headers.
+/// Ths struct should be inserted into the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag)
+/// during operation construction. The `UserAgentInterceptor` reads `AwsUserAgent`
+/// from the config bag and sets the `User-Agent` and `x-amz-user-agent` headers.
 #[derive(Clone, Debug)]
 pub struct AwsUserAgent {
     sdk_metadata: SdkMetadata,
