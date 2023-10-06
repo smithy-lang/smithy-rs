@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! `Result` wrapper types for [success](SdkSuccess) and [failure](SdkError) responses.
+//! Types for [error](SdkError) responses.
 
 use crate::body::SdkBody;
 use crate::connection::ConnectionMetadata;

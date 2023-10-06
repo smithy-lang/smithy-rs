@@ -11,7 +11,7 @@ use std::borrow::Cow;
 
 pub mod error;
 
-/// Metadata attached to an [`Operation`] that identifies the API being called.
+/// Metadata added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) that identifies the API being called.
 #[derive(Clone, Debug)]
 pub struct Metadata {
     operation: Cow<'static, str>,
