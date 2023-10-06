@@ -709,7 +709,7 @@ impl GetIdentityResolver for RuntimeComponents {
 
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
-    use crate::client::runtime_components::{RuntimeComponentsBuilder, Tracked};
+    use super::{BuildError, RuntimeComponentsBuilder, Tracked};
 
     #[test]
     #[allow(unreachable_pub)]
