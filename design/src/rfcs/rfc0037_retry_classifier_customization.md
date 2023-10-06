@@ -116,14 +116,14 @@ In order to implement this feature, we must:
 /// The result of running a [`ClassifyRetry`] on a [`InterceptorContext`].
 #[non_exhaustive]
 #[derive(Clone, Eq, PartialEq, Debug)]
-pub enum RetryClassifierResult {
+pub enum RetryAction {
     /// "A retryable error was received. This is what kind of error it was,
     /// in case that's important."
-    Error(ErrorKind),
+    Retry(ErrorKind),
     /// "The server told us to wait this long before retrying the request."
-    Explicit(Duration),
+    RetryAfter(Duration),
     /// "This response should not be retried."
-    DontRetry,
+    NoRetry,
 }
 
 /// Classifies what kind of retry is needed for a given [`InterceptorContext`].  
