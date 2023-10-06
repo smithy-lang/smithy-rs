@@ -279,3 +279,9 @@ message = "STS and SSO-based credential providers will now respect both `use_fip
 references = ["aws-sdk-rust#882", "smithy-rs#3007"]
 meta = { "breaking" = true, "tada" = true, "bug" = true }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "`SdkError` is no longer re-exported in generated server crates."
+references = ["smithy-rs#3038"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "jdisanti"
