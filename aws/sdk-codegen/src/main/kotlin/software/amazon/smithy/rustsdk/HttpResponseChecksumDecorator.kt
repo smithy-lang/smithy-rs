@@ -90,14 +90,15 @@ class HttpResponseChecksumCustomization(
                     val responseAlgorithms = checksumTrait.responseAlgorithms
                         .map { algorithm -> algorithm.lowercase() }.joinToString(", ") { algorithm -> "\"$algorithm\"" }
                     val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-
-                    // Per [the spec](https://smithy.io/2.0/aws/aws-core.html#http-response-checksums),
-                    // we check to see if it's the `ENABLED` variant
                     rustTemplate(
                         """
                         #{ResponseChecksumInterceptor}::new(
                             [$responseAlgorithms].as_slice(),
                             |input: &#{Input}| {
+                                ${""/*
+                                Per [the spec](https://smithy.io/2.0/aws/aws-core.html#http-response-checksums),
+                                we check to see if it's the `ENABLED` variant
+                                */}
                                 let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
                                 matches!(input.$validationModeName(), #{Some}(#{ValidationModeShape}::Enabled))
                             }

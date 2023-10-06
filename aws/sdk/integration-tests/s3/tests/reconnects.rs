@@ -10,6 +10,7 @@ use aws_smithy_client::test_connection::wire_mock::{
     check_matches, ReplayedEvent, WireLevelTestConnection,
 };
 use aws_smithy_client::{ev, match_events};
+use aws_smithy_runtime::client::retries::classifiers::HttpStatusCodeClassifier;
 
 #[tokio::test]
 async fn test_disable_reconnect_on_503() {
@@ -26,6 +27,7 @@ async fn test_disable_reconnect_on_503() {
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .endpoint_url(mock.endpoint_url())
         .http_connector(mock.http_connector())
+        .retry_classifier(HttpStatusCodeClassifier::default())
         .retry_config(
             RetryConfig::standard().with_reconnect_mode(ReconnectMode::ReuseAllConnections),
         )
@@ -66,6 +68,7 @@ async fn test_enabling_reconnect_on_503() {
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .endpoint_url(mock.endpoint_url())
         .http_connector(mock.http_connector())
+        .retry_classifier(HttpStatusCodeClassifier::default())
         .retry_config(
             RetryConfig::standard().with_reconnect_mode(ReconnectMode::ReconnectOnTransientError),
         )

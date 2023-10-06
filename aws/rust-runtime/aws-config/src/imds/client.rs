@@ -578,11 +578,11 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        previous_result: Option<RetryAction>,
+        previous_action: Option<RetryAction>,
     ) -> Option<RetryAction> {
-        if previous_result.is_some() {
-            // Never second-guess a result from a higher-priority classifier
-            return previous_result;
+        if previous_action.is_some() {
+            // Never second-guess the action of a higher-priority classifier
+            return previous_action;
         }
 
         if let Some(response) = ctx.response() {

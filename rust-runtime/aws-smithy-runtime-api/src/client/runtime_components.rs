@@ -18,7 +18,7 @@ use crate::client::connectors::SharedHttpConnector;
 use crate::client::endpoint::SharedEndpointResolver;
 use crate::client::identity::{ConfiguredIdentityResolver, SharedIdentityResolver};
 use crate::client::interceptors::SharedInterceptor;
-use crate::client::retries::classifiers::SharedRetryClassifier;
+use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
 use crate::client::retries::SharedRetryStrategy;
 use crate::shared::IntoShared;
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
@@ -451,7 +451,7 @@ impl RuntimeComponentsBuilder {
     /// Adds an retry_classifier.
     pub fn push_retry_classifier(
         &mut self,
-        retry_classifier: impl IntoShared<SharedRetryClassifier>,
+        retry_classifier: impl ClassifyRetry + 'static,
     ) -> &mut Self {
         self.retry_classifiers.push(Tracked::new(
             self.builder_name,
@@ -461,10 +461,7 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Adds an retry_classifier.
-    pub fn with_retry_classifier(
-        mut self,
-        retry_classifier: impl IntoShared<SharedRetryClassifier>,
-    ) -> Self {
+    pub fn with_retry_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
         self.push_retry_classifier(retry_classifier);
         self
     }

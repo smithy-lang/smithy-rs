@@ -23,7 +23,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output
 use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
-use aws_smithy_runtime_api::client::retries::classifiers::SharedRetryClassifier;
+use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
 use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{
@@ -205,12 +205,9 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn retry_classifier(
-        mut self,
-        retry_classifier: impl IntoShared<SharedRetryClassifier>,
-    ) -> Self {
+    pub fn retry_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
         self.runtime_components
-            .push_retry_classifier(retry_classifier.into_shared());
+            .push_retry_classifier(retry_classifier);
         self
     }
 
@@ -450,9 +447,7 @@ mod tests {
             .endpoint_url("http://localhost:1234")
             .no_auth()
             .standard_retry(&RetryConfig::standard())
-            .retry_classifier(SharedRetryClassifier::new(
-                HttpStatusCodeClassifier::default(),
-            ))
+            .retry_classifier(HttpStatusCodeClassifier::default())
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .serializer(|input: String| {
                 Ok(http::Request::builder()
