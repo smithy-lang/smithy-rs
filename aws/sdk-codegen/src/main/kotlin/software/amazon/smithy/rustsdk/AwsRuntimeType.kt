@@ -42,20 +42,6 @@ object AwsRuntimeType {
             ),
         )
 
-    // TODO(enableNewSmithyRuntimeCleanup): Delete defaultMiddleware and middleware.rs, and remove tower dependency from inlinables, when cleaning up middleware
-    fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
-        InlineAwsDependency.forRustFile(
-            "middleware", visibility = Visibility.PUBLIC,
-            CargoDependency.smithyHttp(this),
-            CargoDependency.smithyHttpTower(this),
-            CargoDependency.smithyClient(this),
-            CargoDependency.Tower,
-            AwsCargoDependency.awsSigAuth(this),
-            AwsCargoDependency.awsHttp(this),
-            AwsCargoDependency.awsEndpoint(this),
-        ),
-    ).resolve("DefaultMiddleware")
-
     fun awsCredentialTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsCredentialTypes(runtimeConfig).toType()
 
     fun awsCredentialTypesTestUtil(runtimeConfig: RuntimeConfig) =
