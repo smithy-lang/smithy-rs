@@ -13,10 +13,10 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 
+//TODO(runtimeCratesVersioningCleanup): Re-point those who use the following reexport to
+// directly depend on `aws_smithy_types` and remove the reexport below.
 /// Errors for operations
-pub mod error {
-    pub use aws_smithy_types::operation::error::{BuildError, SerializationError};
-}
+pub use aws_smithy_types::operation::error;
 
 /// Metadata attached to an [`Operation`] that identifies the API being called.
 #[derive(Clone, Debug)]
