@@ -95,7 +95,7 @@ pub trait ClassifyRetry: Send + Sync + fmt::Debug {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        result_of_preceding_classifier: Option<RetryAction>,
+        previous_action: Option<RetryAction>,
     ) -> Option<RetryAction>;
 
     /// The name of this retry classifier.
@@ -128,9 +128,9 @@ impl ClassifyRetry for SharedRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        result_of_preceding_classifier: Option<RetryAction>,
+        previous_action: Option<RetryAction>,
     ) -> Option<RetryAction> {
-        self.0.classify_retry(ctx, result_of_preceding_classifier)
+        self.0.classify_retry(ctx, previous_action)
     }
 
     fn name(&self) -> &'static str {

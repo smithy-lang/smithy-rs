@@ -9,10 +9,9 @@
     feature = "connector-hyper-0-14-x",
 ))]
 
-use ::aws_smithy_runtime::client::retries::classifier::{
-    HttpStatusCodeClassifier, SmithyErrorClassifier,
+use ::aws_smithy_runtime::client::retries::classifiers::{
+    HttpStatusCodeClassifier, TransientErrorClassifier,
 };
-use ::aws_smithy_runtime_api::client::retries::RetryClassifiers;
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_http::body::{BoxBody, SdkBody};
 use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
@@ -24,7 +23,7 @@ use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime::{ev, match_events};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
+use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, ReconnectMode, RetryConfig};
 use aws_smithy_types::timeout::TimeoutConfig;
 use hyper::client::Builder as HyperBuilder;
@@ -58,18 +57,26 @@ impl std::error::Error for OperationError {}
 struct TestRetryClassifier;
 
 impl ClassifyRetry for TestRetryClassifier {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
+    fn classify_retry(
+        &self,
+        ctx: &InterceptorContext,
+        previous_action: Option<RetryAction>,
+    ) -> Option<RetryAction> {
+        if previous_action.is_some() {
+            // Never second-guess the action of a higher-priority classifier
+            return previous_action;
+        }
         tracing::info!("classifying retry for {ctx:?}");
         let classification = ctx.output_or_error().unwrap().err().and_then(|err| {
             if let Some(err) = err.as_operation_error() {
                 tracing::info!("its an operation error: {err:?}");
                 let err = err.downcast_ref::<OperationError>().unwrap();
-                Some(RetryReason::Error(err.0))
+                Some(RetryAction::Retry(err.0))
             } else {
                 tracing::info!("its something else... using other classifiers");
-                SmithyErrorClassifier::<OperationError>::new()
-                    .classify_retry(ctx)
-                    .or_else(|| HttpStatusCodeClassifier::default().classify_retry(ctx))
+                TransientErrorClassifier::<OperationError>::new()
+                    .classify_retry(ctx, None)
+                    .or_else(|| HttpStatusCodeClassifier::default().classify_retry(ctx, None))
             }
         });
         tracing::info!("classified as {classification:?}");
@@ -132,7 +139,7 @@ async fn wire_level_test(
                 .build(),
         )
         .standard_retry(&RetryConfig::standard().with_reconnect_mode(reconnect_mode))
-        .retry_classifiers(RetryClassifiers::new().with_classifier(TestRetryClassifier))
+        .retry_classifier(TestRetryClassifier)
         .sleep_impl(TokioSleep::new())
         .with_connection_poisoning()
         .serializer({
