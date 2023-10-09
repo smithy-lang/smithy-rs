@@ -18,8 +18,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         *preludeScope,
+        "IntoShared" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("shared::IntoShared"),
         "SharedTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::SharedTimeSource"),
         "StaticTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::StaticTimeSource"),
+        "TimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::TimeSource"),
         "UNIX_EPOCH" to RuntimeType.std.resolve("time::UNIX_EPOCH"),
         "Duration" to RuntimeType.std.resolve("time::Duration"),
     )
@@ -46,9 +48,9 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                         /// Sets the time source used for this service
                         pub fn time_source(
                             mut self,
-                            time_source: impl #{Into}<#{SharedTimeSource}>,
+                            time_source: impl #{TimeSource} + 'static,
                         ) -> Self {
-                            self.set_time_source(#{Some}(time_source.into()));
+                            self.set_time_source(#{Some}(#{IntoShared}::into_shared(time_source)));
                             self
                         }
                         """,

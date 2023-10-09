@@ -43,10 +43,9 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
             writer.rustTemplate(
                 """
-                runtime_components.push_interceptor(#{SharedInterceptor}::new(#{interceptor}) as _);
+                runtime_components.push_interceptor(#{interceptor});
                 """,
                 "interceptor" to interceptor,
-                "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
             )
         }
 

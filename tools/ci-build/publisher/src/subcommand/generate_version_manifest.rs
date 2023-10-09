@@ -4,10 +4,9 @@
  */
 
 use crate::fs::Fs;
-use crate::package::discover_packages;
+use crate::package::{discover_packages, VersionRequirement};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
-use semver::Version;
 use serde::Deserialize;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::package::PackageCategory;
@@ -70,7 +69,7 @@ pub async fn subcommand_generate_version_manifest(
         (None, Some(output_location)) => output_location,
         _ => bail!("Only one of `--location` or `--output-location` should be provided"),
     };
-    let packages = discover_packages(Fs::Real, input_location.into())
+    let packages = discover_packages::<VersionRequirement>(Fs::Real, input_location.into())
         .await
         .context("read packages")?;
 
@@ -135,8 +134,8 @@ fn generate_release_metadata(
     }
 }
 
-fn parse_version(name: &str, value: &str) -> Result<Version> {
-    match Version::parse(value) {
+fn parse_version(name: &str, value: &str) -> Result<semver::Version> {
+    match semver::Version::parse(value) {
         Ok(version) => Ok(version),
         Err(err) => bail!(
             "Failed to parse version number `{}` from `{}`: {}",

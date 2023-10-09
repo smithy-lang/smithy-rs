@@ -76,7 +76,7 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
                     ${section.serviceConfigBuilder}.set_timeout_config(${section.sdkConfig}.timeout_config().cloned());
                     ${section.serviceConfigBuilder}.set_sleep_impl(${section.sdkConfig}.sleep_impl());
 
-                    ${section.serviceConfigBuilder}.set_http_connector(${section.sdkConfig}.http_connector().cloned());
+                    ${section.serviceConfigBuilder}.set_http_client(${section.sdkConfig}.http_client());
                     ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
                     """,
                 )
@@ -105,6 +105,7 @@ class SdkConfigDecorator : ClientCodegenDecorator {
         val codegenScope = arrayOf(
             "SdkConfig" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("sdk_config::SdkConfig"),
         )
+
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
                 """

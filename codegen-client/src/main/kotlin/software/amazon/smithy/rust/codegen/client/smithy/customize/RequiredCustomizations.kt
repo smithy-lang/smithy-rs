@@ -69,7 +69,13 @@ class RequiredCustomizations : ClientCodegenDecorator {
         val rc = codegenContext.runtimeConfig
 
         // Add rt-tokio feature for `ByteStream::from_path`
-        rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
+        rustCrate.mergeFeature(
+            Feature(
+                "rt-tokio",
+                true,
+                listOf("aws-smithy-async/rt-tokio", "aws-smithy-http/rt-tokio"),
+            ),
+        )
 
         rustCrate.mergeFeature(TestUtilFeature)
 

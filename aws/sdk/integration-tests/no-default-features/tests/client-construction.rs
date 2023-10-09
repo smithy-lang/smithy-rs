@@ -12,7 +12,9 @@ use std::time::Duration;
 // If this test doesn't panic, you may have accidentally unified features, resulting in
 // the connector being enabled transitively
 #[tokio::test]
-#[should_panic(expected = "Enable the `rustls` crate feature or set a connector to fix this.")]
+#[should_panic(
+    expected = "Enable the `rustls` crate feature or configure a HTTP client to fix this."
+)]
 async fn test_clients_from_sdk_config() {
     aws_config::load_from_env().await;
 }
@@ -42,10 +44,10 @@ async fn test_clients_from_service_config() {
         .list_buckets()
         .send()
         .await
-        .expect_err("it should fail to send a request because there is no connector");
+        .expect_err("it should fail to send a request because there is no HTTP client");
     let msg = format!("{}", DisplayErrorContext(err));
     assert!(
-        msg.contains("No HTTP connector was available to send this request. Enable the `rustls` crate feature or set a connector to fix this."),
-        "expected '{msg}' to contain 'No HTTP connector was available to send this request. Enable the `rustls` crate feature or set a connector to fix this.'"
+        msg.contains("No HTTP client was available to send this request. Enable the `rustls` crate feature or configure a HTTP client to fix this."),
+        "expected '{msg}' to contain 'No HTTP client was available to send this request. Enable the `rustls` crate feature or set a HTTP client to fix this.'"
     );
 }

@@ -6,15 +6,15 @@
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
-use aws_smithy_client::test_connection::{capture_request, CaptureRequestReceiver};
+use aws_smithy_runtime::client::http::test_util::{capture_request, CaptureRequestReceiver};
 use aws_types::SdkConfig;
 
 fn test_client() -> (CaptureRequestReceiver, Client) {
-    let (conn, captured_request) = capture_request(None);
+    let (http_client, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-west-2"))
-        .http_connector(conn)
+        .http_client(http_client)
         .build();
     let client = Client::new(&sdk_config);
     (captured_request, client)

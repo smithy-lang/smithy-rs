@@ -12,10 +12,9 @@ publish = false
 
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-endpoint = { path = "../../build/aws-sdk/sdk/aws-endpoint"}
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-iam = { path = "../../build/aws-sdk/sdk/iam" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 bytes = "1.0.0"
 http = "0.2.0"

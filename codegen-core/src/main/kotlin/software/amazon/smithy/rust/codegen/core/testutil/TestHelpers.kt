@@ -37,6 +37,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.module
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -137,9 +138,13 @@ fun testRustSettings(
 )
 
 private const val SmithyVersion = "1.0"
-fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion): Model {
+fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion, disableValidation: Boolean = false): Model {
     val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
-    return Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed).assemble()
+    val assembler = Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed)
+    if (disableValidation) {
+        assembler.disableValidation()
+    }
+    return assembler.assemble()
         .unwrap()
 }
 
@@ -194,7 +199,7 @@ fun StructureShape.renderWithModelBuilder(
 ) {
     val struct = this
     rustCrate.withModule(symbolProvider.moduleForShape(struct)) {
-        StructureGenerator(model, symbolProvider, this, struct, emptyList()).render()
+        StructureGenerator(model, symbolProvider, this, struct, emptyList(), StructSettings(true)).render()
         implBlock(symbolProvider.toSymbol(struct)) {
             BuilderGenerator.renderConvenienceMethod(this, symbolProvider, struct)
         }

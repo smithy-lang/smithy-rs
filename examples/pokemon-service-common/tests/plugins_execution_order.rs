@@ -10,24 +10,12 @@ use std::{
     task::{Context, Poll},
 };
 
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, IdentityPlugin, Plugin};
 use tower::{Layer, Service};
 
-use aws_smithy_client::test_connection::capture_request;
+use aws_smithy_runtime::client::http::test_util::capture_request;
 use pokemon_service_client::{Client, Config};
 use pokemon_service_common::do_nothing;
-
-trait OperationExt {
-    /// Convert an SDK operation into an `http::Request`.
-    fn into_http(self) -> http::Request<SdkBody>;
-}
-
-impl<H, R> OperationExt for aws_smithy_http::operation::Operation<H, R> {
-    fn into_http(self) -> http::Request<SdkBody> {
-        self.into_request_response().0.into_parts().0
-    }
-}
 
 #[tokio::test]
 async fn plugin_layers_are_executed_in_registration_order() {
@@ -46,9 +34,9 @@ async fn plugin_layers_are_executed_in_registration_order() {
     .build_unchecked();
 
     let request = {
-        let (conn, rcvr) = capture_request(None);
+        let (http_client, rcvr) = capture_request(None);
         let config = Config::builder()
-            .http_connector(conn)
+            .http_client(http_client)
             .endpoint_url("http://localhost:1234")
             .build();
         Client::from_conf(config).do_nothing().send().await.unwrap();

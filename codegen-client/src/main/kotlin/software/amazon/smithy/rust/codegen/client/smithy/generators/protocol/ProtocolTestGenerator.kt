@@ -49,7 +49,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType as RT
 
 data class ClientCreationParams(
     val codegenContext: ClientCodegenContext,
-    val connectorName: String,
+    val httpClientName: String,
     val configBuilderName: String,
     val clientName: String,
 )
@@ -75,7 +75,7 @@ class DefaultProtocolTestGenerator(
             """
             let ${params.clientName} = #{Client}::from_conf(
                 ${params.configBuilderName}
-                    .http_connector(${params.connectorName})
+                    .http_client(${params.httpClientName})
                     .build()
             );
             """,
@@ -206,20 +206,17 @@ class DefaultProtocolTestGenerator(
         } ?: writable { }
         rustTemplate(
             """
-            let (conn, request_receiver) = #{capture_request}(None);
+            let (http_client, request_receiver) = #{capture_request}(None);
             let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
             #{customParams}
 
             """,
-            "capture_request" to CargoDependency.smithyClient(rc)
-                .toDevDependency()
-                .withFeature("test-util")
-                .toType()
-                .resolve("test_connection::capture_request"),
+            "capture_request" to CargoDependency.smithyRuntimeTestUtil(rc).toType()
+                .resolve("client::http::test_util::capture_request"),
             "config" to ClientRustModule.config,
             "customParams" to customParams,
         )
-        renderClientCreation(this, ClientCreationParams(codegenContext, "conn", "config_builder", "client"))
+        renderClientCreation(this, ClientCreationParams(codegenContext, "http_client", "config_builder", "client"))
 
         writeInline("let result = ")
         instantiator.renderFluentCall(this, "client", operationShape, inputShape, httpRequestTestCase.params)
@@ -592,6 +589,9 @@ class DefaultProtocolTestGenerator(
             "SDKAppliedContentEncoding_ec2Query",
             "SDKAppliedContentEncoding_restJson1",
             "SDKAppliedContentEncoding_restXml",
+            "AwsJson11DeserializeIgnoreType",
+            "AwsJson10DeserializeIgnoreType",
+            "RestJsonDeserializeIgnoreType",
         )
     }
 }
