@@ -14,12 +14,6 @@
     unreachable_pub
 )]
 
-/// Credentials middleware
-pub mod auth;
-
-/// Recursion Detection middleware
-pub mod recursion_detection;
-
 /// User agent middleware
 pub mod user_agent;
 

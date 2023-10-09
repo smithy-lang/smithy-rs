@@ -33,7 +33,6 @@ private class HttpConnectorConfigCustomization(
     private val codegenScope = arrayOf(
         *preludeScope,
         "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
-        "ConnectorSettings" to RuntimeType.smithyClient(runtimeConfig).resolve("http_connector::ConnectorSettings"),
         "HttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::HttpClient"),
         "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),

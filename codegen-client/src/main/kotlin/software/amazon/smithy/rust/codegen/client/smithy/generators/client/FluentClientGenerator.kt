@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
@@ -57,7 +57,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
-    private val reexportSmithyClientBuilder: Boolean = true,
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
     companion object {
@@ -94,19 +93,9 @@ class FluentClientGenerator(
 
     private fun renderFluentClient(crate: RustCrate) {
         crate.withModule(ClientRustModule.client) {
-            if (reexportSmithyClientBuilder) {
-                rustTemplate(
-                    """
-                    ##[doc(inline)]
-                    pub use #{client}::Builder;
-                    """,
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                )
-            }
             val clientScope = arrayOf(
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
-                "client" to RuntimeType.smithyClient(runtimeConfig),
                 "client_docs" to writable
                     {
                         customizations.forEach {
@@ -183,10 +172,7 @@ class FluentClientGenerator(
 
             val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
-                rustBlockTemplate(
-                    "impl super::Client",
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                ) {
+                rustBlock("impl super::Client") {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                     val maybePaginated = if (operation.isPaginated(model)) {
                         "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
@@ -329,10 +315,7 @@ class FluentClientGenerator(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-        rustBlockTemplate(
-            "impl $builderName",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-        ) {
+        rustBlock("impl $builderName") {
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
