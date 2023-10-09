@@ -6,7 +6,7 @@
 use aws_smithy_http::connection::{CaptureSmithyConnection, ConnectionMetadata};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
+    AfterDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
@@ -61,9 +61,9 @@ impl Interceptor for ConnectionPoisoningInterceptor {
         Ok(())
     }
 
-    fn modify_before_deserialization(
+    fn read_after_deserialization(
         &self,
-        context: &mut BeforeDeserializationInterceptorContextMut<'_>,
+        context: &AfterDeserializationInterceptorContextRef<'_>,
         runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
@@ -77,7 +77,7 @@ impl Interceptor for ConnectionPoisoningInterceptor {
             .ok_or("retry classifiers are required for connection poisoning to work")?;
 
         let error_is_transient = retry_classifiers
-            .classify_retry(context.inner_mut())
+            .classify_retry(context.inner())
             .map(|reason| reason == RetryReason::Error(ErrorKind::TransientError))
             .unwrap_or_default();
         let connection_poisoning_is_enabled =

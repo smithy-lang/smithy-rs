@@ -6,8 +6,7 @@
 use aws_sdk_s3::config::interceptors::BeforeTransmitInterceptorContextMut;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
-use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::test_connection::capture_request;
+use aws_smithy_runtime::client::http::test_util::capture_request;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -57,13 +56,13 @@ async fn interceptor_priority() {
         }
     }
 
-    let (conn, rx) = capture_request(None);
+    let (http_client, rx) = capture_request(None);
 
     // The first `TestInterceptor` will put `value1` into config
     let config = aws_sdk_s3::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
-        .http_connector(DynConnector::new(conn))
+        .http_client(http_client)
         .interceptor(TestInterceptor("value1"))
         .build();
     let client = Client::from_conf(config);
@@ -89,12 +88,12 @@ async fn interceptor_priority() {
 
 #[tokio::test]
 async fn set_test_user_agent_through_request_mutation() {
-    let (conn, rx) = capture_request(None);
+    let (http_client, rx) = capture_request(None);
 
     let config = aws_sdk_s3::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
-        .http_connector(DynConnector::new(conn.clone()))
+        .http_client(http_client.clone())
         .build();
     let client = Client::from_conf(config);
 

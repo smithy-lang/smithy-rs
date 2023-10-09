@@ -71,18 +71,19 @@ class CustomizableOperationGenerator(
                     _error: #{PhantomData}<E>,
                 }
 
-                impl<T, E, B> CustomizableOperation<T, E, B> {
-                    /// Creates a new `CustomizableOperation` from `customizable_send`.
-                    pub(crate) fn new(customizable_send: B) -> Self {
-                        Self {
-                            customizable_send,
-                            config_override: #{None},
-                            interceptors: vec![],
-                            runtime_plugins: vec![],
-                            _output: #{PhantomData},
-                            _error: #{PhantomData}
+                    impl<T, E, B> CustomizableOperation<T, E, B> {
+                        /// Creates a new `CustomizableOperation` from `customizable_send`.
+                        ##[allow(dead_code)] // unused when a service does not provide any operations
+                        pub(crate) fn new(customizable_send: B) -> Self {
+                            Self {
+                                customizable_send,
+                                config_override: #{None},
+                                interceptors: vec![],
+                                runtime_plugins: vec![],
+                                _output: #{PhantomData},
+                                _error: #{PhantomData}
+                            }
                         }
-                    }
 
                     /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
                     ///

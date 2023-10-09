@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[smithy-rs]]
+message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
+references = ["smithy-rs#3011"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
+references = ["smithy-rs#3011"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
 message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
 references = ["smithy-rs#2909"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
@@ -261,3 +273,9 @@ For more information, see the [Change Log Discussion](https://github.com/awslabs
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 references = ["smithy-rs#3014"]
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "STS and SSO-based credential providers will now respect both `use_fips` and `use_dual_stack` when those settings are configured in a user's environment or profile."
+references = ["aws-sdk-rust#882", "smithy-rs#3007"]
+meta = { "breaking" = true, "tada" = true, "bug" = true }
+author = "Velfi"

@@ -132,6 +132,7 @@ impl TokenResolver {
                     .operation_name("get-token")
                     .runtime_plugin(common_plugin)
                     .no_auth()
+                    .with_connection_poisoning()
                     .serializer(move |_| {
                         Ok(http::Request::builder()
                             .method("PUT")
