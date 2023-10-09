@@ -73,10 +73,8 @@ class EndpointTraitBindings(
                     }
                     if (generateValidation) {
                         val contents =
-                            // TODO(enableNewSmithyRuntimeCleanup): Remove the allow attribute once all places need .into method
                             """
                             if $field.is_empty() {
-                                ##[allow(clippy::useless_conversion)]
                                 return Err(#{invalidFieldError:W}.into())
                             }
                             """
