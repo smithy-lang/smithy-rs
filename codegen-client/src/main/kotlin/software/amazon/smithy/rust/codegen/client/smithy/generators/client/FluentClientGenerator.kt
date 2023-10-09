@@ -35,7 +35,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
@@ -57,7 +57,6 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
-    private val reexportSmithyClientBuilder: Boolean = true,
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
     companion object {
@@ -94,19 +93,9 @@ class FluentClientGenerator(
 
     private fun renderFluentClient(crate: RustCrate) {
         crate.withModule(ClientRustModule.client) {
-            if (reexportSmithyClientBuilder) {
-                rustTemplate(
-                    """
-                    ##[doc(inline)]
-                    pub use #{client}::Builder;
-                    """,
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                )
-            }
             val clientScope = arrayOf(
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
-                "client" to RuntimeType.smithyClient(runtimeConfig),
                 "client_docs" to writable
                     {
                         customizations.forEach {
@@ -126,6 +115,7 @@ class FluentClientGenerator(
                 ##[derive(Debug)]
                 pub(crate) struct Handle {
                     pub(crate) conf: crate::Config,
+                    ##[allow(dead_code)] // unused when a service does not provide any operations
                     pub(crate) runtime_plugins: #{RuntimePlugins},
                 }
 
@@ -180,10 +170,7 @@ class FluentClientGenerator(
 
             val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
-                rustBlockTemplate(
-                    "impl super::Client",
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                ) {
+                rustBlock("impl super::Client") {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                     val maybePaginated = if (operation.isPaginated(model)) {
                         "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
@@ -326,10 +313,7 @@ class FluentClientGenerator(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-        rustBlockTemplate(
-            "impl $builderName",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-        ) {
+        rustBlock("impl $builderName") {
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
@@ -480,6 +464,7 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                 let mut plugins = #{RuntimePlugins}::new()
+                    .with_client_plugin(#{default_http_client_plugin}())
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
@@ -499,6 +484,8 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
                 .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
             "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "default_http_client_plugin" to RuntimeType.smithyRuntime(runtimeConfig)
+                .resolve("client::http::default_http_client_plugin"),
         )
     }
 

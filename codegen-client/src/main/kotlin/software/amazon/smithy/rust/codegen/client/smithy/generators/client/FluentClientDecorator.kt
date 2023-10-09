@@ -39,7 +39,7 @@ class FluentClientDecorator : ClientCodegenDecorator {
             customizations = listOf(GenericFluentClient(codegenContext)),
         ).render(rustCrate)
 
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-client/rustls")))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
     }
 
     override fun libRsCustomizations(
@@ -53,7 +53,7 @@ class FluentClientDecorator : ClientCodegenDecorator {
         return baseCustomizations + object : LibRsCustomization() {
             override fun section(section: LibRsSection) = when (section) {
                 is LibRsSection.Body -> writable {
-                    rust("pub use client::{Client, Builder};")
+                    rust("pub use client::Client;")
                 }
                 else -> emptySection
             }

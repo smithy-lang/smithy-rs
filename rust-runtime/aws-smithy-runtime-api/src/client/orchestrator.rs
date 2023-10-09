@@ -27,8 +27,6 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use bytes::Bytes;
 use std::error::Error as StdError;
 use std::fmt;
-use std::future::Future as StdFuture;
-use std::pin::Pin;
 
 /// Type alias for the HTTP request type that the orchestrator uses.
 pub type HttpRequest = http::Request<SdkBody>;
@@ -40,7 +38,7 @@ pub type HttpResponse = http::Response<SdkBody>;
 ///
 /// See [the Rust blog](https://blog.rust-lang.org/inside-rust/2023/05/03/stabilizing-async-fn-in-trait.html) for
 /// more information on async functions in traits.
-pub type BoxFuture<T> = Pin<Box<dyn StdFuture<Output = Result<T, BoxError>> + Send>>;
+pub type BoxFuture<T> = aws_smithy_async::future::BoxFuture<T, BoxError>;
 
 /// Type alias for futures that are returned from several traits since async trait functions are not stable yet (as of 2023-07-21).
 ///

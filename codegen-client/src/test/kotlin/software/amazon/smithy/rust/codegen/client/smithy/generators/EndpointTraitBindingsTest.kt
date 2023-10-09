@@ -160,7 +160,7 @@ internal class EndpointTraitBindingsTest {
                 rustTemplate(
                     """
                     async fn test_endpoint_prefix() {
-                        use #{aws_smithy_client}::test_connection::capture_request;
+                        use #{capture_request};
                         use aws_smithy_http::body::SdkBody;
                         use aws_smithy_http::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::box_error::BoxError;
@@ -202,7 +202,7 @@ internal class EndpointTraitBindingsTest {
                             }
                         }
 
-                        let (conn, _r) = capture_request(Some(
+                        let (http_client, _r) = capture_request(Some(
                             http::Response::builder()
                                 .status(200)
                                 .body(SdkBody::from(""))
@@ -210,7 +210,7 @@ internal class EndpointTraitBindingsTest {
                         ));
                         let interceptor = TestInterceptor::default();
                         let config = Config::builder()
-                            .http_connector(conn)
+                            .http_client(http_client)
                             .interceptor(interceptor.clone())
                             .build();
                         let client = Client::from_conf(config);
@@ -246,8 +246,8 @@ internal class EndpointTraitBindingsTest {
                         );
                     }
                     """,
-                    "aws_smithy_client" to CargoDependency.smithyClient(clientCodegenContext.runtimeConfig)
-                        .toDevDependency().withFeature("test-util").toType(),
+                    "capture_request" to CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
+                        .toType().resolve("client::http::test_util::capture_request"),
                 )
             }
         }
