@@ -90,8 +90,6 @@ class MetadataCustomizationTest {
                         let _ = client
                             .say_hello()
                             .customize()
-                            .await
-                            .expect("operation should be customizable")
                             .interceptor(ExtractMetadataInterceptor(::std::sync::Mutex::new(#{Some}(tx))))
                             .send()
                             .await;
