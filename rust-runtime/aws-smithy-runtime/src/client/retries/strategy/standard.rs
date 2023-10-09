@@ -145,7 +145,7 @@ impl StandardRetryStrategy {
                     Ok(Duration::from_secs_f64(backoff).min(self.max_backoff))
                 }
             }
-            RetryAction::RetryForbidden => {
+            RetryAction::RetryForbidden | RetryAction::DontCare => {
                 update_rate_limiter_if_exists(runtime_components, cfg, false);
                 debug!(
                     attempts = request_attempts,
