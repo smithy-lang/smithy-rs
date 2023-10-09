@@ -7,7 +7,6 @@ use aws_sdk_s3::config::retry::{ReconnectMode, RetryConfig};
 use aws_sdk_s3::config::{Credentials, Region, SharedAsyncSleep};
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_runtime::client::http::test_util::wire::{ReplayedEvent, WireMockServer};
-use aws_smithy_runtime::client::retries::classifiers::HttpStatusCodeClassifier;
 use aws_smithy_runtime::{ev, match_events};
 
 #[tokio::test]
