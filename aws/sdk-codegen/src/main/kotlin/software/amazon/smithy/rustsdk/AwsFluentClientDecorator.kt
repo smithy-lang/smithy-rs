@@ -30,19 +30,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyClient = RuntimeType.smithyClient(runtimeConfig)
     private val smithyHttp = RuntimeType.smithyHttp(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
 
     val awsTypes = AwsRuntimeType.awsTypes(runtimeConfig)
     val connectorError = smithyHttp.resolve("result::ConnectorError")
-    val connectorSettings = smithyClient.resolve("http_connector::ConnectorSettings")
-    val dynConnector = smithyClient.resolve("erase::DynConnector")
-    val dynMiddleware = smithyClient.resolve("erase::DynMiddleware")
     val retryConfig = smithyTypes.resolve("retry::RetryConfig")
-    val smithyClientBuilder = smithyClient.resolve("Builder")
-    val smithyClientRetry = smithyClient.resolve("retry")
-    val smithyConnector = smithyClient.resolve("bounds::SmithyConnector")
     val timeoutConfig = smithyTypes.resolve("timeout::TimeoutConfig")
 }
 
@@ -57,7 +50,6 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         val types = Types(runtimeConfig)
         FluentClientGenerator(
             codegenContext,
-            reexportSmithyClientBuilder = false,
             customizations = listOf(
                 AwsPresignedFluentBuilderMethod(codegenContext),
                 AwsFluentClientDocs(codegenContext),
@@ -111,15 +103,9 @@ private class AwsFluentClientExtensions(private val codegenContext: ClientCodege
     private val codegenScope = arrayOf(
         "Arc" to RuntimeType.Arc,
         "ConnectorError" to types.connectorError,
-        "ConnectorSettings" to types.connectorSettings,
-        "DynConnector" to types.dynConnector,
-        "DynMiddleware" to types.dynMiddleware,
         "RetryConfig" to types.retryConfig,
-        "SmithyConnector" to types.smithyConnector,
         "TimeoutConfig" to types.timeoutConfig,
-        "SmithyClientBuilder" to types.smithyClientBuilder,
         "aws_types" to types.awsTypes,
-        "retry" to types.smithyClientRetry,
     )
 
     fun render(writer: RustWriter) {

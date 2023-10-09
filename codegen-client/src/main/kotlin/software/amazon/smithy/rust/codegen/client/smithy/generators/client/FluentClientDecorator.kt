@@ -53,7 +53,7 @@ class FluentClientDecorator : ClientCodegenDecorator {
         return baseCustomizations + object : LibRsCustomization() {
             override fun section(section: LibRsSection) = when (section) {
                 is LibRsSection.Body -> writable {
-                    rust("pub use client::{Client, Builder};")
+                    rust("pub use client::Client;")
                 }
                 else -> emptySection
             }
