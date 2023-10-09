@@ -13,7 +13,7 @@ use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
-use aws_smithy_types::retry::{ErrorKind, ReconnectMode, RetryConfig};
+use aws_smithy_types::retry::{ReconnectMode, RetryConfig};
 use std::fmt;
 use tracing::{debug, error};
 
@@ -75,8 +75,7 @@ impl Interceptor for ConnectionPoisoningInterceptor {
         let captured_connection = cfg.load::<CaptureSmithyConnectionWrapper>().cloned();
         let retry_classifier_result =
             run_classifiers_on_ctx(runtime_components.retry_classifiers(), context.inner());
-        let error_is_transient =
-            retry_classifier_result == RetryAction::Retry(ErrorKind::TransientError);
+        let error_is_transient = retry_classifier_result == RetryAction::transient_error();
         let connection_poisoning_is_enabled =
             reconnect_mode == ReconnectMode::ReconnectOnTransientError;
 

@@ -11,7 +11,9 @@ use crate::provider_config::ProviderConfig;
 use crate::sso::{SsoCredentialsProvider, SsoProviderConfig};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
-use aws_credential_types::provider::{self, error::CredentialsError, ProvideCredentials};
+use aws_credential_types::provider::{
+    self, error::CredentialsError, ProvideCredentials, SharedCredentialsProvider,
+};
 use aws_sdk_sts::config::Credentials;
 use aws_sdk_sts::Client as StsClient;
 use aws_smithy_async::time::SharedTimeSource;
@@ -33,12 +35,11 @@ impl AssumeRoleProvider {
         input_credentials: Credentials,
         sdk_config: &SdkConfig,
     ) -> provider::Result {
-        let config = aws_sdk_sts::Config::from(sdk_config)
+        let config = sdk_config
             .to_builder()
-            .credentials_provider(input_credentials)
+            .credentials_provider(SharedCredentialsProvider::new(input_credentials))
             .build();
-
-        let client = StsClient::from_conf(config);
+        let client = StsClient::new(&config);
         let session_name = &self.session_name.as_ref().cloned().unwrap_or_else(|| {
             sts::util::default_session_name("assume-role-from-profile", self.time_source.now())
         });

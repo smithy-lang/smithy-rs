@@ -172,7 +172,7 @@ class FluentClientGenerator(
                 }
                 """,
                 *clientScope,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig, customizations),
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
             )
         }
 
@@ -473,7 +473,7 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig, customizations: List<FluentClientCustomization>): RuntimeType =
+private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
         rustTemplate(
             """

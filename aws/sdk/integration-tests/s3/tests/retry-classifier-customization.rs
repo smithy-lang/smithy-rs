@@ -12,11 +12,11 @@ use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClien
 use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
-struct CustomRetryClassifier {
+struct CustomizationTestClassifier {
     counter: Arc<Mutex<u8>>,
 }
 
-impl CustomRetryClassifier {
+impl CustomizationTestClassifier {
     pub fn new() -> Self {
         Self {
             counter: Arc::new(Mutex::new(0u8)),
@@ -28,7 +28,7 @@ impl CustomRetryClassifier {
     }
 }
 
-impl ClassifyRetry for CustomRetryClassifier {
+impl ClassifyRetry for CustomizationTestClassifier {
     fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         *self.counter.lock().unwrap() += 1;
 
@@ -78,14 +78,14 @@ async fn test_retry_classifier_customization() {
         ReplayEvent::new(req(), ok()),
     ]);
 
-    let custom_retry_classifier = CustomRetryClassifier::new();
+    let customization_test_classifier = CustomizationTestClassifier::new();
 
     let config = aws_sdk_s3::Config::builder()
         .with_test_defaults()
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .http_client(http_client)
         .retry_config(RetryConfig::standard())
-        .retry_classifier(custom_retry_classifier.clone())
+        .retry_classifier(customization_test_classifier.clone())
         .build();
 
     let client = aws_sdk_s3::Client::from_conf(config);
@@ -98,5 +98,5 @@ async fn test_retry_classifier_customization() {
         .expect_err("fails without attempting a retry");
 
     // ensure our custom retry classifier was called at least once.
-    assert_ne!(custom_retry_classifier.counter(), 0);
+    assert_ne!(customization_test_classifier.counter(), 0);
 }

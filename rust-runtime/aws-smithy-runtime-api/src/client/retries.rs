@@ -159,7 +159,7 @@ mod test_util {
     impl ClassifyRetry for AlwaysRetry {
         fn classify_retry(&self, error: &InterceptorContext) -> RetryAction {
             tracing::debug!("Retrying error {:?} as an {:?}", error, self.0);
-            RetryAction::Retry(self.0)
+            RetryAction::retryable_error(self.0)
         }
 
         fn name(&self) -> &'static str {

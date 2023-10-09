@@ -7,7 +7,7 @@ use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::classifiers::{
-    ClassifyRetry, RetryAction, RetryClassifierPriority,
+    ClassifyRetry, RetryAction, RetryClassifierPriority, RetryReason,
 };
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
@@ -59,9 +59,16 @@ where
         let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
             Some(Err(err)) => err,
         };
+
+        let retry_after = ctx
+            .response()
+            .and_then(|res| res.http_headers().get("x-amz-retry-after"))
+            .and_then(|header| header.to_str().ok())
+            .and_then(|header| header.parse::<u64>().ok())
+            .map(std::time::Duration::from_millis);
 
         let error_code = OrchestratorError::as_operation_error(error)
             .and_then(|err| err.downcast_ref::<E>())
@@ -69,14 +76,25 @@ where
 
         if let Some(error_code) = error_code {
             if THROTTLING_ERRORS.contains(&error_code) {
-                return RetryAction::Retry(ErrorKind::ThrottlingError);
+                return RetryAction::RetryIndicated(RetryReason::RetryableError {
+                    kind: ErrorKind::ThrottlingError,
+                    retry_after,
+                });
             }
             if TRANSIENT_ERRORS.contains(&error_code) {
-                return RetryAction::Retry(ErrorKind::TransientError);
+                return RetryAction::RetryIndicated(RetryReason::RetryableError {
+                    kind: ErrorKind::TransientError,
+                    retry_after,
+                });
             }
         };
 
-        RetryAction::DontCare
+        debug_assert!(
+            retry_after.is_none(),
+            "retry_after should be None if the error wasn't an identifiable AWS error"
+        );
+
+        RetryAction::NoActionIndicated
     }
 
     fn name(&self) -> &'static str {
@@ -90,48 +108,15 @@ where
     }
 }
 
-/// A retry classifier that checks for `x-amz-retry-after` headers. If one is found, a
-/// [`RetryAction::Explicit`](RetryAction) is returned containing the duration to wait
-/// before retrying.
-#[derive(Debug, Default)]
-pub struct AmzRetryAfterHeaderClassifier;
-
-impl AmzRetryAfterHeaderClassifier {
-    /// Create a new `AmzRetryAfterHeaderClassifier`.
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl ClassifyRetry for AmzRetryAfterHeaderClassifier {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
-        ctx.response()
-            .and_then(|res| res.http_headers().get("x-amz-retry-after"))
-            .and_then(|header| header.to_str().ok())
-            .and_then(|header| header.parse::<u64>().ok())
-            .map(|retry_after_delay| {
-                RetryAction::RetryAfter(std::time::Duration::from_millis(retry_after_delay))
-            })
-            .unwrap_or(RetryAction::DontCare)
-    }
-
-    fn name(&self) -> &'static str {
-        "'Retry After' Header"
-    }
-
-    fn priority(&self) -> RetryClassifierPriority {
-        RetryClassifierPriority::with_lower_priority_than(
-            RetryClassifierPriority::transient_error_classifier(),
-        )
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use super::*;
+    use crate::retries::classifiers::AwsErrorCodeClassifier;
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
     use aws_smithy_runtime_api::client::interceptors::context::{Error, Input};
-    use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
+    use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+    use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+    use aws_smithy_types::error::metadata::ProvideErrorMetadata;
     use aws_smithy_types::error::ErrorMetadata;
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
     use std::fmt;
@@ -193,19 +178,13 @@ mod test {
             CodedError::new("Throttling"),
         ))));
 
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            RetryAction::Retry(ErrorKind::ThrottlingError)
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::throttling_error());
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(
             CodedError::new("RequestTimeout"),
         ))));
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            RetryAction::Retry(ErrorKind::TransientError)
-        )
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error())
     }
 
     #[test]
@@ -218,15 +197,12 @@ mod test {
         ctx.set_response(test_response);
         ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
 
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            RetryAction::Retry(ErrorKind::ThrottlingError)
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::throttling_error());
     }
 
     #[test]
     fn test_retry_after_header() {
-        let policy = AmzRetryAfterHeaderClassifier;
+        let policy = AwsErrorCodeClassifier::<ErrorMetadata>::new();
         let res = http::Response::builder()
             .header("x-amz-retry-after", "5000")
             .body("retry later")
@@ -240,7 +216,10 @@ mod test {
 
         assert_eq!(
             policy.classify_retry(&ctx),
-            RetryAction::RetryAfter(Duration::from_millis(5000))
+            RetryAction::retryable_error_with_explicit_delay(
+                ErrorKind::TransientError,
+                Duration::from_secs(5)
+            )
         );
     }
 }

@@ -11,7 +11,7 @@ use crate::client::retries::strategy::standard::ReleaseResult::{
 use crate::client::retries::token_bucket::TokenBucket;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
+use aws_smithy_runtime_api::client::retries::classifiers::{RetryAction, RetryReason};
 use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
@@ -111,14 +111,20 @@ impl StandardRetryStrategy {
         let token_bucket = cfg.load::<TokenBucket>();
 
         match retry_reason {
-            RetryAction::RetryAfter(backoff) => Ok(*backoff),
-            RetryAction::Retry(kind) => {
+            RetryAction::RetryIndicated(RetryReason::RetryableError { kind, retry_after }) => {
                 update_rate_limiter_if_exists(
                     runtime_components,
                     cfg,
                     *kind == ErrorKind::ThrottlingError,
                 );
-                if let Some(delay) = check_rate_limiter_for_delay(runtime_components, cfg, *kind) {
+
+                if let Some(delay) = *retry_after {
+                    let delay = delay.min(self.max_backoff);
+                    debug!("explicit request from server to delay {delay:?} before retrying");
+                    Ok(delay)
+                } else if let Some(delay) =
+                    check_rate_limiter_for_delay(runtime_components, cfg, *kind)
+                {
                     let delay = delay.min(self.max_backoff);
                     debug!("rate limiter has requested a {delay:?} delay before retrying");
                     Ok(delay)
@@ -145,7 +151,7 @@ impl StandardRetryStrategy {
                     Ok(Duration::from_secs_f64(backoff).min(self.max_backoff))
                 }
             }
-            RetryAction::RetryForbidden | RetryAction::DontCare => {
+            RetryAction::RetryForbidden | RetryAction::NoActionIndicated => {
                 update_rate_limiter_if_exists(runtime_components, cfg, false);
                 debug!(
                     attempts = request_attempts,
@@ -425,7 +431,7 @@ mod tests {
 
     #[derive(Debug)]
     struct PresetReasonRetryClassifier {
-        retry_reasons: Mutex<Vec<RetryAction>>,
+        retry_actions: Mutex<Vec<RetryAction>>,
     }
 
     #[cfg(feature = "test-util")]
@@ -434,7 +440,7 @@ mod tests {
             // We'll pop the retry_reasons in reverse order so we reverse the list to fix that.
             retry_reasons.reverse();
             Self {
-                retry_reasons: Mutex::new(retry_reasons),
+                retry_actions: Mutex::new(retry_reasons),
             }
         }
     }
@@ -445,15 +451,15 @@ mod tests {
             let output_or_error = ctx.output_or_error();
             // Check for an error
             match output_or_error {
-                Some(Ok(_)) | None => return RetryAction::DontCare,
+                Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
                 _ => (),
             };
 
-            let mut retry_reasons = self.retry_reasons.lock().unwrap();
-            if retry_reasons.len() == 1 {
-                retry_reasons.first().unwrap().clone()
+            let mut retry_actions = self.retry_actions.lock().unwrap();
+            if retry_actions.len() == 1 {
+                retry_actions.first().unwrap().clone()
             } else {
-                retry_reasons.pop().unwrap()
+                retry_actions.pop().unwrap()
             }
         }
 
@@ -483,7 +489,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn eventual_success() {
-        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
+        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryAction::server_error()]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -513,7 +519,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_more_attempts() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::server_error()]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(3);
@@ -541,7 +547,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn no_quota() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::server_error()]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -564,8 +570,11 @@ mod tests {
     #[test]
     fn quota_replenishes_on_success() {
         let (mut cfg, rc, mut ctx) = setup_test(vec![
-            RetryAction::Retry(ErrorKind::TransientError),
-            RetryAction::RetryAfter(Duration::from_secs(1)),
+            RetryAction::transient_error(),
+            RetryAction::retryable_error_with_explicit_delay(
+                ErrorKind::TransientError,
+                Duration::from_secs(1),
+            ),
         ]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
@@ -598,8 +607,7 @@ mod tests {
     #[test]
     fn quota_replenishes_on_first_try_success() {
         const PERMIT_COUNT: usize = 20;
-        let (mut cfg, rc, mut ctx) =
-            setup_test(vec![RetryAction::Retry(ErrorKind::TransientError)]);
+        let (mut cfg, rc, mut ctx) = setup_test(vec![RetryAction::transient_error()]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(u32::MAX);
@@ -649,7 +657,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn backoff_timing() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::server_error()]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5);
@@ -689,7 +697,7 @@ mod tests {
     #[cfg(feature = "test-util")]
     #[test]
     fn max_backoff_time() {
-        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::Retry(ErrorKind::ServerError)]);
+        let (mut cfg, rc, ctx) = setup_test(vec![RetryAction::server_error()]);
         let strategy = StandardRetryStrategy::default()
             .with_base(|| 1.0)
             .with_max_attempts(5)

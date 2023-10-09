@@ -5,41 +5,102 @@
 
 //! Classifier for determining if a retry is necessary and related code.
 
+use crate::client::interceptors::context::InterceptorContext;
+use crate::impl_shared_conversions;
+use aws_smithy_types::retry::ErrorKind;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
-use aws_smithy_types::retry::ErrorKind;
-
-use crate::client::interceptors::context::InterceptorContext;
-use crate::impl_shared_conversions;
-
 /// The result of running a [`ClassifyRetry`] on a [`InterceptorContext`].
 #[non_exhaustive]
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, Default)]
 pub enum RetryAction {
-    /// When a classifier doesn't have something to classify, this action is returned.
+    /// When a classifier can't run or has no opinion, this action is returned.
     ///
     /// For example, if a classifier requires a parsed response and response parsing failed,
     /// this action is returned. If all classifiers return this action, no retry should be
     /// attempted.
-    DontCare,
-    /// When an error is received that should be retried, this action is returned.
-    Retry(ErrorKind),
-    /// When the server tells us to retry after a specific time has elapsed, this action is returned.
-    RetryAfter(Duration),
-    /// When a response must not be retried, this action is returned. This action stops retry
-    /// classification immediately, skipping any following classifiers.
+    #[default]
+    NoActionIndicated,
+    /// When a classifier runs and thinks a response should be retried, this action is returned.
+    RetryIndicated(RetryReason),
+    /// When a classifier runs and decides a response must not be retried, this action is returned.
+    ///
+    /// This action stops retry classification immediately, skipping any following classifiers.
     RetryForbidden,
 }
 
 impl fmt::Display for RetryAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::DontCare => write!(f, "don't care"),
-            Self::Retry(kind) => write!(f, "retry ({kind})"),
-            Self::RetryAfter(duration) => write!(f, "retry after {duration:?}"),
+            Self::NoActionIndicated => write!(f, "no action indicated"),
             Self::RetryForbidden => write!(f, "retry forbidden"),
+            Self::RetryIndicated(reason) => write!(f, "retry {reason}"),
+        }
+    }
+}
+
+impl RetryAction {
+    /// Create a new `RetryAction` indicating that a retry is necessary.
+    pub fn retryable_error(kind: ErrorKind) -> Self {
+        Self::RetryIndicated(RetryReason::RetryableError {
+            kind,
+            retry_after: None,
+        })
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary after an explicit delay.
+    pub fn retryable_error_with_explicit_delay(kind: ErrorKind, retry_after: Duration) -> Self {
+        Self::RetryIndicated(RetryReason::RetryableError {
+            kind,
+            retry_after: Some(retry_after),
+        })
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a transient error.
+    pub fn transient_error() -> Self {
+        Self::retryable_error(ErrorKind::TransientError)
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a throttling error.
+    pub fn throttling_error() -> Self {
+        Self::retryable_error(ErrorKind::ThrottlingError)
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a server error.
+    pub fn server_error() -> Self {
+        Self::retryable_error(ErrorKind::ServerError)
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a client error.
+    pub fn client_error() -> Self {
+        Self::retryable_error(ErrorKind::ClientError)
+    }
+}
+
+/// The reason for a retry.
+#[non_exhaustive]
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum RetryReason {
+    /// When an error is received that should be retried, this reason is returned.
+    RetryableError {
+        /// The kind of error.
+        kind: ErrorKind,
+        /// A server may tells us to retry only after a specific time has elapsed.
+        retry_after: Option<Duration>,
+    },
+}
+
+impl fmt::Display for RetryReason {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::RetryableError { kind, retry_after } => {
+                let after = retry_after
+                    .map(|d| format!(" after {d:?}"))
+                    .unwrap_or_default();
+                write!(f, "{kind} error{after}")
+            }
         }
     }
 }
@@ -141,9 +202,9 @@ pub trait ClassifyRetry: Send + Sync + fmt::Debug {
     /// Used for debugging purposes.
     fn name(&self) -> &'static str;
 
-    /// The priority of this retry classifier. Classifiers with a higher priority will run before
-    /// classifiers with a lower priority. Classifiers with equal priorities make no guarantees
-    /// about which will run first.
+    /// The priority of this retry classifier. Classifiers with a higher priority will override the
+    /// results of classifiers with a lower priority. Classifiers with equal priorities make no
+    /// guarantees about which will override the other.
     fn priority(&self) -> RetryClassifierPriority {
         RetryClassifierPriority::default()
     }

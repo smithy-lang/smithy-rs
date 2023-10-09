@@ -29,7 +29,7 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
 use aws_smithy_types::config_bag::{FrozenLayer, Layer};
 use aws_smithy_types::endpoint::Endpoint;
-use aws_smithy_types::retry::{ErrorKind, RetryConfig};
+use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::os_shim_internal::Env;
 use http::Uri;
@@ -555,17 +555,17 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
         if let Some(response) = ctx.response() {
             let status = response.status();
             match status {
-                _ if status.is_server_error() => RetryAction::Retry(ErrorKind::ServerError),
+                _ if status.is_server_error() => RetryAction::server_error(),
                 // 401 indicates that the token has expired, this is retryable
-                _ if status.as_u16() == 401 => RetryAction::Retry(ErrorKind::ServerError),
+                _ if status.as_u16() == 401 => RetryAction::server_error(),
                 // This catch-all includes successful responses that fail to parse. These should not be retried.
-                _ => RetryAction::DontCare,
+                _ => RetryAction::NoActionIndicated,
             }
         } else {
             // Don't retry timeouts for IMDS, or else it will take ~30 seconds for the default
             // credentials provider chain to fail to provide credentials.
             // Also don't retry non-responses.
-            RetryAction::DontCare
+            RetryAction::NoActionIndicated
         }
     }
 }
@@ -914,14 +914,20 @@ pub(crate) mod test {
         ctx.set_output_or_error(Ok(Output::doesnt_matter()));
         ctx.set_response(imds_response("").map(|_| SdkBody::empty()));
         let classifier = ImdsResponseRetryClassifier;
-        assert_eq!(RetryAction::DontCare, classifier.classify_retry(&ctx));
+        assert_eq!(
+            RetryAction::NoActionIndicated,
+            classifier.classify_retry(&ctx)
+        );
 
         // Emulate a failure to parse the response body (using an io error since it's easy to construct in a test)
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::connector(ConnectorError::io(
             io::Error::new(io::ErrorKind::BrokenPipe, "fail to parse").into(),
         ))));
-        assert_eq!(RetryAction::DontCare, classifier.classify_retry(&ctx));
+        assert_eq!(
+            RetryAction::NoActionIndicated,
+            classifier.classify_retry(&ctx)
+        );
     }
 
     // since tokens are sent as headers, the tokens need to be valid header values

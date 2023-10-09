@@ -50,8 +50,8 @@ async fn errors_are_retryable() {
     let mut ctx = InterceptorContext::new(Input::doesnt_matter());
     let err = err.into_service_error();
     ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
-    let retry_kind = classifier.classify_retry(&ctx);
-    assert_eq!(RetryAction::Retry(ErrorKind::ThrottlingError), retry_kind);
+    let retry_action = classifier.classify_retry(&ctx);
+    assert_eq!(RetryAction::throttling_error(), retry_action);
 }
 
 #[tokio::test]
@@ -69,6 +69,6 @@ async fn unmodeled_errors_are_retryable() {
     let mut ctx = InterceptorContext::new(Input::doesnt_matter());
     let err = err.into_service_error();
     ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
-    let retry_kind = classifier.classify_retry(&ctx);
-    assert_eq!(RetryAction::Retry(ErrorKind::ThrottlingError), retry_kind);
+    let retry_action = classifier.classify_retry(&ctx);
+    assert_eq!(RetryAction::throttling_error(), retry_action);
 }

@@ -27,7 +27,7 @@ use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
 use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
 use aws_smithy_types::config_bag::Layer;
-use aws_smithy_types::retry::{ErrorKind, RetryConfig};
+use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use http::header::{ACCEPT, AUTHORIZATION};
 use http::{HeaderValue, Response};
@@ -193,7 +193,7 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
     fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         let output_or_error = ctx.output_or_error();
         let error = match output_or_error {
-            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
             Some(Err(err)) => err,
         };
 
@@ -204,11 +204,11 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
             .zip(ctx.response().map(HttpResponse::status))
         {
             if matches!(err, CredentialsError::Unhandled { .. }) && status.is_success() {
-                return RetryAction::Retry(ErrorKind::ServerError);
+                return RetryAction::server_error();
             }
         }
 
-        RetryAction::DontCare
+        RetryAction::NoActionIndicated
     }
 }
 

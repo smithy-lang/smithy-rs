@@ -63,18 +63,18 @@ impl ClassifyRetry for TestRetryClassifier {
         let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
             Some(Err(err)) => err,
         };
 
         let action = if let Some(err) = error.as_operation_error() {
             tracing::info!("its an operation error: {err:?}");
             let err = err.downcast_ref::<OperationError>().unwrap();
-            RetryAction::Retry(err.0)
+            RetryAction::retryable_error(err.0)
         } else {
             tracing::info!("its something else... using other classifiers");
             let action = TransientErrorClassifier::<OperationError>::new().classify_retry(ctx);
-            if action == RetryAction::DontCare {
+            if action == RetryAction::NoActionIndicated {
                 HttpStatusCodeClassifier::default().classify_retry(ctx)
             } else {
                 action

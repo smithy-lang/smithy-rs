@@ -7,7 +7,7 @@ use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::retries::classifiers::{
     ClassifyRetry, RetryAction, RetryClassifierPriority, SharedRetryClassifier,
 };
-use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
+use aws_smithy_types::retry::ProvideErrorKind;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::marker::PhantomData;
@@ -41,7 +41,7 @@ where
         let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
             Some(Err(err)) => err,
         };
         // Check that the error is an operation error
@@ -50,8 +50,8 @@ where
             // Downcast the error
             .and_then(|err| err.downcast_ref::<E>())
             // Check if the error is retryable
-            .and_then(|err| err.retryable_error_kind().map(RetryAction::Retry))
-            .unwrap_or(RetryAction::DontCare)
+            .and_then(|err| err.retryable_error_kind().map(RetryAction::retryable_error))
+            .unwrap_or_default()
     }
 
     fn name(&self) -> &'static str {
@@ -92,23 +92,23 @@ where
         let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Some(Ok(_)) | None => return RetryAction::DontCare,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
             Some(Err(err)) => err,
         };
 
         if error.is_response_error() || error.is_timeout_error() {
-            RetryAction::Retry(ErrorKind::TransientError)
+            RetryAction::transient_error()
         } else if let Some(error) = error.as_connector_error() {
             if error.is_timeout() || error.is_io() {
-                RetryAction::Retry(ErrorKind::TransientError)
+                RetryAction::transient_error()
             } else {
                 error
                     .as_other()
-                    .map(RetryAction::Retry)
-                    .unwrap_or(RetryAction::DontCare)
+                    .map(RetryAction::retryable_error)
+                    .unwrap_or_default()
             }
         } else {
-            RetryAction::DontCare
+            RetryAction::NoActionIndicated
         }
     }
 
@@ -161,9 +161,9 @@ impl ClassifyRetry for HttpStatusCodeClassifier {
             .unwrap_or_default();
 
         if is_retryable {
-            RetryAction::Retry(ErrorKind::TransientError)
+            RetryAction::transient_error()
         } else {
-            RetryAction::DontCare
+            RetryAction::NoActionIndicated
         }
     }
 
@@ -184,14 +184,14 @@ pub fn run_classifiers_on_ctx(
     ctx: &InterceptorContext,
 ) -> RetryAction {
     // By default, don't retry
-    let mut result = RetryAction::DontCare;
+    let mut result = RetryAction::NoActionIndicated;
 
     for classifier in classifiers {
         let new_result = classifier.classify_retry(ctx);
 
-        // If the result is `DontCare`, continue to the next classifier
+        // If the result is `NoActionIndicated`, continue to the next classifier
         // without overriding any previously-set result.
-        if new_result == RetryAction::DontCare {
+        if new_result == RetryAction::NoActionIndicated {
             continue;
         }
 
@@ -205,6 +205,7 @@ pub fn run_classifiers_on_ctx(
 
         // If the result is `RetryForbidden`, stop running classifiers.
         if result == RetryAction::RetryForbidden {
+            tracing::trace!("retry classification ending early because a `RetryAction::RetryForbidden` was emitted",);
             break;
         }
     }
@@ -247,10 +248,7 @@ mod test {
             .map(SdkBody::from);
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            RetryAction::Retry(ErrorKind::TransientError)
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error());
     }
 
     #[test]
@@ -263,7 +261,7 @@ mod test {
             .map(SdkBody::from);
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
-        assert_eq!(policy.classify_retry(&ctx), RetryAction::DontCare);
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::NoActionIndicated);
     }
 
     #[test]
@@ -296,10 +294,7 @@ mod test {
             RetryableError,
         ))));
 
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            RetryAction::Retry(ErrorKind::ClientError),
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::client_error(),);
     }
 
     #[test]
@@ -309,10 +304,7 @@ mod test {
         ctx.set_output_or_error(Err(OrchestratorError::response(
             "I am a response error".into(),
         )));
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            RetryAction::Retry(ErrorKind::TransientError),
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error(),);
     }
 
     #[test]
@@ -322,9 +314,6 @@ mod test {
         ctx.set_output_or_error(Err(OrchestratorError::timeout(
             "I am a timeout error".into(),
         )));
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            RetryAction::Retry(ErrorKind::TransientError),
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error(),);
     }
 }
