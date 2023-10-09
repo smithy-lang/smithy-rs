@@ -40086,7 +40086,7 @@ RecordPreprocessorSourceUri,record_preprocessor_source_uri
 RecordRowDelimiter,record_row_delimiter
 RecordRowPath,record_row_path
 RecordSetId,record_set_id
-RecordSizeKiB,record_size_ki_b
+RecordSizeKiB,record_size_kib
 RecordState,record_state
 RecordTag,record_tag
 RecordTags,record_tags

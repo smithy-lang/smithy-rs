@@ -21,7 +21,7 @@ fun String.dq(): String = this.doubleQuote()
 private fun String.splitOnWordBoundaries(): List<String> {
     val out = mutableListOf<String>()
     // These are whole words but cased differently, e.g. `IPv4`, `MiB`, `GiB`, `TtL`
-    val completeWords = listOf("ipv4", "ipv6", "sigv4", "mib", "gib", "ttl")
+    val completeWords = listOf("ipv4", "ipv6", "sigv4", "mib", "gib", "kib", "ttl")
     var currentWord = ""
 
     // emit the current word and update from the next character
@@ -113,11 +113,11 @@ private fun digitFollowedByLower(current: String, nextChar: Char): Boolean {
     return (current.last().isDigit() && nextChar.isLowerCase())
 }
 
-// String extensions
 fun String.toSnakeCase(): String {
     return this.splitOnWordBoundaries().joinToString("_") { it.lowercase() }
 }
 
 fun String.toPascalCase(): String {
+    // TODO: consider using our updated toSnakeCase (but need to audit diff)
     return CaseUtils.toSnakeCase(this).let { CaseUtils.toPascalCase(it) }
 }
