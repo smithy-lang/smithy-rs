@@ -3,13 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Http Request Types
+
 use aws_smithy_http::body::SdkBody;
 use http as http0;
+use http::header::{InvalidHeaderName, InvalidHeaderValue, ToStrError};
+use http::uri::InvalidUri;
 use http0::header::Iter;
 use http0::uri::PathAndQuery;
 use http0::{Extensions, HeaderMap, Method};
 use std::borrow::Cow;
-use std::fmt::Debug;
+use std::error::Error;
+use std::fmt::{Debug, Display, Formatter};
 use std::str::{FromStr, Utf8Error};
 
 #[derive(Debug)]
@@ -474,7 +479,7 @@ mod header_value {
     }
 }
 
-use crate::client::http::HttpError;
+use crate::box_error::BoxError;
 pub use header_value::HeaderValue;
 
 impl HeaderValue {
@@ -492,14 +497,6 @@ impl FromStr for HeaderValue {
     }
 }
 
-impl TryFrom<http0::HeaderValue> for HeaderValue {
-    type Error = Utf8Error;
-
-    fn try_from(value: http::HeaderValue) -> Result<Self, Self::Error> {
-        HeaderValue::from_http03x(value)
-    }
-}
-
 impl TryFrom<String> for HeaderValue {
     type Error = HttpError;
 
@@ -512,6 +509,47 @@ impl TryFrom<String> for HeaderValue {
 }
 
 type MaybeStatic = Cow<'static, str>;
+
+#[derive(Debug)]
+/// An error occurred constructing an Http Request.
+///
+/// This is normally due to configuration issues, internal SDK bugs, or other user error.
+pub struct HttpError(BoxError);
+
+impl HttpError {
+    // TODO(httpRefactor): Add better error internals
+    fn new<E: Into<Box<dyn Error + Send + Sync + 'static>>>(err: E) -> Self {
+        HttpError(err.into())
+    }
+
+    fn invalid_header_value(err: InvalidHeaderValue) -> Self {
+        Self(err.into())
+    }
+
+    fn header_was_not_a_string(err: ToStrError) -> Self {
+        Self(err.into())
+    }
+
+    fn invalid_header_name(err: InvalidHeaderName) -> Self {
+        Self(err.into())
+    }
+
+    fn invalid_uri(err: InvalidUri) -> Self {
+        Self(err.into())
+    }
+}
+
+impl Display for HttpError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "an error occurred creating an HTTP Request")
+    }
+}
+
+impl Error for HttpError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.0.as_ref())
+    }
+}
 
 fn header_name(name: impl AsHeaderComponent) -> Result<http0::HeaderName, HttpError> {
     name.repr_as_http03x_header_name().or_else(|name| {

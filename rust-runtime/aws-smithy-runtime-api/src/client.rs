@@ -25,5 +25,3 @@ pub mod auth;
 pub mod http;
 
 pub mod ser_de;
-
-pub mod http;
