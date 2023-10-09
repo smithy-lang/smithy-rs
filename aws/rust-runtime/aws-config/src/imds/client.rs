@@ -574,7 +574,6 @@ impl ClassifyRetry for ImdsResponseRetryClassifier {
 pub(crate) mod test {
     use crate::imds::client::{Client, EndpointMode, ImdsResponseRetryClassifier};
     use crate::provider_config::ProviderConfig;
-    use aws_sdk_sso::config::retry::RetryAction;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep};
     use aws_smithy_http::body::SdkBody;
@@ -589,7 +588,7 @@ pub(crate) mod test {
     use aws_smithy_runtime_api::client::orchestrator::{
         HttpRequest, HttpResponse, OrchestratorError,
     };
-    use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
+    use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
     use http::header::USER_AGENT;

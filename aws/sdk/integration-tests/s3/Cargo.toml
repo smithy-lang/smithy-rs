@@ -27,7 +27,7 @@ aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"
-fastrand = "2.0.0"
+fastrand = "2.0.1"
 futures-util = { version = "0.3.16", default-features = false }
 hdrhistogram = "7.5.2"
 http = "0.2.3"

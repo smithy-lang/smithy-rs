@@ -104,7 +104,7 @@ class RetryClassifierServiceRuntimePluginCustomization(codegenContext: ClientCod
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> writable {
+            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 section.registerRetryClassifier(this) {
                     rustTemplate(
                         "#{HttpStatusCodeClassifier}::default()",

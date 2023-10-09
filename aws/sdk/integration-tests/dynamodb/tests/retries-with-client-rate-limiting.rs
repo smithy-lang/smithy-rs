@@ -9,7 +9,7 @@ use aws_smithy_async::test_util::instant_time_and_sleep;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
-use aws_smithy_runtime::client::retries::{classifiers::HttpStatusCodeClassifier, RetryPartition};
+use aws_smithy_runtime::client::retries::RetryPartition;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use std::time::{Duration, SystemTime};
 
@@ -73,7 +73,6 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
                 .with_max_attempts(4)
                 .with_use_static_exponential_base(true),
         )
-        .retry_classifier(HttpStatusCodeClassifier::default())
         .time_source(SharedTimeSource::new(time_source))
         .sleep_impl(SharedAsyncSleep::new(sleep_impl.clone()))
         .retry_partition(RetryPartition::new(
@@ -129,7 +128,6 @@ async fn test_adaptive_retries_with_throttling_errors() {
                 .with_max_attempts(4)
                 .with_use_static_exponential_base(true),
         )
-        .retry_classifier(HttpStatusCodeClassifier::default())
         .time_source(SharedTimeSource::new(time_source))
         .sleep_impl(SharedAsyncSleep::new(sleep_impl.clone()))
         .retry_partition(RetryPartition::new(

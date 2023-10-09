@@ -25,7 +25,6 @@ async fn test_disable_reconnect_on_503() {
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .endpoint_url(mock.endpoint_url())
         .http_client(mock.http_client())
-        .retry_classifier(HttpStatusCodeClassifier::default())
         .retry_config(
             RetryConfig::standard().with_reconnect_mode(ReconnectMode::ReuseAllConnections),
         )
@@ -66,7 +65,6 @@ async fn test_enabling_reconnect_on_503() {
         .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
         .endpoint_url(mock.endpoint_url())
         .http_client(mock.http_client())
-        .retry_classifier(HttpStatusCodeClassifier::default())
         .retry_config(
             RetryConfig::standard().with_reconnect_mode(ReconnectMode::ReconnectOnTransientError),
         )
