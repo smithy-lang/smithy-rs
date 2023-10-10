@@ -267,3 +267,11 @@ message = "STS and SSO-based credential providers will now respect both `use_fip
 references = ["aws-sdk-rust#882", "smithy-rs#3007"]
 meta = { "breaking" = true, "tada" = true, "bug" = true }
 author = "Velfi"
+
+[[smithy-rs]]
+message = """
+[EndpointPrefix::new](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/struct.EndpointPrefix.html#method.new) no longer returns `crate::operation::error::BuildError` for an Err variant, instead returns a more specific [`InvalidEndpointError`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/error/struct.InvalidEndpointError.html).
+"""
+references = ["smithy-rs#3032"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
