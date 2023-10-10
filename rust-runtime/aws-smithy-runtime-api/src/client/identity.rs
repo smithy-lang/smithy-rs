@@ -10,6 +10,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -20,6 +21,74 @@ new_type_future! {
     #[doc = "Future for [`IdentityResolver::resolve_identity`]."]
     pub struct IdentityFuture<'a, Identity, BoxError>;
 }
+
+static NEXT_CACHE_PARTITION: AtomicUsize = AtomicUsize::new(0);
+
+/// Cache partition key for identity caching.
+///
+/// Identities need cache partitioning because a single identity cache is used across
+/// multiple identity providers across multiple auth schemes. In addition, a single auth scheme
+/// may have many different identity providers due to operation-level config overrides.
+///
+/// This partition _must_ be respected when retrieving from the identity cache and _should_
+/// be part of the cache key.
+///
+/// Calling [`IdentityCachePartition::new`] will create a new globally unique cache partition key,
+/// and the [`SharedIdentityResolver`] will automatically create and store a partion on construction.
+/// Thus, every configured identity resolver will be assigned a unique partition.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub struct IdentityCachePartition(usize);
+
+impl IdentityCachePartition {
+    /// Create a new globally unique cache partition key.
+    pub fn new() -> Self {
+        Self(NEXT_CACHE_PARTITION.fetch_add(1, Ordering::Relaxed))
+    }
+
+    /// Helper for unit tests to create an identity cache partition with a known value.
+    #[cfg(feature = "test-util")]
+    pub fn new_for_tests(value: usize) -> IdentityCachePartition {
+        Self(value)
+    }
+}
+
+/// Caching resolver for identities.
+pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
+    /// Returns a cached identity, or resolves an identity and caches it if its not already cached.
+    fn resolve_cached_identity<'a>(
+        &'a self,
+        resolver: SharedIdentityResolver,
+        config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a>
+    where
+        Self: 'a;
+}
+
+/// Shared identity cache.
+#[derive(Clone, Debug)]
+pub struct SharedIdentityCache(Arc<dyn ResolveCachedIdentity>);
+
+impl SharedIdentityCache {
+    /// Creates a new [`SharedIdentityCache`] from the given cache implementation.
+    pub fn new(cache: impl ResolveCachedIdentity + 'static) -> Self {
+        Self(Arc::new(cache))
+    }
+}
+
+impl ResolveCachedIdentity for SharedIdentityCache {
+    fn resolve_cached_identity<'a>(
+        &'a self,
+        resolver: SharedIdentityResolver,
+        config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a>
+    where
+        Self: 'a,
+    {
+        self.0.resolve_cached_identity(resolver, config_bag)
+    }
+}
+
+impl_shared_conversions!(convert SharedIdentityCache from ResolveCachedIdentity using SharedIdentityCache::new);
 
 /// Resolver for identities.
 ///
@@ -35,22 +104,48 @@ new_type_future! {
 pub trait IdentityResolver: Send + Sync + Debug {
     /// Asynchronously resolves an identity for a request using the given config.
     fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a>;
+
+    /// Returns a fallback identity.
+    ///
+    /// This method should be used as a fallback plan, i.e., when a call to `resolve_identity`
+    /// is interrupted by a timeout and its future fails to complete.
+    ///
+    /// The fallback identity should be set aside and ready to be returned
+    /// immediately. Therefore, a new identity should NOT be fetched
+    /// within this method, which might cause a long-running operation.
+    fn fallback_on_interrupt(&self) -> Option<Identity> {
+        None
+    }
 }
 
 /// Container for a shared identity resolver.
 #[derive(Clone, Debug)]
-pub struct SharedIdentityResolver(Arc<dyn IdentityResolver>);
+pub struct SharedIdentityResolver {
+    inner: Arc<dyn IdentityResolver>,
+    cache_partition: IdentityCachePartition,
+}
 
 impl SharedIdentityResolver {
     /// Creates a new [`SharedIdentityResolver`] from the given resolver.
     pub fn new(resolver: impl IdentityResolver + 'static) -> Self {
-        Self(Arc::new(resolver))
+        Self {
+            inner: Arc::new(resolver),
+            cache_partition: IdentityCachePartition::new(),
+        }
+    }
+
+    /// Returns the globally unique cache partition key for this identity resolver.
+    ///
+    /// See the [`IdentityCachePartition`] docs for more information on what this is used for
+    /// and why.
+    pub fn cache_partition(&self) -> IdentityCachePartition {
+        self.cache_partition
     }
 }
 
 impl IdentityResolver for SharedIdentityResolver {
     fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
-        self.0.resolve_identity(config_bag)
+        self.inner.resolve_identity(config_bag)
     }
 }
 
@@ -124,8 +219,8 @@ impl Identity {
     }
 
     /// Returns the expiration time for this identity, if any.
-    pub fn expiration(&self) -> Option<&SystemTime> {
-        self.expiration.as_ref()
+    pub fn expiration(&self) -> Option<SystemTime> {
+        self.expiration
     }
 }
 
@@ -169,6 +264,6 @@ mod tests {
 
         assert_eq!("foo", identity.data::<MyIdentityData>().unwrap().first);
         assert_eq!("bar", identity.data::<MyIdentityData>().unwrap().last);
-        assert_eq!(Some(&expiration), identity.expiration());
+        assert_eq!(Some(expiration), identity.expiration());
     }
 }
