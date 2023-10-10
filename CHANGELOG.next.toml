@@ -297,3 +297,9 @@ message = "The `customize()` method is now sync and infallible. Remove any `awai
 references = ["smithy-rs#3039"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Our algorithm for converting identifiers to `snake_case` has been updated. This may result in a small change for some identifiers, particularly acronyms ending in `s`, e.g. `ACLs`."
+references = ["smithy-rs#3037", "aws-sdk-rust#756"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "all" }
+author = "rcoh"
