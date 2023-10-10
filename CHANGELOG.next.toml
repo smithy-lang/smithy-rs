@@ -297,3 +297,23 @@ message = "The `customize()` method is now sync and infallible. Remove any `awai
 references = ["smithy-rs#3039"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"

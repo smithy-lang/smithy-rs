@@ -71,8 +71,7 @@ fn err() -> http::Response<SdkBody> {
 }
 
 #[tokio::test]
-async fn test_retry_classifier_customization() {
-    tracing_subscriber::fmt::init();
+async fn test_retry_classifier_customization_for_service() {
     let http_client = StaticReplayClient::new(vec![
         ReplayEvent::new(req(), err()),
         ReplayEvent::new(req(), ok()),
@@ -93,6 +92,40 @@ async fn test_retry_classifier_customization() {
         .get_object()
         .bucket("bucket")
         .key("key")
+        .send()
+        .await
+        .expect_err("fails without attempting a retry");
+
+    // ensure our custom retry classifier was called at least once.
+    assert_ne!(customization_test_classifier.counter(), 0);
+}
+
+#[tokio::test]
+async fn test_retry_classifier_customization_for_operation() {
+    let http_client = StaticReplayClient::new(vec![
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), ok()),
+    ]);
+
+    let customization_test_classifier = CustomizationTestClassifier::new();
+
+    let config = aws_sdk_s3::Config::builder()
+        .with_test_defaults()
+        .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
+        .http_client(http_client)
+        .retry_config(RetryConfig::standard())
+        .build();
+
+    let client = aws_sdk_s3::Client::from_conf(config);
+    let _ = client
+        .get_object()
+        .bucket("bucket")
+        .key("key")
+        .customize()
+        .config_override(
+            aws_sdk_s3::config::Config::builder()
+                .retry_classifier(customization_test_classifier.clone()),
+        )
         .send()
         .await
         .expect_err("fails without attempting a retry");
