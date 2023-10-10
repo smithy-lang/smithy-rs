@@ -427,6 +427,18 @@ references = ["smithy-rs#3043", "smithy-rs#3078"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "A bug was fixed where the credentials-process provider was executing the subprocess in the worker thread, potentially stalling the runtime."
+references = ["smithy-rs#3052"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The `credentials-process` feature was added to `aws-config`. If you currently use `no-default-features` for `aws-config`, you MUST enable this feature to use the [`CredentialProcessProvider`](https://docs.rs/aws-config/latest/aws_config/credential_process/struct.CredentialProcessProvider.html) provider directly or via `~/.aws/config`."
+references = ["smithy-rs#3052"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
 [[smithy-rs]]
 message = """
 `aws_smithy_http::operation::error::{BuildError, SerializationError}` have been moved to `aws_smithy_types::error::operation::{BuildError, SerializationError}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
