@@ -223,6 +223,10 @@ impl Request<SdkBody> {
     pub fn take_body(&mut self) -> SdkBody {
         std::mem::replace(self.body_mut(), SdkBody::taken())
     }
+
+    pub fn empty() -> Self {
+        Self::new(SdkBody::empty())
+    }
 }
 
 impl<B> TryFrom<http0::Request<B>> for Request<B> {
