@@ -12,7 +12,7 @@ allowed_external_types = [
     "http::response::Response",
     "http::uri::Uri",
 
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Switch to AsyncIterator once standardized
+    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
     "futures_core::stream::Stream",
 
     # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
