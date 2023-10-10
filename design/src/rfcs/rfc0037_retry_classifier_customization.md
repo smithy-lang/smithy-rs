@@ -53,32 +53,42 @@ pub fn run_classifiers_on_ctx(
     classifiers: impl Iterator<Item = SharedRetryClassifier>,
     ctx: &InterceptorContext,
 ) -> RetryAction {
-    let mut result = None;
+    // By default, don't retry
+    let mut result = RetryAction::NoActionIndicated;
 
     for classifier in classifiers {
-        let new_result = classifier.classify_retry(ctx, result.clone());
+        let new_result = classifier.classify_retry(ctx);
 
-        // Emit a log whenever a new result overrides the result of a higher-priority classifier.
-        if new_result != result && new_result.is_none() {
-            tracing::debug!(
-                "Classifier '{}' has overridden the result of a higher-priority classifier",
-                classifier.name()
-            );
+        // If the result is `NoActionIndicated`, continue to the next classifier
+        // without overriding any previously-set result.
+        if new_result == RetryAction::NoActionIndicated {
+            continue;
         }
 
+        // Otherwise, set the result to the new result.
+        tracing::trace!(
+            "Classifier '{}' set the result of classification to '{}'",
+            classifier.name(),
+            new_result
+        );
         result = new_result;
+
+        // If the result is `RetryForbidden`, stop running classifiers.
+        if result == RetryAction::RetryForbidden {
+            tracing::trace!("retry classification ending early because a `RetryAction::RetryForbidden` was emitted",);
+            break;
+        }
     }
 
-    result.unwrap_or(RetryAction::NoRetry)
+    result
 }
 ```
 
 *NOTE: User-defined retry strategies are responsible for calling `run_classifiers_on_ctx`.*
 
-Lower-priority classifiers have the option of overriding or passing on the
-`RetryAction` returned by higher-priority classifiers. However, the default
-classifiers set for generic and AWS smithy clients always respect the result of
-higher-priority classifiers.
+Lower-priority classifiers run first, but the retry actions they return may be
+overridden by higher-priority classifiers. Classification stops immediately if
+any classifier returns `RetryAction::RetryForbidden`.
 
 ## The user experience if this RFC is implemented
 
@@ -96,15 +106,18 @@ impl ClassifyRetry for CustomRetryClassifier {
     fn classify_retry(
         &self,
         ctx: &InterceptorContext,
-        preceding_action: Option<RetryAction>,
     ) -> Option<RetryAction> {
-        // It's typical, but not required, to respect the judgement of the
-        // preceding classifier and forward it on.
-        if let Some(action) = preceding_action {
-            return action;
-        }
+        // Check for a result
+        let output_or_error = ctx.output_or_error();
+        // Check for an error
+        let error = match output_or_error {
+            // Typically, when the response is OK or unset
+            // then `RetryAction::NoActionIndicated` is returned.
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
+            Some(Err(err)) => err,
+        };
 
-        todo!("inspect the interceptor context to determine if a retry attempt should be made.")
+        todo!("inspect the error to determine if a retry attempt should be made.")
     }
 
     fn name(&self) -> &'static str { "my custom retry classifier" }
@@ -126,20 +139,16 @@ classifier should be respected.
 Internally, priority is implemented with a simple numeric system. In order to
 give the smithy-rs team the flexibility to make future changes, this numeric
 system is private and inaccessible to users. Instead, users may set the priority
-of classifiers relative to one another with the `run_after` and `run_before`
-methods:
+of classifiers relative to one another with the `with_lower_priority_than` and
+`with_higher_priority_than` methods:
 
 ```rust
 impl RetryClassifierPriority {
-    /// Create a new `RetryClassifierPriority` that runs after the given priority.
-    pub fn run_after(other: Self) -> Self {
-        Self::Other(other.as_i8() - 1)
-    }
+    /// Create a new `RetryClassifierPriority` with lower priority than the given priority.
+    pub fn with_lower_priority_than(other: Self) -> Self { ... }
 
-    /// Create a new `RetryClassifierPriority` that runs before the given priority.
-    pub fn run_before(other: Self) -> Self {
-        Self::Other(other.as_i8() + 1)
-    }
+    /// Create a new `RetryClassifierPriority` with higher priority than the given priority.
+    pub fn with_higher_priority_than(other: Self) -> Self { ... }
 }
 ```
 
@@ -158,7 +167,94 @@ impl ClassifyRetry for CustomRetryClassifier {
 The priorities of the three default retry classifiers
 (`HttpStatusCodeClassifier`, `ModeledAsRetryableClassifier`, and
 `TransientErrorClassifier`) are all public for this purpose. Users may **ONLY**
-set the priority of a retry relative to an existing retry priority.
+set a retry priority relative to an existing retry priority.
+
+
+#### `RetryAction` and `RetryReason`
+
+Retry classifiers communicate to the retry strategy by emitting `RetryAction`s:
+
+```rust
+/// The result of running a [`ClassifyRetry`] on a [`InterceptorContext`].
+#[non_exhaustive]
+#[derive(Clone, Eq, PartialEq, Debug, Default)]
+pub enum RetryAction {
+    /// When a classifier can't run or has no opinion, this action is returned.
+    ///
+    /// For example, if a classifier requires a parsed response and response parsing failed,
+    /// this action is returned. If all classifiers return this action, no retry should be
+    /// attempted.
+    #[default]
+    NoActionIndicated,
+    /// When a classifier runs and thinks a response should be retried, this action is returned.
+    RetryIndicated(RetryReason),
+    /// When a classifier runs and decides a response must not be retried, this action is returned.
+    ///
+    /// This action stops retry classification immediately, skipping any following classifiers.
+    RetryForbidden,
+}
+```
+
+When a retry is indicated by a classifier, the action will contain a `RetryReason`:
+
+```rust
+/// The reason for a retry.
+#[non_exhaustive]
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum RetryReason {
+    /// When an error is received that should be retried, this reason is returned.
+    RetryableError {
+        /// The kind of error.
+        kind: ErrorKind,
+        /// A server may tell us to retry only after a specific time has elapsed.
+        retry_after: Option<Duration>,
+    },
+}
+```
+
+*NOTE: `RetryReason` currently only has a single variant but it's defined as an `enum` for [forward compatibility] purposes.*
+
+`RetryAction`'s `impl` defines several convenience methods:
+
+```rust
+impl RetryAction {
+    /// Create a new `RetryAction` indicating that a retry is necessary.
+    pub fn retryable_error(kind: ErrorKind) -> Self {
+        Self::RetryIndicated(RetryReason::RetryableError {
+            kind,
+            retry_after: None,
+        })
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary after an explicit delay.
+    pub fn retryable_error_with_explicit_delay(kind: ErrorKind, retry_after: Duration) -> Self {
+        Self::RetryIndicated(RetryReason::RetryableError {
+            kind,
+            retry_after: Some(retry_after),
+        })
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a transient error.
+    pub fn transient_error() -> Self {
+        Self::retryable_error(ErrorKind::TransientError)
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a throttling error.
+    pub fn throttling_error() -> Self {
+        Self::retryable_error(ErrorKind::ThrottlingError)
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a server error.
+    pub fn server_error() -> Self {
+        Self::retryable_error(ErrorKind::ServerError)
+    }
+
+    /// Create a new `RetryAction` indicating that a retry is necessary because of a client error.
+    pub fn client_error() -> Self {
+        Self::retryable_error(ErrorKind::ClientError)
+    }
+}
+```
 
 ### Setting classifiers
 
@@ -232,23 +328,31 @@ The priority order of these classifiers is as follows:
 4. `AwsErrorCodeClassifier`
 5. *(lowest priority)* `HttpStatusCodeClassifier`
 
-The priority order of the default classifiers is not configurable. However, it's possible to wrap a default classifier in a newtype and set your desired priority when implementing the `ClassifyRetry` trait, delegating the `classify_retry` and `name` fields to the inner classifier.
+The priority order of the default classifiers is not configurable. However, it's
+possible to wrap a default classifier in a newtype and set your desired priority
+when implementing the `ClassifyRetry` trait, delegating the `classify_retry` and
+`name` fields to the inner classifier.
 
 #### Disable default classifiers
 
-Disabling the default classifiers is possible, but not easy. They are set at different points during config and operation construction, and must be unset at each of those places. A far simpler solution is to implement your own classifier that either:
+Disabling the default classifiers is possible, but not easy. They are set at
+different points during config and operation construction, and must be unset at
+each of those places. A far simpler solution is to implement your own classifier
+that has the highest priority.
 
- - Has the highest priority. All default classifiers will always respect the action of a higher-priority classifier.
- - Has the lowest priority and disregards the action of all other classifiers.
-
-Still, if completely removing the other classifiers is desired, use the `set_retry_classifiers` method on the config to replace the config-level defaults and then set a config override on the operation that does the same.
+Still, if completely removing the other classifiers is desired, use the
+`set_retry_classifiers` method on the config to replace the config-level
+defaults and then set a config override on the operation that does the same.
 
 ## How to actually implement this RFC
 
 In order to implement this feature, we must:
-- Update the current retry classification system so that individual classifiers as well as collections of classifiers can be easily composed together.
-- Create two new configuration mechanisms for users that allow them to customize retry classification at the service level and at the operation level.
-- Update retry classifiers so that they may 'short-circuit' the chain, ending retry classification immediately.
+- Update the current retry classification system so that individual classifiers
+  as well as collections of classifiers can be easily composed together.
+- Create two new configuration mechanisms for users that allow them to customize
+  retry classification at the service level and at the operation level.
+- Update retry classifiers so that they may 'short-circuit' the chain, ending
+  retry classification immediately.
 
 ### The `RetryClassifier` trait
 
@@ -303,14 +407,14 @@ expected order.
 
 ## Questions and answers
 
-- **Q:** Why are retry classifiers responsible for passing on the result of preceding
-classifiers? Isn't this a 'footgun'?
-  - **A:** Allowing lower-priority classifiers to second-guess the action returned
-by a higher-priority classifier allows users to define "catch-all" classifiers
-that run last and have ultimate authority to decide if a response should be
-retried.
 - **Q:** Should retry classifiers be fallible?
-  - **A:** I think no, because of the added complexity. If we make them fallible then we'll have to decide what happens when classifiers fail. Do we skip them or does classification end? The retry strategy is responsible for calling the classifiers so it be responsible for deciding how to handle a classifier error. I don't foresee a use case where an error returned by a classifier would be interpreted either by classifiers following the failed classifier or the retry strategy.
+  - **A:** I think no, because of the added complexity. If we make them fallible
+    then we'll have to decide what happens when classifiers fail. Do we skip
+    them or does classification end? The retry strategy is responsible for
+    calling the classifiers so it be responsible for deciding how to handle a
+    classifier error. I don't foresee a use case where an error returned by a
+    classifier would be interpreted either by classifiers following the failed
+    classifier or the retry strategy.
 
 ## Changes checklist
 
@@ -328,3 +432,4 @@ retried.
 <!-- Links -->
 
 [sort]: https://doc.rust-lang.org/stable/std/primitive.slice.html#method.sort
+[forward compatibility]: https://en.wikipedia.org/wiki/Forward_compatibility
