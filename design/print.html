@@ -1,17 +1,17 @@
 <!DOCTYPE HTML>
-<html lang="en" class="sidebar-visible no-js light">
+<html lang="en" class="light" dir="ltr">
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Smithy Rust</title>
-        <meta name="robots" content="noindex" />
+        <meta name="robots" content="noindex">
 
 
         <!-- Custom HTML head -->
         
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="theme-color" content="#ffffff" />
+        <meta name="theme-color" content="#ffffff">
 
         <link rel="icon" href="favicon.svg">
         <link rel="shortcut icon" href="favicon.png">
@@ -32,7 +32,7 @@
         <!-- Custom theme stylesheets -->
 
     </head>
-    <body>
+    <body class="sidebar-visible no-js">
     <div id="body-container">
         <!-- Provide site root to javascript -->
         <script>
@@ -62,29 +62,34 @@
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
             var html = document.querySelector('html');
-            html.classList.remove('no-js')
             html.classList.remove('light')
             html.classList.add(theme);
-            html.classList.add('js');
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
         </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
 
         <!-- Hide / unhide sidebar before it is displayed -->
         <script>
-            var html = document.querySelector('html');
+            var body = document.querySelector('body');
             var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
             if (document.body.clientWidth >= 1080) {
                 try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
                 sidebar = sidebar || 'visible';
             } else {
                 sidebar = 'hidden';
             }
-            html.classList.remove('sidebar-visible');
-            html.classList.add("sidebar-" + sidebar);
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
         </script>
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li><li class="chapter-item expanded "><a href="transport/connector.html"><strong aria-hidden="true">4.3.</strong> TLS Connector</a></li></ol></li><li class="chapter-item expanded "><a href="smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0035_collection_defaults.html"><strong aria-hidden="true">8.35.</strong> RFC-0035: Collection Defaults</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0036_http_dep_elimination.html"><strong aria-hidden="true">8.36.</strong> RFC-0036: HTTP Dependency Exposure</a></li></ol></li><li class="chapter-item expanded "><a href="contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li><li class="chapter-item expanded "><a href="transport/connector.html"><strong aria-hidden="true">4.3.</strong> TLS Connector</a></li></ol></li><li class="chapter-item expanded "><a href="smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0035_collection_defaults.html"><strong aria-hidden="true">8.35.</strong> RFC-0035: Collection Defaults</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0036_http_dep_elimination.html"><strong aria-hidden="true">8.36.</strong> RFC-0036: HTTP Dependency Exposure</a></li><li class="chapter-item expanded "><a href="rfcs/rfc0037_http_wrapper.html"><strong aria-hidden="true">8.37.</strong> RFC-0037: The HTTP Wrapper</a></li></ol></li><li class="chapter-item expanded "><a href="contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
             </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
@@ -117,9 +122,9 @@
                                 <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky">
                     <div class="left-buttons">
-                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
                             <i class="fa fa-bars"></i>
-                        </button>
+                        </label>
                         <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
                             <i class="fa fa-paint-brush"></i>
                         </button>
@@ -2568,6 +2573,10 @@ to avoid having to format correctly Rust in <code>Writer</code>s and to be sure 
 <li><a href="rfcs/./rfc0031_providing_fallback_credentials_on_timeout.html">RFC-0031: Providing Fallback Credentials on Timeout</a></li>
 <li><a href="rfcs/./rfc0032_better_constraint_violations.html">RFC-0032: Better Constraint Violations</a></li>
 <li><a href="rfcs/./rfc0033_improve_sdk_request_id_access.html">RFC-0033: Improving access to request IDs in SDK clients</a></li>
+<li><a href="rfcs/./rfc0034_smithy_orchestrator.html">RFC-0034: The Orchestrator Architecture</a></li>
+<li><a href="rfcs/./rfc0035_collection_defaults.html">RFC-0035: Sensible Defaults for Collection Values</a></li>
+<li><a href="rfcs/./rfc0036_http_dep_elimination.html">RFC-0036: Enabling HTTP crate upgrades in the future</a></li>
+<li><a href="rfcs/./rfc0037_http_wrapper_type.html">RFC-0037: The HTTP wrapper type</a></li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="aws-configuration-rfc"><a class="header" href="#aws-configuration-rfc">AWS Configuration RFC</a></h1>
 <blockquote>
@@ -12921,6 +12930,749 @@ Remove <code>http::Response</code> and <code>Uri</code> from the public exposed 
 Long tail of other usages: 1 week</li>
 <li><input disabled="" type="checkbox"/>
 Implement <code>~</code> versions for SDK Crate =&gt; runtime crate dependencies: 1 week</li>
+</ul>
+<div style="break-before: page; page-break-before: always;"></div><!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
+<h1 id="rfc-the-http-wrapper-type"><a class="header" href="#rfc-the-http-wrapper-type">RFC: The HTTP Wrapper Type</a></h1>
+<!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
+<blockquote>
+<p>Status: RFC</p>
+<p>Applies to: client</p>
+</blockquote>
+<!-- A great RFC will include a list of changes at the bottom so that the implementor can be sure they haven't missed anything -->
+<p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0037_http_wrapper.html#changes-checklist">Changes Checklist</a> section.</p>
+<!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
+<p>This RFC defines the API of our wrapper types around <code>http::Request</code> and <code>http::Response</code>. For more information about why we are wrapping these types, see <a href="rfcs/./rfc0036_http_dep_elimination.html">RFC 0036: The HTTP Dependency</a>.</p>
+<!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
+<h2 id="terminology-22"><a class="header" href="#terminology-22">Terminology</a></h2>
+<ul>
+<li><code>Extensions</code> / &quot;Request Extensions&quot;: The <code>http</code> crate Request/Response types include a typed property bag to store additional metadata along with the request.</li>
+</ul>
+<!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
+<h2 id="the-user-experience-if-this-rfc-is-implemented-6"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented-6">The user experience if this RFC is implemented</a></h2>
+<p>In the current version of the SDK, external customers and internal code interacts directly with the <a href="https://crates.io/crates/http"><code>http</code></a> crate. Once this RFC is implemented, interactions at the <strong>public</strong> API level will occur with our own <code>http</code> types instead.</p>
+<p>Our types aim to be nearly drop-in-compatible for types in the <code>http</code> crate, however:</p>
+<ol>
+<li>We will not expose existing HTTP types in public APIs in ways that are ossified.</li>
+<li>When possible, we aim to simplify the APIs to make them easier to use.</li>
+<li>We will add SDK specific helper functionality when appropriate, e.g. first-level support for applying an endpoint to a request.</li>
+</ol>
+<!-- Explain the implementation of this new feature -->
+<h2 id="how-to-actually-implement-this-rfc-5"><a class="header" href="#how-to-actually-implement-this-rfc-5">How to actually implement this RFC</a></h2>
+<p>We will need to add two types, <code>HttpRequest</code> and <code>HttpResponse</code>.</p>
+<h4 id="to-string-or-not-to-string"><a class="header" href="#to-string-or-not-to-string">To string or not to String</a></h4>
+<p>Our header library restricts header names and values to <code>String</code>s (UTF-8).</p>
+<p>Although the <code>http</code> library is very precise in its representation—it allows for <code>HeaderValue</code>s that are both a super and subset of <code>String</code>—a superset because headers support arbitrary binary data but a subset because headers cannot contain control characters like <code>\n</code>.</p>
+<p>Although technically allowed, headers containing arbitrary binary data are not widely supported. Generally, Smithy protocols will use base-64 encoding when storing binary data in headers.</p>
+<p>Finally, it's nicer for users if they can stay in &quot;string land&quot;. Because of this, HttpRequest and Response expose header names and values as strings. Internally, the current design uses <code>HeaderName</code> and <code>HeaderValue</code>, however, there is a gate on construction that enforces that values are valid UTF-8.</p>
+<p><strong>This is a one way door because <code>.as_str()</code> would panic in the future if we allow non-string values into headers.</strong></p>
+<h4 id="where-should-these-types-live"><a class="header" href="#where-should-these-types-live">Where should these types live?</a></h4>
+<p>These types will be used by all orchestrator functionality, so they will be housed in <code>aws-smithy-runtime-api</code></p>
+<h4 id="whats-in-and-whats-out"><a class="header" href="#whats-in-and-whats-out">What's in and what's out?</a></h4>
+<p>At the onset, these types focus on supporting the most ossified usages: <code>&amp;mut</code> modification of HTTP types. They <strong>do not</strong>
+support construction of HTTP types, other than <code>impl From&lt;http::Request&gt;</code> and <code>From&lt;http::Response&gt;</code>. We will also make it
+possible to use <code>http::HeaderName</code> / <code>http::HeaderValue</code> in a zero-cost way.</p>
+<h4 id="the-asheadercomponent-trait"><a class="header" href="#the-asheadercomponent-trait">The <code>AsHeaderComponent</code> trait</a></h4>
+<p>All header insertion methods accept <code>impl AsHeaderComponent</code>. This allows us to provide a nice user experience while taking
+advantage of zero-cost usage of <code>'static str</code>. We will seal this trait to prevent external usage. We will have separate implementation for:</p>
+<ul>
+<li><code>&amp;'static str</code></li>
+<li><code>String</code></li>
+<li>http03x::HeaderName</li>
+</ul>
+<h4 id="additional-functionality"><a class="header" href="#additional-functionality">Additional Functionality</a></h4>
+<p>Our wrapper type will add the following additional functionality:</p>
+<ol>
+<li>Support for <code>self.try_clone()</code></li>
+<li>Support for <code>&amp;mut self.apply_endpoint(...)</code></li>
+</ol>
+<h4 id="handling-failure"><a class="header" href="#handling-failure">Handling failure</a></h4>
+<p>There is no stdlib type that cleanly defines what may be placed into headers—String is too broad (even if we restrict to ASCII). This RFC proposes moving fallibility to the APIs:</p>
+<pre><code class="language-rust ignore">impl HeadersMut&lt;'_&gt; {
+    pub fn try_insert(
+        &amp;mut self,
+        key: impl AsHeaderComponent,
+        value: impl AsHeaderComponent,
+    ) -&gt; Result&lt;Option&lt;String&gt;, BoxError&gt; {
+        // ...
+    }
+}</code></pre>
+<p>This allows us to offer user-friendly types while still avoiding runtime panics. We also offer <code>insert</code> and <code>append</code> which panic on invalid values.</p>
+<h4 id="request-extensions"><a class="header" href="#request-extensions">Request Extensions</a></h4>
+<p>There is ongoing work which MAY restrict HTTP extensions to clone types. We will preempt that by:</p>
+<ol>
+<li>Preventing <code>Extensions</code> from being present when initially constructing our HTTP request wrapper.</li>
+<li>Forbidding non-clone extensions from being inserted into the wrapped request.</li>
+</ol>
+<p>This also enables supporting request extensions for different downstream providers by allowing cloning into different extension types.</p>
+<h4 id="proposed-implementation"><a class="header" href="#proposed-implementation">Proposed Implementation</a></h4>
+<details>
+<summary>Proposed Implementation of `request`</summary>
+<pre><code class="language-rust ignore">/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Http Request Types
+
+use aws_smithy_http::body::SdkBody;
+use http as http0;
+use http::header::{InvalidHeaderName, InvalidHeaderValue, ToStrError};
+use http::uri::InvalidUri;
+use http0::header::Iter;
+use http0::uri::PathAndQuery;
+use http0::{Extensions, HeaderMap, Method};
+use std::borrow::Cow;
+use std::error::Error;
+use std::fmt::{Debug, Display, Formatter};
+use std::str::FromStr;
+
+#[derive(Debug)]
+/// An HTTP Request Type
+pub struct Request&lt;B = SdkBody&gt; {
+    body: B,
+    uri: Uri,
+    method: Method,
+    extensions: Extensions,
+    headers: Headers,
+}
+
+/// A Request URI
+#[derive(Debug, Clone)]
+pub struct Uri {
+    as_string: String,
+    parsed: http0::Uri,
+}
+
+impl Uri {
+    /// Sets `endpoint` as the endpoint for a URL.
+    ///
+    /// An `endpoint` MUST contain a scheme and authority.
+    /// An `endpoint` MAY contain a port and path.
+    ///
+    /// An `endpoint` MUST NOT contain a query
+    pub fn set_endpoint(&amp;mut self, endpoint: &amp;str) -&gt; Result&lt;(), HttpError&gt; {
+        let endpoint: http0::Uri = endpoint.parse().map_err(HttpError::invalid_uri)?;
+        let endpoint = endpoint.into_parts();
+        let authority = endpoint
+            .authority
+            .ok_or_else(|| HttpError::new(&quot;endpoint must contain authority&quot;))?;
+        let scheme = endpoint
+            .scheme
+            .ok_or_else(|| HttpError::new(&quot;endpoint must have scheme&quot;))?;
+        let new_uri = http0::Uri::builder()
+            .authority(authority)
+            .scheme(scheme)
+            .path_and_query(merge_paths(endpoint.path_and_query, &amp;self.parsed).as_ref())
+            .build()
+            .map_err(HttpError::new)?;
+        self.as_string = new_uri.to_string();
+        self.parsed = new_uri;
+        Ok(())
+    }
+}
+
+fn merge_paths(endpoint_path: Option&lt;PathAndQuery&gt;, uri: &amp;http0::Uri) -&gt; Cow&lt;'_, str&gt; {
+    let uri_path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or(&quot;&quot;);
+    let endpoint_path = match endpoint_path {
+        None =&gt; return Cow::Borrowed(uri_path_and_query),
+        Some(path) =&gt; path,
+    };
+    if let Some(query) = endpoint_path.query() {
+        tracing::warn!(query = %query, &quot;query specified in endpoint will be ignored during endpoint resolution&quot;);
+    }
+    let endpoint_path = endpoint_path.path();
+    if endpoint_path.is_empty() {
+        Cow::Borrowed(uri_path_and_query)
+    } else {
+        let ep_no_slash = endpoint_path.strip_suffix('/').unwrap_or(endpoint_path);
+        let uri_path_no_slash = uri_path_and_query
+            .strip_prefix('/')
+            .unwrap_or(uri_path_and_query);
+        Cow::Owned(format!(&quot;{}/{}&quot;, ep_no_slash, uri_path_no_slash))
+    }
+}
+
+impl TryFrom&lt;String&gt; for Uri {
+    type Error = HttpError;
+
+    fn try_from(value: String) -&gt; Result&lt;Self, Self::Error&gt; {
+        let parsed = value.parse().map_err(HttpError::invalid_uri)?;
+        Ok(Uri {
+            as_string: value,
+            parsed,
+        })
+    }
+}
+
+impl&lt;'a&gt; TryFrom&lt;&amp;'a str&gt; for Uri {
+    type Error = HttpError;
+    fn try_from(value: &amp;'a str) -&gt; Result&lt;Self, Self::Error&gt; {
+        Self::try_from(value.to_string())
+    }
+}
+
+impl From&lt;http0::Uri&gt; for Uri {
+    fn from(value: http::Uri) -&gt; Self {
+        Self {
+            as_string: value.to_string(),
+            parsed: value,
+        }
+    }
+}
+
+impl&lt;B&gt; TryInto&lt;http0::Request&lt;B&gt;&gt; for Request&lt;B&gt; {
+    type Error = HttpError;
+
+    fn try_into(self) -&gt; Result&lt;http::Request&lt;B&gt;, Self::Error&gt; {
+        self.into_http03x()
+    }
+}
+
+impl&lt;B&gt; Request&lt;B&gt; {
+    /// Converts this request into an http 0.x request.
+    ///
+    /// Depending on the internal storage type, this operation may be free or it may have an internal
+    /// cost.
+    pub fn into_http03x(self) -&gt; Result&lt;http0::Request&lt;B&gt;, HttpError&gt; {
+        let mut req = http::Request::builder()
+            .uri(self.uri.parsed)
+            .method(self.method)
+            .body(self.body)
+            .expect(&quot;known valid&quot;);
+        let mut headers = HeaderMap::new();
+        headers.extend(
+            self.headers
+                .headers
+                .into_iter()
+                .map(|(k, v)| (k, v.into_http03x())),
+        );
+        *req.headers_mut() = headers;
+        *req.extensions_mut() = self.extensions;
+        Ok(req)
+    }
+
+    /// Returns a GET request with no URI
+    pub fn new(body: B) -&gt; Self {
+        Self {
+            body,
+            uri: Uri::from(http0::Uri::from_static(&quot;/&quot;)),
+            method: Method::GET,
+            extensions: Default::default(),
+            headers: Default::default(),
+        }
+    }
+
+    /// Returns a reference to the header map
+    pub fn headers(&amp;self) -&gt; &amp;Headers {
+        &amp;self.headers
+    }
+
+    /// Returns a mutable reference to the header map
+    pub fn headers_mut(&amp;mut self) -&gt; &amp;mut Headers {
+        &amp;mut self.headers
+    }
+
+    /// Returns the body associated with the request
+    pub fn body(&amp;self) -&gt; &amp;B {
+        &amp;self.body
+    }
+
+    /// Returns a mutable reference to the body
+    pub fn body_mut(&amp;mut self) -&gt; &amp;mut B {
+        &amp;mut self.body
+    }
+
+    /// Returns the method associated with this request
+    pub fn method(&amp;self) -&gt; &amp;str {
+        self.method.as_str()
+    }
+
+    /// Returns the URI associated with this request
+    pub fn uri(&amp;self) -&gt; &amp;str {
+        &amp;self.uri.as_string
+    }
+
+    /// Returns a mutable reference the the URI of this http::Request
+    pub fn uri_mut(&amp;mut self) -&gt; &amp;mut Uri {
+        &amp;mut self.uri
+    }
+
+    /// Sets the URI of this request
+    pub fn set_uri&lt;U&gt;(&amp;mut self, uri: U) -&gt; Result&lt;(), U::Error&gt;
+    where
+        U: TryInto&lt;Uri&gt;,
+    {
+        let uri = uri.try_into()?;
+        self.uri = uri;
+        Ok(())
+    }
+
+    /// Adds an extension to the request extensions
+    pub fn add_extension&lt;T: Send + Sync + Clone + 'static&gt;(&amp;mut self, extension: T) {
+        self.extensions.insert(extension);
+    }
+}
+
+impl Request&lt;SdkBody&gt; {
+    /// Attempts to clone this request
+    ///
+    /// If the body is cloneable, this will clone the request. Otherwise `None` will be returned
+    pub fn try_clone(&amp;self) -&gt; Option&lt;Self&gt; {
+        let body = self.body().try_clone()?;
+        Some(Self {
+            body,
+            uri: self.uri.clone(),
+            method: self.method.clone(),
+            extensions: Extensions::new(),
+            headers: self.headers.clone(),
+        })
+    }
+
+    /// Replaces this requests body with [`SdkBody::taken()`]
+    pub fn take_body(&amp;mut self) -&gt; SdkBody {
+        std::mem::replace(self.body_mut(), SdkBody::taken())
+    }
+}
+
+impl&lt;B&gt; TryFrom&lt;http0::Request&lt;B&gt;&gt; for Request&lt;B&gt; {
+    type Error = HttpError;
+
+    fn try_from(value: http::Request&lt;B&gt;) -&gt; Result&lt;Self, Self::Error&gt; {
+        if let Some(e) = value
+            .headers()
+            .values()
+            .filter_map(|value| value.to_str().err())
+            .next()
+        {
+            Err(HttpError::header_was_not_a_string(e))
+        } else {
+            let (parts, body) = value.into_parts();
+            let mut string_safe_headers: HeaderMap&lt;HeaderValue&gt; = Default::default();
+            string_safe_headers.extend(
+                parts
+                    .headers
+                    .into_iter()
+                    .map(|(k, v)| (k, HeaderValue::from_http03x(v).expect(&quot;validated above&quot;))),
+            );
+            Ok(Self {
+                body,
+                uri: parts.uri.into(),
+                method: parts.method.clone(),
+                extensions: parts.extensions,
+                headers: Headers {
+                    headers: string_safe_headers,
+                },
+            })
+        }
+    }
+}
+
+/// An immutable view of request headers
+#[derive(Clone, Default, Debug)]
+pub struct Headers {
+    headers: HeaderMap&lt;HeaderValue&gt;,
+}
+
+impl&lt;'a&gt; IntoIterator for &amp;'a Headers {
+    type Item = (&amp;'a str, &amp;'a str);
+    type IntoIter = HeadersIter&lt;'a&gt;;
+
+    fn into_iter(self) -&gt; Self::IntoIter {
+        HeadersIter {
+            inner: self.headers.iter(),
+        }
+    }
+}
+
+/// An Iterator over headers
+pub struct HeadersIter&lt;'a&gt; {
+    inner: Iter&lt;'a, HeaderValue&gt;,
+}
+
+impl&lt;'a&gt; Iterator for HeadersIter&lt;'a&gt; {
+    type Item = (&amp;'a str, &amp;'a str);
+
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        self.inner.next().map(|(k, v)| (k.as_str(), v.as_ref()))
+    }
+}
+
+impl Headers {
+    /// Returns the value for a given key
+    ///
+    /// If multiple values are associated, the first value is returned
+    /// See [HeaderMap::get]
+    pub fn get(&amp;self, key: impl AsRef&lt;str&gt;) -&gt; Option&lt;&amp;str&gt; {
+        self.headers.get(key.as_ref()).map(|v| v.as_ref())
+    }
+
+    /// Returns an iterator over the headers
+    pub fn iter(&amp;self) -&gt; HeadersIter&lt;'_&gt; {
+        HeadersIter {
+            inner: self.headers.iter(),
+        }
+    }
+
+    /// Returns the total number of **values** stored in the map
+    pub fn len(&amp;self) -&gt; usize {
+        self.headers.len()
+    }
+
+    /// Returns true if there are no headers
+    pub fn is_empty(&amp;self) -&gt; bool {
+        self.len() == 0
+    }
+
+    /// Returns true if this header is present
+    pub fn contains_key(&amp;self, key: &amp;str) -&gt; bool {
+        self.headers.contains_key(key)
+    }
+
+    /// Insert a value into the headers structure.
+    ///
+    /// This will *replace* any existing value for this key. Returns the previous associated value if any.
+    ///
+    /// # Panics
+    /// If the key or value are not valid ascii, this function will panic.
+    pub fn insert(
+        &amp;mut self,
+        key: impl AsHeaderComponent,
+        value: impl AsHeaderComponent,
+    ) -&gt; Option&lt;String&gt; {
+        self.try_insert(key, value)
+            .expect(&quot;HeaderName or HeaderValue was invalid&quot;)
+    }
+
+    /// Insert a value into the headers structure.
+    ///
+    /// This will *replace* any existing value for this key. Returns the previous associated value if any.
+    ///
+    /// If the key or value are not valid ascii, an error is returned
+    pub fn try_insert(
+        &amp;mut self,
+        key: impl AsHeaderComponent,
+        value: impl AsHeaderComponent,
+    ) -&gt; Result&lt;Option&lt;String&gt;, HttpError&gt; {
+        let key = header_name(key.into_maybe_static()?)?;
+        let value = header_value(value.into_maybe_static()?)?;
+        Ok(self
+            .headers
+            .insert(key, value)
+            .map(|old_value| old_value.into()))
+    }
+
+    /// Appends a value to a given key
+    ///
+    /// If the key or value are NOT valid ascii, an error is returned
+    pub fn try_append(
+        &amp;mut self,
+        key: impl AsHeaderComponent,
+        value: impl AsHeaderComponent,
+    ) -&gt; Result&lt;bool, HttpError&gt; {
+        let key = header_name(key.into_maybe_static()?)?;
+        let value = header_value(value.into_maybe_static()?)?;
+        Ok(self.headers.append(key, value))
+    }
+
+    /// Removes all headers with a given key
+    ///
+    /// If there are multiple entries for this key, the first entry is returned
+    pub fn remove(&amp;mut self, key: &amp;str) -&gt; Option&lt;HeaderValue&gt; {
+        self.headers.remove(key)
+    }
+
+    /// Appends a value to a given key
+    ///
+    /// # Panics
+    /// If the key or value are NOT valid ascii, this function will panic
+    pub fn append(&amp;mut self, key: impl AsHeaderComponent, value: impl AsHeaderComponent) -&gt; bool {
+        self.try_append(key, value)
+            .expect(&quot;HeaderName or HeaderValue was invalid&quot;)
+    }
+}
+
+use sealed::AsHeaderComponent;
+
+mod sealed {
+    use super::*;
+    /// Trait defining things that may be converted into a header component (name or value)
+    pub trait AsHeaderComponent {
+        /// If the component can be represented as a Cow&lt;'static, str&gt;, return it
+        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt;;
+
+        /// If a component is already internally represented as a `http03x::HeaderName`, return it
+        fn repr_as_http03x_header_name(self) -&gt; Result&lt;http0::HeaderName, Self&gt;
+        where
+            Self: Sized,
+        {
+            Err(self)
+        }
+    }
+
+    impl AsHeaderComponent for &amp;'static str {
+        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
+            Ok(Cow::Borrowed(self))
+        }
+    }
+
+    impl AsHeaderComponent for String {
+        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
+            Ok(Cow::Owned(self))
+        }
+    }
+
+    impl AsHeaderComponent for Cow&lt;'static, str&gt; {
+        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
+            Ok(self)
+        }
+    }
+
+    impl AsHeaderComponent for http0::HeaderValue {
+        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
+            Ok(Cow::Owned(
+                self.to_str()
+                    .map_err(HttpError::header_was_not_a_string)?
+                    .to_string(),
+            ))
+        }
+    }
+
+    impl AsHeaderComponent for http0::HeaderName {
+        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
+            Ok(self.to_string().into())
+        }
+
+        fn repr_as_http03x_header_name(self) -&gt; Result&lt;http0::HeaderName, Self&gt;
+        where
+            Self: Sized,
+        {
+            Ok(self)
+        }
+    }
+}
+
+mod header_value {
+    use super::http0;
+    use std::str::Utf8Error;
+
+    /// HeaderValue type
+    ///
+    /// **Note**: Unlike `HeaderValue` in `http`, this only supports UTF-8 header values
+    #[derive(Debug, Clone)]
+    pub struct HeaderValue {
+        _private: http0::HeaderValue,
+    }
+
+    impl HeaderValue {
+        pub(crate) fn from_http03x(value: http0::HeaderValue) -&gt; Result&lt;Self, Utf8Error&gt; {
+            let _ = std::str::from_utf8(value.as_bytes())?;
+            Ok(Self { _private: value })
+        }
+
+        pub(crate) fn into_http03x(self) -&gt; http0::HeaderValue {
+            self._private
+        }
+    }
+
+    impl AsRef&lt;str&gt; for HeaderValue {
+        fn as_ref(&amp;self) -&gt; &amp;str {
+            std::str::from_utf8(self._private.as_bytes())
+                .expect(&quot;unreachable—only strings may be stored&quot;)
+        }
+    }
+
+    impl From&lt;HeaderValue&gt; for String {
+        fn from(value: HeaderValue) -&gt; Self {
+            value.as_ref().to_string()
+        }
+    }
+}
+
+use crate::box_error::BoxError;
+pub use header_value::HeaderValue;
+
+impl HeaderValue {
+    /// Returns the string representation of this header value
+    pub fn as_str(&amp;self) -&gt; &amp;str {
+        self.as_ref()
+    }
+}
+
+impl FromStr for HeaderValue {
+    type Err = HttpError;
+
+    fn from_str(s: &amp;str) -&gt; Result&lt;Self, Self::Err&gt; {
+        HeaderValue::try_from(s.to_string())
+    }
+}
+
+impl TryFrom&lt;String&gt; for HeaderValue {
+    type Error = HttpError;
+
+    fn try_from(value: String) -&gt; Result&lt;Self, Self::Error&gt; {
+        Ok(HeaderValue::from_http03x(
+            http0::HeaderValue::try_from(value).map_err(HttpError::invalid_header_value)?,
+        )
+        .expect(&quot;input was a string&quot;))
+    }
+}
+
+type MaybeStatic = Cow&lt;'static, str&gt;;
+
+#[derive(Debug)]
+/// An error occurred constructing an Http Request.
+///
+/// This is normally due to configuration issues, internal SDK bugs, or other user error.
+pub struct HttpError(BoxError);
+
+impl HttpError {
+    // TODO(httpRefactor): Add better error internals
+    fn new&lt;E: Into&lt;Box&lt;dyn Error + Send + Sync + 'static&gt;&gt;&gt;(err: E) -&gt; Self {
+        HttpError(err.into())
+    }
+
+    fn invalid_header_value(err: InvalidHeaderValue) -&gt; Self {
+        Self(err.into())
+    }
+
+    fn header_was_not_a_string(err: ToStrError) -&gt; Self {
+        Self(err.into())
+    }
+
+    fn invalid_header_name(err: InvalidHeaderName) -&gt; Self {
+        Self(err.into())
+    }
+
+    fn invalid_uri(err: InvalidUri) -&gt; Self {
+        Self(err.into())
+    }
+}
+
+impl Display for HttpError {
+    fn fmt(&amp;self, f: &amp;mut Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        write!(f, &quot;an error occurred creating an HTTP Request&quot;)
+    }
+}
+
+impl Error for HttpError {
+    fn source(&amp;self) -&gt; Option&lt;&amp;(dyn Error + 'static)&gt; {
+        Some(self.0.as_ref())
+    }
+}
+
+fn header_name(name: impl AsHeaderComponent) -&gt; Result&lt;http0::HeaderName, HttpError&gt; {
+    name.repr_as_http03x_header_name().or_else(|name| {
+        name.into_maybe_static().and_then(|cow| match cow {
+            Cow::Borrowed(staticc) =&gt; Ok(http0::HeaderName::from_static(staticc)),
+            Cow::Owned(s) =&gt; http0::HeaderName::try_from(s).map_err(HttpError::invalid_header_name),
+        })
+    })
+}
+
+fn header_value(value: MaybeStatic) -&gt; Result&lt;HeaderValue, HttpError&gt; {
+    let header = match value {
+        Cow::Borrowed(b) =&gt; http0::HeaderValue::from_static(b),
+        Cow::Owned(s) =&gt; {
+            http0::HeaderValue::try_from(s).map_err(HttpError::invalid_header_value)?
+        }
+    };
+    HeaderValue::from_http03x(header).map_err(HttpError::new)
+}
+
+#[cfg(test)]
+mod test {
+    use aws_smithy_http::body::SdkBody;
+    use http::header::{AUTHORIZATION, CONTENT_LENGTH};
+    use http::{HeaderValue, Uri};
+
+    #[test]
+    fn headers_can_be_any_string() {
+        let _: HeaderValue = &quot;😹&quot;.parse().expect(&quot;can be any string&quot;);
+        let _: HeaderValue = &quot;abcd&quot;.parse().expect(&quot;can be any string&quot;);
+        let _ = &quot;a\nb&quot;
+            .parse::&lt;HeaderValue&gt;()
+            .expect_err(&quot;cannot contain control characters&quot;);
+    }
+
+    #[test]
+    fn request_can_be_created() {
+        let req = http::Request::builder()
+            .uri(&quot;http://foo.com&quot;)
+            .body(SdkBody::from(&quot;hello&quot;))
+            .unwrap();
+        let mut req = super::Request::try_from(req).unwrap();
+        req.headers_mut().insert(&quot;a&quot;, &quot;b&quot;);
+        assert_eq!(req.headers().get(&quot;a&quot;).unwrap(), &quot;b&quot;);
+        req.headers_mut().append(&quot;a&quot;, &quot;c&quot;);
+        assert_eq!(req.headers().get(&quot;a&quot;).unwrap(), &quot;b&quot;);
+        let http0 = req.into_http03x().unwrap();
+        assert_eq!(http0.uri(), &quot;http://foo.com&quot;);
+    }
+
+    #[test]
+    fn uri_mutations() {
+        let req = http::Request::builder()
+            .uri(&quot;http://foo.com&quot;)
+            .body(SdkBody::from(&quot;hello&quot;))
+            .unwrap();
+        let mut req = super::Request::try_from(req).unwrap();
+        assert_eq!(req.uri(), &quot;http://foo.com/&quot;);
+        req.set_uri(&quot;http://bar.com&quot;).unwrap();
+        assert_eq!(req.uri(), &quot;http://bar.com&quot;);
+        let http0 = req.into_http03x().unwrap();
+        assert_eq!(http0.uri(), &quot;http://bar.com&quot;);
+    }
+
+    #[test]
+    #[should_panic]
+    fn header_panics() {
+        let req = http::Request::builder()
+            .uri(&quot;http://foo.com&quot;)
+            .body(SdkBody::from(&quot;hello&quot;))
+            .unwrap();
+        let mut req = super::Request::try_from(req).unwrap();
+        let _ = req
+            .headers_mut()
+            .try_insert(&quot;a\nb&quot;, &quot;a\nb&quot;)
+            .expect_err(&quot;invalid header&quot;);
+        let _ = req.headers_mut().insert(&quot;a\nb&quot;, &quot;a\nb&quot;);
+    }
+
+    #[test]
+    fn try_clone_clones_all_data() {
+        let request = ::http::Request::builder()
+            .uri(Uri::from_static(&quot;https://www.amazon.com&quot;))
+            .method(&quot;POST&quot;)
+            .header(CONTENT_LENGTH, 456)
+            .header(AUTHORIZATION, &quot;Token: hello&quot;)
+            .body(SdkBody::from(&quot;hello world!&quot;))
+            .expect(&quot;valid request&quot;);
+        let request: super::Request = request.try_into().unwrap();
+        let cloned = request.try_clone().expect(&quot;request is cloneable&quot;);
+
+        assert_eq!(&quot;https://www.amazon.com/&quot;, cloned.uri());
+        assert_eq!(&quot;POST&quot;, cloned.method());
+        assert_eq!(2, cloned.headers().len());
+        assert_eq!(&quot;Token: hello&quot;, cloned.headers().get(AUTHORIZATION).unwrap(),);
+        assert_eq!(&quot;456&quot;, cloned.headers().get(CONTENT_LENGTH).unwrap());
+        assert_eq!(&quot;hello world!&quot;.as_bytes(), cloned.body().bytes().unwrap());
+    }
+}</code></pre>
+</details>
+<h3 id="future-work"><a class="header" href="#future-work">Future Work</a></h3>
+<p>Currently, the only way to construct <code>Request</code> is from a compatible type (e.g. <code>http03x::Request</code>)</p>
+<h2 id="changes-checklist-29"><a class="header" href="#changes-checklist-29">Changes checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+Implement initial implementation and test it against the SDK as written</li>
+<li><input disabled="" type="checkbox"/>
+Add test suite of <code>HTTP</code> wrapper</li>
+<li><input disabled="" type="checkbox"/>
+External design review</li>
+<li><input disabled="" type="checkbox" checked=""/>
+Update the SigV4 crate to remove <code>http</code> API dependency</li>
+<li><input disabled="" type="checkbox"/>
+Update the SDK to use the new type (breaking change)</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="contributing"><a class="header" href="#contributing">Contributing</a></h1>
 <p>This is a collection of written resources for smithy-rs and SDK contributors.</p>
