@@ -48,7 +48,7 @@ they'll always run in a consistent order.
 
 Classifiers are each run in turn by the retry strategy:
 
-```rust
+```rust,ignore
 pub fn run_classifiers_on_ctx(
     classifiers: impl Iterator<Item = SharedRetryClassifier>,
     ctx: &InterceptorContext,
@@ -98,7 +98,7 @@ implemented, users will be able to define and set their own classifiers.
 
 ### Defining a custom classifier
 
-```rust
+```rust,ignore
 #[derive(Debug)]
 struct CustomRetryClassifier;
 
@@ -142,7 +142,7 @@ system is private and inaccessible to users. Instead, users may set the priority
 of classifiers relative to one another with the `with_lower_priority_than` and
 `with_higher_priority_than` methods:
 
-```rust
+```rust,ignore
 impl RetryClassifierPriority {
     /// Create a new `RetryClassifierPriority` with lower priority than the given priority.
     pub fn with_lower_priority_than(other: Self) -> Self { ... }
@@ -152,11 +152,11 @@ impl RetryClassifierPriority {
 }
 ```
 
-For example, if it was important for our `CustomRetryClassifer` in the previous
+For example, if it was important for our `CustomRetryClassifier` in the previous
 example to run *before* the default `HttpStatusCodeClassifier`, a user would
-define the `CustomRetryClassifer` priority like this:
+define the `CustomRetryClassifier` priority like this:
 
-```rust
+```rust,ignore
 impl ClassifyRetry for CustomRetryClassifier {
     fn priority(&self) -> RetryClassifierPriority {
         RetryClassifierPriority::run_before(RetryClassifierPriority::http_status_code_classifier())
@@ -174,7 +174,7 @@ set a retry priority relative to an existing retry priority.
 
 Retry classifiers communicate to the retry strategy by emitting `RetryAction`s:
 
-```rust
+```rust,ignore
 /// The result of running a [`ClassifyRetry`] on a [`InterceptorContext`].
 #[non_exhaustive]
 #[derive(Clone, Eq, PartialEq, Debug, Default)]
@@ -197,7 +197,7 @@ pub enum RetryAction {
 
 When a retry is indicated by a classifier, the action will contain a `RetryReason`:
 
-```rust
+```rust,ignore
 /// The reason for a retry.
 #[non_exhaustive]
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -212,11 +212,11 @@ pub enum RetryReason {
 }
 ```
 
-*NOTE: `RetryReason` currently only has a single variant but it's defined as an `enum` for [forward compatibility] purposes.*
+*NOTE: `RetryReason` currently only has a single variant, but it's defined as an `enum` for [forward compatibility] purposes.*
 
 `RetryAction`'s `impl` defines several convenience methods:
 
-```rust
+```rust,ignore
 impl RetryAction {
     /// Create a new `RetryAction` indicating that a retry is necessary.
     pub fn retryable_error(kind: ErrorKind) -> Self {
@@ -261,7 +261,7 @@ impl RetryAction {
 The interface for setting classifiers is very similar to the interface of
 settings interceptors:
 
-```rust
+```rust,ignore
 // All service configs support these setters. Operations support a nearly identical API.
 impl ServiceConfigBuilder {
     /// Add type implementing ClassifyRetry that will be used by the RetryStrategy
@@ -303,7 +303,7 @@ Smithy clients have three classifiers enabled by default:
   one is encountered, returns
   `Some(RetryAction::Retry(ErrorKind::TransientError))`. Otherwise, returns
   `None`. Requires a parsed response.
-- `HttpStatusCodeClassifier`: Checks the HTTP response's status code. By default
+- `HttpStatusCodeClassifier`: Checks the HTTP response's status code. By default,
   this classifies `500`, `502`, `503`, and `504` errors as
   `Some(RetryAction::Retry(ErrorKind::TransientError))`. Otherwise, returns
   `None`. The list of retryable status codes may be customized when creating
@@ -356,7 +356,7 @@ In order to implement this feature, we must:
 
 ### The `RetryClassifier` trait
 
-```rust
+```rust,ignore
 /// The result of running a [`ClassifyRetry`] on a [`InterceptorContext`].
 #[non_exhaustive]
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -411,7 +411,7 @@ expected order.
   - **A:** I think no, because of the added complexity. If we make them fallible
     then we'll have to decide what happens when classifiers fail. Do we skip
     them or does classification end? The retry strategy is responsible for
-    calling the classifiers so it be responsible for deciding how to handle a
+    calling the classifiers, so it be responsible for deciding how to handle a
     classifier error. I don't foresee a use case where an error returned by a
     classifier would be interpreted either by classifiers following the failed
     classifier or the retry strategy.
