@@ -10,7 +10,8 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -132,11 +133,11 @@ class EndpointsDecoratorTest {
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)
-                rust(
+                rustTemplate(
                     """
                     async fn endpoint_params_are_set() {
-                        use aws_smithy_async::rt::sleep::TokioSleep;
-                        use aws_smithy_client::never::NeverConnector;
+                        use #{NeverClient};
+                        use #{TokioSleep};
                         use aws_smithy_runtime_api::box_error::BoxError;
                         use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
                         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -194,7 +195,7 @@ class EndpointsDecoratorTest {
 
                         let interceptor = TestInterceptor::default();
                         let config = Config::builder()
-                            .http_connector(NeverConnector::new())
+                            .http_client(NeverClient::new())
                             .interceptor(interceptor.clone())
                             .timeout_config(
                                 TimeoutConfig::builder()
@@ -218,6 +219,10 @@ class EndpointsDecoratorTest {
                         assert_eq!(format!("{}", err), "failed to construct request");
                     }
                     """,
+                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
+                        .toType().resolve("client::http::test_util::NeverClient"),
+                    "TokioSleep" to CargoDependency.smithyAsync(clientCodegenContext.runtimeConfig)
+                        .withFeature("rt-tokio").toType().resolve("rt::sleep::TokioSleep"),
                 )
             }
         }

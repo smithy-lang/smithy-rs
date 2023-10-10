@@ -5,8 +5,7 @@
 
 //! Credential provider augmentation through the AWS Security Token Service (STS).
 
-pub(crate) mod util;
-
 pub use assume_role::{AssumeRoleProvider, AssumeRoleProviderBuilder};
 
 mod assume_role;
+pub(crate) mod util;

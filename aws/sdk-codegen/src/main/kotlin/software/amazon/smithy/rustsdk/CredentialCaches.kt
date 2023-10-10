@@ -44,10 +44,17 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
     private val codegenScope = arrayOf(
         *preludeScope,
         "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache::CredentialsCache"),
+        "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
+            .resolve("identity::credentials::CredentialsIdentityResolver"),
         "DefaultProvider" to defaultProvider(),
+        "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth::sigv4::SCHEME_ID"),
         "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
-        "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("cache::SharedCredentialsCache"),
-        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider::SharedCredentialsProvider"),
+        "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+            .resolve("cache::SharedCredentialsCache"),
+        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+            .resolve("provider::SharedCredentialsProvider"),
+        "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            .resolve("client::identity::SharedIdentityResolver"),
     )
 
     override fun section(section: ServiceConfig) = writable {
@@ -99,7 +106,7 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                                 || match sleep {
                                     Some(sleep) => {
                                         #{CredentialsCache}::lazy_builder()
-                                            .sleep(sleep)
+                                            .sleep_impl(sleep)
                                             .into_credentials_cache()
                                     }
                                     None => #{CredentialsCache}::lazy(),
@@ -131,7 +138,13 @@ class CredentialCacheConfig(codegenContext: ClientCodegenContext) : ConfigCustom
                             #{Some}(credentials_cache),
                             #{Some}(credentials_provider),
                         ) => {
-                            resolver.config_mut().store_put(credentials_cache.create_cache(credentials_provider));
+                            let credentials_cache = credentials_cache.create_cache(credentials_provider);
+                            resolver.runtime_components_mut().push_identity_resolver(
+                                #{SIGV4_SCHEME_ID},
+                                #{SharedIdentityResolver}::new(
+                                    #{CredentialsIdentityResolver}::new(credentials_cache),
+                                ),
+                            );
                         }
                     }
                     """,

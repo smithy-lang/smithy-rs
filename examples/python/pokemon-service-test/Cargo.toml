@@ -17,7 +17,7 @@ tokio-rustls = "0.24.0"
 hyper-rustls = { version = "0.24", features = ["http2"] }
 
 # Local paths
-aws-smithy-client  = { path = "../../../rust-runtime/aws-smithy-client/", features = ["rustls"] }
+aws-smithy-runtime  = { path = "../../../rust-runtime/aws-smithy-runtime/", features = ["client", "connector-hyper-0-14-x"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http/" }
 aws-smithy-types  = { path = "../../../rust-runtime/aws-smithy-types/" }
 pokemon-service-client = { path = "../pokemon-service-client/" }

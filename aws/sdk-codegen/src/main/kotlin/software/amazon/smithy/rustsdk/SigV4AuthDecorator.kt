@@ -118,6 +118,18 @@ private class SigV4SigningConfig(
                     )
                 }
 
+                is ServiceConfig.OperationConfigOverride -> {
+                    rustTemplate(
+                        """
+                        resolver.config_mut()
+                            .load::<#{Region}>()
+                            .cloned()
+                            .map(|r| resolver.config_mut().store_put(#{SigningRegion}::from(r)));
+                        """,
+                        *codegenScope,
+                    )
+                }
+
                 else -> {}
             }
         }

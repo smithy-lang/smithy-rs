@@ -13,7 +13,6 @@
 use crate::fs_util::{home_dir, Os};
 use crate::json_credentials::{json_parse_loop, InvalidJsonCredentials};
 use crate::provider_config::ProviderConfig;
-
 use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
@@ -25,14 +24,12 @@ use aws_smithy_types::DateTime;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
 use aws_types::SdkConfig;
-
+use ring::digest;
 use std::convert::TryInto;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::io;
 use std::path::PathBuf;
-
-use ring::digest;
 use zeroize::Zeroizing;
 
 /// SSO Credentials Provider
@@ -66,7 +63,7 @@ impl SsoCredentialsProvider {
             fs,
             env,
             sso_provider_config,
-            sdk_config: provider_config.client_config("SSO"),
+            sdk_config: provider_config.client_config(),
         }
     }
 

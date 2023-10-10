@@ -5,4 +5,4 @@
 #
 
 set -e
-cd "$(git rev-parse --show-toplevel)/tools/ci-build/sdk-lints" && cargo run -- check --license --changelog
+cd "$(git rev-parse --show-toplevel)/tools/ci-build/sdk-lints" && cargo run -- check --all

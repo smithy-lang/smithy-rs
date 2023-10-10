@@ -442,7 +442,7 @@ impl Builder {
 
         ProfileFileCredentialsProvider {
             factory,
-            sdk_config: conf.client_config("profile file"),
+            sdk_config: conf.client_config(),
             provider_config: conf,
         }
     }
