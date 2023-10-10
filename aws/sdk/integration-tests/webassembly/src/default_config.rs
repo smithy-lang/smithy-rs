@@ -5,12 +5,9 @@
 
 use crate::http::WasmHttpConnector;
 use aws_config::retry::RetryConfig;
-use aws_credential_types::Credentials;
 use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::region::Region;
-use std::future::Future;
 
-pub(crate) fn get_default_config() -> impl Future<Output = aws_config::SdkConfig> {
+pub(crate) async fn get_default_config() -> aws_config::SdkConfig {
     aws_config::from_env()
         .region("us-east-2")
         .timeout_config(TimeoutConfig::disabled())

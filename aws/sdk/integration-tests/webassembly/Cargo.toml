@@ -26,6 +26,7 @@ aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", feat
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-smithy-wasm = { path = "../../build/aws-sdk/sdk/aws-smithy-wasm" }
+http = "0.2.9"
 tokio = { version = "1.32.0", features = ["macros", "rt"] }
 
 [target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
