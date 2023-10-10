@@ -86,7 +86,6 @@ async fn operation_overrides_credentials_provider() {
             Some(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1669257290 + 3600)),
             "test",
         )))
-        .request_time_for_tests(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1669257290))
         .send()
         .await;
 
