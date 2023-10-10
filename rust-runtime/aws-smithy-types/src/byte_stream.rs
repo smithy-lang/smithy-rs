@@ -423,9 +423,20 @@ impl ByteStream {
     /// # }
     /// ```
     pub fn into_async_read(self) -> impl tokio::io::AsyncRead {
-        tokio_util::io::StreamReader::new(
-            crate::futures_stream_adapter::FuturesStreamCompatByteStream::new(self),
-        )
+        // The `Stream` trait is currently unstable so we can only use it in private.
+        // Here, we create a local struct just to enable the trait for `ByteStream` and pass it
+        // to `StreamReader`.
+        struct FuturesStreamCompatByteStream(ByteStream);
+        impl futures_core::stream::Stream for FuturesStreamCompatByteStream {
+            type Item = Result<Bytes, Error>;
+            fn poll_next(
+                mut self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<Option<Self::Item>> {
+                Pin::new(&mut self.0).poll_next(cx)
+            }
+        }
+        tokio_util::io::StreamReader::new(FuturesStreamCompatByteStream(self))
     }
 
     /// Given a function to modify an [`SdkBody`], run it on the `SdkBody` inside this `Bytestream`.
