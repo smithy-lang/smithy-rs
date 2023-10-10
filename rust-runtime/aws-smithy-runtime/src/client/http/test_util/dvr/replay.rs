@@ -301,7 +301,10 @@ impl HttpConnector for ReplayingClient {
                 data_read
                     .extend_from_slice(data.expect("in memory request should not fail").as_ref())
             }
-            request.map(|_| Bytes::from(data_read))
+            request
+                .into_http03x()
+                .unwrap()
+                .map(|_body| Bytes::from(data_read))
         });
         let mut recorded_request = Waitable::Loading(recorded_request);
         let fut = async move {

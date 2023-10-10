@@ -4,10 +4,8 @@
  */
 
 use aws_smithy_http::endpoint::error::ResolveEndpointError;
-use aws_smithy_http::endpoint::{
-    apply_endpoint as apply_endpoint_to_request_uri, EndpointPrefix, ResolveEndpoint as _,
-    SharedEndpointResolver,
-};
+use aws_smithy_http::endpoint::EndpointPrefix;
+use aws_smithy_http::endpoint::SharedEndpointResolver;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::endpoint::{
     EndpointFuture, EndpointResolverParams, ResolveEndpoint,
@@ -18,7 +16,7 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
-use http::{HeaderValue, Uri};
+use http::HeaderValue;
 use std::fmt::Debug;
 use std::str::FromStr;
 use tracing::trace;
@@ -102,6 +100,7 @@ where
     Params: Debug + Send + Sync + 'static,
 {
     fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a> {
+        use aws_smithy_http::endpoint::ResolveEndpoint as _;
         let ep = match params.get::<Params>() {
             Some(params) => self.inner.resolve_endpoint(params).map_err(Box::new),
             None => Err(Box::new(ResolveEndpointError::message(
@@ -144,17 +143,21 @@ fn apply_endpoint(
     endpoint: &Endpoint,
     endpoint_prefix: Option<&EndpointPrefix>,
 ) -> Result<(), BoxError> {
-    let uri: Uri = endpoint.url().parse().map_err(|err| {
-        ResolveEndpointError::from_source("endpoint did not have a valid uri", err)
-    })?;
+    let prefix = endpoint_prefix
+        .map(EndpointPrefix::as_str)
+        .unwrap_or_default();
+    let endpoint_url = format!("{}{}", prefix, endpoint.url());
 
-    apply_endpoint_to_request_uri(request.uri_mut(), &uri, endpoint_prefix).map_err(|err| {
-        ResolveEndpointError::message(format!(
-            "failed to apply endpoint `{:?}` to request `{:?}`",
-            uri, request,
-        ))
-        .with_source(Some(err.into()))
-    })?;
+    request
+        .uri_mut()
+        .set_endpoint(&endpoint_url)
+        .map_err(|err| {
+            ResolveEndpointError::message(format!(
+                "failed to apply endpoint `{}` to request `{:?}`",
+                endpoint_url, request,
+            ))
+            .with_source(Some(err.into()))
+        })?;
 
     for (header_name, header_values) in endpoint.headers() {
         request.headers_mut().remove(header_name);

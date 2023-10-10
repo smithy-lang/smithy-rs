@@ -224,8 +224,16 @@ impl Request<SdkBody> {
         std::mem::replace(self.body_mut(), SdkBody::taken())
     }
 
+    /// Create a GET request to `/` with an empty body
     pub fn empty() -> Self {
         Self::new(SdkBody::empty())
+    }
+
+    /// Creates a GET request to `uri` with an empty body
+    pub fn get(uri: impl AsRef<str>) -> Result<Self, HttpError> {
+        let mut req = Self::new(SdkBody::empty());
+        req.set_uri(uri.as_ref())?;
+        Ok(req)
     }
 }
 
