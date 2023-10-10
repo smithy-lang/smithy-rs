@@ -291,3 +291,9 @@ message = "`SdkError` is no longer re-exported in generated server crates."
 references = ["smithy-rs#3038"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `customize()` method is now sync and infallible. Remove any `await`s and error handling from it to make things compile again."
+references = ["smithy-rs#3039"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"

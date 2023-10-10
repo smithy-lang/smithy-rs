@@ -156,8 +156,6 @@ internal class CredentialCacheConfigTest {
                         let _ = client
                             .say_hello()
                             .customize()
-                            .await
-                            .unwrap()
                             .config_override(operation_config_override)
                             .send()
                             .await
