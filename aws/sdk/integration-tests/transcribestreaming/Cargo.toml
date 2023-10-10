@@ -13,9 +13,9 @@ async-stream = "0.3.0"
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-transcribestreaming = { path = "../../build/aws-sdk/sdk/transcribestreaming" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 bytes = "1.0.0"
 futures-core = "0.3.14"
 hound = "3.4.0"

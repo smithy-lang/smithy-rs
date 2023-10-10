@@ -26,7 +26,6 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
         "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
         "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
         "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
-        "SharedTimeSource" to CargoDependency.smithyAsync(runtimeConfig).toType().resolve("time::SharedTimeSource"),
         "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::StaticRuntimePlugin"),
         "StaticTimeSource" to CargoDependency.smithyAsync(runtimeConfig).toType().resolve("time::StaticTimeSource"),
         "TestParamsSetterInterceptor" to testParamsSetterInterceptor(),
@@ -94,7 +93,7 @@ class CustomizableOperationTestHelpers(runtimeConfig: RuntimeConfig) :
                             #{StaticRuntimePlugin}::new()
                                 .with_runtime_components(
                                     #{RuntimeComponentsBuilder}::new("request_time_for_tests")
-                                        .with_time_source(Some(#{SharedTimeSource}::new(#{StaticTimeSource}::new(request_time))))
+                                        .with_time_source(Some(#{StaticTimeSource}::new(request_time)))
                                 )
                         )
                     }

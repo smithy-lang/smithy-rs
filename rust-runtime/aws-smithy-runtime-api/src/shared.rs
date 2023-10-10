@@ -19,8 +19,8 @@
 #![cfg_attr(
     feature = "client",
     doc = "
-For example, [`SharedHttpConnector`](crate::client::connectors::SharedHttpConnector), is
-a shared type for the [`HttpConnector`](crate::client::connectors::HttpConnector) trait,
+For example, [`SharedHttpConnector`](crate::client::http::SharedHttpConnector), is
+a shared type for the [`HttpConnector`](crate::client::http::HttpConnector) trait,
 which allows for sharing a single HTTP connector instance (and its connection pool) among multiple clients.
 "
 )]
@@ -63,9 +63,10 @@ The `IntoShared` trait is useful for making functions that take any `RuntimePlug
 For example, this function will convert the given `plugin` argument into a `SharedRuntimePlugin`.
 
 ```rust,no_run
-# use aws_smithy_runtime_api::client::runtime_plugin::{SharedRuntimePlugin, StaticRuntimePlugin};
-# use aws_smithy_runtime_api::shared::{IntoShared, FromUnshared};
-fn take_shared(plugin: impl IntoShared<SharedRuntimePlugin>) {
+# use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
+use aws_smithy_runtime_api::shared::IntoShared;
+
+fn take_shared(plugin: impl RuntimePlugin + 'static) {
     let _plugin: SharedRuntimePlugin = plugin.into_shared();
 }
 ```
@@ -74,9 +75,9 @@ This can be called with different types, and even if a `SharedRuntimePlugin` is 
 `SharedRuntimePlugin` inside of another `SharedRuntimePlugin`.
 
 ```rust,no_run
-# use aws_smithy_runtime_api::client::runtime_plugin::{SharedRuntimePlugin, StaticRuntimePlugin};
+# use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin, StaticRuntimePlugin};
 # use aws_smithy_runtime_api::shared::{IntoShared, FromUnshared};
-# fn take_shared(plugin: impl IntoShared<SharedRuntimePlugin>) {
+# fn take_shared(plugin: impl RuntimePlugin + 'static) {
 #     let _plugin: SharedRuntimePlugin = plugin.into_shared();
 # }
 // Automatically converts it to `SharedRuntimePlugin(StaticRuntimePlugin)`
@@ -178,6 +179,14 @@ macro_rules! impl_shared_conversions {
             }
         }
     };
+}
+
+// TODO(https://github.com/awslabs/smithy-rs/issues/3016): Move these impls once aws-smithy-async is merged into aws-smithy-runtime-api
+mod async_impls {
+    use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
+    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    impl_shared_conversions!(convert SharedAsyncSleep from AsyncSleep using SharedAsyncSleep::new);
+    impl_shared_conversions!(convert SharedTimeSource from TimeSource using SharedTimeSource::new);
 }
 
 #[cfg(test)]

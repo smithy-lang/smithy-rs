@@ -29,9 +29,11 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
+        "AsyncSleep" to sleepModule.resolve("AsyncSleep"),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
         "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
         "debug" to RuntimeType.Tracing.resolve("debug"),
+        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
         "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
         "RetryPartition" to retries.resolve("RetryPartition"),
@@ -150,8 +152,8 @@ class ResiliencyConfigCustomization(private val codegenContext: ClientCodegenCon
                         /// let sleep_impl = SharedAsyncSleep::new(ForeverSleep);
                         /// let config = Config::builder().sleep_impl(sleep_impl).build();
                         /// ```
-                        pub fn sleep_impl(mut self, sleep_impl: #{SharedAsyncSleep}) -> Self {
-                            self.set_sleep_impl(Some(sleep_impl));
+                        pub fn sleep_impl(mut self, sleep_impl: impl #{AsyncSleep} + 'static) -> Self {
+                            self.set_sleep_impl(Some(#{IntoShared}::into_shared(sleep_impl)));
                             self
                         }
 

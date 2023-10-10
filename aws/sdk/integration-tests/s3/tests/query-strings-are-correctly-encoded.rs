@@ -7,18 +7,18 @@ use aws_config::SdkConfig;
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
-use aws_smithy_client::test_connection::capture_request;
+use aws_smithy_runtime::client::http::test_util::capture_request;
 use std::time::{Duration, UNIX_EPOCH};
 
 #[tokio::test]
 async fn test_s3_signer_query_string_with_all_valid_chars() {
-    let (conn, rcvr) = capture_request(None);
+    let (http_client, rcvr) = capture_request(None);
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(
             Credentials::for_tests_with_session_token(),
         ))
         .region(Region::new("us-east-1"))
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .build();
 
     let client = Client::new(&sdk_config);
@@ -33,8 +33,6 @@ async fn test_s3_signer_query_string_with_all_valid_chars() {
         .bucket("test-bucket")
         .prefix(&prefix)
         .customize()
-        .await
-        .unwrap()
         .request_time_for_tests(UNIX_EPOCH + Duration::from_secs(1624036048))
         .user_agent_for_tests()
         .send()

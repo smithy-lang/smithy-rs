@@ -284,13 +284,13 @@ impl ImdsCredentialsProvider {
 mod test {
     use super::*;
     use crate::imds::client::test::{
-        imds_request, imds_response, make_client, token_request, token_response,
+        imds_request, imds_response, make_imds_client, token_request, token_response,
     };
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::ProvideCredentials;
     use aws_smithy_async::test_util::instant_time_and_sleep;
-    use aws_smithy_client::erase::DynConnector;
-    use aws_smithy_client::test_connection::TestConnection;
+    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
     use std::time::{Duration, UNIX_EPOCH};
     use tracing_test::traced_test;
 
@@ -298,51 +298,51 @@ mod test {
 
     #[tokio::test]
     async fn profile_is_not_cached() {
-        let connection = TestConnection::new(vec![
-                (
-                    token_request("http://169.254.169.254", 21600),
-                    token_response(21600, TOKEN_A),
-                ),
-                (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
-                    imds_response(r#"profile-name"#),
-                ),
-                (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
-                    imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
-                ),
-                (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
-                    imds_response(r#"different-profile"#),
-                ),
-                (
-                    imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/different-profile", TOKEN_A),
-                    imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST2\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
-                ),
-            ]);
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                token_request("http://169.254.169.254", 21600),
+                token_response(21600, TOKEN_A),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_response(r#"profile-name"#),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
+                imds_response(r#"different-profile"#),
+            ),
+            ReplayEvent::new(
+                imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/different-profile", TOKEN_A),
+                imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST2\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
+            ),
+        ]);
         let client = ImdsCredentialsProvider::builder()
-            .imds_client(make_client(&connection))
+            .imds_client(make_imds_client(&http_client))
             .build();
         let creds1 = client.provide_credentials().await.expect("valid creds");
         let creds2 = client.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
         assert_eq!(creds2.access_key_id(), "ASIARTEST2");
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     #[tokio::test]
     #[traced_test]
     async fn credentials_not_stale_should_be_used_as_they_are() {
-        let connection = TestConnection::new(vec![
-            (
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, TOKEN_A),
             ),
-            (
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                 imds_response(r#"profile-name"#),
             ),
-            (
+            ReplayEvent::new(
                 imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
                 imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
             ),
@@ -354,8 +354,8 @@ mod test {
         let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
 
         let provider_config = ProviderConfig::no_configuration()
-            .with_http_connector(DynConnector::new(connection.clone()))
-            .with_sleep(sleep)
+            .with_http_client(http_client.clone())
+            .with_sleep_impl(sleep)
             .with_time_source(time_source);
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
@@ -370,7 +370,7 @@ mod test {
             creds.expiry(),
             UNIX_EPOCH.checked_add(Duration::from_secs(1632197813))
         );
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
 
         // There should not be logs indicating credentials are extended for stability.
         assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
@@ -378,16 +378,16 @@ mod test {
     #[tokio::test]
     #[traced_test]
     async fn expired_credentials_should_be_extended() {
-        let connection = TestConnection::new(vec![
-                (
+        let http_client = StaticReplayClient::new(vec![
+                ReplayEvent::new(
                     token_request("http://169.254.169.254", 21600),
                     token_response(21600, TOKEN_A),
                 ),
-                (
+                ReplayEvent::new(
                     imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                     imds_response(r#"profile-name"#),
                 ),
-                (
+                ReplayEvent::new(
                     imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
@@ -398,8 +398,8 @@ mod test {
         let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
 
         let provider_config = ProviderConfig::no_configuration()
-            .with_http_connector(DynConnector::new(connection.clone()))
-            .with_sleep(sleep)
+            .with_http_client(http_client.clone())
+            .with_sleep_impl(sleep)
             .with_time_source(time_source);
         let client = crate::imds::Client::builder()
             .configure(&provider_config)
@@ -410,7 +410,7 @@ mod test {
             .build();
         let creds = provider.provide_credentials().await.expect("valid creds");
         assert!(creds.expiry().unwrap() > time_of_request_to_fetch_credentials);
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
 
         // We should inform customers that expired credentials are being used for stability.
         assert!(logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
@@ -486,36 +486,36 @@ mod test {
     #[tokio::test]
     async fn fallback_credentials_should_be_used_when_imds_returns_500_during_credentials_refresh()
     {
-        let connection = TestConnection::new(vec![
+        let http_client = StaticReplayClient::new(vec![
                 // The next three request/response pairs will correspond to the first call to `provide_credentials`.
                 // During the call, it populates last_retrieved_credentials.
-                (
+                ReplayEvent::new(
                     token_request("http://169.254.169.254", 21600),
                     token_response(21600, TOKEN_A),
                 ),
-                (
+                ReplayEvent::new(
                     imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                     imds_response(r#"profile-name"#),
                 ),
-                (
+                ReplayEvent::new(
                     imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
                 // The following request/response pair corresponds to the second call to `provide_credentials`.
                 // During the call, IMDS returns response code 500.
-                (
+                ReplayEvent::new(
                     imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
-                    http::Response::builder().status(500).body("").unwrap(),
+                    http::Response::builder().status(500).body(SdkBody::empty()).unwrap(),
                 ),
             ]);
         let provider = ImdsCredentialsProvider::builder()
-            .imds_client(make_client(&connection))
+            .imds_client(make_imds_client(&http_client))
             .build();
         let creds1 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
         // `creds1` should be returned as fallback credentials and assigned to `creds2`
         let creds2 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1, creds2);
-        connection.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 }

@@ -11,6 +11,7 @@ use std::time::Duration;
 use aws_config::timeout::TimeoutConfig;
 use aws_credential_types::Credentials;
 use aws_sdk_sts::error::SdkError;
+use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 
 #[cfg(debug_assertions)]
 use x509_parser::prelude::*;
@@ -103,15 +104,15 @@ async fn create_client(
         .unwrap()
         .with_root_certificates(roots)
         .with_no_client_auth();
-    let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+    let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(tls_config)
         .https_only()
         .enable_http1()
         .enable_http2()
         .build();
-    let smithy_connector = aws_smithy_client::hyper_ext::Adapter::builder().build(https_connector);
+    let http_client = HyperClientBuilder::new().build(tls_connector);
     let sdk_config = aws_config::from_env()
-        .http_connector(smithy_connector)
+        .http_client(http_client)
         .credentials_provider(credentials)
         .region("us-nether-1")
         .endpoint_url(format!("https://{host}:{port}"))

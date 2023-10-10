@@ -8,15 +8,15 @@ use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
-use aws_smithy_client::test_connection::{capture_request, CaptureRequestReceiver};
+use aws_smithy_runtime::client::http::test_util::{capture_request, CaptureRequestReceiver};
 use std::time::{Duration, UNIX_EPOCH};
 
 fn test_client(update_builder: fn(Builder) -> Builder) -> (CaptureRequestReceiver, Client) {
-    let (conn, captured_request) = capture_request(None);
+    let (http_client, captured_request) = capture_request(None);
     let sdk_config = SdkConfig::builder()
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-west-4"))
-        .http_connector(conn)
+        .http_client(http_client)
         .build();
     let client = Client::from_conf(update_builder(Builder::from(&sdk_config)).build());
     (captured_request, client)
@@ -70,8 +70,6 @@ async fn multi_region_access_points() {
         .bucket("arn:aws:s3::123456789012:accesspoint/mfzwi23gnjvgw.mrap")
         .key("blah")
         .customize()
-        .await
-        .unwrap()
         .request_time_for_tests(UNIX_EPOCH + Duration::from_secs(1624036048))
         .user_agent_for_tests()
         .send()
@@ -103,8 +101,6 @@ async fn s3_object_lambda() {
         .bucket("arn:aws:s3-object-lambda:us-east-100:123412341234:accesspoint/myolap")
         .key("s3.txt")
         .customize()
-        .await
-        .unwrap()
         .request_time_for_tests(UNIX_EPOCH + Duration::from_secs(1234567890))
         .send()
         .await

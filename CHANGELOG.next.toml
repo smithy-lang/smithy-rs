@@ -12,6 +12,24 @@
 # author = "rcoh"
 
 [[smithy-rs]]
+message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
+references = ["smithy-rs#3011"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `enableNewSmithyRuntime: middleware` opt-out flag in smithy-build.json has been removed and no longer opts out of the client orchestrator implementation. Middleware is no longer supported. If you haven't already upgraded to the orchestrator, see [the guide](https://github.com/awslabs/smithy-rs/discussions/2887)."
+references = ["smithy-rs#3038"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
+references = ["smithy-rs#3011"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
 message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
 references = ["smithy-rs#2909"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
@@ -261,3 +279,21 @@ For more information, see the [Change Log Discussion](https://github.com/awslabs
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 references = ["smithy-rs#3014"]
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "STS and SSO-based credential providers will now respect both `use_fips` and `use_dual_stack` when those settings are configured in a user's environment or profile."
+references = ["aws-sdk-rust#882", "smithy-rs#3007"]
+meta = { "breaking" = true, "tada" = true, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "`SdkError` is no longer re-exported in generated server crates."
+references = ["smithy-rs#3038"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `customize()` method is now sync and infallible. Remove any `await`s and error handling from it to make things compile again."
+references = ["smithy-rs#3039"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
