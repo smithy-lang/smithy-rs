@@ -1,6 +1,6 @@
 # RFC: User-configurable retry classification
 
-> Status: RFC
+> Status: Implemented
 >
 > Applies to: client
 
@@ -418,16 +418,16 @@ expected order.
 
 ## Changes checklist
 
-- [ ] Add retry classifiers field and setters to `RuntimeComponents` and `RuntimeComponentsBuilder`.
-  - [ ] Add unit tests ensuring that classifier priority is respected by `RuntimeComponents::retry_classifiers`, especially when multiple layers of config are in play.
-- [ ] Add codegen customization allowing users to set retry classifiers on service configs.
-- [ ] Add codegen for setting default classifiers at the service level.
-  - [ ] Add integration tests for setting classifiers at the service level.
-- [ ] Add codegen for settings default classifiers that require knowledge of operation error types at the operation level.
-  - [ ] Add integration tests for setting classifiers at the operation level.
-- [ ] Implement retry classifier priority.
-  - [ ] Add unit tests for retry classifier priority.
-- [ ] Update existing tests that would fail for lack of a retry classifier.
+- [x] Add retry classifiers field and setters to `RuntimeComponents` and `RuntimeComponentsBuilder`.
+  - [x] Add unit tests ensuring that classifier priority is respected by `RuntimeComponents::retry_classifiers`, especially when multiple layers of config are in play.
+- [x] Add codegen customization allowing users to set retry classifiers on service configs.
+- [x] Add codegen for setting default classifiers at the service level.
+  - [x] Add integration tests for setting classifiers at the service level.
+- [x] Add codegen for settings default classifiers that require knowledge of operation error types at the operation level.
+  - [x] Add integration tests for setting classifiers at the operation level.
+- [x] Implement retry classifier priority.
+  - [x] Add unit tests for retry classifier priority.
+- [x] Update existing tests that would fail for lack of a retry classifier.
 
 <!-- Links -->
 
