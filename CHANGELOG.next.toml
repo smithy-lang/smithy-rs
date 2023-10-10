@@ -299,6 +299,12 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
+message = "Our algorithm for converting identifiers to `snake_case` has been updated. This may result in a small change for some identifiers, particularly acronyms ending in `s`, e.g. `ACLs`."
+references = ["smithy-rs#3037", "aws-sdk-rust#756"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "all" }
+author = "rcoh"
+
+[[smithy-rs]]
 message = """
 Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
 

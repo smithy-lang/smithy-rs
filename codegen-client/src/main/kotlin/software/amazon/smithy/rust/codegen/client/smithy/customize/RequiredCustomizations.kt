@@ -24,7 +24,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -91,20 +90,17 @@ class RequiredCustomizations : ClientCodegenDecorator {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
         }
         rustCrate.withModule(ClientRustModule.Error) {
-            // TODO(enableNewSmithyRuntimeCleanup): Change SdkError to a `pub use` after changing the generic's default
-            rust("/// Error type returned by the client.")
-            rustTemplate(
-                "pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;",
-                "SdkError" to RuntimeType.sdkError(rc),
-                "R" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
-            )
             rustTemplate(
                 """
+                /// Error type returned by the client.
+                pub use #{SdkError};
+
                 pub use #{DisplayErrorContext};
                 pub use #{ProvideErrorMetadata};
                 """,
                 "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
                 "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+                "SdkError" to RuntimeType.sdkError(rc),
             )
         }
 

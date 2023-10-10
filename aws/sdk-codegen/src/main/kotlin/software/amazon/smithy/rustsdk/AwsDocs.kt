@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docsTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizationsOrElse
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 object AwsDocs {
     /**
@@ -27,7 +26,7 @@ object AwsDocs {
             ).contains(codegenContext.serviceShape.id)
 
     fun constructClient(codegenContext: ClientCodegenContext, indent: String): Writable {
-        val crateName = codegenContext.moduleName.toSnakeCase()
+        val crateName = codegenContext.moduleUseName()
         return writable {
             writeCustomizationsOrElse(
                 codegenContext.rootDecorator.extraSections(codegenContext),
@@ -48,7 +47,7 @@ object AwsDocs {
 
     fun clientConstructionDocs(codegenContext: ClientCodegenContext): Writable = {
         if (canRelyOnAwsConfig(codegenContext)) {
-            val crateName = codegenContext.moduleName.toSnakeCase()
+            val crateName = codegenContext.moduleUseName()
             docsTemplate(
                 """
                 #### Constructing a `Client`
