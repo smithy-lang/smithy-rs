@@ -118,8 +118,6 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let customizable_send = client
                             .say_hello()
                             .customize()
-                            .await
-                            .unwrap()
                             .config_override(crate::config::Config::builder().http_client(http_client))
                             .send();
 

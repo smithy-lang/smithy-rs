@@ -382,8 +382,6 @@ class ResiliencyServiceRuntimePluginCustomization(codegenContext: ClientCodegenC
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
             is ServiceRuntimePluginSection.DeclareSingletons -> {
-                // TODO(enableNewSmithyRuntimeCleanup) We can use the standard library's `OnceCell` once we upgrade the
-                //    MSRV to 1.70
                 rustTemplate(
                     """
                     static TOKEN_BUCKET: #{StaticPartitionMap}<#{TokenBucketPartition}, #{TokenBucket}> = #{StaticPartitionMap}::new();

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::connection::{CaptureSmithyConnection, ConnectionMetadata};
+use aws_smithy_http::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     AfterDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
@@ -14,9 +14,10 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::{ErrorKind, ReconnectMode, RetryConfig};
 use std::fmt;
+use std::sync::{Arc, Mutex};
 use tracing::{debug, error};
 
-/// A interceptor for poisoning connections in response to certain events.
+/// An interceptor for poisoning connections in response to certain events.
 ///
 /// This interceptor, when paired with a compatible connection, allows the connection to be
 /// poisoned in reaction to certain events *(like receiving a transient error.)* This allows users
@@ -25,10 +26,11 @@ use tracing::{debug, error};
 ///
 /// **In order for this interceptor to work,** the configured connection must interact with the
 /// "connection retriever" stored in an HTTP request's `extensions` map. For an example of this,
-/// see [aws_smithy_client::hyper_ext::Adapter](https://github.com/awslabs/smithy-rs/blob/47b3d23ff3cabd67e797af616101f5a4ea6be5e8/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L155).
-/// When a connection is made available to the retriever, this interceptor will call a `.poison`
-/// method on it, signalling that the connection should be dropped. It is up to the connection
-/// implementer to handle this.
+/// see [`HyperConnector`]. When a connection is made available to the retriever, this interceptor
+/// will call a `.poison` method on it, signalling that the connection should be dropped. It is
+/// up to the connection implementer to handle this.
+///
+/// [`HyperConnector`]: https://github.com/awslabs/smithy-rs/blob/26a914ece072bba2dd9b5b49003204b70e7666ac/rust-runtime/aws-smithy-runtime/src/client/http/hyper_014.rs#L347
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct ConnectionPoisoningInterceptor {}
@@ -51,11 +53,11 @@ impl Interceptor for ConnectionPoisoningInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let capture_smithy_connection = CaptureSmithyConnectionWrapper::new();
+        let capture_smithy_connection = CaptureSmithyConnection::new();
         context
             .request_mut()
             .extensions_mut()
-            .insert(capture_smithy_connection.clone_inner());
+            .insert(capture_smithy_connection.clone());
         cfg.interceptor_state().store_put(capture_smithy_connection);
 
         Ok(())
@@ -71,7 +73,7 @@ impl Interceptor for ConnectionPoisoningInterceptor {
             .load::<RetryConfig>()
             .map(RetryConfig::reconnect_mode)
             .unwrap_or(ReconnectMode::ReconnectOnTransientError);
-        let captured_connection = cfg.load::<CaptureSmithyConnectionWrapper>().cloned();
+        let captured_connection = cfg.load::<CaptureSmithyConnection>().cloned();
         let retry_classifiers = runtime_components
             .retry_classifiers()
             .ok_or("retry classifiers are required for connection poisoning to work")?;
@@ -100,46 +102,66 @@ impl Interceptor for ConnectionPoisoningInterceptor {
     }
 }
 
-// TODO(enableNewSmithyRuntimeCleanup): A storable wrapper won't be needed anymore once we absorb aws_smithy_http into the new runtime crate.
-/// A wrapper around CaptureSmithyConnection that implements `Storable` so that it can be added to the `ConfigBag`.
+type LoaderFn = dyn Fn() -> Option<ConnectionMetadata> + Send + Sync;
+
+/// State for a middleware that will monitor and manage connections.
+#[allow(missing_debug_implementations)]
 #[derive(Clone, Default)]
-pub struct CaptureSmithyConnectionWrapper {
-    inner: CaptureSmithyConnection,
+pub struct CaptureSmithyConnection {
+    loader: Arc<Mutex<Option<Box<LoaderFn>>>>,
 }
 
-impl CaptureSmithyConnectionWrapper {
-    /// Creates a new `CaptureSmithyConnectionWrapper`.
+impl CaptureSmithyConnection {
+    /// Create a new connection monitor.
     pub fn new() -> Self {
         Self {
-            inner: CaptureSmithyConnection::new(),
+            loader: Default::default(),
         }
     }
 
-    /// Returns a reference to the inner `CaptureSmithyConnection`.
-    pub fn clone_inner(&self) -> CaptureSmithyConnection {
-        self.inner.clone()
-    }
-
-    /// Returns the captured connection metadata, if any.
-    pub fn get(&self) -> Option<ConnectionMetadata> {
-        self.inner.get()
-    }
-
-    /// Sets the connection retriever function.
+    /// Set the retriever that will capture the `hyper` connection.
     pub fn set_connection_retriever<F>(&self, f: F)
     where
         F: Fn() -> Option<ConnectionMetadata> + Send + Sync + 'static,
     {
-        self.inner.set_connection_retriever(f)
+        *self.loader.lock().unwrap() = Some(Box::new(f));
+    }
+
+    /// Get the associated connection metadata.
+    pub fn get(&self) -> Option<ConnectionMetadata> {
+        match self.loader.lock().unwrap().as_ref() {
+            Some(loader) => loader(),
+            None => {
+                tracing::debug!("no loader was set on the CaptureSmithyConnection");
+                None
+            }
+        }
     }
 }
 
-impl Storable for CaptureSmithyConnectionWrapper {
+impl fmt::Debug for CaptureSmithyConnection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "CaptureSmithyConnection")
+    }
+}
+
+impl Storable for CaptureSmithyConnection {
     type Storer = StoreReplace<Self>;
 }
 
-impl fmt::Debug for CaptureSmithyConnectionWrapper {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "CaptureSmithyConnectionWrapper")
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    #[allow(clippy::redundant_clone)]
+    fn retrieve_connection_metadata() {
+        let retriever = CaptureSmithyConnection::new();
+        let retriever_clone = retriever.clone();
+        assert!(retriever.get().is_none());
+        retriever.set_connection_retriever(|| Some(ConnectionMetadata::new(true, None, || {})));
+
+        assert!(retriever.get().is_some());
+        assert!(retriever_clone.get().is_some());
     }
 }

@@ -17,6 +17,12 @@ references = ["smithy-rs#3011"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = "The `enableNewSmithyRuntime: middleware` opt-out flag in smithy-build.json has been removed and no longer opts out of the client orchestrator implementation. Middleware is no longer supported. If you haven't already upgraded to the orchestrator, see [the guide](https://github.com/awslabs/smithy-rs/discussions/2887)."
+references = ["smithy-rs#3038"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
 [[aws-sdk-rust]]
 message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
 references = ["smithy-rs#3011"]
@@ -279,3 +285,21 @@ message = "STS and SSO-based credential providers will now respect both `use_fip
 references = ["aws-sdk-rust#882", "smithy-rs#3007"]
 meta = { "breaking" = true, "tada" = true, "bug" = true }
 author = "Velfi"
+
+[[smithy-rs]]
+message = "`SdkError` is no longer re-exported in generated server crates."
+references = ["smithy-rs#3038"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `customize()` method is now sync and infallible. Remove any `await`s and error handling from it to make things compile again."
+references = ["smithy-rs#3039"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Our algorithm for converting identifiers to `snake_case` has been updated. This may result in a small change for some identifiers, particularly acronyms ending in `s`, e.g. `ACLs`."
+references = ["smithy-rs#3037", "aws-sdk-rust#756"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "all" }
+author = "rcoh"

@@ -63,7 +63,8 @@
   - [RFC-0034: Smithy Orchestrator](./rfcs/rfc0034_smithy_orchestrator.md)
   - [RFC-0035: Collection Defaults](./rfcs/rfc0035_collection_defaults.md)
   - [RFC-0036: HTTP Dependency Exposure](./rfcs/rfc0036_http_dep_elimination.md)
-  - [RFC-0037: User-configurable retry classification](./rfcs/rfc0037_retry_classifier_customization.md)
+  - [RFC-0037: The HTTP Wrapper](./rfcs/rfc0037_http_wrapper.md)
+  - [RFC-0038: User-configurable retry classification](./rfcs/rfc0038_retry_classifier_customization.md)
 
 - [Contributing](./contributing/overview.md)
   - [Writing and debugging a low-level feature that relies on HTTP](./contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.md)

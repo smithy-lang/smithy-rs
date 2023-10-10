@@ -3,4 +3,4 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! This crate is no longer used by the AWS SDK and is deprecated.
+//! Http Response Types
