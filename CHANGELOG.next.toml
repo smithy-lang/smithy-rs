@@ -303,3 +303,23 @@ message = "Our algorithm for converting identifiers to `snake_case` has been upd
 references = ["smithy-rs#3037", "aws-sdk-rust#756"]
 meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "all" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"

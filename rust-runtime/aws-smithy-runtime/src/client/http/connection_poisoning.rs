@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::retries::classifiers::run_classifiers_on_ctx;
 use aws_smithy_http::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     AfterDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::Interceptor;
-use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
+use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
-use aws_smithy_types::retry::{ErrorKind, ReconnectMode, RetryConfig};
+use aws_smithy_types::retry::{ReconnectMode, RetryConfig};
 use std::fmt;
 use std::sync::{Arc, Mutex};
 use tracing::{debug, error};
@@ -74,14 +75,9 @@ impl Interceptor for ConnectionPoisoningInterceptor {
             .map(RetryConfig::reconnect_mode)
             .unwrap_or(ReconnectMode::ReconnectOnTransientError);
         let captured_connection = cfg.load::<CaptureSmithyConnection>().cloned();
-        let retry_classifiers = runtime_components
-            .retry_classifiers()
-            .ok_or("retry classifiers are required for connection poisoning to work")?;
-
-        let error_is_transient = retry_classifiers
-            .classify_retry(context.inner())
-            .map(|reason| reason == RetryReason::Error(ErrorKind::TransientError))
-            .unwrap_or_default();
+        let retry_classifier_result =
+            run_classifiers_on_ctx(runtime_components.retry_classifiers(), context.inner());
+        let error_is_transient = retry_classifier_result == RetryAction::transient_error();
         let connection_poisoning_is_enabled =
             reconnect_mode == ReconnectMode::ReconnectOnTransientError;
 

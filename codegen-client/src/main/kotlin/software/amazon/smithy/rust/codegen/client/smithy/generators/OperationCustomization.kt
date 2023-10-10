@@ -79,21 +79,6 @@ sealed class OperationSection(name: String) : Section(name) {
     }
 
     /**
-     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
-     *
-     * Should emit 1+ lines of code that look like the following:
-     * ```rust
-     * .with_classifier(AwsErrorCodeClassifier::new())
-     * .with_classifier(HttpStatusCodeClassifier::new())
-     * ```
-     */
-    data class RetryClassifier(
-        override val customizations: List<OperationCustomization>,
-        val configBagName: String,
-        val operationShape: OperationShape,
-    ) : OperationSection("RetryClassifier")
-
-    /**
      * Hook for adding supporting types for operation-specific runtime plugins.
      * Examples include various operation-specific types (retry classifiers, config bag types, etc.)
      */
@@ -116,6 +101,15 @@ sealed class OperationSection(name: String) : Section(name) {
 
         fun addOperationRuntimePlugin(writer: RustWriter, plugin: Writable) {
             writer.rustTemplate(".with_operation_plugin(#{plugin})", "plugin" to plugin)
+        }
+    }
+
+    data class RetryClassifiers(
+        override val customizations: List<OperationCustomization>,
+        val operationShape: OperationShape,
+    ) : OperationSection("RetryClassifiers") {
+        fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
+            writer.rustTemplate(".with_retry_classifier(#{classifier})", "classifier" to classifier)
         }
     }
 }

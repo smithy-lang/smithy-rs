@@ -201,9 +201,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         cfg.push_shared_layer(client_config_layer.clone());
 
                         let retry_classifiers_component = #{RuntimeComponentsBuilder}::new("retry_classifier")
-                            .with_retry_classifiers(#{Some}(
-                                #{RetryClassifiers}::new().with_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError)),
-                            ));
+                            .with_retry_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError));
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()

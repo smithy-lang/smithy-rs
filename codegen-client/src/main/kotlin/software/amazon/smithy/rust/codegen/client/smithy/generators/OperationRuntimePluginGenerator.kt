@@ -40,6 +40,7 @@ class OperationRuntimePluginGenerator(
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "Cow" to RuntimeType.Cow,
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+            "IntoShared" to runtimeApi.resolve("shared::IntoShared"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
@@ -77,15 +78,11 @@ class OperationRuntimePluginGenerator(
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
-                    // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
-                    let retry_classifiers = #{RetryClassifiers}::new()
-                        #{retry_classifier_customizations};
-
                     #{Cow}::Owned(
                         #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
-                            .with_retry_classifiers(#{Some}(retry_classifiers))
                             #{auth_options}
                             #{interceptors}
+                            #{retry_classifiers}
                     )
                 }
             }
@@ -105,12 +102,6 @@ class OperationRuntimePluginGenerator(
                     ),
                 )
             },
-            "retry_classifier_customizations" to writable {
-                writeCustomizations(
-                    customizations,
-                    OperationSection.RetryClassifier(customizations, "cfg", operationShape),
-                )
-            },
             "runtime_plugin_supporting_types" to writable {
                 writeCustomizations(
                     customizations,
@@ -121,6 +112,12 @@ class OperationRuntimePluginGenerator(
                 writeCustomizations(
                     customizations,
                     OperationSection.AdditionalInterceptors(customizations, operationShape),
+                )
+            },
+            "retry_classifiers" to writable {
+                writeCustomizations(
+                    customizations,
+                    OperationSection.RetryClassifiers(customizations, operationShape),
                 )
             },
         )

@@ -4,8 +4,10 @@
  */
 
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
-use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
+use aws_smithy_runtime_api::client::retries::classifiers::{
+    ClassifyRetry, RetryAction, RetryClassifierPriority, SharedRetryClassifier,
+};
+use aws_smithy_types::retry::ProvideErrorKind;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::marker::PhantomData;
@@ -23,75 +25,99 @@ impl<E> ModeledAsRetryableClassifier<E> {
             _inner: PhantomData,
         }
     }
+
+    /// Return the priority of this retry classifier.
+    pub fn priority() -> RetryClassifierPriority {
+        RetryClassifierPriority::modeled_as_retryable_classifier()
+    }
 }
 
 impl<E> ClassifyRetry for ModeledAsRetryableClassifier<E>
 where
     E: StdError + ProvideErrorKind + Send + Sync + 'static,
 {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         // Check for a result
-        let output_or_error = ctx.output_or_error()?;
+        let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Ok(_) => return None,
-            Err(err) => err,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
+            Some(Err(err)) => err,
         };
         // Check that the error is an operation error
-        let error = error.as_operation_error()?;
-        // Downcast the error
-        let error = error.downcast_ref::<E>()?;
-        // Check if the error is retryable
-        error.retryable_error_kind().map(RetryReason::Error)
+        error
+            .as_operation_error()
+            // Downcast the error
+            .and_then(|err| err.downcast_ref::<E>())
+            // Check if the error is retryable
+            .and_then(|err| err.retryable_error_kind().map(RetryAction::retryable_error))
+            .unwrap_or_default()
     }
 
     fn name(&self) -> &'static str {
         "Errors Modeled As Retryable"
     }
+
+    fn priority(&self) -> RetryClassifierPriority {
+        Self::priority()
+    }
 }
 
 /// Classifies response, timeout, and connector errors as retryable or not.
 #[derive(Debug, Default)]
-pub struct SmithyErrorClassifier<E> {
+pub struct TransientErrorClassifier<E> {
     _inner: PhantomData<E>,
 }
 
-impl<E> SmithyErrorClassifier<E> {
-    /// Create a new `SmithyErrorClassifier`
+impl<E> TransientErrorClassifier<E> {
+    /// Create a new `TransientErrorClassifier`
     pub fn new() -> Self {
         Self {
             _inner: PhantomData,
         }
     }
+
+    /// Return the priority of this retry classifier.
+    pub fn priority() -> RetryClassifierPriority {
+        RetryClassifierPriority::transient_error_classifier()
+    }
 }
 
-impl<E> ClassifyRetry for SmithyErrorClassifier<E>
+impl<E> ClassifyRetry for TransientErrorClassifier<E>
 where
     E: StdError + Send + Sync + 'static,
 {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
-        let output_or_error = ctx.output_or_error()?;
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        // Check for a result
+        let output_or_error = ctx.output_or_error();
         // Check for an error
         let error = match output_or_error {
-            Ok(_) => return None,
-            Err(err) => err,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
+            Some(Err(err)) => err,
         };
 
         if error.is_response_error() || error.is_timeout_error() {
-            Some(RetryReason::Error(ErrorKind::TransientError))
+            RetryAction::transient_error()
         } else if let Some(error) = error.as_connector_error() {
             if error.is_timeout() || error.is_io() {
-                Some(RetryReason::Error(ErrorKind::TransientError))
+                RetryAction::transient_error()
             } else {
-                error.as_other().map(RetryReason::Error)
+                error
+                    .as_other()
+                    .map(RetryAction::retryable_error)
+                    .unwrap_or_default()
             }
         } else {
-            None
+            RetryAction::NoActionIndicated
         }
     }
 
     fn name(&self) -> &'static str {
         "Retryable Smithy Errors"
+    }
+
+    fn priority(&self) -> RetryClassifierPriority {
+        Self::priority()
     }
 }
 
@@ -119,45 +145,87 @@ impl HttpStatusCodeClassifier {
             retryable_status_codes: retryable_status_codes.into(),
         }
     }
+
+    /// Return the priority of this retry classifier.
+    pub fn priority() -> RetryClassifierPriority {
+        RetryClassifierPriority::http_status_code_classifier()
+    }
 }
 
 impl ClassifyRetry for HttpStatusCodeClassifier {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
-        ctx.response()
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        let is_retryable = ctx
+            .response()
             .map(|res| res.status().as_u16())
             .map(|status| self.retryable_status_codes.contains(&status))
-            .unwrap_or_default()
-            .then_some(RetryReason::Error(ErrorKind::TransientError))
+            .unwrap_or_default();
+
+        if is_retryable {
+            RetryAction::transient_error()
+        } else {
+            RetryAction::NoActionIndicated
+        }
     }
 
     fn name(&self) -> &'static str {
         "HTTP Status Code"
     }
+
+    fn priority(&self) -> RetryClassifierPriority {
+        Self::priority()
+    }
 }
 
-// Generic smithy clients would have something like this:
-// pub fn default_retry_classifiers() -> RetryClassifiers {
-//     RetryClassifiers::new()
-//         .with_classifier(SmithyErrorClassifier::new())
-//         .with_classifier(ModeledAsRetryableClassifier::new())
-//         .with_classifier(HttpStatusCodeClassifier::new())
-// }
-// This ordering is different than the default AWS ordering because the old generic client classifier
-// was the same.
+/// Given an iterator of retry classifiers and an interceptor context, run retry classifiers on the
+/// context. Each classifier is passed the classification result from the previous classifier (the
+/// 'root' classifier is passed `None`.)
+pub fn run_classifiers_on_ctx(
+    classifiers: impl Iterator<Item = SharedRetryClassifier>,
+    ctx: &InterceptorContext,
+) -> RetryAction {
+    // By default, don't retry
+    let mut result = RetryAction::NoActionIndicated;
+
+    for classifier in classifiers {
+        let new_result = classifier.classify_retry(ctx);
+
+        // If the result is `NoActionIndicated`, continue to the next classifier
+        // without overriding any previously-set result.
+        if new_result == RetryAction::NoActionIndicated {
+            continue;
+        }
+
+        // Otherwise, set the result to the new result.
+        tracing::trace!(
+            "Classifier '{}' set the result of classification to '{}'",
+            classifier.name(),
+            new_result
+        );
+        result = new_result;
+
+        // If the result is `RetryForbidden`, stop running classifiers.
+        if result == RetryAction::RetryForbidden {
+            tracing::trace!("retry classification ending early because a `RetryAction::RetryForbidden` was emitted",);
+            break;
+        }
+    }
+
+    result
+}
 
 #[cfg(test)]
 mod test {
-    use crate::client::retries::classifier::{
+    use crate::client::retries::classifiers::{
         HttpStatusCodeClassifier, ModeledAsRetryableClassifier,
     };
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-    use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
+    use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
     use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
     use std::fmt;
 
-    use super::SmithyErrorClassifier;
+    use super::TransientErrorClassifier;
 
     #[derive(Debug, PartialEq, Eq, Clone)]
     struct UnmodeledError;
@@ -180,10 +248,7 @@ mod test {
             .map(SdkBody::from);
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Error(ErrorKind::TransientError))
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error());
     }
 
     #[test]
@@ -196,7 +261,7 @@ mod test {
             .map(SdkBody::from);
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
-        assert_eq!(policy.classify_retry(&ctx), None);
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::NoActionIndicated);
     }
 
     #[test]
@@ -229,35 +294,26 @@ mod test {
             RetryableError,
         ))));
 
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Error(ErrorKind::ClientError)),
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::client_error(),);
     }
 
     #[test]
     fn classify_response_error() {
-        let policy = SmithyErrorClassifier::<UnmodeledError>::new();
+        let policy = TransientErrorClassifier::<UnmodeledError>::new();
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::response(
             "I am a response error".into(),
         )));
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Error(ErrorKind::TransientError)),
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error(),);
     }
 
     #[test]
     fn test_timeout_error() {
-        let policy = SmithyErrorClassifier::<UnmodeledError>::new();
+        let policy = TransientErrorClassifier::<UnmodeledError>::new();
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::timeout(
             "I am a timeout error".into(),
         )));
-        assert_eq!(
-            policy.classify_retry(&ctx),
-            Some(RetryReason::Error(ErrorKind::TransientError)),
-        );
+        assert_eq!(policy.classify_retry(&ctx), RetryAction::transient_error(),);
     }
 }
