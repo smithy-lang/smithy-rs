@@ -73,7 +73,6 @@ class EndpointTraitBindings(
                     if (generateValidation) {
                         val errorString = "$field was unset or empty but must be set as part of the endpoint prefix"
                         val contents =
-                            // TODO(enableNewSmithyRuntimeCleanup): Remove the allow attribute once all places need .into method
                             """
                             if $field.is_empty() {
                                 return Err(#{InvalidEndpointError}::failed_to_construct_uri("$errorString").into());
