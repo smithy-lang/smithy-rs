@@ -297,36 +297,30 @@ Smithy clients have three classifiers enabled by default:
 
 - `ModeledAsRetryableClassifier`: Checks for errors that are marked as retryable
   in the smithy model. If one is encountered, returns
-  `Some(RetryAction::Retry(ErrorKind))`. Otherwise, returns `None`. Requires a
-  parsed response.
+  `RetryAction::RetryIndicated`. Requires a parsed response.
 - `TransientErrorClassifier`: Checks for timeout, IO, and connector errors. If
-  one is encountered, returns
-  `Some(RetryAction::Retry(ErrorKind::TransientError))`. Otherwise, returns
-  `None`. Requires a parsed response.
-- `HttpStatusCodeClassifier`: Checks the HTTP response's status code. By default,
-  this classifies `500`, `502`, `503`, and `504` errors as
-  `Some(RetryAction::Retry(ErrorKind::TransientError))`. Otherwise, returns
-  `None`. The list of retryable status codes may be customized when creating
-  this classifier with the `HttpStatusCodeClassifier::new_from_codes` method.
+  one is encountered, returns `RetryAction::RetryIndicated`.  Requires a parsed
+  response.
+- `HttpStatusCodeClassifier`: Checks the HTTP response's status code. By
+  default, this classifies `500`, `502`, `503`, and `504` errors as
+  `RetryAction::RetryIndicated`.  The list of retryable status codes may be
+  customized when creating this classifier with the
+  `HttpStatusCodeClassifier::new_from_codes` method.
 
-AWS clients enable the three smithy classifiers as well as two more by default:
+AWS clients enable the three smithy classifiers as well as one more by default:
 
 - `AwsErrorCodeClassifier`: Checks for errors with AWS error codes marking them
   as either transient or throttling errors. If one is encountered, returns
-  `Some(RetryAction::Retry(ErrorKind))`. Otherwise, returns `None`. Requires a
-  parsed response.
-- `AmzRetryAfterHeaderClassifier`: Checks the HTTP response for an
-  `x-amz-retry-after` header. If one is set, returns
-  `Some(RetryAction::RetryAfter(duration))` where duration is the header's
-  value. Otherwise, returns `None`.
+  `RetryAction::RetryIndicated`. Requires a parsed response. This classifier
+  will also check the HTTP response for an `x-amz-retry-after` header. If one is
+  set, then the returned `RetryAction` will include the explicit delay.
 
 The priority order of these classifiers is as follows:
 
 1. *(highest priority)* `TransientErrorClassifier`
-2. `AmzRetryAfterHeaderClassifier`
-3. `ModeledAsRetryableClassifier`
-4. `AwsErrorCodeClassifier`
-5. *(lowest priority)* `HttpStatusCodeClassifier`
+2. `ModeledAsRetryableClassifier`
+3. `AwsErrorCodeClassifier`
+4. *(lowest priority)* `HttpStatusCodeClassifier`
 
 The priority order of the default classifiers is not configurable. However, it's
 possible to wrap a default classifier in a newtype and set your desired priority
