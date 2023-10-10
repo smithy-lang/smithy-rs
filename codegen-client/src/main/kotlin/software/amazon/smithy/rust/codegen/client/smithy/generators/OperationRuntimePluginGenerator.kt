@@ -40,6 +40,7 @@ class OperationRuntimePluginGenerator(
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "Cow" to RuntimeType.Cow,
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+            "IntoShared" to runtimeApi.resolve("shared::IntoShared"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
             "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
@@ -76,16 +77,12 @@ class OperationRuntimePluginGenerator(
                     #{Some}(cfg.freeze())
                 }
 
-                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
-                    // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
-                    let retry_classifiers = #{RetryClassifiers}::new()
-                        #{retry_classifier_customizations};
-
+                fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
                     #{Cow}::Owned(
                         #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
-                            .with_retry_classifiers(#{Some}(retry_classifiers))
                             #{auth_options}
                             #{interceptors}
+                            #{retry_classifiers}
                     )
                 }
             }
@@ -105,12 +102,6 @@ class OperationRuntimePluginGenerator(
                     ),
                 )
             },
-            "retry_classifier_customizations" to writable {
-                writeCustomizations(
-                    customizations,
-                    OperationSection.RetryClassifier(customizations, "cfg", operationShape),
-                )
-            },
             "runtime_plugin_supporting_types" to writable {
                 writeCustomizations(
                     customizations,
@@ -123,6 +114,12 @@ class OperationRuntimePluginGenerator(
                     OperationSection.AdditionalInterceptors(customizations, operationShape),
                 )
             },
+            "retry_classifiers" to writable {
+                writeCustomizations(
+                    customizations,
+                    OperationSection.RetryClassifiers(customizations, operationShape),
+                )
+            },
         )
     }
 
@@ -133,10 +130,6 @@ class OperationRuntimePluginGenerator(
         if (authSchemeOptions.any { it is AuthSchemeOption.CustomResolver }) {
             throw IllegalStateException("AuthSchemeOption.CustomResolver is unimplemented")
         } else {
-            val authOptionsMap = authSchemeOptions.associate {
-                val option = it as AuthSchemeOption.StaticAuthSchemeOption
-                option.schemeShapeId to option
-            }
             withBlockTemplate(
                 """
                 .with_auth_scheme_option_resolver(#{Some}(
@@ -149,10 +142,19 @@ class OperationRuntimePluginGenerator(
                 var noSupportedAuthSchemes = true
                 val authSchemes = ServiceIndex.of(codegenContext.model)
                     .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
+
                 for (schemeShapeId in authSchemes.keys) {
-                    val authOption = authOptionsMap[schemeShapeId]
-                    if (authOption != null) {
-                        authOption.constructor(this)
+                    val optionsForScheme = authSchemeOptions.filter {
+                        when (it) {
+                            is AuthSchemeOption.CustomResolver -> false
+                            is AuthSchemeOption.StaticAuthSchemeOption -> {
+                                it.schemeShapeId == schemeShapeId
+                            }
+                        }
+                    }
+
+                    if (optionsForScheme.isNotEmpty()) {
+                        optionsForScheme.forEach { (it as AuthSchemeOption.StaticAuthSchemeOption).constructor(this) }
                         noSupportedAuthSchemes = false
                     } else {
                         logger.warning(
@@ -162,9 +164,11 @@ class OperationRuntimePluginGenerator(
                     }
                 }
                 if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
-                    val authOption = authOptionsMap[noAuthSchemeShapeId]
+                    val authOption = authSchemeOptions.find {
+                        it is AuthSchemeOption.StaticAuthSchemeOption && it.schemeShapeId == noAuthSchemeShapeId
+                    }
                         ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")
-                    authOption.constructor(this)
+                    (authOption as AuthSchemeOption.StaticAuthSchemeOption).constructor(this)
                 }
             }
         }

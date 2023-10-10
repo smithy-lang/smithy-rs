@@ -26,7 +26,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -51,7 +50,6 @@ private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>>
         "HTTP_DIGEST_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_DIGEST_AUTH_SCHEME_ID"),
         "IdentityResolver" to smithyRuntimeApi.resolve("client::identity::IdentityResolver"),
         "Login" to smithyRuntimeApi.resolve("client::identity::http::Login"),
-        "PropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::PropertyBag"),
         "SharedAuthScheme" to smithyRuntimeApi.resolve("client::auth::SharedAuthScheme"),
         "SharedIdentityResolver" to smithyRuntimeApi.resolve("client::identity::SharedIdentityResolver"),
         "Token" to smithyRuntimeApi.resolve("client::identity::http::Token"),
@@ -67,12 +65,11 @@ private data class HttpAuthSchemes(
     companion object {
         fun from(codegenContext: ClientCodegenContext): HttpAuthSchemes {
             val authSchemes = ServiceIndex.of(codegenContext.model).getAuthSchemes(codegenContext.serviceShape).keys
-            val generateOrchestrator = codegenContext.smithyRuntimeMode.generateOrchestrator
             return HttpAuthSchemes(
-                apiKey = generateOrchestrator && authSchemes.contains(HttpApiKeyAuthTrait.ID),
-                basic = generateOrchestrator && authSchemes.contains(HttpBasicAuthTrait.ID),
-                bearer = generateOrchestrator && authSchemes.contains(HttpBearerAuthTrait.ID),
-                digest = generateOrchestrator && authSchemes.contains(HttpDigestAuthTrait.ID),
+                apiKey = authSchemes.contains(HttpApiKeyAuthTrait.ID),
+                basic = authSchemes.contains(HttpBasicAuthTrait.ID),
+                bearer = authSchemes.contains(HttpBearerAuthTrait.ID),
+                digest = authSchemes.contains(HttpDigestAuthTrait.ID),
             )
         }
     }

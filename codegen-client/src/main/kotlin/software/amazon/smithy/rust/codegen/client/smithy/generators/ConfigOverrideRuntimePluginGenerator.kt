@@ -48,6 +48,7 @@ class ConfigOverrideRuntimePluginGenerator(
             }
 
             impl ConfigOverrideRuntimePlugin {
+                ##[allow(dead_code)] // unused when a service does not provide any operations
                 pub(crate) fn new(
                     config_override: Builder,
                     initial_config: #{FrozenLayer},
@@ -73,7 +74,7 @@ class ConfigOverrideRuntimePluginGenerator(
                     Some(self.config.clone())
                 }
 
-                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
                     #{Cow}::Borrowed(&self.components)
                 }
             }

@@ -19,38 +19,6 @@ data class RootTest(
     val manifestName: String,
 )
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/2810): We can remove the `Flat` layout after the switch
-// to `Workspaces` has been released. This can be checked by looking at the `examples/` directory in aws-sdk-rust's
-// main branch.
-//
-// The `Flat` layout is retained for backwards compatibility so that the next release process can succeed.
-enum class AwsExamplesLayout {
-    /**
-     * Directory layout for examples used prior to June 26, 2023,
-     * where each example was in the `rust_dev_preview/` root directory and
-     * was considered to be its own workspace.
-     *
-     * This layout had issues with CI in terms of time to compile and disk space required
-     * since the dependencies would get recompiled for every example.
-     */
-    Flat,
-
-    /**
-     * Current directory layout where there are a small number of workspaces
-     * rooted in `rust_dev_preview/`.
-     */
-    Workspaces,
-    ;
-
-    companion object {
-        fun detect(project: Project): AwsExamplesLayout = if (project.projectDir.resolve("examples/Cargo.toml").exists()) {
-            AwsExamplesLayout.Flat
-        } else {
-            AwsExamplesLayout.Workspaces
-        }
-    }
-}
-
 class AwsServices(
     private val project: Project,
     services: List<AwsService>,
@@ -77,15 +45,9 @@ class AwsServices(
 
     val examples: List<String> by lazy {
         val examplesRoot = project.projectDir.resolve("examples")
-        if (AwsExamplesLayout.detect(project) == AwsExamplesLayout.Flat) {
-            examplesRoot.listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-                .filter { file -> manifestCompatibleWithGeneratedServices(file) }
-                .map { "examples/${it.name}" }
-        } else {
-            examplesRoot.listFiles { file ->
-                !file.name.startsWith(".") && file.isDirectory() && file.resolve("Cargo.toml").exists()
-            }.orEmpty().toList().map { "examples/${it.name}" }
-        }
+        examplesRoot.listFiles { file ->
+            !file.name.startsWith(".") && file.isDirectory() && file.resolve("Cargo.toml").exists()
+        }.orEmpty().toList().map { "examples/${it.name}" }
     }
 
     /**

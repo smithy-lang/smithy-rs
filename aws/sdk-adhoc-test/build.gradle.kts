@@ -35,44 +35,46 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-protocol-tests:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
+    implementation("software.amazon.smithy:smithy-model:$smithyVersion")
 }
 
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
+fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
+
+fun baseTest(service: String, module: String, imports: List<String> = listOf()): CodegenTest {
+    return CodegenTest(
+        service = service,
+        module = module,
+        imports = imports,
+        extraCodegenConfig = """
+            "includeFluentClient": false,
+            "nullabilityCheckMode": "${getNullabilityCheckMode()}"
+        """,
+        extraConfig = """
+            , "customizationConfig": {
+                "awsSdk": {
+                    "generateReadme": false,
+                    "requireEndpointResolver": false
+                }
+            }
+        """,
+    )
+}
 
 val allCodegenTests = listOf(
-    CodegenTest(
+    baseTest(
         "com.amazonaws.apigateway#BackplaneControlService",
         "apigateway",
         imports = listOf("models/apigateway-rules.smithy"),
-        extraConfig = """
-            ,
-            "codegen": {
-                "includeFluentClient": false,
-                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
-            },
-            "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false
-                }
-            }
-        """,
     ),
-    CodegenTest(
+    baseTest(
         "com.amazonaws.testservice#TestService",
         "endpoint-test-service",
         imports = listOf("models/single-static-endpoint.smithy"),
-        extraConfig = """
-            ,
-            "codegen": {
-                "includeFluentClient": false,
-                "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}"
-            },
-            "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false
-                }
-            }
-        """,
+    ),
+    baseTest(
+        "com.amazonaws.testservice#RequiredValues",
+        "required-values",
+        imports = listOf("models/required-value-test.smithy"),
     ),
 )
 

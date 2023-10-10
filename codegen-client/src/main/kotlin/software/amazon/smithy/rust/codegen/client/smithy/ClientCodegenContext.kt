@@ -9,10 +9,12 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientBuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
 /**
@@ -35,6 +37,8 @@ data class ClientCodegenContext(
 ) : CodegenContext(
     model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
 ) {
-    val smithyRuntimeMode: SmithyRuntimeMode get() = settings.codegenConfig.enableNewSmithyRuntime
     val enableUserConfigurableRuntimePlugins: Boolean get() = settings.codegenConfig.enableUserConfigurableRuntimePlugins
+    override fun builderInstantiator(): BuilderInstantiator {
+        return ClientBuilderInstantiator(this)
+    }
 }

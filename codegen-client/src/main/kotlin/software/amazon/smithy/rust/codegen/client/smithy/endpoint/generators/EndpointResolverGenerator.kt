@@ -7,13 +7,14 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
 import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
-import software.amazon.smithy.rulesengine.language.eval.Type
-import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
-import software.amazon.smithy.rulesengine.language.syntax.expr.Reference
-import software.amazon.smithy.rulesengine.language.syntax.fn.IsSet
+import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
+import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
-import software.amazon.smithy.rulesengine.language.visit.RuleValueVisitor
+import software.amazon.smithy.rulesengine.language.syntax.rule.RuleValueVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
@@ -168,7 +169,7 @@ internal class EndpointResolverGenerator(
 
         // Now that we rendered the rules once (and then threw it away) we can see what functions we actually used!
         val fnsUsed = registry.fnsUsed()
-        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.endpoint(codegenContext)) {
+        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Config.endpoint) {
             rustTemplate(
                 """
                 /// The default endpoint resolver
@@ -247,9 +248,9 @@ internal class EndpointResolverGenerator(
     }
 
     private fun isExhaustive(rule: Rule): Boolean = rule.conditions.isEmpty() || rule.conditions.all {
-        when (it.fn.type()) {
-            is Type.Bool -> false
-            is Type.Option -> false
+        when (it.function.type()) {
+            is BooleanType -> false
+            is OptionalType -> false
             else -> true
         }
     }
@@ -262,8 +263,8 @@ internal class EndpointResolverGenerator(
      * deal with the actual target of the condition but flattening through isSet
      */
     private fun Condition.targetFunction(): Expression {
-        return when (val fn = this.fn) {
-            is IsSet -> fn.target
+        return when (val fn = this.function) {
+            is IsSet -> fn.arguments[0]
             else -> fn
         }
     }
@@ -292,7 +293,7 @@ internal class EndpointResolverGenerator(
                 val target = generator.generate(fn)
                 val next = generateRuleInternal(rule, rest)
                 when {
-                    fn.type() is Type.Option -> {
+                    fn.type() is OptionalType -> {
                         Attribute.AllowUnusedVariables.render(this)
                         rustTemplate(
                             "if let Some($resultName) = #{target:W} { #{next:W} }",
@@ -301,7 +302,7 @@ internal class EndpointResolverGenerator(
                         )
                     }
 
-                    fn.type() is Type.Bool -> {
+                    fn.type() is BooleanType -> {
                         rustTemplate(
                             """
                             if #{target:W} {#{binding}
@@ -362,7 +363,7 @@ internal class EndpointResolverGenerator(
         return writable {
             rustTemplate("#{SmithyEndpoint}::builder().url(#{url:W})", *codegenScope, "url" to url)
             headers.forEach { (name, values) -> values.forEach { rust(".header(${name.dq()}, #W)", it) } }
-            properties.forEach { (name, value) -> rust(".property(${name.asString().dq()}, #W)", value) }
+            properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
             rust(".build()")
         }
     }

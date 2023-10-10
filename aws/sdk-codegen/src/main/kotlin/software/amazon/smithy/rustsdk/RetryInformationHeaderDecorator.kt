@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class RetryInformationHeaderDecorator : ClientCodegenDecorator {
     override val name: String = "RetryInformationHeader"
@@ -22,9 +21,7 @@ class RetryInformationHeaderDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(AddRetryInformationHeaderInterceptors(codegenContext))
-        }
+        baseCustomizations + listOf(AddRetryInformationHeaderInterceptors(codegenContext))
 }
 
 private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodegenContext) :
@@ -35,7 +32,7 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             // Track the latency between client and server.
-            section.registerInterceptor(runtimeConfig, this) {
+            section.registerInterceptor(this) {
                 rust(
                     "#T::new()",
                     awsRuntime.resolve("service_clock_skew::ServiceClockSkewInterceptor"),
@@ -43,7 +40,7 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
             }
 
             // Add request metadata to outgoing requests. Sets a header.
-            section.registerInterceptor(runtimeConfig, this) {
+            section.registerInterceptor(this) {
                 rust("#T::new()", awsRuntime.resolve("request_info::RequestInfoInterceptor"))
             }
         }

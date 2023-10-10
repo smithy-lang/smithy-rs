@@ -84,9 +84,9 @@ class EndpointsCredentialsTest {
                 tokioTest("default_auth") {
                     rustTemplate(
                         """
-                        let (conn, rcvr) = #{capture_request}(None);
+                        let (http_client, rcvr) = #{capture_request}(None);
                         let conf = $moduleName::Config::builder()
-                            .http_connector(conn)
+                            .http_client(http_client)
                             .region(#{Region}::new("us-west-2"))
                             .credentials_provider(#{Credentials}::for_tests())
                             .build();
@@ -107,9 +107,9 @@ class EndpointsCredentialsTest {
                 tokioTest("custom_auth") {
                     rustTemplate(
                         """
-                        let (conn, rcvr) = #{capture_request}(None);
+                        let (http_client, rcvr) = #{capture_request}(None);
                         let conf = $moduleName::Config::builder()
-                            .http_connector(conn)
+                            .http_client(http_client)
                             .region(#{Region}::new("us-west-2"))
                             .credentials_provider(#{Credentials}::for_tests())
                             .build();

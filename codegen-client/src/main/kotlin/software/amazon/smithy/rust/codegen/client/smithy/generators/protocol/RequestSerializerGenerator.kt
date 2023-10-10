@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -88,12 +87,7 @@ class RequestSerializerGenerator(
             "generate_body" to writable {
                 if (bodyGenerator != null) {
                     val body = writable {
-                        bodyGenerator.generatePayload(
-                            this,
-                            "input",
-                            operationShape,
-                            ClientAdditionalPayloadContext(propertyBagAvailable = false),
-                        )
+                        bodyGenerator.generatePayload(this, "input", operationShape)
                     }
                     val streamingMember = inputShape.findStreamingMember(codegenContext.model)
                     val isBlobStreaming =

@@ -18,7 +18,7 @@
         "smithy-rs#2129"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Retrieving a request ID from errors now requires importing the `RequestId` trait. For example, with S3:\n```rust\nuse aws_sdk_s3::types::RequestId;\nprintln!(\"Request ID: {:?}\", error.request_id());\n```\n",
@@ -33,7 +33,7 @@
         "smithy-rs#2129"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "The `message()` and `code()` methods on errors have been moved into `ProvideErrorMetadata` trait. This trait will need to be imported to continue calling these.",
@@ -48,7 +48,7 @@
         "smithy-rs#2129"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "The `*Error` and `*ErrorKind` types have been combined to make error matching simpler.\n<details>\n<summary>Example with S3</summary>\n**Before:**\n```rust\nlet result = client\n    .get_object()\n    .bucket(BUCKET_NAME)\n    .key(\"some-key\")\n    .send()\n    .await;\nmatch result {\n    Ok(_output) => { /* Do something with the output */ }\n    Err(err) => match err.into_service_error() {\n        GetObjectError { kind, .. } => match kind {\n            GetObjectErrorKind::InvalidObjectState(value) => println!(\"invalid object state: {:?}\", value),\n            GetObjectErrorKind::NoSuchKey(_) => println!(\"object didn't exist\"),\n        }\n        err @ GetObjectError { .. } if err.code() == Some(\"SomeUnmodeledError\") => {}\n        err @ _ => return Err(err.into()),\n    },\n}\n```\n**After:**\n```rust\n// Needed to access the `.code()` function on the error type:\nuse aws_sdk_s3::types::ProvideErrorMetadata;\nlet result = client\n    .get_object()\n    .bucket(BUCKET_NAME)\n    .key(\"some-key\")\n    .send()\n    .await;\nmatch result {\n    Ok(_output) => { /* Do something with the output */ }\n    Err(err) => match err.into_service_error() {\n        GetObjectError::InvalidObjectState(value) => {\n            println!(\"invalid object state: {:?}\", value);\n        }\n        GetObjectError::NoSuchKey(_) => {\n            println!(\"object didn't exist\");\n        }\n        err if err.code() == Some(\"SomeUnmodeledError\") => {}\n        err @ _ => return Err(err.into()),\n    },\n}\n```\n</details>\n",
@@ -64,7 +64,7 @@
         "smithy-rs#2075"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`.",
@@ -79,7 +79,7 @@
         "smithy-rs#2129"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated.",
@@ -93,7 +93,7 @@
         "aws-sdk-rust#740"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "`SdkError` variants can now be constructed for easier unit testing.",
@@ -108,7 +108,7 @@
         "smithy-rs#2208"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`.",
@@ -123,7 +123,7 @@
         "aws-sdk-rust#600"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Enable presigning for S3's `HeadObject` operation.",
@@ -138,7 +138,7 @@
         "smithy-rs#2451"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "The modules in the SDK crates have been reorganized. See the [SDK Crate Reorganization Upgrade Guidance](https://github.com/awslabs/aws-sdk-rust/discussions/752) to see how to fix your code after this change.",
@@ -152,7 +152,7 @@
         "smithy-rs#2433"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Reconnect on transient errors.\n\nIf a transient error (timeout, 500, 503, 503) is encountered, the connection will be evicted from the pool and will not\nbe reused. This is enabled by default for all AWS services. It can be disabled by setting `RetryConfig::with_reconnect_mode`\n\nAlthough there is no API breakage from this change, it alters the client behavior in a way that may cause breakage for customers.\n",
@@ -167,7 +167,7 @@
         "smithy-rs#2445"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Update MSRV to 1.66.1",
@@ -181,7 +181,7 @@
         "smithy-rs#2467"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Default connector provided by `aws-config` now respects `ConnectorSettings`.\n\nPreviously, it used the timeout settings provided by aws-config. A test from @Oliboy50 has been incorporated to verify this behavior.\n\n**Behavior Change**: Prior to this change, the Hyper client would be shared between all service clients. After this change, each service client will use its own Hyper Client.\nTo revert to the previous behavior, set `HttpConnector::Prebuilt` on `SdkConfig::http_connector`.\n",
@@ -197,7 +197,7 @@
         "smithy-rs#2151"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Remove deprecated `ResolveAwsEndpoint` interfaces.\n[For details see the longform changelog entry](https://github.com/awslabs/aws-sdk-rust/discussions/755).\n",
@@ -212,7 +212,7 @@
         "smithy-rs#1784"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Increase Tokio version to 1.23.1 for all crates. This is to address [RUSTSEC-2023-0001](https://rustsec.org/advisories/RUSTSEC-2023-0001)",
@@ -226,7 +226,7 @@
         "smithy-rs#2474"
       ],
       "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Implement std::error::Error#source() properly for the service meta Error enum.",
@@ -240,7 +240,7 @@
         "aws-sdk-rust#784"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "The outputs for event stream operations (for example, S3's SelectObjectContent) now implement the `Sync` auto-trait.",
@@ -254,7 +254,7 @@
         "smithy-rs#2496"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "The AWS SDK now compiles for the `wasm32-unknown-unknown` and `wasm32-wasi` targets when no default features are enabled. WebAssembly is not officially supported yet, but this is a great first step towards it!",
@@ -268,7 +268,7 @@
         "smithy-rs#2254"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "S3's `GetObject` will no longer panic when checksum validation is enabled and the target object was uploaded as a multi-part upload.\nHowever, these objects cannot be checksum validated by the SDK due to the way checksums are calculated for multipart uploads.\nFor more information, see [this page](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity.html#large-object-checksums).\n",
@@ -282,7 +282,7 @@
         "aws-sdk-rust#764"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "`AppName` is now configurable from within `ConfigLoader`.",
@@ -296,7 +296,7 @@
         "smithy-rs#2513"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add support for omitting session token in canonical requests for SigV4 signing.",
@@ -310,7 +310,7 @@
         "smithy-rs#2473"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add `into_segments` method to `AggregatedBytes`, for zero-copy conversions.",
@@ -324,7 +324,7 @@
         "smithy-rs#2525"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fix bug where an incorrect endpoint was produced for `WriteGetObjectResponse`",
@@ -339,7 +339,7 @@
         "aws-sdk-rust#781"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Update the `std::fmt::Debug` implementation for `aws-sigv4::SigningParams` so that it will no longer print sensitive information.",
@@ -353,7 +353,7 @@
         "smithy-rs#2562"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "`aws_smithy_types::date_time::Format` has been re-exported in SDK crates.",
@@ -367,7 +367,7 @@
         "smithy-rs#2534"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Reduce several instances of credential exposure in the SDK logs:\n- IMDS now suppresses the body of the response from logs\n- `aws-sigv4` marks the `x-amz-session-token` header as sensitive\n- STS & SSO credentials have been manually marked as sensitive which suppresses logging of response bodies for relevant operations\n",
@@ -381,7 +381,7 @@
         "smithy-rs#2603"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Update MSRV to Rust 1.67.1",
@@ -395,7 +395,7 @@
         "smithy-rs#2611"
       ],
       "since-commit": "9201176c9876c9f7bf6599f8a93fe69d25ee0f03",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Avoid extending IMDS credentials' expiry unconditionally, which may incorrectly extend it beyond what is originally defined; If returned credentials are not stale, use them as they are.",
@@ -410,7 +410,7 @@
         "smithy-rs#2694"
       ],
       "since-commit": "3b5fc51a41700c88270145e38fa708eca72dc414",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Automatically exclude X-Ray trace ID headers and authorization headers from SigV4 canonical request calculations.",
@@ -424,7 +424,7 @@
         "smithy-rs#2815"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add accessors to Builders",
@@ -438,7 +438,7 @@
         "smithy-rs#2791"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Remove native-tls and add a migration guide.",
@@ -452,7 +452,7 @@
         "smithy-rs#2675"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Fix error message when `credentials-sso` feature is not enabled on `aws-config`. NOTE: if you use `no-default-features`, you will need to manually able `credentials-sso` after 0.55.*",
@@ -467,7 +467,7 @@
         "aws-sdk-rust#703"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "`SsoCredentialsProvider`, `AssumeRoleProvider`, and `WebIdentityTokenCredentialsProvider` now use `NoCredentialsCache` internally when fetching credentials using an STS client. This avoids double-caching when these providers are wrapped by `LazyCredentialsCache` when a service client is created.",
@@ -481,7 +481,7 @@
         "smithy-rs#2720"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "For event stream operations such as S3 SelectObjectContent or Transcribe StartStreamTranscription, the `EventStreamSender` in the input now requires the passed in `Stream` impl to implement `Sync`.",
@@ -495,7 +495,7 @@
         "smithy-rs#2673"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The `SigningInstructions` in the `aws-sigv4` module are now public. This allows them to be named in a function signature.",
@@ -509,7 +509,7 @@
         "smithy-rs#2730"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported.",
@@ -525,7 +525,7 @@
         "aws-sdk-rust#2087"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The SDK has added support for timestreamwrite and timestreamquery. Support for these services is considered experimental at this time. In order to use these services, you MUST call `.with_endpoint_discovery_enabled()` on the `Client` after construction.",
@@ -541,7 +541,7 @@
         "smithy-rs#2846"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "A newtype wrapper `SharedAsyncSleep` has been introduced and occurrences of `Arc<dyn AsyncSleep>` that appear in public APIs have been replaced with it.",
@@ -555,7 +555,7 @@
         "smithy-rs#2742"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Update MSRV to Rust 1.69.0",
@@ -569,7 +569,7 @@
         "smithy-rs#2893"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Implement unstable serde support for the `Number`, `Blob`, `Document`, `DateTime` primitives",
@@ -586,7 +586,7 @@
         "smithy-rs#2616"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add a `send_with` function on `-Input` types for sending requests without fluent builders",
@@ -600,7 +600,7 @@
         "smithy-rs#2652"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The naming `make_token` for fields and the API of `IdempotencyTokenProvider` in service configs and their builders has now been updated to `idempotency_token_provider`.",
@@ -614,7 +614,7 @@
         "smithy-rs#2783"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The implementation `From<http::header::value::InvalidHeaderValue>` for `aws_http::user_agent::UserAgentStageError` has been removed.",
@@ -628,7 +628,7 @@
         "smithy-rs#2845"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The AppName property can now be set with `sdk_ua_app_id` in profile files. The old field, `sdk-ua-app-id`, is maintained for backwards compatibility.",
@@ -642,7 +642,7 @@
         "smithy-rs#2724"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "**Behavior change**: Credential providers now share the HTTP connector used by the SDK. If you want to keep a separate connector for clients, use `<service>::ConfigBuilder::http_connector` when constructing the client.",
@@ -657,7 +657,7 @@
         "aws-sdk-rust#338"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The `doc(hidden)` `time_source` in `aws-credential-types` was removed. Use `aws_smithy_async::time` instead.",
@@ -671,7 +671,7 @@
         "smithy-rs#2877"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The `doc(hidden)` `with_env` in `ProviderConfig` was removed.",
@@ -685,7 +685,7 @@
         "smithy-rs#2877"
       ],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 1
+      "age": 2
     },
     {
       "message": "The underlying architecture of the SDK clients has been overhauled. This shouldn't require any changes for most projects, but will affect projects that customize the SDK middleware. More details are available in the [upgrade guide](https://github.com/awslabs/aws-sdk-rust/discussions/853) if you are effected by these changes.",
@@ -697,6 +697,80 @@
       "author": "jdisanti",
       "references": [],
       "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
+      "age": 2
+    },
+    {
+      "message": "`RuntimeComponents` are now re-exported so that implementing a custom interceptor doens't require directly depending on `aws-smithy-runtime-api`.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2904",
+        "aws-sdk-rust#862"
+      ],
+      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
+      "age": 1
+    },
+    {
+      "message": "Fix requests to S3 with `no_credentials` set.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2907",
+        "aws-sdk-rust#864"
+      ],
+      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
+      "age": 1
+    },
+    {
+      "message": "Fixed re-exported `SdkError` type. The previous release had the wrong type for `SdkError`, which caused projects to fail to compile when upgrading.",
+      "meta": {
+        "bug": true,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2931",
+        "aws-sdk-rust#875"
+      ],
+      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
+      "age": 1
+    },
+    {
+      "message": "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#2934",
+        "aws-sdk-rust#872"
+      ],
+      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
+      "age": 1
+    },
+    {
+      "message": "Fix `SDK::Endpoint` built-in for `@endpointRuleSet`.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#2935"
+      ],
+      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
       "age": 1
     }
   ],

@@ -16,10 +16,6 @@ class ClientRuntimeTypesReExportGenerator(
     private val rustCrate: RustCrate,
 ) {
     fun render() {
-        if (!codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            return
-        }
-
         val rc = codegenContext.runtimeConfig
         val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
 
@@ -50,7 +46,7 @@ class ClientRuntimeTypesReExportGenerator(
                 )
             }
         }
-        rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
+        rustCrate.withModule(ClientRustModule.Config.endpoint) {
             rustTemplate(
                 """
                 pub use #{ResolveEndpoint};
@@ -64,11 +60,11 @@ class ClientRuntimeTypesReExportGenerator(
             rustTemplate(
                 """
                 pub use #{ClassifyRetry};
-                pub use #{RetryReason};
+                pub use #{RetryAction};
                 pub use #{ShouldAttempt};
                 """,
-                "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
-                "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),
+                "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::classifiers::ClassifyRetry"),
+                "RetryAction" to smithyRuntimeApi.resolve("client::retries::classifiers::RetryAction"),
                 "ShouldAttempt" to smithyRuntimeApi.resolve("client::retries::ShouldAttempt"),
             )
         }

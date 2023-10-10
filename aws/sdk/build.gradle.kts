@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import aws.sdk.AwsExamplesLayout
 import aws.sdk.AwsServices
 import aws.sdk.Membership
 import aws.sdk.discoverServices
@@ -61,7 +60,7 @@ val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, prop
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
+fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
@@ -105,8 +104,8 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
-                            "enableUserConfigurableRuntimePlugins": false
+                            "enableUserConfigurableRuntimePlugins": false,
+                            "nullabilityCheckMode": "${getNullabilityCheckMode()}"
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -246,22 +245,12 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
 
     toolPath = sdkVersionerToolPath
     binaryName = "sdk-versioner"
-    arguments = when (AwsExamplesLayout.detect(project)) {
-        AwsExamplesLayout.Flat -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", "../../sdk",
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-        AwsExamplesLayout.Workspaces -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", sdkOutputDir.absolutePath,
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-    }
+    arguments = listOf(
+        "use-path-and-version-dependencies",
+        "--sdk-path", sdkOutputDir.absolutePath,
+        "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
+        outputDir.resolve("examples").absolutePath,
+    )
 
     outputs.dir(outputDir)
     dependsOn("relocateExamples", "generateVersionManifest")

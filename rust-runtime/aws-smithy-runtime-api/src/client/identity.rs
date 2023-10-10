@@ -6,6 +6,7 @@
 use crate::client::auth::AuthSchemeId;
 use crate::client::orchestrator::Future;
 use crate::client::runtime_components::RuntimeComponents;
+use crate::impl_shared_conversions;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::any::Any;
 use std::fmt;
@@ -56,6 +57,8 @@ impl IdentityResolver for SharedIdentityResolver {
         self.0.resolve_identity(runtime_components, config_bag)
     }
 }
+
+impl_shared_conversions!(convert SharedIdentityResolver from IdentityResolver using SharedIdentityResolver::new);
 
 /// An identity resolver paired with an auth scheme ID that it resolves for.
 #[derive(Clone, Debug)]

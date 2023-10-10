@@ -6,14 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -39,16 +37,14 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides endpoint resolver`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
                 "EndpointResolverParams" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::endpoint::EndpointResolverParams"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
             )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
@@ -67,7 +63,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                             client_config.config,
                             &client_config.runtime_components,
                         );
-                        let sut_components = sut.runtime_components();
+                        let prev = #{RuntimeComponentsBuilder}::new("prev");
+                        let sut_components = sut.runtime_components(&prev);
                         let endpoint_resolver = sut_components.endpoint_resolver().unwrap();
                         let endpoint = endpoint_resolver
                             .resolve_endpoint(&#{EndpointResolverParams}::new(crate::config::endpoint::Params {}))
@@ -85,10 +82,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides http connector`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
@@ -96,16 +90,16 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
             )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
-                tokioTest("test_operation_overrides_http_connection") {
+                tokioTest("test_operation_overrides_http_client") {
                     rustTemplate(
                         """
                         use #{AsyncSleep};
 
-                        let (conn, captured_request) = #{capture_request}(#{None});
+                        let (http_client, captured_request) = #{capture_request}(#{None});
                         let expected_url = "http://localhost:1234/";
                         let client_config = crate::config::Config::builder()
                             .endpoint_resolver(expected_url)
-                            .http_connector(#{NeverConnector}::new())
+                            .http_client(#{NeverClient}::new())
                             .build();
                         let client = crate::client::Client::from_conf(client_config.clone());
                         let sleep = #{TokioSleep}::new();
@@ -124,9 +118,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let customizable_send = client
                             .say_hello()
                             .customize()
-                            .await
-                            .unwrap()
-                            .config_override(crate::config::Config::builder().http_connector(conn))
+                            .config_override(crate::config::Config::builder().http_client(http_client))
                             .send();
 
                         let timeout = #{Timeout}::new(
@@ -150,11 +142,11 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         *codegenScope,
                         "AsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::AsyncSleep"),
                         "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-                        "NeverConnector" to RuntimeType.smithyClient(runtimeConfig)
-                            .resolve("never::NeverConnector"),
+                        "NeverClient" to CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
+                            .resolve("client::http::test_util::NeverClient"),
                         "Timeout" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::timeout::Timeout"),
-                        "TokioSleep" to RuntimeType.smithyAsync(runtimeConfig)
-                            .resolve("rt::sleep::TokioSleep"),
+                        "TokioSleep" to CargoDependency.smithyAsync(runtimeConfig).withFeature("rt-tokio")
+                            .toType().resolve("rt::sleep::TokioSleep"),
                     )
                 }
             }
@@ -163,10 +155,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
     @Test
     fun `operation overrides retry strategy`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
@@ -212,9 +201,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         cfg.push_shared_layer(client_config_layer.clone());
 
                         let retry_classifiers_component = #{RuntimeComponentsBuilder}::new("retry_classifier")
-                            .with_retry_classifiers(#{Some}(
-                                #{RetryClassifiers}::new().with_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError)),
-                            ));
+                            .with_retry_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError));
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()

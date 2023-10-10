@@ -10,13 +10,10 @@
 //!
 //! This provider is included automatically when profiles are loaded.
 
-use crate::connector::expect_connector;
-use crate::provider_config::ProviderConfig;
 use crate::sso::cache::{
     load_cached_token, save_cached_token, CachedSsoToken, CachedSsoTokenError,
 };
 use aws_credential_types::cache::{CredentialsCache, ExpiringCache};
-use aws_sdk_ssooidc::config::Builder as SsoOidcConfigBuilder;
 use aws_sdk_ssooidc::error::DisplayErrorContext;
 use aws_sdk_ssooidc::operation::create_token::CreateTokenOutput;
 use aws_sdk_ssooidc::Client as SsoOidcClient;
@@ -26,9 +23,9 @@ use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::Future;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::retry::RetryConfig;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::region::Region;
+use aws_types::SdkConfig;
 use std::error::Error as StdError;
 use std::fmt;
 use std::sync::{Arc, Mutex};
@@ -57,7 +54,7 @@ struct Inner {
     region: Region,
     session_name: String,
     start_url: String,
-    sso_oidc_config: SsoOidcConfigBuilder,
+    sdk_config: SdkConfig,
     last_refresh_attempt: Mutex<Option<SystemTime>>,
 }
 
@@ -75,12 +72,12 @@ impl SsoTokenProvider {
     ) -> Result<Option<CachedSsoToken>, SsoTokenProviderError> {
         // TODO(enableNewSmithyRuntimeCleanup): Use `customize().config_override()` to set the region instead of creating a new client once middleware is removed
         let config = inner
-            .sso_oidc_config
-            .clone()
+            .sdk_config
+            .to_builder()
             .region(Some(inner.region.clone()))
             .credentials_cache(CredentialsCache::no_caching())
             .build();
-        let client = SsoOidcClient::from_conf(config);
+        let client = SsoOidcClient::new(&config);
         let resp = client
             .create_token()
             .grant_type("refresh_token")
@@ -249,11 +246,10 @@ impl IdentityResolver for SsoTokenProvider {
 /// Builder for [`SsoTokenProvider`].
 #[derive(Debug, Default)]
 pub struct Builder {
-    provider_config: Option<ProviderConfig>,
+    sdk_config: Option<SdkConfig>,
     region: Option<Region>,
     session_name: Option<String>,
     start_url: Option<String>,
-    sso_oidc_config: Option<SsoOidcConfigBuilder>,
 }
 
 impl Builder {
@@ -263,8 +259,8 @@ impl Builder {
     }
 
     /// Override the configuration used for this provider
-    pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
-        self.provider_config = Some(provider_config.clone());
+    pub fn configure(mut self, sdk_config: &SdkConfig) -> Self {
+        self.sdk_config = Some(sdk_config.clone());
         self
     }
 
@@ -316,36 +312,23 @@ impl Builder {
         self
     }
 
-    /// Sets the SSO OIDC client config.
-    #[cfg(test)]
-    pub(crate) fn sso_oidc_config(mut self, config: SsoOidcConfigBuilder) -> Self {
-        self.sso_oidc_config = Some(config);
-        self
-    }
-
     /// Builds the [`SsoTokenProvider`].
     ///
     /// # Panics
     ///
     /// This will panic if any of the required fields are not given.
-    pub fn build(self) -> SsoTokenProvider {
+    pub async fn build(mut self) -> SsoTokenProvider {
+        if self.sdk_config.is_none() {
+            self.sdk_config = Some(crate::load_from_env().await);
+        }
+        self.build_with(Env::real(), Fs::real())
+    }
+
+    pub(crate) fn build_sync(self) -> SsoTokenProvider {
         self.build_with(Env::real(), Fs::real())
     }
 
     fn build_with(self, env: Env, fs: Fs) -> SsoTokenProvider {
-        let sso_oidc_config = self.sso_oidc_config.unwrap_or_else(|| {
-            let provider_config = self.provider_config.unwrap_or_default();
-            let mut sso_oidc_config = aws_sdk_ssooidc::Config::builder()
-                .http_connector(expect_connector(
-                    "The SSO token provider",
-                    provider_config.connector(&Default::default()),
-                ))
-                .retry_config(RetryConfig::standard())
-                .time_source(provider_config.time_source());
-            sso_oidc_config.set_sleep_impl(provider_config.sleep());
-            sso_oidc_config
-        });
-
         SsoTokenProvider {
             inner: Arc::new(Inner {
                 env,
@@ -353,7 +336,7 @@ impl Builder {
                 region: self.region.expect("region is required"),
                 session_name: self.session_name.expect("session_name is required"),
                 start_url: self.start_url.expect("start_url is required"),
-                sso_oidc_config,
+                sdk_config: self.sdk_config.expect("sdk_config is required"),
                 last_refresh_attempt: Mutex::new(None),
             }),
             token_cache: ExpiringCache::new(REFRESH_BUFFER_TIME),
@@ -407,9 +390,12 @@ mod tests {
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_async::time::{StaticTimeSource, TimeSource};
-    use aws_smithy_client::test_connection::{capture_request, TestConnection};
     use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime::client::http::test_util::{
+        capture_request, ReplayEvent, StaticReplayClient,
+    };
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+    use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::date_time::Format;
     use aws_smithy_types::retry::RetryConfig;
@@ -430,24 +416,25 @@ mod tests {
         fn new(
             time_source: impl TimeSource + 'static,
             sleep_impl: impl AsyncSleep + 'static,
-            conn: impl Into<::aws_smithy_client::http_connector::HttpConnector>,
+            http_client: impl HttpClient + 'static,
             fs: Fs,
         ) -> Self {
             let env = Env::from_slice(&[("HOME", "/home/user")]);
             let time_source = SharedTimeSource::new(time_source);
-            let sso_oidc_config = aws_sdk_ssooidc::config::Config::builder()
-                .http_connector(conn)
+            let config = SdkConfig::builder()
+                .http_client(http_client)
                 .time_source(time_source.clone())
                 .sleep_impl(SharedAsyncSleep::new(sleep_impl))
                 // disable retry to simplify testing
-                .retry_config(RetryConfig::disabled());
+                .retry_config(RetryConfig::disabled())
+                .build();
             Self {
                 time_source,
                 token_provider: SsoTokenProvider::builder()
+                    .configure(&config)
                     .session_name("test")
                     .region(Region::new("us-west-2"))
                     .start_url("https://d-123.awsapps.com/start")
-                    .sso_oidc_config(sso_oidc_config)
                     .build_with(env.clone(), fs.clone()),
                 env,
                 fs,
@@ -775,7 +762,7 @@ mod tests {
 
         let events = vec![
             // First refresh attempt should fail
-            (
+            ReplayEvent::new(
                 http::Request::new(SdkBody::from("")), // don't really care what the request looks like
                 http::Response::builder()
                     .status(500)
@@ -783,7 +770,7 @@ mod tests {
                     .unwrap(),
             ),
             // Second refresh attempt should also fail
-            (
+            ReplayEvent::new(
                 http::Request::new(SdkBody::from("")), // don't really care what the request looks like
                 http::Response::builder()
                     .status(500)
@@ -791,7 +778,7 @@ mod tests {
                     .unwrap(),
             ),
             // Third refresh attempt will succeed
-            (
+            ReplayEvent::new(
                 http::Request::new(SdkBody::from("")), // don't really care what the request looks like
                 http::Response::builder()
                     .status(200)
@@ -805,8 +792,8 @@ mod tests {
                     .unwrap(),
             ),
         ];
-        let conn = TestConnection::new(events);
-        let harness = TestHarness::new(shared_time_source, sleep_impl, conn, fs);
+        let http_client = StaticReplayClient::new(events);
+        let harness = TestHarness::new(shared_time_source, sleep_impl, http_client, fs);
 
         tracing::info!("test: first token retrieval should return the cached token");
         assert!(

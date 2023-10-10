@@ -7,12 +7,8 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
-import software.amazon.smithy.rust.codegen.client.smithy.SmithyRuntimeMode
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -40,10 +36,8 @@ internal class EndpointTraitBindingsTest {
         epTrait.prefixFormatString() shouldBe ("\"{foo}.data\"")
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = ["middleware", "orchestrator"])
-    fun `generate endpoint prefixes`(smithyRuntimeModeStr: String) {
-        val smithyRuntimeMode = SmithyRuntimeMode.fromString(smithyRuntimeModeStr)
+    @Test
+    fun `generate endpoint prefixes`() {
         val model = """
             namespace test
             @readonly
@@ -81,7 +75,7 @@ internal class EndpointTraitBindingsTest {
                     RuntimeType.smithyHttp(TestRuntimeConfig),
                     TestRuntimeConfig.operationBuildError(),
                 ) {
-                    endpointBindingGenerator.render(this, "self", smithyRuntimeMode)
+                    endpointBindingGenerator.render(this, "self")
                 }
             }
             unitTest(
@@ -121,56 +115,6 @@ internal class EndpointTraitBindingsTest {
         }
 
         project.compileAndTest()
-    }
-
-    // TODO(enableNewSmithyRuntimeCleanup): Delete this test (replaced by the @Test below it)
-    @ExperimentalPathApi
-    @Test
-    fun `endpoint integration test middleware`() {
-        val model = """
-            namespace com.example
-            use aws.protocols#awsJson1_0
-            @awsJson1_0
-            @aws.api#service(sdkId: "Test", endpointPrefix: "differentprefix")
-            service TestService {
-                operations: [SayHello],
-                version: "1"
-            }
-            @endpoint(hostPrefix: "test123.{greeting}.")
-            operation SayHello {
-                input: SayHelloInput
-            }
-            structure SayHelloInput {
-                @required
-                @hostLabel
-                greeting: String
-            }
-        """.asSmithyModel()
-        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams) { clientCodegenContext, rustCrate ->
-            val moduleName = clientCodegenContext.moduleUseName()
-            rustCrate.integrationTest("test_endpoint_prefix") {
-                Attribute.TokioTest.render(this)
-                rust(
-                    """
-                    async fn test_endpoint_prefix() {
-                        let conf = $moduleName::Config::builder().build();
-                        $moduleName::operation::say_hello::SayHelloInput::builder()
-                            .greeting("hey there!").build().expect("input is valid")
-                            .make_operation(&conf).await.expect_err("no spaces or exclamation points in ep prefixes");
-                        let op = $moduleName::operation::say_hello::SayHelloInput::builder()
-                            .greeting("hello")
-                            .build().expect("valid operation")
-                            .make_operation(&conf).await.expect("hello is a valid prefix");
-                        let properties = op.properties();
-                        let prefix = properties.get::<aws_smithy_http::endpoint::EndpointPrefix>()
-                            .expect("prefix should be in config")
-                            .as_str();
-                        assert_eq!(prefix, "test123.hello.");
-                    }
-                    """,
-                )
-            }
-        }
     }
 
     @ExperimentalPathApi
@@ -216,7 +160,7 @@ internal class EndpointTraitBindingsTest {
                 rustTemplate(
                     """
                     async fn test_endpoint_prefix() {
-                        use #{aws_smithy_client}::test_connection::capture_request;
+                        use #{capture_request};
                         use aws_smithy_http::body::SdkBody;
                         use aws_smithy_http::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::box_error::BoxError;
@@ -258,7 +202,7 @@ internal class EndpointTraitBindingsTest {
                             }
                         }
 
-                        let (conn, _r) = capture_request(Some(
+                        let (http_client, _r) = capture_request(Some(
                             http::Response::builder()
                                 .status(200)
                                 .body(SdkBody::from(""))
@@ -266,7 +210,7 @@ internal class EndpointTraitBindingsTest {
                         ));
                         let interceptor = TestInterceptor::default();
                         let config = Config::builder()
-                            .http_connector(conn)
+                            .http_client(http_client)
                             .interceptor(interceptor.clone())
                             .build();
                         let client = Client::from_conf(config);
@@ -302,8 +246,8 @@ internal class EndpointTraitBindingsTest {
                         );
                     }
                     """,
-                    "aws_smithy_client" to CargoDependency.smithyClient(clientCodegenContext.runtimeConfig)
-                        .toDevDependency().withFeature("test-util").toType(),
+                    "capture_request" to CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
+                        .toType().resolve("client::http::test_util::capture_request"),
                 )
             }
         }

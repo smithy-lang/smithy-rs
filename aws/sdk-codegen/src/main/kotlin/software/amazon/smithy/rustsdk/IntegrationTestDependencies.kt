@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingAppender
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingSubscriber
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyProtocolTestHelpers
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApi
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -83,25 +84,19 @@ class IntegrationTestDependencies(
             if (hasTests) {
                 val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                val smithyClient = CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util", "wiremock"), scope = DependencyScope.Dev)
                 val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig)
                     .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                addDependency(smithyAsync)
-                addDependency(smithyClient)
-                addDependency(smithyTypes)
-                addDependency(CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig))
-                addDependency(SerdeJson)
-                addDependency(Tokio)
+                addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
                 addDependency(FuturesUtil)
+                addDependency(SerdeJson)
+                addDependency(smithyAsync)
+                addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
+                addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
+                addDependency(smithyRuntimeApi(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
+                addDependency(smithyTypes)
+                addDependency(Tokio)
                 addDependency(Tracing.toDevDependency())
                 addDependency(TracingSubscriber)
-
-                if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                    addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
-                    addDependency(smithyRuntimeApi(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
-                    addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
-                }
             }
             if (hasBenches) {
                 addDependency(Criterion)

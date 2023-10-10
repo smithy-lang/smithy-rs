@@ -12,6 +12,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.returnSymbolToParseFn
 
 /**
  * [ServerCodegenContext] contains code-generation context that is _specific_ to the [RustServerCodegenPlugin] plugin
@@ -35,4 +38,8 @@ data class ServerCodegenContext(
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
 ) : CodegenContext(
     model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
-)
+) {
+    override fun builderInstantiator(): BuilderInstantiator {
+        return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))
+    }
+}
