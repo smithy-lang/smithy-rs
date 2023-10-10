@@ -11,7 +11,6 @@ use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, InterceptorContext};
 use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, OrchestratorError};
 use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
-use aws_smithy_types::retry::ErrorKind;
 use bytes::Bytes;
 use kms::operation::create_alias::CreateAliasError;
 

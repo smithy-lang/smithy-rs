@@ -118,30 +118,9 @@ mod test {
     use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
     use aws_smithy_types::error::metadata::ProvideErrorMetadata;
     use aws_smithy_types::error::ErrorMetadata;
-    use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind};
+    use aws_smithy_types::retry::ErrorKind;
     use std::fmt;
     use std::time::Duration;
-
-    #[derive(Debug)]
-    struct UnmodeledError;
-
-    impl fmt::Display for UnmodeledError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "UnmodeledError")
-        }
-    }
-
-    impl std::error::Error for UnmodeledError {}
-
-    impl ProvideErrorKind for UnmodeledError {
-        fn retryable_error_kind(&self) -> Option<ErrorKind> {
-            None
-        }
-
-        fn code(&self) -> Option<&str> {
-            None
-        }
-    }
 
     #[derive(Debug)]
     struct CodedError {
@@ -203,6 +182,7 @@ mod test {
     #[test]
     fn test_retry_after_header() {
         let policy = AwsErrorCodeClassifier::<ErrorMetadata>::new();
+        let err = aws_smithy_types::Error::builder().code("SlowDown").build();
         let res = http::Response::builder()
             .header("x-amz-retry-after", "5000")
             .body("retry later")
@@ -210,14 +190,12 @@ mod test {
             .map(SdkBody::from);
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_response(res);
-        ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(
-            UnmodeledError,
-        ))));
+        ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(err))));
 
         assert_eq!(
             policy.classify_retry(&ctx),
             RetryAction::retryable_error_with_explicit_delay(
-                ErrorKind::TransientError,
+                ErrorKind::ThrottlingError,
                 Duration::from_secs(5)
             )
         );
