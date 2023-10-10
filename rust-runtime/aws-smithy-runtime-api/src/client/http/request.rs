@@ -15,7 +15,7 @@ use http0::{Extensions, HeaderMap, Method};
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::str::{FromStr, Utf8Error};
+use std::str::FromStr;
 
 #[derive(Debug)]
 /// An HTTP Request Type
@@ -243,7 +243,7 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
                 parts
                     .headers
                     .into_iter()
-                    .map(|(k, v)| (k, v.try_into().expect("validated above"))),
+                    .map(|(k, v)| (k, HeaderValue::from_http03x(v).expect("validated above"))),
             );
             Ok(Self {
                 body,
@@ -567,7 +567,7 @@ fn header_value(value: MaybeStatic) -> Result<HeaderValue, HttpError> {
             http0::HeaderValue::try_from(s).map_err(HttpError::invalid_header_value)?
         }
     };
-    header.try_into().map_err(HttpError::new)
+    HeaderValue::from_http03x(header).map_err(HttpError::new)
 }
 
 #[cfg(test)]
