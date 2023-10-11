@@ -323,3 +323,15 @@ For more information, see the [guide](https://github.com/awslabs/smithy-rs/discu
 references = ["smithy-rs#2417", "smithy-rs#3018"]
 meta = { "breaking" = true, "tada" = true, "bug" = false }
 author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
+references = ["smithy-rs#3055"]
+meta = { "breaking" = true, "tada" = true, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
+references = ["smithy-rs#3055"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
