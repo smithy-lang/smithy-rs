@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::borrow::Cow;
+
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
@@ -12,8 +14,6 @@ use aws_smithy_runtime_api::client::runtime_components::{
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::base64;
 use aws_smithy_types::config_bag::ConfigBag;
-use http::header::HeaderName;
-use std::borrow::Cow;
 
 #[derive(Debug)]
 pub(crate) struct HttpChecksumRequiredRuntimePlugin {

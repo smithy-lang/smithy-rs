@@ -16,7 +16,8 @@ mod xml;
 use crate::xml::try_xml_equivalent;
 use assert_json_diff::assert_json_eq_no_panic;
 use aws_smithy_runtime_api::client::http::request::Headers;
-use http::{Request, Uri};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use http::Uri;
 use pretty_assertions::Comparison;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
@@ -123,8 +124,9 @@ impl<'a> QueryParam<'a> {
     }
 }
 
-fn extract_params(uri: &Uri) -> HashSet<&str> {
-    uri.query().unwrap_or_default().split('&').collect()
+fn extract_params(uri: &str) -> HashSet<&str> {
+    let query = uri.rsplit_once('?').map(|s| s.1).unwrap_or_default();
+    query.split('&').collect()
 }
 
 #[track_caller]
@@ -132,25 +134,25 @@ pub fn assert_uris_match(left: impl AsRef<str>, right: impl AsRef<str>) {
     if left.as_ref() == right.as_ref() {
         return;
     }
+    assert_eq!(
+        extract_params(&left.as_ref()),
+        extract_params(&right.as_ref()),
+        "Query parameters did not match. left: {}, right: {}",
+        left.as_ref(),
+        right.as_ref()
+    );
     let left: Uri = left.as_ref().parse().expect("left is not a valid URI");
     let right: Uri = right.as_ref().parse().expect("left is not a valid URI");
     assert_eq!(left.authority(), right.authority());
     assert_eq!(left.scheme(), right.scheme());
     assert_eq!(left.path(), right.path());
-    assert_eq!(
-        extract_params(&left),
-        extract_params(&right),
-        "Query parameters did not match. left: {}, right: {}",
-        left,
-        right
-    );
 }
 
-pub fn validate_query_string<B>(
-    request: &Request<B>,
+pub fn validate_query_string(
+    request: &HttpRequest,
     expected_params: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
-    let actual_params = extract_params(request.uri());
+    let actual_params = extract_params(&request.uri());
     for param in expected_params {
         if !actual_params.contains(param) {
             return Err(ProtocolTestFailure::MissingQueryParam {
@@ -162,11 +164,11 @@ pub fn validate_query_string<B>(
     Ok(())
 }
 
-pub fn forbid_query_params<B>(
-    request: &Request<B>,
+pub fn forbid_query_params(
+    request: &HttpRequest,
     forbid_params: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
-    let actual_params: HashSet<QueryParam<'_>> = extract_params(request.uri())
+    let actual_params: HashSet<QueryParam<'_>> = extract_params(&request.uri())
         .iter()
         .map(|param| QueryParam::parse(param))
         .collect();
@@ -189,8 +191,8 @@ pub fn forbid_query_params<B>(
     Ok(())
 }
 
-pub fn require_query_params<B>(
-    request: &Request<B>,
+pub fn require_query_params(
+    request: &HttpRequest,
     require_keys: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
     let actual_keys: HashSet<&str> = extract_params(request.uri())
@@ -385,21 +387,24 @@ mod tests {
         validate_headers, validate_query_string, FloatEquals, MediaType, ProtocolTestFailure,
     };
     use aws_smithy_runtime_api::client::http::request::Headers;
-    use http::Request;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+
+    fn make_request(uri: &str) -> HttpRequest {
+        let mut req = HttpRequest::empty();
+        req.set_uri(uri).unwrap();
+        req
+    }
 
     #[test]
     fn test_validate_empty_query_string() {
-        let request = Request::builder().uri("/foo").body(()).unwrap();
+        let request = HttpRequest::empty();
         validate_query_string(&request, &[]).expect("no required params should pass");
         validate_query_string(&request, &["a"]).expect_err("no params provided");
     }
 
     #[test]
     fn test_validate_query_string() {
-        let request = Request::builder()
-            .uri("/foo?a=b&c&d=efg&hello=a%20b")
-            .body(())
-            .unwrap();
+        let request = make_request("/foo?a=b&c&d=efg&hello=a%20b");
         validate_query_string(&request, &["a=b"]).expect("a=b is in the query string");
         validate_query_string(&request, &["c", "a=b"])
             .expect("both params are in the query string");
@@ -415,10 +420,7 @@ mod tests {
 
     #[test]
     fn test_forbid_query_param() {
-        let request = Request::builder()
-            .uri("/foo?a=b&c&d=efg&hello=a%20b")
-            .body(())
-            .unwrap();
+        let request = make_request("/foo?a=b&c&d=efg&hello=a%20b");
         forbid_query_params(&request, &["a"]).expect_err("a is a query param");
         forbid_query_params(&request, &["not_included"]).expect("query param not included");
         forbid_query_params(&request, &["a=b"]).expect_err("if there is an `=`, match against KV");
@@ -428,10 +430,7 @@ mod tests {
 
     #[test]
     fn test_require_query_param() {
-        let request = Request::builder()
-            .uri("/foo?a=b&c&d=efg&hello=a%20b")
-            .body(())
-            .unwrap();
+        let request = make_request("/foo?a=b&c&d=efg&hello=a%20b");
         require_query_params(&request, &["a"]).expect("a is a query param");
         require_query_params(&request, &["not_included"]).expect_err("query param not included");
         require_query_params(&request, &["a=b"]).expect_err("should be matching against keys");
