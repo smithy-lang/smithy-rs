@@ -287,7 +287,7 @@ class JsonParserGenerator(
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
             is BlobShape -> deserializeBlob(memberShape)
-            is TimestampShape -> deserializeTimestamp(target, memberShape)
+            is TimestampShape -> deserializeTimestamp(memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is StructureShape -> deserializeStruct(target)
@@ -361,7 +361,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {
+    private fun RustWriter.deserializeTimestamp(member: MemberShape) {
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
