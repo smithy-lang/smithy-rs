@@ -16,7 +16,9 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
-use http::HeaderValue;
+use http::uri::PathAndQuery;
+use http::{HeaderValue, Uri};
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::str::FromStr;
 use tracing::trace;
@@ -143,10 +145,23 @@ fn apply_endpoint(
     endpoint: &Endpoint,
     endpoint_prefix: Option<&EndpointPrefix>,
 ) -> Result<(), BoxError> {
-    let prefix = endpoint_prefix
-        .map(EndpointPrefix::as_str)
-        .unwrap_or_default();
-    let endpoint_url = format!("{}{}", prefix, endpoint.url());
+    let endpoint_url = match endpoint_prefix {
+        None => Cow::Borrowed(endpoint.url()),
+        Some(prefix) => {
+            let parsed = endpoint.url().parse::<Uri>()?;
+            let scheme = parsed.scheme_str().unwrap_or_default();
+            let prefix = prefix.as_str();
+            let authority = parsed
+                .authority()
+                .map(|auth| auth.as_str())
+                .unwrap_or_default();
+            let path_and_query = parsed
+                .path_and_query()
+                .map(PathAndQuery::as_str)
+                .unwrap_or_default();
+            Cow::Owned(format!("{scheme}://{prefix}{authority}{path_and_query}"))
+        }
+    };
 
     request
         .uri_mut()
@@ -175,4 +190,24 @@ fn apply_endpoint(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use aws_smithy_http::endpoint::EndpointPrefix;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+    use aws_smithy_types::endpoint::Endpoint;
+
+    #[test]
+    fn test_apply_endpoint() {
+        let mut req = HttpRequest::empty();
+        req.set_uri("/foo?bar=1").unwrap();
+        let endpoint = Endpoint::builder().url("https://s3.amazon.com").build();
+        let prefix = EndpointPrefix::new("prefix.subdomain.").unwrap();
+        super::apply_endpoint(&mut req, &endpoint, Some(&prefix)).expect("should succeed");
+        assert_eq!(
+            req.uri(),
+            "https://prefix.subdomain.s3.amazon.com/foo?bar=1"
+        );
+    }
 }

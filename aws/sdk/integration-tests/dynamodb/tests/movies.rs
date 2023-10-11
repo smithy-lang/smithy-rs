@@ -14,6 +14,7 @@ use dynamodb::types::{
     ScalarAttributeType, TableStatus,
 };
 use dynamodb::Client;
+use http::header::AUTHORIZATION;
 use http::Uri;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -186,7 +187,7 @@ async fn movies_it() {
         ]
     );
 
-    http_client.assert_requests_match(&["AUTHORIZATION", "x-amz-date"]);
+    http_client.assert_requests_match(&[AUTHORIZATION.as_str(), "x-amz-date"]);
 }
 
 /// Test connection for the movies IT

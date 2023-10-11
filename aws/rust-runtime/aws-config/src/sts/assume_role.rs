@@ -383,7 +383,7 @@ mod test {
         let req = request.expect_request();
         let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
         assert!(str_body.contains("1234567"), "{}", str_body);
-        assert_eq!(req.uri(), "https://sts.us-east-1.amazonaws.com");
+        assert_eq!(req.uri(), "https://sts.us-east-1.amazonaws.com/");
     }
 
     #[tokio::test]
@@ -411,7 +411,7 @@ mod test {
             .await;
         let _ = dbg!(provider.provide_credentials().await);
         let req = request.expect_request();
-        assert_eq!(req.uri(), "https://sts.us-west-2.amazonaws.com");
+        assert_eq!(req.uri(), "https://sts.us-west-2.amazonaws.com/");
     }
 
     /// Test that `build()` where no provider is passed still works

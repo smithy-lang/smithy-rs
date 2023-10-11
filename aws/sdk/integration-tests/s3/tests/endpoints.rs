@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg(feature = "test-util")]
+
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::config::{Credentials, Region};
@@ -136,14 +138,16 @@ async fn s3_object_lambda_no_cross_region() {
 #[tokio::test]
 async fn write_get_object_response() {
     let (req, client) = test_client(|b| b);
-    let _write = client
-        .write_get_object_response()
-        .request_route("req-route")
-        .request_token("token")
-        .status_code(200)
-        .body(vec![1, 2, 3].into())
-        .send()
-        .await;
+    let _write = dbg!(
+        client
+            .write_get_object_response()
+            .request_route("req-route")
+            .request_token("token")
+            .status_code(200)
+            .body(vec![1, 2, 3].into())
+            .send()
+            .await
+    );
 
     let captured_request = req.expect_request();
     assert_eq!(

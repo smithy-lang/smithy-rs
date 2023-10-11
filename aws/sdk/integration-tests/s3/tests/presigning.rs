@@ -109,7 +109,7 @@ async fn test_presigning_with_payload_headers() {
             .put_object()
             .bucket("test-bucket")
             .key("test-key")
-            .content_length(123456)
+            .content_length(12345)
             .content_type("application/x-test")
     })
     .await;
@@ -145,7 +145,7 @@ async fn test_presigning_with_payload_headers() {
         presigned.headers().get(CONTENT_TYPE),
         Some("application/x-test")
     );
-    assert_eq!(presigned.headers().get(CONTENT_LENGTH), Some("123456"));
+    assert_eq!(presigned.headers().get(CONTENT_LENGTH), Some("12345"));
     assert_eq!(presigned.headers().iter().count(), 2);
 }
 
