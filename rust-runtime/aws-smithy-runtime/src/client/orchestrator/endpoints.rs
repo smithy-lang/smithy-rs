@@ -46,7 +46,10 @@ impl StaticUriEndpointResolver {
 }
 
 impl EndpointResolver for StaticUriEndpointResolver {
-    fn resolve_endpoint(&self, _params: &EndpointResolverParams) -> EndpointFuture {
+    fn resolve_endpoint<'a>(&'a self, _params: &'a EndpointResolverParams) -> EndpointFuture<'a>
+    where
+        Self: 'a,
+    {
         EndpointFuture::ready(Ok(Endpoint::builder()
             .url(self.endpoint.to_string())
             .build()))
@@ -101,7 +104,10 @@ impl<Params> EndpointResolver for DefaultEndpointResolver<Params>
 where
     Params: Debug + Send + Sync + 'static,
 {
-    fn resolve_endpoint(&self, params: &EndpointResolverParams) -> EndpointFuture {
+    fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a>
+    where
+        Self: 'a,
+    {
         let ep = match params.get::<Params>() {
             Some(params) => self.inner.resolve_endpoint(params).map_err(Box::new),
             None => Err(Box::new(ResolveEndpointError::message(

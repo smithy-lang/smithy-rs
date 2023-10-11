@@ -64,7 +64,10 @@ impl From<String> for Token {
 }
 
 impl IdentityResolver for Token {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> IdentityFuture {
+    fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a>
+    where
+        Self: 'a,
+    {
         IdentityFuture::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }
@@ -123,7 +126,10 @@ impl Login {
 }
 
 impl IdentityResolver for Login {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> IdentityFuture {
+    fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a>
+    where
+        Self: 'a,
+    {
         IdentityFuture::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }
