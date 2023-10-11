@@ -128,16 +128,18 @@ fn extract_params(uri: &Uri) -> HashSet<&str> {
 }
 
 #[track_caller]
-pub fn assert_uris_match(left: &Uri, right: &Uri) {
-    if left == right {
+pub fn assert_uris_match(left: impl AsRef<str>, right: impl AsRef<str>) {
+    if left.as_ref() == right.as_ref() {
         return;
     }
+    let left: Uri = left.as_ref().parse().expect("left is not a valid URI");
+    let right: Uri = right.as_ref().parse().expect("left is not a valid URI");
     assert_eq!(left.authority(), right.authority());
     assert_eq!(left.scheme(), right.scheme());
     assert_eq!(left.path(), right.path());
     assert_eq!(
-        extract_params(left),
-        extract_params(right),
+        extract_params(&left),
+        extract_params(&right),
         "Query parameters did not match. left: {}, right: {}",
         left,
         right
@@ -383,7 +385,7 @@ mod tests {
         validate_headers, validate_query_string, FloatEquals, MediaType, ProtocolTestFailure,
     };
     use aws_smithy_runtime_api::client::http::request::Headers;
-    use http::{header::HeaderMap, Request};
+    use http::Request;
 
     #[test]
     fn test_validate_empty_query_string() {
