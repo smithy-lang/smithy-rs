@@ -301,12 +301,25 @@ impl<'a> Iterator for HeadersIter<'a> {
 }
 
 impl Headers {
+    /// Create an empty header map
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Returns the value for a given key
     ///
     /// If multiple values are associated, the first value is returned
     /// See [HeaderMap::get]
     pub fn get(&self, key: impl AsRef<str>) -> Option<&str> {
         self.headers.get(key.as_ref()).map(|v| v.as_ref())
+    }
+
+    /// Returns all values for a given key
+    pub fn get_all(&self, key: impl AsRef<str>) -> impl Iterator<Item = &str> {
+        self.headers
+            .get_all(key.as_ref())
+            .iter()
+            .map(|v| v.as_ref())
     }
 
     /// Returns an iterator over the headers

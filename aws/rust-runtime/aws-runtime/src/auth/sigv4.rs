@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::auth;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
     SigV4OperationSigningConfig, SigV4SigningError,
@@ -145,7 +146,7 @@ impl SigV4Signer {
 impl Sign for SigV4Signer {
     fn sign_http_request(
         &self,
-        request: &mut HttpRequest,
+        mut request: &mut HttpRequest,
         identity: &Identity,
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
         runtime_components: &RuntimeComponents,
@@ -182,15 +183,9 @@ impl Sign for SigV4Signer {
                 });
 
             let signable_request = SignableRequest::new(
-                request.method().as_str(),
-                request.uri().to_string(),
-                request.headers().iter().map(|(k, v)| {
-                    (
-                        k.as_str(),
-                        // use from_utf8 instead of to_str because we _do_ allow non-ascii header values
-                        std::str::from_utf8(v.as_bytes()).expect("only utf-8 headers are signable"),
-                    )
-                }),
+                request.method(),
+                request.uri(),
+                request.headers().iter(),
                 signable_body,
             )?;
             sign(signable_request, &SigningParams::V4(signing_params))?
@@ -218,7 +213,7 @@ impl Sign for SigV4Signer {
                     .expect("failed to send deferred signer");
             }
         }
-        signing_instructions.apply_to_request(request);
+        auth::apply_signing_instructions(signing_instructions, &mut request)?;
         Ok(())
     }
 }

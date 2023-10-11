@@ -15,7 +15,8 @@ mod xml;
 
 use crate::xml::try_xml_equivalent;
 use assert_json_diff::assert_json_eq_no_panic;
-use http::{header::HeaderMap, Request, Uri};
+use aws_smithy_runtime_api::client::http::request::Headers;
+use http::{Request, Uri};
 use pretty_assertions::Comparison;
 use std::collections::HashSet;
 use std::fmt::{self, Debug};
@@ -205,7 +206,7 @@ pub fn require_query_params<B>(
 }
 
 pub fn validate_headers<'a>(
-    actual_headers: &HeaderMap,
+    actual_headers: &Headers,
     expected_headers: impl IntoIterator<Item = (impl AsRef<str> + 'a, impl AsRef<str> + 'a)>,
 ) -> Result<(), ProtocolTestFailure> {
     for (key, expected_value) in expected_headers {
@@ -230,23 +231,16 @@ pub fn validate_headers<'a>(
     Ok(())
 }
 
-fn normalized_header(headers: &HeaderMap, key: &str) -> Option<String> {
+fn normalized_header(headers: &Headers, key: &str) -> Option<String> {
     if !headers.contains_key(key) {
         None
     } else {
-        Some(
-            headers
-                .get_all(key)
-                .iter()
-                .map(|hv| hv.to_str().unwrap())
-                .collect::<Vec<_>>()
-                .join(", "),
-        )
+        Some(headers.get_all(key).collect::<Vec<_>>().join(", "))
     }
 }
 
 pub fn forbid_headers(
-    headers: &HeaderMap,
+    headers: &Headers,
     forbidden_headers: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
     for key in forbidden_headers {
@@ -262,7 +256,7 @@ pub fn forbid_headers(
 }
 
 pub fn require_headers(
-    headers: &HeaderMap,
+    headers: &Headers,
     required_headers: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
     for key in required_headers {
@@ -388,6 +382,7 @@ mod tests {
         forbid_headers, forbid_query_params, require_headers, require_query_params, validate_body,
         validate_headers, validate_query_string, FloatEquals, MediaType, ProtocolTestFailure,
     };
+    use aws_smithy_runtime_api::client::http::request::Headers;
     use http::{header::HeaderMap, Request};
 
     #[test]
@@ -443,11 +438,11 @@ mod tests {
 
     #[test]
     fn test_validate_headers() {
-        let mut headers = HeaderMap::new();
-        headers.append("X-Foo", "foo".parse().unwrap());
-        headers.append("X-Foo-List", "foo".parse().unwrap());
-        headers.append("X-Foo-List", "bar".parse().unwrap());
-        headers.append("X-Inline", "inline, other".parse().unwrap());
+        let mut headers = Headers::new();
+        headers.append("X-Foo", "foo");
+        headers.append("X-Foo-List", "foo");
+        headers.append("X-Foo-List", "bar");
+        headers.append("X-Inline", "inline, other");
 
         validate_headers(&headers, [("X-Foo", "foo")]).expect("header present");
         validate_headers(&headers, [("X-Foo", "Foo")]).expect_err("case sensitive");
@@ -466,30 +461,24 @@ mod tests {
 
     #[test]
     fn test_forbidden_headers() {
-        let request = Request::builder()
-            .uri("/")
-            .header("X-Foo", "foo")
-            .body(())
-            .unwrap();
+        let mut headers = Headers::new();
+        headers.append("X-Foo", "foo");
         assert_eq!(
-            forbid_headers(request.headers(), &["X-Foo"]).expect_err("should be error"),
+            forbid_headers(&headers, &["X-Foo"]).expect_err("should be error"),
             ProtocolTestFailure::ForbiddenHeader {
                 forbidden: "X-Foo".to_string(),
                 found: "X-Foo: foo".to_string()
             }
         );
-        forbid_headers(request.headers(), &["X-Bar"]).expect("header not present");
+        forbid_headers(&headers, &["X-Bar"]).expect("header not present");
     }
 
     #[test]
     fn test_required_headers() {
-        let request = Request::builder()
-            .uri("/")
-            .header("X-Foo", "foo")
-            .body(())
-            .unwrap();
-        require_headers(request.headers(), &["X-Foo"]).expect("header present");
-        require_headers(request.headers(), &["X-Bar"]).expect_err("header not present");
+        let mut headers = Headers::new();
+        headers.append("X-Foo", "foo");
+        require_headers(&headers, &["X-Foo"]).expect("header present");
+        require_headers(&headers, &["X-Bar"]).expect_err("header not present");
     }
 
     #[test]

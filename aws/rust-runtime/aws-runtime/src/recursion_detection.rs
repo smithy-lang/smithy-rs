@@ -154,7 +154,11 @@ mod tests {
         for (name, value) in test_case.request_headers_before() {
             request = request.header(name, value);
         }
-        let request = request.body(SdkBody::empty()).expect("must be valid");
+        let request = request
+            .body(SdkBody::empty())
+            .expect("must be valid")
+            .try_into()
+            .unwrap();
         let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
         context.set_request(request);
@@ -167,9 +171,9 @@ mod tests {
             .modify_before_signing(&mut ctx, &rc, &mut config)
             .expect("interceptor must succeed");
         let mutated_request = context.request().expect("request is set");
-        for name in mutated_request.headers().keys() {
+        for (name, _) in mutated_request.headers() {
             assert_eq!(
-                mutated_request.headers().get_all(name).iter().count(),
+                mutated_request.headers().get_all(name).count(),
                 1,
                 "No duplicated headers"
             )

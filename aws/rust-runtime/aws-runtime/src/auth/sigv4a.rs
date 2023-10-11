@@ -4,7 +4,8 @@
  */
 
 use crate::auth::{
-    extract_endpoint_auth_scheme_signing_name, SigV4OperationSigningConfig, SigV4SigningError,
+    apply_signing_instructions, extract_endpoint_auth_scheme_signing_name,
+    SigV4OperationSigningConfig, SigV4SigningError,
 };
 use aws_credential_types::Credentials;
 use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettings};
@@ -159,7 +160,7 @@ fn extract_endpoint_auth_scheme_signing_region_set(
 impl Sign for SigV4aSigner {
     fn sign_http_request(
         &self,
-        request: &mut HttpRequest,
+        mut request: &mut HttpRequest,
         identity: &Identity,
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
         runtime_components: &RuntimeComponents,
@@ -196,22 +197,16 @@ impl Sign for SigV4aSigner {
                 });
 
             let signable_request = SignableRequest::new(
-                request.method().as_str(),
+                request.method(),
                 request.uri().to_string(),
-                request.headers().iter().map(|(k, v)| {
-                    (
-                        k.as_str(),
-                        // use from_utf8 instead of to_str because we _do_ allow non-ascii header values
-                        std::str::from_utf8(v.as_bytes()).expect("only utf-8 headers are signable"),
-                    )
-                }),
+                request.headers().iter(),
                 signable_body,
             )?;
             sign(signable_request, &signing_params.into())?
         }
         .into_parts();
 
-        signing_instructions.apply_to_request(request);
+        apply_signing_instructions(signing_instructions, &mut request)?;
         Ok(())
     }
 }
