@@ -12,6 +12,9 @@
 //!
 //! Only operations that support presigning have the `presigned()` method on them.
 
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::http::request::Headers;
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
@@ -171,49 +174,48 @@ impl PresigningConfigBuilder {
 /// - [`PresignedRequest::to_http_request<B>`][Self::to_http_request] returns an [`http::Request<B>`](https://docs.rs/http/0.2.6/http/request/struct.Request.html)
 /// - [`PresignedRequest::into`](#impl-From<PresignedRequest>) returns an [`http::request::Builder`](https://docs.rs/http/0.2.6/http/request/struct.Builder.html)
 #[non_exhaustive]
-pub struct PresignedRequest(http::Request<()>);
+pub struct PresignedRequest(HttpRequest);
 
 impl PresignedRequest {
     #[allow(dead_code)]
-    pub(crate) fn new(inner: http::Request<()>) -> Self {
+    pub(crate) fn new(inner: HttpRequest) -> Self {
         Self(inner)
     }
 
     /// Returns the HTTP request method.
-    pub fn method(&self) -> &http::Method {
+    pub fn method(&self) -> &str {
         self.0.method()
     }
 
     /// Returns the HTTP request URI.
-    pub fn uri(&self) -> &http::Uri {
+    pub fn uri(&self) -> &str {
         self.0.uri()
     }
 
     /// Returns any HTTP headers that need to go along with the request, except for `Host`,
     /// which should be sent based on the endpoint in the URI by the HTTP client rather than
     /// added directly.
-    pub fn headers(&self) -> &http::HeaderMap<http::HeaderValue> {
+    pub fn headers(&self) -> &Headers {
         self.0.headers()
     }
 
     /// Given a body, convert this `PresignedRequest` into an `http::Request`
-    pub fn to_http_request<B>(self, body: B) -> Result<http::Request<B>, http::Error> {
-        let builder: http::request::Builder = self.into();
-
-        builder.body(body)
+    pub fn to_http_03x_request<B>(self, body: B) -> Result<http::Request<B>, BoxError> {
+        Ok(self.0.into_http03x()?.map(|_req| body))
     }
 }
 
 impl fmt::Debug for PresignedRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PresignedRequest")
-            .field("method", self.method())
-            .field("uri", self.uri())
+            .field("method", &self.method())
+            .field("uri", &self.uri())
             .field("headers", self.headers())
             .finish()
     }
 }
 
+/*
 impl From<PresignedRequest> for http::request::Builder {
     fn from(req: PresignedRequest) -> Self {
         let mut builder = http::request::Builder::new()
@@ -226,4 +228,4 @@ impl From<PresignedRequest> for http::request::Builder {
 
         builder
     }
-}
+}*/

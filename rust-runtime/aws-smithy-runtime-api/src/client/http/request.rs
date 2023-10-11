@@ -142,6 +142,17 @@ impl<B> Request<B> {
         Ok(req)
     }
 
+    /// Update the body of this request to be a new body.
+    pub fn map<U>(self, f: impl Fn(B) -> U) -> Request<U> {
+        Request {
+            body: f(self.body),
+            uri: self.uri,
+            method: self.method,
+            extensions: self.extensions,
+            headers: self.headers,
+        }
+    }
+
     /// Returns a GET request with no URI
     pub fn new(body: B) -> Self {
         Self {

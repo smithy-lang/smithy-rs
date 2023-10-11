@@ -187,7 +187,7 @@ fn wrap_streaming_request_body_in_checksum_calculating_body(
 
     headers.insert(
         http::header::HeaderName::from_static("x-amz-trailer"),
-        checksum_algorithm.as_str(),
+        checksum_algorithm.into_impl().header_name(),
     );
 
     headers.insert(

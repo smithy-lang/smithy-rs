@@ -81,7 +81,7 @@ async fn interceptor_priority() {
     .expect_err("no fake response set");
 
     let request = rx.expect_request();
-    assert_eq!("value2", request.headers()["test-header"]);
+    assert_eq!("value2", request.headers().get("test-header").unwrap());
 }
 
 #[tokio::test]
@@ -112,6 +112,6 @@ async fn set_test_user_agent_through_request_mutation() {
     .expect_err("no fake response set");
 
     let request = rx.expect_request();
-    assert_eq!("test", request.headers()[USER_AGENT]);
-    assert_eq!("test", request.headers()["x-amz-user-agent"]);
+    assert_eq!("test", request.headers().get(USER_AGENT).unwrap());
+    assert_eq!("test", request.headers().get("x-amz-user-agent").unwrap());
 }

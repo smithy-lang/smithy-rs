@@ -4,10 +4,11 @@
  */
 
 use aws_sdk_s3 as s3;
+
 use futures_util::future::FutureExt;
 use futures_util::Future;
 use http::header::{CONTENT_LENGTH, CONTENT_TYPE};
-use http::{HeaderMap, HeaderValue};
+use http::Uri;
 use s3::config::{Credentials, Region};
 use s3::operation::get_object::builders::GetObjectFluentBuilder;
 use s3::operation::head_object::builders::HeadObjectFluentBuilder;
@@ -71,8 +72,9 @@ where
 async fn test_presigning() {
     let presigned =
         presign(|client| client.get_object().bucket("test-bucket").key("test-key")).await;
+    let uri = presigned.uri().parse::<Uri>().unwrap();
 
-    let pq = presigned.uri().path_and_query().unwrap();
+    let pq = uri.path_and_query().unwrap();
     let path = pq.path();
     let query = pq.query().unwrap();
     let mut query_params: Vec<&str> = query.split('&').collect();
@@ -80,9 +82,9 @@ async fn test_presigning() {
 
     pretty_assertions::assert_eq!(
         "test-bucket.s3.us-east-1.amazonaws.com",
-        presigned.uri().authority().unwrap()
+        uri.authority().unwrap()
     );
-    assert_eq!("GET", presigned.method().as_str());
+    assert_eq!("GET", presigned.method());
     assert_eq!("/test-key", path);
     pretty_assertions::assert_eq!(
         &[
@@ -111,8 +113,9 @@ async fn test_presigning_with_payload_headers() {
             .content_type("application/x-test")
     })
     .await;
+    let uri = presigned.uri().parse::<Uri>().unwrap();
 
-    let pq = presigned.uri().path_and_query().unwrap();
+    let pq = uri.path_and_query().unwrap();
     let path = pq.path();
     let query = pq.query().unwrap();
     let mut query_params: Vec<&str> = query.split('&').collect();
@@ -120,9 +123,9 @@ async fn test_presigning_with_payload_headers() {
 
     pretty_assertions::assert_eq!(
         "test-bucket.s3.us-east-1.amazonaws.com",
-        presigned.uri().authority().unwrap()
+        uri.authority().unwrap()
     );
-    assert_eq!("PUT", presigned.method().as_str());
+    assert_eq!("PUT", presigned.method());
     assert_eq!("/test-key", path);
     pretty_assertions::assert_eq!(
         &[
@@ -138,10 +141,12 @@ async fn test_presigning_with_payload_headers() {
         &query_params
     );
 
-    let mut expected_headers = HeaderMap::new();
-    expected_headers.insert(CONTENT_LENGTH, HeaderValue::from_static("12345"));
-    expected_headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/x-test"));
-    assert_eq!(&expected_headers, presigned.headers());
+    assert_eq!(
+        presigned.headers().get(CONTENT_TYPE),
+        Some("application/x-test")
+    );
+    assert_eq!(presigned.headers().get(CONTENT_LENGTH), Some("123456"));
+    assert_eq!(presigned.headers().iter().count(), 2);
 }
 
 #[tokio::test]
@@ -182,7 +187,7 @@ async fn test_presigning_object_lambda() {
 async fn test_presigned_head_object() {
     let presigned = presign(|client| client.head_object().bucket("bucket").key("key")).await;
 
-    assert_eq!("HEAD", presigned.method().as_str());
+    assert_eq!("HEAD", presigned.method());
     pretty_assertions::assert_eq!(
         "https://bucket.s3.us-east-1.amazonaws.com/key?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ANOTREAL%2F20090213%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20090213T233131Z&X-Amz-Expires=30&X-Amz-SignedHeaders=host&X-Amz-Signature=6b97012e70d5ee3528b5591e0e90c0f45e0fa303506f854eff50ff922751a193&X-Amz-Security-Token=notarealsessiontoken",
         presigned.uri().to_string(),

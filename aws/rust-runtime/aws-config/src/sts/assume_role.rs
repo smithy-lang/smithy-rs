@@ -442,13 +442,7 @@ mod test {
             .await;
         let _ = provider.provide_credentials().await;
         let req = request.expect_request();
-        let auth_header = req
-            .headers()
-            .get(AUTHORIZATION)
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+        let auth_header = req.headers().get(AUTHORIZATION).unwrap().to_string();
         let expect = "Credential=123-key/20090213/us-west-17/sts/aws4_request";
         assert!(
             auth_header.contains(expect),

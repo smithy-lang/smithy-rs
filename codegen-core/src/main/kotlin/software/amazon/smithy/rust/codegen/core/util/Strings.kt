@@ -18,10 +18,10 @@ fun String.doubleQuote(): String =
  */
 fun String.dq(): String = this.doubleQuote()
 
+val completeWords: List<String> = listOf("ipv4", "ipv6", "sigv4", "mib", "gib", "kib", "ttl")
 private fun String.splitOnWordBoundaries(): List<String> {
     val out = mutableListOf<String>()
     // These are whole words but cased differently, e.g. `IPv4`, `MiB`, `GiB`, `TtL`
-    val completeWords = listOf("ipv4", "ipv6", "sigv4", "mib", "gib", "kib", "ttl")
     var currentWord = ""
 
     // emit the current word and update from the next character

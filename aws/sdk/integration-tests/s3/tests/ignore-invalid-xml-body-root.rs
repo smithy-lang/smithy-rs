@@ -58,5 +58,5 @@ async fn ignore_invalid_xml_body_root() {
         .await
         .unwrap();
 
-    http_client.assert_requests_match(&[AUTHORIZATION]);
+    http_client.assert_requests_match(&[AUTHORIZATION.as_str()]);
 }
