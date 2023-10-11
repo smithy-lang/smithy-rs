@@ -7,7 +7,7 @@
 
 use aws_smithy_http::body::SdkBody;
 use http as http0;
-use http::header::{InvalidHeaderName, InvalidHeaderValue, ToStrError};
+use http::header::{InvalidHeaderName, InvalidHeaderValue};
 use http::uri::InvalidUri;
 use http0::header::Iter;
 use http0::uri::PathAndQuery;
@@ -15,7 +15,7 @@ use http0::{Extensions, HeaderMap, Method};
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Debug, Display, Formatter};
-use std::str::FromStr;
+use std::str::{FromStr, Utf8Error};
 
 #[derive(Debug)]
 /// An HTTP Request Type
@@ -255,7 +255,7 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
         if let Some(e) = value
             .headers()
             .values()
-            .filter_map(|value| value.to_str().err())
+            .filter_map(|value| std::str::from_utf8(value.as_bytes()).err())
             .next()
         {
             Err(HttpError::header_was_not_a_string(e))
@@ -457,7 +457,7 @@ mod sealed {
     impl AsHeaderComponent for http0::HeaderValue {
         fn into_maybe_static(self) -> Result<MaybeStatic, HttpError> {
             Ok(Cow::Owned(
-                self.to_str()
+                std::str::from_utf8(self.as_bytes())
                     .map_err(HttpError::header_was_not_a_string)?
                     .to_string(),
             ))
@@ -562,7 +562,7 @@ impl HttpError {
         Self(err.into())
     }
 
-    fn header_was_not_a_string(err: ToStrError) -> Self {
+    fn header_was_not_a_string(err: Utf8Error) -> Self {
         Self(err.into())
     }
 
@@ -608,6 +608,7 @@ fn header_value(value: MaybeStatic) -> Result<HeaderValue, HttpError> {
 
 #[cfg(test)]
 mod test {
+    use crate::client::orchestrator::HttpRequest;
     use aws_smithy_http::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
@@ -619,6 +620,18 @@ mod test {
         let _ = "a\nb"
             .parse::<HeaderValue>()
             .expect_err("cannot contain control characters");
+    }
+
+    #[test]
+    fn non_ascii_requests() {
+        let request = http::Request::builder()
+            .header("k", "😹")
+            .body(SdkBody::empty())
+            .unwrap();
+        let request: HttpRequest = request
+            .try_into()
+            .expect("failed to convert a non-string header");
+        assert_eq!(request.headers().get("k"), Some("😹"))
     }
 
     #[test]

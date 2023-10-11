@@ -109,7 +109,7 @@ async fn test_presigning_with_payload_headers() {
             .put_object()
             .bucket("test-bucket")
             .key("test-key")
-            .content_length(12345)
+            .content_length(123456)
             .content_type("application/x-test")
     })
     .await;
