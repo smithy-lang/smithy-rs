@@ -35,3 +35,6 @@ pub fn default_http_client_plugin() -> SharedRuntimePlugin {
         );
     SharedRuntimePlugin::new(plugin)
 }
+
+/// HTTP body and body-wrapper types
+pub mod body;
