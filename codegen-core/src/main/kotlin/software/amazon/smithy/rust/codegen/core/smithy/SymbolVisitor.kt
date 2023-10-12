@@ -269,10 +269,14 @@ open class SymbolVisitor(
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
         val defaultValue = shape.getMemberTrait(model, DefaultTrait::class.java).orNull()?.let { trait ->
-            when (val value = trait.toNode()) {
-                Node.from(""), Node.from(0), Node.from(false), Node.arrayNode(), Node.objectNode() -> Default.RustDefault
-                Node.nullNode() -> Default.NoDefault
-                else -> Default.NonZeroDefault(value)
+            if (target.isDocumentShape || target.isTimestampShape) {
+                Default.NonZeroDefault(trait.toNode())
+            } else {
+                when (val value = trait.toNode()) {
+                    Node.from(""), Node.from(0), Node.from(false), Node.arrayNode(), Node.objectNode() -> Default.RustDefault
+                    Node.nullNode() -> Default.NoDefault
+                    else -> Default.NonZeroDefault(value)
+                }
             }
         } ?: Default.NoDefault
         // Handle boxing first, so we end up with Option<Box<_>>, not Box<Option<_>>.
