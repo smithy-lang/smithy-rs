@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut, Input,
 };
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::HeaderValue;
@@ -75,7 +75,7 @@ impl<AP> RequestChecksumInterceptor<AP> {
     }
 }
 
-impl<AP> Interceptor for RequestChecksumInterceptor<AP>
+impl<AP> Intercept for RequestChecksumInterceptor<AP>
 where
     AP: Fn(&Input) -> Result<Option<ChecksumAlgorithm>, BoxError> + Send + Sync,
 {

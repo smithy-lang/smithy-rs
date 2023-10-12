@@ -157,7 +157,7 @@ class EndpointsDecoratorTest {
                         struct TestInterceptor {
                             called: Arc<AtomicBool>,
                         }
-                        impl Interceptor for TestInterceptor {
+                        impl Intercept for TestInterceptor {
                             fn name(&self) -> &'static str {
                                 "TestInterceptor"
                             }

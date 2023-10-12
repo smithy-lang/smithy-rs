@@ -180,7 +180,7 @@ internal class EndpointTraitBindingsTest {
                             called: Arc<AtomicU32>,
                             last_endpoint_prefix: Arc<Mutex<Option<EndpointPrefix>>>,
                         }
-                        impl Interceptor for TestInterceptor {
+                        impl Intercept for TestInterceptor {
                             fn name(&self) -> &'static str {
                                 "TestInterceptor"
                             }

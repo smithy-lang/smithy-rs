@@ -20,7 +20,7 @@ use crate::client::http::{HttpClient, SharedHttpClient};
 use crate::client::identity::{
     ConfiguredIdentityResolver, ResolveIdentity, SharedIdentityResolver,
 };
-use crate::client::interceptors::{Interceptor, SharedInterceptor};
+use crate::client::interceptors::{Intercept, SharedInterceptor};
 use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
 use crate::client::retries::{RetryStrategy, SharedRetryStrategy};
 use crate::shared::IntoShared;
@@ -392,14 +392,14 @@ impl RuntimeComponentsBuilder {
     }
 
     /// Adds an interceptor.
-    pub fn push_interceptor(&mut self, interceptor: impl Interceptor + 'static) -> &mut Self {
+    pub fn push_interceptor(&mut self, interceptor: impl Intercept + 'static) -> &mut Self {
         self.interceptors
             .push(Tracked::new(self.builder_name, interceptor.into_shared()));
         self
     }
 
     /// Adds an interceptor.
-    pub fn with_interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
+    pub fn with_interceptor(mut self, interceptor: impl Intercept + 'static) -> Self {
         self.push_interceptor(interceptor);
         self
     }

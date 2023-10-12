@@ -21,7 +21,7 @@ use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, SharedEnd
 use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
 use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
@@ -261,7 +261,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
+    pub fn interceptor(mut self, interceptor: impl Intercept + 'static) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
     }

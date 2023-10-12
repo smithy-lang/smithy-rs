@@ -5,7 +5,7 @@
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use fastrand::Rng;
@@ -92,7 +92,7 @@ impl InvocationIdInterceptor {
     }
 }
 
-impl Interceptor for InvocationIdInterceptor {
+impl Intercept for InvocationIdInterceptor {
     fn name(&self) -> &'static str {
         "InvocationIdInterceptor"
     }
@@ -217,7 +217,7 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::context::{
         BeforeTransmitInterceptorContextMut, Input, InterceptorContext,
     };
-    use aws_smithy_runtime_api::client::interceptors::Interceptor;
+    use aws_smithy_runtime_api::client::interceptors::Intercept;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::ConfigBag;
     use http::HeaderValue;

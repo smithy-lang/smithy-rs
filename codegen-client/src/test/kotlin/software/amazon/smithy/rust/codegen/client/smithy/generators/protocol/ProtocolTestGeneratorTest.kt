@@ -40,7 +40,7 @@ private class TestServiceRuntimePluginCustomization(
                     {
                         ##[derive(::std::fmt::Debug)]
                         struct TestInterceptor;
-                        impl #{Interceptor} for TestInterceptor {
+                        impl #{Intercept} for TestInterceptor {
                             fn name(&self) -> &'static str {
                                 "TestInterceptor"
                             }
@@ -71,7 +71,7 @@ private class TestServiceRuntimePluginCustomization(
                     "BeforeTransmitInterceptorContextMut" to RT.beforeTransmitInterceptorContextMut(rc),
                     "BoxError" to RT.boxError(rc),
                     "ConfigBag" to RT.configBag(rc),
-                    "Interceptor" to RT.interceptor(rc),
+                    "Intercept" to RT.intercept(rc),
                     "RuntimeComponents" to RT.runtimeComponents(rc),
                     "SdkBody" to RT.sdkBody(rc),
                 )

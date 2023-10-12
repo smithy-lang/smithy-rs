@@ -357,8 +357,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
 
-        fun interceptor(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::Interceptor")
+        fun intercept(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::Intercept")
 
         fun interceptorContext(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::InterceptorContext")

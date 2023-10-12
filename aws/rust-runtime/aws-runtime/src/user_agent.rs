@@ -6,7 +6,7 @@
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
@@ -71,7 +71,7 @@ fn header_values(
     ))
 }
 
-impl Interceptor for UserAgentInterceptor {
+impl Intercept for UserAgentInterceptor {
     fn name(&self) -> &'static str {
         "UserAgentInterceptor"
     }
@@ -115,7 +115,7 @@ mod tests {
     use super::*;
     use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
-    use aws_smithy_runtime_api::client::interceptors::Interceptor;
+    use aws_smithy_runtime_api::client::interceptors::Intercept;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::error::display::DisplayErrorContext;
