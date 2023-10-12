@@ -59,9 +59,7 @@ pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
         &'a self,
         resolver: SharedIdentityResolver,
         config_bag: &'a ConfigBag,
-    ) -> IdentityFuture<'a>
-    where
-        Self: 'a;
+    ) -> IdentityFuture<'a>;
 }
 
 /// Shared identity cache.
@@ -80,10 +78,7 @@ impl ResolveCachedIdentity for SharedIdentityCache {
         &'a self,
         resolver: SharedIdentityResolver,
         config_bag: &'a ConfigBag,
-    ) -> IdentityFuture<'a>
-    where
-        Self: 'a,
-    {
+    ) -> IdentityFuture<'a> {
         self.0.resolve_cached_identity(resolver, config_bag)
     }
 }

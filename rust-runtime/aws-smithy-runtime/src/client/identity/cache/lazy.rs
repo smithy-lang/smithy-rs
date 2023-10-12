@@ -247,10 +247,7 @@ impl ResolveCachedIdentity for LazyCache {
         &'a self,
         resolver: SharedIdentityResolver,
         config_bag: &'a ConfigBag,
-    ) -> IdentityFuture<'a>
-    where
-        Self: 'a,
-    {
+    ) -> IdentityFuture<'a> {
         let time = self.time.clone();
         let now = self.time.now();
         let timeout_future = self.sleeper.sleep(self.load_timeout);

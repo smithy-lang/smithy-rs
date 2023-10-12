@@ -81,10 +81,7 @@ impl ResolveCachedIdentity for NoCache {
         &'a self,
         resolver: SharedIdentityResolver,
         config_bag: &'a ConfigBag,
-    ) -> IdentityFuture<'a>
-    where
-        Self: 'a,
-    {
+    ) -> IdentityFuture<'a> {
         IdentityFuture::new(async move { resolver.resolve_identity(config_bag).await })
     }
 }
