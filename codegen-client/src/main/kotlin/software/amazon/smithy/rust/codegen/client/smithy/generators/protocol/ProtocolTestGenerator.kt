@@ -338,7 +338,7 @@ class DefaultProtocolTestGenerator(
         )
         rustTemplate(
             """
-            use #{ResponseDeserializer};
+            use #{DeserializeResponse};
             use #{RuntimePlugin};
 
             let op = #{Operation}::new();
@@ -356,7 +356,7 @@ class DefaultProtocolTestGenerator(
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
             "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
             "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-            "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
+            "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
         )

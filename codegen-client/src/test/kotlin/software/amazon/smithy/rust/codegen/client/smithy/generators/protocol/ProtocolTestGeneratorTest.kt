@@ -92,7 +92,7 @@ private class TestOperationCustomization(
                 // Override the default response deserializer with our fake output
                 ##[derive(::std::fmt::Debug)]
                 struct TestDeser;
-                impl #{ResponseDeserializer} for TestDeser {
+                impl #{DeserializeResponse} for TestDeser {
                     fn deserialize_nonstreaming(
                         &self,
                         _response: &#{HttpResponse},
@@ -114,7 +114,7 @@ private class TestOperationCustomization(
                 "HttpResponse" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
                 "Output" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Output"),
-                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
+                "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
             )
         }
     }

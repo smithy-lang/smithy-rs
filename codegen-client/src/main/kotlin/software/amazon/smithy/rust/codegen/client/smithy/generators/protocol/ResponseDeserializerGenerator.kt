@@ -44,7 +44,7 @@ class ResponseDeserializerGenerator(
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
-            "ResponseDeserializer" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::ser_de::ResponseDeserializer"),
+            "DeserializeResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::ser_de::DeserializeResponse"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
@@ -61,7 +61,7 @@ class ResponseDeserializerGenerator(
             """
             ##[derive(Debug)]
             struct ${operationName}ResponseDeserializer;
-            impl #{ResponseDeserializer} for ${operationName}ResponseDeserializer {
+            impl #{DeserializeResponse} for ${operationName}ResponseDeserializer {
                 #{deserialize_streaming}
 
                 fn deserialize_nonstreaming(&self, response: &#{HttpResponse}) -> #{OutputOrError} {

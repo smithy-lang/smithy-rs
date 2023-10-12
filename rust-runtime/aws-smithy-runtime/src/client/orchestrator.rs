@@ -27,7 +27,7 @@ use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, Sh
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::client::ser_de::{
-    RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
+    DeserializeResponse, SerializeRequest, SharedRequestSerializer, SharedResponseDeserializer,
 };
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::timeout::TimeoutConfig;

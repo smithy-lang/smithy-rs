@@ -31,7 +31,7 @@ use aws_smithy_runtime_api::client::runtime_plugin::{
     RuntimePlugin, RuntimePlugins, SharedRuntimePlugin, StaticRuntimePlugin,
 };
 use aws_smithy_runtime_api::client::ser_de::{
-    RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
+    DeserializeResponse, SerializeRequest, SharedRequestSerializer, SharedResponseDeserializer,
 };
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
@@ -53,7 +53,7 @@ impl<F, I> FnSerializer<F, I> {
         }
     }
 }
-impl<F, I> RequestSerializer for FnSerializer<F, I>
+impl<F, I> SerializeRequest for FnSerializer<F, I>
 where
     F: Fn(I) -> Result<HttpRequest, BoxError> + Send + Sync,
     I: fmt::Debug + Send + Sync + 'static,
@@ -81,7 +81,7 @@ impl<F, O, E> FnDeserializer<F, O, E> {
         }
     }
 }
-impl<F, O, E> ResponseDeserializer for FnDeserializer<F, O, E>
+impl<F, O, E> DeserializeResponse for FnDeserializer<F, O, E>
 where
     F: Fn(&HttpResponse) -> Result<O, OrchestratorError<E>> + Send + Sync,
     O: fmt::Debug + Send + Sync + 'static,
