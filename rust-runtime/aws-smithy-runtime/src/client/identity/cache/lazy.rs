@@ -153,7 +153,7 @@ impl LazyCacheBuilder {
         self
     }
 
-    /// Builds an [`IdentityCache`] from this builder.
+    /// Builds a [`SharedIdentityCache`] from this builder.
     ///
     /// # Panics
     ///
