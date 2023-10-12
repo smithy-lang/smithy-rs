@@ -346,7 +346,7 @@ where
 {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         let mut request = request
-            .into_http03x()
+            .into_http02x()
             .expect("TODO(httpRefactor): no panics");
         let capture_connection = capture_connection(&mut request);
         if let Some(capture_smithy_connection) =
