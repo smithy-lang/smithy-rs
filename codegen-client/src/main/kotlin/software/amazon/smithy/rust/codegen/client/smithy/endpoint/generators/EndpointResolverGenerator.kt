@@ -207,7 +207,7 @@ internal class EndpointResolverGenerator(
         endpointRuleSet: EndpointRuleSet,
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
-        return RuntimeType.forInlineFun("resolve_endpoint", endpointImplModule(codegenContext)) {
+        return RuntimeType.forInlineFun("resolve_endpoint", endpointImplModule()) {
             Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """

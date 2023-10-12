@@ -59,7 +59,7 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") {
             rustBlockTemplate(
                 "pub fn parse_event_stream_error_metadata(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,

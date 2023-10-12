@@ -60,11 +60,11 @@ class ClientRuntimeTypesReExportGenerator(
             rustTemplate(
                 """
                 pub use #{ClassifyRetry};
-                pub use #{RetryReason};
+                pub use #{RetryAction};
                 pub use #{ShouldAttempt};
                 """,
-                "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
-                "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),
+                "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::classifiers::ClassifyRetry"),
+                "RetryAction" to smithyRuntimeApi.resolve("client::retries::classifiers::RetryAction"),
                 "ShouldAttempt" to smithyRuntimeApi.resolve("client::retries::ShouldAttempt"),
             )
         }

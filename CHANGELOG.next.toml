@@ -306,6 +306,38 @@ author = "rcoh"
 
 [[smithy-rs]]
 message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
+references = ["smithy-rs#3055"]
+meta = { "breaking" = true, "tada" = true, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
+references = ["smithy-rs#3055"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
 [`EndpointPrefix::new`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/struct.EndpointPrefix.html#method.new) no longer returns `crate::operation::error::BuildError` for an Err variant, instead returns a more specific [`InvalidEndpointError`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/error/struct.InvalidEndpointError.html).
 """
 references = ["smithy-rs#3032"]

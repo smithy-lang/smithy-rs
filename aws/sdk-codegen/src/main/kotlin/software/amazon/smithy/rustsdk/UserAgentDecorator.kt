@@ -91,7 +91,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
             when (section) {
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                    section.registerInterceptor(runtimeConfig, this) {
+                    section.registerInterceptor(this) {
                         rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
                     }
                 }

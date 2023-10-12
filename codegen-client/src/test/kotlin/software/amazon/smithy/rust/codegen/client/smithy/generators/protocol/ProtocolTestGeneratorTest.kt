@@ -34,7 +34,7 @@ private class TestServiceRuntimePluginCustomization(
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             val rc = context.runtimeConfig
-            section.registerInterceptor(rc, this) {
+            section.registerInterceptor(this) {
                 rustTemplate(
                     """
                     {
