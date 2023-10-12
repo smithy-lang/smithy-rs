@@ -6,8 +6,8 @@
 use crate::client::auth::no_auth::NO_AUTH_SCHEME_ID;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolver,
-    AuthSchemeOptionResolverParams,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
+    ResolveAuthSchemeOptions,
 };
 use aws_smithy_runtime_api::client::identity::IdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;

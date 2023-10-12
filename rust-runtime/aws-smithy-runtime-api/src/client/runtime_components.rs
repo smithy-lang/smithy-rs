@@ -12,7 +12,7 @@
 //! [`RuntimeComponents`](RuntimeComponents).
 
 use crate::client::auth::{
-    AuthScheme, AuthSchemeId, AuthSchemeOptionResolver, SharedAuthScheme,
+    AuthScheme, AuthSchemeId, ResolveAuthSchemeOptions, SharedAuthScheme,
     SharedAuthSchemeOptionResolver,
 };
 use crate::client::endpoint::{EndpointResolver, SharedEndpointResolver};
@@ -278,7 +278,7 @@ impl RuntimeComponentsBuilder {
     /// Sets the auth scheme option resolver.
     pub fn set_auth_scheme_option_resolver(
         &mut self,
-        auth_scheme_option_resolver: Option<impl AuthSchemeOptionResolver + 'static>,
+        auth_scheme_option_resolver: Option<impl ResolveAuthSchemeOptions + 'static>,
     ) -> &mut Self {
         self.auth_scheme_option_resolver =
             auth_scheme_option_resolver.map(|r| Tracked::new(self.builder_name, r.into_shared()));
@@ -288,7 +288,7 @@ impl RuntimeComponentsBuilder {
     /// Sets the auth scheme option resolver.
     pub fn with_auth_scheme_option_resolver(
         mut self,
-        auth_scheme_option_resolver: Option<impl AuthSchemeOptionResolver + 'static>,
+        auth_scheme_option_resolver: Option<impl ResolveAuthSchemeOptions + 'static>,
     ) -> Self {
         self.set_auth_scheme_option_resolver(auth_scheme_option_resolver);
         self
@@ -554,7 +554,7 @@ impl RuntimeComponentsBuilder {
 
         #[derive(Debug)]
         struct FakeAuthSchemeOptionResolver;
-        impl AuthSchemeOptionResolver for FakeAuthSchemeOptionResolver {
+        impl ResolveAuthSchemeOptions for FakeAuthSchemeOptionResolver {
             fn resolve_auth_scheme_options(
                 &self,
                 _: &crate::client::auth::AuthSchemeOptionResolverParams,

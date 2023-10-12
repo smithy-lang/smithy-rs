@@ -93,7 +93,7 @@ impl Storable for AuthSchemeOptionResolverParams {
 /// [`StaticAuthSchemeOptionResolver`](static_resolver::StaticAuthSchemeOptionResolver),
 /// or it can be a complex code generated resolver that incorporates parameters from both
 /// the model and the resolved endpoint.
-pub trait AuthSchemeOptionResolver: Send + Sync + fmt::Debug {
+pub trait ResolveAuthSchemeOptions: Send + Sync + fmt::Debug {
     /// Returns a list of available auth scheme options to choose from.
     fn resolve_auth_scheme_options(
         &self,
@@ -103,16 +103,16 @@ pub trait AuthSchemeOptionResolver: Send + Sync + fmt::Debug {
 
 /// A shared auth scheme option resolver.
 #[derive(Clone, Debug)]
-pub struct SharedAuthSchemeOptionResolver(Arc<dyn AuthSchemeOptionResolver>);
+pub struct SharedAuthSchemeOptionResolver(Arc<dyn ResolveAuthSchemeOptions>);
 
 impl SharedAuthSchemeOptionResolver {
     /// Creates a new [`SharedAuthSchemeOptionResolver`].
-    pub fn new(auth_scheme_option_resolver: impl AuthSchemeOptionResolver + 'static) -> Self {
+    pub fn new(auth_scheme_option_resolver: impl ResolveAuthSchemeOptions + 'static) -> Self {
         Self(Arc::new(auth_scheme_option_resolver))
     }
 }
 
-impl AuthSchemeOptionResolver for SharedAuthSchemeOptionResolver {
+impl ResolveAuthSchemeOptions for SharedAuthSchemeOptionResolver {
     fn resolve_auth_scheme_options(
         &self,
         params: &AuthSchemeOptionResolverParams,
@@ -123,7 +123,7 @@ impl AuthSchemeOptionResolver for SharedAuthSchemeOptionResolver {
 
 impl_shared_conversions!(
     convert SharedAuthSchemeOptionResolver
-    from AuthSchemeOptionResolver
+    from ResolveAuthSchemeOptions
     using SharedAuthSchemeOptionResolver::new
 );
 
@@ -135,7 +135,7 @@ pub trait AuthScheme: Send + Sync + fmt::Debug {
     /// Returns the unique identifier associated with this auth scheme.
     ///
     /// This identifier is used to refer to this auth scheme from the
-    /// [`AuthSchemeOptionResolver`], and is also associated with
+    /// [`ResolveAuthSchemeOptions`], and is also associated with
     /// identity resolvers in the config.
     fn scheme_id(&self) -> AuthSchemeId;
 
