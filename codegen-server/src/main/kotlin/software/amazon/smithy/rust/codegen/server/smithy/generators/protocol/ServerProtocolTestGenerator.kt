@@ -561,9 +561,9 @@ class ServerProtocolTestGenerator(
 
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpResponseTestCase) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
-        checkForbidHeaders(rustWriter, "&http_response.headers()", testCase.forbidHeaders)
-        checkRequiredHeaders(rustWriter, "&http_response.headers()", testCase.requireHeaders)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
+        checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
+        checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -579,7 +579,7 @@ class ServerProtocolTestGenerator(
 
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpMalformedResponseDefinition) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to

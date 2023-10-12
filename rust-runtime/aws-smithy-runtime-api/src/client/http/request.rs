@@ -589,9 +589,16 @@ impl Error for HttpError {
 
 fn header_name(name: impl AsHeaderComponent) -> Result<http0::HeaderName, HttpError> {
     name.repr_as_http03x_header_name().or_else(|name| {
-        name.into_maybe_static().and_then(|cow| match cow {
-            Cow::Borrowed(staticc) => Ok(http0::HeaderName::from_static(staticc)),
-            Cow::Owned(s) => http0::HeaderName::try_from(s).map_err(HttpError::invalid_header_name),
+        name.into_maybe_static().and_then(|cow| {
+            if cow.chars().any(|c| c.is_uppercase()) {
+                return Err(HttpError::new("Header names must be all lower case"));
+            }
+            match cow {
+                Cow::Borrowed(staticc) => Ok(http0::HeaderName::from_static(staticc)),
+                Cow::Owned(s) => {
+                    http0::HeaderName::try_from(s).map_err(HttpError::invalid_header_name)
+                }
+            }
         })
     })
 }
