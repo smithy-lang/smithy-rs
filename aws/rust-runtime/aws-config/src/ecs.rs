@@ -50,7 +50,7 @@ use crate::http_credential_provider::HttpCredentialProvider;
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_smithy_http::endpoint::apply_endpoint;
-use aws_smithy_runtime_api::client::dns::{DnsResolver, ResolveDnsError, SharedDnsResolver};
+use aws_smithy_runtime_api::client::dns::{ResolveDns, ResolveDnsError, SharedDnsResolver};
 use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
@@ -274,7 +274,7 @@ impl Builder {
     ///
     /// URIs must refer to loopback addresses. The [`DnsResolver`](aws_smithy_runtime_api::client::dns::DnsResolver)
     /// is used to retrieve IP addresses for a given domain.
-    pub fn dns(mut self, dns: impl DnsResolver + 'static) -> Self {
+    pub fn dns(mut self, dns: impl ResolveDns + 'static) -> Self {
         self.dns = Some(dns.into_shared());
         self
     }
@@ -751,7 +751,7 @@ mod test {
         }
     }
 
-    impl DnsResolver for TestDns {
+    impl ResolveDns for TestDns {
         fn resolve_dns(&self, name: String) -> DnsFuture {
             DnsFuture::ready(Ok(self.addrs.get(&name).unwrap_or(&self.fallback).clone()))
         }
@@ -759,7 +759,7 @@ mod test {
 
     #[derive(Debug)]
     struct NeverDns;
-    impl DnsResolver for NeverDns {
+    impl ResolveDns for NeverDns {
         fn resolve_dns(&self, _name: String) -> DnsFuture {
             DnsFuture::new(async {
                 Never::new().await;

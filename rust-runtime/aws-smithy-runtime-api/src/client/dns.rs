@@ -71,29 +71,29 @@ impl Future for DnsFuture {
 }
 
 /// Trait for resolving domain names
-pub trait DnsResolver: fmt::Debug + Send + Sync {
+pub trait ResolveDns: fmt::Debug + Send + Sync {
     /// Asynchronously resolve the given domain name
     fn resolve_dns(&self, name: String) -> DnsFuture;
 }
 
 /// Shared DNS resolver
 #[derive(Clone, Debug)]
-pub struct SharedDnsResolver(Arc<dyn DnsResolver>);
+pub struct SharedDnsResolver(Arc<dyn ResolveDns>);
 
 impl SharedDnsResolver {
     /// Create a new `SharedDnsResolver`.
-    pub fn new(resolver: impl DnsResolver + 'static) -> Self {
+    pub fn new(resolver: impl ResolveDns + 'static) -> Self {
         Self(Arc::new(resolver))
     }
 }
 
-impl DnsResolver for SharedDnsResolver {
+impl ResolveDns for SharedDnsResolver {
     fn resolve_dns(&self, name: String) -> DnsFuture {
         self.0.resolve_dns(name)
     }
 }
 
-impl_shared_conversions!(convert SharedDnsResolver from DnsResolver using SharedDnsResolver::new);
+impl_shared_conversions!(convert SharedDnsResolver from ResolveDns using SharedDnsResolver::new);
 
 #[cfg(test)]
 mod tests {
