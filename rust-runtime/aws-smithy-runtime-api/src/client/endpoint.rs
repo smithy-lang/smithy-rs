@@ -45,9 +45,7 @@ impl Storable for EndpointResolverParams {
 /// Configurable endpoint resolver implementation.
 pub trait EndpointResolver: Send + Sync + fmt::Debug {
     /// Asynchronously resolves an endpoint to use from the given endpoint parameters.
-    fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a>
-    where
-        Self: 'a;
+    fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a>;
 }
 
 /// Shared endpoint resolver.
@@ -64,10 +62,7 @@ impl SharedEndpointResolver {
 }
 
 impl EndpointResolver for SharedEndpointResolver {
-    fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a>
-    where
-        Self: 'a,
-    {
+    fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a> {
         self.0.resolve_endpoint(params)
     }
 }

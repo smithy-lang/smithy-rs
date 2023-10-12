@@ -29,10 +29,7 @@ impl NoAuthIdentityResolver {
 }
 
 impl IdentityResolver for NoAuthIdentityResolver {
-    fn resolve_identity<'a>(&'a self, _: &'a ConfigBag) -> IdentityFuture<'a>
-    where
-        Self: 'a,
-    {
+    fn resolve_identity<'a>(&'a self, _: &'a ConfigBag) -> IdentityFuture<'a> {
         IdentityFuture::ready(Ok(Identity::new(NoAuthIdentity::new(), None)))
     }
 }

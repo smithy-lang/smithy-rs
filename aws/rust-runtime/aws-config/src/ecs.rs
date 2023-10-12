@@ -752,10 +752,7 @@ mod test {
     }
 
     impl ResolveDns for TestDns {
-        fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a>
-        where
-            Self: 'a,
-        {
+        fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
             DnsFuture::ready(Ok(self.addrs.get(name).unwrap_or(&self.fallback).clone()))
         }
     }
@@ -763,10 +760,7 @@ mod test {
     #[derive(Debug)]
     struct NeverDns;
     impl ResolveDns for NeverDns {
-        fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a>
-        where
-            Self: 'a,
-        {
+        fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a> {
             DnsFuture::new(async {
                 Never::new().await;
                 unreachable!()

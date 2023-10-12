@@ -160,10 +160,7 @@ mod tests {
         #[derive(Debug)]
         struct TestIdentityResolver;
         impl IdentityResolver for TestIdentityResolver {
-            fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a>
-            where
-                Self: 'a,
-            {
+            fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
                 IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))
             }
         }

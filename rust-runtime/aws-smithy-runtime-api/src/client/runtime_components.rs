@@ -579,10 +579,7 @@ impl RuntimeComponentsBuilder {
         #[derive(Debug)]
         struct FakeEndpointResolver;
         impl EndpointResolver for FakeEndpointResolver {
-            fn resolve_endpoint<'a>(&'a self, _: &'a EndpointResolverParams) -> EndpointFuture<'a>
-            where
-                Self: 'a,
-            {
+            fn resolve_endpoint<'a>(&'a self, _: &'a EndpointResolverParams) -> EndpointFuture<'a> {
                 unreachable!("fake endpoint resolver must be overridden for this test")
             }
         }
@@ -609,10 +606,7 @@ impl RuntimeComponentsBuilder {
         #[derive(Debug)]
         struct FakeIdentityResolver;
         impl IdentityResolver for FakeIdentityResolver {
-            fn resolve_identity<'a>(&'a self, _: &'a ConfigBag) -> IdentityFuture<'a>
-            where
-                Self: 'a,
-            {
+            fn resolve_identity<'a>(&'a self, _: &'a ConfigBag) -> IdentityFuture<'a> {
                 unreachable!("fake identity resolver must be overridden for this test")
             }
         }

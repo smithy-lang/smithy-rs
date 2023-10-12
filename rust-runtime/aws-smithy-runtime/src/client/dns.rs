@@ -26,10 +26,7 @@ mod tokio {
     }
 
     impl ResolveDns for TokioDnsResolver {
-        fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a>
-        where
-            Self: 'a,
-        {
+        fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
             let name = name.to_string();
             DnsFuture::new(async move {
                 let result = tokio::task::spawn_blocking(move || (name, 0).to_socket_addrs()).await;

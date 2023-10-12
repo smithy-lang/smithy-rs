@@ -47,9 +47,7 @@ new_type_future! {
 /// Trait for resolving domain names
 pub trait ResolveDns: fmt::Debug + Send + Sync {
     /// Asynchronously resolve the given domain name
-    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a>
-    where
-        Self: 'a;
+    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a>;
 }
 
 /// Shared instance of [`ResolveDns`].
@@ -64,10 +62,7 @@ impl SharedDnsResolver {
 }
 
 impl ResolveDns for SharedDnsResolver {
-    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a>
-    where
-        Self: 'a,
-    {
+    fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
         self.0.resolve_dns(name)
     }
 }

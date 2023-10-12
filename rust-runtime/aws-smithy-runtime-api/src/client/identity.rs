@@ -34,9 +34,7 @@ new_type_future! {
 /// There is no fallback to other auth schemes in the absence of an identity.
 pub trait IdentityResolver: Send + Sync + Debug {
     /// Asynchronously resolves an identity for a request using the given config.
-    fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a>
-    where
-        Self: 'a;
+    fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a>;
 }
 
 /// Container for a shared identity resolver.
@@ -51,10 +49,7 @@ impl SharedIdentityResolver {
 }
 
 impl IdentityResolver for SharedIdentityResolver {
-    fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a>
-    where
-        Self: 'a,
-    {
+    fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
         self.0.resolve_identity(config_bag)
     }
 }

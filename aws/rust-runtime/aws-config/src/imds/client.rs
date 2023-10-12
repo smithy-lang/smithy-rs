@@ -524,10 +524,7 @@ struct ImdsEndpointResolver {
 }
 
 impl EndpointResolver for ImdsEndpointResolver {
-    fn resolve_endpoint<'a>(&'a self, _: &'a EndpointResolverParams) -> EndpointFuture<'a>
-    where
-        Self: 'a,
-    {
+    fn resolve_endpoint<'a>(&'a self, _: &'a EndpointResolverParams) -> EndpointFuture<'a> {
         EndpointFuture::new(async move {
             self.endpoint_source
                 .endpoint(self.mode_override.clone())
