@@ -177,12 +177,26 @@ internal class BuilderGeneratorTest {
               @default(true)
               @required
               defaultDocument: Document
+
+              @default([])
+              @required
+              listDocument: Document
+
+              @default(0)
+              zero_timestamp: Timestamp
+
+              @default(1)
+              one_timestamp: Timestamp
+
+              @default("abc")
+              blob_abc: Blob
             }
             list StringList {
                 member: String
             }
             @default(1)
             integer OneDefault
+
         """.asSmithyModel(smithyVersion = "2.0")
 
         val provider = testSymbolProvider(
@@ -207,6 +221,10 @@ internal class BuilderGeneratorTest {
                     assert_eq!(s.an_actually_required_field(), 5);
                     assert_eq!(s.no_default(), None);
                     assert_eq!(s.default_document().as_bool().unwrap(), true);
+                    assert_eq!(s.list_document().as_array().expect("empty list"), &[]);
+                    assert_eq!(std::str::from_utf8(s.blob_abc().as_ref()).expect("invalid blob"), "abc");
+                    assert_eq!(s.zero_timestamp().secs(), 0);
+                    assert_eq!(s.one_timestamp().secs(), 1);
                     """,
                     "Struct" to provider.toSymbol(shape),
                 )
