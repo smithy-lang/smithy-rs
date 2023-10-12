@@ -79,12 +79,12 @@ impl InvalidEndpointError {
 
     /// Construct a build error for an invalid authority
     pub fn failed_to_construct_authority(
-        authority: String,
+        authority: impl Into<String>,
         source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
     ) -> Self {
         Self {
             kind: InvalidEndpointErrorKind::FailedToConstructAuthority {
-                authority,
+                authority: authority.into(),
                 source: source.into(),
             },
         }
