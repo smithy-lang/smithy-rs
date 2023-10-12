@@ -15,7 +15,7 @@ use crate::client::auth::{
     AuthScheme, AuthSchemeId, ResolveAuthSchemeOptions, SharedAuthScheme,
     SharedAuthSchemeOptionResolver,
 };
-use crate::client::endpoint::{EndpointResolver, SharedEndpointResolver};
+use crate::client::endpoint::{ResolveEndpoint, SharedEndpointResolver};
 use crate::client::http::{HttpClient, SharedHttpClient};
 use crate::client::identity::{
     ConfiguredIdentityResolver, IdentityResolver, SharedIdentityResolver,
@@ -319,7 +319,7 @@ impl RuntimeComponentsBuilder {
     /// Sets the endpoint resolver.
     pub fn set_endpoint_resolver(
         &mut self,
-        endpoint_resolver: Option<impl EndpointResolver + 'static>,
+        endpoint_resolver: Option<impl ResolveEndpoint + 'static>,
     ) -> &mut Self {
         self.endpoint_resolver =
             endpoint_resolver.map(|s| Tracked::new(self.builder_name, s.into_shared()));
@@ -329,7 +329,7 @@ impl RuntimeComponentsBuilder {
     /// Sets the endpoint resolver.
     pub fn with_endpoint_resolver(
         mut self,
-        endpoint_resolver: Option<impl EndpointResolver + 'static>,
+        endpoint_resolver: Option<impl ResolveEndpoint + 'static>,
     ) -> Self {
         self.set_endpoint_resolver(endpoint_resolver);
         self
@@ -578,7 +578,7 @@ impl RuntimeComponentsBuilder {
 
         #[derive(Debug)]
         struct FakeEndpointResolver;
-        impl EndpointResolver for FakeEndpointResolver {
+        impl ResolveEndpoint for FakeEndpointResolver {
             fn resolve_endpoint(&self, _: &EndpointResolverParams) -> EndpointFuture {
                 unreachable!("fake endpoint resolver must be overridden for this test")
             }

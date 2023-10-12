@@ -5,12 +5,12 @@
 
 use aws_smithy_http::endpoint::error::ResolveEndpointError;
 use aws_smithy_http::endpoint::{
-    apply_endpoint as apply_endpoint_to_request_uri, EndpointPrefix, ResolveEndpoint,
+    apply_endpoint as apply_endpoint_to_request_uri, EndpointPrefix, ResolveEndpoint as _,
     SharedEndpointResolver,
 };
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::endpoint::{
-    EndpointFuture, EndpointResolver, EndpointResolverParams,
+    EndpointFuture, EndpointResolverParams, ResolveEndpoint,
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -45,7 +45,7 @@ impl StaticUriEndpointResolver {
     }
 }
 
-impl EndpointResolver for StaticUriEndpointResolver {
+impl ResolveEndpoint for StaticUriEndpointResolver {
     fn resolve_endpoint(&self, _params: &EndpointResolverParams) -> EndpointFuture {
         EndpointFuture::ready(Ok(Endpoint::builder()
             .url(self.endpoint.to_string())
@@ -70,9 +70,9 @@ impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
     }
 }
 
-/// Default implementation of [`EndpointResolver`].
+/// Default implementation of [`ResolveEndpoint`].
 ///
-/// This default endpoint resolver implements the `EndpointResolver` trait by
+/// This default endpoint resolver implements the `ResolveEndpoint` trait by
 /// converting the type-erased [`EndpointResolverParams`] into the concrete
 /// endpoint params for the service. It then delegates endpoint resolution
 /// to an underlying resolver that is aware of the concrete type.
@@ -97,7 +97,7 @@ impl<Params> DefaultEndpointResolver<Params> {
     }
 }
 
-impl<Params> EndpointResolver for DefaultEndpointResolver<Params>
+impl<Params> ResolveEndpoint for DefaultEndpointResolver<Params>
 where
     Params: Debug + Send + Sync + 'static,
 {
