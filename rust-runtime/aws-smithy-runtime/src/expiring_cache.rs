@@ -102,7 +102,7 @@ fn expired(expiration: SystemTime, buffer_time: Duration, now: SystemTime) -> bo
     now >= (expiration - buffer_time)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "client"))]
 mod tests {
     use super::{expired, ExpiringCache};
     use aws_smithy_runtime_api::box_error::BoxError;
