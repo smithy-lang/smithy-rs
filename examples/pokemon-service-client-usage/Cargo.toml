@@ -1,0 +1,34 @@
+[package]
+name = "pokemon-service-client-usage"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+
+
+[dependencies]
+aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async/", features = ["rt-tokio"] }
+aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client/", features = ["rustls"] }
+aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
+aws-smithy-http-tower = { path = "../../rust-runtime/aws-smithy-http-tower/" }
+aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
+aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api/" }
+pokemon-service-client = { path = "../pokemon-service-client/" }
+hyper = { version = "0.14.25", features = ["client", "full"] }
+tower = "0.4.13"
+tokio = {version = "1.26.0", features=["full"]}
+color-eyre = "0.6.2"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+pin-project = "1.1.0"
+hyper-rustls = "0.24.1"
+native-tls = "0.2.11"
+hyper-native-tls = "0.3.0"
+openssl = "0.10.57"
+hyper-tls = "0.5.0"
+http = "0.2.9"
+uuid = {version="1.4.1", features = ["v4"]}
+thiserror = "1.0.49"
+rustls = "0.21.7"
+once_cell = "1.18.0"
