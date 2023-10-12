@@ -4,6 +4,7 @@
  */
 
 use aws_sdk_s3 as s3;
+use std::collections::HashMap;
 
 use futures_util::future::FutureExt;
 use futures_util::Future;
@@ -99,7 +100,7 @@ async fn test_presigning() {
         ][..],
         &query_params
     );
-    assert!(presigned.headers().is_empty());
+    assert_eq!(presigned.headers().count(), 0);
 }
 
 #[tokio::test]
@@ -140,13 +141,14 @@ async fn test_presigning_with_payload_headers() {
         ][..],
         &query_params
     );
+    let headers = presigned.headers().collect::<HashMap<_, _>>();
 
     assert_eq!(
-        presigned.headers().get(CONTENT_TYPE),
-        Some("application/x-test")
+        headers.get(CONTENT_TYPE.as_str()),
+        Some(&"application/x-test")
     );
-    assert_eq!(presigned.headers().get(CONTENT_LENGTH), Some("12345"));
-    assert_eq!(presigned.headers().iter().count(), 2);
+    assert_eq!(headers.get(CONTENT_LENGTH.as_str()), Some(&"12345"));
+    assert_eq!(headers.len(), 2);
 }
 
 #[tokio::test]

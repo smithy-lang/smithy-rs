@@ -13,7 +13,6 @@
 //! Only operations that support presigning have the `presigned()` method on them.
 
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::http::request::Headers;
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use std::fmt;
 use std::time::{Duration, SystemTime};
@@ -195,8 +194,8 @@ impl PresignedRequest {
     /// Returns any HTTP headers that need to go along with the request, except for `Host`,
     /// which should be sent based on the endpoint in the URI by the HTTP client rather than
     /// added directly.
-    pub fn headers(&self) -> &Headers {
-        self.0.headers()
+    pub fn headers(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.0.headers().iter()
     }
 
     /// Given a body, convert this `PresignedRequest` into an `http::Request`
@@ -210,22 +209,7 @@ impl fmt::Debug for PresignedRequest {
         f.debug_struct("PresignedRequest")
             .field("method", &self.method())
             .field("uri", &self.uri())
-            .field("headers", self.headers())
+            .field("headers", self.0.headers())
             .finish()
     }
 }
-
-/*
-impl From<PresignedRequest> for http::request::Builder {
-    fn from(req: PresignedRequest) -> Self {
-        let mut builder = http::request::Builder::new()
-            .uri(req.uri())
-            .method(req.method());
-
-        if let Some(headers) = builder.headers_mut() {
-            *headers = req.headers().clone();
-        }
-
-        builder
-    }
-}*/

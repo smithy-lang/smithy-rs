@@ -56,5 +56,5 @@ async fn test_presigning() {
         ][..],
         &query_params
     );
-    assert!(presigned.headers().is_empty());
+    assert_eq!(presigned.headers().count(), 0);
 }

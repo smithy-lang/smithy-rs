@@ -334,7 +334,7 @@ pub async fn stream_pokemon_radio(
                 .body(SdkBody::empty())
                 .unwrap()
                 .try_into()
-                .uwrap(),
+                .unwrap(),
         )
         .await
         .unwrap();
