@@ -146,7 +146,7 @@ impl SigV4Signer {
 impl Sign for SigV4Signer {
     fn sign_http_request(
         &self,
-        mut request: &mut HttpRequest,
+        request: &mut HttpRequest,
         identity: &Identity,
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
         runtime_components: &RuntimeComponents,
@@ -213,7 +213,7 @@ impl Sign for SigV4Signer {
                     .expect("failed to send deferred signer");
             }
         }
-        auth::apply_signing_instructions(signing_instructions, &mut request)?;
+        auth::apply_signing_instructions(signing_instructions, request)?;
         Ok(())
     }
 }

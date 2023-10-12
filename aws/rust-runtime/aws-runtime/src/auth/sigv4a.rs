@@ -160,7 +160,7 @@ fn extract_endpoint_auth_scheme_signing_region_set(
 impl Sign for SigV4aSigner {
     fn sign_http_request(
         &self,
-        mut request: &mut HttpRequest,
+        request: &mut HttpRequest,
         identity: &Identity,
         auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
         runtime_components: &RuntimeComponents,
@@ -206,7 +206,7 @@ impl Sign for SigV4aSigner {
         }
         .into_parts();
 
-        apply_signing_instructions(signing_instructions, &mut request)?;
+        apply_signing_instructions(signing_instructions, request)?;
         Ok(())
     }
 }

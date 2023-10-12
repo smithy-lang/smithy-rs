@@ -131,18 +131,20 @@ fn extract_params(uri: &str) -> HashSet<&str> {
 
 #[track_caller]
 pub fn assert_uris_match(left: impl AsRef<str>, right: impl AsRef<str>) {
-    if left.as_ref() == right.as_ref() {
+    let left = left.as_ref();
+    let right = right.as_ref();
+    if left == right {
         return;
     }
     assert_eq!(
-        extract_params(&left.as_ref()),
-        extract_params(&right.as_ref()),
+        extract_params(left),
+        extract_params(right),
         "Query parameters did not match. left: {}, right: {}",
-        left.as_ref(),
-        right.as_ref()
+        left,
+        right
     );
-    let left: Uri = left.as_ref().parse().expect("left is not a valid URI");
-    let right: Uri = right.as_ref().parse().expect("left is not a valid URI");
+    let left: Uri = left.parse().expect("left is not a valid URI");
+    let right: Uri = right.parse().expect("left is not a valid URI");
     assert_eq!(left.authority(), right.authority());
     assert_eq!(left.scheme(), right.scheme());
     assert_eq!(left.path(), right.path());
@@ -152,7 +154,7 @@ pub fn validate_query_string(
     request: &HttpRequest,
     expected_params: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
-    let actual_params = extract_params(&request.uri());
+    let actual_params = extract_params(request.uri());
     for param in expected_params {
         if !actual_params.contains(param) {
             return Err(ProtocolTestFailure::MissingQueryParam {
@@ -168,7 +170,7 @@ pub fn forbid_query_params(
     request: &HttpRequest,
     forbid_params: &[&str],
 ) -> Result<(), ProtocolTestFailure> {
-    let actual_params: HashSet<QueryParam<'_>> = extract_params(&request.uri())
+    let actual_params: HashSet<QueryParam<'_>> = extract_params(request.uri())
         .iter()
         .map(|param| QueryParam::parse(param))
         .collect();
