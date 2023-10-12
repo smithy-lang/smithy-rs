@@ -194,14 +194,14 @@ impl CachePartitions {
     }
 
     fn partition(&self, key: IdentityCachePartition) -> ExpiringCache<Identity, BoxError> {
-        let mut partition = self.partitions.read().unwrap().get(&key).map(|p| p.clone());
+        let mut partition = self.partitions.read().unwrap().get(&key).cloned();
         if partition.is_none() {
             let mut partitions = self.partitions.write().unwrap();
             // Another thread could have inserted the partition before we acquired the lock,
             // so double check before inserting it.
-            if !partitions.contains_key(&key) {
-                partitions.insert(key, ExpiringCache::new(self.buffer_time));
-            }
+            partitions
+                .entry(key)
+                .or_insert_with(|| ExpiringCache::new(self.buffer_time));
             drop(partitions);
 
             partition = self.partitions.read().unwrap().get(&key).cloned();
