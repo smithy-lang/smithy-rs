@@ -598,7 +598,7 @@ impl RuntimeComponentsBuilder {
                 None
             }
 
-            fn signer(&self) -> &dyn crate::client::auth::Signer {
+            fn signer(&self) -> &dyn crate::client::auth::Sign {
                 unreachable!("fake http auth scheme must be overridden for this test")
             }
         }

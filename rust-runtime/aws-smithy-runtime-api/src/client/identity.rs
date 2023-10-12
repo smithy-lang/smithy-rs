@@ -89,7 +89,7 @@ impl ConfiguredIdentityResolver {
 /// An identity that can be used for authentication.
 ///
 /// The [`Identity`] is a container for any arbitrary identity data that may be used
-/// by a [`Signer`](crate::client::auth::Signer) implementation. Under the hood, it
+/// by a [`Sign`](crate::client::auth::Sign) implementation. Under the hood, it
 /// has an `Arc<dyn Any>`, and it is the responsibility of the signer to downcast
 /// to the appropriate data type using the `data()` function.
 ///

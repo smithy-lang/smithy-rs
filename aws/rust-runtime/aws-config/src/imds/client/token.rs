@@ -22,7 +22,7 @@ use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
 };
 use aws_smithy_runtime_api::client::identity::{
     Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
@@ -244,7 +244,7 @@ impl AuthScheme for TokenAuthScheme {
         identity_resolvers.identity_resolver(IMDS_TOKEN_AUTH_SCHEME)
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -252,7 +252,7 @@ impl AuthScheme for TokenAuthScheme {
 #[derive(Debug)]
 struct TokenSigner;
 
-impl Signer for TokenSigner {
+impl Sign for TokenSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,

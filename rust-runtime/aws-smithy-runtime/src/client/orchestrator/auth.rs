@@ -142,7 +142,7 @@ mod tests {
     use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeId, AuthSchemeOptionResolverParams, SharedAuthScheme,
-        SharedAuthSchemeOptionResolver, Signer,
+        SharedAuthSchemeOptionResolver, Sign,
     };
     use aws_smithy_runtime_api::client::identity::{
         Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
@@ -168,7 +168,7 @@ mod tests {
         #[derive(Debug)]
         struct TestSigner;
 
-        impl Signer for TestSigner {
+        impl Sign for TestSigner {
             fn sign_http_request(
                 &self,
                 request: &mut HttpRequest,
@@ -202,7 +202,7 @@ mod tests {
                 identity_resolvers.identity_resolver(self.scheme_id())
             }
 
-            fn signer(&self) -> &dyn Signer {
+            fn signer(&self) -> &dyn Sign {
                 &self.signer
             }
         }
