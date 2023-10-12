@@ -46,7 +46,7 @@ where
         }
     }
 
-    #[cfg(all(test, feature = "client"))]
+    #[cfg(all(test, feature = "client", feature = "http-auth"))]
     async fn get(&self) -> Option<T>
     where
         T: Clone,
@@ -102,7 +102,7 @@ fn expired(expiration: SystemTime, buffer_time: Duration, now: SystemTime) -> bo
     now >= (expiration - buffer_time)
 }
 
-#[cfg(all(test, feature = "client"))]
+#[cfg(all(test, feature = "client", feature = "http-auth"))]
 mod tests {
     use super::{expired, ExpiringCache};
     use aws_smithy_runtime_api::box_error::BoxError;

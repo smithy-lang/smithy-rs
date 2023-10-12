@@ -326,7 +326,7 @@ impl fmt::Display for TimedOutError {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "client", feature = "http-auth"))]
 mod tests {
     use super::*;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
