@@ -18,7 +18,7 @@ use crate::client::auth::{
 use crate::client::endpoint::{ResolveEndpoint, SharedEndpointResolver};
 use crate::client::http::{HttpClient, SharedHttpClient};
 use crate::client::identity::{
-    ConfiguredIdentityResolver, IdentityResolver, SharedIdentityResolver,
+    ConfiguredIdentityResolver, ResolveIdentity, SharedIdentityResolver,
 };
 use crate::client::interceptors::{Interceptor, SharedInterceptor};
 use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
@@ -357,7 +357,7 @@ impl RuntimeComponentsBuilder {
     pub fn push_identity_resolver(
         &mut self,
         scheme_id: AuthSchemeId,
-        identity_resolver: impl IdentityResolver + 'static,
+        identity_resolver: impl ResolveIdentity + 'static,
     ) -> &mut Self {
         self.identity_resolvers.push(Tracked::new(
             self.builder_name,
@@ -370,7 +370,7 @@ impl RuntimeComponentsBuilder {
     pub fn with_identity_resolver(
         mut self,
         scheme_id: AuthSchemeId,
-        identity_resolver: impl IdentityResolver + 'static,
+        identity_resolver: impl ResolveIdentity + 'static,
     ) -> Self {
         self.push_identity_resolver(scheme_id, identity_resolver);
         self
@@ -605,7 +605,7 @@ impl RuntimeComponentsBuilder {
 
         #[derive(Debug)]
         struct FakeIdentityResolver;
-        impl IdentityResolver for FakeIdentityResolver {
+        impl ResolveIdentity for FakeIdentityResolver {
             fn resolve_identity(&self, _: &ConfigBag) -> IdentityFuture {
                 unreachable!("fake identity resolver must be overridden for this test")
             }

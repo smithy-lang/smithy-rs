@@ -9,7 +9,7 @@ use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
     ResolveAuthSchemeOptions,
 };
-use aws_smithy_runtime_api::client::identity::IdentityResolver;
+use aws_smithy_runtime_api::client::identity::ResolveIdentity;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
@@ -145,7 +145,7 @@ mod tests {
         SharedAuthSchemeOptionResolver, Signer,
     };
     use aws_smithy_runtime_api::client::identity::{
-        Identity, IdentityFuture, IdentityResolver, SharedIdentityResolver,
+        Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
     };
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -159,7 +159,7 @@ mod tests {
     async fn basic_case() {
         #[derive(Debug)]
         struct TestIdentityResolver;
-        impl IdentityResolver for TestIdentityResolver {
+        impl ResolveIdentity for TestIdentityResolver {
             fn resolve_identity(&self, _config_bag: &ConfigBag) -> IdentityFuture {
                 IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))
             }
@@ -261,7 +261,7 @@ mod tests {
 
         fn config_with_identity(
             scheme_id: AuthSchemeId,
-            identity: impl IdentityResolver + 'static,
+            identity: impl ResolveIdentity + 'static,
         ) -> (RuntimeComponents, ConfigBag) {
             let runtime_components = RuntimeComponentsBuilder::for_tests()
                 .with_auth_scheme(SharedAuthScheme::new(BasicAuthScheme::new()))

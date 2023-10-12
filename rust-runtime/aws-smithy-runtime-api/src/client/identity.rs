@@ -32,29 +32,29 @@ new_type_future! {
 /// resolves successfully, or it fails. The orchestrator will choose exactly one auth scheme
 /// to use, and thus, its chosen identity resolver is the only identity resolver that runs.
 /// There is no fallback to other auth schemes in the absence of an identity.
-pub trait IdentityResolver: Send + Sync + Debug {
+pub trait ResolveIdentity: Send + Sync + Debug {
     /// Asynchronously resolves an identity for a request using the given config.
     fn resolve_identity(&self, config_bag: &ConfigBag) -> IdentityFuture;
 }
 
 /// Container for a shared identity resolver.
 #[derive(Clone, Debug)]
-pub struct SharedIdentityResolver(Arc<dyn IdentityResolver>);
+pub struct SharedIdentityResolver(Arc<dyn ResolveIdentity>);
 
 impl SharedIdentityResolver {
     /// Creates a new [`SharedIdentityResolver`] from the given resolver.
-    pub fn new(resolver: impl IdentityResolver + 'static) -> Self {
+    pub fn new(resolver: impl ResolveIdentity + 'static) -> Self {
         Self(Arc::new(resolver))
     }
 }
 
-impl IdentityResolver for SharedIdentityResolver {
+impl ResolveIdentity for SharedIdentityResolver {
     fn resolve_identity(&self, config_bag: &ConfigBag) -> IdentityFuture {
         self.0.resolve_identity(config_bag)
     }
 }
 
-impl_shared_conversions!(convert SharedIdentityResolver from IdentityResolver using SharedIdentityResolver::new);
+impl_shared_conversions!(convert SharedIdentityResolver from ResolveIdentity using SharedIdentityResolver::new);
 
 /// An identity resolver paired with an auth scheme ID that it resolves for.
 #[derive(Clone, Debug)]
