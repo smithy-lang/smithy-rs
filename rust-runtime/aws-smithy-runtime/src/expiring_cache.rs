@@ -46,7 +46,7 @@ where
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, feature = "client"))]
     async fn get(&self) -> Option<T>
     where
         T: Clone,
