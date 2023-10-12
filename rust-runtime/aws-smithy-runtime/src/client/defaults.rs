@@ -9,6 +9,7 @@
 //! for _your_ client, since many things can change these defaults on the way to
 //! code generating and constructing a full client.
 
+use crate::client::identity::IdentityCache;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
@@ -101,4 +102,57 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
             }))
             .into_shared(),
     )
+}
+
+/// Runtime plugin that registers the default identity cache implementation.
+pub fn default_identity_cache_plugin() -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin("default_identity_cache_plugin", |components| {
+            components.with_identity_cache(Some(IdentityCache::lazy().build()))
+        })
+        .into_shared(),
+    )
+}
+
+/// Arguments for the [`default_plugins`] method.
+///
+/// This is a struct to enable adding new parameters in the future without breaking the API.
+#[non_exhaustive]
+#[derive(Debug, Default)]
+pub struct DefaultPluginParams {
+    retry_partition_name: Option<Cow<'static, str>>,
+}
+
+impl DefaultPluginParams {
+    /// Creates a new [`DefaultPluginParams`].
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Sets the retry partition name.
+    pub fn with_retry_partition_name(mut self, name: impl Into<Cow<'static, str>>) -> Self {
+        self.retry_partition_name = Some(name.into());
+        self
+    }
+}
+
+/// All default plugins.
+pub fn default_plugins(
+    params: DefaultPluginParams,
+) -> impl IntoIterator<Item = SharedRuntimePlugin> {
+    [
+        default_http_client_plugin(),
+        default_identity_cache_plugin(),
+        default_retry_config_plugin(
+            params
+                .retry_partition_name
+                .expect("retry_partition_name is required"),
+        ),
+        default_sleep_impl_plugin(),
+        default_time_source_plugin(),
+        default_timeout_config_plugin(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<SharedRuntimePlugin>>()
 }

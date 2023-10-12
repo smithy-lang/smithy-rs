@@ -516,7 +516,7 @@ mod tests {
     impl TestOperationRuntimePlugin {
         fn new() -> Self {
             Self {
-                builder: RuntimeComponentsBuilder::new("TestOperationRuntimePlugin")
+                builder: RuntimeComponentsBuilder::for_tests()
                     .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())))
                     .with_endpoint_resolver(Some(SharedEndpointResolver::new(
                         StaticUriEndpointResolver::http_localhost(8080),

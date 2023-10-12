@@ -18,7 +18,8 @@ use crate::client::auth::{
 use crate::client::endpoint::{ResolveEndpoint, SharedEndpointResolver};
 use crate::client::http::{HttpClient, SharedHttpClient};
 use crate::client::identity::{
-    ConfiguredIdentityResolver, ResolveIdentity, SharedIdentityResolver,
+    ConfiguredIdentityResolver, ResolveCachedIdentity, ResolveIdentity, SharedIdentityCache,
+    SharedIdentityResolver,
 };
 use crate::client::interceptors::{Intercept, SharedInterceptor};
 use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
@@ -196,6 +197,9 @@ declare_runtime_components! {
         #[atLeastOneRequired]
         auth_schemes: Vec<SharedAuthScheme>,
 
+        #[required]
+        identity_cache: Option<SharedIdentityCache>,
+
         #[atLeastOneRequired]
         identity_resolvers: Vec<ConfiguredIdentityResolver>,
 
@@ -239,6 +243,11 @@ impl RuntimeComponents {
             .iter()
             .find(|s| s.value.scheme_id() == scheme_id)
             .map(|s| s.value.clone())
+    }
+
+    /// Returns the identity cache.
+    pub fn identity_cache(&self) -> SharedIdentityCache {
+        self.identity_cache.value.clone()
     }
 
     /// Returns an iterator over the interceptors.
@@ -350,6 +359,30 @@ impl RuntimeComponentsBuilder {
     /// Adds an auth scheme.
     pub fn with_auth_scheme(mut self, auth_scheme: impl AuthScheme + 'static) -> Self {
         self.push_auth_scheme(auth_scheme);
+        self
+    }
+
+    /// Returns the identity cache.
+    pub fn identity_cache(&self) -> Option<SharedIdentityCache> {
+        self.identity_cache.as_ref().map(|s| s.value.clone())
+    }
+
+    /// Sets the identity cache.
+    pub fn set_identity_cache(
+        &mut self,
+        identity_cache: Option<impl ResolveCachedIdentity + 'static>,
+    ) -> &mut Self {
+        self.identity_cache =
+            identity_cache.map(|c| Tracked::new(self.builder_name, c.into_shared()));
+        self
+    }
+
+    /// Sets the identity cache.
+    pub fn with_identity_cache(
+        mut self,
+        identity_cache: Option<impl ResolveCachedIdentity + 'static>,
+    ) -> Self {
+        self.set_identity_cache(identity_cache);
         self
     }
 
@@ -654,11 +687,27 @@ impl RuntimeComponentsBuilder {
             }
         }
 
+        #[derive(Debug)]
+        struct FakeIdentityCache;
+        impl ResolveCachedIdentity for FakeIdentityCache {
+            fn resolve_cached_identity<'a>(
+                &'a self,
+                resolver: SharedIdentityResolver,
+                components: &'a RuntimeComponents,
+                config_bag: &'a ConfigBag,
+            ) -> IdentityFuture<'a> {
+                IdentityFuture::new(async move {
+                    resolver.resolve_identity(components, config_bag).await
+                })
+            }
+        }
+
         Self::new("aws_smithy_runtime_api::client::runtime_components::RuntimeComponentBuilder::for_tests")
             .with_auth_scheme(FakeAuthScheme)
             .with_auth_scheme_option_resolver(Some(FakeAuthSchemeOptionResolver))
             .with_endpoint_resolver(Some(FakeEndpointResolver))
             .with_http_client(Some(FakeClient))
+            .with_identity_cache(Some(FakeIdentityCache))
             .with_identity_resolver(AuthSchemeId::new("fake"), FakeIdentityResolver)
             .with_retry_strategy(Some(FakeRetryStrategy))
             .with_sleep_impl(Some(SharedAsyncSleep::new(FakeSleep)))

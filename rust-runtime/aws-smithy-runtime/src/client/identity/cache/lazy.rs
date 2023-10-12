@@ -263,7 +263,12 @@ impl ResolveCachedIdentity for LazyCache {
         IdentityFuture::new(async move {
             // Attempt to get cached identity, or clear the cache if they're expired
             if let Some(identity) = cache.yield_or_clear_if_expired(now).await {
-                tracing::debug!("loaded identity from cache");
+                tracing::debug!(
+                    buffer_time=?self.buffer_time,
+                    cached_expiration=?identity.expiration(),
+                    now=?now,
+                    "loaded identity from cache"
+                );
                 Ok(identity)
             } else {
                 // If we didn't get identity from the cache, then we need to try and load.

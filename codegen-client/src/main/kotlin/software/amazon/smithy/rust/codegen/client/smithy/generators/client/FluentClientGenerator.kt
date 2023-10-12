@@ -459,17 +459,12 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
 
-                let defaults = [
-                    #{default_http_client_plugin}(),
-                    #{default_retry_config_plugin}(${codegenContext.serviceShape.sdkId().dq()}),
-                    #{default_sleep_impl_plugin}(),
-                    #{default_time_source_plugin}(),
-                    #{default_timeout_config_plugin}(),
-                ].into_iter().flatten();
-
                 let mut plugins = #{RuntimePlugins}::new()
                     // defaults
-                    .with_client_plugins(defaults)
+                    .with_client_plugins(#{default_plugins}(
+                        #{DefaultPluginParams}::new()
+                            .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
+                    ))
                     // user config
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
@@ -486,11 +481,8 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
             }
             """,
             *preludeScope,
-            "default_http_client_plugin" to rt.resolve("client::defaults::default_http_client_plugin"),
-            "default_retry_config_plugin" to rt.resolve("client::defaults::default_retry_config_plugin"),
-            "default_sleep_impl_plugin" to rt.resolve("client::defaults::default_sleep_impl_plugin"),
-            "default_timeout_config_plugin" to rt.resolve("client::defaults::default_timeout_config_plugin"),
-            "default_time_source_plugin" to rt.resolve("client::defaults::default_time_source_plugin"),
+            "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
+            "default_plugins" to rt.resolve("client::defaults::default_plugins"),
             "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
             "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
             "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),

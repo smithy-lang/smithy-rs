@@ -29,7 +29,6 @@ import software.amazon.smithy.rustsdk.endpoints.RequireEndpointRules
 val DECORATORS: List<ClientCodegenDecorator> = listOf(
     // General AWS Decorators
     listOf(
-        CredentialsCacheDecorator(),
         CredentialsProviderDecorator(),
         RegionDecorator(),
         RequireEndpointRules(),
