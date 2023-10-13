@@ -17,7 +17,7 @@ use pokemon_service_client::{
     config::{interceptors::BeforeTransmitInterceptorContextMut, Interceptor, RuntimeComponents},
     error::BoxError,
 };
-use pokemon_service_client_usage::setup_tracing_subscriber;
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
 use tracing::info;
 use uuid::Uuid;
 
@@ -90,7 +90,7 @@ async fn main() {
         .passcode("pikachu123")
         .send()
         .await
-        .expect("Operation could not be called");
+        .custom_expect_and_log("Operation could not be called");
 
     info!(%BASE_URL, ?response, "Response for get_storage()");
 }

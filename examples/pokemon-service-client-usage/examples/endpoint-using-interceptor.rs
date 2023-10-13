@@ -15,6 +15,7 @@ use pokemon_service_client::{
     config::{interceptors::BeforeTransmitInterceptorContextMut, Interceptor, RuntimeComponents},
     error::BoxError,
 };
+use pokemon_service_client_usage::setup_tracing_subscriber;
 use tracing::info;
 
 use pokemon_service_client::Client as PokemonClient;
@@ -90,7 +91,7 @@ fn create_client() -> PokemonClient {
 
 #[tokio::main]
 async fn main() {
-    tracing_setup();
+    setup_tracing_subscriber();
 
     // Create a configured Smithy client.
     let client = create_client();
@@ -103,18 +104,4 @@ async fn main() {
         .expect("Pokemon service does not seem to be running on localhost:13734");
 
     info!(?response, "Response received");
-}
-
-fn tracing_setup() {
-    if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "1");
-    }
-    let _ = color_eyre::install();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-    tracing_subscriber::fmt::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
 }

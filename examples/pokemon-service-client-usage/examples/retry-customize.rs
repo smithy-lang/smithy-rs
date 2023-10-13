@@ -11,7 +11,7 @@
 /// The example can be run using `cargo run --example retry-customize`.
 ///
 use aws_smithy_types::retry::RetryConfig;
-use pokemon_service_client_usage::setup_tracing_subscriber;
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
 use std::time::Duration;
 use tracing::info;
 
@@ -62,7 +62,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .expect("Pokemon service does not seem to be running on localhost:13734");
+        .custom_expect_and_log("get_server_statistics failed");
 
     info!(%BASE_URL, ?response, "Response received");
 }

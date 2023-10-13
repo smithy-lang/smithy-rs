@@ -45,6 +45,7 @@ impl ResolveEndpoint<Params> for RegionalEndpoint {
         // Construct an endpoint using the Endpoint::Builder. Set the URL and,
         // optionally, any headers to be sent with the request. For this example,
         // we'll set the 'x-amz-date' header to the current date for all outgoing requests.
+        // `aws_smithy_types::DateTime` can be used for formatting an ISO 8601 date time.
         let now = SystemTime::now();
         let date_time = aws_smithy_types::DateTime::from(now);
 

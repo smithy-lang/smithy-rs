@@ -1,9 +1,9 @@
-use aws_smithy_http::retry::ClassifyRetry;
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-/// This example demonstrates how to customize retry settings on a Smithy client.
+/// This example demonstrates how a custom RetryClassifier can be written to decide
+/// which error conditions should be retried.
 ///
 /// The example assumes that the Pokemon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
@@ -11,8 +11,11 @@ use aws_smithy_http::retry::ClassifyRetry;
 ///
 /// The example can be run using `cargo run --example retry-customize`.
 ///
-use aws_smithy_types::retry::{RetryConfig, RetryKind};
-use pokemon_service_client_usage::setup_tracing_subscriber;
+use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
+use aws_smithy_types::retry::RetryConfig;
+use http::StatusCode;
+use pokemon_service_client::operation::get_server_statistics::GetServerStatisticsError;
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
 use std::time::Duration;
 use tracing::info;
 
@@ -21,64 +24,43 @@ use pokemon_service_client::Client as PokemonClient;
 static BASE_URL: &str = "http://localhost:13734";
 
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-use aws_smithy_types::error::metadata::ProvideErrorMetadata;
-use aws_smithy_types::retry::ErrorKind;
-use std::error::Error as StdError;
-use std::marker::PhantomData;
+use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 
-const RETRYABLE_ERROR_CODES: &[&str] = &["500"];
+#[derive(Clone, Debug)]
+struct SampleRetryClassifier;
 
-// When classifying at an operation's error type, classifiers require a generic parameter.
-// When classifying the HTTP response alone, no generic is needed.
-#[derive(Debug, Default, Clone)]
-pub struct ErrorCodeClassifier<E> {
-    _inner: PhantomData<E>,
-}
+impl ClassifyRetry for SampleRetryClassifier {
+    fn name(&self) -> &'static str {
+        "SampleRetryClassifier"
+    }
 
-impl<E> ErrorCodeClassifier<E> {
-    pub fn new() -> Self {
-        Self {
-            _inner: PhantomData,
+    // For this example, the classifier should retry in case the error is GetServerStatisticsError
+    // and the status code is 503.
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        // Get the output or error that has been deserialized from the response.
+        let output_or_error = ctx.output_or_error();
+
+        let error = match output_or_error {
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
+            Some(Err(err)) => err,
+        };
+
+        // Retry in case the error returned is GetServerStatisticsError and StatusCode is 503.
+        if let Some(_err) = error
+            .as_operation_error()
+            .and_then(|err| err.downcast_ref::<GetServerStatisticsError>())
+        {
+            if let Some(response) = ctx.response() {
+                if response.status() == StatusCode::SERVICE_UNAVAILABLE {
+                    return RetryAction::server_error();
+                }
+            }
         }
+
+        // Let other classifiers run and decide if the request should be retried.
+        // Returning RetryAction::RetryForbidden will forbid any retries.
+        RetryAction::NoActionIndicated
     }
-}
-
-impl<T, E> ClassifyRetry<T, E> for ErrorCodeClassifier<E>
-where
-    // Adding a trait bound for ProvideErrorMetadata allows us to inspect the error code.
-    E: StdError + ProvideErrorMetadata + Send + Sync + 'static,
-    E: Clone,
-{
-    fn classify_retry(&self, response: Result<&T, &E>) -> RetryKind {
-        todo!()
-    }
-    
-    // fn classify_retry(&self, ctx: &InterceptorContext) -> RetryKind {
-    //     // Check for a result
-    //     let output_or_error = ctx.output_or_error();
-    //     // Check for an error
-    //     let error = match output_or_error {
-    //         Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
-    //         Some(Err(err)) => err,
-    //     };
-
-    //     // Downcast the generic error and extract the code
-    //     let error_code = OrchestratorError::as_operation_error(error)
-    //         .and_then(|err| err.downcast_ref::<E>())
-    //         .and_then(|err| err.code());
-
-    //     // If this error's code is in our list, return an action that tells the RetryStrategy to retry this request.
-    //     if let Some(error_code) = error_code {
-    //         if RETRYABLE_ERROR_CODES.contains(&error_code) {
-    //             return RetryAction::transient_error();
-    //         }
-    //     }
-
-    //     // Otherwise, return that no action is indicated i.e. that this classifier doesn't require a retry.
-    //     // Another classifier may still classify this response as retryable.
-    //     RetryAction::NoActionIndicated
-    // }
 }
 
 /// Creates a new Smithy client that is configured to communicate with a locally running Pokemon service on TCP port 13734.
@@ -102,6 +84,8 @@ fn create_client() -> PokemonClient {
     let config = pokemon_service_client::Config::builder()
         .endpoint_resolver(BASE_URL)
         .retry_config(retry_config)
+        // Add the retry classifier.
+        .retry_classifier(SampleRetryClassifier {})
         .sleep_impl(::aws_smithy_async::rt::sleep::SharedAsyncSleep::new(
             aws_smithy_async::rt::sleep::default_async_sleep()
                 .expect("sleep implementation could not be created"),
@@ -116,16 +100,6 @@ fn create_client() -> PokemonClient {
 async fn main() {
     setup_tracing_subscriber();
 
-    // let sdk_config = aws_config::load_from_env().await;
-    // let client = aws_sdk_s3::Client::new(&sdk_config);
-    // let some_object = client
-    //     .get_object()
-    //     .bucket("bucket")
-    //     .key("key")
-    //     .customize()
-    //     .config_override(aws_sdk_s3::config::Config::builder().retry_classifier(ExampleErrorCodeClassifier::<GetObjectError>::new()))
-    //     .send()
-    //     .await
     // Create a configured Smithy client.
     let client = create_client();
 
@@ -134,7 +108,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .expect("Pokemon service does not seem to be running on localhost:13734");
+        .custom_expect_and_log("get_server_statistics failed");
 
     info!(%BASE_URL, ?response, "Response received");
 }

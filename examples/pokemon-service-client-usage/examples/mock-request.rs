@@ -9,52 +9,62 @@
 /// The example can be run using `cargo run --example mock-request`.
 ///
 //use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::{body::SdkBody, result::ConnectorError};
-use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
-use pokemon_service_client::Client as PokemonClient;
-use pokemon_service_client_usage::setup_tracing_subscriber;
-use std::{future::Future, pin::Pin};
-use tower::Service;
+use aws_smithy_http::body::SdkBody;
+use aws_smithy_runtime_api::{
+    client::{
+        http::{
+            HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings,
+            SharedHttpConnector,
+        },
+        orchestrator::HttpRequest,
+    },
+    shared::FromUnshared,
+};
+use pokemon_service_client::{config::RuntimeComponents, Client as PokemonClient};
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
 use tracing::info;
 
 static BASE_URL: &str = "http://localhost:13734";
 
+/// The MockConnector won't send the request on the wire and will send a static Response
+/// when a request comes in. It can be extended to return different responses for different
+/// requests.
 #[derive(Debug, Clone)]
 struct MockConnector {}
 
-/// Implement a tower Service that takes a Request as input and returns
-/// a Response as output.
-impl Service<http::Request<SdkBody>> for MockConnector {
-    type Response = HttpResponse;
-    type Error = ConnectorError;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+impl HttpConnector for MockConnector {
+    fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        info!(?request, "Got request in MockConnector");
 
-    fn poll_ready(
-        &mut self,
-        _cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), Self::Error>> {
-        std::task::Poll::Ready(Ok(()))
+        let res = http::Response::builder()
+            .status(200)
+            .body(SdkBody::from(
+                r#" {
+                   "calls_count" : 100
+                 }"#,
+            ))
+            .expect("Cannot construct a response");
+
+        HttpConnectorFuture::new(async move { Ok(res) })
     }
+}
 
-    fn call(&mut self, req: http::Request<SdkBody>) -> Self::Future {
-        info!(?req, "Request received in MockConnector:");
-
-        let r = http::Response::builder()
-            .header("content-type", "application/json")
-            .status(http::StatusCode::OK)
-            .body::<SdkBody>("".into())
-            .map_err(|e| ConnectorError::user(Box::new(e)));
-
-        Box::pin(async move { r })
+/// HttpClient must be implemented for a type to be acceptable as a Connector
+/// by the Config::builder.
+impl HttpClient for MockConnector {
+    fn http_connector(
+        &self,
+        _: &HttpConnectorSettings,
+        _: &RuntimeComponents,
+    ) -> SharedHttpConnector {
+        // Any type that implements HttpConnector trait can be converted
+        // into a SharedHttpConnector by using `FromUnshared::from_unshared`
+        FromUnshared::from_unshared(self.clone())
     }
 }
 
 /// Creates a new Smithy client that is configured to communicate with a locally running Pokemon
 /// service on TCP port 13734.
-///
-/// For convenience, this example type-erases the concrete HTTP transport backend used using
-/// dynamic dispatch. This comes at a slight runtime performance cost. See
-/// [`DynConnector`](https://docs.rs/aws-smithy-client/latest/aws_smithy_client/erase/struct.DynConnector.html) for details.
 ///
 /// # Examples
 ///
@@ -68,7 +78,7 @@ fn create_client() -> PokemonClient {
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
         .endpoint_resolver(BASE_URL)
-        .http_connector(MockConnector {})
+        .http_client(MockConnector {})
         .build();
 
     PokemonClient::from_conf(config)
@@ -81,7 +91,12 @@ async fn main() {
     // Create a configured Smithy client.
     let client = create_client();
     // Call an operation `get_server_statistics` on Pokemon service.
-    let response = client.get_server_statistics().send().await;
+    let response = client
+        .get_server_statistics()
+        .send()
+        .await
+        .custom_expect_and_log("get_server_statistics failed");
+
     // Print the response received from the service.
     info!(%BASE_URL, ?response, "Response received");
 }

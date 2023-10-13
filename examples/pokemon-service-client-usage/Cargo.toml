@@ -9,14 +9,13 @@ publish = false
 
 [dependencies]
 aws-smithy-async = { path = "../../rust-runtime/aws-smithy-async/", features = ["rt-tokio"] }
-aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client/", features = ["rustls"] }
+aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client/" }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
-aws-smithy-http-tower = { path = "../../rust-runtime/aws-smithy-http-tower/" }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
 aws-smithy-runtime-api = { path = "../../rust-runtime/aws-smithy-runtime-api/" }
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime/", features=["test-util"] }
 pokemon-service-client = { path = "../pokemon-service-client/" }
 hyper = { version = "0.14.25", features = ["client", "full"] }
-tower = "0.4.13"
 tokio = {version = "1.26.0", features=["full"]}
 color-eyre = "0.6.2"
 tracing = "0.1.37"

@@ -47,11 +47,7 @@ async fn main() {
     let client = create_client();
 
     // Call an operation `get_server_statistics` on Pokemon service.
-    let request = client
-        .get_server_statistics()
-        .customize()
-        .await
-        .expect("Operation could not be constructed");
+    let request = client.get_server_statistics().customize();
 
     // Mutate the request, then insert header name / value pair to mutated header collection.
     let response = request

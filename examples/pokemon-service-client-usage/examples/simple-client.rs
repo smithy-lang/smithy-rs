@@ -12,7 +12,7 @@
 /// The example can be run using `cargo run --example dyn-client`.
 ///
 use pokemon_service_client::Client as PokemonClient;
-use pokemon_service_client_usage::setup_tracing_subscriber;
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
 use tracing::info;
 
 static BASE_URL: &str = "http://localhost:13734";
@@ -49,7 +49,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .expect("Pokemon service does not seem to be running on localhost:13734");
+        .custom_expect_and_log("get_server_statistics failed");
 
     // Print the response received from the service.
     info!(%BASE_URL, ?response, "Response received");

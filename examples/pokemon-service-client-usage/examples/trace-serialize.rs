@@ -1,12 +1,9 @@
-use http::StatusCode;
-use pokemon_service_client_usage::setup_tracing_subscriber;
-use std::str;
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-/// This example demonstrates how different interceptor can use a property bag to pass
-/// state from one interceptor to the next.
+/// This example demonstrates how an interceptor can be written to trace what is being
+/// serialized / deserialized on the wire.
 ///
 /// The example assumes that the Pokemon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
@@ -14,9 +11,11 @@ use std::str;
 ///
 /// The example can be run using `cargo run --example use-config-bag`.
 ///
+use http::StatusCode;
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
+use std::str;
 use tracing::{debug, error, info};
 
-use aws_smithy_client::SdkError;
 use pokemon_service_client::{config::Interceptor, Client as PokemonClient};
 
 static BASE_URL: &str = "http://localhost:13734";
@@ -103,22 +102,13 @@ async fn main() {
     let client = create_client();
 
     // Call an operation `get_server_statistics` on Pokemon service.
-    let response_result = client
+    let response = client
         .get_storage()
         .user("ash")
         .passcode("pikachu123")
         .send()
-        .await;
+        .await
+        .custom_expect_and_log("get_storage failed");
 
-    match response_result {
-        Ok(response) => {
-            info!(%BASE_URL, ?response, "Response received");
-        }
-        Err(e) => match e {
-            SdkError::DispatchFailure(_) => println!("Connection could not be made to Pokemon service. Please make sure you have the pokemon service running locally on tcp port:13734"),
-            some_error => {
-                error!(?some_error, "An error occurred:");
-            }
-        },
-    }
+    info!(%BASE_URL, ?response, "Response received");
 }
