@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime_api::client::identity::{Identity, IdentityFuture, IdentityResolver};
+use aws_smithy_runtime_api::client::identity::{Identity, IdentityFuture, ResolveIdentity};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 
@@ -29,7 +29,7 @@ impl NoAuthIdentityResolver {
     }
 }
 
-impl IdentityResolver for NoAuthIdentityResolver {
+impl ResolveIdentity for NoAuthIdentityResolver {
     fn resolve_identity<'a>(
         &'a self,
         _: &'a RuntimeComponents,

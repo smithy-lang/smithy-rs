@@ -12,7 +12,7 @@ use aws_smithy_runtime_api::client::auth::http::{
     HTTP_DIGEST_AUTH_SCHEME_ID,
 };
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
 };
 use aws_smithy_runtime_api::client::identity::http::{Login, Token};
 use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
@@ -67,7 +67,7 @@ impl AuthScheme for ApiKeyAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -79,7 +79,7 @@ struct ApiKeySigner {
     name: String,
 }
 
-impl Signer for ApiKeySigner {
+impl Sign for ApiKeySigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,
@@ -138,7 +138,7 @@ impl AuthScheme for BasicAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -146,7 +146,7 @@ impl AuthScheme for BasicAuthScheme {
 #[derive(Debug, Default)]
 struct BasicAuthSigner;
 
-impl Signer for BasicAuthSigner {
+impl Sign for BasicAuthSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,
@@ -197,7 +197,7 @@ impl AuthScheme for BearerAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -205,7 +205,7 @@ impl AuthScheme for BearerAuthScheme {
 #[derive(Debug, Default)]
 struct BearerAuthSigner;
 
-impl Signer for BearerAuthSigner {
+impl Sign for BearerAuthSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,
@@ -254,7 +254,7 @@ impl AuthScheme for DigestAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -262,7 +262,7 @@ impl AuthScheme for DigestAuthScheme {
 #[derive(Debug, Default)]
 struct DigestAuthSigner;
 
-impl Signer for DigestAuthSigner {
+impl Sign for DigestAuthSigner {
     fn sign_http_request(
         &self,
         _request: &mut HttpRequest,

@@ -23,12 +23,12 @@ class ClientRuntimeTypesReExportGenerator(
             rustTemplate(
                 """
                 pub use #{ConfigBag};
-                pub use #{Interceptor};
+                pub use #{Intercept};
                 pub use #{RuntimeComponents};
                 pub use #{SharedInterceptor};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
-                "Interceptor" to RuntimeType.interceptor(rc),
+                "Intercept" to RuntimeType.intercept(rc),
                 "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
                 "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
             )

@@ -14,7 +14,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::LoadedRequestBody;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
@@ -65,7 +65,7 @@ impl<I> GlacierAccountIdAutofillInterceptor<I> {
     }
 }
 
-impl<I: GlacierAccountId + Send + Sync + 'static> Interceptor
+impl<I: GlacierAccountId + Send + Sync + 'static> Intercept
     for GlacierAccountIdAutofillInterceptor<I>
 {
     fn name(&self) -> &'static str {
@@ -100,7 +100,7 @@ impl GlacierApiVersionInterceptor {
     }
 }
 
-impl Interceptor for GlacierApiVersionInterceptor {
+impl Intercept for GlacierApiVersionInterceptor {
     fn name(&self) -> &'static str {
         "GlacierApiVersionInterceptor"
     }
@@ -123,7 +123,7 @@ impl Interceptor for GlacierApiVersionInterceptor {
 #[derive(Debug, Default)]
 pub(crate) struct GlacierTreeHashHeaderInterceptor;
 
-impl Interceptor for GlacierTreeHashHeaderInterceptor {
+impl Intercept for GlacierTreeHashHeaderInterceptor {
     fn name(&self) -> &'static str {
         "GlacierTreeHashHeaderInterceptor"
     }

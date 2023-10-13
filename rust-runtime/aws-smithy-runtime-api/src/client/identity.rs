@@ -89,6 +89,9 @@ impl ResolveCachedIdentity for SharedIdentityCache {
 
 impl_shared_conversions!(convert SharedIdentityCache from ResolveCachedIdentity using SharedIdentityCache::new);
 
+#[deprecated(note = "Renamed to ResolveIdentity.")]
+pub use ResolveIdentity as IdentityResolver;
+
 /// Resolver for identities.
 ///
 /// Every [`AuthScheme`](crate::client::auth::AuthScheme) has one or more compatible
@@ -100,7 +103,7 @@ impl_shared_conversions!(convert SharedIdentityCache from ResolveCachedIdentity 
 /// resolves successfully, or it fails. The orchestrator will choose exactly one auth scheme
 /// to use, and thus, its chosen identity resolver is the only identity resolver that runs.
 /// There is no fallback to other auth schemes in the absence of an identity.
-pub trait IdentityResolver: Send + Sync + Debug {
+pub trait ResolveIdentity: Send + Sync + Debug {
     /// Asynchronously resolves an identity for a request using the given config.
     fn resolve_identity<'a>(
         &'a self,
@@ -124,13 +127,13 @@ pub trait IdentityResolver: Send + Sync + Debug {
 /// Container for a shared identity resolver.
 #[derive(Clone, Debug)]
 pub struct SharedIdentityResolver {
-    inner: Arc<dyn IdentityResolver>,
+    inner: Arc<dyn ResolveIdentity>,
     cache_partition: IdentityCachePartition,
 }
 
 impl SharedIdentityResolver {
     /// Creates a new [`SharedIdentityResolver`] from the given resolver.
-    pub fn new(resolver: impl IdentityResolver + 'static) -> Self {
+    pub fn new(resolver: impl ResolveIdentity + 'static) -> Self {
         Self {
             inner: Arc::new(resolver),
             cache_partition: IdentityCachePartition::new(),
@@ -146,7 +149,7 @@ impl SharedIdentityResolver {
     }
 }
 
-impl IdentityResolver for SharedIdentityResolver {
+impl ResolveIdentity for SharedIdentityResolver {
     fn resolve_identity<'a>(
         &'a self,
         runtime_components: &'a RuntimeComponents,
@@ -156,7 +159,7 @@ impl IdentityResolver for SharedIdentityResolver {
     }
 }
 
-impl_shared_conversions!(convert SharedIdentityResolver from IdentityResolver using SharedIdentityResolver::new);
+impl_shared_conversions!(convert SharedIdentityResolver from ResolveIdentity using SharedIdentityResolver::new);
 
 /// An identity resolver paired with an auth scheme ID that it resolves for.
 #[derive(Clone, Debug)]
@@ -191,7 +194,7 @@ impl ConfiguredIdentityResolver {
 /// An identity that can be used for authentication.
 ///
 /// The [`Identity`] is a container for any arbitrary identity data that may be used
-/// by a [`Signer`](crate::client::auth::Signer) implementation. Under the hood, it
+/// by a [`Sign`](crate::client::auth::Sign) implementation. Under the hood, it
 /// has an `Arc<dyn Any>`, and it is the responsibility of the signer to downcast
 /// to the appropriate data type using the `data()` function.
 ///

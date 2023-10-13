@@ -11,7 +11,7 @@ use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettin
 use aws_sigv4::sign::v4a;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
 };
 use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -53,7 +53,7 @@ impl AuthScheme for SigV4aAuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -156,7 +156,7 @@ fn extract_endpoint_auth_scheme_signing_region_set(
     }
 }
 
-impl Signer for SigV4aSigner {
+impl Sign for SigV4aSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,

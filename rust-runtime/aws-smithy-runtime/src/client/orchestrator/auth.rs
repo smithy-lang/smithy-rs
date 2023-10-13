@@ -6,10 +6,10 @@
 use crate::client::auth::no_auth::NO_AUTH_SCHEME_ID;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolver,
-    AuthSchemeOptionResolverParams,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
+    ResolveAuthSchemeOptions,
 };
-use aws_smithy_runtime_api::client::identity::IdentityResolver;
+use aws_smithy_runtime_api::client::identity::ResolveIdentity;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
@@ -144,10 +144,10 @@ mod tests {
     use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeId, AuthSchemeOptionResolverParams, SharedAuthScheme,
-        SharedAuthSchemeOptionResolver, Signer,
+        SharedAuthSchemeOptionResolver, Sign,
     };
     use aws_smithy_runtime_api::client::identity::{
-        Identity, IdentityFuture, IdentityResolver, SharedIdentityResolver,
+        Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
     };
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -161,7 +161,7 @@ mod tests {
     async fn basic_case() {
         #[derive(Debug)]
         struct TestIdentityResolver;
-        impl IdentityResolver for TestIdentityResolver {
+        impl ResolveIdentity for TestIdentityResolver {
             fn resolve_identity<'a>(
                 &'a self,
                 _: &'a RuntimeComponents,
@@ -174,7 +174,7 @@ mod tests {
         #[derive(Debug)]
         struct TestSigner;
 
-        impl Signer for TestSigner {
+        impl Sign for TestSigner {
             fn sign_http_request(
                 &self,
                 request: &mut HttpRequest,
@@ -208,7 +208,7 @@ mod tests {
                 identity_resolvers.identity_resolver(self.scheme_id())
             }
 
-            fn signer(&self) -> &dyn Signer {
+            fn signer(&self) -> &dyn Sign {
                 &self.signer
             }
         }
@@ -267,7 +267,7 @@ mod tests {
 
         fn config_with_identity(
             scheme_id: AuthSchemeId,
-            identity: impl IdentityResolver + 'static,
+            identity: impl ResolveIdentity + 'static,
         ) -> (RuntimeComponents, ConfigBag) {
             let runtime_components = RuntimeComponentsBuilder::for_tests()
                 .with_auth_scheme(SharedAuthScheme::new(BasicAuthScheme::new()))

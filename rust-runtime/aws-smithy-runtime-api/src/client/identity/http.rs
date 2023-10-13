@@ -5,7 +5,7 @@
 
 //! Identity types for HTTP auth
 
-use crate::client::identity::{Identity, IdentityFuture, IdentityResolver};
+use crate::client::identity::{Identity, IdentityFuture, ResolveIdentity};
 use crate::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
@@ -64,7 +64,7 @@ impl From<String> for Token {
     }
 }
 
-impl IdentityResolver for Token {
+impl ResolveIdentity for Token {
     fn resolve_identity<'a>(
         &'a self,
         _: &'a RuntimeComponents,
@@ -127,7 +127,7 @@ impl Login {
     }
 }
 
-impl IdentityResolver for Login {
+impl ResolveIdentity for Login {
     fn resolve_identity<'a>(
         &'a self,
         _: &'a RuntimeComponents,
