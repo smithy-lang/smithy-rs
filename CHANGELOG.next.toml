@@ -336,6 +336,14 @@ references = ["smithy-rs#3055"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
+[[smithy-rs]]
+message = """
+[`EndpointPrefix::new`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/struct.EndpointPrefix.html#method.new) no longer returns `crate::operation::error::BuildError` for an Err variant, instead returns a more specific [`InvalidEndpointError`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/error/struct.InvalidEndpointError.html).
+"""
+references = ["smithy-rs#3032"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
 [[aws-sdk-rust]]
 message = "Lifetimes have been added to `EndpointResolver` and `IdentityResolver` traits."
 references = ["smithy-rs#3061"]
