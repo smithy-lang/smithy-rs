@@ -1,3 +1,4 @@
+use aws_smithy_http::result::SdkError;
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -12,7 +13,6 @@
 ///
 /// The example can be run using `cargo run --example handling-errors`.
 ///
-use aws_smithy_client::SdkError;
 use pokemon_service_client::operation::get_storage::GetStorageError;
 use pokemon_service_client_usage::setup_tracing_subscriber;
 use tracing::{error, info};

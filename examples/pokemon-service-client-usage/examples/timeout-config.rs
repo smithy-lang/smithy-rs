@@ -2,7 +2,6 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use pokemon_service_client_usage::setup_tracing_subscriber;
 /// This example demonstrates how to create a Smithy Client and set connection
 /// and operation related timeouts on the client.
 ///
@@ -16,6 +15,7 @@ use std::time::Duration;
 use tracing::info;
 
 use pokemon_service_client::Client as PokemonClient;
+use pokemon_service_client_usage::setup_tracing_subscriber;
 
 static BASE_URL: &str = "http://localhost:13734";
 

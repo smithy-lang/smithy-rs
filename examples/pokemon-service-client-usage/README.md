@@ -46,7 +46,7 @@ cargo run --example simple-client
 | retries-customize             | Customize retry settings. |
 | retries-disable               | How to disable retries.                                                 |
 | timeout-config                | How to configure timeouts.                  |
-| mock-request                  | Use a custom HttpConnector to generate responses. |
+| mock-request                  | Use a custom HttpConnector / Client to generate mock responses. |
 | interceptor-errors             | Raising an error from an interceptor and detecting it at the origin of the call. |
 | trace-serialize             | Trace request and response as they are being sent and received on the wire. |
 | client-connector            | Shows how to change TLS related configuration |

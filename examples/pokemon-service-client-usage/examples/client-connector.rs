@@ -9,16 +9,13 @@
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
-/// The example can be run using `cargo run --example dyn-client`.
+/// The example can be run using `cargo run --example client-connector`.
 ///
-use std::time::Duration;
-
-use aws_smithy_client::{http_connector::ConnectorSettings, hyper_ext, SdkError};
-// ConfigBuilderExt
+use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use hyper_rustls::ConfigBuilderExt;
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
-use tracing::{error, info};
+use tracing::info;
 
 static BASE_URL: &str = "http://localhost:13734";
 
@@ -41,7 +38,7 @@ fn create_client() -> PokemonClient {
         // .with_client_auth_cert(client_cert, client_key) instead of .with_no_client_auth();
         .with_no_client_auth();
 
-    let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+    let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(tls_config)
         // This can be changed to .https_only() to ensure that the client always uses https
         .https_or_http()
@@ -49,19 +46,13 @@ fn create_client() -> PokemonClient {
         .enable_http2()
         .build();
 
-    let smithy_connector = hyper_ext::Adapter::builder()
-        // Optionally set things like timeouts as well
-        .connector_settings(
-            ConnectorSettings::builder()
-                .connect_timeout(Duration::from_secs(5))
-                .build(),
-        )
-        .build(https_connector);
+    // Create a hyper-based HTTP client that uses this TLS connector.
+    let http_client = HyperClientBuilder::new().build(tls_connector);
 
     // Pass the smithy connector to the Client::ConfigBuilder
     let config = pokemon_service_client::Config::builder()
         .endpoint_url(BASE_URL)
-        .http_connector(smithy_connector)
+        .http_client(http_client)
         .build();
 
     // Instantiate a client by applying the configuration.
