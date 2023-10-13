@@ -343,3 +343,15 @@ message = """
 references = ["smithy-rs#3032"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Lifetimes have been added to `EndpointResolver` and `IdentityResolver` traits."
+references = ["smithy-rs#3061"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Lifetimes have been added to the `EndpointResolver` trait."
+references = ["smithy-rs#3061"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
