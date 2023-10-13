@@ -21,6 +21,9 @@ new_type_future! {
     pub struct IdentityFuture<Identity, BoxError>,
 }
 
+#[deprecated(note = "Renamed to ResolveIdentity.")]
+pub use ResolveIdentity as IdentityResolver;
+
 /// Resolver for identities.
 ///
 /// Every [`AuthScheme`](crate::client::auth::AuthScheme) has one or more compatible

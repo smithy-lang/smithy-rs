@@ -80,6 +80,9 @@ impl Storable for AuthSchemeOptionResolverParams {
     type Storer = StoreReplace<Self>;
 }
 
+#[deprecated(note = "Renamed to ResolveAuthSchemeOptions.")]
+pub use ResolveAuthSchemeOptions as AuthSchemeOptionResolver;
+
 /// Resolver for auth scheme options.
 ///
 /// The orchestrator needs to select an auth scheme to sign requests with, and potentially
@@ -185,6 +188,9 @@ impl AuthScheme for SharedAuthScheme {
 }
 
 impl_shared_conversions!(convert SharedAuthScheme from AuthScheme using SharedAuthScheme::new);
+
+#[deprecated(note = "Renamed to Sign.")]
+pub use Sign as Signer;
 
 /// Signing implementation for an auth scheme.
 pub trait Sign: Send + Sync + fmt::Debug {

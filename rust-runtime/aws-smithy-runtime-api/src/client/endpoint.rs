@@ -42,6 +42,9 @@ impl Storable for EndpointResolverParams {
     type Storer = StoreReplace<Self>;
 }
 
+#[deprecated(note = "Renamed to ResolveEndpoint.")]
+pub use ResolveEndpoint as EndpointResolver;
+
 /// Configurable endpoint resolver implementation.
 pub trait ResolveEndpoint: Send + Sync + fmt::Debug {
     /// Asynchronously resolves an endpoint to use from the given endpoint parameters.
