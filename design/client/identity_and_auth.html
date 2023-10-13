@@ -214,7 +214,7 @@ comes directly from the service model.</li>
 <li><strong>IdentityResolver:</strong> resolves an identity for use in authentication.
 There can be multiple identity resolvers that need to be selected from.</li>
 <li><strong>Signer:</strong> a signing implementation that signs a HTTP request.</li>
-<li><strong>AuthSchemeOptionResolver:</strong> resolves a list of auth scheme options for a given operation and its inputs.</li>
+<li><strong>ResolveAuthSchemeOptions:</strong> resolves a list of auth scheme options for a given operation and its inputs.</li>
 </ul>
 </li>
 </ul>
@@ -230,7 +230,7 @@ to the config bag).</p>
 <ol>
 <li>Retrieve the <code>AuthSchemeOptionResolverParams</code> from the config bag. The <code>AuthSchemeOptionResolverParams</code> allow client
 config and operation inputs to play a role in which auth scheme option is selected.</li>
-<li>Retrieve the <code>AuthSchemeOptionResolver</code> from the config bag, and use it to resolve the auth scheme options available
+<li>Retrieve the <code>ResolveAuthSchemeOptions</code> impl from the config bag, and use it to resolve the auth scheme options available
 with the <code>AuthSchemeOptionResolverParams</code>. The returned auth scheme options are in priority order.</li>
 <li>Retrieve the <code>IdentityResolvers</code> list from the config bag.</li>
 <li>For each auth scheme option:
@@ -260,7 +260,7 @@ pub struct AuthSchemeId {
     scheme_id: &amp;'static str,
 }
 
-pub trait AuthSchemeOptionResolver: Send + Sync + Debug {
+pub trait ResolveAuthSchemeOptions: Send + Sync + Debug {
     fn resolve_auth_scheme_options&lt;'a&gt;(
         &amp;'a self,
         params: &amp;AuthSchemeOptionResolverParams,
