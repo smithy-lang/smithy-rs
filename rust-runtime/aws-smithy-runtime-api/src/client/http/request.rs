@@ -266,7 +266,7 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
                 parts
                     .headers
                     .into_iter()
-                    .map(|(k, v)| (k, HeaderValue::from_http03x(v).expect("validated above"))),
+                    .map(|(k, v)| (k, HeaderValue::from_http02x(v).expect("validated above"))),
             );
             Ok(Self {
                 body,
@@ -427,8 +427,8 @@ mod sealed {
         /// If the component can be represented as a Cow<'static, str>, return it
         fn into_maybe_static(self) -> Result<MaybeStatic, HttpError>;
 
-        /// If a component is already internally represented as a `http03x::HeaderName`, return it
-        fn repr_as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
+        /// If a component is already internally represented as a `http02x::HeaderName`, return it
+        fn repr_as_http02x_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -469,7 +469,7 @@ mod sealed {
             Ok(self.to_string().into())
         }
 
-        fn repr_as_http03x_header_name(self) -> Result<http0::HeaderName, Self>
+        fn repr_as_http02x_header_name(self) -> Result<http0::HeaderName, Self>
         where
             Self: Sized,
         {
@@ -491,7 +491,7 @@ mod header_value {
     }
 
     impl HeaderValue {
-        pub(crate) fn from_http03x(value: http0::HeaderValue) -> Result<Self, Utf8Error> {
+        pub(crate) fn from_http02x(value: http0::HeaderValue) -> Result<Self, Utf8Error> {
             let _ = std::str::from_utf8(value.as_bytes())?;
             Ok(Self { _private: value })
         }
@@ -537,7 +537,7 @@ impl TryFrom<String> for HeaderValue {
     type Error = HttpError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Ok(HeaderValue::from_http03x(
+        Ok(HeaderValue::from_http02x(
             http0::HeaderValue::try_from(value).map_err(HttpError::invalid_header_value)?,
         )
         .expect("input was a string"))
@@ -588,7 +588,7 @@ impl Error for HttpError {
 }
 
 fn header_name(name: impl AsHeaderComponent) -> Result<http0::HeaderName, HttpError> {
-    name.repr_as_http03x_header_name().or_else(|name| {
+    name.repr_as_http02x_header_name().or_else(|name| {
         name.into_maybe_static().and_then(|cow| {
             if cow.chars().any(|c| c.is_uppercase()) {
                 return Err(HttpError::new("Header names must be all lower case"));
@@ -610,7 +610,7 @@ fn header_value(value: MaybeStatic) -> Result<HeaderValue, HttpError> {
             http0::HeaderValue::try_from(s).map_err(HttpError::invalid_header_value)?
         }
     };
-    HeaderValue::from_http03x(header).map_err(HttpError::new)
+    HeaderValue::from_http02x(header).map_err(HttpError::new)
 }
 
 #[cfg(test)]

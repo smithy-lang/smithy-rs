@@ -170,7 +170,7 @@ impl PresigningConfigBuilder {
 ///
 /// **This struct has conversion convenience functions:**
 ///
-/// - [`PresignedRequest::to_http_02x_request<B>`][Self::to_http_03x_request] returns an [`http::Request<B>`](https://docs.rs/http/0.2.6/http/request/struct.Request.html)
+/// - [`PresignedRequest::to_http_02x_request<B>`][Self::to_http_02x_request] returns an [`http::Request<B>`](https://docs.rs/http/0.2.6/http/request/struct.Request.html)
 /// - [`PresignedRequest::into`](#impl-From<PresignedRequest>) returns an [`http::request::Builder`](https://docs.rs/http/0.2.6/http/request/struct.Builder.html)
 #[non_exhaustive]
 pub struct PresignedRequest(HttpRequest);
@@ -199,7 +199,7 @@ impl PresignedRequest {
     }
 
     /// Given a body, convert this `PresignedRequest` into an `http::Request`
-    pub fn to_http_03x_request<B>(self, body: B) -> Result<http::Request<B>, BoxError> {
+    pub fn to_http_02x_request<B>(self, body: B) -> Result<http::Request<B>, BoxError> {
         Ok(self.0.into_http02x()?.map(|_req| body))
     }
 }

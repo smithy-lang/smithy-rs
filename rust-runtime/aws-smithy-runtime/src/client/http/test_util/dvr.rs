@@ -118,7 +118,7 @@ fn headers_to_map_http(headers: &Headers) -> HashMap<String, Vec<String>> {
     out
 }
 
-fn headers_to_map_03x(headers: &HeaderMap) -> HashMap<String, Vec<String>> {
+fn headers_to_map_02x(headers: &HeaderMap) -> HashMap<String, Vec<String>> {
     let mut out: HashMap<_, Vec<_>> = HashMap::new();
     for (header_name, header_value) in headers.iter() {
         let entry = out.entry(header_name.to_string()).or_default();
@@ -135,7 +135,7 @@ impl<'a, B> From<&'a http::Response<B>> for Response {
     fn from(resp: &'a http::Response<B>) -> Self {
         let status = resp.status().as_u16();
         let version = format!("{:?}", resp.version());
-        let headers = headers_to_map_03x(resp.headers());
+        let headers = headers_to_map_02x(resp.headers());
         Self {
             status,
             version,
