@@ -168,7 +168,7 @@ internal class EndpointTraitBindingsTest {
                         use std::sync::{Arc, Mutex};
                         use $moduleName::{
                             config::interceptors::BeforeTransmitInterceptorContextRef,
-                            config::Interceptor,
+                            config::Intercept,
                             error::DisplayErrorContext,
                             {Client, Config},
                         };

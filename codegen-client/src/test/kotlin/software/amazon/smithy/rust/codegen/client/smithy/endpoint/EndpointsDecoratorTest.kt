@@ -150,7 +150,7 @@ class EndpointsDecoratorTest {
                         use std::time::Duration;
                         use $moduleName::{
                             config::endpoint::Params, config::interceptors::BeforeTransmitInterceptorContextRef,
-                            config::Interceptor, config::SharedAsyncSleep, Client, Config,
+                            config::Intercept, config::SharedAsyncSleep, Client, Config,
                         };
 
                         ##[derive(Clone, Debug, Default)]
