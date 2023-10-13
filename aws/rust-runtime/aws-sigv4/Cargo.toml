@@ -40,7 +40,7 @@ zeroize = { version = "^1", optional = true }
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util", "hardcoded-credentials"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "test-util"] }
 bytes = "1"
-criterion = "0.4"
+criterion = "0.5"
 hex-literal = "0.4.1"
 httparse = "1.8"
 libfuzzer-sys = "0.4.6"
