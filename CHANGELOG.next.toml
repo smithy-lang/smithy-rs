@@ -327,11 +327,34 @@ author = "Velfi"
 [[aws-sdk-rust]]
 message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
 references = ["smithy-rs#3055"]
-meta = { "breaking" = true, "tada" = true, "bug" = true }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
 message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
 references = ["smithy-rs#3055"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Several traits have been renamed from noun form to verb form to be more idiomatic:
+- `EndpointResolver` -> `ResolveEndpoint`
+- `Interceptor` -> `Intercept`
+"""
+references = ["smithy-rs#3065"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """Several traits have been renamed from noun form to verb form to be more idiomatic:
+- `AuthSchemeOptionResolver` -> `ResolveAuthSchemeOptions`
+- `EndpointResolver` -> `ResolveEndpoint`
+- `IdentityResolver` -> `ResolveIdentity`
+- `Signer` -> `Sign`
+- `RequestSerializer` -> `SerializeRequest`
+- `ResponseDeserializer` -> `DeserializeResponse`
+- `Interceptor` -> `Intercept`
+"""
+references = ["smithy-rs#3065"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
