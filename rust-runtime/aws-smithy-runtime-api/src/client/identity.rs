@@ -17,8 +17,8 @@ use std::time::SystemTime;
 pub mod http;
 
 new_type_future! {
-    doc = "Future for [`IdentityResolver::resolve_identity`].",
-    pub struct IdentityFuture<Identity, BoxError>,
+    #[doc = "Future for [`IdentityResolver::resolve_identity`]."]
+    pub struct IdentityFuture<'a, Identity, BoxError>;
 }
 
 #[deprecated(note = "Renamed to ResolveIdentity.")]
@@ -37,7 +37,7 @@ pub use ResolveIdentity as IdentityResolver;
 /// There is no fallback to other auth schemes in the absence of an identity.
 pub trait ResolveIdentity: Send + Sync + Debug {
     /// Asynchronously resolves an identity for a request using the given config.
-    fn resolve_identity(&self, config_bag: &ConfigBag) -> IdentityFuture;
+    fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a>;
 }
 
 /// Container for a shared identity resolver.
@@ -52,7 +52,7 @@ impl SharedIdentityResolver {
 }
 
 impl ResolveIdentity for SharedIdentityResolver {
-    fn resolve_identity(&self, config_bag: &ConfigBag) -> IdentityFuture {
+    fn resolve_identity<'a>(&'a self, config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
         self.0.resolve_identity(config_bag)
     }
 }

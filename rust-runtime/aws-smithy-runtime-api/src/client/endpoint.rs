@@ -14,8 +14,8 @@ use std::fmt;
 use std::sync::Arc;
 
 new_type_future! {
-    doc = "Future for [`EndpointResolver::resolve_endpoint`].",
-    pub struct EndpointFuture<Endpoint, BoxError>,
+    #[doc = "Future for [`EndpointResolver::resolve_endpoint`]."]
+    pub struct EndpointFuture<'a, Endpoint, BoxError>;
 }
 
 /// Parameters originating from the Smithy endpoint ruleset required for endpoint resolution.
@@ -48,7 +48,7 @@ pub use ResolveEndpoint as EndpointResolver;
 /// Configurable endpoint resolver implementation.
 pub trait ResolveEndpoint: Send + Sync + fmt::Debug {
     /// Asynchronously resolves an endpoint to use from the given endpoint parameters.
-    fn resolve_endpoint(&self, params: &EndpointResolverParams) -> EndpointFuture;
+    fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a>;
 }
 
 /// Shared endpoint resolver.
@@ -65,7 +65,7 @@ impl SharedEndpointResolver {
 }
 
 impl ResolveEndpoint for SharedEndpointResolver {
-    fn resolve_endpoint(&self, params: &EndpointResolverParams) -> EndpointFuture {
+    fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a> {
         self.0.resolve_endpoint(params)
     }
 }

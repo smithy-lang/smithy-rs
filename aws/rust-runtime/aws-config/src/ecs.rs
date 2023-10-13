@@ -273,7 +273,7 @@ impl Builder {
     /// Override the DNS resolver used to validate URIs
     ///
     /// URIs must refer to loopback addresses. The [`ResolveDns`](aws_smithy_runtime_api::client::dns::ResolveDns)
-    /// is used to retrieve IP addresses for a given domain.
+    /// implementation is used to retrieve IP addresses for a given domain.
     pub fn dns(mut self, dns: impl ResolveDns + 'static) -> Self {
         self.dns = Some(dns.into_shared());
         self
@@ -399,7 +399,7 @@ async fn validate_full_uri(
         Ok(addr) => addr.is_loopback(),
         Err(_domain_name) => {
             let dns = dns.ok_or(InvalidFullUriErrorKind::NoDnsResolver)?;
-            dns.resolve_dns(host.to_owned())
+            dns.resolve_dns(host)
                 .await
                 .map_err(|err| InvalidFullUriErrorKind::DnsLookupFailed(ResolveDnsError::new(err)))?
                 .iter()
@@ -752,15 +752,15 @@ mod test {
     }
 
     impl ResolveDns for TestDns {
-        fn resolve_dns(&self, name: String) -> DnsFuture {
-            DnsFuture::ready(Ok(self.addrs.get(&name).unwrap_or(&self.fallback).clone()))
+        fn resolve_dns<'a>(&'a self, name: &'a str) -> DnsFuture<'a> {
+            DnsFuture::ready(Ok(self.addrs.get(name).unwrap_or(&self.fallback).clone()))
         }
     }
 
     #[derive(Debug)]
     struct NeverDns;
     impl ResolveDns for NeverDns {
-        fn resolve_dns(&self, _name: String) -> DnsFuture {
+        fn resolve_dns<'a>(&'a self, _name: &'a str) -> DnsFuture<'a> {
             DnsFuture::new(async {
                 Never::new().await;
                 unreachable!()
