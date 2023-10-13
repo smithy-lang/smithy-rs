@@ -75,8 +75,8 @@ sealed class BuilderSection(name: String) : Section(name) {
 /** Customizations for BuilderGenerator */
 abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
+fun RuntimeConfig.operationBuildError() = RuntimeType.smithyTypes(this).resolve("error::operation::BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.smithyTypes(this).resolve("error::operation::SerializationError")
 
 fun MemberShape.enforceRequired(
     field: Writable,
