@@ -5,13 +5,14 @@
 
 use crate::expiring_cache::ExpiringCache;
 use aws_smithy_async::future::timeout::Timeout;
-use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
+use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::identity::{
     Identity, IdentityCachePartition, IdentityFuture, IdentityResolver, ResolveCachedIdentity,
     SharedIdentityCache, SharedIdentityResolver,
 };
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::collections::HashMap;
@@ -85,6 +86,8 @@ impl LazyCacheBuilder {
     /// For example, if the identity are expiring in 15 minutes, and the buffer time is 10 seconds,
     /// then any requests made after 14 minutes and 50 seconds will load a new identity.
     ///
+    /// Note: random jitter value between [0.0, 1.0] is multiplied to this buffer time.
+    ///
     /// Defaults to 10 seconds.
     pub fn buffer_time(mut self, buffer_time: Duration) -> Self {
         self.set_buffer_time(Some(buffer_time));
@@ -95,6 +98,8 @@ impl LazyCacheBuilder {
     ///
     /// For example, if the identity are expiring in 15 minutes, and the buffer time is 10 seconds,
     /// then any requests made after 14 minutes and 50 seconds will load a new identity.
+    ///
+    /// Note: random jitter value between [0.0, 1.0] is multiplied to this buffer time.
     ///
     /// Defaults to 10 seconds.
     pub fn set_buffer_time(&mut self, buffer_time: Option<Duration>) -> &mut Self {
@@ -109,8 +114,9 @@ impl LazyCacheBuilder {
     /// Therefore, any requests made after 14 minutes and 52 seconds will load a new identity.
     ///
     /// Defaults to a randomly generated value between 0.0 and 1.0. This setter is for testing only.
-    #[cfg(feature = "test-util")]
-    pub fn buffer_time_jitter_fraction(mut self, buffer_time_jitter_fraction: fn() -> f64) -> Self {
+    #[allow(unused)]
+    #[cfg(test)]
+    fn buffer_time_jitter_fraction(mut self, buffer_time_jitter_fraction: fn() -> f64) -> Self {
         self.set_buffer_time_jitter_fraction(Some(buffer_time_jitter_fraction));
         self
     }
@@ -122,8 +128,9 @@ impl LazyCacheBuilder {
     /// Therefore, any requests made after 14 minutes and 52 seconds will load a new identity.
     ///
     /// Defaults to a randomly generated value between 0.0 and 1.0. This setter is for testing only.
-    #[cfg(feature = "test-util")]
-    pub fn set_buffer_time_jitter_fraction(
+    #[allow(unused)]
+    #[cfg(test)]
+    fn set_buffer_time_jitter_fraction(
         &mut self,
         buffer_time_jitter_fraction: Option<fn() -> f64>,
     ) -> &mut Self {
@@ -165,10 +172,6 @@ impl LazyCacheBuilder {
             "default_expiration must be at least 15 minutes"
         );
         LazyCache::new(
-            self.time_source.unwrap_or_default(),
-            self.sleep_impl.unwrap_or_else(|| {
-                default_async_sleep().expect("no default sleep implementation available")
-            }),
             self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
             self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
             self.buffer_time_jitter_fraction
@@ -195,6 +198,8 @@ impl CachePartitions {
 
     fn partition(&self, key: IdentityCachePartition) -> ExpiringCache<Identity, BoxError> {
         let mut partition = self.partitions.read().unwrap().get(&key).cloned();
+        // Add the partition to the cache if it doesn't already exist.
+        // Partitions will never be removed.
         if partition.is_none() {
             let mut partitions = self.partitions.write().unwrap();
             // Another thread could have inserted the partition before we acquired the lock,
@@ -212,8 +217,6 @@ impl CachePartitions {
 
 #[derive(Debug)]
 struct LazyCache {
-    time: SharedTimeSource,
-    sleeper: SharedAsyncSleep,
     partitions: CachePartitions,
     load_timeout: Duration,
     buffer_time: Duration,
@@ -223,16 +226,12 @@ struct LazyCache {
 
 impl LazyCache {
     fn new(
-        time: SharedTimeSource,
-        sleeper: SharedAsyncSleep,
         load_timeout: Duration,
         buffer_time: Duration,
         buffer_time_jitter_fraction: fn() -> f64,
         default_expiration: Duration,
     ) -> Self {
         Self {
-            time,
-            sleeper,
             partitions: CachePartitions::new(buffer_time),
             load_timeout,
             buffer_time,
@@ -246,11 +245,17 @@ impl ResolveCachedIdentity for LazyCache {
     fn resolve_cached_identity<'a>(
         &'a self,
         resolver: SharedIdentityResolver,
+        runtime_components: &'a RuntimeComponents,
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
-        let time = self.time.clone();
-        let now = self.time.now();
-        let timeout_future = self.sleeper.sleep(self.load_timeout);
+        let time_source = runtime_components
+            .time_source()
+            .expect("Identity caching requires a time source to be configured. If this isn't possible, then disable identity caching.");
+        let sleep_impl = runtime_components
+            .sleep_impl()
+            .expect("Identity caching requires a sleep impl to be configured. If this isn't possible, then disable identity caching.");
+        let now = time_source.now();
+        let timeout_future = sleep_impl.sleep(self.load_timeout);
         let load_timeout = self.load_timeout;
         let cache = self.partitions.partition(resolver.cache_partition());
         let default_expiration = self.default_expiration;
@@ -265,13 +270,15 @@ impl ResolveCachedIdentity for LazyCache {
                 // There may be other threads also loading simultaneously, but this is OK
                 // since the futures are not eagerly executed, and the cache will only run one
                 // of them.
-                let start_time = time.now();
+                let start_time = time_source.now();
                 let result = cache
                     .get_or_load(|| {
                         let span = tracing::info_span!("lazy_load_identity");
                         async move {
-                            let fut =
-                                Timeout::new(resolver.resolve_identity(config_bag), timeout_future);
+                            let fut = Timeout::new(
+                                resolver.resolve_identity(runtime_components, config_bag),
+                                timeout_future,
+                            );
                             let identity = match fut.await {
                                 Ok(result) => result?,
                                 Err(_err) => match resolver.fallback_on_interrupt() {
@@ -294,8 +301,8 @@ impl ResolveCachedIdentity for LazyCache {
                             // `cache.get_or_load`, logging inside `cache.get_or_load` ensures that it is emitted
                             // only once for the first thread that succeeds in populating a cache value.
                             tracing::info!(
-                                "identity cache miss occurred; added new AWS identity (took {:?})",
-                                time.now().duration_since(start_time)
+                                "identity cache miss occurred; added new identity (took {:?})",
+                                time_source.now().duration_since(start_time)
                             );
 
                             Ok((identity, expiration + jitter))
@@ -326,10 +333,11 @@ impl fmt::Display for TimedOutError {
 #[cfg(all(test, feature = "client", feature = "http-auth"))]
 mod tests {
     use super::*;
-    use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
+    use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::{instant_time_and_sleep, ManualTimeSource};
-    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_async::time::TimeSource;
     use aws_smithy_runtime_api::client::identity::http::Token;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -347,7 +355,11 @@ mod tests {
     where
         F: Fn() -> IdentityFuture<'static> + Send + Sync,
     {
-        fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
+        fn resolve_identity<'a>(
+            &'a self,
+            _: &'a RuntimeComponents,
+            _config_bag: &'a ConfigBag,
+        ) -> IdentityFuture<'a> {
             (self.0)()
         }
     }
@@ -360,14 +372,17 @@ mod tests {
     }
 
     fn test_cache(
-        time: impl TimeSource + 'static,
         buffer_time_jitter_fraction: fn() -> f64,
         load_list: Vec<Result<Identity, BoxError>>,
     ) -> (LazyCache, SharedIdentityResolver) {
         #[derive(Debug)]
         struct Resolver(Mutex<Vec<Result<Identity, BoxError>>>);
         impl IdentityResolver for Resolver {
-            fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
+            fn resolve_identity<'a>(
+                &'a self,
+                _: &'a RuntimeComponents,
+                _config_bag: &'a ConfigBag,
+            ) -> IdentityFuture<'a> {
                 let mut list = self.0.lock().unwrap();
                 if list.len() > 0 {
                     let next = list.remove(0);
@@ -382,8 +397,6 @@ mod tests {
 
         let identity_resolver = SharedIdentityResolver::new(Resolver(Mutex::new(load_list)));
         let cache = LazyCache::new(
-            SharedTimeSource::new(time),
-            SharedAsyncSleep::new(TokioSleep::new()),
             DEFAULT_LOAD_TIMEOUT,
             DEFAULT_BUFFER_TIME,
             buffer_time_jitter_fraction,
@@ -404,11 +417,12 @@ mod tests {
     async fn expect_identity(
         expired_secs: u64,
         cache: &LazyCache,
+        components: &RuntimeComponents,
         resolver: SharedIdentityResolver,
     ) {
         let config_bag = ConfigBag::base();
         let identity = cache
-            .resolve_cached_identity(resolver, &config_bag)
+            .resolve_cached_identity(resolver, components, &config_bag)
             .await
             .expect("expected identity");
         assert_eq!(Some(epoch_secs(expired_secs)), identity.expiration());
@@ -417,14 +431,17 @@ mod tests {
     #[tokio::test]
     async fn initial_populate_test_identity() {
         let time = ManualTimeSource::new(UNIX_EPOCH);
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(TokioSleep::new()))
+            .build()
+            .unwrap();
         let config_bag = ConfigBag::base();
         let resolver = SharedIdentityResolver::new(resolver_fn(|| {
             info!("refreshing the test_identity");
             IdentityFuture::ready(Ok(test_identity(1000)))
         }));
         let cache = LazyCache::new(
-            SharedTimeSource::new(time),
-            SharedAsyncSleep::new(TokioSleep::new()),
             DEFAULT_LOAD_TIMEOUT,
             DEFAULT_BUFFER_TIME,
             BUFFER_TIME_NO_JITTER,
@@ -433,7 +450,7 @@ mod tests {
         assert_eq!(
             epoch_secs(1000),
             cache
-                .resolve_cached_identity(resolver, &config_bag)
+                .resolve_cached_identity(resolver, &components, &config_bag)
                 .await
                 .unwrap()
                 .expiration()
@@ -444,8 +461,12 @@ mod tests {
     #[tokio::test]
     async fn reload_expired_test_identity() {
         let time = ManualTimeSource::new(epoch_secs(100));
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(TokioSleep::new()))
+            .build()
+            .unwrap();
         let (cache, resolver) = test_cache(
-            time.clone(),
             BUFFER_TIME_NO_JITTER,
             vec![
                 Ok(test_identity(1000)),
@@ -454,30 +475,34 @@ mod tests {
             ],
         );
 
-        expect_identity(1000, &cache, resolver.clone()).await;
-        expect_identity(1000, &cache, resolver.clone()).await;
+        expect_identity(1000, &cache, &components, resolver.clone()).await;
+        expect_identity(1000, &cache, &components, resolver.clone()).await;
         time.set_time(epoch_secs(1500));
-        expect_identity(2000, &cache, resolver.clone()).await;
-        expect_identity(2000, &cache, resolver.clone()).await;
+        expect_identity(2000, &cache, &components, resolver.clone()).await;
+        expect_identity(2000, &cache, &components, resolver.clone()).await;
         time.set_time(epoch_secs(2500));
-        expect_identity(3000, &cache, resolver.clone()).await;
-        expect_identity(3000, &cache, resolver.clone()).await;
+        expect_identity(3000, &cache, &components, resolver.clone()).await;
+        expect_identity(3000, &cache, &components, resolver.clone()).await;
     }
 
     #[tokio::test]
     async fn load_failed_error() {
         let config_bag = ConfigBag::base();
         let time = ManualTimeSource::new(epoch_secs(100));
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(TokioSleep::new()))
+            .build()
+            .unwrap();
         let (cache, resolver) = test_cache(
-            time.clone(),
             BUFFER_TIME_NO_JITTER,
             vec![Ok(test_identity(1000)), Err("failed".into())],
         );
 
-        expect_identity(1000, &cache, resolver.clone()).await;
+        expect_identity(1000, &cache, &components, resolver.clone()).await;
         time.set_time(epoch_secs(1500));
         assert!(cache
-            .resolve_cached_identity(resolver.clone(), &config_bag)
+            .resolve_cached_identity(resolver.clone(), &components, &config_bag)
             .await
             .is_err());
     }
@@ -491,8 +516,12 @@ mod tests {
             .unwrap();
 
         let time = ManualTimeSource::new(epoch_secs(0));
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(TokioSleep::new()))
+            .build()
+            .unwrap();
         let (cache, resolver) = test_cache(
-            time.clone(),
             BUFFER_TIME_NO_JITTER,
             vec![
                 Ok(test_identity(500)),
@@ -512,12 +541,13 @@ mod tests {
                 let resolver = resolver.clone();
                 let cache = cache.clone();
                 let time = time.clone();
+                let components = components.clone();
                 tasks.push(rt.spawn(async move {
                     let now = time.advance(Duration::from_secs(22));
 
                     let config_bag = ConfigBag::base();
                     let identity = cache
-                        .resolve_cached_identity(resolver, &config_bag)
+                        .resolve_cached_identity(resolver, &components, &config_bag)
                         .await
                         .unwrap();
                     assert!(
@@ -538,6 +568,11 @@ mod tests {
     async fn load_timeout() {
         let config_bag = ConfigBag::base();
         let (time, sleep) = instant_time_and_sleep(epoch_secs(100));
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(sleep))
+            .build()
+            .unwrap();
         let resolver = SharedIdentityResolver::new(resolver_fn(|| {
             IdentityFuture::new(async {
                 aws_smithy_async::future::never::Never::new().await;
@@ -545,8 +580,6 @@ mod tests {
             })
         }));
         let cache = LazyCache::new(
-            SharedTimeSource::new(time.clone()),
-            SharedAsyncSleep::new(sleep),
             Duration::from_secs(5),
             DEFAULT_BUFFER_TIME,
             BUFFER_TIME_NO_JITTER,
@@ -554,7 +587,7 @@ mod tests {
         );
 
         let err: BoxError = cache
-            .resolve_cached_identity(resolver, &config_bag)
+            .resolve_cached_identity(resolver, &components, &config_bag)
             .await
             .expect_err("it should return an error");
         let downcasted = err.downcast_ref::<TimedOutError>();
@@ -568,14 +601,18 @@ mod tests {
     #[tokio::test]
     async fn buffer_time_jitter() {
         let time = ManualTimeSource::new(epoch_secs(100));
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(TokioSleep::new()))
+            .build()
+            .unwrap();
         let buffer_time_jitter_fraction = || 0.5_f64;
         let (cache, resolver) = test_cache(
-            time.clone(),
             buffer_time_jitter_fraction,
             vec![Ok(test_identity(1000)), Ok(test_identity(2000))],
         );
 
-        expect_identity(1000, &cache, resolver.clone()).await;
+        expect_identity(1000, &cache, &components, resolver.clone()).await;
         let buffer_time_with_jitter =
             (DEFAULT_BUFFER_TIME.as_secs_f64() * buffer_time_jitter_fraction()) as u64;
         assert_eq!(buffer_time_with_jitter, 5);
@@ -583,18 +620,23 @@ mod tests {
         let almost_expired_secs = 1000 - buffer_time_with_jitter - 1;
         time.set_time(epoch_secs(almost_expired_secs));
         // We should still use the first test_identity.
-        expect_identity(1000, &cache, resolver.clone()).await;
+        expect_identity(1000, &cache, &components, resolver.clone()).await;
         // Now let the first test_identity expire.
         let expired_secs = almost_expired_secs + 1;
         time.set_time(epoch_secs(expired_secs));
         // Now that the first test_identity have been expired, the second test_identity will be retrieved.
-        expect_identity(2000, &cache, resolver.clone()).await;
+        expect_identity(2000, &cache, &components, resolver.clone()).await;
     }
 
     #[tokio::test]
     async fn cache_partitioning() {
         let time = ManualTimeSource::new(epoch_secs(0));
-        let (cache, _) = test_cache(time.clone(), BUFFER_TIME_NO_JITTER, Vec::new());
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(TokioSleep::new()))
+            .build()
+            .unwrap();
+        let (cache, _) = test_cache(BUFFER_TIME_NO_JITTER, Vec::new());
 
         let far_future = SystemTime::now() + Duration::from_secs(10_000);
 
@@ -633,12 +675,12 @@ mod tests {
         // Loading the identity twice with resolver A should result in a single call
         // to the underlying identity resolver since the result gets cached.
         let identity = cache
-            .resolve_cached_identity(resolver_a.clone(), &config_bag)
+            .resolve_cached_identity(resolver_a.clone(), &components, &config_bag)
             .await
             .unwrap();
         assert_eq!("A", identity.data::<Token>().unwrap().token());
         let identity = cache
-            .resolve_cached_identity(resolver_a.clone(), &config_bag)
+            .resolve_cached_identity(resolver_a.clone(), &components, &config_bag)
             .await
             .unwrap();
         assert_eq!("A", identity.data::<Token>().unwrap().token());
@@ -647,12 +689,12 @@ mod tests {
         // Now, loading an identity from B will use a separate cache partition
         // and return a different result.
         let identity = cache
-            .resolve_cached_identity(resolver_b.clone(), &config_bag)
+            .resolve_cached_identity(resolver_b.clone(), &components, &config_bag)
             .await
             .unwrap();
         assert_eq!("B", identity.data::<Token>().unwrap().token());
         let identity = cache
-            .resolve_cached_identity(resolver_b.clone(), &config_bag)
+            .resolve_cached_identity(resolver_b.clone(), &components, &config_bag)
             .await
             .unwrap();
         assert_eq!("B", identity.data::<Token>().unwrap().token());
@@ -661,7 +703,7 @@ mod tests {
 
         // Finally, loading with resolver A again should return the original cached A value
         let identity = cache
-            .resolve_cached_identity(resolver_a.clone(), &config_bag)
+            .resolve_cached_identity(resolver_a.clone(), &components, &config_bag)
             .await
             .unwrap();
         assert_eq!("A", identity.data::<Token>().unwrap().token());

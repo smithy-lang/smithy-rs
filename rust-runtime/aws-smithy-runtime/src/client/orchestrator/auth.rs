@@ -77,7 +77,9 @@ pub(super) async fn orchestrate_auth(
                     Ok(auth_scheme_endpoint_config) => {
                         trace!(auth_scheme_endpoint_config = ?auth_scheme_endpoint_config, "extracted auth scheme endpoint config");
 
-                        let identity = identity_resolver.resolve_identity(cfg).await?;
+                        let identity = identity_resolver
+                            .resolve_identity(runtime_components, cfg)
+                            .await?;
                         trace!(identity = ?identity, "resolved identity");
 
                         trace!("signing request");
@@ -160,7 +162,11 @@ mod tests {
         #[derive(Debug)]
         struct TestIdentityResolver;
         impl IdentityResolver for TestIdentityResolver {
-            fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
+            fn resolve_identity<'a>(
+                &'a self,
+                _: &'a RuntimeComponents,
+                _config_bag: &'a ConfigBag,
+            ) -> IdentityFuture<'a> {
                 IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))
             }
         }

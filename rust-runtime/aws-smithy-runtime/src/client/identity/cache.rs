@@ -11,6 +11,7 @@ use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::ConfigBag;
 
 mod lazy;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 pub use lazy::LazyCacheBuilder;
 
 /// Identity cache configuration.
@@ -68,6 +69,8 @@ impl IdentityCache {
     }
 
     /// Configure a lazy identity cache.
+    ///
+    /// Identities are lazy loaded and then cached when a request is made.
     pub fn lazy() -> LazyCacheBuilder {
         LazyCacheBuilder::new()
     }
@@ -80,8 +83,13 @@ impl ResolveCachedIdentity for NoCache {
     fn resolve_cached_identity<'a>(
         &'a self,
         resolver: SharedIdentityResolver,
+        runtime_components: &'a RuntimeComponents,
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
-        IdentityFuture::new(async move { resolver.resolve_identity(config_bag).await })
+        IdentityFuture::new(async move {
+            resolver
+                .resolve_identity(runtime_components, config_bag)
+                .await
+        })
     }
 }
