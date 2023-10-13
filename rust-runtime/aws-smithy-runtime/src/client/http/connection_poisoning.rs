@@ -9,7 +9,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     AfterDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
 };
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
@@ -43,7 +43,7 @@ impl ConnectionPoisoningInterceptor {
     }
 }
 
-impl Interceptor for ConnectionPoisoningInterceptor {
+impl Intercept for ConnectionPoisoningInterceptor {
     fn name(&self) -> &'static str {
         "ConnectionPoisoningInterceptor"
     }

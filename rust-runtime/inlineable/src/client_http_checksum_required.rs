@@ -5,7 +5,7 @@
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::{Interceptor, SharedInterceptor};
+use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
 use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponents, RuntimeComponentsBuilder,
 };
@@ -41,7 +41,7 @@ impl RuntimePlugin for HttpChecksumRequiredRuntimePlugin {
 #[derive(Debug)]
 struct HttpChecksumRequiredInterceptor;
 
-impl Interceptor for HttpChecksumRequiredInterceptor {
+impl Intercept for HttpChecksumRequiredInterceptor {
     fn name(&self) -> &'static str {
         "HttpChecksumRequiredInterceptor"
     }

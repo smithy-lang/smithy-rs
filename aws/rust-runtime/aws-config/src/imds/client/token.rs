@@ -22,10 +22,10 @@ use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
 };
 use aws_smithy_runtime_api::client::identity::{
-    Identity, IdentityFuture, IdentityResolver, SharedIdentityResolver,
+    Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
 };
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
 use aws_smithy_runtime_api::client::runtime_components::{
@@ -191,7 +191,7 @@ fn parse_token_response(response: &HttpResponse, now: SystemTime) -> Result<Toke
     })
 }
 
-impl IdentityResolver for TokenResolver {
+impl ResolveIdentity for TokenResolver {
     fn resolve_identity<'a>(&'a self, _config_bag: &'a ConfigBag) -> IdentityFuture<'a> {
         IdentityFuture::new(async {
             let preloaded_token = self
@@ -240,7 +240,7 @@ impl AuthScheme for TokenAuthScheme {
         identity_resolvers.identity_resolver(IMDS_TOKEN_AUTH_SCHEME)
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -248,7 +248,7 @@ impl AuthScheme for TokenAuthScheme {
 #[derive(Debug)]
 struct TokenSigner;
 
-impl Signer for TokenSigner {
+impl Sign for TokenSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,

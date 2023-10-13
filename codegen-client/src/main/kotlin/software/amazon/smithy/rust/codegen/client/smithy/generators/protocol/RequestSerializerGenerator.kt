@@ -47,7 +47,7 @@ class RequestSerializerGenerator(
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
             "Input" to interceptorContext.resolve("Input"),
             "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
-            "RequestSerializer" to runtimeApi.resolve("client::ser_de::RequestSerializer"),
+            "SerializeRequest" to runtimeApi.resolve("client::ser_de::SerializeRequest"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "HeaderSerializationSettings" to RuntimeType.forInlineDependency(
                 InlineDependency.serializationSettings(
@@ -66,7 +66,7 @@ class RequestSerializerGenerator(
             """
             ##[derive(Debug)]
             struct $serializerName;
-            impl #{RequestSerializer} for $serializerName {
+            impl #{SerializeRequest} for $serializerName {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");

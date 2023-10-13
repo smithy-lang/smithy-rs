@@ -13,7 +13,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
 };
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::HeaderValue;
@@ -52,7 +52,7 @@ impl<VE> ResponseChecksumInterceptor<VE> {
     }
 }
 
-impl<VE> Interceptor for ResponseChecksumInterceptor<VE>
+impl<VE> Intercept for ResponseChecksumInterceptor<VE>
 where
     VE: Fn(&Input) -> bool + Send + Sync,
 {

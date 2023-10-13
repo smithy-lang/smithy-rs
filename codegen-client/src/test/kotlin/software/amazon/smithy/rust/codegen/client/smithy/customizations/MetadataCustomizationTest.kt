@@ -40,7 +40,7 @@ class MetadataCustomizationTest {
                 "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "ConfigBag" to RuntimeType.configBag(runtimeConfig),
-                "Interceptor" to RuntimeType.interceptor(runtimeConfig),
+                "Intercept" to RuntimeType.intercept(runtimeConfig),
                 "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
                 "capture_request" to RuntimeType.captureRequest(runtimeConfig),
                 "RuntimeComponents" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -57,7 +57,7 @@ class MetadataCustomizationTest {
                             ::std::sync::Mutex<#{Option}<::std::sync::mpsc::Sender<(String, String)>>>,
                         );
 
-                        impl #{Interceptor} for ExtractMetadataInterceptor {
+                        impl #{Intercept} for ExtractMetadataInterceptor {
                             fn name(&self) -> &'static str {
                                 "ExtractMetadataInterceptor"
                             }
