@@ -8,6 +8,9 @@ C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
 set -eux
+
+: "$RUST_NIGHTLY_VERSION"
+
 cd smithy-rs
 
 for runtime_path in \

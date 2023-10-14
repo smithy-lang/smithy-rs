@@ -59,7 +59,7 @@ All header insertion methods accept `impl AsHeaderComponent`. This allows us to 
 advantage of zero-cost usage of `'static str`. We will seal this trait to prevent external usage. We will have separate implementation for:
 - `&'static str`
 - `String`
-- http03x::HeaderName
+- http02x::HeaderName
 
 #### Additional Functionality
 Our wrapper type will add the following additional functionality:
@@ -100,7 +100,7 @@ This also enables supporting request extensions for different downstream provide
 </details>
 
 ### Future Work
-Currently, the only way to construct `Request` is from a compatible type (e.g. `http03x::Request`)
+Currently, the only way to construct `Request` is from a compatible type (e.g. `http02x::Request`)
 
 Changes checklist
 -----------------

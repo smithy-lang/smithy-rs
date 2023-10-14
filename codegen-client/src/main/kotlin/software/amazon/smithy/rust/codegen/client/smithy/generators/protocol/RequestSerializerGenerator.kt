@@ -76,7 +76,7 @@ class RequestSerializerGenerator(
                     };
                     let body = #{generate_body};
                     #{add_content_length}
-                    #{Ok}(request_builder.body(body).expect("valid request"))
+                    #{Ok}(request_builder.body(body).expect("valid request").try_into().unwrap())
                 }
             }
             """,

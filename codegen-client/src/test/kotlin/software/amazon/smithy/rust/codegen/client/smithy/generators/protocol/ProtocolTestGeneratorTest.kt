@@ -55,7 +55,7 @@ private class TestServiceRuntimePluginCustomization(
                                 let mut fake_req = ::http::Request::builder()
                                     $fakeRequestBuilder
                                     .body(#{SdkBody}::from($fakeRequestBody))
-                                    .expect("valid request");
+                                    .expect("valid request").try_into().unwrap();
                                 ::std::mem::swap(
                                     context.request_mut(),
                                     &mut fake_req,
