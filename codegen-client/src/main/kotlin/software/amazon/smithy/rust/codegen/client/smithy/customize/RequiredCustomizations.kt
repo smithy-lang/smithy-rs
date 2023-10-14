@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.Intercep
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.MetadataCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierServiceRuntimePluginCustomization
@@ -115,7 +114,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations +
-        ResiliencyServiceRuntimePluginCustomization(codegenContext) +
         ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
         RetryClassifierServiceRuntimePluginCustomization(codegenContext)
 }

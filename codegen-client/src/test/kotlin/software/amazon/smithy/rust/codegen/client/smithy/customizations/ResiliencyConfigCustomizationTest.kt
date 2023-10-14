@@ -45,7 +45,7 @@ internal class ResiliencyConfigCustomizationTest {
         project.withModule(ClientRustModule.config) {
             ServiceRuntimePluginGenerator(codegenContext).render(
                 this,
-                listOf(ResiliencyServiceRuntimePluginCustomization(codegenContext)),
+                emptyList(),
             )
         }
         ResiliencyReExportCustomization(codegenContext).extras(project)

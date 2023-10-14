@@ -40,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -50,9 +49,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
@@ -161,7 +162,7 @@ class FluentClientGenerator(
                 }
                 """,
                 *clientScope,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
             )
         }
 
@@ -446,8 +447,10 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
+        val api = RuntimeType.smithyRuntimeApi(rc)
+        val rt = RuntimeType.smithyRuntime(rc)
         rustTemplate(
             """
             pub(crate) fn base_client_runtime_plugins(
@@ -456,12 +459,19 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                 let mut plugins = #{RuntimePlugins}::new()
+                    // defaults
                     .with_client_plugin(#{default_http_client_plugin}())
+                    .with_client_plugin(#{default_retry_config_plugin}(${codegenContext.serviceShape.sdkId().dq()}))
+                    .with_client_plugin(#{default_sleep_impl_plugin}())
+                    .with_client_plugin(#{default_time_source_plugin}())
+                    .with_client_plugin(#{default_timeout_config_plugin}())
+                    // user config
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
                             .with_runtime_components(config.runtime_components.clone())
                     )
+                    // codegen config
                     .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
                     .with_client_plugin(#{NoAuthRuntimePlugin}::new());
                 for plugin in configured_plugins {
@@ -471,15 +481,17 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             }
             """,
             *preludeScope,
-            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-            "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-            "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::runtime_plugin::StaticRuntimePlugin"),
-            "default_http_client_plugin" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::http::default_http_client_plugin"),
+            "default_http_client_plugin" to rt.resolve("client::defaults::default_http_client_plugin"),
+            "default_retry_config_plugin" to rt.resolve("client::defaults::default_retry_config_plugin"),
+            "default_sleep_impl_plugin" to rt.resolve("client::defaults::default_sleep_impl_plugin"),
+            "default_timeout_config_plugin" to rt.resolve("client::defaults::default_timeout_config_plugin"),
+            "default_time_source_plugin" to rt.resolve("client::defaults::default_time_source_plugin"),
+            "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+            "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
+            "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
         )
     }
+}
 
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
