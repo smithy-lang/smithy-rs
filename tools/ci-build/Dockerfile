@@ -35,6 +35,7 @@ RUN yum -y install --allowerasing \
         automake \
         binutils \
         ca-certificates \
+        cmake \
         curl \
         gcc \
         gcc-c++ \
