@@ -465,7 +465,7 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                     #{default_sleep_impl_plugin}(),
                     #{default_time_source_plugin}(),
                     #{default_timeout_config_plugin}(),
-                ].into_iter().filter_map(|d| d);
+                ].into_iter().flatten();
 
                 let mut plugins = #{RuntimePlugins}::new()
                     // defaults

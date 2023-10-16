@@ -35,7 +35,7 @@ where
 
 fn layer<LayerFn>(name: &'static str, layer_fn: LayerFn) -> FrozenLayer
 where
-    LayerFn: FnOnce(&mut Layer) -> (),
+    LayerFn: FnOnce(&mut Layer),
 {
     let mut layer = Layer::new(name);
     (layer_fn)(&mut layer);

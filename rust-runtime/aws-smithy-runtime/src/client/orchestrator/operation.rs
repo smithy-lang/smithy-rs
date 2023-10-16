@@ -333,7 +333,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             default_timeout_config_plugin(),
         ]
         .into_iter()
-        .flat_map(|d| d);
+        .flatten();
 
         let mut runtime_plugins = RuntimePlugins::new()
             .with_client_plugins(defaults)
