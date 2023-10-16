@@ -137,7 +137,9 @@ impl TokenResolver {
                             .uri(Uri::from_static("/latest/api/token"))
                             .header(X_AWS_EC2_METADATA_TOKEN_TTL_SECONDS, token_ttl.as_secs())
                             .body(SdkBody::empty())
-                            .expect("valid HTTP request"))
+                            .expect("valid HTTP request")
+                            .try_into()
+                            .unwrap())
                     })
                     .deserializer({
                         let time_source = time_source.clone();

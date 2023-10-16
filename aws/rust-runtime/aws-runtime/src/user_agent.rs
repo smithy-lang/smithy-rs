@@ -113,9 +113,9 @@ impl Intercept for UserAgentInterceptor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::interceptors::Intercept;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::error::display::DisplayErrorContext;
@@ -127,14 +127,12 @@ mod tests {
             .headers()
             .get(header_name)
             .unwrap()
-            .to_str()
-            .unwrap()
     }
 
     fn context() -> InterceptorContext {
         let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(HttpRequest::empty());
         let _ = context.take_input();
         context.enter_before_transmit_phase();
         context

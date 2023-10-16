@@ -23,7 +23,9 @@ use aws_smithy_runtime_api::client::endpoint::{
     EndpointFuture, EndpointResolverParams, ResolveEndpoint,
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::{OrchestratorError, SensitiveOutput};
+use aws_smithy_runtime_api::client::orchestrator::{
+    HttpRequest, OrchestratorError, SensitiveOutput,
+};
 use aws_smithy_runtime_api::client::retries::classifiers::{
     ClassifyRetry, RetryAction, SharedRetryClassifier,
 };
@@ -436,10 +438,13 @@ impl Builder {
             ))
             .with_connection_poisoning()
             .serializer(|path| {
-                Ok(http::Request::builder()
-                    .uri(path)
-                    .body(SdkBody::empty())
-                    .expect("valid request"))
+                Ok(HttpRequest::try_from(
+                    http::Request::builder()
+                        .uri(path)
+                        .body(SdkBody::empty())
+                        .expect("valid request"),
+                )
+                .unwrap())
             })
             .deserializer(|response| {
                 if response.status().is_success() {
@@ -627,6 +632,8 @@ pub(crate) mod test {
             .method("PUT")
             .body(SdkBody::empty())
             .unwrap()
+            .try_into()
+            .unwrap()
     }
 
     pub(crate) fn token_response(ttl: u32, token: &'static str) -> HttpResponse {
@@ -643,6 +650,8 @@ pub(crate) mod test {
             .method("GET")
             .header("x-aws-ec2-metadata-token", token)
             .body(SdkBody::empty())
+            .unwrap()
+            .try_into()
             .unwrap()
     }
 

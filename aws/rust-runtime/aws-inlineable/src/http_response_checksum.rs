@@ -155,7 +155,7 @@ pub(crate) fn check_headers_for_precalculated_checksum(
             "CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER only contains valid checksum algorithm names",
         );
         if let Some(precalculated_checksum) =
-            headers.get(http::HeaderName::from(checksum_algorithm))
+            headers.get(checksum_algorithm.into_impl().header_name())
         {
             let base64_encoded_precalculated_checksum = precalculated_checksum
                 .to_str()
