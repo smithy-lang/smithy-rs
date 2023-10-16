@@ -11,8 +11,7 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-hyper014 = ["dep:hyper"]
-event-stream = ["aws-smithy-eventstream", 'hyper014']
+event-stream = ["aws-smithy-eventstream"]
 rt-tokio = ["aws-smithy-types/rt-tokio"]
 
 [dependencies]
@@ -30,9 +29,6 @@ tracing = "0.1"
 
 # For an adapter to enable the `Stream` trait for `aws_smithy_types::byte_stream::ByteStream`
 futures-core = "0.3.14"
-
-# For our event stream implementation
-hyper = { version = "0.14.26", optional = true }
 
 [dev-dependencies]
 async-stream = "0.3"
