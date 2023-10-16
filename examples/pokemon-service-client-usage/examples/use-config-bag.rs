@@ -5,20 +5,18 @@
 /// This example demonstrates how different interceptor can use a property bag to pass
 /// state from one interceptor to the next.
 ///
-/// The example assumes that the Pokemon service is running on the localhost on TCP port 13734.
+/// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example use-config-bag`.
 ///
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
-use pokemon_service_client_usage::setup_tracing_subscriber;
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::time::Instant;
-use tracing::info;
 
-use pokemon_service_client::{config::Interceptor, Client as PokemonClient};
-
-static BASE_URL: &str = "http://localhost:13734";
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use pokemon_service_client::Client as PokemonClient;
 
 #[derive(Debug)]
 struct RequestTimestamp(Instant);
@@ -29,13 +27,6 @@ impl Storable for RequestTimestamp {
 
 #[derive(Debug, Default)]
 pub struct SetTimeInterceptor;
-
-impl SetTimeInterceptor {
-    /// Creates a new `SetTimeInterceptor`
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
 
 /// Note: This is merely an example demonstrating how state can
 /// be shared between two different interceptors. In a practical
@@ -63,13 +54,6 @@ impl Interceptor for SetTimeInterceptor {
 #[derive(Debug, Default)]
 pub struct GetTimeInterceptor;
 
-impl GetTimeInterceptor {
-    /// Creates a new `SetTimeInterceptor`
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 impl Interceptor for GetTimeInterceptor {
     fn name(&self) -> &'static str {
         "GetTimeInterceptor"
@@ -86,7 +70,7 @@ impl Interceptor for GetTimeInterceptor {
             .expect("StopWatch not found in the ConfigBag");
 
         let time_taken = stop_watch.0.elapsed();
-        info!(time_taken = %time_taken.as_micros(), "Microseconds:");
+        tracing::info!(time_taken = %time_taken.as_micros(), "Microseconds:");
 
         Ok(())
     }
@@ -102,13 +86,13 @@ impl Interceptor for GetTimeInterceptor {
             .expect("RequestTimeStamp not found in the ConfigBag");
 
         let time_taken = timestamp.0.elapsed();
-        info!(time_taken = %time_taken.as_micros(), "Microseconds:");
+        tracing::info!(time_taken = %time_taken.as_micros(), "Microseconds:");
 
         Ok(())
     }
 }
 
-/// Creates a new Smithy client that is configured to communicate with a locally running Pokemon service on TCP port 13734.
+/// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon service on TCP port 13734.
 ///
 /// # Examples
 ///
@@ -118,15 +102,15 @@ impl Interceptor for GetTimeInterceptor {
 /// let client = create_client();
 /// ```
 fn create_client() -> PokemonClient {
-    // The generated client has a type config::Builder that can be used to build a Config, which
+    // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(BASE_URL)
+        .endpoint_resolver(POKEMON_SERVICE_URL)
         .interceptor(SetTimeInterceptor)
         .interceptor(GetTimeInterceptor)
         .build();
 
-    // Apply the configuration on the Client, and return that.
+    // Apply the configuration on the client, and return that.
     PokemonClient::from_conf(config)
 }
 
@@ -134,15 +118,15 @@ fn create_client() -> PokemonClient {
 async fn main() {
     setup_tracing_subscriber();
 
-    // Create a configured Smithy client.
+    // Create a configured `smithy-rs` client.
     let client = create_client();
 
-    // Call an operation `get_server_statistics` on Pokemon service.
+    // Call an operation `get_server_statistics` on the Pokémon service.
     let response = client
         .get_server_statistics()
         .send()
         .await
         .expect("Pokemon service does not seem to be running on localhost:13734");
 
-    info!(%BASE_URL, ?response, "Response received");
+    tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

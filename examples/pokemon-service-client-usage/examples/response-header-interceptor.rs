@@ -5,15 +5,14 @@
 /// This example demonstrates how response headers can be examined before they are deserialized
 /// into the output type.
 ///
-/// The example assumes that the Pokemon service is running on the localhost on TCP port 13734.
+/// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
-/// The example can be run using `cargo run --example custom-middleware-mapresponse`.
+/// The example can be run using `cargo run --example response-header-interceptor`.
 ///
-use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::{box_error::BoxError, client::interceptors::Interceptor};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
-use tracing::info;
 
 // Define a type alias that makes it easy to pass around the Client type.
 use pokemon_service_client::{
@@ -21,17 +20,12 @@ use pokemon_service_client::{
         interceptors::{
             BeforeDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
         },
-        Interceptor, RuntimeComponents,
+        RuntimeComponents,
     },
     Client as PokemonClient,
 };
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
 use uuid::Uuid;
-
-static BASE_URL: &str = "http://localhost:13734";
-// Header to send for client side request ID. Refer to example 'requestid-interceptor'
-// to see how an interceptor can add headers to outgoing requests.
-const REQUEST_ID_HEADER: hyper::header::HeaderName =
-    hyper::header::HeaderName::from_static("x-amzn-requestid");
 
 #[derive(Debug, Clone)]
 struct RequestId {
@@ -41,6 +35,16 @@ struct RequestId {
 
 impl Storable for RequestId {
     type Storer = StoreReplace<Self>;
+}
+
+#[derive(Debug, thiserror::Error)]
+enum RequestIdError {
+    /// The server-sent request ID cannot be converted into a string during parsing.
+    #[error("RequestID sent by the server cannot be parsed into a string. Error: {0}")]
+    NonParsableServerRequestId(String),
+    /// Client side
+    #[error("Client side request ID has not been set")]
+    ClientRequestIdMissing(),
 }
 
 #[derive(Debug, Default)]
@@ -72,7 +76,7 @@ impl Interceptor for ResponseHeaderLoggingInterceptor {
         context
             .request_mut()
             .headers_mut()
-            .insert(&REQUEST_ID_HEADER, request_id);
+            .insert("x-amzn-requestid", request_id);
 
         cfg.interceptor_state().store_put(RequestId {
             client_id,
@@ -88,7 +92,7 @@ impl Interceptor for ResponseHeaderLoggingInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        // Metadata in the ConfigBag has the operation name in it.
+        // `Metadata` in the `ConfigBag` has the operation name in it.
         let metadata = cfg
             .load::<aws_smithy_http::operation::Metadata>()
             .expect("metadata should exist");
@@ -101,33 +105,32 @@ impl Interceptor for ResponseHeaderLoggingInterceptor {
         let header_received = response
             .headers()
             .iter()
-            .find(|(header_name, _)| *header_name == "REQUEST_ID");
+            .find(|(header_name, _)| *header_name == "x-request-id");
 
         if let Some((_, server_id)) = header_received {
             let server_id = server_id
                 .to_str()
-                .expect("HeaderValue for server side request ID could not be converted to string")
-                .to_string();
+                .map_err(|e| Box::new(RequestIdError::NonParsableServerRequestId(e.to_string())))?;
 
             let request_details = cfg
                 .get_mut::<RequestId>()
-                .expect("RequestId data type not found in the ConfigBag");
+                .ok_or_else(|| Box::new(RequestIdError::ClientRequestIdMissing()))?;
 
-            info!(operation = %operation_name,
+            tracing::info!(operation = %operation_name,
                 "RequestID Mapping: {} = {server_id}",
                 request_details.client_id,
             );
 
-            request_details.server_id = Some(server_id);
+            request_details.server_id = Some(server_id.into());
         } else {
-            info!(operation = %operation_name, "Server RequestID missing in response");
+            tracing::info!(operation = %operation_name, "Server RequestID missing in response");
         }
 
         Ok(())
     }
 }
 
-/// Creates a new Smithy client that is configured to communicate with a locally running Pokemon
+/// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon
 /// service on TCP port 13734.
 ///
 /// # Examples
@@ -139,41 +142,31 @@ impl Interceptor for ResponseHeaderLoggingInterceptor {
 /// ```
 fn create_client() -> PokemonClient {
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(BASE_URL)
+        .endpoint_resolver(POKEMON_SERVICE_URL)
         .interceptor(ResponseHeaderLoggingInterceptor)
         .build();
 
-    // Apply the configuration on the Client, and return that.
+    // Apply the configuration on the client, and return that.
     PokemonClient::from_conf(config)
 }
 
 #[tokio::main]
 async fn main() {
-    tracing_setup();
+    setup_tracing_subscriber();
 
-    // Create a configured Smithy client.
+    // Create a configured `smithy-rs` client.
     let client = create_client();
 
-    // Call an operation `get_server_statistics` on Pokemon service.
+    // Call an operation `get_server_statistics` on the Pokémon service.
     let response = client
         .get_server_statistics()
         .send()
         .await
-        .expect("Pokemon service does not seem to be running on localhost:13734");
+        .custom_expect_and_log("get_server_statistics failed");
 
-    info!(%BASE_URL, ?response, "Response received");
-}
+    // If you need to access the `RequestIdError` raised by the interceptor,
+    // you can convert `SdkError::DispatchFailure` to a `ConnectorError`
+    // and then use `downcast_ref` on its source to get a `RequestIdError`.
 
-fn tracing_setup() {
-    if std::env::var("RUST_LIB_BACKTRACE").is_err() {
-        std::env::set_var("RUST_LIB_BACKTRACE", "1");
-    }
-    let _ = color_eyre::install();
-
-    if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "info");
-    }
-    tracing_subscriber::fmt::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

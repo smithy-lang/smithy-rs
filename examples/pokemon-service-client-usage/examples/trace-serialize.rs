@@ -5,30 +5,25 @@
 /// This example demonstrates how an interceptor can be written to trace what is being
 /// serialized / deserialized on the wire.
 ///
-/// The example assumes that the Pokemon service is running on the localhost on TCP port 13734.
+/// Please beware that this may log sensitive information! This example is meant for pedagogical
+/// purposes and may be useful in debugging scenarios. Please don't use this as-is in production.
+///
+/// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
-/// The example can be run using `cargo run --example use-config-bag`.
+/// The example can be run using `cargo run --example trace-serialize`.
 ///
 use http::StatusCode;
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
 use std::str;
-use tracing::{debug, error, info};
 
-use pokemon_service_client::{config::Interceptor, Client as PokemonClient};
-
-static BASE_URL: &str = "http://localhost:13734";
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use pokemon_service_client::Client as PokemonClient;
 
 /// An example interceptor that logs the request and response as they're sent and received.
 #[derive(Debug, Default)]
 pub struct WireFormatInterceptor;
-
-impl WireFormatInterceptor {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
 
 impl Interceptor for WireFormatInterceptor {
     fn name(&self) -> &'static str {
@@ -47,7 +42,7 @@ impl Interceptor for WireFormatInterceptor {
         // Get the request type from the context.
         let request = context.request();
         // Print the request to the debug tracing log.
-        debug!(?request);
+        tracing::debug!(?request);
 
         Ok(())
     }
@@ -62,18 +57,18 @@ impl Interceptor for WireFormatInterceptor {
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
         // Get the response type from the context.
         let response = context.response();
-        // Print the response to the debug tracing log.
+        // Print the response.
         if response.status() == StatusCode::OK {
-            info!(?response, "Response received:");
+            tracing::info!(?response, "Response received:");
         } else {
-            error!(?response);
+            tracing::error!(?response);
         }
 
         Ok(())
     }
 }
 
-/// Creates a new Smithy client that is configured to communicate with a locally running Pokemon service on TCP port 13734.
+/// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon service on TCP port 13734.
 ///
 /// # Examples
 ///
@@ -83,14 +78,14 @@ impl Interceptor for WireFormatInterceptor {
 /// let client = create_client();
 /// ```
 fn create_client() -> PokemonClient {
-    // The generated client has a type config::Builder that can be used to build a Config, which
+    // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(BASE_URL)
+        .endpoint_resolver(POKEMON_SERVICE_URL)
         .interceptor(WireFormatInterceptor {})
         .build();
 
-    // Apply the configuration on the Client, and return that.
+    // Apply the configuration on the client, and return that.
     PokemonClient::from_conf(config)
 }
 
@@ -98,17 +93,15 @@ fn create_client() -> PokemonClient {
 async fn main() {
     setup_tracing_subscriber();
 
-    // Create a configured Smithy client.
+    // Create a configured `smithy-rs` client.
     let client = create_client();
 
-    // Call an operation `get_server_statistics` on Pokemon service.
+    // Call an operation `get_server_statistics` on the Pokémon service.
     let response = client
-        .get_storage()
-        .user("ash")
-        .passcode("pikachu123")
+        .get_server_statistics()
         .send()
         .await
         .custom_expect_and_log("get_storage failed");
 
-    info!(%BASE_URL, ?response, "Response received");
+    tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

@@ -2,13 +2,12 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-/// This example demonstrates how to create a Smithy Client using a connector
+/// This example demonstrates how to create a `smithy-rs` Client using a connector
 /// that can be used to return mock responses. This can be useful for testing
 /// purposes.
 ///
 /// The example can be run using `cargo run --example mock-request`.
 ///
-//use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime_api::{
     client::{
@@ -21,27 +20,24 @@ use aws_smithy_runtime_api::{
     shared::FromUnshared,
 };
 use pokemon_service_client::{config::RuntimeComponents, Client as PokemonClient};
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
-use tracing::info;
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
 
-static BASE_URL: &str = "http://localhost:13734";
-
-/// The MockConnector won't send the request on the wire and will send a static Response
+/// The `MockConnector` won't send the request on the wire and will send a static Response
 /// when a request comes in. It can be extended to return different responses for different
 /// requests.
 #[derive(Debug, Clone)]
-struct MockConnector {}
+struct MockConnector;
 
 impl HttpConnector for MockConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        info!(?request, "Got request in MockConnector");
+        tracing::info!(?request, "Got request in MockConnector");
 
         let res = http::Response::builder()
             .status(200)
             .body(SdkBody::from(
                 r#" {
-                   "calls_count" : 100
-                 }"#,
+    "calls_count" : 100
+}"#,
             ))
             .expect("Cannot construct a response");
 
@@ -49,21 +45,21 @@ impl HttpConnector for MockConnector {
     }
 }
 
-/// HttpClient must be implemented for a type to be acceptable as a Connector
-/// by the Config::builder.
+/// `HttpClient` must be implemented for a type to be acceptable as a `Connector`
+/// by the `Config::builder`.
 impl HttpClient for MockConnector {
     fn http_connector(
         &self,
         _: &HttpConnectorSettings,
         _: &RuntimeComponents,
     ) -> SharedHttpConnector {
-        // Any type that implements HttpConnector trait can be converted
-        // into a SharedHttpConnector by using `FromUnshared::from_unshared`
+        // Any type that implements `HttpConnector` trait can be converted
+        // into a `SharedHttpConnector` by using `FromUnshared::from_unshared`
         FromUnshared::from_unshared(self.clone())
     }
 }
 
-/// Creates a new Smithy client that is configured to communicate with a locally running Pokemon
+/// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokemon
 /// service on TCP port 13734.
 ///
 /// # Examples
@@ -74,10 +70,10 @@ impl HttpClient for MockConnector {
 /// let client = create_client();
 /// ```
 fn create_client() -> PokemonClient {
-    // The generated client has a type config::Builder that can be used to build a Config, which
+    // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(BASE_URL)
+        .endpoint_resolver(POKEMON_SERVICE_URL)
         .http_client(MockConnector {})
         .build();
 
@@ -88,9 +84,9 @@ fn create_client() -> PokemonClient {
 async fn main() {
     setup_tracing_subscriber();
 
-    // Create a configured Smithy client.
+    // Create a configured `smithy-rs` client.
     let client = create_client();
-    // Call an operation `get_server_statistics` on Pokemon service.
+    // Call an operation `get_server_statistics` on the Pokémon service.
     let response = client
         .get_server_statistics()
         .send()
@@ -98,5 +94,5 @@ async fn main() {
         .custom_expect_and_log("get_server_statistics failed");
 
     // Print the response received from the service.
-    info!(%BASE_URL, ?response, "Response received");
+    tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

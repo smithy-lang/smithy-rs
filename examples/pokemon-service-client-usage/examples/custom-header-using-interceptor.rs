@@ -2,11 +2,11 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-/// In this example, a custom header x-amzn-client-ttl-seconds is set for all outgoing requests.
+/// In this example, a custom header `x-amzn-client-ttl-seconds` is set for all outgoing requests.
 /// It serves as a demonstration of how an operation name can be retrieved and utilized within
 /// the interceptor.
 ///
-/// The example assumes that the Pokemon service is running on the localhost on TCP port 13734.
+/// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
@@ -14,24 +14,18 @@
 ///
 use std::{collections::HashMap, time::Duration};
 
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_types::config_bag::ConfigBag;
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client::{
-    config::{interceptors::BeforeTransmitInterceptorContextMut, Interceptor, RuntimeComponents},
+    config::{interceptors::BeforeTransmitInterceptorContextMut, RuntimeComponents},
     error::BoxError,
 };
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
-use tracing::info;
+use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
 
-// URL where example Pokemon service is running.
-static BASE_URL: &str = "http://localhost:13734";
-// Header to send with each operation.
-const HEADER_TO_SEND: hyper::header::HeaderName =
-    hyper::header::HeaderName::from_static("x-amzn-client-ttl-seconds");
-
-// The TtlHeaderInterceptor keeps a map of operation specific value to send
+// The `TtlHeaderInterceptor` keeps a map of operation specific value to send
 // in the header for each Request.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TtlHeaderInterceptor {
     /// Default time-to-live for an operation.
     default_ttl: hyper::http::HeaderValue,
@@ -68,7 +62,7 @@ impl TtlHeaderInterceptor {
     }
 }
 
-/// Appends the header `x-amzn-ttl-secs` using either the default time-to-live value
+/// Appends the header `x-amzn-client-ttl-seconds` using either the default time-to-live value
 /// or an operation-specific value if it was set earlier using `add_operation_ttl`.
 impl Interceptor for TtlHeaderInterceptor {
     fn name(&self) -> &'static str {
@@ -86,26 +80,26 @@ impl Interceptor for TtlHeaderInterceptor {
         let metadata = cfg
             .load::<aws_smithy_http::operation::Metadata>()
             .expect("metadata should exist");
-        let operation_name = metadata.name().to_string();
+        let operation_name = metadata.name();
 
         // Get operation specific or default HeaderValue to set for the header key.
-        let ttl = match self.operation_ttl.get(operation_name.as_str()) {
-            Some(ttl) => ttl,
-            None => &self.default_ttl,
-        };
+        let ttl = self
+            .operation_ttl
+            .get(operation_name)
+            .unwrap_or(&self.default_ttl);
 
         context
             .request_mut()
             .headers_mut()
-            .insert(&HEADER_TO_SEND, ttl.clone());
+            .insert("x-amzn-client-ttl-seconds", ttl.clone());
 
-        info!("{operation_name} header set to {ttl:?}");
+        tracing::info!("{operation_name} header set to {ttl:?}");
 
         Ok(())
     }
 }
 
-/// Creates a new Smithy client that is configured to communicate with a locally running Pokemon service on TCP port 13734.
+/// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon service on TCP port 13734.
 ///
 /// # Examples
 ///
@@ -115,18 +109,18 @@ impl Interceptor for TtlHeaderInterceptor {
 /// let client = create_client();
 /// ```
 fn create_client() -> PokemonClient {
-    // By default set the value of all operations to 6.0
-    static DEFAULT_TTL: Duration = Duration::from_secs(6);
+    // By default set the value of all operations to 6 seconds.
+    const DEFAULT_TTL: Duration = Duration::from_secs(6);
 
-    // Setup the interceptor to add an operation specific value of 3.5 secs to be added
+    // Set up the interceptor to add an operation specific value of 3.5 seconds to be added
     // for GetStorage operation.
     let mut ttl_headers_interceptor = TtlHeaderInterceptor::new(DEFAULT_TTL);
     ttl_headers_interceptor.add_operation_ttl("GetStorage", Duration::from_millis(3500));
 
-    // The generated client has a type config::Builder that can be used to build a Config, which
+    // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(BASE_URL)
+        .endpoint_resolver(POKEMON_SERVICE_URL)
         .interceptor(ttl_headers_interceptor)
         .build();
 
@@ -137,20 +131,20 @@ fn create_client() -> PokemonClient {
 async fn main() {
     setup_tracing_subscriber();
 
-    // Create a configured Smithy client.
+    // Create a configured `smithy-rs` client.
     let client = create_client();
 
-    // Call an operation `get_server_statistics` on Pokemon service.
+    // Call an operation `get_server_statistics` on the Pokémon service.
     let response = client
         .get_server_statistics()
         .send()
         .await
         .custom_expect_and_log("get_server_statistics failed");
 
-    info!(%BASE_URL, ?response, "Response for get_server_statistics()");
+    tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response for get_server_statistics()");
 
-    // Call the operation `get_storage` on Pokemon service. The AddHeader middleware
-    // will add a specific header name / value pair for this operation.
+    // Call the operation `get_storage` on the Pokémon service. The `TtlHeaderInterceptor`
+    // interceptor will add a specific header name / value pair for this operation.
     let response = client
         .get_storage()
         .user("ash")
@@ -160,5 +154,5 @@ async fn main() {
         .custom_expect_and_log("get_storage failed");
 
     // Print the response received from the service.
-    info!(%BASE_URL, ?response, "Response received");
+    tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }
