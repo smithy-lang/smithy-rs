@@ -19,8 +19,7 @@ use aws_sdk_ssooidc::operation::create_token::CreateTokenOutput;
 use aws_sdk_ssooidc::Client as SsoOidcClient;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime_api::client::identity::http::Token;
-use aws_smithy_runtime_api::client::identity::{Identity, IdentityResolver};
-use aws_smithy_runtime_api::client::orchestrator::Future;
+use aws_smithy_runtime_api::client::identity::{Identity, IdentityFuture, ResolveIdentity};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::os_shim_internal::{Env, Fs};
@@ -223,17 +222,17 @@ impl SsoTokenProvider {
     }
 }
 
-impl IdentityResolver for SsoTokenProvider {
-    fn resolve_identity(
-        &self,
-        runtime_components: &RuntimeComponents,
-        _config_bag: &ConfigBag,
-    ) -> Future<Identity> {
+impl ResolveIdentity for SsoTokenProvider {
+    fn resolve_identity<'a>(
+        &'a self,
+        runtime_components: &'a RuntimeComponents,
+        _config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a> {
         let time_source = runtime_components
             .time_source()
             .expect("a time source required by SsoTokenProvider");
         let token_future = self.resolve_token(time_source);
-        Future::new(Box::pin(async move {
+        IdentityFuture::new(Box::pin(async move {
             let token = token_future.await?;
             Ok(Identity::new(
                 Token::new(token.access_token.as_str(), Some(token.expires_at)),

@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -59,10 +60,17 @@ internal class CredentialCacheConfigTest {
                 "CredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::CredentialsCache"),
                 "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
+                "ReplayEvent" to CargoDependency.smithyRuntime(runtimeConfig)
+                    .toDevDependency().withFeature("test-util").toType()
+                    .resolve("client::http::test_util::ReplayEvent"),
                 "RuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::runtime_plugin::RuntimePlugin"),
+                "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
                 "SharedCredentialsCache" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                     .resolve("cache::SharedCredentialsCache"),
+                "StaticReplayClient" to CargoDependency.smithyRuntime(runtimeConfig)
+                    .toDevDependency().withFeature("test-util").toType()
+                    .resolve("client::http::test_util::StaticReplayClient"),
             )
             rustCrate.testModule {
                 unitTest(
@@ -138,7 +146,20 @@ internal class CredentialCacheConfigTest {
                     // per https://github.com/awslabs/aws-sdk-rust/issues/901
                     rustTemplate(
                         """
-                        let client_config = crate::config::Config::builder().build();
+                        let http_client = #{StaticReplayClient}::new(
+                            vec![#{ReplayEvent}::new(
+                                http::Request::builder()
+                                    .body(#{SdkBody}::from("request body"))
+                                    .unwrap(),
+                                http::Response::builder()
+                                    .status(200)
+                                    .body(#{SdkBody}::from("response"))
+                                    .unwrap(),
+                            )],
+                        );
+                        let client_config = crate::config::Config::builder()
+                            .http_client(http_client)
+                            .build();
                         let client = crate::client::Client::from_conf(client_config);
 
                         let credentials = #{Credentials}::new(

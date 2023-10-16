@@ -245,7 +245,7 @@ data class CargoDependency(
         val Approx: CargoDependency = CargoDependency("approx", CratesIo("0.5.1"), DependencyScope.Dev)
         val AsyncStd: CargoDependency = CargoDependency("async-std", CratesIo("1.12.0"), DependencyScope.Dev)
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
-        val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
+        val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.5.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
         val FuturesUtil: CargoDependency =
             CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false)

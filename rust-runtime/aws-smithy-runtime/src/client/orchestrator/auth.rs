@@ -6,10 +6,10 @@
 use crate::client::auth::no_auth::NO_AUTH_SCHEME_ID;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolver,
-    AuthSchemeOptionResolverParams,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
+    ResolveAuthSchemeOptions,
 };
-use aws_smithy_runtime_api::client::identity::IdentityResolver;
+use aws_smithy_runtime_api::client::identity::ResolveIdentity;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
@@ -140,17 +140,16 @@ fn extract_endpoint_auth_scheme_config(
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
-    use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeId, AuthSchemeOptionResolverParams, SharedAuthScheme,
-        SharedAuthSchemeOptionResolver, Signer,
+        SharedAuthSchemeOptionResolver, Sign,
     };
     use aws_smithy_runtime_api::client::identity::{
-        Identity, IdentityResolver, SharedIdentityResolver,
+        Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
     };
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
-    use aws_smithy_runtime_api::client::orchestrator::{Future, HttpRequest};
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::{
         GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
     };
@@ -161,20 +160,20 @@ mod tests {
     async fn basic_case() {
         #[derive(Debug)]
         struct TestIdentityResolver;
-        impl IdentityResolver for TestIdentityResolver {
-            fn resolve_identity(
-                &self,
-                _runtime_components: &RuntimeComponents,
-                _config_bag: &ConfigBag,
-            ) -> Future<Identity> {
-                Future::ready(Ok(Identity::new("doesntmatter", None)))
+        impl ResolveIdentity for TestIdentityResolver {
+            fn resolve_identity<'a>(
+                &'a self,
+                _runtime_components: &'a RuntimeComponents,
+                _config_bag: &'a ConfigBag,
+            ) -> IdentityFuture<'a> {
+                IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))
             }
         }
 
         #[derive(Debug)]
         struct TestSigner;
 
-        impl Signer for TestSigner {
+        impl Sign for TestSigner {
             fn sign_http_request(
                 &self,
                 request: &mut HttpRequest,
@@ -185,7 +184,7 @@ mod tests {
             ) -> Result<(), BoxError> {
                 request
                     .headers_mut()
-                    .insert(http::header::AUTHORIZATION, "success!".parse().unwrap());
+                    .insert(http::header::AUTHORIZATION, "success!");
                 Ok(())
             }
         }
@@ -208,14 +207,14 @@ mod tests {
                 identity_resolvers.identity_resolver(self.scheme_id())
             }
 
-            fn signer(&self) -> &dyn Signer {
+            fn signer(&self) -> &dyn Sign {
                 &self.signer
             }
         }
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::empty());
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
@@ -261,13 +260,13 @@ mod tests {
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::empty());
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
 
         fn config_with_identity(
             scheme_id: AuthSchemeId,
-            identity: impl IdentityResolver + 'static,
+            identity: impl ResolveIdentity + 'static,
         ) -> (RuntimeComponents, ConfigBag) {
             let runtime_components = RuntimeComponentsBuilder::for_tests()
                 .with_auth_scheme(SharedAuthScheme::new(BasicAuthScheme::new()))
@@ -310,7 +309,7 @@ mod tests {
             config_with_identity(HTTP_BEARER_AUTH_SCHEME_ID, Token::new("t", None));
         let mut ctx = InterceptorContext::new(Input::erase("doesnt-matter"));
         ctx.enter_serialization_phase();
-        ctx.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        ctx.set_request(HttpRequest::empty());
         let _ = ctx.take_input();
         ctx.enter_before_transmit_phase();
         orchestrate_auth(&mut ctx, &runtime_components, &cfg)

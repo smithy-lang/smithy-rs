@@ -43,7 +43,7 @@ async fn plugin_layers_are_executed_in_registration_order() {
         rcvr.expect_request()
     };
 
-    app.call(request).await.unwrap();
+    app.call(request.into_http02x().unwrap()).await.unwrap();
 
     let output_guard = output.lock().unwrap();
     assert_eq!(output_guard.deref(), &vec!["first", "second"]);

@@ -40,9 +40,9 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 // internals contains the actual resolver function
-fun endpointImplModule(codegenContext: ClientCodegenContext) = RustModule.private("internals", parent = ClientRustModule.Config.endpoint)
+fun endpointImplModule() = RustModule.private("internals", parent = ClientRustModule.Config.endpoint)
 
-fun endpointTestsModule(codegenContext: ClientCodegenContext) = RustModule.new(
+fun endpointTestsModule() = RustModule.new(
     "test",
     visibility = Visibility.PRIVATE,
     parent = ClientRustModule.Config.endpoint,
