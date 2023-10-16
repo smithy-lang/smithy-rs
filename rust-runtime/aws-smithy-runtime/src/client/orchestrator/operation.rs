@@ -324,12 +324,19 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
+
+        let defaults = [
+            default_http_client_plugin(),
+            default_retry_config_plugin(service_name.clone()),
+            default_sleep_impl_plugin(),
+            default_time_source_plugin(),
+            default_timeout_config_plugin(),
+        ]
+        .into_iter()
+        .flat_map(|d| d);
+
         let mut runtime_plugins = RuntimePlugins::new()
-            .with_client_plugin(default_http_client_plugin())
-            .with_client_plugin(default_retry_config_plugin(service_name.clone()))
-            .with_client_plugin(default_sleep_impl_plugin())
-            .with_client_plugin(default_time_source_plugin())
-            .with_client_plugin(default_timeout_config_plugin())
+            .with_client_plugins(defaults)
             .with_client_plugin(
                 StaticRuntimePlugin::new()
                     .with_config(self.config.freeze())

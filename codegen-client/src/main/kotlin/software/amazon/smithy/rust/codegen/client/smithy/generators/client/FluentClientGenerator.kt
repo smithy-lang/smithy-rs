@@ -458,13 +458,18 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
             ) -> #{RuntimePlugins} {
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+
+                let defaults = [
+                    #{default_http_client_plugin}(),
+                    #{default_retry_config_plugin}(${codegenContext.serviceShape.sdkId().dq()}),
+                    #{default_sleep_impl_plugin}(),
+                    #{default_time_source_plugin}(),
+                    #{default_timeout_config_plugin}(),
+                ].into_iter().filter_map(|d| d);
+
                 let mut plugins = #{RuntimePlugins}::new()
                     // defaults
-                    .with_client_plugin(#{default_http_client_plugin}())
-                    .with_client_plugin(#{default_retry_config_plugin}(${codegenContext.serviceShape.sdkId().dq()}))
-                    .with_client_plugin(#{default_sleep_impl_plugin}())
-                    .with_client_plugin(#{default_time_source_plugin}())
-                    .with_client_plugin(#{default_timeout_config_plugin}())
+                    .with_client_plugins(defaults)
                     // user config
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()

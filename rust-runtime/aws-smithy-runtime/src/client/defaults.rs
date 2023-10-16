@@ -19,74 +19,86 @@ use aws_smithy_runtime_api::client::runtime_plugin::{
     Order, SharedRuntimePlugin, StaticRuntimePlugin,
 };
 use aws_smithy_runtime_api::shared::IntoShared;
-use aws_smithy_types::config_bag::Layer;
+use aws_smithy_types::config_bag::{FrozenLayer, Layer};
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 
+fn default_plugin<CompFn>(name: &'static str, components_fn: CompFn) -> StaticRuntimePlugin
+where
+    CompFn: FnOnce(RuntimeComponentsBuilder) -> RuntimeComponentsBuilder,
+{
+    StaticRuntimePlugin::new()
+        .with_order(Order::Defaults)
+        .with_runtime_components((components_fn)(RuntimeComponentsBuilder::new(name)))
+}
+
+fn layer<LayerFn>(name: &'static str, layer_fn: LayerFn) -> FrozenLayer
+where
+    LayerFn: FnOnce(&mut Layer) -> (),
+{
+    let mut layer = Layer::new(name);
+    (layer_fn)(&mut layer);
+    layer.freeze()
+}
+
 /// Runtime plugin that provides a default connector.
-pub fn default_http_client_plugin() -> SharedRuntimePlugin {
+pub fn default_http_client_plugin() -> Option<SharedRuntimePlugin> {
     let _default: Option<SharedHttpClient> = None;
     #[cfg(feature = "connector-hyper-0-14-x")]
     let _default = crate::client::http::hyper_014::default_client();
 
-    StaticRuntimePlugin::new()
-        .with_order(Order::Defaults)
-        .with_runtime_components(
-            RuntimeComponentsBuilder::new("default_http_client_plugin").with_http_client(_default),
-        )
+    _default.map(|default| {
+        default_plugin("default_http_client_plugin", |components| {
+            components.with_http_client(Some(default))
+        })
         .into_shared()
+    })
 }
 
 /// Runtime plugin that provides a default async sleep implementation.
-pub fn default_sleep_impl_plugin() -> SharedRuntimePlugin {
-    StaticRuntimePlugin::new()
-        .with_order(Order::Defaults)
-        .with_runtime_components(
-            RuntimeComponentsBuilder::new("default_sleep_impl_plugin")
-                .with_sleep_impl(default_async_sleep()),
-        )
+pub fn default_sleep_impl_plugin() -> Option<SharedRuntimePlugin> {
+    default_async_sleep().map(|default| {
+        default_plugin("default_sleep_impl_plugin", |components| {
+            components.with_sleep_impl(Some(default))
+        })
         .into_shared()
+    })
 }
 
 /// Runtime plugin that provides a default time source.
-pub fn default_time_source_plugin() -> SharedRuntimePlugin {
-    StaticRuntimePlugin::new()
-        .with_order(Order::Defaults)
-        .with_runtime_components(
-            RuntimeComponentsBuilder::new("default_time_source_plugin")
-                .with_time_source(Some(SystemTimeSource::new())),
-        )
-        .into_shared()
+pub fn default_time_source_plugin() -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin("default_time_source_plugin", |components| {
+            components.with_time_source(Some(SystemTimeSource::new()))
+        })
+        .into_shared(),
+    )
 }
 
 /// Runtime plugin that sets the default retry strategy, config (disabled), and partition.
 pub fn default_retry_config_plugin(
     default_partition_name: impl Into<Cow<'static, str>>,
-) -> SharedRuntimePlugin {
-    StaticRuntimePlugin::new()
-        .with_order(Order::Defaults)
-        .with_runtime_components(
-            RuntimeComponentsBuilder::new("default_retry_config_plugin")
-                .with_retry_strategy(Some(StandardRetryStrategy::new())),
-        )
-        .with_config({
-            let mut layer = Layer::new("default_retry_config");
+) -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin("default_retry_config_plugin", |components| {
+            components.with_retry_strategy(Some(StandardRetryStrategy::new()))
+        })
+        .with_config(layer("default_retry_config", |layer| {
             layer.store_put(RetryConfig::disabled());
             layer.store_put(RetryPartition::new(default_partition_name));
-            layer.freeze()
-        })
-        .into_shared()
+        }))
+        .into_shared(),
+    )
 }
 
 /// Runtime plugin that sets the default timeout config (no timeouts).
-pub fn default_timeout_config_plugin() -> SharedRuntimePlugin {
-    StaticRuntimePlugin::new()
-        .with_order(Order::Defaults)
-        .with_config({
-            let mut layer = Layer::new("default_timeout_config");
-            layer.store_put(TimeoutConfig::disabled());
-            layer.freeze()
-        })
-        .into_shared()
+pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin("default_timeout_config_plugin", |c| c)
+            .with_config(layer("default_timeout_config", |layer| {
+                layer.store_put(TimeoutConfig::disabled());
+            }))
+            .into_shared(),
+    )
 }
