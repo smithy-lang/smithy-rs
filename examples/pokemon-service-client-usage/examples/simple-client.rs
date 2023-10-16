@@ -9,7 +9,7 @@
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
-/// The example can be run using `cargo run --example dyn-client`.
+/// The example can be run using `cargo run --example simple-client`.
 ///
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};

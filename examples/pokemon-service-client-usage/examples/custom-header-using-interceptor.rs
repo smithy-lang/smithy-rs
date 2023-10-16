@@ -14,17 +14,14 @@
 ///
 use std::{collections::HashMap, time::Duration};
 
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
 use aws_smithy_types::config_bag::ConfigBag;
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client::{
-    config::{interceptors::BeforeTransmitInterceptorContextMut, Interceptor, RuntimeComponents},
+    config::{interceptors::BeforeTransmitInterceptorContextMut, RuntimeComponents},
     error::BoxError,
 };
 use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
-
-// Header to send with each operation.
-static HEADER_TO_SEND: hyper::header::HeaderName =
-    hyper::header::HeaderName::from_static("x-amzn-client-ttl-seconds");
 
 // The `TtlHeaderInterceptor` keeps a map of operation specific value to send
 // in the header for each Request.
@@ -94,7 +91,7 @@ impl Interceptor for TtlHeaderInterceptor {
         context
             .request_mut()
             .headers_mut()
-            .insert(&HEADER_TO_SEND, ttl.clone());
+            .insert("x-amzn-client-ttl-seconds", ttl.clone());
 
         tracing::info!("{operation_name} header set to {ttl:?}");
 

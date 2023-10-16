@@ -15,7 +15,8 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::time::Instant;
 
-use pokemon_service_client::{config::Interceptor, Client as PokemonClient};
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use pokemon_service_client::Client as PokemonClient;
 
 #[derive(Debug)]
 struct RequestTimestamp(Instant);

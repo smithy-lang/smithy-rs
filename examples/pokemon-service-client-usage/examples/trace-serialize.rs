@@ -18,7 +18,8 @@ use http::StatusCode;
 use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
 use std::str;
 
-use pokemon_service_client::{config::Interceptor, Client as PokemonClient};
+use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use pokemon_service_client::Client as PokemonClient;
 
 /// An example interceptor that logs the request and response as they're sent and received.
 #[derive(Debug, Default)]

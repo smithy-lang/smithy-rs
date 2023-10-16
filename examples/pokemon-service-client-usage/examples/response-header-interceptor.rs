@@ -11,7 +11,7 @@
 ///
 /// The example can be run using `cargo run --example response-header-interceptor`.
 ///
-use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::{box_error::BoxError, client::interceptors::Interceptor};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 
 // Define a type alias that makes it easy to pass around the Client type.
@@ -20,16 +20,12 @@ use pokemon_service_client::{
         interceptors::{
             BeforeDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
         },
-        Interceptor, RuntimeComponents,
+        RuntimeComponents,
     },
     Client as PokemonClient,
 };
 use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
 use uuid::Uuid;
-
-// Header to send for client side request ID
-static REQUEST_ID_HEADER: hyper::header::HeaderName =
-    hyper::header::HeaderName::from_static("x-amzn-requestid");
 
 #[derive(Debug, Clone)]
 struct RequestId {
@@ -80,7 +76,7 @@ impl Interceptor for ResponseHeaderLoggingInterceptor {
         context
             .request_mut()
             .headers_mut()
-            .insert(&REQUEST_ID_HEADER, request_id);
+            .insert("x-amzn-requestid", request_id);
 
         cfg.interceptor_state().store_put(RequestId {
             client_id,
