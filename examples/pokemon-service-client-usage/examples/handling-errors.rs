@@ -1,4 +1,3 @@
-use aws_smithy_http::result::SdkError;
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -7,21 +6,19 @@ use aws_smithy_http::result::SdkError;
 ///
 /// This example demonstrates how to handle Service generated errors.
 ///
-/// The example assumes that the Pokemon service is running on the localhost on TCP port 13734.
+/// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example handling-errors`.
 ///
+use aws_smithy_http::result::SdkError;
 use pokemon_service_client::operation::get_storage::GetStorageError;
-use pokemon_service_client_usage::setup_tracing_subscriber;
-use tracing::{error, info};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
 use pokemon_service_client::Client as PokemonClient;
 
-static BASE_URL: &str = "http://localhost:13734";
-
-/// Creates a new Smithy client that is configured to communicate with a locally running Pokemon service on TCP port 13734.
+/// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon service on TCP port 13734.
 ///
 /// # Examples
 ///
@@ -31,13 +28,13 @@ static BASE_URL: &str = "http://localhost:13734";
 /// let client = create_client();
 /// ```
 fn create_client() -> PokemonClient {
-    // The generated client has a type config::Builder that can be used to build a Config, which
+    // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(BASE_URL)
+        .endpoint_resolver(POKEMON_SERVICE_URL)
         .build();
 
-    // Apply the configuration on the Client, and return that.
+    // Apply the configuration on the client, and return that.
     PokemonClient::from_conf(config)
 }
 
@@ -45,7 +42,7 @@ fn create_client() -> PokemonClient {
 async fn main() {
     setup_tracing_subscriber();
 
-    // Create a configured Smithy client.
+    // Create a configured `smithy-rs` client.
     let client = create_client();
 
     // The following example sends an incorrect passcode to the operation `get_storage`,
@@ -59,51 +56,46 @@ async fn main() {
         .send()
         .await;
 
-    // All errors are consolidated into an SdkError<>. It includes the following variants:
-    // SdkError::ServiceError: This represents an error raised by the service.
-    // SdkError::Timeout: Indicates that the request couldn't be completed due to a timeout.
-    // SdkError::DispatchError: Denotes an error encountered while sending the request.
-    // SdkError::ConstructionFailure: Signifies that the request couldn't be constructed.
-    // SdkError::ResponseError: Implies that the response from the service couldn't be converted into the expected response data type.
+    // All errors are consolidated into an `SdkError<T, R>`
     match response_result {
         Ok(response) => {
-            info!(?response, "Response from service")
+            tracing::info!(?response, "Response from service")
         }
         Err(SdkError::ServiceError(se)) => {
             // When an error response is received from the service, it is modeled
-            // as a SdkError::ServiceError.
+            // as a `SdkError::ServiceError`.
             match se.err() {
                 // Not authorized to access Pokémon storage.
                 GetStorageError::StorageAccessNotAuthorized(_) => {
-                    error!("You do not have access to this resource.");
+                    tracing::error!("You do not have access to this resource.");
                 }
                 GetStorageError::ResourceNotFoundError(rnfe) => {
                     let message = rnfe.message();
-                    error!(error = %message,
+                    tracing::error!(error = %message,
                         "Given Pikachu does not exist on the server."
                     )
                 }
                 GetStorageError::ValidationError(ve) => {
-                    error!(error = %ve, "A required field has not been set.");
+                    tracing::error!(error = %ve, "A required field has not been set.");
                 }
                 // An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).
                 GetStorageError::Unhandled(uh) => {
-                    error!(error = %uh, "An unhandled error has occurred.")
+                    tracing::error!(error = %uh, "An unhandled error has occurred.")
                 }
-                // The SdkError is marked as #[non_exhaustive]. Therefore, a catch-all pattern is required to handle
+                // The SdkError is marked as `#[non_exhaustive]`. Therefore, a catch-all pattern is required to handle
                 // potential future variants introduced in SdkError.
                 _ => {
-                    error!(error = %se.err(), "Some other error has occurred on the server")
+                    tracing::error!(error = %se.err(), "Some other error has occurred on the server")
                 }
             }
         }
         Err(SdkError::TimeoutError(_)) => {
-            error!("The request timed out and could not be completed");
+            tracing::error!("The request timed out and could not be completed");
         }
         Err(SdkError::ResponseError(re)) => {
             // Raw response received from the service can be retrieved using
-            // the raw() method.
-            error!(
+            // the `raw()` method.
+            tracing::error!(
                 "An unparsable response was received. Raw response: {:?}",
                 re.raw()
             );
@@ -115,28 +107,28 @@ async fn main() {
             match sdk_error {
                 SdkError::DispatchFailure(ref failure) => {
                     if failure.is_io() {
-                        error!("An I/O error occurred");
+                        tracing::error!("An I/O error occurred");
                     } else if failure.is_timeout() {
-                        error!("Request timed out");
+                        tracing::error!("Request timed out");
                     } else if failure.is_user() {
-                        error!("An invalid HTTP request has been provided");
+                        tracing::error!("An invalid HTTP request has been provided");
                     } else {
-                        error!("Some other dispatch error occurred.");
+                        tracing::error!("Some other dispatch error occurred.");
                     };
 
                     if let Ok(source) = sdk_error.into_source() {
-                        error!(%source, "Error source");
+                        tracing::error!(%source, "Error source");
                     }
                 }
                 SdkError::ConstructionFailure(_) => {
                     if let Ok(source) = sdk_error.into_source() {
-                        error!(%source, "Request could not be constructed.");
+                        tracing::error!(%source, "Request could not be constructed.");
                     } else {
-                        error!("Request could not be constructed for unknown reasons");
+                        tracing::error!("Request could not be constructed for unknown reasons");
                     }
                 }
                 _ => {
-                    error!("An unknown error has occurred");
+                    tracing::error!("An unknown error has occurred");
                 }
             }
         }
