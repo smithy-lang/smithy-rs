@@ -26,9 +26,10 @@ http = "0.2.6"
 hyper-rustls = { version = "0.24", optional = true, features = ["rustls-native-certs", "http2", "webpki-roots"] }
 
 [dev-dependencies]
-futures-util = { version = "0.3.16", default-features = false }
 http = "0.2.4"
+tempfile = "3"
 tracing-test = "0.2.4"
+tokio = { version = "1", features = ["rt", "macros"] }
 
 [build-dependencies]
 rustc_version = "0.4.0"
