@@ -169,7 +169,7 @@ impl ReplayedEvent {
         }
     }
 
-    pub fn with_body(body: &str) -> Self {
+    pub fn with_body(body: impl AsRef<[u8]>) -> Self {
         Self::HttpResponse {
             status: 200,
             body: Bytes::copy_from_slice(body.as_ref()),

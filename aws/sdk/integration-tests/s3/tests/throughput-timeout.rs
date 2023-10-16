@@ -3,16 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_credential_types::provider::SharedCredentialsProvider;
+use aws_credential_types::Credentials;
 use aws_sdk_sts::error::DisplayErrorContext;
-use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep};
 use aws_smithy_async::test_util::instant_time_and_sleep;
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::byte_stream::ByteStream;
 use aws_smithy_runtime::client::http::body::minimum_throughput::MinimumThroughputBody;
+use aws_smithy_runtime::client::http::test_util::wire::{ReplayedEvent, WireMockServer};
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
-use aws_smithy_runtime_api::shared::IntoShared;
-use aws_types::sdk_config::SharedAsyncSleep;
+use aws_smithy_runtime::{ev, match_events};
+use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
+use aws_types::region::Region;
+use aws_types::SdkConfig;
 use bytes::Bytes;
 use once_cell::sync::Lazy;
 use std::convert::Infallible;
@@ -40,7 +46,7 @@ async fn test_throughput_timeout_less_than() {
             }
         }
     });
-    let body = ByteStream::new(SdkBody::from(hyper::body::Body::wrap_stream(stream)));
+    let body = ByteStream::from(hyper::body::Body::wrap_stream(stream));
     let body = body.map(move |body| {
         let ts = time_source.clone();
         // Throw an error if the stream sends less than 2 bytes per second
@@ -63,12 +69,12 @@ const EXPECTED_BYTES: Lazy<Vec<u8>> = Lazy::new(|| (1..=255).map(|i| i as u8).co
 async fn test_throughput_timeout_equal_to() {
     let _logs = capture_test_logs();
     let (time_source, sleep) = instant_time_and_sleep(UNIX_EPOCH);
-    let time_source: SharedTimeSource = time_source.into_shared();
-    let sleep: SharedAsyncSleep = sleep.into_shared();
+    let time_clone = time_source.clone();
+    let sleep_clone = sleep.clone();
 
     // Will send ~1 byte per second.
     let stream = futures_util::stream::unfold(1, move |state| {
-        let sleep = sleep.clone();
+        let sleep = sleep_clone.clone();
         async move {
             if state > 255 {
                 None
@@ -83,20 +89,21 @@ async fn test_throughput_timeout_equal_to() {
     });
     let body = ByteStream::new(SdkBody::from(hyper::body::Body::wrap_stream(stream)));
     let body = body.map(move |body| {
-        let time_source = time_source.clone();
+        let time_source = time_clone.clone();
         // Throw an error if the stream sends less than 1 byte per second
         let minimum_throughput = (1u64, Duration::from_secs(1));
         SdkBody::from_dyn(aws_smithy_http::body::BoxBody::new(
             MinimumThroughputBody::new(time_source, body, minimum_throughput),
         ))
     });
-    // assert_eq!(255.0, time_source.seconds_since_unix_epoch());
-    // assert_eq!(Duration::from_secs(255), sleep.total_duration());
+
     let res = body
         .collect()
         .await
         .expect("no streaming error occurs because data is sent fast enough")
         .to_vec();
+    assert_eq!(255.0, time_source.seconds_since_unix_epoch());
+    assert_eq!(Duration::from_secs(255), sleep.total_duration());
     assert_eq!(*EXPECTED_BYTES, res);
 }
 
@@ -104,12 +111,12 @@ async fn test_throughput_timeout_equal_to() {
 async fn test_throughput_timeout_greater_than() {
     let _logs = capture_test_logs();
     let (time_source, sleep) = instant_time_and_sleep(UNIX_EPOCH);
-    let time_source: SharedTimeSource = time_source.into_shared();
-    let sleep: SharedAsyncSleep = sleep.into_shared();
+    let time_clone = time_source.clone();
+    let sleep_clone = sleep.clone();
 
     // Will send ~1 byte per second.
     let stream = futures_util::stream::unfold(1, move |state| {
-        let sleep = sleep.clone();
+        let sleep = sleep_clone.clone();
         async move {
             if state > 255 {
                 None
@@ -124,19 +131,126 @@ async fn test_throughput_timeout_greater_than() {
     });
     let body = ByteStream::new(SdkBody::from(hyper::body::Body::wrap_stream(stream)));
     let body = body.map(move |body| {
-        let time_source = time_source.clone();
+        let time_source = time_clone.clone();
         // Throw an error if the stream sends less than 1 byte per 2s
         let minimum_throughput = (1u64, Duration::from_secs(2));
         SdkBody::from_dyn(aws_smithy_http::body::BoxBody::new(
             MinimumThroughputBody::new(time_source, body, minimum_throughput),
         ))
     });
-    // assert_eq!(255.0, time_source.seconds_since_unix_epoch());
-    // assert_eq!(Duration::from_secs(255), sleep.total_duration());
     let res = body
         .collect()
         .await
         .expect("no streaming error occurs because data is sent fast enough")
         .to_vec();
+    assert_eq!(255.0, time_source.seconds_since_unix_epoch());
+    assert_eq!(Duration::from_secs(255), sleep.total_duration());
     assert_eq!(*EXPECTED_BYTES, res);
+}
+
+// One mebibyte of zeroes.
+const LARGE_BODY: &[u8] = &[0u8; 1024 * 1024];
+
+#[tokio::test]
+async fn test_throughput_timeout_for_upload() {
+    let mock = WireMockServer::start(vec![ReplayedEvent::ok()]).await;
+
+    let sdk_config = SdkConfig::builder()
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .endpoint_url(mock.endpoint_url())
+        .http_client(mock.http_client())
+        .region(Region::new("us-east-1"))
+        .time_source(SystemTimeSource::new())
+        .sleep_impl(default_async_sleep().expect("default async sleep exists"))
+        .retry_config(RetryConfig::standard().with_max_attempts(1))
+        .timeout_config(
+            TimeoutConfig::builder()
+                // The request requires its own timeout, separate from the body timeout.
+                .operation_timeout(Duration::from_secs(3))
+                .build(),
+        )
+        .build();
+
+    let time_source = sdk_config
+        .time_source()
+        .expect("default time source is set");
+
+    let client = aws_sdk_s3::Client::new(&sdk_config);
+    let body = ByteStream::from(LARGE_BODY.to_vec()).map(move |body| {
+        let time_source = time_source.clone();
+        // Throw an error if the stream fails to send the entirety of the data in 1s.
+        let minimum_throughput = (1, Duration::from_secs(1));
+        SdkBody::from_dyn(aws_smithy_http::body::BoxBody::new(
+            MinimumThroughputBody::new(time_source, body, minimum_throughput),
+        ))
+    });
+    if let Err(err) = client
+        .put_object()
+        .bucket("bucket")
+        .key("key")
+        .body(body)
+        .send()
+        .await
+    {
+        panic!("uh oh:\n{}", DisplayErrorContext(err))
+    }
+
+    match_events!(ev!(dns), ev!(connect), ev!(http(200)))(&mock.events());
+}
+
+#[tokio::test]
+async fn test_throughput_timeout_for_download() {
+    let mock = WireMockServer::start(vec![ReplayedEvent::with_body(LARGE_BODY)]).await;
+
+    let sdk_config = SdkConfig::builder()
+        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+        .endpoint_url(mock.endpoint_url())
+        .http_client(mock.http_client())
+        .region(Region::new("us-east-1"))
+        .time_source(SystemTimeSource::new())
+        .sleep_impl(default_async_sleep().expect("default async sleep exists"))
+        .retry_config(RetryConfig::standard())
+        .timeout_config(
+            TimeoutConfig::builder()
+                // The request requires its own timeout, separate from the body timeout.
+                .operation_timeout(Duration::from_secs(3))
+                .build(),
+        )
+        .build();
+
+    let time_source = sdk_config
+        .time_source()
+        .expect("default time source is set");
+
+    let client = aws_sdk_s3::Client::new(&sdk_config);
+    let res = client
+        .get_object()
+        .bucket("bucket")
+        .key("key")
+        .send()
+        .await
+        .unwrap();
+
+    let body_fut = res
+        .body
+        .map(move |body| {
+            let time_source = time_source.clone();
+            // Throw an error if the stream fails to send the entirety of the data in 1s.
+            let minimum_throughput = (1024 * 1024, Duration::from_secs(1));
+            SdkBody::from_dyn(aws_smithy_http::body::BoxBody::new(
+                MinimumThroughputBody::new(time_source, body, minimum_throughput),
+            ))
+        })
+        .collect();
+    // In the event that the minimum throughput body timeout doesn't work,
+    // we need an outer timeout to ensure the test won't run forever.
+    let body = tokio::time::timeout(Duration::from_secs(2), body_fut)
+        .await
+        .unwrap()
+        .unwrap()
+        .to_vec();
+
+    assert_eq!(body, LARGE_BODY);
+
+    match_events!(ev!(dns), ev!(connect), ev!(http(200)))(&mock.events());
 }
