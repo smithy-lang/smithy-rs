@@ -64,7 +64,7 @@ Support for Smithy IDLv2 nullability is now enabled by default. You can maintain
 For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929).
 """
 references = ["smithy-rs#2916", "smithy-rs#1767"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "Velfi"
 
 [[aws-sdk-rust]]
@@ -327,7 +327,7 @@ author = "Velfi"
 [[aws-sdk-rust]]
 message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
 references = ["smithy-rs#3055"]
-meta = { "breaking" = true, "tada" = true, "bug" = true }
+meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[smithy-rs]]
@@ -355,6 +355,41 @@ message = "Lifetimes have been added to the `EndpointResolver` trait."
 references = ["smithy-rs#3061"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Several traits have been renamed from noun form to verb form to be more idiomatic:
+- `EndpointResolver` -> `ResolveEndpoint`
+- `Interceptor` -> `Intercept`
+"""
+references = ["smithy-rs#3065"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """Several traits have been renamed from noun form to verb form to be more idiomatic:
+- `AuthSchemeOptionResolver` -> `ResolveAuthSchemeOptions`
+- `EndpointResolver` -> `ResolveEndpoint`
+- `IdentityResolver` -> `ResolveIdentity`
+- `Signer` -> `Sign`
+- `RequestSerializer` -> `SerializeRequest`
+- `ResponseDeserializer` -> `DeserializeResponse`
+- `Interceptor` -> `Intercept`
+"""
+references = ["smithy-rs#3065"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "**This change has [detailed upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3067)**. A summary is below.<br><br> The `HttpRequest` type alias now points to `aws-smithy-runtime-api::client::http::Request`. This is a first-party request type to allow us to gracefully support `http = 1.0` when it arrives. Most customer code using this method should be unaffected. `TryFrom`/`TryInto` conversions are provided for `http = 0.2.*`."
+references = ["smithy-rs#3059"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "[`PresignedRequest`](https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/presigning/struct.PresignedRequest.html) now returns standard-library types instead of types from the `http` crate. `to_http_request` has been renamed `to_http_02x_request`."
+references = ["smithy-rs#3059"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
 
 [[smithy-rs]]
 message = """

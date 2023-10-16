@@ -1,6 +1,7 @@
 allowed_external_types = [
     "aws_credential_types::provider::ProvideCredentials",
     "aws_smithy_http::*",
+    "aws_smithy_runtime_api::*",
 
     "http::error::Error",
     "http::header::map::HeaderMap",
