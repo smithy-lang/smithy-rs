@@ -406,11 +406,7 @@ mod tests {
             .no_auth()
             .no_retry()
             .timeout_config(TimeoutConfig::disabled())
-            .serializer(|input: String| {
-                Ok(http::Request::builder()
-                    .body(SdkBody::from(input.as_bytes()))
-                    .unwrap())
-            })
+            .serializer(|input: String| Ok(HttpRequest::new(SdkBody::from(input.as_bytes()))))
             .deserializer::<_, Infallible>(|response| {
                 assert_eq!(418, response.status());
                 Ok(std::str::from_utf8(response.body().bytes().unwrap())
@@ -426,7 +422,7 @@ mod tests {
         assert_eq!("I'm a teapot!", output);
 
         let request = request_rx.expect_request();
-        assert_eq!("http://localhost:1234", request.uri());
+        assert_eq!("http://localhost:1234/", request.uri());
         assert_eq!(b"what are you?", request.body().bytes().unwrap());
     }
 
@@ -464,11 +460,7 @@ mod tests {
             .retry_classifier(HttpStatusCodeClassifier::default())
             .timeout_config(TimeoutConfig::disabled())
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-            .serializer(|input: String| {
-                Ok(http::Request::builder()
-                    .body(SdkBody::from(input.as_bytes()))
-                    .unwrap())
-            })
+            .serializer(|input: String| Ok(HttpRequest::new(SdkBody::from(input.as_bytes()))))
             .deserializer::<_, Infallible>(|response| {
                 if response.status() == 503 {
                     Err(OrchestratorError::connector(ConnectorError::io(

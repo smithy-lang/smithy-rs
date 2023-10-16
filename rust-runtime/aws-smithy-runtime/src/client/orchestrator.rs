@@ -446,7 +446,7 @@ mod tests {
     use crate::client::test_util::{
         deserializer::CannedResponseDeserializer, serializer::CannedRequestSerializer,
     };
-    use ::http::{Request, Response, StatusCode};
+    use ::http::{Response, StatusCode};
     use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
     use aws_smithy_runtime_api::client::auth::{
         AuthSchemeOptionResolverParams, SharedAuthSchemeOptionResolver,
@@ -477,11 +477,7 @@ mod tests {
     use tracing_test::traced_test;
 
     fn new_request_serializer() -> CannedRequestSerializer {
-        CannedRequestSerializer::success(
-            Request::builder()
-                .body(SdkBody::empty())
-                .expect("request is valid"),
-        )
+        CannedRequestSerializer::success(HttpRequest::empty())
     }
 
     fn new_response_deserializer() -> CannedResponseDeserializer {

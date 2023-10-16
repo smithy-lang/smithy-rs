@@ -93,7 +93,7 @@ class EndpointsCredentialsTest {
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.default_auth().send().await;
                         let req = rcvr.expect_request();
-                        let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
+                        let auth_header = req.headers().get("AUTHORIZATION").unwrap();
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
@@ -116,7 +116,7 @@ class EndpointsCredentialsTest {
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = dbg!(client.custom_auth().send().await);
                         let req = rcvr.expect_request();
-                        let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
+                        let auth_header = req.headers().get("AUTHORIZATION").unwrap();
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
