@@ -30,18 +30,16 @@ internal class EndpointConfigCustomization(
     private val codegenScope = arrayOf(
         *preludeScope,
         "DefaultEndpointResolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
+        "ResolveEndpoint" to typesGenerator.resolveEndpointTrait(),
         "Endpoint" to RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint::Endpoint"),
         "OldSharedEndpointResolver" to types.sharedEndpointResolver,
         "Params" to typesGenerator.paramsStruct(),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
         "SharedEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::SharedEndpointResolver"),
-        "SmithyResolver" to types.resolveEndpoint,
     )
 
     override fun section(section: ServiceConfig): Writable {
         return writable {
-            val sharedEndpointResolver = "#{OldSharedEndpointResolver}<#{Params}>"
-            val resolverTrait = "#{SmithyResolver}<#{Params}>"
             when (section) {
                 is ServiceConfig.ConfigImpl -> {
                     rustTemplate(
@@ -75,8 +73,8 @@ internal class EndpointConfigCustomization(
                         ///     base_resolver: DefaultResolver,
                         ///     prefix: String
                         /// }
-                        /// impl endpoint::ResolveEndpoint<EndpointParams> for PrefixResolver {
-                        ///   fn resolve_endpoint(&self, params: &EndpointParams) -> endpoint::Result {
+                        /// impl endpoint::ResolveEndpoint for PrefixResolver {
+                        ///   fn resolve_endpoint(&self, params: &EndpointParams) -> EndpointFuture {
                         ///        self.base_resolver
                         ///              .resolve_endpoint(params)
                         ///              .map(|ep|{
@@ -137,8 +135,8 @@ internal class EndpointConfigCustomization(
                         /// Note: setting an endpoint resolver will replace any endpoint URL that has been set.
                         ///
                         $defaultResolverDocs
-                        pub fn endpoint_resolver(mut self, endpoint_resolver: impl $resolverTrait + 'static) -> Self {
-                            self.set_endpoint_resolver(#{Some}(#{OldSharedEndpointResolver}::new(endpoint_resolver)));
+                        pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{ResolveEndpoint} + 'static) -> Self {
+                            self.set_endpoint_resolver(#{Some}(#{convert_resolver}(endpoint_resolver).into_shared()));
                             self
                         }
 
@@ -148,30 +146,17 @@ internal class EndpointConfigCustomization(
                         /// rules for `$moduleUseName`.
                         """,
                         *codegenScope,
+                        "convert_resolver" to EndpointTypesGenerator.fromContext(codegenContext).convertResolverToOrchestrator(),
                     )
 
                     rustTemplate(
                         """
-                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
+                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<#{SharedEndpointResolver}>) -> &mut Self {
                             self.config.store_or_unset(endpoint_resolver);
                             self
                         }
                         """,
                         *codegenScope,
-                    )
-                }
-
-                ServiceConfig.BuilderBuild -> {
-                    rustTemplate(
-                        "#{set_endpoint_resolver}(&mut resolver);",
-                        "set_endpoint_resolver" to setEndpointResolverFn(),
-                    )
-                }
-
-                is ServiceConfig.OperationConfigOverride -> {
-                    rustTemplate(
-                        "#{set_endpoint_resolver}(&mut resolver);",
-                        "set_endpoint_resolver" to setEndpointResolverFn(),
                     )
                 }
 
@@ -194,13 +179,14 @@ internal class EndpointConfigCustomization(
                 impl MissingResolver {
                     pub(crate) fn new() -> Self { Self }
                 }
-                impl<T> #{ResolveEndpoint}<T> for MissingResolver {
-                    fn resolve_endpoint(&self, _params: &T) -> #{Result} {
+                impl #{ResolveEndpoint} for MissingResolver {
+                    fn resolve_endpoint(&self, _params: &#{Params}) -> #{EndpointFuture} {
                         Err(#{ResolveEndpointError}::message("an endpoint resolver must be provided."))
                     }
                 }
                 """,
-                "ResolveEndpoint" to types.resolveEndpoint,
+                "ResolveEndpoint" to typesGenerator.resolveEndpointTrait(),
+                "EndpointFuture" to types.endpointFuture,
                 "ResolveEndpointError" to types.resolveEndpointError,
                 "Result" to types.smithyHttpEndpointModule.resolve("Result"),
             )

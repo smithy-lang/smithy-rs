@@ -10,10 +10,13 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTestGenerator
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
@@ -57,6 +60,38 @@ class EndpointTypesGenerator(
             ).generate()
         }
             ?: {}
+
+    fun resolveEndpointTrait() = RuntimeType.forInlineFun("ResolveEndpoint", ClientRustModule.Config.endpoint) {
+        rustTemplate(
+            """
+            /// Endpoint resolver specific to this service
+            trait ResolveEndpoint {
+                fn resolve_endpoint(params: &{Params}) -> #{EndpointFuture}<'a>;
+            }
+            """,
+            "Params" to paramsStruct(), "EndpointFuture" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::EndpointFuture"),
+        )
+    }
+
+    fun convertResolverToOrchestrator() = RuntimeType.forInlineFun("ResolverShim", RustModule.private("endpoints_shim")) {
+        rustTemplate(
+            """
+            struct ResolverShim<T>(T);
+            impl<T: #{ResolveEndpointLocal}> #{ResolveEndpointGlobal} for ResolverShim  {
+                fn resolve_endpoint<'a>(&'a self, params: &'a EndpointResolverParams) -> EndpointFuture<'a> {
+                    let ep = match params.get::<#{Params}>() {
+                        Some(params) => self.0.resolve_endpoint(params).map_err(Box::new),
+                        None => Err(Box::new(ResolveEndpointError::message(
+                            "params of expected type was not present",
+                        ))),
+                    }
+                }
+            }
+
+            """,
+            "ResolveEndpointLocal" to resolveEndpointTrait(), "ResolveEndpointGlobal" to Types(runtimeConfig).globalResolveEndpoint,
+        )
+    }
 
     /**
      * Load the builtIn value for [parameter] from the endpoint customizations. If the built-in comes from service config,

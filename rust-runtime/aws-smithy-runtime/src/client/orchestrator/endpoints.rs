@@ -81,13 +81,6 @@ pub struct DefaultEndpointResolver<Params> {
     inner: SharedEndpointResolver<Params>,
 }
 
-impl<Params> Storable for DefaultEndpointResolver<Params>
-where
-    Params: Debug + Send + Sync + 'static,
-{
-    type Storer = StoreReplace<Self>;
-}
-
 impl<Params> DefaultEndpointResolver<Params> {
     /// Creates a new `DefaultEndpointResolver`.
     pub fn new(resolve_endpoint: SharedEndpointResolver<Params>) -> Self {

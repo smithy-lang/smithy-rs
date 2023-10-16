@@ -55,9 +55,10 @@ internal fun endpointsLib(name: String, vararg additionalDependency: RustDepende
 )
 
 class Types(runtimeConfig: RuntimeConfig) {
+    val endpointFuture = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::EndpointFuture")
+    val globalResolveEndpoint = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::ResolveEndpoint")
     private val smithyTypesEndpointModule = RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
     val smithyHttpEndpointModule = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint")
-    val resolveEndpoint = smithyHttpEndpointModule.resolve("ResolveEndpoint")
     val sharedEndpointResolver = smithyHttpEndpointModule.resolve("SharedEndpointResolver")
     val smithyEndpoint = smithyTypesEndpointModule.resolve("Endpoint")
     val resolveEndpointError = smithyHttpEndpointModule.resolve("ResolveEndpointError")
@@ -98,7 +99,8 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
     }
 
     override fun visitEndpointRule(endpoint: Endpoint): Set<String> {
-        return endpoint.properties.getOrDefault(Identifier.of("authSchemes"), Literal.tupleLiteral(listOf())).asTupleLiteral()
+        return endpoint.properties.getOrDefault(Identifier.of("authSchemes"), Literal.tupleLiteral(listOf()))
+            .asTupleLiteral()
             .orNull()?.let {
             it.map { authScheme ->
                 authScheme.asRecordLiteral().get()[Identifier.of("name")]!!.asStringLiteral().get().expectLiteral()

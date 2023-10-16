@@ -185,11 +185,12 @@ internal class EndpointResolverGenerator(
                     }
                 }
 
-                impl #{endpoint}::ResolveEndpoint<#{Params}> for DefaultResolver {
-                    fn resolve_endpoint(&self, params: &Params) -> #{endpoint}::Result {
+                impl #{ResolveEndpoint} for DefaultResolver {
+                    fn resolve_endpoint(&self, params: &Params) -> #{EndpointFuture} {
                         let mut diagnostic_collector = #{DiagnosticCollector}::new();
-                        #{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
-                            .map_err(|err|err.with_source(diagnostic_collector.take_last_error()))
+                        let result = #{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
+                            .map_err(|err|err.with_source(diagnostic_collector.take_last_error()));
+                        #{EndpointFuture}::ready(result)
                     }
                 }
                 """,
