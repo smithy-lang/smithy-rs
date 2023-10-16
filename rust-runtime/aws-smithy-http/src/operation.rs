@@ -9,6 +9,13 @@
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::borrow::Cow;
 
+//TODO(runtimeCratesVersioningCleanup): Re-point those who use the following reexport to
+// directly depend on `aws_smithy_types` and remove the reexport below.
+/// Errors for operations
+pub mod error {
+    pub use aws_smithy_types::error::operation::{BuildError, SerializationError};
+}
+
 /// Metadata added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) that identifies the API being called.
 #[derive(Clone, Debug)]
 pub struct Metadata {
