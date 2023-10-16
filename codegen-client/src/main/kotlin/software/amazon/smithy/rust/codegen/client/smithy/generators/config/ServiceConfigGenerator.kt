@@ -419,7 +419,6 @@ class ServiceConfigGenerator(
                 rustTemplate(
                     """
                     let mut layer = self.config;
-                    let mut resolver = #{Resolver}::initial(&mut layer, &mut self.runtime_components);
                     """,
                     *codegenScope,
                 )

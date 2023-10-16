@@ -56,7 +56,7 @@ class ConfigOverrideRuntimePluginGenerator(
                 ) -> Self {
                     let mut layer = config_override.config;
                     let mut components = config_override.runtime_components;
-                    let mut resolver = #{Resolver}::overrid(initial_config, initial_components, &mut layer, &mut components);
+                    let resolver = #{Resolver}::overrid(initial_config, initial_components, &mut layer, &mut components);
 
                     #{config}
 
