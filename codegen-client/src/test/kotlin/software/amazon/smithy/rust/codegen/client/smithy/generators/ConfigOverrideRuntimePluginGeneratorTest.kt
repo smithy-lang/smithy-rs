@@ -142,7 +142,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
     }
 
     @Test
-    fun `operation overrides retry strategy`() {
+    fun `operation overrides retry config`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
@@ -164,11 +164,13 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                     .resolve("client::retries::RetryClassifiers"),
                 "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                "StandardRetryStrategy" to RuntimeType.smithyRuntime(runtimeConfig)
+                    .resolve("client::retries::strategy::StandardRetryStrategy"),
                 "ShouldAttempt" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                     .resolve("client::retries::ShouldAttempt"),
             )
             rustCrate.testModule {
-                unitTest("test_operation_overrides_retry_strategy") {
+                unitTest("test_operation_overrides_retry_config") {
                     rustTemplate(
                         """
                         use #{RuntimePlugin};
@@ -193,6 +195,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
+                            // emulate the default retry config plugin by setting a retry strategy
+                            .with_retry_strategy(#{Some}(#{StandardRetryStrategy}::new()))
                             .merge_from(&client_config.runtime_components)
                             .merge_from(&retry_classifiers_component)
                             .build()
@@ -219,6 +223,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
+                            // emulate the default retry config plugin by setting a retry strategy
+                            .with_retry_strategy(#{Some}(#{StandardRetryStrategy}::new()))
                             .merge_from(&client_config.runtime_components)
                             .merge_from(&retry_classifiers_component)
                             .merge_from(&config_override.runtime_components)
