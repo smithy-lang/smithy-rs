@@ -104,7 +104,7 @@ ARG cargo_hack_version=0.5.23
 RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
-ARG cargo_minimal_versions_version=0.1.19
+ARG cargo_minimal_versions_version=0.1.8
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
