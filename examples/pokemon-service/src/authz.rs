@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //! This file showcases a rather minimal model plugin that is agnostic over the operation that it
 //! is applied to.
 //!
