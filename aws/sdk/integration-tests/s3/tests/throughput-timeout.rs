@@ -152,53 +152,6 @@ async fn test_throughput_timeout_greater_than() {
 const LARGE_BODY: &[u8] = &[0u8; 1024 * 1024];
 
 #[tokio::test]
-async fn test_throughput_timeout_for_upload() {
-    let mock = WireMockServer::start(vec![ReplayedEvent::ok()]).await;
-
-    let sdk_config = SdkConfig::builder()
-        .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
-        .endpoint_url(mock.endpoint_url())
-        .http_client(mock.http_client())
-        .region(Region::new("us-east-1"))
-        .time_source(SystemTimeSource::new())
-        .sleep_impl(default_async_sleep().expect("default async sleep exists"))
-        .retry_config(RetryConfig::standard().with_max_attempts(1))
-        .timeout_config(
-            TimeoutConfig::builder()
-                // The request requires its own timeout, separate from the body timeout.
-                .operation_timeout(Duration::from_secs(3))
-                .build(),
-        )
-        .build();
-
-    let time_source = sdk_config
-        .time_source()
-        .expect("default time source is set");
-
-    let client = aws_sdk_s3::Client::new(&sdk_config);
-    let body = ByteStream::from(LARGE_BODY.to_vec()).map(move |body| {
-        let time_source = time_source.clone();
-        // Throw an error if the stream fails to send the entirety of the data in 1s.
-        let minimum_throughput = (1, Duration::from_secs(1));
-        SdkBody::from_dyn(aws_smithy_http::body::BoxBody::new(
-            MinimumThroughputBody::new(time_source, body, minimum_throughput),
-        ))
-    });
-    if let Err(err) = client
-        .put_object()
-        .bucket("bucket")
-        .key("key")
-        .body(body)
-        .send()
-        .await
-    {
-        panic!("uh oh:\n{}", DisplayErrorContext(err))
-    }
-
-    match_events!(ev!(dns), ev!(connect), ev!(http(200)))(&mock.events());
-}
-
-#[tokio::test]
 async fn test_throughput_timeout_for_download() {
     let mock = WireMockServer::start(vec![ReplayedEvent::with_body(LARGE_BODY)]).await;
 

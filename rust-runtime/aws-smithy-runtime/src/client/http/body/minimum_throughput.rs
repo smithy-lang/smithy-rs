@@ -9,6 +9,7 @@
 
 mod throughput;
 
+use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::shared::IntoShared;
 use bytes::Buf;
@@ -35,6 +36,7 @@ pin_project_lite::pin_project! {
         // less that this, an error will be returned instead.
         minimum_throughput: Throughput,
         time_source: SharedTimeSource,
+        async_sleep: SharedAsyncSleep,
     }
 }
 
@@ -75,6 +77,7 @@ impl<T: http_body::Body> MinimumThroughputBody<T> {
     /// Given an HTTP body and a minimum throughput, create a new `MinimumThroughputBody`.
     pub fn new(
         time_source: impl TimeSource + 'static,
+        async_sleep: impl AsyncSleep + 'static,
         body: T,
         minimum_throughput: (u64, Duration),
     ) -> Self {
@@ -83,6 +86,7 @@ impl<T: http_body::Body> MinimumThroughputBody<T> {
             throughput_logs: VecDeque::with_capacity(LOG_WINDOW_SIZE),
             minimum_throughput: minimum_throughput.into(),
             time_source: time_source.into_shared(),
+            async_sleep: async_sleep.into_shared(),
         }
     }
 }
@@ -98,18 +102,31 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        // It's possible that this body won't be polled again, so we ensure it'll
+        // wake by spawning a task with a reference to the waker, forcing another
+        // poll.
+        let wake_after = self.minimum_throughput.per_time_elapsed;
+        let waker = cx.waker().clone();
+        let sleeper = self.async_sleep.clone();
+        let _task = tokio::task::spawn(async move {
+            sleeper.sleep(wake_after).await;
+            waker.wake();
+        });
         let this = self.as_mut().project();
         let poll_res = this.inner.poll_data(cx);
 
-        if let Poll::Ready(Some(Ok(ref data))) = poll_res {
-            let now = this.time_source.now();
-            this.throughput_logs
-                .push_back((now, data.remaining() as u64));
-            // When the number of logs exceeds the window size, toss the oldest log.
-            if this.throughput_logs.len() > LOG_WINDOW_SIZE {
-                this.throughput_logs.pop_front();
-            }
+        let bytes_read = if let Poll::Ready(Some(Ok(ref data))) = poll_res {
+            data.remaining() as u64
+        } else {
+            0
         };
+
+        let now = this.time_source.now();
+        this.throughput_logs.push_back((now, bytes_read));
+        // When the number of logs exceeds the window size, toss the oldest log.
+        if this.throughput_logs.len() > LOG_WINDOW_SIZE {
+            this.throughput_logs.pop_front();
+        }
 
         if let Some(actual_throughput) = self.calculate_throughput()? {
             // oh no, too slow!
@@ -159,3 +176,55 @@ impl fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+
+#[cfg(test)]
+mod tests {
+    use super::{Error, MinimumThroughputBody};
+    use aws_smithy_async::test_util::instant_time_and_sleep;
+    use http::HeaderMap;
+    use http_body::Body;
+    use std::error::Error as StdError;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use std::time::{Duration, SystemTime};
+
+    struct NeverBody;
+
+    impl Body for NeverBody {
+        type Data = bytes::Bytes;
+        type Error = Box<(dyn StdError + Send + Sync + 'static)>;
+
+        fn poll_data(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+            Poll::Pending
+        }
+
+        fn poll_trailers(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+        ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
+            todo!()
+        }
+    }
+
+    #[tokio::test()]
+    async fn test_self_waking() {
+        let (time_source, async_sleep) = instant_time_and_sleep(SystemTime::now());
+        let mut body = MinimumThroughputBody::new(
+            time_source.clone(),
+            async_sleep.clone(),
+            NeverBody,
+            (1, Duration::from_secs(1)),
+        );
+        time_source.advance(Duration::from_secs(1));
+        let actual_err = body.data().await.expect("next chunk exists").unwrap_err();
+        let expected_err = Error::ThroughputBelowMinimum {
+            expected: (1, Duration::from_secs(1)).into(),
+            actual: (0, Duration::from_secs(1)).into(),
+        };
+
+        assert_eq!(expected_err.to_string(), actual_err.to_string());
+    }
+}
