@@ -411,7 +411,7 @@ author = "jdisanti"
 
 [[smithy-rs]]
 message = """
-`aws_smithy_http::operation::error::{BuildError, SerializationError}` have been moved to `aws_smithy_types::error::operation::{BuildError, SerializationError}`.
+`aws_smithy_http::operation::error::{BuildError, SerializationError}` have been moved to `aws_smithy_types::error::operation::{BuildError, SerializationError}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but being deprecated.
 """
 references = ["smithy-rs#3054", "smithy-rs#3070"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
