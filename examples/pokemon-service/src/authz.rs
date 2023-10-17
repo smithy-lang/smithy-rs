@@ -26,13 +26,15 @@ impl AuthorizationPlugin {
     }
 }
 
+/// `T` is the inner service this plugin is applied to.
+/// See the documentation for [`Plugin`] for details.
 impl<Ser, Op, T> Plugin<Ser, Op, T> for AuthorizationPlugin {
     type Output = AuthorizeService<Op, T>;
 
     fn apply(&self, input: T) -> Self::Output {
         AuthorizeService {
             inner: input,
-            _operation: PhantomData,
+            authorizer: Authorizer::new(),
         }
     }
 }
@@ -41,10 +43,11 @@ impl ModelMarker for AuthorizationPlugin {}
 
 pub struct AuthorizeService<Op, S> {
     inner: S,
-
-    _operation: PhantomData<Op>,
+    authorizer: Authorizer<Op>,
 }
 
+/// We manually implement `Clone` instead of adding `#[derive(Clone)]` because we don't require
+/// `Op` to be cloneable.
 impl<Op, S> Clone for AuthorizeService<Op, S>
 where
     S: Clone,
@@ -52,14 +55,14 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            _operation: PhantomData,
+            authorizer: self.authorizer.clone(),
         }
     }
 }
 
 /// The error returned by [`AuthorizeService`].
 pub enum AuthorizeServiceError<E> {
-    /// Authorization was succesful, but the inner service yielded an error.
+    /// Authorization was successful, but the inner service yielded an error.
     InnerServiceError(E),
     /// Authorization was not successful.
     AuthorizeError { message: String },
@@ -111,10 +114,10 @@ macro_rules! impl_service {
     ($($var:ident),*) => {
         impl<S, Op, $($var,)*> Service<(Op::Input, ($($var,)*))> for AuthorizeService<Op, S>
         where
-            Op: OperationShape,
             S: Service<(Op::Input, ($($var,)*)), Error = Op::Error> + Clone + Send + 'static,
             S::Future: Send,
-            Op::Input: Send + 'static,
+            Op: OperationShape + Send + Sync + 'static,
+            Op::Input: Send + Sync + 'static,
             $($var: Send + 'static,)*
         {
             type Response = S::Response;
@@ -139,12 +142,10 @@ macro_rules! impl_service {
                 let service = self.inner.clone();
                 let mut service = std::mem::replace(&mut self.inner, service);
 
+                let authorizer = self.authorizer.clone();
+
                 let fut = async move {
-                    // You could imagine that here we would make a more complex async call to perform the
-                    // actual authorization.
-                    // We would likely need to add bounds on `Op::Input`, `Op::Error`, or on data
-                    // types the plugin would hold if we wanted to do anything useful.
-                    let is_authorized = true;
+                    let is_authorized = authorizer.authorize(&input).await;
                     if !is_authorized {
                         return Err(Self::Error::AuthorizeError {
                             message: "Not authorized!".to_owned(),
@@ -162,9 +163,46 @@ macro_rules! impl_service {
     };
 }
 
+struct Authorizer<Op> {
+    operation: PhantomData<Op>,
+}
+
+/// We manually implement `Clone` instead of adding `#[derive(Clone)]` because we don't require
+/// `Op` to be cloneable.
+impl<Op> Clone for Authorizer<Op> {
+    fn clone(&self) -> Self {
+        Self {
+            operation: PhantomData,
+        }
+    }
+}
+
+impl<Op> Authorizer<Op> {
+    fn new() -> Self {
+        Self {
+            operation: PhantomData,
+        }
+    }
+
+    async fn authorize(&self, _input: &Op::Input) -> bool
+    where
+        Op: OperationShape,
+    {
+        // We'd perform the actual authorization here.
+        // We would likely need to add bounds on `Op::Input`, `Op::Error`, if we wanted to do
+        // anything useful.
+        true
+    }
+}
+
 // If we want our plugin to be as reusable as possible, the service it applies should work with
 // inner services (i.e. operation handlers) that take a variable number of parameters. A Rust macro
 // is helpful in providing those implementations concisely.
+// Each handler function registered must accept the operation's input type (if there is one).
+// Additionally, it can take up to 7 different parameters, each of which must implement the
+// `FromParts` trait. To ensure that this `AuthorizeService` works with any of those inner
+// services, we must implement it to handle up to
+// 7 different types. Therefore, we invoke the `impl_service` macro 8 times.
 
 impl_service!();
 impl_service!(T1);
