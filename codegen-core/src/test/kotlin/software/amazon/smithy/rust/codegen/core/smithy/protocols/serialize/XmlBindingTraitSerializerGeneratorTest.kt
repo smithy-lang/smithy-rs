@@ -226,6 +226,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             member: Top
         }
 
+        @input
         structure OpInput {
             @required
             @httpPayload

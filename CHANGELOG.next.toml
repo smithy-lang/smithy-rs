@@ -410,6 +410,12 @@ meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
 author = "jdisanti"
 
 [[smithy-rs]]
+message = "The `idempotency_provider` field has been removed from config as a public field. If you need access to this field, it is still available from the context of an interceptor."
+references = ["smithy-rs#3072"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
 message = """
 `aws_smithy_http::body::{BoxBody, Error, SdkBody}` have been moved to `aws_smithy_types::body::{BoxBody, Error, SdkBody}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but being deprecated.
 """

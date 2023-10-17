@@ -10,9 +10,11 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.InputTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.rename
 import java.util.Optional
@@ -106,6 +108,11 @@ object OperationNormalizer {
         val inputShapeBuilder = operation.input.map { shapeId ->
             model.expectShape(shapeId, StructureShape::class.java).toBuilder().rename(inputId)
         }.orElse(empty(inputId))
+        // There are still shapes missing the input trait. If we don't apply this, we'll get bad results from the
+        // nullability index
+        if (!inputShapeBuilder.build().hasTrait<InputTrait>()) {
+            inputShapeBuilder.addTrait(InputTrait())
+        }
         return inputShapeBuilder.addTrait(
             SyntheticInputTrait(
                 operation = operation.id,
