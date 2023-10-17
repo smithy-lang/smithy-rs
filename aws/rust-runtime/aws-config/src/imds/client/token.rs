@@ -22,10 +22,10 @@ use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
 };
 use aws_smithy_runtime_api::client::identity::{
-    Identity, IdentityFuture, IdentityResolver, SharedIdentityResolver,
+    Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
 };
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
 use aws_smithy_runtime_api::client::runtime_components::{
@@ -137,7 +137,9 @@ impl TokenResolver {
                             .uri(Uri::from_static("/latest/api/token"))
                             .header(X_AWS_EC2_METADATA_TOKEN_TTL_SECONDS, token_ttl.as_secs())
                             .body(SdkBody::empty())
-                            .expect("valid HTTP request"))
+                            .expect("valid HTTP request")
+                            .try_into()
+                            .unwrap())
                     })
                     .deserializer({
                         let time_source = time_source.clone();
@@ -191,24 +193,24 @@ fn parse_token_response(response: &HttpResponse, now: SystemTime) -> Result<Toke
     })
 }
 
-impl IdentityResolver for TokenResolver {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> IdentityFuture {
-        let this = self.clone();
-        IdentityFuture::new(async move {
-            let preloaded_token = this
+impl ResolveIdentity for TokenResolver {
+    fn resolve_identity<'a>(
+        &'a self,
+        _components: &'a RuntimeComponents,
+        _config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a> {
+        IdentityFuture::new(async {
+            let preloaded_token = self
                 .inner
                 .cache
-                .yield_or_clear_if_expired(this.inner.time_source.now())
+                .yield_or_clear_if_expired(self.inner.time_source.now())
                 .await;
             let token = match preloaded_token {
                 Some(token) => Ok(token),
                 None => {
-                    this.inner
+                    self.inner
                         .cache
-                        .get_or_load(|| {
-                            let this = this.clone();
-                            async move { this.get_token().await }
-                        })
+                        .get_or_load(|| async { self.get_token().await })
                         .await
                 }
             }?;
@@ -244,7 +246,7 @@ impl AuthScheme for TokenAuthScheme {
         identity_resolvers.identity_resolver(IMDS_TOKEN_AUTH_SCHEME)
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -252,7 +254,7 @@ impl AuthScheme for TokenAuthScheme {
 #[derive(Debug)]
 struct TokenSigner;
 
-impl Signer for TokenSigner {
+impl Sign for TokenSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,

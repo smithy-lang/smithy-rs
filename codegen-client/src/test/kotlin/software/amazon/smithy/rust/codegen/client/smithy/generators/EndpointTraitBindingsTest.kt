@@ -168,7 +168,7 @@ internal class EndpointTraitBindingsTest {
                         use std::sync::{Arc, Mutex};
                         use $moduleName::{
                             config::interceptors::BeforeTransmitInterceptorContextRef,
-                            config::Interceptor,
+                            config::Intercept,
                             error::DisplayErrorContext,
                             {Client, Config},
                         };
@@ -178,7 +178,7 @@ internal class EndpointTraitBindingsTest {
                             called: Arc<AtomicU32>,
                             last_endpoint_prefix: Arc<Mutex<Option<EndpointPrefix>>>,
                         }
-                        impl Interceptor for TestInterceptor {
+                        impl Intercept for TestInterceptor {
                             fn name(&self) -> &'static str {
                                 "TestInterceptor"
                             }

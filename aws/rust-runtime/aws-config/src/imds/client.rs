@@ -20,10 +20,12 @@ use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy;
 use aws_smithy_runtime_api::client::auth::AuthSchemeOptionResolverParams;
 use aws_smithy_runtime_api::client::endpoint::{
-    EndpointFuture, EndpointResolver, EndpointResolverParams,
+    EndpointFuture, EndpointResolverParams, ResolveEndpoint,
 };
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::{OrchestratorError, SensitiveOutput};
+use aws_smithy_runtime_api::client::orchestrator::{
+    HttpRequest, OrchestratorError, SensitiveOutput,
+};
 use aws_smithy_runtime_api::client::retries::classifiers::{
     ClassifyRetry, RetryAction, SharedRetryClassifier,
 };
@@ -435,10 +437,13 @@ impl Builder {
             ))
             .with_connection_poisoning()
             .serializer(|path| {
-                Ok(http::Request::builder()
-                    .uri(path)
-                    .body(SdkBody::empty())
-                    .expect("valid request"))
+                Ok(HttpRequest::try_from(
+                    http::Request::builder()
+                        .uri(path)
+                        .body(SdkBody::empty())
+                        .expect("valid request"),
+                )
+                .unwrap())
             })
             .deserializer(|response| {
                 if response.status().is_success() {
@@ -523,12 +528,11 @@ struct ImdsEndpointResolver {
     mode_override: Option<EndpointMode>,
 }
 
-impl EndpointResolver for ImdsEndpointResolver {
-    fn resolve_endpoint(&self, _: &EndpointResolverParams) -> EndpointFuture {
-        let this = self.clone();
+impl ResolveEndpoint for ImdsEndpointResolver {
+    fn resolve_endpoint<'a>(&'a self, _: &'a EndpointResolverParams) -> EndpointFuture<'a> {
         EndpointFuture::new(async move {
-            this.endpoint_source
-                .endpoint(this.mode_override)
+            self.endpoint_source
+                .endpoint(self.mode_override.clone())
                 .await
                 .map(|uri| Endpoint::builder().url(uri.to_string()).build())
                 .map_err(|err| err.into())
@@ -627,6 +631,8 @@ pub(crate) mod test {
             .method("PUT")
             .body(SdkBody::empty())
             .unwrap()
+            .try_into()
+            .unwrap()
     }
 
     pub(crate) fn token_response(ttl: u32, token: &'static str) -> HttpResponse {
@@ -643,6 +649,8 @@ pub(crate) mod test {
             .method("GET")
             .header("x-aws-ec2-metadata-token", token)
             .body(SdkBody::empty())
+            .unwrap()
+            .try_into()
             .unwrap()
     }
 

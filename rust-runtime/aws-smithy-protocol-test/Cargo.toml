@@ -16,6 +16,7 @@ regex = "1.5"
 roxmltree = "0.14.1"
 serde_json = "1"
 thiserror = "1.0.40"
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
 
 
 [package.metadata.docs.rs]
