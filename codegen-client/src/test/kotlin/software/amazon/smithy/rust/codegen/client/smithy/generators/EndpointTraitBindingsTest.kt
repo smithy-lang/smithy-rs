@@ -159,10 +159,10 @@ internal class EndpointTraitBindingsTest {
                     """
                     async fn test_endpoint_prefix() {
                         use #{capture_request};
-                        use aws_smithy_http::body::SdkBody;
                         use aws_smithy_http::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::box_error::BoxError;
                         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                        use aws_smithy_types::body::SdkBody;
                         use aws_smithy_types::config_bag::ConfigBag;
                         use std::sync::atomic::{AtomicU32, Ordering};
                         use std::sync::{Arc, Mutex};

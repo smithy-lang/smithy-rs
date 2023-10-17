@@ -20,7 +20,7 @@ aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-sdk-s3control = { path = "../../build/aws-sdk/sdk/s3control", features = ["test-util"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
-aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1.0.0"
 http = "0.2.0"
