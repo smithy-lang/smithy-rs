@@ -21,7 +21,6 @@ class IdempotencyTokenProviderCustomization(codegenContext: ClientCodegenContext
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         *preludeScope,
-        "default_provider" to RuntimeType.idempotencyToken(runtimeConfig).resolve("default_provider"),
         "IdempotencyTokenProvider" to RuntimeType.idempotencyToken(runtimeConfig).resolve("IdempotencyTokenProvider"),
     )
 

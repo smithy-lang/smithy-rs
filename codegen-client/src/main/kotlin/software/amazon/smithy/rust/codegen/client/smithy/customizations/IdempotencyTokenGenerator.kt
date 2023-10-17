@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.findMemberWithTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -53,39 +54,26 @@ class IdempotencyTokenGenerator(
 
         return when (section) {
             is OperationSection.AdditionalRuntimePlugins -> writable {
-                section.addClientPlugin(this) {
-                    if (symbolProvider.toSymbol(idempotencyTokenMember).isOptional()) {
-                        // An idempotency token is optional. If the user didn't specify a token
-                        // then we'll generate one and set it.
-                        rustTemplate(
-                            """
-                            #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
-                                let input: &mut #{Input} = input.downcast_mut().expect("correct type");
-                                if input.$memberName.is_none() {
-                                    input.$memberName = #{Some}(token_provider.make_idempotency_token());
-                                }
-                            })
-                            """,
-                            *codegenScope,
-                        )
-                    } else {
-                        // An idempotency token is required, but it'll be set to an empty string if
-                        // the user didn't specify one. If that's the case, then we'll generate one
-                        // and set it.
-                        rustTemplate(
-                            """
-                            #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
-                                let input: &mut #{Input} = input.downcast_mut().expect("correct type");
-                                if input.$memberName.is_empty() {
-                                    input.$memberName = token_provider.make_idempotency_token();
-                                }
-                            })
-                            """,
-                            *codegenScope,
-                        )
+                section.addOperationRuntimePlugin(this) {
+                    if (!symbolProvider.toSymbol(idempotencyTokenMember).isOptional()) {
+                        UNREACHABLE("top level input members are always optional")
                     }
+                    // An idempotency token is optional. If the user didn't specify a token
+                    // then we'll generate one and set it.
+                    rustTemplate(
+                        """
+                        #{IdempotencyTokenRuntimePlugin}::new(|token_provider, input| {
+                            let input: &mut #{Input} = input.downcast_mut().expect("correct type");
+                            if input.$memberName.is_none() {
+                                input.$memberName = #{Some}(token_provider.make_idempotency_token());
+                            }
+                        })
+                        """,
+                        *codegenScope,
+                    )
                 }
             }
+
             else -> emptySection
         }
     }
