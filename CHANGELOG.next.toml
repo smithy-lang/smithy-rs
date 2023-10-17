@@ -11,6 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "(Behavior Break!) The SSO credentials provider is no longer enabled by default in `aws-config`, and so SSO profile config will no longer work out of box. The `credentials-sso` feature in `aws-config` was removed from the default features, and renamed to `sso`. If you need credentials from SSO, then enable the `sso` feature in `aws-config`."
+references = ["smithy-rs#2917"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `SsoCredentialsProvider` now supports token refresh and is compatible with the token cache file paths the latest AWS CLI uses."
+references = ["smithy-rs#2917", "aws-sdk-rust#703", "aws-sdk-rust#699"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
 [[smithy-rs]]
 message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
 references = ["smithy-rs#3011"]
@@ -390,6 +402,12 @@ message = "[`PresignedRequest`](https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/pre
 references = ["smithy-rs#3059"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "`RuntimeComponents` have been added as an argument to the `IdentityResolver::resolve_identity` trait function."
+references = ["smithy-rs#2917"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
 
 [[smithy-rs]]
 message = """
