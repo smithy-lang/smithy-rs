@@ -151,7 +151,7 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::{
-        GetIdentityResolver, RuntimeComponentsBuilder,
+        GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
     };
     use aws_smithy_types::config_bag::Layer;
     use std::collections::HashMap;
@@ -163,7 +163,7 @@ mod tests {
         impl ResolveIdentity for TestIdentityResolver {
             fn resolve_identity<'a>(
                 &'a self,
-                _: &'a RuntimeComponents,
+                _runtime_components: &'a RuntimeComponents,
                 _config_bag: &'a ConfigBag,
             ) -> IdentityFuture<'a> {
                 IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))

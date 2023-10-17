@@ -26,7 +26,7 @@ pub mod credentials {
     impl ResolveIdentity for CredentialsIdentityResolver {
         fn resolve_identity<'a>(
             &'a self,
-            _: &'a RuntimeComponents,
+            _runtime_components: &'a RuntimeComponents,
             _config_bag: &'a ConfigBag,
         ) -> IdentityFuture<'a> {
             let cache = self.credentials_cache.clone();

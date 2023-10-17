@@ -67,7 +67,7 @@ impl From<String> for Token {
 impl ResolveIdentity for Token {
     fn resolve_identity<'a>(
         &'a self,
-        _: &'a RuntimeComponents,
+        _runtime_components: &'a RuntimeComponents,
         _config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
         IdentityFuture::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
@@ -130,7 +130,7 @@ impl Login {
 impl ResolveIdentity for Login {
     fn resolve_identity<'a>(
         &'a self,
-        _: &'a RuntimeComponents,
+        _runtime_components: &'a RuntimeComponents,
         _config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
         IdentityFuture::ready(Ok(Identity::new(self.clone(), self.0.expiration)))

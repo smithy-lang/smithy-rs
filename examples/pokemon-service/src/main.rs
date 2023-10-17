@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+mod authz;
 mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
@@ -11,7 +12,7 @@ use aws_smithy_http_server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
     layer::alb_health_check::AlbHealthCheckLayer,
-    plugin::{HttpPlugins, IdentityPlugin, Scoped},
+    plugin::{HttpPlugins, ModelPlugins, Scoped},
     request::request_id::ServerRequestIdProviderLayer,
     AddExtensionLayer,
 };
@@ -28,6 +29,8 @@ use pokemon_service_common::{
     stream_pokemon_radio, State,
 };
 use pokemon_service_server_sdk::{scope, PokemonService};
+
+use crate::authz::AuthorizationPlugin;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -64,7 +67,10 @@ pub async fn main() {
         // Adds `tracing` spans and events to the request lifecycle.
         .instrument();
 
-    let app = PokemonService::builder_with_plugins(plugins, IdentityPlugin)
+    let authz_plugin = AuthorizationPlugin::new();
+    let model_plugins = ModelPlugins::new().push(authz_plugin);
+
+    let app = PokemonService::builder_with_plugins(plugins, model_plugins)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.

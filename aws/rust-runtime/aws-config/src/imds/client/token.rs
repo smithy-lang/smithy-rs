@@ -196,7 +196,7 @@ fn parse_token_response(response: &HttpResponse, now: SystemTime) -> Result<Toke
 impl ResolveIdentity for TokenResolver {
     fn resolve_identity<'a>(
         &'a self,
-        _: &'a RuntimeComponents,
+        _components: &'a RuntimeComponents,
         _config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
         IdentityFuture::new(async {
