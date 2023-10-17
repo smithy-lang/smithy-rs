@@ -257,9 +257,6 @@ class ServiceConfigGenerator(
             extraCustomizations: List<ConfigCustomization>,
         ): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
-            if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
-                baseFeatures.add(IdempotencyTokenProviderCustomization(codegenContext))
-            }
             return ServiceConfigGenerator(codegenContext, baseFeatures + extraCustomizations)
         }
     }

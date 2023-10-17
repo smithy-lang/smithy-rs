@@ -47,12 +47,13 @@ class IdempotencyTokenGenerator(
                     "/inlineable/src/client_idempotency_token.rs",
                     CargoDependency.smithyRuntimeApi(runtimeConfig),
                     CargoDependency.smithyTypes(runtimeConfig),
+                    InlineDependency.idempotencyToken(runtimeConfig),
                 ).toType().resolve("IdempotencyTokenRuntimePlugin"),
         )
 
         return when (section) {
             is OperationSection.AdditionalRuntimePlugins -> writable {
-                section.addOperationRuntimePlugin(this) {
+                section.addClientPlugin(this) {
                     if (symbolProvider.toSymbol(idempotencyTokenMember).isOptional()) {
                         // An idempotency token is optional. If the user didn't specify a token
                         // then we'll generate one and set it.
