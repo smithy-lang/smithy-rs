@@ -132,7 +132,7 @@ ARG cargo_wasi_version=0.1.27
 RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.20.0
+ARG cargo_semver_checks_version=0.24.0
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
