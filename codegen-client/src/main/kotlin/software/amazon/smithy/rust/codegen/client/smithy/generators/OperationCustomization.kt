@@ -95,8 +95,8 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalRuntimePlugins") {
-        fun addServiceRuntimePlugin(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_service_plugin(#{plugin})", "plugin" to plugin)
+        fun addClientPlugin(writer: RustWriter, plugin: Writable) {
+            writer.rustTemplate(".with_client_plugin(#{plugin})", "plugin" to plugin)
         }
 
         fun addOperationRuntimePlugin(writer: RustWriter, plugin: Writable) {
