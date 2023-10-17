@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 class IdempotencyTokenGenerator(
     codegenContext: CodegenContext,
-    operationShape: OperationShape,
+    private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -56,7 +56,7 @@ class IdempotencyTokenGenerator(
             is OperationSection.AdditionalRuntimePlugins -> writable {
                 section.addOperationRuntimePlugin(this) {
                     if (!symbolProvider.toSymbol(idempotencyTokenMember).isOptional()) {
-                        UNREACHABLE("top level input members are always optional")
+                        UNREACHABLE("top level input members are always optional. $operationShape")
                     }
                     // An idempotency token is optional. If the user didn't specify a token
                     // then we'll generate one and set it.
