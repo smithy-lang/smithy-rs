@@ -208,7 +208,7 @@ class DefaultProtocolTestGenerator(
         rustTemplate(
             """
             let (http_client, request_receiver) = #{capture_request}(None);
-            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver($host);
+            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_url($host);
             #{customParams}
 
             """,

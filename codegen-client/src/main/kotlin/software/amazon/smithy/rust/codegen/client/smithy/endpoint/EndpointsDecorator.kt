@@ -12,15 +12,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificResolver
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
@@ -118,8 +117,9 @@ class EndpointsDecorator : ClientCodegenDecorator {
             override fun section(section: ServiceRuntimePluginSection): Writable {
                 return when (section) {
                     is ServiceRuntimePluginSection.RegisterRuntimeComponents -> writable {
-                        codegenContext.defaultEndpointResolver()
-                            ?.let { resolver -> section.registerEndpointResolver(this, resolver) }
+                        codegenContext.defaultEndpointResolver()?.also { resolver ->
+                            section.registerEndpointResolver(this, resolver)
+                        }
                     }
 
                     else -> emptySection
@@ -138,28 +138,22 @@ class EndpointsDecorator : ClientCodegenDecorator {
     }
 }
 
+/**
+ * Returns the rules-generated endpoint resolver for this service
+ *
+ * If no endpoint rules are provided, `null` will be returned.
+ */
 private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
     val generator = EndpointTypesGenerator.fromContext(this)
     val defaultResolver = generator.defaultResolver() ?: return null
-    val ctx = arrayOf("DefaultResolver" to defaultResolver)
-    return wrapResolver { rustTemplate("#{DefaultResolver}::new()", *ctx) }
-}
-
-fun ClientCodegenContext.wrapResolver(resolver: Writable): Writable {
-    val generator = EndpointTypesGenerator.fromContext(this)
-    return resolver.map { base ->
-        val types = Types(runtimeConfig)
-        val ctx = arrayOf(
-            "DefaultEndpointResolver" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
-            "Params" to generator.paramsStruct(),
-            "OldSharedEndpointResolver" to types.sharedEndpointResolver,
-        )
-
+    val ctx = arrayOf("DefaultResolver" to defaultResolver, "ServiceSpecificResolver" to serviceSpecificResolver())
+    return writable {
         rustTemplate(
-            "#{DefaultEndpointResolver}::<#{Params}>::new(#{OldSharedEndpointResolver}::new(#{base}))",
+            """{
+            use #{ServiceSpecificResolver};
+            #{DefaultResolver}::new().into_shared_resolver()
+            }""",
             *ctx,
-            "base" to base,
         )
     }
 }

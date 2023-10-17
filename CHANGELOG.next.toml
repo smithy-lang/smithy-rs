@@ -414,3 +414,15 @@ message = "The `idempotency_provider` field has been removed from config as a pu
 references = ["smithy-rs#3072"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "The `config::Builder::endpoint_resolver` method no longer accepts `&'static str`. Use `config::Builder::endpoint_url` instead."
+references = ["smithy-rs#3078"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "**This change has [detailed upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3079).** <br><br>The endpoint interfaces from `aws-smithy-http` have been removed. Service-specific endpoint resolver traits have been added."
+references = ["smithy-rs#3043", "smithy-rs#3078"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"

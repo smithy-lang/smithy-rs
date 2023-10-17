@@ -7,10 +7,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificResolver
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -26,23 +26,21 @@ internal class EndpointConfigCustomization(
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
-    private val types = Types(runtimeConfig)
+    private val epModule = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint")
+    private val epRuntimeModule = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints")
 
     private val codegenScope = arrayOf(
         *preludeScope,
-        "DefaultEndpointResolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints::DefaultEndpointResolver"),
-        "Endpoint" to RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint::Endpoint"),
-        "OldSharedEndpointResolver" to types.sharedEndpointResolver,
         "Params" to typesGenerator.paramsStruct(),
+        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
-        "SharedEndpointResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::SharedEndpointResolver"),
-        "SmithyResolver" to types.resolveEndpoint,
+        "SharedEndpointResolver" to epModule.resolve("SharedEndpointResolver"),
+        "StaticUriEndpointResolver" to epRuntimeModule.resolve("StaticUriEndpointResolver"),
+        "ServiceSpecificResolver" to codegenContext.serviceSpecificResolver(),
     )
 
     override fun section(section: ServiceConfig): Writable {
         return writable {
-            val sharedEndpointResolver = "#{OldSharedEndpointResolver}<#{Params}>"
-            val resolverTrait = "#{SmithyResolver}<#{Params}>"
             when (section) {
                 is ServiceConfig.ConfigImpl -> {
                     rustTemplate(
@@ -57,44 +55,17 @@ internal class EndpointConfigCustomization(
                 }
 
                 ServiceConfig.BuilderImpl -> {
+                    val endpointModule = ClientRustModule.Config.endpoint.fullyQualifiedPath()
+                        .replace("crate::", "$moduleUseName::")
                     // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
                     val defaultResolverDocs = if (typesGenerator.defaultResolver() != null) {
-                        val endpointModule = ClientRustModule.Config.endpoint.fullyQualifiedPath()
-                            .replace("crate::", "$moduleUseName::")
                         """
                         ///
                         /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
                         /// rules for `$moduleUseName`.
-                        ///
-                        /// ## Examples
-                        /// ```no_run
-                        /// use aws_smithy_http::endpoint;
-                        /// use $endpointModule::{Params as EndpointParams, DefaultResolver};
-                        /// /// Endpoint resolver which adds a prefix to the generated endpoint
-                        /// ##[derive(Debug)]
-                        /// struct PrefixResolver {
-                        ///     base_resolver: DefaultResolver,
-                        ///     prefix: String
-                        /// }
-                        /// impl endpoint::ResolveEndpoint<EndpointParams> for PrefixResolver {
-                        ///   fn resolve_endpoint(&self, params: &EndpointParams) -> endpoint::Result {
-                        ///        self.base_resolver
-                        ///              .resolve_endpoint(params)
-                        ///              .map(|ep|{
-                        ///                   let url = ep.url().to_string();
-                        ///                   ep.into_builder().url(format!("{}.{}", &self.prefix, url)).build()
-                        ///               })
-                        ///   }
-                        /// }
-                        /// let prefix_resolver = PrefixResolver {
-                        ///     base_resolver: DefaultResolver::new(),
-                        ///     prefix: "subdomain".to_string()
-                        /// };
-                        /// let config = $moduleUseName::Config::builder().endpoint_resolver(prefix_resolver);
-                        /// ```
                         """
                     } else {
-                        ""
+                        "/// This service does not define a default endpoint resolver."
                     }
                     if (codegenContext.settings.codegenConfig.includeEndpointUrlConfig) {
                         rustTemplate(
@@ -120,9 +91,8 @@ internal class EndpointConfigCustomization(
                                 ##[allow(deprecated)]
                                 self.set_endpoint_resolver(
                                     endpoint_url.map(|url| {
-                                        #{OldSharedEndpointResolver}::new(
-                                            #{Endpoint}::immutable(url).expect("invalid endpoint URL")
-                                        )
+                                        use #{IntoShared};
+                                        #{StaticUriEndpointResolver}::uri(url).into_shared()
                                     })
                                 );
                                 self
@@ -134,12 +104,28 @@ internal class EndpointConfigCustomization(
                     rustTemplate(
                         """
                         /// Sets the endpoint resolver to use when making requests.
+                        $defaultResolverDocs
                         ///
                         /// Note: setting an endpoint resolver will replace any endpoint URL that has been set.
-                        ///
-                        $defaultResolverDocs
-                        pub fn endpoint_resolver(mut self, endpoint_resolver: impl $resolverTrait + 'static) -> Self {
-                            self.set_endpoint_resolver(#{Some}(#{OldSharedEndpointResolver}::new(endpoint_resolver)));
+                        /// This method accepts an endpoint resolver [specific to this service](#{ServiceSpecificResolver}). If you want to
+                        /// provide a shared endpoint resolver, use [`Self::set_endpoint_resolver`].
+                        /// ## Examples
+                        /// ```no_run
+                        /// use $endpointModule::{ResolveEndpoint, EndpointFuture, Params, Endpoint};
+                        /// ##[derive(Debug)]
+                        /// struct StageResolver { stage: String }
+                        /// impl ResolveEndpoint for StageResolver {
+                        ///     fn resolve_endpoint(&self, params: &Params) -> EndpointFuture<'_> {
+                        ///         let stage = &self.stage;
+                        ///         EndpointFuture::ready(Ok(Endpoint::builder().url(format!("{stage}.myservice.com")).build()))
+                        ///     }
+                        /// }
+                        /// let resolver = StageResolver { stage: std::env::var("STAGE").unwrap() };
+                        /// let config = $moduleUseName::Config::builder().endpoint_resolver(resolver).build();
+                        /// let client = $moduleUseName::Client::from_conf(config);
+                        /// ```
+                        pub fn endpoint_resolver(mut self, endpoint_resolver: impl #{ServiceSpecificResolver} + 'static) -> Self {
+                            self.set_endpoint_resolver(#{Some}(endpoint_resolver.into_shared_resolver()));
                             self
                         }
 
@@ -153,13 +139,12 @@ internal class EndpointConfigCustomization(
 
                     rustTemplate(
                         """
-                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
-                            self.runtime_components.set_endpoint_resolver(endpoint_resolver.map(|r|#{wrap_resolver}));
+                        pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<#{SharedEndpointResolver}>) -> &mut Self {
+                            self.runtime_components.set_endpoint_resolver(endpoint_resolver);
                             self
                         }
                         """,
                         *codegenScope,
-                        "wrap_resolver" to codegenContext.wrapResolver { rust("r") },
                     )
                 }
 
