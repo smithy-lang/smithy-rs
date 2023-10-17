@@ -13,7 +13,7 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
 };
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::HeaderValue;
@@ -52,7 +52,7 @@ impl<VE> ResponseChecksumInterceptor<VE> {
     }
 }
 
-impl<VE> Interceptor for ResponseChecksumInterceptor<VE>
+impl<VE> Intercept for ResponseChecksumInterceptor<VE>
 where
     VE: Fn(&Input) -> bool + Send + Sync,
 {
@@ -155,7 +155,7 @@ pub(crate) fn check_headers_for_precalculated_checksum(
             "CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER only contains valid checksum algorithm names",
         );
         if let Some(precalculated_checksum) =
-            headers.get(http::HeaderName::from(checksum_algorithm))
+            headers.get(checksum_algorithm.into_impl().header_name())
         {
             let base64_encoded_precalculated_checksum = precalculated_checksum
                 .to_str()
