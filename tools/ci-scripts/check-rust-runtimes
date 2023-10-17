@@ -30,7 +30,7 @@ do
     cargo doc --no-deps --document-private-items --all-features
 
     echo -e "## ${C_YELLOW}Running 'cargo minimal-versions check' on ${runtime_path}...${C_RESET}"
-    cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --all-features
+    cargo minimal-versions check --all-features
 
     for crate_path in *; do
         if [[ -f "${crate_path}/external-types.toml" ]]; then
