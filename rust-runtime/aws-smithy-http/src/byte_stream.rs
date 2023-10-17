@@ -433,12 +433,6 @@ impl ByteStream {
     pub fn map(self, f: impl Fn(SdkBody) -> SdkBody + Send + Sync + 'static) -> ByteStream {
         ByteStream::new(self.into_inner().map(f))
     }
-
-    #[cfg(feature = "test-util")]
-    /// Create a ByteStream that will immediately emit an error when polled.
-    pub fn taken() -> Self {
-        ByteStream::new(SdkBody::taken())
-    }
 }
 
 impl Default for ByteStream {
