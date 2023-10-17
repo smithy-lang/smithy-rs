@@ -8,7 +8,7 @@
 
 //! Types for representing the body of an HTTP request or response
 
-/// A boxed generic HTTP body that, when consumed, will result in [`Bytes`] or an [`Error`](aws_smithy_types::body::Error).
+/// A boxed generic HTTP body that, when consumed, will result in [`Bytes`](bytes::Bytes) or an [`Error`](aws_smithy_types::body::Error).
 #[deprecated(note = "Moved to `aws_smithy_types::body::BoxBody`.")]
 pub type BoxBody = aws_smithy_types::body::BoxBody;
 
