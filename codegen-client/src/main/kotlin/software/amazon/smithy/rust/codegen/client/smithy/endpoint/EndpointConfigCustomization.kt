@@ -109,7 +109,9 @@ internal class EndpointConfigCustomization(
                         /// Note: setting an endpoint resolver will replace any endpoint URL that has been set.
                         /// This method accepts an endpoint resolver [specific to this service](#{ServiceSpecificResolver}). If you want to
                         /// provide a shared endpoint resolver, use [`Self::set_endpoint_resolver`].
+                        ///
                         /// ## Examples
+                        /// Create a custom endpoint resolver that resolves a different endpoing per-stage, e.g. staging vs. production.
                         /// ```no_run
                         /// use $endpointModule::{ResolveEndpoint, EndpointFuture, Params, Endpoint};
                         /// ##[derive(Debug)]
