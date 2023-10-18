@@ -12,7 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificResolver
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificEndpointResolver
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
@@ -146,7 +146,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
 private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
     val generator = EndpointTypesGenerator.fromContext(this)
     val defaultResolver = generator.defaultResolver() ?: return null
-    val ctx = arrayOf("DefaultResolver" to defaultResolver, "ServiceSpecificResolver" to serviceSpecificResolver())
+    val ctx = arrayOf("DefaultResolver" to defaultResolver, "ServiceSpecificResolver" to serviceSpecificEndpointResolver())
     return writable {
         rustTemplate(
             """{

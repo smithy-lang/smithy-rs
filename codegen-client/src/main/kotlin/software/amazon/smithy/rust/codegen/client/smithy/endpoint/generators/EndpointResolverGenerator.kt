@@ -137,7 +137,7 @@ internal class EndpointResolverGenerator(
         "EndpointFuture" to types.endpointFuture,
         "ResolveEndpointError" to types.resolveEndpointError,
         "EndpointError" to types.resolveEndpointError,
-        "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificResolver(),
+        "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
         "DiagnosticCollector" to endpointsLib("diagnostic").toType().resolve("DiagnosticCollector"),
     )
 
@@ -380,7 +380,7 @@ internal class EndpointResolverGenerator(
     }
 }
 
-fun ClientCodegenContext.serviceSpecificResolver(): RuntimeType {
+fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
     val generator = EndpointTypesGenerator.fromContext(this)
     return RuntimeType.forInlineFun("ResolveEndpoint", ClientRustModule.Config.endpoint) {
         val ctx = arrayOf(*preludeScope, "Params" to generator.paramsStruct(), *Types(runtimeConfig).toArray(), "Debug" to RuntimeType.Debug)
@@ -398,13 +398,13 @@ fun ClientCodegenContext.serviceSpecificResolver(): RuntimeType {
                 where
                     Self: Sized + 'static,
                 {
-                    #{SharedEndpointResolver}::new(MakeGlobal(self))
+                    #{SharedEndpointResolver}::new(DowncastParams(self))
                 }
             }
 
             ##[derive(Debug)]
-            struct MakeGlobal<T>(T);
-            impl<T> #{ResolveEndpoint} for MakeGlobal<T>
+            struct DowncastParams<T>(T);
+            impl<T> #{ResolveEndpoint} for DowncastParams<T>
             where
                 T: ResolveEndpoint,
             {

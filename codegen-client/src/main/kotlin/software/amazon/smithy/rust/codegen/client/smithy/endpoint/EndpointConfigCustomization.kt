@@ -7,7 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificResolver
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificEndpointResolver
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -36,7 +36,7 @@ internal class EndpointConfigCustomization(
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
         "SharedEndpointResolver" to epModule.resolve("SharedEndpointResolver"),
         "StaticUriEndpointResolver" to epRuntimeModule.resolve("StaticUriEndpointResolver"),
-        "ServiceSpecificResolver" to codegenContext.serviceSpecificResolver(),
+        "ServiceSpecificResolver" to codegenContext.serviceSpecificEndpointResolver(),
     )
 
     override fun section(section: ServiceConfig): Writable {
@@ -60,7 +60,6 @@ internal class EndpointConfigCustomization(
                     // if there are no rules, we don't generate a default resolver—we need to also suppress those docs.
                     val defaultResolverDocs = if (typesGenerator.defaultResolver() != null) {
                         """
-                        ///
                         /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
                         /// rules for `$moduleUseName`.
                         """
@@ -104,6 +103,7 @@ internal class EndpointConfigCustomization(
                     rustTemplate(
                         """
                         /// Sets the endpoint resolver to use when making requests.
+                        ///
                         $defaultResolverDocs
                         ///
                         /// Note: setting an endpoint resolver will replace any endpoint URL that has been set.
@@ -131,8 +131,7 @@ internal class EndpointConfigCustomization(
 
                         /// Sets the endpoint resolver to use when making requests.
                         ///
-                        /// When unset, the client will used a generated endpoint resolver based on the endpoint resolution
-                        /// rules for `$moduleUseName`.
+                        $defaultResolverDocs
                         """,
                         *codegenScope,
                     )

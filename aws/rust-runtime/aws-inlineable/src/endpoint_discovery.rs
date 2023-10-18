@@ -151,7 +151,7 @@ impl EndpointCache {
             .map(|e| e.endpoint.clone())
             .ok_or_else(|| {
                 let error: Option<BoxError> = self.error.lock().unwrap().take();
-                error.unwrap_or_else(|| "err".into())
+                error.unwrap_or_else(|| "Failed to resolve endpoint".into())
             });
         EndpointFuture::ready(ep)
     }
