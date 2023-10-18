@@ -14,13 +14,16 @@ use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
 use aws_smithy_async::time::SystemTimeSource;
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponentsBuilder, SharedConfigValidator,
+};
 use aws_smithy_runtime_api::client::runtime_plugin::{
     Order, SharedRuntimePlugin, StaticRuntimePlugin,
 };
 use aws_smithy_runtime_api::shared::IntoShared;
-use aws_smithy_types::config_bag::{FrozenLayer, Layer};
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
@@ -83,7 +86,11 @@ pub fn default_retry_config_plugin(
 ) -> Option<SharedRuntimePlugin> {
     Some(
         default_plugin("default_retry_config_plugin", |components| {
-            components.with_retry_strategy(Some(StandardRetryStrategy::new()))
+            components
+                .with_retry_strategy(Some(StandardRetryStrategy::new()))
+                .with_config_validator(SharedConfigValidator::base_client_config_fn(
+                    validate_retry_config,
+                ))
         })
         .with_config(layer("default_retry_config", |layer| {
             layer.store_put(RetryConfig::disabled());
@@ -93,15 +100,57 @@ pub fn default_retry_config_plugin(
     )
 }
 
+fn validate_retry_config(
+    components: &RuntimeComponentsBuilder,
+    cfg: &ConfigBag,
+) -> Result<(), BoxError> {
+    if let Some(retry_config) = cfg.load::<RetryConfig>() {
+        if retry_config.has_retry() && components.sleep_impl().is_none() {
+            Err("An async sleep implementation is required for retry to work. Please provide a `sleep_impl` on \
+                 the config, or disable timeouts.".into())
+        } else {
+            Ok(())
+        }
+    } else {
+        Err(
+            "The default retry config was removed, and no other config was put in its place."
+                .into(),
+        )
+    }
+}
+
 /// Runtime plugin that sets the default timeout config (no timeouts).
 pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
     Some(
-        default_plugin("default_timeout_config_plugin", |c| c)
-            .with_config(layer("default_timeout_config", |layer| {
-                layer.store_put(TimeoutConfig::disabled());
-            }))
-            .into_shared(),
+        default_plugin("default_timeout_config_plugin", |components| {
+            components.with_config_validator(SharedConfigValidator::base_client_config_fn(
+                validate_timeout_config,
+            ))
+        })
+        .with_config(layer("default_timeout_config", |layer| {
+            layer.store_put(TimeoutConfig::disabled());
+        }))
+        .into_shared(),
     )
+}
+
+fn validate_timeout_config(
+    components: &RuntimeComponentsBuilder,
+    cfg: &ConfigBag,
+) -> Result<(), BoxError> {
+    if let Some(timeout_config) = cfg.load::<TimeoutConfig>() {
+        if timeout_config.has_timeouts() && components.sleep_impl().is_none() {
+            Err("An async sleep implementation is required for timeouts to work. Please provide a `sleep_impl` on \
+                 the config, or disable timeouts.".into())
+        } else {
+            Ok(())
+        }
+    } else {
+        Err(
+            "The default timeout config was removed, and no other config was put in its place."
+                .into(),
+        )
+    }
 }
 
 /// Runtime plugin that registers the default identity cache implementation.

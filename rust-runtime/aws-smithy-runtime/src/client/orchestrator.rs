@@ -182,10 +182,13 @@ fn apply_configuration(
     continue_on_err!([ctx] => Interceptors::new(operation_rc_builder.interceptors()).read_before_execution(true, ctx, cfg));
 
     // The order below is important. Client interceptors must run before operation interceptors.
-    Ok(RuntimeComponents::builder("merged orchestrator components")
+    let components = RuntimeComponents::builder("merged orchestrator components")
         .merge_from(&client_rc_builder)
         .merge_from(&operation_rc_builder)
-        .build()?)
+        .build()?;
+
+    components.validate_final_config(cfg)?;
+    Ok(components)
 }
 
 #[instrument(skip_all, level = "debug")]

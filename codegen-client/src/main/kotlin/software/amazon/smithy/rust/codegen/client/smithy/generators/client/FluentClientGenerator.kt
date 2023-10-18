@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -94,23 +95,6 @@ class FluentClientGenerator(
 
     private fun renderFluentClient(crate: RustCrate) {
         crate.withModule(ClientRustModule.client) {
-            val clientScope = arrayOf(
-                *preludeScope,
-                "Arc" to RuntimeType.Arc,
-                "client_docs" to writable
-                    {
-                        customizations.forEach {
-                            it.section(
-                                FluentClientSection.FluentClientDocs(
-                                    serviceShape,
-                                ),
-                            )(this)
-                        }
-                    },
-                "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
-                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
-            )
             rustTemplate(
                 """
                 ##[derive(Debug)]
@@ -131,27 +115,22 @@ class FluentClientGenerator(
                     ///
                     /// ## Panics
                     ///
-                    /// This method will panic if the `conf` has retry or timeouts enabled without a `sleep_impl`.
-                    /// If you experience this panic, it can be fixed by setting the `sleep_impl`, or by disabling
-                    /// retries and timeouts.
+                    /// This method will panic in the following cases:
+                    ///
+                    /// - Retries or timeouts are enabled without a `sleep_impl` configured.
+                    /// - Identity caching is enabled without a `sleep_impl` and `time_source` configured.
+                    ///
+                    /// The panic message for each of these will have instructions on how to resolve them.
                     pub fn from_conf(conf: crate::Config) -> Self {
-                        let has_retry_config = conf.retry_config().map(#{RetryConfig}::has_retry).unwrap_or_default();
-                        let has_timeout_config = conf.timeout_config().map(#{TimeoutConfig}::has_timeouts).unwrap_or_default();
-                        let sleep_impl = conf.sleep_impl();
-                        if (has_retry_config || has_timeout_config) && sleep_impl.is_none() {
-                            panic!(
-                                "An async sleep implementation is required for retries or timeouts to work. \
-                                 Set the `sleep_impl` on the Config passed into this function to fix this panic."
-                            );
+                        let handle = Handle {
+                            conf: conf.clone(),
+                            runtime_plugins: #{base_client_runtime_plugins}(conf),
+                        };
+                        if let Err(err) = Self::validate_config(&handle) {
+                            panic!("Invalid client configuration: {err}");
                         }
-
                         Self {
-                            handle: #{Arc}::new(
-                                Handle {
-                                    conf: conf.clone(),
-                                    runtime_plugins: #{base_client_runtime_plugins}(conf),
-                                }
-                            )
+                            handle: #{Arc}::new(handle)
                         }
                     }
 
@@ -159,10 +138,32 @@ class FluentClientGenerator(
                     pub fn config(&self) -> &crate::Config {
                         &self.handle.conf
                     }
+
+                    fn validate_config(handle: &Handle) -> Result<(), #{BoxError}> {
+                        let mut cfg = #{ConfigBag}::base();
+                        handle.runtime_plugins
+                            .apply_client_configuration(&mut cfg)?
+                            .validate_base_client_config(&cfg)?;
+                        Ok(())
+                    }
                 }
                 """,
-                *clientScope,
+                *preludeScope,
+                "Arc" to RuntimeType.Arc,
                 "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
+                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                "client_docs" to writable {
+                    customizations.forEach {
+                        it.section(
+                            FluentClientSection.FluentClientDocs(
+                                serviceShape,
+                            ),
+                        )(this)
+                    }
+                },
+                "ConfigBag" to RuntimeType.configBag(runtimeConfig),
+                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                "tracing" to CargoDependency.Tracing.toType(),
             )
         }
 

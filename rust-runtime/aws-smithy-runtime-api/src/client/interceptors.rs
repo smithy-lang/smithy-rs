@@ -15,7 +15,7 @@ use crate::client::interceptors::context::{
     BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
     FinalizerInterceptorContextRef,
 };
-use crate::client::runtime_components::RuntimeComponents;
+use crate::client::runtime_components::{RuntimeComponents, ValidateConfig};
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use std::fmt;
 use std::marker::PhantomData;
@@ -620,6 +620,8 @@ impl SharedInterceptor {
         (self.check_enabled)(conf)
     }
 }
+
+impl ValidateConfig for SharedInterceptor {}
 
 impl Intercept for SharedInterceptor {
     fn name(&self) -> &'static str {

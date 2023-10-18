@@ -42,6 +42,7 @@ impl Storable for EndpointResolverParams {
     type Storer = StoreReplace<Self>;
 }
 
+use crate::client::runtime_components::ValidateConfig;
 #[deprecated(note = "Renamed to ResolveEndpoint.")]
 pub use ResolveEndpoint as EndpointResolver;
 
@@ -69,5 +70,7 @@ impl ResolveEndpoint for SharedEndpointResolver {
         self.0.resolve_endpoint(params)
     }
 }
+
+impl ValidateConfig for SharedEndpointResolver {}
 
 impl_shared_conversions!(convert SharedEndpointResolver from ResolveEndpoint using SharedEndpointResolver::new);
