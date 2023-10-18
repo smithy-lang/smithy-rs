@@ -13,7 +13,7 @@
 ///
 use std::time::Duration;
 
-use pokemon_service_client::Client as PokemonClient;
+use pokemon_service_client::{config::timeout::TimeoutConfig, Client as PokemonClient};
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
 /// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon service on TCP port 13734.
@@ -31,19 +31,15 @@ fn create_client() -> PokemonClient {
     //    for each individual operation attempt.
     // operation_timeout - Overall timeout for the operation to complete.
     // connect timeout - The amount of time allowed for a connection to be established.
-    let timeout_config = aws_smithy_types::timeout::TimeoutConfig::builder()
+    let timeout_config = TimeoutConfig::builder()
         .operation_attempt_timeout(Duration::from_secs(1))
         .operation_timeout(Duration::from_secs(5))
         .connect_timeout(Duration::from_millis(500))
         .build();
 
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .timeout_config(timeout_config)
-        .sleep_impl(::aws_smithy_async::rt::sleep::SharedAsyncSleep::new(
-            aws_smithy_async::rt::sleep::default_async_sleep()
-                .expect("sleep implementation could not be created"),
-        ))
         .build();
 
     // Apply the configuration on the client, and return that.

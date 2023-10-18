@@ -26,7 +26,7 @@ You can view a list of examples by running `cargo run --example` from the
 [pokemon-service-client-usage](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage)
 folder. To run an example, pass its name to the `cargo run --example` command, e.g.:
 
-```
+```console
 cargo run --example simple-client
 ```
 

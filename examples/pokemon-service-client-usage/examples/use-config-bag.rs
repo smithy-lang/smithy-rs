@@ -1,3 +1,4 @@
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -11,12 +12,20 @@
 ///
 /// The example can be run using `cargo run --example use-config-bag`.
 ///
-use aws_smithy_types::config_bag::{Storable, StoreReplace};
+//use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::time::Instant;
 
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
-use pokemon_service_client::Client as PokemonClient;
+use pokemon_service_client::{
+    config::{
+        interceptors::{
+            BeforeDeserializationInterceptorContextRef, FinalizerInterceptorContextRef,
+        },
+        ConfigBag, Intercept, RuntimeComponents,
+    },
+    error::BoxError,
+    Client as PokemonClient,
+};
 
 #[derive(Debug)]
 struct RequestTimestamp(Instant);
@@ -35,7 +44,7 @@ pub struct SetTimeInterceptor;
 /// to the receipt of the response. This task can be accomplished
 /// within a single interceptor by overriding both
 /// read_before_execution and read_before_deserialization.
-impl Interceptor for SetTimeInterceptor {
+impl Intercept for SetTimeInterceptor {
     fn name(&self) -> &'static str {
         "SetTimeInterceptor"
     }
@@ -54,17 +63,17 @@ impl Interceptor for SetTimeInterceptor {
 #[derive(Debug, Default)]
 pub struct GetTimeInterceptor;
 
-impl Interceptor for GetTimeInterceptor {
+impl Intercept for GetTimeInterceptor {
     fn name(&self) -> &'static str {
         "GetTimeInterceptor"
     }
 
     fn read_before_deserialization(
         &self,
-        _context: &pokemon_service_client::config::interceptors::BeforeDeserializationInterceptorContextRef<'_>,
-        _runtime_components: &pokemon_service_client::config::RuntimeComponents,
-        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
-    ) -> Result<(), pokemon_service_client::error::BoxError> {
+        _context: &BeforeDeserializationInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
         let stop_watch = cfg
             .load::<RequestTimestamp>()
             .expect("StopWatch not found in the ConfigBag");
@@ -77,9 +86,9 @@ impl Interceptor for GetTimeInterceptor {
 
     fn read_after_execution(
         &self,
-        _context: &pokemon_service_client::config::interceptors::FinalizerInterceptorContextRef<'_>,
-        _runtime_components: &pokemon_service_client::config::RuntimeComponents,
-        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+        _context: &FinalizerInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        cfg: &mut ConfigBag,
     ) -> Result<(), pokemon_service_client::error::BoxError> {
         let timestamp = cfg
             .load::<RequestTimestamp>()
@@ -105,7 +114,7 @@ fn create_client() -> PokemonClient {
     // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .interceptor(SetTimeInterceptor)
         .interceptor(GetTimeInterceptor)
         .build();

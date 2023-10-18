@@ -4,7 +4,7 @@
  */
 /// Copyright © 2023, Amazon, LLC.
 ///
-/// This example demonstrates how to handle Service generated errors.
+/// This example demonstrates how to handle service generated errors.
 ///
 /// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
@@ -12,8 +12,7 @@
 ///
 /// The example can be run using `cargo run --example handling-errors`.
 ///
-use aws_smithy_http::result::SdkError;
-use pokemon_service_client::operation::get_storage::GetStorageError;
+use pokemon_service_client::{error::SdkError, operation::get_storage::GetStorageError};
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
 use pokemon_service_client::Client as PokemonClient;
@@ -31,7 +30,7 @@ fn create_client() -> PokemonClient {
     // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .build();
 
     // Apply the configuration on the client, and return that.

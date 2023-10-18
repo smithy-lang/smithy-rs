@@ -12,7 +12,7 @@
 /// The example can be run using `cargo run --example custom-header`
 ///
 use pokemon_service_client::Client as PokemonClient;
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
 /// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon
 /// service on TCP port 13734.
@@ -28,7 +28,7 @@ fn create_client() -> PokemonClient {
     // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .build();
 
     // Apply the configuration on the client, and return that.
@@ -43,11 +43,11 @@ async fn main() {
     let client = create_client();
 
     // Call an operation `get_server_statistics` on the Pokémon service.
-    let request = client.get_server_statistics().customize();
-
-    // Mutate the request, then insert header name / value pair to mutated header collection.
-    let response = request
+    let response = client
+        .get_server_statistics()
+        .customize()
         .mutate_request(|req| {
+            // For demonstration purposes, add a header `x-ttl-seconds` to the outgoing request.
             let headers = req.headers_mut();
             headers.insert(
                 hyper::header::HeaderName::from_static("x-ttl-seconds"),
@@ -56,7 +56,7 @@ async fn main() {
         })
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

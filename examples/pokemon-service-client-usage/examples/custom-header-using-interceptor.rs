@@ -14,14 +14,13 @@
 ///
 use std::{collections::HashMap, time::Duration};
 
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
-use aws_smithy_types::config_bag::ConfigBag;
+use pokemon_service_client::config::{ConfigBag, Intercept};
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client::{
     config::{interceptors::BeforeTransmitInterceptorContextMut, RuntimeComponents},
     error::BoxError,
 };
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
 // The `TtlHeaderInterceptor` keeps a map of operation specific value to send
 // in the header for each Request.
@@ -64,7 +63,8 @@ impl TtlHeaderInterceptor {
 
 /// Appends the header `x-amzn-client-ttl-seconds` using either the default time-to-live value
 /// or an operation-specific value if it was set earlier using `add_operation_ttl`.
-impl Interceptor for TtlHeaderInterceptor {
+//impl aws_smithy_runtime_api::client::interceptors::Interceptor for TtlHeaderInterceptor {
+impl Intercept for TtlHeaderInterceptor {
     fn name(&self) -> &'static str {
         "TtlHeaderInterceptor"
     }
@@ -139,7 +139,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response for get_server_statistics()");
 
@@ -151,7 +151,7 @@ async fn main() {
         .passcode("pikachu123")
         .send()
         .await
-        .custom_expect_and_log("get_storage failed");
+        .expect("operation failed");
 
     // Print the response received from the service.
     tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");

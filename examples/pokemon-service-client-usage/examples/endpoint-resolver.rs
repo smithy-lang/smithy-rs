@@ -12,11 +12,12 @@
 ///
 /// The example can be run using `cargo run --example endpoint-resolver`.
 ///
-use aws_smithy_http::endpoint::{ResolveEndpoint, ResolveEndpointError};
-use aws_smithy_types::{date_time::Format, endpoint::Endpoint};
-use pokemon_service_client::config::endpoint::Params;
+use aws_smithy_types::endpoint::Endpoint;
+use pokemon_service_client::config::endpoint::{Params, ResolveEndpoint};
+use pokemon_service_client::primitives::{DateTime, DateTimeFormat};
 use pokemon_service_client::Client as PokemonClient;
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt};
+use pokemon_service_client_usage::setup_tracing_subscriber;
+
 use std::time::SystemTime;
 
 // This struct, provided as an example, constructs the URL that should be set on each request during initialization.
@@ -33,23 +34,20 @@ impl RegionalEndpoint {
 }
 
 impl ResolveEndpoint<Params> for RegionalEndpoint {
-    fn resolve_endpoint(
-        &self,
-        _params: &Params,
-    ) -> std::result::Result<Endpoint, ResolveEndpointError> {
+    fn resolve_endpoint(&self, _: &Params) -> aws_smithy_http::endpoint::Result {
         // Construct an endpoint using the Endpoint::Builder. Set the URL and,
         // optionally, any headers to be sent with the request. For this example,
         // we'll set the 'x-amz-date' header to the current date for all outgoing requests.
-        // `aws_smithy_types::DateTime` can be used for formatting an RFC 3339 date time.
+        // `DateTime` can be used for formatting an RFC 3339 date time.
         let now = SystemTime::now();
-        let date_time = aws_smithy_types::DateTime::from(now);
+        let date_time = DateTime::from(now);
 
         let endpoint = Endpoint::builder()
             .url(self.url_to_use.clone())
             .header(
                 "x-amz-date",
                 date_time
-                    .fmt(Format::DateTimeWithOffset)
+                    .fmt(DateTimeFormat::DateTimeWithOffset)
                     .expect("Could not create a date in UTC format"),
             )
             .build();
@@ -99,7 +97,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     tracing::info!(?response, "Response received");
 }

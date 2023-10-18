@@ -15,17 +15,25 @@
 /// The example can be run using `cargo run --example trace-serialize`.
 ///
 use http::StatusCode;
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::str;
 
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
-use pokemon_service_client::Client as PokemonClient;
+use pokemon_service_client::{
+    config::{
+        interceptors::{
+            BeforeDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextRef,
+        },
+        ConfigBag, Intercept, RuntimeComponents,
+    },
+    error::BoxError,
+    Client as PokemonClient,
+};
 
 /// An example interceptor that logs the request and response as they're sent and received.
 #[derive(Debug, Default)]
 pub struct WireFormatInterceptor;
 
-impl Interceptor for WireFormatInterceptor {
+impl Intercept for WireFormatInterceptor {
     fn name(&self) -> &'static str {
         "WireFormatInterceptor"
     }
@@ -33,12 +41,10 @@ impl Interceptor for WireFormatInterceptor {
     // Called after the operation input has been serialized but before it's dispatched over the wire.
     fn read_after_serialization(
         &self,
-        context: &pokemon_service_client::config::interceptors::BeforeTransmitInterceptorContextRef<
-            '_,
-        >,
-        _runtime_components: &pokemon_service_client::config::RuntimeComponents,
-        _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
-    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        context: &BeforeTransmitInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        _cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
         // Get the request type from the context.
         let request = context.request();
         // Print the request to the debug tracing log.
@@ -51,10 +57,10 @@ impl Interceptor for WireFormatInterceptor {
     // operation's output type.
     fn read_before_deserialization(
         &self,
-        context: &pokemon_service_client::config::interceptors::BeforeDeserializationInterceptorContextRef<'_>,
-        _runtime_components: &pokemon_service_client::config::RuntimeComponents,
-        _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
-    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        context: &BeforeDeserializationInterceptorContextRef<'_>,
+        _runtime_components: &RuntimeComponents,
+        _cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
         // Get the response type from the context.
         let response = context.response();
         // Print the response.
@@ -81,7 +87,7 @@ fn create_client() -> PokemonClient {
     // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .interceptor(WireFormatInterceptor {})
         .build();
 
@@ -101,7 +107,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .custom_expect_and_log("get_storage failed");
+        .expect("operation failed");
 
     tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

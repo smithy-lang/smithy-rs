@@ -11,20 +11,18 @@
 ///
 /// The example can be run using `cargo run --example response-header-interceptor`.
 ///
-use aws_smithy_runtime_api::{box_error::BoxError, client::interceptors::Interceptor};
-use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
-
-// Define a type alias that makes it easy to pass around the Client type.
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use pokemon_service_client::{
     config::{
         interceptors::{
             BeforeDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
         },
-        RuntimeComponents,
+        ConfigBag, Intercept, RuntimeComponents,
     },
+    error::BoxError,
     Client as PokemonClient,
 };
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -57,7 +55,7 @@ impl ResponseHeaderLoggingInterceptor {
     }
 }
 
-impl Interceptor for ResponseHeaderLoggingInterceptor {
+impl Intercept for ResponseHeaderLoggingInterceptor {
     fn name(&self) -> &'static str {
         "ResponseHeaderLoggingInterceptor"
     }
@@ -142,7 +140,7 @@ impl Interceptor for ResponseHeaderLoggingInterceptor {
 /// ```
 fn create_client() -> PokemonClient {
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .interceptor(ResponseHeaderLoggingInterceptor)
         .build();
 
@@ -162,7 +160,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     // If you need to access the `RequestIdError` raised by the interceptor,
     // you can convert `SdkError::DispatchFailure` to a `ConnectorError`

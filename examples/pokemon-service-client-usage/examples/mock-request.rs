@@ -2,97 +2,75 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-/// This example demonstrates how to create a `smithy-rs` Client using a connector
-/// that can be used to return mock responses. This can be useful for testing
-/// purposes.
+/// This example demonstrates how to use a mock connector with `capture_request`. This allows for
+/// responding with a static `Response` while capturing the incoming request. The captured request
+/// can later be asserted to verify that the correct headers and body were sent to the server.
+///
+/// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
+/// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
+/// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example mock-request`.
 ///
 use aws_smithy_http::body::SdkBody;
-use aws_smithy_runtime_api::{
-    client::{
-        http::{
-            HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings,
-            SharedHttpConnector,
-        },
-        orchestrator::HttpRequest,
-    },
-    shared::FromUnshared,
-};
-use pokemon_service_client::{config::RuntimeComponents, Client as PokemonClient};
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
-
-/// The `MockConnector` won't send the request on the wire and will send a static Response
-/// when a request comes in. It can be extended to return different responses for different
-/// requests.
-#[derive(Debug, Clone)]
-struct MockConnector;
-
-impl HttpConnector for MockConnector {
-    fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        tracing::info!(?request, "Got request in MockConnector");
-
-        let res = http::Response::builder()
-            .status(200)
-            .body(SdkBody::from(
-                r#" {
-    "calls_count" : 100
-}"#,
-            ))
-            .expect("Cannot construct a response");
-
-        HttpConnectorFuture::new(async move { Ok(res) })
-    }
-}
-
-/// `HttpClient` must be implemented for a type to be acceptable as a `Connector`
-/// by the `Config::builder`.
-impl HttpClient for MockConnector {
-    fn http_connector(
-        &self,
-        _: &HttpConnectorSettings,
-        _: &RuntimeComponents,
-    ) -> SharedHttpConnector {
-        // Any type that implements `HttpConnector` trait can be converted
-        // into a `SharedHttpConnector` by using `FromUnshared::from_unshared`
-        FromUnshared::from_unshared(self.clone())
-    }
-}
-
-/// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokemon
-/// service on TCP port 13734.
-///
-/// # Examples
-///
-/// Basic usage:
-///
-/// ```
-/// let client = create_client();
-/// ```
-fn create_client() -> PokemonClient {
-    // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
-    // allows configuring endpoint-resolver, timeouts, retries etc.
-    let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
-        .http_client(MockConnector {})
-        .build();
-
-    PokemonClient::from_conf(config)
-}
+use aws_smithy_runtime::client::http::test_util::capture_request;
+use pokemon_service_client::Client as PokemonClient;
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
 #[tokio::main]
 async fn main() {
     setup_tracing_subscriber();
 
-    // Create a configured `smithy-rs` client.
-    let client = create_client();
+    // Build a response that should be sent when the operation is called.
+    let response = http::Response::builder()
+        .status(200)
+        .body(SdkBody::from(r#"{"calls_count":100}"#))
+        .expect("response could not be constructed");
+
+    // Call `capture_request` to obtain a HTTP connector and a request receiver.
+    // The request receiver captures the incoming request, while the connector can be passed
+    // to `Config::builder().http_client`.
+    let (http_client, captured_request) = capture_request(Some(response));
+
+    // Pass the `http_client` connector to `Config::builder`. The connector won't send
+    // the request over the network; instead, it will return the static response provided
+    // during its initialization.
+    let config = pokemon_service_client::Config::builder()
+        .endpoint_url(POKEMON_SERVICE_URL)
+        .http_client(http_client)
+        .build();
+
+    // Instantiate a client by applying the configuration.
+    let client = PokemonClient::from_conf(config);
+
     // Call an operation `get_server_statistics` on the Pokémon service.
     let response = client
         .get_server_statistics()
+        .customize()
+        .mutate_request(|req| {
+            // For demonstration, send an extra header that can be verified to confirm
+            // that the client actually sends it.
+            let headers = req.headers_mut();
+            headers.insert(
+                hyper::header::HeaderName::from_static("user-agent"),
+                hyper::header::HeaderName::from_static("sample-client"),
+            );
+        })
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     // Print the response received from the service.
     tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
+
+    // The captured request can be verified to have certain headers.
+    let req = captured_request.expect_request();
+    assert_eq!(req.headers().get("user-agent"), Some("sample-client"));
+
+    // As an example, you can verify the URL matches.
+    assert_eq!(req.uri(), "http://localhost:13734/stats");
+
+    // You can convert the captured body into a &str and use assert!
+    // on it if you want to verify the contents of the request body.
+    // let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
 }

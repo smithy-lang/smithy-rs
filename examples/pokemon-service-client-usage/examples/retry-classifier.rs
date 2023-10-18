@@ -9,21 +9,22 @@
 /// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
-/// The example can be run using `cargo run --example retry-customize`.
+/// The example can be run using `cargo run --example retry-classifier`.
 ///
-use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
-use aws_smithy_types::retry::RetryConfig;
 use http::StatusCode;
-use pokemon_service_client::operation::get_server_statistics::GetServerStatisticsError;
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
+use pokemon_service_client::{
+    config::{
+        interceptors::InterceptorContext,
+        retry::{ClassifyRetry, RetryAction, RetryConfig},
+    },
+    operation::get_server_statistics::GetServerStatisticsError,
+};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::time::Duration;
 
 use pokemon_service_client::Client as PokemonClient;
 
-use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
-
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct SampleRetryClassifier;
 
 // By default, the generated client uses the `aws_http::retry::AwsResponseRetryClassifier`
@@ -83,14 +84,10 @@ fn create_client() -> PokemonClient {
     // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .retry_config(retry_config)
         // Add the retry classifier.
         .retry_classifier(SampleRetryClassifier {})
-        .sleep_impl(::aws_smithy_async::rt::sleep::SharedAsyncSleep::new(
-            aws_smithy_async::rt::sleep::default_async_sleep()
-                .expect("sleep implementation could not be created"),
-        ))
         .build();
 
     // Apply the configuration on the client, and return that.
@@ -109,7 +106,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

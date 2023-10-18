@@ -10,11 +10,10 @@
 ///
 /// The example can be run using `cargo run --example retry-customize`.
 ///
-use aws_smithy_types::retry::RetryConfig;
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::time::Duration;
 
-use pokemon_service_client::Client as PokemonClient;
+use pokemon_service_client::{config::retry::RetryConfig, Client as PokemonClient};
 
 /// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon service on TCP port 13734.
 ///
@@ -35,12 +34,8 @@ fn create_client() -> PokemonClient {
     // The generated client has a type `Config::Builder` that can be used to build a `Config`, which
     // allows configuring endpoint-resolver, timeouts, retries etc.
     let config = pokemon_service_client::Config::builder()
-        .endpoint_resolver(POKEMON_SERVICE_URL)
+        .endpoint_url(POKEMON_SERVICE_URL)
         .retry_config(retry_config)
-        .sleep_impl(::aws_smithy_async::rt::sleep::SharedAsyncSleep::new(
-            aws_smithy_async::rt::sleep::default_async_sleep()
-                .expect("sleep implementation could not be created"),
-        ))
         .build();
 
     // Apply the configuration on the client, and return that.
@@ -59,7 +54,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     tracing::info!(%POKEMON_SERVICE_URL, ?response, "Response received");
 }

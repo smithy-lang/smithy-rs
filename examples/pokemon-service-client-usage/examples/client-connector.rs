@@ -14,7 +14,7 @@
 use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use hyper_rustls::ConfigBuilderExt;
 use pokemon_service_client::Client as PokemonClient;
-use pokemon_service_client_usage::{setup_tracing_subscriber, ResultExt, POKEMON_SERVICE_URL};
+use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
 /// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon
 /// service on TCP port 13734.
@@ -68,7 +68,7 @@ async fn main() {
         .get_server_statistics()
         .send()
         .await
-        .custom_expect_and_log("get_server_statistics failed");
+        .expect("operation failed");
 
     tracing::info!(?response, "Response from service")
 }
