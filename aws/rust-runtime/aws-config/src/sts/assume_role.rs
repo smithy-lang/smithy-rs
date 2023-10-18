@@ -8,12 +8,12 @@
 use aws_credential_types::provider::{
     self, error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
 };
-use aws_sdk_sso::config::IdentityCache;
 use aws_sdk_sts::operation::assume_role::builders::AssumeRoleFluentBuilder;
 use aws_sdk_sts::operation::assume_role::AssumeRoleError;
 use aws_sdk_sts::types::PolicyDescriptorType;
 use aws_sdk_sts::Client as StsClient;
 use aws_smithy_http::result::SdkError;
+use aws_smithy_runtime::client::identity::IdentityCache;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::region::Region;
 use aws_types::SdkConfig;

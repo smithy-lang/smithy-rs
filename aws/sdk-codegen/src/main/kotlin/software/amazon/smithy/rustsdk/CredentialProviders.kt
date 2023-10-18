@@ -146,7 +146,7 @@ class CredentialsIdentityResolverRegistration(
                     if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
                         featureGateBlock("sigv4a") {
                             section.registerIdentityResolver(this) {
-                                rustTemplate("#{SIGV4A_SCHEME_ID}, creds_provider", *codegenScope)
+                                rustTemplate("#{SIGV4A_SCHEME_ID}, creds_provider.clone()", *codegenScope)
                             }
                         }
                     }
