@@ -4,12 +4,14 @@ allowed_external_types = [
     "aws_credential_types::*",
     "aws_types::*",
     "aws_smithy_runtime_api::*",
-    "aws_smithy_runtime::*",
     "aws_smithy_async::rt::sleep::*",
     "aws_smithy_async::time::*",
     "aws_smithy_async::future::pagination_stream::PaginationStream",
     # only allowed in from impl for presigned request
     "http::request::Request",
+
+    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
+    "aws_smithy_eventstream::*",
 
     ### All below this line need to be fixed:
     # The following are not OK
@@ -24,8 +26,4 @@ allowed_external_types = [
 
     # Pending future fix
     "aws_smithy_http::event_stream::receiver::Receiver",
-
-
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
-    "aws_smithy_eventstream::*",
 ]
