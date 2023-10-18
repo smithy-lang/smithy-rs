@@ -56,7 +56,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let (http_client, req) = #{capture_request}(None);
                         let client_config = crate::config::Config::builder().http_client(http_client).build();
                         let config_override =
-                            crate::config::Config::builder().endpoint_resolver(expected_url);
+                            crate::config::Config::builder().endpoint_url(expected_url);
                         let client = crate::Client::from_conf(client_config);
                         let _ = dbg!(client.say_hello().customize().config_override(config_override).send().await);
                         assert_eq!("http://localhost:1234/", req.expect_request().uri());
@@ -86,7 +86,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let (http_client, captured_request) = #{capture_request}(#{None});
                         let expected_url = "http://localhost:1234/";
                         let client_config = crate::config::Config::builder()
-                            .endpoint_resolver(expected_url)
+                            .endpoint_url(expected_url)
                             .http_client(#{NeverClient}::new())
                             .build();
                         let client = crate::client::Client::from_conf(client_config.clone());

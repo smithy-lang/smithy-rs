@@ -77,7 +77,7 @@ class FluentClientGeneratorTest {
                     ##[test]
                     fn test() {
                         let config = $moduleName::Config::builder()
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(#{NeverClient}::new())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -101,7 +101,7 @@ class FluentClientGeneratorTest {
                     ##[test]
                     fn test() {
                         let config = $moduleName::Config::builder()
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(#{NeverClient}::new())
                             .build();
                         let client = $moduleName::Client::from_conf(config);

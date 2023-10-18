@@ -83,7 +83,7 @@ class MetadataCustomizationTest {
 
                         let (http_client, _captured_request) = #{capture_request}(#{None});
                         let client_config = crate::config::Config::builder()
-                            .endpoint_resolver("http://localhost:1234/")
+                            .endpoint_url("http://localhost:1234/")
                             .http_client(http_client)
                             .build();
                         let client = crate::client::Client::from_conf(client_config);

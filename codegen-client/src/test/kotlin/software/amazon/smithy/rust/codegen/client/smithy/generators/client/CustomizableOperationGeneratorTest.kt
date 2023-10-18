@@ -45,7 +45,7 @@ class CustomizableOperationGeneratorTest {
                     fn test() {
                         let config = $moduleName::Config::builder()
                             .http_client(#{NeverClient}::new())
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .build();
                         let client = $moduleName::Client::from_conf(config);
                         check_send_and_sync(client.say_hello().customize());
