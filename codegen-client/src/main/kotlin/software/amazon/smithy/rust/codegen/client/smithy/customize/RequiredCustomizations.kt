@@ -10,12 +10,10 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ConnectionPoisoningRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.MetadataCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyReExportCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierServiceRuntimePluginCustomization
@@ -50,7 +48,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
     ): List<OperationCustomization> =
         baseCustomizations +
             MetadataCustomization(codegenContext, operation) +
-            IdempotencyTokenGenerator(codegenContext, operation) +
             HttpChecksumRequiredGenerator(codegenContext, operation) +
             RetryClassifierOperationCustomization(codegenContext, operation)
 
@@ -115,7 +112,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations +
-        ResiliencyServiceRuntimePluginCustomization(codegenContext) +
         ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
         RetryClassifierServiceRuntimePluginCustomization(codegenContext)
 }

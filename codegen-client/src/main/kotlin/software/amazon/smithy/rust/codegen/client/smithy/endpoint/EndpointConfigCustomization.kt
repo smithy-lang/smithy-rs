@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -153,84 +154,17 @@ internal class EndpointConfigCustomization(
                     rustTemplate(
                         """
                         pub fn set_endpoint_resolver(&mut self, endpoint_resolver: #{Option}<$sharedEndpointResolver>) -> &mut Self {
-                            self.config.store_or_unset(endpoint_resolver);
+                            self.runtime_components.set_endpoint_resolver(endpoint_resolver.map(|r|#{wrap_resolver}));
                             self
                         }
                         """,
                         *codegenScope,
-                    )
-                }
-
-                ServiceConfig.BuilderBuild -> {
-                    rustTemplate(
-                        "#{set_endpoint_resolver}(&mut resolver);",
-                        "set_endpoint_resolver" to setEndpointResolverFn(),
-                    )
-                }
-
-                is ServiceConfig.OperationConfigOverride -> {
-                    rustTemplate(
-                        "#{set_endpoint_resolver}(&mut resolver);",
-                        "set_endpoint_resolver" to setEndpointResolverFn(),
+                        "wrap_resolver" to codegenContext.wrapResolver { rust("r") },
                     )
                 }
 
                 else -> emptySection
             }
         }
-    }
-
-    private fun defaultResolver(): RuntimeType {
-        // For now, fallback to a default endpoint resolver that always fails. In the future,
-        // the endpoint resolver will be required (so that it can be unwrapped).
-        return typesGenerator.defaultResolver() ?: RuntimeType.forInlineFun(
-            "MissingResolver",
-            ClientRustModule.Config.endpoint,
-        ) {
-            rustTemplate(
-                """
-                ##[derive(Debug)]
-                pub(crate) struct MissingResolver;
-                impl MissingResolver {
-                    pub(crate) fn new() -> Self { Self }
-                }
-                impl<T> #{ResolveEndpoint}<T> for MissingResolver {
-                    fn resolve_endpoint(&self, _params: &T) -> #{Result} {
-                        Err(#{ResolveEndpointError}::message("an endpoint resolver must be provided."))
-                    }
-                }
-                """,
-                "ResolveEndpoint" to types.resolveEndpoint,
-                "ResolveEndpointError" to types.resolveEndpointError,
-                "Result" to types.smithyHttpEndpointModule.resolve("Result"),
-            )
-        }
-    }
-
-    private fun setEndpointResolverFn(): RuntimeType = RuntimeType.forInlineFun("set_endpoint_resolver", ClientRustModule.config) {
-        // TODO(enableNewSmithyRuntimeCleanup): Simplify the endpoint resolvers
-        rustTemplate(
-            """
-            fn set_endpoint_resolver(resolver: &mut #{Resolver}<'_>) {
-                let endpoint_resolver = if resolver.is_initial() {
-                    Some(resolver.resolve_config::<#{OldSharedEndpointResolver}<#{Params}>>().cloned().unwrap_or_else(||
-                        #{OldSharedEndpointResolver}::new(#{DefaultResolver}::new())
-                    ))
-                } else if resolver.is_latest_set::<#{OldSharedEndpointResolver}<#{Params}>>() {
-                    resolver.resolve_config::<#{OldSharedEndpointResolver}<#{Params}>>().cloned()
-                } else {
-                    None
-                };
-                if let Some(endpoint_resolver) = endpoint_resolver {
-                    let shared = #{SharedEndpointResolver}::new(
-                        #{DefaultEndpointResolver}::<#{Params}>::new(endpoint_resolver)
-                    );
-                    resolver.runtime_components_mut().set_endpoint_resolver(#{Some}(shared));
-                }
-            }
-            """,
-            *codegenScope,
-            "DefaultResolver" to defaultResolver(),
-        )
     }
 }
