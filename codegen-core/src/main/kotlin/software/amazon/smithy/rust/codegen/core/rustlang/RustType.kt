@@ -524,7 +524,6 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
-        val TracedTest = Attribute(RuntimeType.TracingTest.resolve("traced_test").writable)
         val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**

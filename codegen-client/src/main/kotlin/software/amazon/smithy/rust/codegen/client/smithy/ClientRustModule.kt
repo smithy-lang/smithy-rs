@@ -104,7 +104,7 @@ class ClientModuleDocProvider(
             ClientRustModule.Config.endpoint -> strDoc("Types needed to configure endpoint resolution.")
             ClientRustModule.Config.retry -> strDoc("Retry configuration.")
             ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")
-            ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Interceptor`](crate::config::Interceptor).")
+            ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Intercept`](crate::config::Intercept).")
             ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
             ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
             ClientRustModule.Meta -> strDoc("Information about this crate.")

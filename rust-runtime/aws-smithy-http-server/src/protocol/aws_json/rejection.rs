@@ -9,7 +9,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
     #[error("error serializing JSON-encoded body: {0}")]
-    Serialization(#[from] aws_smithy_http::operation::error::SerializationError),
+    Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
     HttpBuild(#[from] http::Error),
 }

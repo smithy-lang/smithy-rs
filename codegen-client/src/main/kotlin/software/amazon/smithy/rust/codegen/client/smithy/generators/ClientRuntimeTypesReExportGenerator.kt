@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -49,11 +50,11 @@ class ClientRuntimeTypesReExportGenerator(
         rustCrate.withModule(ClientRustModule.Config.endpoint) {
             rustTemplate(
                 """
-                pub use #{ResolveEndpoint};
                 pub use #{SharedEndpointResolver};
+                pub use #{EndpointFuture};
+                pub use #{Endpoint};
                 """,
-                "ResolveEndpoint" to RuntimeType.smithyHttp(rc).resolve("endpoint::ResolveEndpoint"),
-                "SharedEndpointResolver" to RuntimeType.smithyHttp(rc).resolve("endpoint::SharedEndpointResolver"),
+                *Types(rc).toArray(),
             )
         }
         rustCrate.withModule(ClientRustModule.Config.retry) {
