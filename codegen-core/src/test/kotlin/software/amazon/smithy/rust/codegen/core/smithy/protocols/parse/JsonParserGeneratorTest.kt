@@ -171,6 +171,17 @@ class JsonParserGeneratorTest {
             )
 
             unitTest(
+                "dunder_type_should_be_ignored",
+                """
+                // __type field should be ignored during deserialization
+                let input = br#"{ "top": { "choice": { "int": 5, "__type": "value-should-be-ignored-anyway" } } }"#;
+                let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).unwrap().build();
+                use test_model::Choice;
+                assert_eq!(Choice::Int(5), output.top.unwrap().choice);
+                """,
+            )
+
+            unitTest(
                 "empty_error",
                 """
                 // empty error
