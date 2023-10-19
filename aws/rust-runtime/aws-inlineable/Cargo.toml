@@ -16,12 +16,12 @@ aws-credential-types = { path = "../aws-credential-types" }
 aws-http = { path = "../aws-http" }
 aws-runtime = { path = "../aws-runtime" }
 aws-sigv4 = { path = "../aws-sigv4" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 bytes = "1"
 hex = "0.4.3"
 http = "0.2.9"
