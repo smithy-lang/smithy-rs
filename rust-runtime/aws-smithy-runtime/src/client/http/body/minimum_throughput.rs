@@ -22,8 +22,9 @@ use std::time::Duration;
 use throughput::{Throughput, ThroughputLogs};
 
 pin_project_lite::pin_project! {
-    /// A body-wrapper that ensures data is emitted from the body at a rate
-    /// greater
+    /// A body-wrapping type that ensures data is being streamed faster than some lower limit.
+    ///
+    /// If data is being streamed too slowly, this body type will emit an error next time it's polled.
     pub struct MinimumThroughputBody<B> {
         async_sleep: SharedAsyncSleep,
         time_source: SharedTimeSource,
@@ -36,12 +37,11 @@ pin_project_lite::pin_project! {
     }
 }
 
-// Limit logs to ~1KB of memory overhead.
-const SIZE_OF_ONE_LOG: usize = std::mem::size_of::<(std::time::SystemTime, u64)>();
+const SIZE_OF_ONE_LOG: usize = std::mem::size_of::<(std::time::SystemTime, u64)>(); // 24 bytes per log
 const NUMBER_OF_LOGS_IN_ONE_KB: usize = 1024 / SIZE_OF_ONE_LOG;
 
 impl<B> MinimumThroughputBody<B> {
-    ///
+    /// Create a new minimum throughput body.
     pub fn new(
         time_source: impl TimeSource + 'static,
         async_sleep: impl AsyncSleep + 'static,
@@ -49,10 +49,10 @@ impl<B> MinimumThroughputBody<B> {
         (bytes_read, per_time_elapsed): (u64, Duration),
     ) -> Self {
         let minimum_throughput = Throughput::new(bytes_read as f64, per_time_elapsed);
-
         Self {
             throughput_logs: ThroughputLogs::new(
-                NUMBER_OF_LOGS_IN_ONE_KB,
+                // Never keep more than 10KB of logs in memory.
+                NUMBER_OF_LOGS_IN_ONE_KB * 10,
                 minimum_throughput.per_time_elapsed(),
             ),
             async_sleep: async_sleep.into_shared(),
@@ -75,17 +75,26 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        let now = self.time_source.now();
+        let mut a_log_was_pushed_this_poll = false;
         // Attempt to read the data from the inner body, then update the
         // throughput logs.
         let mut this = self.as_mut().project();
-        let (bytes_read, poll_res) = match this.inner.poll_data(cx) {
-            Poll::Ready(Some(Ok(bytes))) => (bytes.len() as u64, Poll::Ready(Some(Ok(bytes)))),
-            Poll::Pending => (0, Poll::Pending),
+        // Push a start log if we haven't already done so.
+        if this.throughput_logs.is_empty() {
+            this.throughput_logs.push((now, 0));
+            a_log_was_pushed_this_poll = true;
+        }
+        let poll_res = match this.inner.poll_data(cx) {
+            Poll::Ready(Some(Ok(bytes))) => {
+                this.throughput_logs.push((now, bytes.len() as u64));
+                a_log_was_pushed_this_poll = true;
+                Poll::Ready(Some(Ok(bytes)))
+            }
+            Poll::Pending => Poll::Pending,
             // If we've read all the data or an error occurred, then return that result.
             res => return res,
         };
-        this.throughput_logs
-            .push((this.time_source.now(), bytes_read));
 
         // Check the sleep future to see if it needs refreshing.
         let mut sleep_fut = this.sleep_fut.take().unwrap_or_else(|| {
@@ -98,6 +107,18 @@ where
                 sleep_fut = this
                     .async_sleep
                     .sleep(this.minimum_throughput.per_time_elapsed());
+                // If we already pushed a log during this poll, don't set a
+                // "floating back". Otherwise, do set one.
+                //
+                // The floating back acts as a end-bound for the purposes of
+                // calculating throughput for a given time span. 0-byte logs
+                // don't affect the throughput calculation except when they are
+                // the first or last log. The starting log is pushed the first
+                // time this is polled. If no data was emitted during a poll,
+                // then we set the floating back.
+                if !a_log_was_pushed_this_poll {
+                    this.throughput_logs.set_floating_back(now);
+                }
                 // We also schedule a wake up for current task to ensure that
                 // it gets polled at least one more time.
                 cx.waker().wake_by_ref();

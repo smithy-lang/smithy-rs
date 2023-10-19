@@ -119,18 +119,30 @@ pub(super) struct ThroughputLogs {
     max_length: usize,
     min_elapsed_time: Duration,
     inner: VecDeque<(SystemTime, u64)>,
+    floating_back: Option<(SystemTime, u64)>,
 }
 
 impl ThroughputLogs {
     pub(super) fn new(max_length: usize, min_elapsed_time: Duration) -> Self {
         Self {
-            inner: VecDeque::with_capacity(max_length),
+            inner: VecDeque::new(),
             min_elapsed_time,
             max_length,
+            floating_back: None,
         }
     }
 
+    pub(super) fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.inner.is_empty()
+    }
+
     pub(super) fn push(&mut self, throughput: (SystemTime, u64)) {
+        // Clear the floating back since we now have a real one.
+        let _ = self.floating_back.take();
         self.inner.push_back(throughput);
 
         // When the number of logs exceeds the max length, toss the oldest log.
@@ -139,8 +151,21 @@ impl ThroughputLogs {
         }
     }
 
+    pub(super) fn set_floating_back(&mut self, time: SystemTime) {
+        self.floating_back = Some((time, 0));
+    }
+
+    pub(super) fn front(&self) -> Option<&(SystemTime, u64)> {
+        self.inner.front()
+    }
+
+    // Call `self.inner.back()` instead of this and you'll be confused and then sorry.
+    pub(super) fn back(&self) -> Option<&(SystemTime, u64)> {
+        self.floating_back.as_ref().or(self.inner.back())
+    }
+
     pub(super) fn calculate_throughput(&self) -> Result<Option<Throughput>, super::Error> {
-        match (self.inner.front(), self.inner.back()) {
+        match (self.front(), self.back()) {
             (Some((front_t, _)), Some((back_t, _))) => {
                 // Ensure that enough time has passed between the first and last logs.
                 // If not, we can't calculate throughput.
@@ -151,6 +176,8 @@ impl ThroughputLogs {
                     return Ok(None);
                 }
 
+                // Floating back never contains bytes, so we don't care that
+                // it's missed in this calculation.
                 let total_bytes_logged = self
                     .inner
                     .iter()
@@ -188,7 +215,7 @@ mod test {
             throughput_logs.push((UNIX_EPOCH + (tick_duration * i), rate));
         }
 
-        assert_eq!(length as usize, throughput_logs.inner.len());
+        assert_eq!(length as usize, throughput_logs.len());
         throughput_logs
     }
 
