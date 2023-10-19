@@ -49,7 +49,7 @@ class HttpAuthDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .api_key(Token::new("some-api-key", None))
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -81,7 +81,7 @@ class HttpAuthDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .basic_auth_login(Login::new("some-user", "some-pass", None))
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -121,7 +121,7 @@ class HttpAuthDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .api_key(Token::new("some-api-key", None))
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -162,7 +162,7 @@ class HttpAuthDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .api_key(Token::new("some-api-key", None))
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -203,7 +203,7 @@ class HttpAuthDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .basic_auth_login(Login::new("some-user", "some-pass", None))
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -244,7 +244,7 @@ class HttpAuthDecoratorTest {
 
                         let config = $moduleName::Config::builder()
                             .bearer_token(Token::new("some-token", None))
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -281,7 +281,7 @@ class HttpAuthDecoratorTest {
                         );
 
                         let config = $moduleName::Config::builder()
-                            .endpoint_resolver("http://localhost:1234")
+                            .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);

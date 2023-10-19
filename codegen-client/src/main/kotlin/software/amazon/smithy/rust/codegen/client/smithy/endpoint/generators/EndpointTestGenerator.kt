@@ -16,7 +16,6 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.ExpectedEndpoint
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
@@ -38,16 +37,12 @@ internal class EndpointTestGenerator(
     private val paramsType: RuntimeType,
     private val resolverType: RuntimeType,
     private val params: Parameters,
-    private val endpointCustomizations: List<EndpointCustomization>,
     codegenContext: ClientCodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val serviceShape = codegenContext.serviceShape
-    private val model = codegenContext.model
     private val types = Types(runtimeConfig)
     private val codegenScope = arrayOf(
         "Endpoint" to types.smithyEndpoint,
-        "ResolveEndpoint" to types.resolveEndpoint,
         "Error" to types.resolveEndpointError,
         "Document" to RuntimeType.document(runtimeConfig),
         "HashMap" to RuntimeType.HashMap,
@@ -67,7 +62,6 @@ internal class EndpointTestGenerator(
             #{docs:W}
             ##[test]
             fn test_$id() {
-                use #{ResolveEndpoint};
                 let params = #{params:W};
                 let resolver = #{resolver}::new();
                 let endpoint = resolver.resolve_endpoint(&params);
