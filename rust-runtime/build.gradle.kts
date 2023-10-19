@@ -32,7 +32,7 @@ tasks["assemble"].apply {
 
 tasks.register<Copy>("copyRuntimeCrates") {
     from("$rootDir/rust-runtime") {
-        CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { include("$it/**") }
+        CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { include("${it.name}/**") }
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
@@ -43,9 +43,9 @@ tasks.register<Copy>("copyRuntimeCrates") {
 tasks.register("fixRuntimeCrateVersions") {
     dependsOn("copyRuntimeCrates")
     doLast {
-        CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { moduleName ->
-            patchFile(runtimeOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteRuntimeCrateVersion(properties, line)
+        CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { module ->
+            patchFile(runtimeOutputDir.resolve("${module.name}/Cargo.toml")) { line ->
+                rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line)
             }
         }
     }

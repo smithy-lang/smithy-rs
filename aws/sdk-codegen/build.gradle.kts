@@ -36,7 +36,7 @@ val generateAwsRuntimeCrateVersion by tasks.registering {
     val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rustsdk"
     val versionFile = file("$resourcesDir/sdk-crate-version.txt")
     outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"]?.toString()!!
+    val crateVersion = project.properties[CrateSet.STABLE_VERSION_PROP_NAME]?.toString()!!
     inputs.property("crateVersion", crateVersion)
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
