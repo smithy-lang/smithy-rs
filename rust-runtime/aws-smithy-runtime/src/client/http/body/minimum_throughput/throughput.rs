@@ -3,21 +3,51 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::collections::VecDeque;
 use std::fmt;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Clone, Copy)]
 pub(super) struct Throughput {
-    pub(super) bytes_read: f64,
-    pub(super) per_time_elapsed: Duration,
+    bytes_read: f64,
+    per_time_elapsed: Duration,
 }
 
 impl Throughput {
-    pub(super) fn bytes_per_second(&self) -> f64 {
-        self.bytes_read / self.per_time_elapsed.as_secs_f64()
+    pub(super) fn new(bytes_read: f64, per_time_elapsed: Duration) -> Self {
+        debug_assert!(
+            !bytes_read.is_nan(),
+            "cannot create a throughput if bytes_read == NaN"
+        );
+        debug_assert!(
+            bytes_read.is_finite(),
+            "cannot create a throughput if bytes_read == Inf"
+        );
+        debug_assert!(
+            !per_time_elapsed.is_zero(),
+            "cannot create a throughput if per_time_elapsed == 0"
+        );
+
+        Self {
+            bytes_read,
+            per_time_elapsed,
+        }
     }
 
-    fn normalize_to_per_second(self) -> Self {
+    pub(super) fn per_time_elapsed(&self) -> Duration {
+        self.per_time_elapsed
+    }
+
+    pub(super) fn bytes_per_second(&self) -> f64 {
+        let per_time_elapsed_secs = self.per_time_elapsed.as_secs_f64();
+        if per_time_elapsed_secs == 0.0 {
+            return 0.0; // Avoid dividing by zero.
+        };
+
+        self.bytes_read / per_time_elapsed_secs
+    }
+
+    fn normalize_to_per_one_second(self) -> Self {
         if self.per_time_elapsed == Duration::from_secs(1) {
             // Already normalized to per second, return self without modifying it.
             self
@@ -38,8 +68,8 @@ impl PartialEq for Throughput {
             self.bytes_per_second() == other.bytes_per_second()
         } else {
             // Otherwise, normalize the unit of time and then compare adjusted bytes per second.
-            let normalized_self = self.normalize_to_per_second();
-            let normalized_other = other.normalize_to_per_second();
+            let normalized_self = self.normalize_to_per_one_second();
+            let normalized_other = other.normalize_to_per_one_second();
             normalized_self.bytes_per_second() == normalized_other.bytes_per_second()
         }
     }
@@ -53,8 +83,8 @@ impl PartialOrd for Throughput {
                 .partial_cmp(&other.bytes_per_second())
         } else {
             // Otherwise, normalize the unit of time and then compare adjusted bytes per second.
-            let normalized_self = self.normalize_to_per_second();
-            let normalized_other = other.normalize_to_per_second();
+            let normalized_self = self.normalize_to_per_one_second();
+            let normalized_other = other.normalize_to_per_one_second();
             normalized_self
                 .bytes_per_second()
                 .partial_cmp(&normalized_other.bytes_per_second())
@@ -81,5 +111,129 @@ impl From<(u64, Duration)> for Throughput {
             bytes_read: value.0 as f64,
             per_time_elapsed: value.1,
         }
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct ThroughputLogs {
+    max_length: usize,
+    min_elapsed_time: Duration,
+    inner: VecDeque<(SystemTime, u64)>,
+}
+
+impl ThroughputLogs {
+    pub(super) fn new(max_length: usize, min_elapsed_time: Duration) -> Self {
+        Self {
+            inner: VecDeque::with_capacity(max_length),
+            min_elapsed_time,
+            max_length,
+        }
+    }
+
+    pub(super) fn push(&mut self, throughput: (SystemTime, u64)) {
+        self.inner.push_back(throughput);
+
+        // When the number of logs exceeds the max length, toss the oldest log.
+        if self.inner.len() > self.max_length {
+            self.inner.pop_front();
+        }
+    }
+
+    pub(super) fn calculate_throughput(&self) -> Result<Option<Throughput>, super::Error> {
+        match (self.inner.front(), self.inner.back()) {
+            (Some((front_t, _)), Some((back_t, _))) => {
+                // Ensure that enough time has passed between the first and last logs.
+                // If not, we can't calculate throughput.
+                let log_time_span = back_t
+                    .duration_since(*front_t)
+                    .map_err(|err| super::Error::TimeTravel(err.into()))?;
+                if log_time_span < self.min_elapsed_time {
+                    return Ok(None);
+                }
+
+                let total_bytes_logged = self
+                    .inner
+                    .iter()
+                    .fold(0, |acc, (_, bytes_read)| acc + bytes_read)
+                    as f64;
+
+                Ok(Some(Throughput {
+                    bytes_read: total_bytes_logged,
+                    per_time_elapsed: log_time_span,
+                }))
+            }
+            _ => Ok(None),
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{Throughput, ThroughputLogs};
+    use std::time::{Duration, UNIX_EPOCH};
+
+    #[test]
+    fn test_throughput_eq() {
+        let t1 = Throughput::new(1.0, Duration::from_secs(1));
+        let t2 = Throughput::new(25.0, Duration::from_secs(25));
+        let t3 = Throughput::new(100.0, Duration::from_secs(100));
+
+        assert_eq!(t1, t2);
+        assert_eq!(t2, t3);
+    }
+
+    fn build_throughput_log(length: u32, tick_duration: Duration, rate: u64) -> ThroughputLogs {
+        let mut throughput_logs = ThroughputLogs::new(length as usize, Duration::from_secs(1));
+        for i in 1..=length {
+            throughput_logs.push((UNIX_EPOCH + (tick_duration * i), rate));
+        }
+
+        assert_eq!(length as usize, throughput_logs.inner.len());
+        throughput_logs
+    }
+
+    #[test]
+    fn test_throughput_log_calculate_throughput_1() {
+        let throughput_logs = build_throughput_log(1000, Duration::from_secs(1), 1);
+
+        let throughput = throughput_logs.calculate_throughput().unwrap().unwrap();
+        // Floats being what they are
+        assert_eq!(1.001001001001001, throughput.bytes_per_second());
+    }
+
+    #[test]
+    fn test_throughput_log_calculate_throughput_2() {
+        let throughput_logs = build_throughput_log(1000, Duration::from_secs(5), 5);
+
+        let throughput = throughput_logs.calculate_throughput().unwrap().unwrap();
+        // Floats being what they are
+        assert_eq!(1.001001001001001, throughput.bytes_per_second());
+    }
+
+    #[test]
+    fn test_throughput_log_calculate_throughput_3() {
+        let throughput_logs = build_throughput_log(1000, Duration::from_millis(200), 1024);
+
+        let throughput = throughput_logs.calculate_throughput().unwrap().unwrap();
+        let expected_throughput = 1024.0 * 5.0;
+        // Floats being what they are
+        assert_eq!(
+            expected_throughput + 5.125125125125,
+            throughput.bytes_per_second()
+        );
+    }
+
+    #[test]
+    fn test_throughput_log_calculate_throughput_4() {
+        let throughput_logs = build_throughput_log(1000, Duration::from_millis(100), 12);
+
+        let throughput = throughput_logs.calculate_throughput().unwrap().unwrap();
+        let expected_throughput = 12.0 * 10.0;
+
+        // Floats being what they are
+        assert_eq!(
+            expected_throughput + 0.12012012012012,
+            throughput.bytes_per_second()
+        );
     }
 }

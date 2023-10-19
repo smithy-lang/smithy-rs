@@ -9,207 +9,64 @@
 
 mod throughput;
 
+use aws_smithy_async::rt::sleep::Sleep;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::shared::IntoShared;
-use std::collections::VecDeque;
 use std::fmt;
 use std::future::Future;
-use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::pin::{pin, Pin};
 use std::task::{Context, Poll};
-use std::time::{Duration, SystemTime};
-use throughput::Throughput;
-use tokio::select;
-
-// Chosen arbitrarily.
-const LOG_WINDOW_SIZE: usize = 16;
+use std::time::Duration;
+use throughput::{Throughput, ThroughputLogs};
 
 pin_project_lite::pin_project! {
-    struct MinimumThroughputBody<D, T> {
+    /// A body-wrapper that ensures data is emitted from the body at a rate
+    /// greater
+    pub struct MinimumThroughputBody<B> {
+        async_sleep: SharedAsyncSleep,
+        time_source: SharedTimeSource,
+        minimum_throughput: Throughput,
+        throughput_logs: ThroughputLogs,
         #[pin]
-        data_fut: D,
+        sleep_fut: Option<Sleep>,
         #[pin]
-        trailers_fut: T,
+        inner: B,
     }
 }
 
-#[derive(Clone)]
-struct ThroughputLogs {
-    window_size: usize,
-    inner: Arc<Mutex<VecDeque<(SystemTime, u64)>>>,
-}
+// Limit logs to ~1KB of memory overhead.
+const SIZE_OF_ONE_LOG: usize = std::mem::size_of::<(std::time::SystemTime, u64)>();
+const NUMBER_OF_LOGS_IN_ONE_KB: usize = 1024 / SIZE_OF_ONE_LOG;
 
-impl ThroughputLogs {
-    fn new(window_size: usize) -> Self {
-        Self {
-            inner: Arc::new(Mutex::new(VecDeque::with_capacity(window_size))),
-            window_size,
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.inner.lock().unwrap().is_empty()
-    }
-
-    fn push(&self, throughput: (SystemTime, u64)) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.push_back(throughput);
-
-        // When the number of logs exceeds the window size, toss the oldest log.
-        if inner.len() > self.window_size {
-            inner.pop_front();
-        }
-    }
-
-    // If this function returns:
-    // - `None`: We couldn't calculate a throughput because we don't have good data yet.
-    // - `Some(throughput)`: We have good data, and we can calculate a throughput.
-    // -- `Err(_)`: A bug occurred.
-    fn calculate_throughput(
-        &self,
-        now: SystemTime,
-        min_duration_elapsed: Duration,
-    ) -> Result<Option<Throughput>, Error> {
-        let mut inner = self.inner.lock().unwrap();
-
-        if let Some((earliest_time, _)) = inner.front() {
-            let time_elapsed_since_earliest_poll = now
-                .duration_since(*earliest_time)
-                .map_err(|err| Error::TimeTravel(err.into()))?;
-
-            // This check ensures we that the data we're looking at covers a good range of time.
-            // If not, then we don't calculate a throughput.
-            if time_elapsed_since_earliest_poll < min_duration_elapsed {
-                return Ok(None);
-            }
-
-            let total_bytes_logged = inner
-                .iter()
-                .fold(0, |acc, (_, bytes_read)| acc + bytes_read)
-                as f64;
-
-            Ok(Some(Throughput {
-                bytes_read: total_bytes_logged,
-                per_time_elapsed: time_elapsed_since_earliest_poll,
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-}
-
-impl<D, T> MinimumThroughputBody<D, T> {
-    pub fn new<B>(
+impl<B> MinimumThroughputBody<B> {
+    ///
+    pub fn new(
         time_source: impl TimeSource + 'static,
         async_sleep: impl AsyncSleep + 'static,
-        mut body: B,
-        minimum_throughput: (u64, Duration),
-    ) -> Self
-    where
-        B: http_body::Body<Data = bytes::Bytes, Error = BoxError> + Unpin,
-        D: Future<Output = Option<Result<B::Data, B::Error>>>,
-        T: Future<Output = Result<Option<http::HeaderMap<http::HeaderValue>>, B::Error>>,
-    {
-        let throughput_logs = ThroughputLogs::new(LOG_WINDOW_SIZE);
-        let minimum_throughput: Throughput = minimum_throughput.into();
-        let shared_sleep: SharedAsyncSleep = async_sleep.into_shared();
-        let shared_time: SharedTimeSource = time_source.into_shared();
-
-        let data_fut = body.data();
-        // Wrap the data future in our throughput-checking future.
-        let data_fut = async {
-            let async_sleep = shared_sleep.clone();
-            let time_source = shared_time.clone();
-            let throughput_logs = throughput_logs.clone();
-            let tick_rate = minimum_throughput.per_time_elapsed;
-            loop {
-                let sleep_fut = async_sleep.sleep(tick_rate);
-                select! {
-                    sleep = sleep_fut => {
-                        // We need at least one log to calc throughput, so ensure
-                        // one is present. If we already have at least one log,
-                        // then logging that we received no data is implicit and
-                        // unnecessary.
-                        if throughput_logs.is_empty() {
-                            let now = time_source.now();
-                            throughput_logs.push((now, 0));
-                        }
-                    },
-                    data = &mut data_fut => {
-                        break data;
-                    }
-                }
-
-                let now = time_source.now();
-                let actual_throughput = throughput_logs
-                    .calculate_throughput(now, tick_rate)
-                    .expect("time travel is impossible");
-                match actual_throughput {
-                    Some(actual_throughput) if actual_throughput < minimum_throughput => {
-                        break Some(Err(Box::new(Error::ThroughputBelowMinimum {
-                            expected: minimum_throughput,
-                            actual: actual_throughput,
-                        })));
-                    }
-                    _ => continue,
-                }
-            }
-        };
-
-        let trailers_fut = body.trailers();
-        // Wrap the trailers future in our throughput-checking future.
-        let trailers_fut = async {
-            let async_sleep = shared_sleep.clone();
-            let time_source = shared_time.clone();
-            let throughput_logs = throughput_logs.clone();
-            let tick_rate = minimum_throughput.per_time_elapsed;
-            loop {
-                let sleep_fut = async_sleep.sleep(tick_rate);
-                select! {
-                    sleep = sleep_fut => {
-                        // We need at least one log to calc throughput, so ensure
-                        // one is present. If we already have at least one log,
-                        // then logging that we received no data is implicit and
-                        // unnecessary.
-                        if throughput_logs.is_empty() {
-                            let now = time_source.now();
-                            throughput_logs.push((now, 0));
-                        }
-                    },
-                    trailers = &mut trailers_fut => {
-                        break trailers;
-                    }
-                }
-
-                let now = time_source.now();
-                let actual_throughput = throughput_logs
-                    .calculate_throughput(now, tick_rate)
-                    .expect("time travel is impossible");
-                match actual_throughput {
-                    Some(actual_throughput) if actual_throughput < minimum_throughput => {
-                        break Err(Box::new(Error::ThroughputBelowMinimum {
-                            expected: minimum_throughput,
-                            actual: actual_throughput,
-                        }));
-                    }
-                    _ => continue,
-                }
-            }
-        };
+        body: B,
+        (bytes_read, per_time_elapsed): (u64, Duration),
+    ) -> Self {
+        let minimum_throughput = Throughput::new(bytes_read as f64, per_time_elapsed);
 
         Self {
-            data_fut,
-            trailers_fut,
+            throughput_logs: ThroughputLogs::new(
+                NUMBER_OF_LOGS_IN_ONE_KB,
+                minimum_throughput.per_time_elapsed(),
+            ),
+            async_sleep: async_sleep.into_shared(),
+            time_source: time_source.into_shared(),
+            minimum_throughput: minimum_throughput.into(),
+            inner: body,
+            sleep_fut: None,
         }
     }
 }
 
-impl<D, T> http_body::Body for MinimumThroughputBody<D, T>
+impl<B> http_body::Body for MinimumThroughputBody<B>
 where
-    D: Future<Output = Option<Result<bytes::Bytes, BoxError>>>,
-    T: Future<Output = Result<Option<http::HeaderMap<http::HeaderValue>>, BoxError>>,
+    B: http_body::Body<Data = bytes::Bytes, Error = BoxError>,
 {
     type Data = bytes::Bytes;
     type Error = BoxError;
@@ -218,14 +75,57 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.project().data_fut.poll(cx)
+        // Attempt to read the data from the inner body, then update the
+        // throughput logs.
+        let mut this = self.as_mut().project();
+        let (bytes_read, poll_res) = match this.inner.poll_data(cx) {
+            Poll::Ready(Some(Ok(bytes))) => (bytes.len() as u64, Poll::Ready(Some(Ok(bytes)))),
+            Poll::Pending => (0, Poll::Pending),
+            // If we've read all the data or an error occurred, then return that result.
+            res => return res,
+        };
+        this.throughput_logs
+            .push((this.time_source.now(), bytes_read));
+
+        // Check the sleep future to see if it needs refreshing.
+        let mut sleep_fut = this.sleep_fut.take().unwrap_or_else(|| {
+            this.async_sleep
+                .sleep(this.minimum_throughput.per_time_elapsed())
+        });
+        match pin!(&mut sleep_fut).poll(cx) {
+            Poll::Ready(()) => {
+                // Whenever the sleep future expires, we replace it.
+                sleep_fut = this
+                    .async_sleep
+                    .sleep(this.minimum_throughput.per_time_elapsed());
+                // We also schedule a wake up for current task to ensure that
+                // it gets polled at least one more time.
+                cx.waker().wake_by_ref();
+            }
+            _ => (),
+        };
+        this.sleep_fut.replace(sleep_fut);
+
+        // Calculate the current throughput and emit an error if it's too low.
+        let actual_throughput = this.throughput_logs.calculate_throughput()?;
+        let is_below_minimum_throughput = actual_throughput
+            .map(|t| t < self.minimum_throughput)
+            .unwrap_or_default();
+        if is_below_minimum_throughput {
+            Poll::Ready(Some(Err(Box::new(Error::ThroughputBelowMinimum {
+                expected: self.minimum_throughput,
+                actual: actual_throughput.unwrap(),
+            }))))
+        } else {
+            poll_res
+        }
     }
 
     fn poll_trailers(
         self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
-        self.project().trailers_fut.poll(cx)
+        todo!()
     }
 }
 
@@ -266,7 +166,7 @@ mod tests {
     use std::error::Error as StdError;
     use std::pin::Pin;
     use std::task::{Context, Poll};
-    use std::time::{Duration, SystemTime};
+    use std::time::{Duration, UNIX_EPOCH};
 
     struct NeverBody;
 
@@ -285,13 +185,13 @@ mod tests {
             self: Pin<&mut Self>,
             _cx: &mut Context<'_>,
         ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-            todo!()
+            unreachable!("body can't be read, so this won't be called")
         }
     }
 
     #[tokio::test()]
     async fn test_self_waking() {
-        let (time_source, async_sleep) = instant_time_and_sleep(SystemTime::now());
+        let (time_source, async_sleep) = instant_time_and_sleep(UNIX_EPOCH);
         let mut body = MinimumThroughputBody::new(
             time_source.clone(),
             async_sleep.clone(),
@@ -306,5 +206,127 @@ mod tests {
         };
 
         assert_eq!(expected_err.to_string(), actual_err.to_string());
+    }
+
+    // These tests use `hyper::body::Body::wrap_stream`
+    #[cfg(feature = "connector-hyper-0-14-x")]
+    mod connector_hyper_0_14_x {
+        use super::*;
+        use crate::client::http::body::minimum_throughput::throughput::Throughput;
+        use aws_smithy_async::rt::sleep::AsyncSleep;
+        use aws_smithy_async::test_util::{InstantSleep, ManualTimeSource};
+        use aws_smithy_types::body::SdkBody;
+        use aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream};
+        use aws_smithy_types::error::display::DisplayErrorContext;
+        use bytes::Bytes;
+        use once_cell::sync::Lazy;
+        use pretty_assertions::assert_eq;
+        use std::convert::Infallible;
+        use std::future::Future;
+
+        fn create_test_stream(
+            async_sleep: impl AsyncSleep + Clone,
+        ) -> impl futures_util::Stream<Item = Result<Bytes, Infallible>> {
+            futures_util::stream::unfold(1, move |state| {
+                let async_sleep = async_sleep.clone();
+                async move {
+                    if state > 255 {
+                        None
+                    } else {
+                        async_sleep.sleep(Duration::from_secs(1)).await;
+                        Some((
+                            Result::<_, Infallible>::Ok(Bytes::from_static(b"00000000")),
+                            state + 1,
+                        ))
+                    }
+                }
+            })
+        }
+
+        const EXPECTED_BYTES: Lazy<Vec<u8>> = Lazy::new(|| {
+            (1..=255)
+                .map(|_| b"00000000")
+                .flatten()
+                .map(|byte| *byte)
+                .collect()
+        });
+
+        fn eight_byte_per_second_stream_with_minimum_throughput_timeout(
+            minimum_throughput: (u64, Duration),
+        ) -> (
+            impl Future<Output = Result<AggregatedBytes, aws_smithy_types::byte_stream::error::Error>>,
+            ManualTimeSource,
+            InstantSleep,
+        ) {
+            let (time_source, async_sleep) = instant_time_and_sleep(UNIX_EPOCH);
+            let time_clone = time_source.clone();
+
+            // Will send ~8 bytes per second.
+            let stream = create_test_stream(async_sleep.clone());
+            let body = ByteStream::new(SdkBody::from(hyper::body::Body::wrap_stream(stream)));
+            let body = body.map(move |body| {
+                let time_source = time_clone.clone();
+                // We don't want to log these sleeps because it would duplicate
+                // the `sleep` calls being logged by the MTB
+                let async_sleep = InstantSleep::unlogged();
+                SdkBody::from_dyn(aws_smithy_http::body::BoxBody::new(
+                    MinimumThroughputBody::new(time_source, async_sleep, body, minimum_throughput),
+                ))
+            });
+
+            (body.collect(), time_source, async_sleep)
+        }
+
+        async fn expect_error(minimum_throughput: (u64, Duration)) {
+            let (res, ..) =
+                eight_byte_per_second_stream_with_minimum_throughput_timeout(minimum_throughput);
+            let expected_err = Error::ThroughputBelowMinimum {
+                expected: minimum_throughput.into(),
+                actual: Throughput::new(8.889, Duration::from_secs(1)),
+            };
+            match res.await {
+                Ok(_) => {
+                    panic!("response succeeded instead of returning the expected error '{expected_err}'")
+                }
+                Err(actual_err) => {
+                    assert_eq!(
+                        expected_err.to_string(),
+                        // We need to source this so that we don't get the streaming error it's wrapped in.
+                        actual_err.source().unwrap().to_string()
+                    );
+                }
+            }
+        }
+
+        #[tokio::test]
+        async fn test_throughput_timeout_less_than() {
+            let minimum_throughput = (9, Duration::from_secs(1));
+            expect_error(minimum_throughput).await;
+        }
+
+        async fn expect_success(minimum_throughput: (u64, Duration)) {
+            let (res, time_source, async_sleep) =
+                eight_byte_per_second_stream_with_minimum_throughput_timeout(minimum_throughput);
+            match res.await {
+                Ok(res) => {
+                    assert_eq!(255.0, time_source.seconds_since_unix_epoch());
+                    assert_eq!(Duration::from_secs(255), async_sleep.total_duration());
+                    assert_eq!(*EXPECTED_BYTES, res.to_vec());
+                }
+                Err(err) => panic!("{}", DisplayErrorContext(err.source().unwrap())),
+            }
+        }
+
+        #[tokio::test]
+        async fn test_throughput_timeout_equal_to() {
+            let minimum_throughput = (32, Duration::from_secs(4));
+            expect_success(minimum_throughput).await;
+        }
+
+        #[tokio::test]
+        async fn test_throughput_timeout_greater_than() {
+            let minimum_throughput = (20, Duration::from_secs(3));
+            expect_success(minimum_throughput).await;
+        }
     }
 }
