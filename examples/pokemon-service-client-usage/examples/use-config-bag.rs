@@ -1,4 +1,3 @@
-use aws_smithy_types::config_bag::{Storable, StoreReplace};
 /*
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -13,6 +12,7 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 /// The example can be run using `cargo run --example use-config-bag`.
 ///
 //use aws_smithy_types::config_bag::{Storable, StoreReplace};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::time::Instant;
 

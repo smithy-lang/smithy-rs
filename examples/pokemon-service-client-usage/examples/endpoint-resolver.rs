@@ -12,8 +12,7 @@
 ///
 /// The example can be run using `cargo run --example endpoint-resolver`.
 ///
-use aws_smithy_types::endpoint::Endpoint;
-use pokemon_service_client::config::endpoint::{Params, ResolveEndpoint};
+use pokemon_service_client::config::endpoint::{Endpoint, EndpointFuture, Params, ResolveEndpoint};
 use pokemon_service_client::primitives::{DateTime, DateTimeFormat};
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client_usage::setup_tracing_subscriber;
@@ -22,6 +21,7 @@ use std::time::SystemTime;
 
 // This struct, provided as an example, constructs the URL that should be set on each request during initialization.
 // It also implements the `ResolveEndpoint` trait, enabling it to be assigned as the endpoint_resolver in the `Config`.
+#[derive(Debug)]
 struct RegionalEndpoint {
     url_to_use: String,
 }
@@ -33,8 +33,8 @@ impl RegionalEndpoint {
     }
 }
 
-impl ResolveEndpoint<Params> for RegionalEndpoint {
-    fn resolve_endpoint(&self, _: &Params) -> aws_smithy_http::endpoint::Result {
+impl ResolveEndpoint for RegionalEndpoint {
+    fn resolve_endpoint<'a>(&'a self, _params: &'a Params) -> EndpointFuture<'a> {
         // Construct an endpoint using the Endpoint::Builder. Set the URL and,
         // optionally, any headers to be sent with the request. For this example,
         // we'll set the 'x-amz-date' header to the current date for all outgoing requests.
@@ -51,9 +51,8 @@ impl ResolveEndpoint<Params> for RegionalEndpoint {
                     .expect("Could not create a date in UTC format"),
             )
             .build();
-
         tracing::info!(?endpoint, "Resolving endpoint");
-        Ok(endpoint)
+        EndpointFuture::ready(Ok(endpoint))
     }
 }
 

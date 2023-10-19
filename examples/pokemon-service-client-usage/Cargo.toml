@@ -18,11 +18,13 @@ pokemon-service-client = { path = "../pokemon-service-client/" }
 # Required for getting the operation name from the `Metadata`.
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
 
-# Required for building an `Endpoint` in `custom-header-using-interceptor` example.
+# Required for `Storable` and `StoreReplace` in `response-header-interceptor` example.
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
 
 # Required for `HyperClientBuilder` in `client-connector` example.
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime/", features=["test-util"] }
+
+
 
 hyper = { version = "0.14.25", features = ["client", "full"] }
 tokio = {version = "1.26.0", features=["full"]}

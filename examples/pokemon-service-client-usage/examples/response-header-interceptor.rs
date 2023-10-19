@@ -11,6 +11,7 @@
 ///
 /// The example can be run using `cargo run --example response-header-interceptor`.
 ///
+//use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use pokemon_service_client::{
     config::{
