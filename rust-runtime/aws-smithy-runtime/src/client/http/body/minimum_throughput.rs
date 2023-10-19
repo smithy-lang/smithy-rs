@@ -282,7 +282,7 @@ mod tests {
                 // We don't want to log these sleeps because it would duplicate
                 // the `sleep` calls being logged by the MTB
                 let async_sleep = InstantSleep::unlogged();
-                SdkBody::from_dyn(aws_smithy_http::body::BoxBody::new(
+                SdkBody::from_dyn(aws_smithy_types::body::BoxBody::new(
                     MinimumThroughputBody::new(time_source, async_sleep, body, minimum_throughput),
                 ))
             });
