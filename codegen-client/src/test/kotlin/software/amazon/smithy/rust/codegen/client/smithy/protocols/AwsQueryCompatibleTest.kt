@@ -58,7 +58,7 @@ class AwsQueryCompatibleTest {
                     ##[cfg(test)]
                     ##[#{tokio}::test]
                     async fn should_parse_code_and_type_fields() {
-                        use aws_smithy_http::body::SdkBody;
+                        use aws_smithy_types::body::SdkBody;
 
                         let response = |_: http::Request<SdkBody>| {
                             http::Response::builder()
@@ -138,7 +138,7 @@ class AwsQueryCompatibleTest {
                     ##[cfg(test)]
                     ##[#{tokio}::test]
                     async fn should_parse_code_from_payload() {
-                        use aws_smithy_http::body::SdkBody;
+                        use aws_smithy_types::body::SdkBody;
 
                         let response = |_: http::Request<SdkBody>| {
                             http::Response::builder()

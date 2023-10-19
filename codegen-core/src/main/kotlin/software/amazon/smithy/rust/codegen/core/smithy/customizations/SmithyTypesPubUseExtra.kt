@@ -64,10 +64,10 @@ fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writab
             pub use #{Error} as ByteStreamError;
             pub use #{SdkBody};
             """,
-            "ByteStream" to RuntimeType.smithyHttp(rc).resolve("byte_stream::ByteStream"),
-            "AggregatedBytes" to RuntimeType.smithyHttp(rc).resolve("byte_stream::AggregatedBytes"),
-            "Error" to RuntimeType.smithyHttp(rc).resolve("byte_stream::error::Error"),
-            "SdkBody" to RuntimeType.smithyHttp(rc).resolve("body::SdkBody"),
+            "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
+            "AggregatedBytes" to RuntimeType.smithyTypes(rc).resolve("byte_stream::AggregatedBytes"),
+            "Error" to RuntimeType.smithyTypes(rc).resolve("byte_stream::error::Error"),
+            "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
         )
     }
 }
