@@ -15,7 +15,7 @@ use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use smithy_rs_tool_common::ci::running_in_ci;
-use smithy_rs_tool_common::package::PackageCategory;
+use smithy_rs_tool_common::package::{PackageCategory, PackageStability};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -78,9 +78,28 @@ impl Manifest {
         let value = self.metadata.get("package").and_then(|v| v.get("publish"));
         match value {
             None => Ok(true),
-            Some(value) => value
-                .as_bool()
-                .ok_or(anyhow::Error::msg("unexpected publish setting")),
+            Some(value) => value.as_bool().ok_or(anyhow::Error::msg(format!(
+                "unexpected publish setting: {value}"
+            ))),
+        }
+    }
+
+    fn stability(&self) -> Result<PackageStability> {
+        let value = self
+            .metadata
+            .get("package.metadata.release-tooling")
+            .and_then(|v| v.get("stable"));
+        match value {
+            None => Ok(PackageStability::Unstable),
+            Some(value) => {
+                if value.as_bool().ok_or(anyhow::Error::msg(format!(
+                    "unexpected stable setting: {value}"
+                )))? {
+                    Ok(PackageStability::Stable)
+                } else {
+                    Ok(PackageStability::Unstable)
+                }
+            }
         }
     }
 }
@@ -122,11 +141,21 @@ impl Versions {
     fn get(&self, crate_name: &str) -> Option<&semver::Version> {
         self.0.get(crate_name).map(|v| &v.version)
     }
+
+    fn stable(&self, crate_name: &str) -> Option<bool> {
+        match self.0.get(crate_name) {
+            Some(VersionWithMetadata { stability, .. }) => {
+                Some(*stability == PackageStability::Stable)
+            }
+            _ => None,
+        }
+    }
 }
 
 struct VersionWithMetadata {
     version: semver::Version,
     publish: bool,
+    stability: PackageStability,
 }
 
 async fn read_manifests(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Manifest>> {
@@ -150,6 +179,7 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
             None => continue,
         };
         let publish = manifest.publish()?;
+        let stability = manifest.stability()?;
         let name = package
             .get("name")
             .and_then(|name| name.as_str())
@@ -163,7 +193,14 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
                 anyhow::Error::msg(format!("{:?} is missing a package version", manifest.path))
             })?;
         let version = parse_version::<SemVer>(&manifest.path, version)?;
-        versions.insert(name.into(), VersionWithMetadata { version, publish });
+        versions.insert(
+            name.into(),
+            VersionWithMetadata {
+                version,
+                publish,
+                stability,
+            },
+        );
     }
     Ok(Versions(versions))
 }
@@ -376,16 +413,19 @@ fn fix_manifest(versions: &Versions, manifest: &mut Manifest) -> Result<usize> {
 mod tests {
     use super::*;
 
-    fn make_versions<'a>(versions: impl Iterator<Item = &'a (&'a str, &'a str, bool)>) -> Versions {
+    fn make_versions<'a>(
+        versions: impl Iterator<Item = &'a (&'a str, &'a str, bool, PackageStability)>,
+    ) -> Versions {
         let map = versions
             .into_iter()
-            .map(|(name, version, publish)| {
+            .map(|(name, version, publish, stability)| {
                 let publish = *publish;
                 (
                     name.to_string(),
                     VersionWithMetadata {
                         version: semver::Version::parse(&version).unwrap(),
                         publish,
+                        stability: *stability,
                     },
                 )
             })
@@ -419,9 +459,19 @@ mod tests {
             metadata,
         };
         let versions = &[
-            ("local_build_something", "0.2.0", true),
-            ("local_dev_something", "0.1.0", false),
-            ("local_something", "1.1.3", false),
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", false, PackageStability::Stable),
         ];
         let versions = make_versions(versions.iter());
         fix_manifest(&versions, &mut manifest).expect_err("depends on unpublished local something");
@@ -455,9 +505,19 @@ mod tests {
             metadata,
         };
         let versions = &[
-            ("local_build_something", "0.2.0", true),
-            ("local_dev_something", "0.1.0", false),
-            ("local_something", "1.1.3", true),
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", true, PackageStability::Stable),
         ];
         let versions = make_versions(versions.iter());
 
@@ -515,7 +575,7 @@ mod tests {
             path: "test".into(),
             metadata,
         };
-        let versions = &[("aws-sdk-example", "0.2.0", true)];
+        let versions = &[("aws-sdk-example", "1.2.0", true, PackageStability::Stable)];
         let versions = make_versions(versions.iter());
 
         fix_dep_sets(&versions.published(), &mut manifest.metadata).expect("success");
@@ -525,7 +585,7 @@ mod tests {
             "\
                 [aws-sdk-example]\n\
                 path = \"../aws/sdk/example\"\n\
-                version = \"0.2.0\"\n\
+                version = \"1.2.0\"\n\
             ",
             actual_deps.to_string()
         );
