@@ -22,7 +22,6 @@ allowed_external_types = [
 
     # Pending fix in open PRs:
     "aws_smithy_http::result::*",
-    "aws_smithy_http::endpoint::*",
 
     # Pending future fix
     "aws_smithy_http::event_stream::receiver::Receiver",
