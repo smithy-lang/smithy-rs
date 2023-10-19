@@ -74,9 +74,6 @@ structure PrimitiveIntDocument {
     defaultedValue: PrimitiveInt
 }
 
-@enum([{"value": "enumvalue", "name": "V"}])
-string StringEnum
-
 integer PrimitiveInt
 
 structure AttributePartyInputOutput {
