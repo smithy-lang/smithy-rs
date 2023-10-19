@@ -13,7 +13,7 @@ env:
   rust_version: 1.70.0
 
 name: Release smithy-rs
-run-name: ${{ github.workflow }} ${{ inputs.semantic_version }} (${{ inputs.commit_sha }}) - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
+run-name: ${{ github.workflow }} ${{ inputs.stable_semantic_version }} ${{ inputs.unstable_semantic_version }} (${{ inputs.commit_sha }}) - ${{ inputs.dry_run && 'Dry run' || 'Production run' }}
 on:
   workflow_dispatch:
     inputs:
@@ -23,8 +23,12 @@ on:
           You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
         required: true
         type: string
-      semantic_version:
-        description: The semver tag that you want to release (e.g. 0.52.1)
+      stable_semantic_version:
+        description: The semver tag that you want to release for stable crates (e.g. 1.0.2)
+        required: true
+        type: string
+      unstable_semantic_version:
+        description: The semver tag that you want to release for unstable crates (e.g. 0.52.1)
         required: true
         type: string
       dry_run:
@@ -92,7 +96,7 @@ jobs:
       id: branch-push
       shell: bash
       env:
-        SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -e
@@ -125,7 +129,7 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: upgrade-gradle-properties
-        action-arguments: ${{ inputs.semantic_version }}
+        action-arguments: ${{ inputs.stable_semantic_version }} ${{ inputs.unstable_semantic_version }}
     - name: Download all artifacts
       uses: ./smithy-rs/.github/actions/download-all-artifacts
     - name: Push gradle.properties changes
@@ -133,7 +137,7 @@ jobs:
       working-directory: upgrade-gradle-properties/smithy-rs
       shell: bash
       env:
-        SEMANTIC_VERSION: ${{ inputs.semantic_version }}
+        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
         RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
         RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         DRY_RUN: ${{ inputs.dry_run }}
