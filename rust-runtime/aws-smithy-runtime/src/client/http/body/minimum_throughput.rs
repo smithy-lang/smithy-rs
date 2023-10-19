@@ -57,7 +57,7 @@ impl<B> MinimumThroughputBody<B> {
             ),
             async_sleep: async_sleep.into_shared(),
             time_source: time_source.into_shared(),
-            minimum_throughput: minimum_throughput.into(),
+            minimum_throughput,
             inner: body,
             sleep_fut: None,
         }
@@ -101,29 +101,26 @@ where
             this.async_sleep
                 .sleep(this.minimum_throughput.per_time_elapsed())
         });
-        match pin!(&mut sleep_fut).poll(cx) {
-            Poll::Ready(()) => {
-                // Whenever the sleep future expires, we replace it.
-                sleep_fut = this
-                    .async_sleep
-                    .sleep(this.minimum_throughput.per_time_elapsed());
-                // If we already pushed a log during this poll, don't set a
-                // "floating back". Otherwise, do set one.
-                //
-                // The floating back acts as a end-bound for the purposes of
-                // calculating throughput for a given time span. 0-byte logs
-                // don't affect the throughput calculation except when they are
-                // the first or last log. The starting log is pushed the first
-                // time this is polled. If no data was emitted during a poll,
-                // then we set the floating back.
-                if !a_log_was_pushed_this_poll {
-                    this.throughput_logs.set_floating_back(now);
-                }
-                // We also schedule a wake up for current task to ensure that
-                // it gets polled at least one more time.
-                cx.waker().wake_by_ref();
+        if let Poll::Ready(()) = pin!(&mut sleep_fut).poll(cx) {
+            // Whenever the sleep future expires, we replace it.
+            sleep_fut = this
+                .async_sleep
+                .sleep(this.minimum_throughput.per_time_elapsed());
+            // If we already pushed a log during this poll, don't set a
+            // "floating back". Otherwise, do set one.
+            //
+            // The floating back acts as a end-bound for the purposes of
+            // calculating throughput for a given time span. 0-byte logs
+            // don't affect the throughput calculation except when they are
+            // the first or last log. The starting log is pushed the first
+            // time this is polled. If no data was emitted during a poll,
+            // then we set the floating back.
+            if !a_log_was_pushed_this_poll {
+                this.throughput_logs.set_floating_back(now);
             }
-            _ => (),
+            // We also schedule a wake up for current task to ensure that
+            // it gets polled at least one more time.
+            cx.waker().wake_by_ref();
         };
         this.sleep_fut.replace(sleep_fut);
 
@@ -264,13 +261,8 @@ mod tests {
             })
         }
 
-        const EXPECTED_BYTES: Lazy<Vec<u8>> = Lazy::new(|| {
-            (1..=255)
-                .map(|_| b"00000000")
-                .flatten()
-                .map(|byte| *byte)
-                .collect()
-        });
+        static EXPECTED_BYTES: Lazy<Vec<u8>> =
+            Lazy::new(|| (1..=255).flat_map(|_| b"00000000").copied().collect());
 
         fn eight_byte_per_second_stream_with_minimum_throughput_timeout(
             minimum_throughput: (u64, Duration),

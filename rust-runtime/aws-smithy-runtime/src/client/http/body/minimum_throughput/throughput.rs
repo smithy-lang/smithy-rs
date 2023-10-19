@@ -132,10 +132,6 @@ impl ThroughputLogs {
         }
     }
 
-    pub(super) fn len(&self) -> usize {
-        self.inner.len()
-    }
-
     pub(super) fn is_empty(&self) -> bool {
         self.inner.is_empty()
     }
@@ -215,7 +211,7 @@ mod test {
             throughput_logs.push((UNIX_EPOCH + (tick_duration * i), rate));
         }
 
-        assert_eq!(length as usize, throughput_logs.len());
+        assert_eq!(length as usize, throughput_logs.inner.len());
         throughput_logs
     }
 
