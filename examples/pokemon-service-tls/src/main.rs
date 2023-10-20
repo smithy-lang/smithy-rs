@@ -77,11 +77,9 @@ impl Connected<&tokio_rustls::server::TlsStream<hyper::server::conn::AddrStream>
         let (addr_stream, session) = target.get_ref();
         let socket_addr = addr_stream.remote_addr();
 
-        let certs = if let Some(certs) = session.peer_certificates() {
-            Some(Arc::new(certs.to_vec()))
-        } else {
-            None
-        };
+        let certs = session
+            .peer_certificates()
+            .map(|certs| Arc::new(certs.to_vec()));
 
         TlsConnectInfo { socket_addr, certs }
     }
@@ -93,6 +91,8 @@ pub async fn do_nothing_with_tls_connect_info(
     _input: input::DoNothingInput,
     ConnectInfo(tls_connect_info): ConnectInfo<TlsConnectInfo>,
 ) -> output::DoNothingOutput {
+    // Logging these might pose a security concern! You probably don't want to do this in
+    // production.
     tracing::debug!(?tls_connect_info.certs, "peer TLS certificates");
 
     output::DoNothingOutput {}
