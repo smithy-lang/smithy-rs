@@ -17,7 +17,6 @@
 use crate::identity::IdentityCache;
 use crate::imds::client::error::{ImdsError, TokenError, TokenErrorKind};
 use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::expiring_cache::ExpiringCache;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -33,6 +32,7 @@ use aws_smithy_runtime_api::client::runtime_components::{
     GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use http::{HeaderValue, Uri};
 use std::borrow::Cow;

@@ -426,3 +426,27 @@ message = "**This change has [detailed upgrade guidance](https://github.com/awsl
 references = ["smithy-rs#3043", "smithy-rs#3078"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = """
+`aws_smithy_http::operation::error::{BuildError, SerializationError}` have been moved to `aws_smithy_types::error::operation::{BuildError, SerializationError}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+"""
+references = ["smithy-rs#3054", "smithy-rs#3070"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+`aws_smithy_http::body::{BoxBody, Error, SdkBody}` have been moved to `aws_smithy_types::body::{BoxBody, Error, SdkBody}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+"""
+references = ["smithy-rs#3076"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+`aws_smithy_http::byte_stream::{AggregatedBytes, ByteStream, error::Error}` have been moved to `aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream, error::Error}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+"""
+references = ["smithy-rs#3076"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
