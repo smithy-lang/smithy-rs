@@ -230,6 +230,17 @@ impl Request<SdkBody> {
         })
     }
 
+    /// Creates an empty clone of this request, that is, the same URI, method, and headers but no body or extensions.
+    pub fn empty_clone(&self) -> Self {
+        Self {
+            body: SdkBody::empty(),
+            uri: self.uri.clone(),
+            method: self.method.clone(),
+            extensions: Extensions::new(),
+            headers: self.headers.clone(),
+        }
+    }
+
     /// Replaces this requests body with [`SdkBody::taken()`]
     pub fn take_body(&mut self) -> SdkBody {
         std::mem::replace(self.body_mut(), SdkBody::taken())

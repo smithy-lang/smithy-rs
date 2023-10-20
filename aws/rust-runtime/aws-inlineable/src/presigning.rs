@@ -204,6 +204,12 @@ impl PresignedRequest {
     }
 }
 
+impl Clone for PresignedRequest {
+    fn clone(&self) -> Self {
+        Self(self.0.empty_clone())
+    }
+}
+
 impl fmt::Debug for PresignedRequest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("PresignedRequest")
@@ -211,5 +217,38 @@ impl fmt::Debug for PresignedRequest {
             .field("uri", &self.uri())
             .field("headers", self.0.headers())
             .finish()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+    use aws_smithy_types::body::SdkBody;
+    use http::Method;
+
+    #[test]
+    fn test_presigned_request_clone() {
+        let req = http::Request::builder()
+            .method(http::Method::PATCH)
+            .uri(
+                http::Uri::builder()
+                    .scheme("http")
+                    .authority("localhost")
+                    .path_and_query("/hello?foo=bar")
+                    .build()
+                    .expect("build test uri"),
+            )
+            .header("test", "header")
+            .body(SdkBody::empty())
+            .expect("test request");
+
+        let req = HttpRequest::try_from(req).expect("");
+
+        let clone = req.empty_clone();
+
+        assert_eq!(clone.method(), Method::PATCH);
+        assert_eq!(clone.uri(), "http://localhost/hello?foo=bar");
+        // Assert they have different bodies
+        assert!(!std::ptr::eq(req.body(), clone.body()));
     }
 }
