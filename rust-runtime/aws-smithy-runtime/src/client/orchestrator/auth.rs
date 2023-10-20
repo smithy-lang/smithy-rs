@@ -419,9 +419,9 @@ mod tests {
     #[tokio::test]
     async fn use_identity_cache() {
         use crate::client::auth::http::{ApiKeyAuthScheme, ApiKeyLocation};
-        use aws_smithy_http::body::SdkBody;
         use aws_smithy_runtime_api::client::auth::http::HTTP_API_KEY_AUTH_SCHEME_ID;
         use aws_smithy_runtime_api::client::identity::http::Token;
+        use aws_smithy_types::body::SdkBody;
 
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.enter_serialization_phase();
