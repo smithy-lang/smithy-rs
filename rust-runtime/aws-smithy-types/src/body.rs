@@ -11,7 +11,7 @@ use http_body::{Body, SizeHint};
 use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
-use std::pin::Pin;
+use std::pin::{pin, Pin};
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
@@ -278,10 +278,20 @@ impl http_body::Body for SdkBody {
     }
 
     fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
     ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        Poll::Ready(Ok(None))
+        match &mut self.inner {
+            Inner::Once { .. } | Inner::Taken => Poll::Ready(Ok(None)),
+            Inner::Streaming { inner } => {
+                let this = pin!(inner);
+                this.poll_trailers(cx).map_err(Into::into)
+            }
+            Inner::Dyn { inner } => {
+                let this = pin!(inner);
+                this.poll_trailers(cx).map_err(Into::into)
+            }
+        }
     }
 
     fn is_end_stream(&self) -> bool {

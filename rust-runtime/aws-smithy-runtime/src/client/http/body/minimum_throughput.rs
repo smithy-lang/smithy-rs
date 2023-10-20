@@ -38,7 +38,7 @@ pin_project_lite::pin_project! {
 }
 
 const SIZE_OF_ONE_LOG: usize = std::mem::size_of::<(std::time::SystemTime, u64)>(); // 24 bytes per log
-const NUMBER_OF_LOGS_IN_ONE_KB: usize = 1024 / SIZE_OF_ONE_LOG;
+const NUMBER_OF_LOGS_IN_ONE_KB: f64 = 1024.0 / SIZE_OF_ONE_LOG as f64;
 
 impl<B> MinimumThroughputBody<B> {
     /// Create a new minimum throughput body.
@@ -51,8 +51,9 @@ impl<B> MinimumThroughputBody<B> {
         let minimum_throughput = Throughput::new(bytes_read as f64, per_time_elapsed);
         Self {
             throughput_logs: ThroughputLogs::new(
-                // Never keep more than 10KB of logs in memory.
-                NUMBER_OF_LOGS_IN_ONE_KB * 10,
+                // Never keep more than 10KB of logs in memory. This currently
+                // equates to 426 logs.
+                (NUMBER_OF_LOGS_IN_ONE_KB * 10.0) as usize,
                 minimum_throughput.per_time_elapsed(),
             ),
             async_sleep: async_sleep.into_shared(),
@@ -64,6 +65,7 @@ impl<B> MinimumThroughputBody<B> {
     }
 }
 
+#[cfg(feature = "http-0-x")]
 impl<B> http_body::Body for MinimumThroughputBody<B>
 where
     B: http_body::Body<Data = bytes::Bytes, Error = BoxError>,
@@ -140,10 +142,59 @@ where
     }
 
     fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
-        todo!()
+        let now = self.time_source.now();
+        let mut a_log_was_pushed_this_poll = false;
+        // Attempt to read the data from the inner body, then update the
+        // throughput logs.
+        let mut this = self.as_mut().project();
+        let poll_res = match this.inner.poll_trailers(cx) {
+            Poll::Ready(Ok(Some(trailers))) => {
+                let size_of_all_keys: u64 = trailers.keys().map(|k| k.as_str().len() as u64).sum();
+                let size_of_all_values: u64 = trailers.values().map(|v| v.len() as u64).sum();
+                this.throughput_logs
+                    .push((now, size_of_all_keys + size_of_all_values));
+                a_log_was_pushed_this_poll = true;
+                Poll::Ready(Ok(Some(trailers)))
+            }
+            Poll::Pending => Poll::Pending,
+            // If we've read all the data or an error occurred, then return that result.
+            res => return res,
+        };
+
+        // Check the sleep future to see if it needs refreshing.
+        let mut sleep_fut = this.sleep_fut.take().unwrap_or_else(|| {
+            this.async_sleep
+                .sleep(this.minimum_throughput.per_time_elapsed())
+        });
+        // The strategy here is the same as when polling for data. Read those
+        // comments first if you have questions.
+        if let Poll::Ready(()) = pin!(&mut sleep_fut).poll(cx) {
+            sleep_fut = this
+                .async_sleep
+                .sleep(this.minimum_throughput.per_time_elapsed());
+            if !a_log_was_pushed_this_poll {
+                this.throughput_logs.set_floating_back(now);
+            }
+            cx.waker().wake_by_ref();
+        };
+        this.sleep_fut.replace(sleep_fut);
+
+        // Calculate the current throughput and emit an error if it's too low.
+        let actual_throughput = this.throughput_logs.calculate_throughput()?;
+        let is_below_minimum_throughput = actual_throughput
+            .map(|t| t < self.minimum_throughput)
+            .unwrap_or_default();
+        if is_below_minimum_throughput {
+            Poll::Ready(Err(Box::new(Error::ThroughputBelowMinimum {
+                expected: self.minimum_throughput,
+                actual: actual_throughput.unwrap(),
+            })))
+        } else {
+            poll_res
+        }
     }
 }
 
