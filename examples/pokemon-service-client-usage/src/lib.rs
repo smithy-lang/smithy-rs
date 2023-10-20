@@ -1,3 +1,7 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
 pub static POKEMON_SERVICE_URL: &str = "http://localhost:13734";
 
 /// Sets up the tracing subscriber to print `tracing::info!` and `tracing::error!` messages on the console.
