@@ -44,7 +44,6 @@ pub struct InterceptorError {
 
 impl InterceptorError {
     interceptor_error_fn!(read_before_execution => ReadBeforeExecution (with source));
-    interceptor_error_fn!(read_after_configuration => ReadAfterConfiguration (with source));
     interceptor_error_fn!(modify_before_serialization => ModifyBeforeSerialization (with source));
     interceptor_error_fn!(read_before_serialization => ReadBeforeSerialization (with source));
     interceptor_error_fn!(read_after_serialization => ReadAfterSerialization (with source));
@@ -79,8 +78,6 @@ impl InterceptorError {
 enum ErrorKind {
     /// An error occurred within the read_before_execution interceptor
     ReadBeforeExecution,
-    /// An error occurred within the read_after_configuration interceptor
-    ReadAfterConfiguration,
     /// An error occurred within the modify_before_serialization interceptor
     ModifyBeforeSerialization,
     /// An error occurred within the read_before_serialization interceptor
@@ -149,7 +146,6 @@ impl fmt::Display for InterceptorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         display_interceptor_err!(self, f,
             (ReadBeforeExecution => read_before_execution (interceptor error)),
-            (ReadAfterConfiguration => read_after_configuration (interceptor error)),
             (ModifyBeforeSerialization => modify_before_serialization (interceptor error)),
             (ReadBeforeSerialization => read_before_serialization (interceptor error)),
             (ReadAfterSerialization => read_after_serialization (interceptor error)),

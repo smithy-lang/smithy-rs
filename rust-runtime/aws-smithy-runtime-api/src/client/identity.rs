@@ -5,9 +5,8 @@
 
 use crate::box_error::BoxError;
 use crate::client::auth::AuthSchemeId;
-use crate::client::runtime_components::{
-    RuntimeComponents, RuntimeComponentsBuilder, ValidateConfig,
-};
+use crate::client::runtime_components::sealed::ValidateConfig;
+use crate::client::runtime_components::{RuntimeComponents, RuntimeComponentsBuilder};
 use crate::impl_shared_conversions;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::any::Any;

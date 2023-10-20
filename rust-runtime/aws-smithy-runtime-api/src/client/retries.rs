@@ -12,7 +12,8 @@ pub mod classifiers;
 
 use crate::box_error::BoxError;
 use crate::client::interceptors::context::InterceptorContext;
-use crate::client::runtime_components::{RuntimeComponents, ValidateConfig};
+use crate::client::runtime_components::sealed::ValidateConfig;
+use crate::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use std::fmt;
 use std::sync::Arc;

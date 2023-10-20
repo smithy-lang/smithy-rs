@@ -36,40 +36,45 @@ use std::sync::Arc;
 pub(crate) static EMPTY_RUNTIME_COMPONENTS_BUILDER: RuntimeComponentsBuilder =
     RuntimeComponentsBuilder::new("empty");
 
-/// Validates client configuration.
-///
-/// This trait can be used to validate that certain required components or config values
-/// are available, and provide an error with helpful instructions if they are not.
-pub trait ValidateConfig: fmt::Debug + Send + Sync {
-    /// Validate the base client configuration.
-    ///
-    /// This gets called upon client construction. The full config may not be available at
-    /// this time (hence why it has [`RuntimeComponentsBuilder`] as an argument rather
-    /// than [`RuntimeComponents`]). Any error returned here will become a panic
-    /// in the client constructor.
-    fn validate_base_client_config(
-        &self,
-        runtime_components: &RuntimeComponentsBuilder,
-        cfg: &ConfigBag,
-    ) -> Result<(), BoxError> {
-        let _ = (runtime_components, cfg);
-        Ok(())
-    }
+pub(crate) mod sealed {
+    use super::*;
 
-    /// Validate the final client configuration.
+    /// Validates client configuration.
     ///
-    /// This gets called immediately after the [`Intercept::read_before_execution`] trait hook
-    /// when the final configuration has been resolved. Any error returned here will
-    /// cause the operation to return that error.
-    fn validate_final_config(
-        &self,
-        runtime_components: &RuntimeComponents,
-        cfg: &ConfigBag,
-    ) -> Result<(), BoxError> {
-        let _ = (runtime_components, cfg);
-        Ok(())
+    /// This trait can be used to validate that certain required components or config values
+    /// are available, and provide an error with helpful instructions if they are not.
+    pub trait ValidateConfig: fmt::Debug + Send + Sync {
+        /// Validate the base client configuration.
+        ///
+        /// This gets called upon client construction. The full config may not be available at
+        /// this time (hence why it has [`RuntimeComponentsBuilder`] as an argument rather
+        /// than [`RuntimeComponents`]). Any error returned here will become a panic
+        /// in the client constructor.
+        fn validate_base_client_config(
+            &self,
+            runtime_components: &RuntimeComponentsBuilder,
+            cfg: &ConfigBag,
+        ) -> Result<(), BoxError> {
+            let _ = (runtime_components, cfg);
+            Ok(())
+        }
+
+        /// Validate the final client configuration.
+        ///
+        /// This gets called immediately after the [`Intercept::read_before_execution`] trait hook
+        /// when the final configuration has been resolved. Any error returned here will
+        /// cause the operation to return that error.
+        fn validate_final_config(
+            &self,
+            runtime_components: &RuntimeComponents,
+            cfg: &ConfigBag,
+        ) -> Result<(), BoxError> {
+            let _ = (runtime_components, cfg);
+            Ok(())
+        }
     }
 }
+use sealed::ValidateConfig;
 
 #[derive(Clone)]
 enum ValidatorInner {
@@ -86,7 +91,7 @@ impl fmt::Debug for ValidatorInner {
     }
 }
 
-/// A shared implementation of [`ValidateConfig`].
+/// A client config validator.
 #[derive(Clone, Debug)]
 pub struct SharedConfigValidator {
     inner: ValidatorInner,
@@ -94,13 +99,43 @@ pub struct SharedConfigValidator {
 
 impl SharedConfigValidator {
     /// Creates a new shared config validator.
-    pub fn new(validator: impl ValidateConfig + 'static) -> Self {
+    pub(crate) fn new(validator: impl ValidateConfig + 'static) -> Self {
         Self {
             inner: ValidatorInner::Shared(Arc::new(validator) as _),
         }
     }
 
     /// Creates a base client validator from a function.
+    ///
+    /// A base client validator gets called upon client construction. The full
+    /// config may not be available at this time (hence why it has
+    /// [`RuntimeComponentsBuilder`] as an argument rather than [`RuntimeComponents`]).
+    /// Any error returned from the validator function will become a panic in the
+    /// client constructor.
+    ///
+    /// # Examples
+    ///
+    /// Creating a validator function:
+    /// ```no_run
+    /// use aws_smithy_runtime_api::box_error::BoxError;
+    /// use aws_smithy_runtime_api::client::runtime_components::{
+    ///     RuntimeComponentsBuilder,
+    ///     SharedConfigValidator
+    /// };
+    /// use aws_smithy_types::config_bag::ConfigBag;
+    ///
+    /// fn my_validation(
+    ///     components: &RuntimeComponentsBuilder,
+    ///     config: &ConfigBag
+    /// ) -> Result<(), BoxError> {
+    ///     if components.sleep_impl().is_none() {
+    ///         return Err("I need a sleep_impl!".into());
+    ///     }
+    ///     Ok(())
+    /// }
+    ///
+    /// let validator = SharedConfigValidator::base_client_config_fn(my_validation);
+    /// ```
     pub fn base_client_config_fn(
         validator: fn(&RuntimeComponentsBuilder, &ConfigBag) -> Result<(), BoxError>,
     ) -> Self {

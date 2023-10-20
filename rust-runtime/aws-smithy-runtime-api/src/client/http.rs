@@ -54,7 +54,8 @@ pub mod request;
 pub mod response;
 
 use crate::client::orchestrator::{HttpRequest, HttpResponse};
-use crate::client::runtime_components::{RuntimeComponents, ValidateConfig};
+use crate::client::runtime_components::sealed::ValidateConfig;
+use crate::client::runtime_components::RuntimeComponents;
 use crate::impl_shared_conversions;
 use aws_smithy_http::result::ConnectorError;
 use std::fmt;

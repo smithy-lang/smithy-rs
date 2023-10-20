@@ -15,7 +15,8 @@ use crate::client::interceptors::context::{
     BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
     FinalizerInterceptorContextRef,
 };
-use crate::client::runtime_components::{RuntimeComponents, ValidateConfig};
+use crate::client::runtime_components::sealed::ValidateConfig;
+use crate::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use std::fmt;
 use std::marker::PhantomData;

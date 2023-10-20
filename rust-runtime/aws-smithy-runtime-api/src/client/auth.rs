@@ -8,7 +8,8 @@
 use crate::box_error::BoxError;
 use crate::client::identity::{Identity, SharedIdentityResolver};
 use crate::client::orchestrator::HttpRequest;
-use crate::client::runtime_components::{GetIdentityResolver, RuntimeComponents, ValidateConfig};
+use crate::client::runtime_components::sealed::ValidateConfig;
+use crate::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use crate::impl_shared_conversions;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::type_erasure::TypeErasedBox;

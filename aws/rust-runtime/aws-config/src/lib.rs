@@ -339,9 +339,17 @@ mod loader {
             self
         }
 
+        /// The credentials cache has been replaced. Use the identity_cache() method instead. See its rustdoc for an example.
+        #[deprecated(
+            note = "The credentials cache has been replaced. Use the identity_cache() method instead for equivalent functionality. See its rustdoc for an example."
+        )]
+        pub fn credentials_cache(self) -> Self {
+            self
+        }
+
         /// Override the identity cache used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
-        /// The identity cache caches credentials and SSO tokens. By default, a lazy cache is used
+        /// The identity cache caches AWS credentials and SSO tokens. By default, a lazy cache is used
         /// that will load credentials upon first request, cache them, and then reload them during
         /// another request when they are close to expiring.
         ///
@@ -356,7 +364,8 @@ mod loader {
         /// let config = aws_config::from_env()
         ///     .identity_cache(
         ///         IdentityCache::lazy()
-        ///             // change the load timeout to 10 seconds
+        ///             // Change the load timeout to 10 seconds.
+        ///             // Note: there are other timeouts that could trigger if the load timeout is too long.
         ///             .load_timeout(Duration::from_secs(10))
         ///             .build()
         ///     )

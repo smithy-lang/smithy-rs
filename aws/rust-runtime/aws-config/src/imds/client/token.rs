@@ -207,7 +207,7 @@ impl ResolveIdentity for TokenResolver {
             let preloaded_token = self.inner.cache.yield_or_clear_if_expired(now).await;
             let token = match preloaded_token {
                 Some(token) => {
-                    tracing::debug!(
+                    tracing::trace!(
                         buffer_time=?TOKEN_REFRESH_BUFFER,
                         expiration=?token.expiry,
                         now=?now,
