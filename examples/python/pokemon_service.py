@@ -179,6 +179,8 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
     if content_type == "application/json":
         logging.debug("found valid `application/json` content type")
     else:
+        # Note that dumping all headers may log sensitive information! You
+        # probably don't want to do this in production.
         logging.warning(
             "invalid content type %s, dumping headers: %s",
             content_type,
