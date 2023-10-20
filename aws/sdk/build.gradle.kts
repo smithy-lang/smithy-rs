@@ -19,7 +19,7 @@ plugins {
 }
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    smithyBuildConfigs = files(buildDir.resolve("smithy-build.json"))
+    smithyBuildConfigs = files(layout.buildDirectory.file("smithy-build.json"))
     allowUnknownTraits = true
 }
 
@@ -144,7 +144,7 @@ tasks.register("generateSmithyBuild") {
     inputs.property("servicelist", awsServices.services.toString())
     inputs.property("eventStreamAllowList", eventStreamAllowList)
     inputs.dir(projectDir.resolve("aws-models"))
-    outputs.file(buildDir.resolve("smithy-build.json"))
+    outputs.file(layout.buildDirectory.file("smithy-build.json"))
 
     doFirst {
         buildDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
@@ -186,7 +186,7 @@ tasks.register("relocateServices") {
             }
         }
     }
-    inputs.dir("$buildDir/smithyprojections/sdk/")
+    inputs.dir(layout.buildDirectory.dir("smithyprojections/sdk/"))
     outputs.dir(sdkOutputDir)
 }
 
@@ -406,7 +406,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         "--examples-revision",
         properties.get("aws.sdk.examples.revision") ?: "missing",
     ).apply {
-        val previousReleaseManifestPath = getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
+        getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
             add(manifestPath)
         }
@@ -414,7 +414,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
 }
 
 tasks["smithyBuildJar"].apply {
-    inputs.file(buildDir.resolve("smithy-build.json"))
+    inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
@@ -455,5 +455,5 @@ tasks.register<Delete>("deleteSdk") {
 }
 tasks["clean"].dependsOn("deleteSdk")
 tasks["clean"].doFirst {
-    delete(buildDir.resolve("smithy-build.json"))
+    delete(layout.buildDirectory.file("smithy-build.json"))
 }

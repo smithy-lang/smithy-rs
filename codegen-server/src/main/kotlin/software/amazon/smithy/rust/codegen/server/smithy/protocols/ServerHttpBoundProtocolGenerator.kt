@@ -98,7 +98,7 @@ sealed class ServerHttpBoundProtocolSection(name: String) : Section(name) {
      * Represent a section for rendering the serialized stream payload.
      *
      * If the payload does not implement the `futures_core::stream::Stream`, which is the case for
-     * `aws_smithy_http::byte_stream::ByteStream`, the section needs to be overridden and renders a new-type wrapper
+     * `aws_smithy_types::byte_stream::ByteStream`, the section needs to be overridden and renders a new-type wrapper
      * around the payload to enable the `Stream` trait.
      */
     data class WrapStreamPayload(val params: StreamPayloadSerializerParams) :
@@ -189,8 +189,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "OnceCell" to RuntimeType.OnceCell,
         "PercentEncoding" to RuntimeType.PercentEncoding,
         "Regex" to RuntimeType.Regex,
-        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
         "RuntimeError" to protocol.runtimeError(runtimeConfig),
         "RequestRejection" to protocol.requestRejection(runtimeConfig),
         "ResponseRejection" to protocol.responseRejection(runtimeConfig),
@@ -1269,7 +1269,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
+            "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
         } else {
             ""
         }

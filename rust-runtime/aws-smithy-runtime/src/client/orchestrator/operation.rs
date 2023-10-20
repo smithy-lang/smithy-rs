@@ -4,35 +4,42 @@
  */
 
 use crate::client::auth::no_auth::{NoAuthScheme, NO_AUTH_SCHEME_ID};
+use crate::client::defaults::{
+    default_http_client_plugin, default_retry_config_plugin, default_sleep_impl_plugin,
+    default_time_source_plugin, default_timeout_config_plugin,
+};
+use crate::client::http::connection_poisoning::ConnectionPoisoningInterceptor;
 use crate::client::identity::no_auth::NoAuthIdentityResolver;
 use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
 use crate::client::retries::strategy::{NeverRetryStrategy, StandardRetryStrategy};
-use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::rt::sleep::AsyncSleep;
+use aws_smithy_async::time::TimeSource;
 use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
     AuthSchemeOptionResolverParams, SharedAuthScheme, SharedAuthSchemeOptionResolver,
 };
-use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
 use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, SharedEndpointResolver};
+use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
-use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
-use aws_smithy_runtime_api::client::retries::{RetryClassifiers, SharedRetryStrategy};
+use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
+use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{
-    RuntimePlugins, SharedRuntimePlugin, StaticRuntimePlugin,
+    RuntimePlugin, RuntimePlugins, SharedRuntimePlugin, StaticRuntimePlugin,
 };
 use aws_smithy_runtime_api::client::ser_de::{
-    RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
+    DeserializeResponse, SerializeRequest, SharedRequestSerializer, SharedResponseDeserializer,
 };
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
 use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::fmt;
 use std::marker::PhantomData;
@@ -49,7 +56,7 @@ impl<F, I> FnSerializer<F, I> {
         }
     }
 }
-impl<F, I> RequestSerializer for FnSerializer<F, I>
+impl<F, I> SerializeRequest for FnSerializer<F, I>
 where
     F: Fn(I) -> Result<HttpRequest, BoxError> + Send + Sync,
     I: fmt::Debug + Send + Sync + 'static,
@@ -77,7 +84,7 @@ impl<F, O, E> FnDeserializer<F, O, E> {
         }
     }
 }
-impl<F, O, E> ResponseDeserializer for FnDeserializer<F, O, E>
+impl<F, O, E> DeserializeResponse for FnDeserializer<F, O, E>
 where
     F: Fn(&HttpResponse) -> Result<O, OrchestratorError<E>> + Send + Sync,
     O: fmt::Debug + Send + Sync + 'static,
@@ -189,8 +196,8 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn http_connector(mut self, connector: impl IntoShared<SharedHttpConnector>) -> Self {
-        self.runtime_components.set_http_connector(Some(connector));
+    pub fn http_client(mut self, connector: impl HttpClient + 'static) -> Self {
+        self.runtime_components.set_http_client(Some(connector));
         self
     }
 
@@ -203,23 +210,27 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
+    pub fn retry_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
+        self.runtime_components
+            .push_retry_classifier(retry_classifier);
+        self
+    }
+
     pub fn no_retry(mut self) -> Self {
         self.runtime_components
             .set_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())));
         self
     }
 
-    pub fn retry_classifiers(mut self, retry_classifiers: RetryClassifiers) -> Self {
+    pub fn standard_retry(mut self, retry_config: &RetryConfig) -> Self {
+        self.config.store_put(retry_config.clone());
         self.runtime_components
-            .set_retry_classifiers(Some(retry_classifiers));
+            .set_retry_strategy(Some(SharedRetryStrategy::new(StandardRetryStrategy::new())));
         self
     }
 
-    pub fn standard_retry(mut self, retry_config: &RetryConfig) -> Self {
-        self.runtime_components
-            .set_retry_strategy(Some(SharedRetryStrategy::new(StandardRetryStrategy::new(
-                retry_config,
-            ))));
+    pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
+        self.config.store_put(timeout_config);
         self
     }
 
@@ -239,22 +250,29 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
-    pub fn sleep_impl(mut self, async_sleep: SharedAsyncSleep) -> Self {
-        self.runtime_components.set_sleep_impl(Some(async_sleep));
+    pub fn sleep_impl(mut self, async_sleep: impl AsyncSleep + 'static) -> Self {
+        self.runtime_components
+            .set_sleep_impl(Some(async_sleep.into_shared()));
         self
     }
 
-    pub fn time_source(mut self, time_source: SharedTimeSource) -> Self {
-        self.runtime_components.set_time_source(Some(time_source));
+    pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
+        self.runtime_components
+            .set_time_source(Some(time_source.into_shared()));
         self
     }
 
-    pub fn interceptor(mut self, interceptor: impl IntoShared<SharedInterceptor>) -> Self {
+    pub fn interceptor(mut self, interceptor: impl Intercept + 'static) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
     }
 
-    pub fn runtime_plugin(mut self, runtime_plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
+    /// Registers the [`ConnectionPoisoningInterceptor`].
+    pub fn with_connection_poisoning(self) -> Self {
+        self.interceptor(ConnectionPoisoningInterceptor::new())
+    }
+
+    pub fn runtime_plugin(mut self, runtime_plugin: impl RuntimePlugin + 'static) -> Self {
         self.runtime_plugins.push(runtime_plugin.into_shared());
         self
     }
@@ -306,11 +324,24 @@ impl<I, O, E> OperationBuilder<I, O, E> {
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
-        let mut runtime_plugins = RuntimePlugins::new().with_client_plugin(
-            StaticRuntimePlugin::new()
-                .with_config(self.config.freeze())
-                .with_runtime_components(self.runtime_components),
-        );
+
+        let defaults = [
+            default_http_client_plugin(),
+            default_retry_config_plugin(service_name.clone()),
+            default_sleep_impl_plugin(),
+            default_time_source_plugin(),
+            default_timeout_config_plugin(),
+        ]
+        .into_iter()
+        .flatten();
+
+        let mut runtime_plugins = RuntimePlugins::new()
+            .with_client_plugins(defaults)
+            .with_client_plugin(
+                StaticRuntimePlugin::new()
+                    .with_config(self.config.freeze())
+                    .with_runtime_components(self.runtime_components),
+            );
         for runtime_plugin in self.runtime_plugins {
             runtime_plugins = runtime_plugins.with_client_plugin(runtime_plugin);
         }
@@ -323,8 +354,8 @@ impl<I, O, E> OperationBuilder<I, O, E> {
                 .expect("the runtime plugins should succeed");
 
             assert!(
-                components.http_connector().is_some(),
-                "a http_connector is required"
+                components.http_client().is_some(),
+                "a http_client is required. Enable the `rustls` crate feature or configure a HTTP client to fix this."
             );
             assert!(
                 components.endpoint_resolver().is_some(),
@@ -346,6 +377,10 @@ impl<I, O, E> OperationBuilder<I, O, E> {
                 config.load::<EndpointResolverParams>().is_some(),
                 "endpoint resolver params are required"
             );
+            assert!(
+                config.load::<TimeoutConfig>().is_some(),
+                "timeout config is required"
+            );
         }
 
         Operation {
@@ -360,11 +395,11 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
-    use crate::client::connectors::test_util::{capture_request, ConnectionEvent, EventConnector};
-    use crate::client::retries::classifier::HttpStatusCodeClassifier;
+    use crate::client::http::test_util::{capture_request, ReplayEvent, StaticReplayClient};
+    use crate::client::retries::classifiers::HttpStatusCodeClassifier;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
-    use aws_smithy_http::body::SdkBody;
     use aws_smithy_http::result::ConnectorError;
+    use aws_smithy_types::body::SdkBody;
     use std::convert::Infallible;
 
     #[tokio::test]
@@ -378,15 +413,12 @@ mod tests {
         let operation = Operation::builder()
             .service_name("test")
             .operation_name("test")
-            .http_connector(SharedHttpConnector::new(connector))
+            .http_client(connector)
             .endpoint_url("http://localhost:1234")
             .no_auth()
             .no_retry()
-            .serializer(|input: String| {
-                Ok(http::Request::builder()
-                    .body(SdkBody::from(input.as_bytes()))
-                    .unwrap())
-            })
+            .timeout_config(TimeoutConfig::disabled())
+            .serializer(|input: String| Ok(HttpRequest::new(SdkBody::from(input.as_bytes()))))
             .deserializer::<_, Infallible>(|response| {
                 assert_eq!(418, response.status());
                 Ok(std::str::from_utf8(response.body().bytes().unwrap())
@@ -402,53 +434,45 @@ mod tests {
         assert_eq!("I'm a teapot!", output);
 
         let request = request_rx.expect_request();
-        assert_eq!("http://localhost:1234", request.uri());
+        assert_eq!("http://localhost:1234/", request.uri());
         assert_eq!(b"what are you?", request.body().bytes().unwrap());
     }
 
     #[tokio::test]
     async fn operation_retries() {
-        let connector = EventConnector::new(
-            vec![
-                ConnectionEvent::new(
-                    http::Request::builder()
-                        .uri("http://localhost:1234/")
-                        .body(SdkBody::from(&b"what are you?"[..]))
-                        .unwrap(),
-                    http::Response::builder()
-                        .status(503)
-                        .body(SdkBody::from(&b""[..]))
-                        .unwrap(),
-                ),
-                ConnectionEvent::new(
-                    http::Request::builder()
-                        .uri("http://localhost:1234/")
-                        .body(SdkBody::from(&b"what are you?"[..]))
-                        .unwrap(),
-                    http::Response::builder()
-                        .status(418)
-                        .body(SdkBody::from(&b"I'm a teapot!"[..]))
-                        .unwrap(),
-                ),
-            ],
-            SharedAsyncSleep::new(TokioSleep::new()),
-        );
+        let connector = StaticReplayClient::new(vec![
+            ReplayEvent::new(
+                http::Request::builder()
+                    .uri("http://localhost:1234/")
+                    .body(SdkBody::from(&b"what are you?"[..]))
+                    .unwrap(),
+                http::Response::builder()
+                    .status(503)
+                    .body(SdkBody::from(&b""[..]))
+                    .unwrap(),
+            ),
+            ReplayEvent::new(
+                http::Request::builder()
+                    .uri("http://localhost:1234/")
+                    .body(SdkBody::from(&b"what are you?"[..]))
+                    .unwrap(),
+                http::Response::builder()
+                    .status(418)
+                    .body(SdkBody::from(&b"I'm a teapot!"[..]))
+                    .unwrap(),
+            ),
+        ]);
         let operation = Operation::builder()
             .service_name("test")
             .operation_name("test")
-            .http_connector(SharedHttpConnector::new(connector.clone()))
+            .http_client(connector.clone())
             .endpoint_url("http://localhost:1234")
             .no_auth()
-            .retry_classifiers(
-                RetryClassifiers::new().with_classifier(HttpStatusCodeClassifier::default()),
-            )
             .standard_retry(&RetryConfig::standard())
+            .retry_classifier(HttpStatusCodeClassifier::default())
+            .timeout_config(TimeoutConfig::disabled())
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-            .serializer(|input: String| {
-                Ok(http::Request::builder()
-                    .body(SdkBody::from(input.as_bytes()))
-                    .unwrap())
-            })
+            .serializer(|input: String| Ok(HttpRequest::new(SdkBody::from(input.as_bytes()))))
             .deserializer::<_, Infallible>(|response| {
                 if response.status() == 503 {
                     Err(OrchestratorError::connector(ConnectorError::io(

@@ -32,9 +32,9 @@ class InvocationIdDecoratorTest {
                             }
                         }
 
-                        let (conn, rx) = #{capture_request}(None);
+                        let (http_client, rx) = #{capture_request}(None);
                         let config = $moduleName::Config::builder()
-                            .http_connector(conn)
+                            .http_client(http_client)
                             .invocation_id_generator(TestIdGen)
                             .build();
                         assert!(config.invocation_id_generator().is_some());

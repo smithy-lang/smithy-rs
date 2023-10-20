@@ -35,12 +35,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -50,14 +49,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
-    private val reexportSmithyClientBuilder: Boolean = true,
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
     companion object {
@@ -94,19 +94,9 @@ class FluentClientGenerator(
 
     private fun renderFluentClient(crate: RustCrate) {
         crate.withModule(ClientRustModule.client) {
-            if (reexportSmithyClientBuilder) {
-                rustTemplate(
-                    """
-                    ##[doc(inline)]
-                    pub use #{client}::Builder;
-                    """,
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                )
-            }
             val clientScope = arrayOf(
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
-                "client" to RuntimeType.smithyClient(runtimeConfig),
                 "client_docs" to writable
                     {
                         customizations.forEach {
@@ -126,6 +116,7 @@ class FluentClientGenerator(
                 ##[derive(Debug)]
                 pub(crate) struct Handle {
                     pub(crate) conf: crate::Config,
+                    ##[allow(dead_code)] // unused when a service does not provide any operations
                     pub(crate) runtime_plugins: #{RuntimePlugins},
                 }
 
@@ -144,12 +135,14 @@ class FluentClientGenerator(
                     /// If you experience this panic, it can be fixed by setting the `sleep_impl`, or by disabling
                     /// retries and timeouts.
                     pub fn from_conf(conf: crate::Config) -> Self {
-                        let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                        let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
+                        let has_retry_config = conf.retry_config().map(#{RetryConfig}::has_retry).unwrap_or_default();
+                        let has_timeout_config = conf.timeout_config().map(#{TimeoutConfig}::has_timeouts).unwrap_or_default();
                         let sleep_impl = conf.sleep_impl();
-                        if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
-                            panic!("An async sleep implementation is required for retries or timeouts to work. \
-                                    Set the `sleep_impl` on the Config passed into this function to fix this panic.");
+                        if (has_retry_config || has_timeout_config) && sleep_impl.is_none() {
+                            panic!(
+                                "An async sleep implementation is required for retries or timeouts to work. \
+                                 Set the `sleep_impl` on the Config passed into this function to fix this panic."
+                            );
                         }
 
                         Self {
@@ -169,7 +162,7 @@ class FluentClientGenerator(
                 }
                 """,
                 *clientScope,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
             )
         }
 
@@ -180,10 +173,7 @@ class FluentClientGenerator(
 
             val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
-                rustBlockTemplate(
-                    "impl super::Client",
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                ) {
+                rustBlock("impl super::Client") {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                     val maybePaginated = if (operation.isPaginated(model)) {
                         "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
@@ -326,10 +316,7 @@ class FluentClientGenerator(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-        rustBlockTemplate(
-            "impl $builderName",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-        ) {
+        rustBlock("impl $builderName") {
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
@@ -387,21 +374,11 @@ class FluentClientGenerator(
                     #{Operation}::orchestrate(&runtime_plugins, input).await
                 }
 
-                /// Consumes this builder, creating a customizable operation that can be modified before being
-                /// sent.
-                // TODO(enableNewSmithyRuntimeCleanup): Remove `async` and `Result` once we switch to orchestrator
-                pub async fn customize(
+                /// Consumes this builder, creating a customizable operation that can be modified before being sent.
+                pub fn customize(
                     self,
-                ) -> #{Result}<
-                    #{CustomizableOperation}<
-                        #{OperationOutput},
-                        #{OperationError},
-                        Self,
-                    >,
-                    #{SdkError}<#{OperationError}>,
-                >
-                {
-                    #{Ok}(#{CustomizableOperation}::new(self))
+                ) -> #{CustomizableOperation}<#{OperationOutput}, #{OperationError}, Self> {
+                    #{CustomizableOperation}::new(self)
                 }
                 """,
                 *orchestratorScope,
@@ -470,8 +447,10 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
+        val api = RuntimeType.smithyRuntimeApi(rc)
+        val rt = RuntimeType.smithyRuntime(rc)
         rustTemplate(
             """
             pub(crate) fn base_client_runtime_plugins(
@@ -479,12 +458,25 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             ) -> #{RuntimePlugins} {
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+
+                let defaults = [
+                    #{default_http_client_plugin}(),
+                    #{default_retry_config_plugin}(${codegenContext.serviceShape.sdkId().dq()}),
+                    #{default_sleep_impl_plugin}(),
+                    #{default_time_source_plugin}(),
+                    #{default_timeout_config_plugin}(),
+                ].into_iter().flatten();
+
                 let mut plugins = #{RuntimePlugins}::new()
+                    // defaults
+                    .with_client_plugins(defaults)
+                    // user config
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
                             .with_runtime_components(config.runtime_components.clone())
                     )
+                    // codegen config
                     .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
                     .with_client_plugin(#{NoAuthRuntimePlugin}::new());
                 for plugin in configured_plugins {
@@ -494,13 +486,17 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             }
             """,
             *preludeScope,
-            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-            "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-            "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "default_http_client_plugin" to rt.resolve("client::defaults::default_http_client_plugin"),
+            "default_retry_config_plugin" to rt.resolve("client::defaults::default_retry_config_plugin"),
+            "default_sleep_impl_plugin" to rt.resolve("client::defaults::default_sleep_impl_plugin"),
+            "default_timeout_config_plugin" to rt.resolve("client::defaults::default_timeout_config_plugin"),
+            "default_time_source_plugin" to rt.resolve("client::defaults::default_time_source_plugin"),
+            "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+            "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
+            "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
         )
     }
+}
 
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of

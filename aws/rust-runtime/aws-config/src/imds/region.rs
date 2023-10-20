@@ -110,21 +110,20 @@ mod test {
     use crate::imds::client::test::{imds_request, imds_response, token_request, token_response};
     use crate::imds::region::ImdsRegionProvider;
     use crate::provider_config::ProviderConfig;
-    use aws_sdk_sts::config::Region;
     use aws_smithy_async::rt::sleep::TokioSleep;
-    use aws_smithy_client::erase::DynConnector;
-    use aws_smithy_client::test_connection::TestConnection;
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+    use aws_smithy_types::body::SdkBody;
+    use aws_types::region::Region;
     use tracing_test::traced_test;
 
     #[tokio::test]
     async fn load_region() {
-        let conn = TestConnection::new(vec![
-            (
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
                 token_request("http://169.254.169.254", 21600),
                 token_response(21600, "token"),
             ),
-            (
+            ReplayEvent::new(
                 imds_request(
                     "http://169.254.169.254/latest/meta-data/placement/region",
                     "token",
@@ -135,8 +134,8 @@ mod test {
         let provider = ImdsRegionProvider::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_http_connector(DynConnector::new(conn))
-                    .with_sleep(TokioSleep::new()),
+                    .with_http_client(http_client)
+                    .with_sleep_impl(TokioSleep::new()),
             )
             .build();
         assert_eq!(
@@ -148,7 +147,7 @@ mod test {
     #[traced_test]
     #[tokio::test]
     async fn no_region_imds_disabled() {
-        let conn = TestConnection::new(vec![(
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
             token_request("http://169.254.169.254", 21600),
             http::Response::builder()
                 .status(403)
@@ -158,8 +157,8 @@ mod test {
         let provider = ImdsRegionProvider::builder()
             .configure(
                 &ProviderConfig::no_configuration()
-                    .with_http_connector(DynConnector::new(conn))
-                    .with_sleep(TokioSleep::new()),
+                    .with_http_client(http_client)
+                    .with_sleep_impl(TokioSleep::new()),
             )
             .build();
         assert_eq!(provider.region().await, None);

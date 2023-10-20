@@ -12,6 +12,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpConnectorConfigDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SensitiveOutputDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -66,6 +67,7 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 HttpAuthDecorator(),
                 HttpConnectorConfigDecorator(),
                 SensitiveOutputDecorator(),
+                IdempotencyTokenDecorator(),
                 *decorator,
             )
 

@@ -287,7 +287,7 @@ class JsonParserGenerator(
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
             is NumberShape -> deserializeNumber(target)
             is BlobShape -> deserializeBlob(memberShape)
-            is TimestampShape -> deserializeTimestamp(target, memberShape)
+            is TimestampShape -> deserializeTimestamp(memberShape)
             is CollectionShape -> deserializeCollection(target)
             is MapShape -> deserializeMap(target)
             is StructureShape -> deserializeStruct(target)
@@ -361,7 +361,7 @@ class JsonParserGenerator(
         }
     }
 
-    private fun RustWriter.deserializeTimestamp(shape: TimestampShape, member: MemberShape) {
+    private fun RustWriter.deserializeTimestamp(member: MemberShape) {
         val timestampFormat =
             httpBindingResolver.timestampFormat(
                 member, HttpLocation.DOCUMENT,
@@ -551,13 +551,18 @@ class JsonParserGenerator(
                         objectKeyLoop(hasMembers = shape.members().isNotEmpty()) {
                             rustTemplate(
                                 """
+                                let key = key.to_unescaped()?;
+                                if key == "__type" {
+                                    #{skip_value}(tokens)?;
+                                    continue
+                                }
                                 if variant.is_some() {
                                     return Err(#{Error}::custom("encountered mixed variants in union"));
                                 }
                                 """,
                                 *codegenScope,
                             )
-                            withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
+                            withBlock("variant = match key.as_ref() {", "};") {
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {

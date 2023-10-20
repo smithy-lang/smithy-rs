@@ -257,9 +257,6 @@ class ServiceConfigGenerator(
             extraCustomizations: List<ConfigCustomization>,
         ): ServiceConfigGenerator {
             val baseFeatures = mutableListOf<ConfigCustomization>()
-            if (codegenContext.serviceShape.needsIdempotencyToken(codegenContext.model)) {
-                baseFeatures.add(IdempotencyTokenProviderCustomization(codegenContext))
-            }
             return ServiceConfigGenerator(codegenContext, baseFeatures + extraCustomizations)
         }
     }
@@ -401,7 +398,7 @@ class ServiceConfigGenerator(
             testUtilOnly.render(this)
             Attribute.AllowUnusedMut.render(this)
             docs("Apply test defaults to the builder")
-            rustBlock("pub fn set_test_defaults(&mut self) -> &mut Self") {
+            rustBlock("pub fn apply_test_defaults(&mut self) -> &mut Self") {
                 customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
                 rust("self")
             }
@@ -410,7 +407,7 @@ class ServiceConfigGenerator(
             Attribute.AllowUnusedMut.render(this)
             docs("Apply test defaults to the builder")
             rustBlock("pub fn with_test_defaults(mut self) -> Self") {
-                rust("self.set_test_defaults(); self")
+                rust("self.apply_test_defaults(); self")
             }
 
             docs("Builds a [`Config`].")
@@ -419,7 +416,6 @@ class ServiceConfigGenerator(
                 rustTemplate(
                     """
                     let mut layer = self.config;
-                    let mut resolver = #{Resolver}::initial(&mut layer, &mut self.runtime_components);
                     """,
                     *codegenScope,
                 )

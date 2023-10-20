@@ -38,8 +38,7 @@ class CustomizableOperationGenerator(
                 .resolve("client::orchestrator::HttpRequest"),
             "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
                 .resolve("client::orchestrator::HttpResponse"),
-            "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::interceptors::Interceptor"),
+            "Intercept" to RuntimeType.intercept(runtimeConfig),
             "MapRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::interceptors::MapRequestInterceptor"),
             "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
@@ -71,26 +70,27 @@ class CustomizableOperationGenerator(
                     _error: #{PhantomData}<E>,
                 }
 
-                impl<T, E, B> CustomizableOperation<T, E, B> {
-                    /// Creates a new `CustomizableOperation` from `customizable_send`.
-                    pub(crate) fn new(customizable_send: B) -> Self {
-                        Self {
-                            customizable_send,
-                            config_override: #{None},
-                            interceptors: vec![],
-                            runtime_plugins: vec![],
-                            _output: #{PhantomData},
-                            _error: #{PhantomData}
+                    impl<T, E, B> CustomizableOperation<T, E, B> {
+                        /// Creates a new `CustomizableOperation` from `customizable_send`.
+                        ##[allow(dead_code)] // unused when a service does not provide any operations
+                        pub(crate) fn new(customizable_send: B) -> Self {
+                            Self {
+                                customizable_send,
+                                config_override: #{None},
+                                interceptors: vec![],
+                                runtime_plugins: vec![],
+                                _output: #{PhantomData},
+                                _error: #{PhantomData}
+                            }
                         }
-                    }
 
-                    /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
+                    /// Adds an [interceptor](#{Intercept}) that runs at specific stages of the request execution pipeline.
                     ///
                     /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
                     /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
                     /// The order in which those user-specified operation interceptors are invoked should not be relied upon
                     /// as it is an implementation detail.
-                    pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
+                    pub fn interceptor(mut self, interceptor: impl #{Intercept} + 'static) -> Self {
                         self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                         self
                     }

@@ -17,23 +17,21 @@
 use crate::imds::client::error::{ImdsError, TokenError, TokenErrorKind};
 use aws_credential_types::cache::ExpiringCache;
 use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
 };
 use aws_smithy_runtime_api::client::identity::{
-    Identity, IdentityResolver, SharedIdentityResolver,
+    Identity, IdentityFuture, ResolveIdentity, SharedIdentityResolver,
 };
-use aws_smithy_runtime_api::client::orchestrator::{
-    Future, HttpRequest, HttpResponse, OrchestratorError,
-};
+use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
 use aws_smithy_runtime_api::client::runtime_components::{
     GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use http::{HeaderValue, Uri};
 use std::borrow::Cow;
@@ -132,13 +130,16 @@ impl TokenResolver {
                     .operation_name("get-token")
                     .runtime_plugin(common_plugin)
                     .no_auth()
+                    .with_connection_poisoning()
                     .serializer(move |_| {
                         Ok(http::Request::builder()
                             .method("PUT")
                             .uri(Uri::from_static("/latest/api/token"))
                             .header(X_AWS_EC2_METADATA_TOKEN_TTL_SECONDS, token_ttl.as_secs())
                             .body(SdkBody::empty())
-                            .expect("valid HTTP request"))
+                            .expect("valid HTTP request")
+                            .try_into()
+                            .unwrap())
                     })
                     .deserializer({
                         let time_source = time_source.clone();
@@ -192,31 +193,31 @@ fn parse_token_response(response: &HttpResponse, now: SystemTime) -> Result<Toke
     })
 }
 
-impl IdentityResolver for TokenResolver {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> Future<Identity> {
-        let this = self.clone();
-        Future::new(Box::pin(async move {
-            let preloaded_token = this
+impl ResolveIdentity for TokenResolver {
+    fn resolve_identity<'a>(
+        &'a self,
+        _components: &'a RuntimeComponents,
+        _config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a> {
+        IdentityFuture::new(async {
+            let preloaded_token = self
                 .inner
                 .cache
-                .yield_or_clear_if_expired(this.inner.time_source.now())
+                .yield_or_clear_if_expired(self.inner.time_source.now())
                 .await;
             let token = match preloaded_token {
                 Some(token) => Ok(token),
                 None => {
-                    this.inner
+                    self.inner
                         .cache
-                        .get_or_load(|| {
-                            let this = this.clone();
-                            async move { this.get_token().await }
-                        })
+                        .get_or_load(|| async { self.get_token().await })
                         .await
                 }
             }?;
 
             let expiry = token.expiry;
             Ok(Identity::new(token, Some(expiry)))
-        }))
+        })
     }
 }
 
@@ -245,7 +246,7 @@ impl AuthScheme for TokenAuthScheme {
         identity_resolvers.identity_resolver(IMDS_TOKEN_AUTH_SCHEME)
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -253,7 +254,7 @@ impl AuthScheme for TokenAuthScheme {
 #[derive(Debug)]
 struct TokenSigner;
 
-impl Signer for TokenSigner {
+impl Sign for TokenSigner {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,

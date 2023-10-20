@@ -8,28 +8,27 @@
 //!
 //! Future work will stabilize this interface and enable it to be used directly.
 
-use crate::connector::expect_connector;
 use crate::json_credentials::{parse_json_credentials, JsonCredentials, RefreshableCredentials};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials;
-use aws_smithy_client::http_connector::ConnectorSettings;
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_http::result::SdkError;
-use aws_smithy_runtime::client::connectors::adapter::DynConnectorAdapter;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
-use aws_smithy_runtime::client::retries::classifier::{
-    HttpStatusCodeClassifier, SmithyErrorClassifier,
+use aws_smithy_runtime::client::retries::classifiers::{
+    HttpStatusCodeClassifier, TransientErrorClassifier,
 };
-use aws_smithy_runtime_api::client::connectors::SharedHttpConnector;
+use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, InterceptorContext};
 use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, OrchestratorError, SensitiveOutput,
 };
-use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryClassifiers, RetryReason};
+use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
+use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::runtime_plugin::StaticRuntimePlugin;
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::Layer;
-use aws_smithy_types::retry::{ErrorKind, RetryConfig};
+use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use http::header::{ACCEPT, AUTHORIZATION};
 use http::{HeaderValue, Response};
 use std::time::Duration;
@@ -65,7 +64,7 @@ impl HttpCredentialProvider {
 #[derive(Default)]
 pub(crate) struct Builder {
     provider_config: Option<ProviderConfig>,
-    connector_settings: Option<ConnectorSettings>,
+    http_connector_settings: Option<HttpConnectorSettings>,
 }
 
 impl Builder {
@@ -74,8 +73,11 @@ impl Builder {
         self
     }
 
-    pub(crate) fn connector_settings(mut self, connector_settings: ConnectorSettings) -> Self {
-        self.connector_settings = Some(connector_settings);
+    pub(crate) fn http_connector_settings(
+        mut self,
+        http_connector_settings: HttpConnectorSettings,
+    ) -> Self {
+        self.http_connector_settings = Some(http_connector_settings);
         self
     }
 
@@ -86,46 +88,40 @@ impl Builder {
         path: impl Into<String>,
     ) -> HttpCredentialProvider {
         let provider_config = self.provider_config.unwrap_or_default();
-        let connector_settings = self.connector_settings.unwrap_or_else(|| {
-            ConnectorSettings::builder()
-                .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
-                .read_timeout(DEFAULT_READ_TIMEOUT)
-                .build()
-        });
-        let connector = expect_connector(
-            "The HTTP credentials provider",
-            provider_config.connector(&connector_settings),
-        );
-
-        // The following errors are retryable:
-        //   - Socket errors
-        //   - Networking timeouts
-        //   - 5xx errors
-        //   - Non-parseable 200 responses.
-        let retry_classifiers = RetryClassifiers::new()
-            .with_classifier(HttpCredentialRetryClassifier)
-            // Socket errors and network timeouts
-            .with_classifier(SmithyErrorClassifier::<Error>::new())
-            // 5xx errors
-            .with_classifier(HttpStatusCodeClassifier::default());
 
         let mut builder = Operation::builder()
             .service_name("HttpCredentialProvider")
             .operation_name("LoadCredentials")
-            .http_connector(SharedHttpConnector::new(DynConnectorAdapter::new(
-                connector,
-            )))
+            .with_connection_poisoning()
             .endpoint_url(endpoint)
             .no_auth()
+            .timeout_config(
+                TimeoutConfig::builder()
+                    .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
+                    .read_timeout(DEFAULT_READ_TIMEOUT)
+                    .build(),
+            )
             .runtime_plugin(StaticRuntimePlugin::new().with_config({
                 let mut layer = Layer::new("SensitiveOutput");
                 layer.store_put(SensitiveOutput);
                 layer.freeze()
             }));
-        if let Some(sleep_impl) = provider_config.sleep() {
+        if let Some(http_client) = provider_config.http_client() {
+            builder = builder.http_client(http_client);
+        }
+        if let Some(sleep_impl) = provider_config.sleep_impl() {
             builder = builder
                 .standard_retry(&RetryConfig::standard())
-                .retry_classifiers(retry_classifiers)
+                // The following errors are retryable:
+                //   - Socket errors
+                //   - Networking timeouts
+                //   - 5xx errors
+                //   - Non-parseable 200 responses.
+                .retry_classifier(HttpCredentialRetryClassifier)
+                // Socket errors and network timeouts
+                .retry_classifier(TransientErrorClassifier::<Error>::new())
+                // 5xx errors
+                .retry_classifier(HttpStatusCodeClassifier::default())
                 .sleep_impl(sleep_impl);
         } else {
             builder = builder.no_retry();
@@ -139,7 +135,11 @@ impl Builder {
                 if let Some(auth) = input.auth {
                     http_req = http_req.header(AUTHORIZATION, auth);
                 }
-                Ok(http_req.body(SdkBody::empty()).expect("valid request"))
+                Ok(http_req
+                    .body(SdkBody::empty())
+                    .expect("valid request")
+                    .try_into()
+                    .unwrap())
             })
             .deserializer(move |response| parse_response(provider_name, response))
             .build();
@@ -194,11 +194,11 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
         "HttpCredentialRetryClassifier"
     }
 
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
-        let output_or_error = ctx.output_or_error()?;
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
+        let output_or_error = ctx.output_or_error();
         let error = match output_or_error {
-            Ok(_) => return None,
-            Err(err) => err,
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
+            Some(Err(err)) => err,
         };
 
         // Retry non-parseable 200 responses
@@ -208,11 +208,11 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
             .zip(ctx.response().map(HttpResponse::status))
         {
             if matches!(err, CredentialsError::Unhandled { .. }) && status.is_success() {
-                return Some(RetryReason::Error(ErrorKind::ServerError));
+                return RetryAction::server_error();
             }
         }
 
-        None
+        RetryAction::NoActionIndicated
     }
 }
 
@@ -220,24 +220,23 @@ impl ClassifyRetry for HttpCredentialRetryClassifier {
 mod test {
     use super::*;
     use aws_credential_types::provider::error::CredentialsError;
-    use aws_smithy_client::test_connection::TestConnection;
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+    use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+    use aws_smithy_types::body::SdkBody;
     use http::{Request, Response, Uri};
     use std::time::SystemTime;
 
     async fn provide_creds(
-        connector: TestConnection<SdkBody>,
+        http_client: StaticReplayClient,
     ) -> Result<Credentials, CredentialsError> {
-        let provider_config = ProviderConfig::default().with_http_connector(connector.clone());
+        let provider_config = ProviderConfig::default().with_http_client(http_client.clone());
         let provider = HttpCredentialProvider::builder()
             .configure(&provider_config)
             .build("test", "http://localhost:1234/", "/some-creds");
         provider.credentials(None).await
     }
 
-    fn successful_req_resp() -> (HttpRequest, HttpResponse) {
-        (
+    fn successful_req_resp() -> ReplayEvent {
+        ReplayEvent::new(
             Request::builder()
                 .uri(Uri::from_static("http://localhost:1234/some-creds"))
                 .body(SdkBody::empty())
@@ -258,8 +257,8 @@ mod test {
 
     #[tokio::test]
     async fn successful_response() {
-        let connector = TestConnection::new(vec![successful_req_resp()]);
-        let creds = provide_creds(connector.clone()).await.expect("success");
+        let http_client = StaticReplayClient::new(vec![successful_req_resp()]);
+        let creds = provide_creds(http_client.clone()).await.expect("success");
         assert_eq!("MUA...", creds.access_key_id());
         assert_eq!("/7PC5om....", creds.secret_access_key());
         assert_eq!(Some("AQoDY....="), creds.session_token());
@@ -267,13 +266,13 @@ mod test {
             Some(SystemTime::UNIX_EPOCH + Duration::from_secs(1456380211)),
             creds.expiry()
         );
-        connector.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     #[tokio::test]
     async fn retry_nonparseable_response() {
-        let connector = TestConnection::new(vec![
-            (
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
                 Request::builder()
                     .uri(Uri::from_static("http://localhost:1234/some-creds"))
                     .body(SdkBody::empty())
@@ -285,15 +284,15 @@ mod test {
             ),
             successful_req_resp(),
         ]);
-        let creds = provide_creds(connector.clone()).await.expect("success");
+        let creds = provide_creds(http_client.clone()).await.expect("success");
         assert_eq!("MUA...", creds.access_key_id());
-        connector.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     #[tokio::test]
     async fn retry_error_code() {
-        let connector = TestConnection::new(vec![
-            (
+        let http_client = StaticReplayClient::new(vec![
+            ReplayEvent::new(
                 Request::builder()
                     .uri(Uri::from_static("http://localhost:1234/some-creds"))
                     .body(SdkBody::empty())
@@ -305,14 +304,14 @@ mod test {
             ),
             successful_req_resp(),
         ]);
-        let creds = provide_creds(connector.clone()).await.expect("success");
+        let creds = provide_creds(http_client.clone()).await.expect("success");
         assert_eq!("MUA...", creds.access_key_id());
-        connector.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 
     #[tokio::test]
-    async fn explicit_error_not_retriable() {
-        let connector = TestConnection::new(vec![(
+    async fn explicit_error_not_retryable() {
+        let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
             Request::builder()
                 .uri(Uri::from_static("http://localhost:1234/some-creds"))
                 .body(SdkBody::empty())
@@ -324,13 +323,13 @@ mod test {
                 ))
                 .unwrap(),
         )]);
-        let err = provide_creds(connector.clone())
+        let err = provide_creds(http_client.clone())
             .await
             .expect_err("it should fail");
         assert!(
             matches!(err, CredentialsError::ProviderError { .. }),
             "should be CredentialsError::ProviderError: {err}",
         );
-        connector.assert_requests_match(&[]);
+        http_client.assert_requests_match(&[]);
     }
 }

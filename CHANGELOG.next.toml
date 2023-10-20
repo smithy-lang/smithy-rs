@@ -11,6 +11,36 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "(Behavior Break!) The SSO credentials provider is no longer enabled by default in `aws-config`, and so SSO profile config will no longer work out of box. The `credentials-sso` feature in `aws-config` was removed from the default features, and renamed to `sso`. If you need credentials from SSO, then enable the `sso` feature in `aws-config`."
+references = ["smithy-rs#2917"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "The `SsoCredentialsProvider` now supports token refresh and is compatible with the token cache file paths the latest AWS CLI uses."
+references = ["smithy-rs#2917", "aws-sdk-rust#703", "aws-sdk-rust#699"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
+references = ["smithy-rs#3011"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `enableNewSmithyRuntime: middleware` opt-out flag in smithy-build.json has been removed and no longer opts out of the client orchestrator implementation. Middleware is no longer supported. If you haven't already upgraded to the orchestrator, see [the guide](https://github.com/awslabs/smithy-rs/discussions/2887)."
+references = ["smithy-rs#3038"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details."
+references = ["smithy-rs#3011"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
 [[smithy-rs]]
 message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
 references = ["smithy-rs#2909"]
@@ -46,7 +76,7 @@ Support for Smithy IDLv2 nullability is now enabled by default. You can maintain
 For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929).
 """
 references = ["smithy-rs#2916", "smithy-rs#1767"]
-meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "Velfi"
 
 [[aws-sdk-rust]]
@@ -261,3 +291,162 @@ For more information, see the [Change Log Discussion](https://github.com/awslabs
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 references = ["smithy-rs#3014"]
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "STS and SSO-based credential providers will now respect both `use_fips` and `use_dual_stack` when those settings are configured in a user's environment or profile."
+references = ["aws-sdk-rust#882", "smithy-rs#3007"]
+meta = { "breaking" = true, "tada" = true, "bug" = true }
+author = "Velfi"
+
+[[smithy-rs]]
+message = "`SdkError` is no longer re-exported in generated server crates."
+references = ["smithy-rs#3038"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "server" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `customize()` method is now sync and infallible. Remove any `await`s and error handling from it to make things compile again."
+references = ["smithy-rs#3039"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Our algorithm for converting identifiers to `snake_case` has been updated. This may result in a small change for some identifiers, particularly acronyms ending in `s`, e.g. `ACLs`."
+references = ["smithy-rs#3037", "aws-sdk-rust#756"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "all" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = """
+Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+"""
+references = ["smithy-rs#2417", "smithy-rs#3018"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
+references = ["smithy-rs#3055"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively."
+references = ["smithy-rs#3055"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+[`EndpointPrefix::new`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/struct.EndpointPrefix.html#method.new) no longer returns `crate::operation::error::BuildError` for an Err variant, instead returns a more specific [`InvalidEndpointError`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/error/struct.InvalidEndpointError.html).
+"""
+references = ["smithy-rs#3032"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Lifetimes have been added to `EndpointResolver` and `IdentityResolver` traits."
+references = ["smithy-rs#3061"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Lifetimes have been added to the `EndpointResolver` trait."
+references = ["smithy-rs#3061"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Several traits have been renamed from noun form to verb form to be more idiomatic:
+- `EndpointResolver` -> `ResolveEndpoint`
+- `Interceptor` -> `Intercept`
+"""
+references = ["smithy-rs#3065"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """Several traits have been renamed from noun form to verb form to be more idiomatic:
+- `AuthSchemeOptionResolver` -> `ResolveAuthSchemeOptions`
+- `EndpointResolver` -> `ResolveEndpoint`
+- `IdentityResolver` -> `ResolveIdentity`
+- `Signer` -> `Sign`
+- `RequestSerializer` -> `SerializeRequest`
+- `ResponseDeserializer` -> `DeserializeResponse`
+- `Interceptor` -> `Intercept`
+"""
+references = ["smithy-rs#3065"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "**This change has [detailed upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3067)**. A summary is below.<br><br> The `HttpRequest` type alias now points to `aws-smithy-runtime-api::client::http::Request`. This is a first-party request type to allow us to gracefully support `http = 1.0` when it arrives. Most customer code using this method should be unaffected. `TryFrom`/`TryInto` conversions are provided for `http = 0.2.*`."
+references = ["smithy-rs#3059"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "[`PresignedRequest`](https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/presigning/struct.PresignedRequest.html) now returns standard-library types instead of types from the `http` crate. `to_http_request` has been renamed `to_http_02x_request`."
+references = ["smithy-rs#3059"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "`RuntimeComponents` have been added as an argument to the `IdentityResolver::resolve_identity` trait function."
+references = ["smithy-rs#2917"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `idempotency_provider` field has been removed from config as a public field. If you need access to this field, it is still available from the context of an interceptor."
+references = ["smithy-rs#3072"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "The `config::Builder::endpoint_resolver` method no longer accepts `&'static str`. Use `config::Builder::endpoint_url` instead."
+references = ["smithy-rs#3078"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "**This change has [detailed upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3079).** <br><br>The endpoint interfaces from `aws-smithy-http` have been removed. Service-specific endpoint resolver traits have been added."
+references = ["smithy-rs#3043", "smithy-rs#3078"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """
+`aws_smithy_http::operation::error::{BuildError, SerializationError}` have been moved to `aws_smithy_types::error::operation::{BuildError, SerializationError}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+"""
+references = ["smithy-rs#3054", "smithy-rs#3070"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+`aws_smithy_http::body::{BoxBody, Error, SdkBody}` have been moved to `aws_smithy_types::body::{BoxBody, Error, SdkBody}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+"""
+references = ["smithy-rs#3076"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+`aws_smithy_http::byte_stream::{AggregatedBytes, ByteStream, error::Error}` have been moved to `aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream, error::Error}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+"""
+references = ["smithy-rs#3076"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"

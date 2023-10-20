@@ -9,7 +9,7 @@
 //! This can include:
 //! - Registering interceptors
 //! - Registering auth schemes
-//! - Adding entries to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) for orchestration
+//! - Adding entries to the [`ConfigBag`] for orchestration
 //! - Setting runtime components
 //!
 //! Runtime plugins are divided into service/operation "levels", with service runtime plugins
@@ -77,7 +77,7 @@ pub trait RuntimePlugin: Debug + Send + Sync {
         DEFAULT_ORDER
     }
 
-    /// Optionally returns additional config that should be added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag).
+    /// Optionally returns additional config that should be added to the [`ConfigBag`].
     ///
     /// As a best practice, a frozen layer should be stored on the runtime plugin instance as
     /// a member, and then cloned upon return since that clone is cheap. Constructing a new
@@ -236,20 +236,52 @@ pub struct RuntimePlugins {
 }
 
 impl RuntimePlugins {
+    /// Create a new empty set of runtime plugins.
     pub fn new() -> Self {
         Default::default()
     }
 
-    pub fn with_client_plugin(mut self, plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
-        insert_plugin!(self.client_plugins, plugin.into_shared());
+    /// Add several client-level runtime plugins from an iterator.
+    pub fn with_client_plugins(
+        mut self,
+        plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> Self {
+        for plugin in plugins.into_iter() {
+            self = self.with_client_plugin(plugin);
+        }
         self
     }
 
-    pub fn with_operation_plugin(mut self, plugin: impl IntoShared<SharedRuntimePlugin>) -> Self {
-        insert_plugin!(self.operation_plugins, plugin.into_shared());
+    /// Adds a client-level runtime plugin.
+    pub fn with_client_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
+        insert_plugin!(
+            self.client_plugins,
+            IntoShared::<SharedRuntimePlugin>::into_shared(plugin)
+        );
         self
     }
 
+    /// Add several operation-level runtime plugins from an iterator.
+    pub fn with_operation_plugins(
+        mut self,
+        plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> Self {
+        for plugin in plugins.into_iter() {
+            self = self.with_operation_plugin(plugin);
+        }
+        self
+    }
+
+    /// Adds an operation-level runtime plugin.
+    pub fn with_operation_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
+        insert_plugin!(
+            self.operation_plugins,
+            IntoShared::<SharedRuntimePlugin>::into_shared(plugin)
+        );
+        self
+    }
+
+    /// Apply the client-level runtime plugins' config to the given config bag.
     pub fn apply_client_configuration(
         &self,
         cfg: &mut ConfigBag,
@@ -257,6 +289,7 @@ impl RuntimePlugins {
         apply_plugins!(client, self.client_plugins, cfg)
     }
 
+    /// Apply the operation-level runtime plugins' config to the given config bag.
     pub fn apply_operation_configuration(
         &self,
         cfg: &mut ConfigBag,
@@ -265,14 +298,17 @@ impl RuntimePlugins {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::{RuntimePlugin, RuntimePlugins};
-    use crate::client::connectors::{HttpConnector, HttpConnectorFuture, SharedHttpConnector};
+    use crate::client::http::{
+        http_client_fn, HttpClient, HttpConnector, HttpConnectorFuture, SharedHttpConnector,
+    };
     use crate::client::orchestrator::HttpRequest;
     use crate::client::runtime_components::RuntimeComponentsBuilder;
     use crate::client::runtime_plugin::{Order, SharedRuntimePlugin};
-    use aws_smithy_http::body::SdkBody;
+    use crate::shared::IntoShared;
+    use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::ConfigBag;
     use http::HeaderValue;
     use std::borrow::Cow;
@@ -392,7 +428,7 @@ mod tests {
             ) -> Cow<'_, RuntimeComponentsBuilder> {
                 Cow::Owned(
                     RuntimeComponentsBuilder::new("Plugin1")
-                        .with_http_connector(Some(SharedHttpConnector::new(Connector1))),
+                        .with_http_client(Some(http_client_fn(|_, _| Connector1.into_shared()))),
                 )
             }
         }
@@ -409,11 +445,13 @@ mod tests {
                 &self,
                 current_components: &RuntimeComponentsBuilder,
             ) -> Cow<'_, RuntimeComponentsBuilder> {
+                let current = current_components.http_client().unwrap();
                 Cow::Owned(
-                    RuntimeComponentsBuilder::new("Plugin2").with_http_connector(Some(
-                        SharedHttpConnector::new(Connector2(
-                            current_components.http_connector().unwrap(),
-                        )),
+                    RuntimeComponentsBuilder::new("Plugin2").with_http_client(Some(
+                        http_client_fn(move |settings, components| {
+                            let connector = current.http_connector(settings, components);
+                            SharedHttpConnector::new(Connector2(connector))
+                        }),
                     )),
                 )
             }
@@ -426,18 +464,14 @@ mod tests {
             .with_client_plugin(Plugin1);
         let mut cfg = ConfigBag::base();
         let components = plugins.apply_client_configuration(&mut cfg).unwrap();
+        let fake_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
 
         // Use the resulting HTTP connector to make a response
         let resp = components
-            .http_connector()
+            .http_client()
             .unwrap()
-            .call(
-                http::Request::builder()
-                    .method("GET")
-                    .uri("/")
-                    .body(SdkBody::empty())
-                    .unwrap(),
-            )
+            .http_connector(&Default::default(), &fake_components)
+            .call(HttpRequest::empty())
             .await
             .unwrap();
         dbg!(&resp);

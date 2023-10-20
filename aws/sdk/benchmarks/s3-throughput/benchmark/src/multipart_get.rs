@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
 use aws_sdk_s3::Client;
-use aws_smithy_http::byte_stream::AggregatedBytes;
+use aws_smithy_types::byte_stream::AggregatedBytes;
 use std::fmt;
 use std::fs::File;
 use std::os::unix::fs::FileExt;

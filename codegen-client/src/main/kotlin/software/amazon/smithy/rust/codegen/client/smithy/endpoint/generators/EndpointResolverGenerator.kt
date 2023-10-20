@@ -18,6 +18,7 @@ import software.amazon.smithy.rulesengine.language.syntax.rule.RuleValueVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
@@ -36,8 +37,10 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
 abstract class CustomRuntimeFunction {
     abstract val id: String
@@ -128,9 +131,13 @@ internal class EndpointResolverGenerator(
     private val registry: FunctionRegistry = FunctionRegistry(stdlib)
     private val types = Types(runtimeConfig)
     private val codegenScope = arrayOf(
+        "BoxError" to RuntimeType.boxError(runtimeConfig),
         "endpoint" to types.smithyHttpEndpointModule,
         "SmithyEndpoint" to types.smithyEndpoint,
+        "EndpointFuture" to types.endpointFuture,
+        "ResolveEndpointError" to types.resolveEndpointError,
         "EndpointError" to types.resolveEndpointError,
+        "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
         "DiagnosticCollector" to endpointsLib("diagnostic").toType().resolve("DiagnosticCollector"),
     )
 
@@ -183,13 +190,17 @@ internal class EndpointResolverGenerator(
                     pub fn new() -> Self {
                         Self { #{custom_fields_init:W} }
                     }
+
+                    fn resolve_endpoint(&self, params: &#{Params}) -> Result<#{SmithyEndpoint}, #{BoxError}> {
+                        let mut diagnostic_collector = #{DiagnosticCollector}::new();
+                        Ok(#{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
+                            .map_err(|err|err.with_source(diagnostic_collector.take_last_error()))?)
+                    }
                 }
 
-                impl #{endpoint}::ResolveEndpoint<#{Params}> for DefaultResolver {
-                    fn resolve_endpoint(&self, params: &Params) -> #{endpoint}::Result {
-                        let mut diagnostic_collector = #{DiagnosticCollector}::new();
-                        #{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
-                            .map_err(|err|err.with_source(diagnostic_collector.take_last_error()))
+                impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
+                    fn resolve_endpoint(&self, params: &#{Params}) -> #{EndpointFuture} {
+                        #{EndpointFuture}::ready(self.resolve_endpoint(params))
                     }
                 }
                 """,
@@ -207,7 +218,7 @@ internal class EndpointResolverGenerator(
         endpointRuleSet: EndpointRuleSet,
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
-        return RuntimeType.forInlineFun("resolve_endpoint", endpointImplModule(codegenContext)) {
+        return RuntimeType.forInlineFun("resolve_endpoint", endpointImplModule()) {
             Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
@@ -366,5 +377,48 @@ internal class EndpointResolverGenerator(
             properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
             rust(".build()")
         }
+    }
+}
+
+fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
+    val generator = EndpointTypesGenerator.fromContext(this)
+    return RuntimeType.forInlineFun("ResolveEndpoint", ClientRustModule.Config.endpoint) {
+        val ctx = arrayOf(*preludeScope, "Params" to generator.paramsStruct(), *Types(runtimeConfig).toArray(), "Debug" to RuntimeType.Debug)
+        rustTemplate(
+            """
+            /// Endpoint resolver trait specific to ${serviceShape.serviceNameOrDefault("this service")}
+            pub trait ResolveEndpoint: #{Send} + #{Sync} + #{Debug} {
+                /// Resolve an endpoint with the given parameters
+                fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a>;
+
+                /// Convert this service-specific resolver into a `SharedEndpointResolver`
+                ///
+                /// The resulting resolver will downcast `EndpointResolverParams` into `#{Params}`.
+                fn into_shared_resolver(self) -> #{SharedEndpointResolver}
+                where
+                    Self: Sized + 'static,
+                {
+                    #{SharedEndpointResolver}::new(DowncastParams(self))
+                }
+            }
+
+            ##[derive(Debug)]
+            struct DowncastParams<T>(T);
+            impl<T> #{ResolveEndpoint} for DowncastParams<T>
+            where
+                T: ResolveEndpoint,
+            {
+                fn resolve_endpoint<'a>(&'a self, params: &'a #{EndpointResolverParams}) -> #{EndpointFuture}<'a> {
+                    let ep = match params.get::<#{Params}>() {
+                        Some(params) => self.0.resolve_endpoint(params),
+                        None => #{EndpointFuture}::ready(Err("params of expected type was not present".into())),
+                    };
+                    ep
+                }
+            }
+
+            """,
+            *ctx,
+        )
     }
 }
