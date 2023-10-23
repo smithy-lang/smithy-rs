@@ -35,24 +35,35 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isInputEventStream
+import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
 class SigV4AuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "SigV4AuthDecorator"
     override val order: Byte = 0
 
+    private fun sigv4(runtimeConfig: RuntimeConfig) = writable {
+        val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
+        rust("#T", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
+    }
+
+    private fun sigv4a(runtimeConfig: RuntimeConfig) = writable {
+        val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
+        featureGateBlock("sigv4a") {
+            rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
+        }
+    }
+
     override fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> = baseAuthSchemeOptions + AuthSchemeOption.StaticAuthSchemeOption(SigV4Trait.ID) {
-        val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig).resolve("auth")
-        rust("#T,", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
-        if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
-            featureGateBlock("sigv4a") {
-                rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
-            }
-            rust(",")
-        }
+    ): List<AuthSchemeOption> {
+        val supportsSigV4a = codegenContext.serviceShape.supportedAuthSchemes().contains("sig4a")
+            .thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
+        return baseAuthSchemeOptions + AuthSchemeOption.StaticAuthSchemeOption(
+            SigV4Trait.ID,
+            listOf(sigv4(codegenContext.runtimeConfig)) + supportsSigV4a,
+        )
     }
 
     override fun serviceRuntimePluginCustomizations(

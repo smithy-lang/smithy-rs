@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.raw
+import software.amazon.smithy.rust.codegen.core.rustlang.rawRust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -104,7 +104,7 @@ class HttpAuthDecoratorTest {
         clientIntegrationTest(TestModels.noSchemes) { ctx, rustCrate ->
             rustCrate.integrationTest("custom_auth_scheme_works") {
                 val moduleName = ctx.moduleUseName()
-                raw(
+                rawRust(
                     """
                     use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
                     use aws_smithy_runtime_api::client::auth::AuthScheme;
@@ -112,13 +112,18 @@ class HttpAuthDecoratorTest {
                     use aws_smithy_runtime_api::client::identity::{
                         IdentityFuture, ResolveIdentity, SharedIdentityResolver,
                     };
+                    use aws_smithy_runtime_api::box_error::BoxError;
+                    use aws_smithy_runtime_api::client::auth::Signer;
                     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                     use aws_smithy_runtime_api::client::runtime_components::{
                         GetIdentityResolver, RuntimeComponentsBuilder,
                     };
+                    use aws_smithy_runtime_api::client::identity::Identity;
                     use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+                    use aws_smithy_runtime_api::client::auth::AuthSchemeEndpointConfig;
                     use aws_smithy_types::config_bag::ConfigBag;
                     use std::borrow::Cow;
+                    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
                     #[derive(Debug)]
                     struct CustomAuthRuntimePlugin {
                         components: RuntimeComponentsBuilder,
@@ -134,24 +139,55 @@ class HttpAuthDecoratorTest {
                     }
 
                     #[derive(Debug)]
-                    struct TestAuthScheme;
+                    struct TestAuthScheme { signer: CustomSigner }
 
                     impl AuthScheme for TestAuthScheme {
                         fn scheme_id(&self) -> AuthSchemeId {
-                            todo!()
+                            AuthSchemeId::new("customauth")
                         }
 
                         fn identity_resolver(
                             &self,
-                            _identity_resolvers: &dyn GetIdentityResolver,
+                            identity_resolvers: &dyn GetIdentityResolver,
                         ) -> Option<SharedIdentityResolver> {
-                            todo!()
+                            identity_resolvers.identity_resolver(self.scheme_id())
                         }
 
                         fn signer(&self) -> &dyn Sign {
-                            todo!()
+                            &self.signer
                         }
                     }
+
+                    #[derive(Debug, Default)]
+                    struct CustomSigner;
+
+                    #[derive(Debug)]
+                    struct CustomIdentity(String);
+
+                    impl Signer for CustomSigner {
+                        fn sign_http_request(
+                            &self,
+                            request: &mut HttpRequest,
+                            identity: &Identity,
+                            // In some advanced use cases, the Smithy `@endpointRuleSet` can
+                            // provide additional context in this config:
+                            _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+                            _runtime_components: &RuntimeComponents,
+                            _config_bag: &ConfigBag,
+                        ) -> Result<(), BoxError> {
+                            // Downcast the identity to our known `Login` type
+                            let login = identity
+                                .data::<CustomIdentity>()
+                                .ok_or("custom auth requires a `Login` identity")?;
+                            // Use the login to add an authorization header to the request
+                            request.headers_mut().try_append(
+                                http::header::AUTHORIZATION,
+                                login.0.to_string()
+                            )?;
+                            Ok(())
+                        }
+                    }
+
 
                     #[derive(Debug)]
                     struct TestResolver;
@@ -161,17 +197,17 @@ class HttpAuthDecoratorTest {
                             _runtime_components: &'a RuntimeComponents,
                             _config_bag: &'a ConfigBag,
                         ) -> IdentityFuture<'a> {
-                            todo!()
+                            IdentityFuture::ready(Ok(Identity::new(CustomIdentity("password".to_string()), None)))
                         }
                     }
 
                     impl CustomAuthRuntimePlugin {
                         pub fn new() -> Self {
-                            let scheme_id = AuthSchemeId::new("basicauth");
+                            let scheme_id = AuthSchemeId::new("customauth");
                             Self {
                                 components: RuntimeComponentsBuilder::new("test-auth-scheme")
                                     // Register our auth scheme
-                                    .with_auth_scheme(TestAuthScheme)
+                                    .with_auth_scheme(TestAuthScheme { signer: CustomSigner })
                                     // Register our identity resolver with our auth scheme ID
                                     .with_identity_resolver(
                                         // This scheme ID needs to match the scheme ID returned in the auth scheme implementation
@@ -196,11 +232,11 @@ class HttpAuthDecoratorTest {
                 rustTemplate(
                     """
                     async fn apply_custom_auth_scheme() {
-                        let (_guard, rx) = #{capture_test_logs}();
+                        let (_guard, _rx) = #{capture_test_logs}();
                         let http_client = #{StaticReplayClient}::new(
                             vec![#{ReplayEvent}::new(
                                 http::Request::builder()
-                                    .header("authorization", "Basic c29tZS11c2VyOnNvbWUtcGFzcw==")
+                                    .header("authorization", "password")
                                     .uri("http://localhost:1234/SomeOperation")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
@@ -213,15 +249,11 @@ class HttpAuthDecoratorTest {
                             .runtime_plugin(CustomAuthRuntimePlugin::new())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
-                        let req = client.some_operation()
+                        let _req = dbg!(client.some_operation()
                             .send()
-                            .await;
+                            .await).expect("request should succeed");
 
-                        println!("{}", rx.contents());
-                        req.unwrap();
-                        panic!()
-
-
+                        http_client.assert_requests_match(&[]);
                     }
                     """,
                     "capture_test_logs" to CargoDependency.smithyRuntimeTestUtil(ctx.runtimeConfig).toType()
