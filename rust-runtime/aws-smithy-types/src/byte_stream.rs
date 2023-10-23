@@ -309,6 +309,7 @@ impl ByteStream {
         Some(self.inner.next().await?.map_err(Error::streaming))
     }
 
+    #[cfg(feature = "byte-stream-poll-next")]
     /// Attempt to pull out the next value of this stream, returning `None` if the stream is
     /// exhausted.
     pub fn poll_next(
@@ -457,7 +458,9 @@ impl ByteStream {
                 mut self: Pin<&mut Self>,
                 cx: &mut Context<'_>,
             ) -> Poll<Option<Self::Item>> {
-                Pin::new(&mut self.0).poll_next(cx)
+                Pin::new(&mut self.0.inner)
+                    .poll_next(cx)
+                    .map_err(Error::streaming)
             }
         }
         tokio_util::io::StreamReader::new(FuturesStreamCompatByteStream(self))

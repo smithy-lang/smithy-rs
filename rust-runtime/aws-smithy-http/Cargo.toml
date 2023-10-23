@@ -16,7 +16,7 @@ rt-tokio = ["aws-smithy-types/rt-tokio"]
 
 [dependencies]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
-aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 bytes = "1"
 bytes-utils = "0.1"
 http = "0.2.3"
