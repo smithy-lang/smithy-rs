@@ -287,7 +287,7 @@ mod tests {
         use aws_smithy_types::body::SdkBody;
         use aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream};
         use aws_smithy_types::error::display::DisplayErrorContext;
-        use bytes::Bytes;
+        use bytes::{BufMut, Bytes, BytesMut};
         use once_cell::sync::Lazy;
         use pretty_assertions::assert_eq;
         use std::convert::Infallible;
@@ -391,6 +391,77 @@ mod tests {
         async fn test_throughput_timeout_greater_than() {
             let minimum_throughput = (20, Duration::from_secs(3));
             expect_success(minimum_throughput).await;
+        }
+
+        // A multiplier for the sine wave amplitude; Chosen arbitrarily.
+        const BYTE_COUNT_UPPER_LIMIT: f64 = 100.0;
+
+        fn create_shrinking_sine_wave_stream(
+            async_sleep: impl AsyncSleep + Clone,
+        ) -> impl futures_util::Stream<Item = Result<Bytes, Infallible>> {
+            futures_util::stream::unfold(1, move |i| {
+                let async_sleep = async_sleep.clone();
+                async move {
+                    if i > 255 {
+                        None
+                    } else {
+                        let byte_count = (i as f64).sin().floor().abs() + 1.0 / (i as f64 + 1.0);
+                        let byte_count = (byte_count * BYTE_COUNT_UPPER_LIMIT) as u64;
+                        let mut bytes = BytesMut::new();
+                        bytes.put_u8(i as u8);
+                        if byte_count > 0 {
+                            for _ in 0..byte_count {
+                                bytes.put_u8(0)
+                            }
+                        }
+
+                        async_sleep.sleep(Duration::from_secs(1)).await;
+                        Some((Result::<Bytes, Infallible>::Ok(bytes.into()), i + 1))
+                    }
+                }
+            })
+        }
+
+        #[tokio::test]
+        async fn test_throughput_timeout_shrinking_sine_wave() {
+            // Minimum throughput per second will be approx. half of the BYTE_COUNT_UPPER_LIMIT.
+            let minimum_throughput = (
+                BYTE_COUNT_UPPER_LIMIT as u64 / 2 + 2,
+                Duration::from_secs(1),
+            );
+            let (time_source, async_sleep) = instant_time_and_sleep(UNIX_EPOCH);
+            let time_clone = time_source.clone();
+
+            let stream = create_shrinking_sine_wave_stream(async_sleep.clone());
+            let body = ByteStream::new(SdkBody::from(hyper::body::Body::wrap_stream(stream)));
+            let res = body
+                .map(move |body| {
+                    let time_source = time_clone.clone();
+                    // We don't want to log these sleeps because it would duplicate
+                    // the `sleep` calls being logged by the MTB
+                    let async_sleep = InstantSleep::unlogged();
+                    SdkBody::from_dyn(aws_smithy_types::body::BoxBody::new(
+                        MinimumThroughputBody::new(
+                            time_source,
+                            async_sleep,
+                            body,
+                            minimum_throughput,
+                        ),
+                    ))
+                })
+                .collect();
+
+            match res.await {
+                Ok(_res) => {
+                    assert_eq!(255.0, time_source.seconds_since_unix_epoch());
+                    assert_eq!(Duration::from_secs(255), async_sleep.total_duration());
+                }
+                Err(err) => panic!(
+                    "test stopped after {:?} due to {}",
+                    async_sleep.total_duration(),
+                    DisplayErrorContext(err.source().unwrap())
+                ),
+            }
         }
     }
 }
