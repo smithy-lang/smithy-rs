@@ -24,5 +24,5 @@ allowed_external_types = [
     "aws_smithy_http::result::*",
 
     # Pending future fix
-    "aws_smithy_http::event_stream::receiver::Receiver",
+    "aws_smithy_http::event_stream::*",
 ]
