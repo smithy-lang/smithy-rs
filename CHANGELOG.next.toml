@@ -450,3 +450,21 @@ message = """
 references = ["smithy-rs#3076"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "**This change has [detailed upgrade guidance](https://github.com/awslabs/aws-sdk-rust/discussions/923).** <br><br>The AWS credentials cache has been replaced with a more generic identity cache."
+references = ["smithy-rs#3077"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "**Behavior Break!** Identities for auth are now cached by default. See the `Config` builder's `identity_cache()` method docs for an example of how to disable this caching."
+references = ["smithy-rs#3077"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Clients now have a default async sleep implementation so that one does not need to be specified if you're using Tokio."
+references = ["smithy-rs#3071"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"

@@ -27,11 +27,13 @@ class ClientRuntimeTypesReExportGenerator(
                 pub use #{Intercept};
                 pub use #{RuntimeComponents};
                 pub use #{SharedInterceptor};
+                pub use #{IdentityCache};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
                 "Intercept" to RuntimeType.intercept(rc),
                 "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
                 "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
+                "IdentityCache" to RuntimeType.smithyRuntime(rc).resolve("client::identity::IdentityCache"),
             )
 
             if (codegenContext.enableUserConfigurableRuntimePlugins) {
