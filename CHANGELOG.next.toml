@@ -468,3 +468,15 @@ message = "Clients now have a default async sleep implementation so that one doe
 references = ["smithy-rs#3071"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Publicly exposed types from `http-body` and `hyper` crates within `aws-smithy-types` are now feature-gated. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3089) for details."
+references = ["smithy-rs#3033", "smithy-rs#3088"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`ByteStream::poll_next` is now feature-gated. You can turn on a cargo feature `byte-stream-poll-next` in `aws-smithy-types` to use it."
+references = ["smithy-rs#3033", "smithy-rs#3088"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
