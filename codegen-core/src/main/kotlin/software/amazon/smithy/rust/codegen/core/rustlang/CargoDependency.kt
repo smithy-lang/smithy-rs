@@ -89,6 +89,8 @@ class InlineDependency(
         private fun forInlineableRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(RustModule.private(name), "/inlineable/src/$name.rs", *additionalDependencies)
 
+        fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) = forInlineableRustFile("auth_plugin", CargoDependency.smithyRuntimeApi(runtimeConfig))
+
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "json_errors",
