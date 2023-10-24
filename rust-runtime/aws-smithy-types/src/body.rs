@@ -96,7 +96,7 @@ impl SdkBody {
     ///
     /// All bodies constructed from in-memory data (`String`, `Vec<u8>`, `Bytes`, etc.) will be
     /// retryable out of the box. If you want to read data from a file, you should turn on a feature
-    /// `http-body-0-4-x` and use [`ByteStream::from_path_body_0_4`](crate::byte_stream::ByteStream::from_path_body_0_4).
+    /// `http-body-0-4-x` and use `ByteStream::from_path_body_0_4`.
     ///
     /// This function is only necessary when you need to enable retries for your own streaming container.
     pub fn retryable(f: impl Fn() -> SdkBody + Send + Sync + 'static) -> Self {
