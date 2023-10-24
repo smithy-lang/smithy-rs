@@ -4,9 +4,7 @@
  */
 
 use crate::body::SdkBody;
-use crate::byte_stream::error::Error;
 use crate::byte_stream::ByteStream;
-use crate::byte_stream::FsBuilder;
 use bytes::Bytes;
 
 impl ByteStream {
@@ -44,8 +42,8 @@ impl ByteStream {
     /// ```
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
-    pub fn read_with_body_0_4_from() -> FsBuilder {
-        FsBuilder::new_with_body_0_4()
+    pub fn read_with_body_0_4_from() -> crate::byte_stream::FsBuilder {
+        crate::byte_stream::FsBuilder::new_with_body_0_4()
     }
 
     /// Create a ByteStream that streams data from the filesystem
@@ -74,8 +72,13 @@ impl ByteStream {
     /// ```
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
-    pub async fn from_path_body_0_4(path: impl AsRef<std::path::Path>) -> Result<Self, Error> {
-        FsBuilder::new_with_body_0_4().path(path).build().await
+    pub async fn from_path_body_0_4(
+        path: impl AsRef<std::path::Path>,
+    ) -> Result<Self, crate::byte_stream::error::Error> {
+        crate::byte_stream::FsBuilder::new_with_body_0_4()
+            .path(path)
+            .build()
+            .await
     }
 
     /// Create a ByteStream from a file
@@ -88,8 +91,13 @@ impl ByteStream {
     )]
     #[cfg(feature = "rt-tokio")]
     #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
-    pub async fn from_file_body_0_4(file: tokio::fs::File) -> Result<Self, Error> {
-        FsBuilder::new_with_body_0_4().file(file).build().await
+    pub async fn from_file_body_0_4(
+        file: tokio::fs::File,
+    ) -> Result<Self, crate::byte_stream::error::Error> {
+        crate::byte_stream::FsBuilder::new_with_body_0_4()
+            .file(file)
+            .build()
+            .await
     }
 }
 

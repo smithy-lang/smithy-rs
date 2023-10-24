@@ -56,7 +56,7 @@ impl PathBody {
 
 /// Builder for creating [`ByteStreams`](ByteStream) from a file/path, with full control over advanced options.
 ///
-/// _Note: This is only available with `http-body-0-4-x` enabled._
+/// _Note: A cargo feature `http-body-0-4-x` should be active to call `ByteStream::read_with_body_0_4_from` in the following example._
 ///
 /// Example usage:
 /// ```no_run
@@ -112,6 +112,8 @@ impl FsBuilder {
     /// Create a new [`FsBuilder`] (using a default read buffer of 4096 bytes).
     ///
     /// You must then call either [`file`](FsBuilder::file) or [`path`](FsBuilder::path) to specify what to read from.
+    ///
+    /// _Note: This is only available with `http-body-0-4-x` enabled._
     pub fn new_with_body_0_4() -> Self {
         Self {
             buffer_size: DEFAULT_BUFFER_SIZE,
