@@ -138,7 +138,7 @@ open class Instantiator(
      * If the shape is optional: `Some(inner)` or `None`.
      * Otherwise: `inner`.
      */
-    private fun renderMember(writer: RustWriter, memberShape: MemberShape, data: Node, ctx: Ctx) {
+    protected fun renderMember(writer: RustWriter, memberShape: MemberShape, data: Node, ctx: Ctx) {
         val targetShape = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
         if (data is NullNode && !targetShape.isDocumentShape) {

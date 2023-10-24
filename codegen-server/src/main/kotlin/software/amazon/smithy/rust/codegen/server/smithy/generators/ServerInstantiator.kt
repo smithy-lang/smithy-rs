@@ -5,12 +5,17 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -68,15 +73,65 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         codegenContext.symbolProvider.toSymbol(memberShape).isOptional()
 }
 
-fun serverInstantiator(codegenContext: CodegenContext) =
-    Instantiator(
-        codegenContext.symbolProvider,
-        codegenContext.model,
-        codegenContext.runtimeConfig,
-        ServerBuilderKindBehavior(codegenContext),
-        defaultsForRequiredFields = true,
-        customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
-    )
+class ServerInstantiator(private val codegenContext: CodegenContext) : Instantiator(
+    codegenContext.symbolProvider,
+    codegenContext.model,
+    codegenContext.runtimeConfig,
+    ServerBuilderKindBehavior(codegenContext),
+    defaultsForRequiredFields = true,
+    customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
+) {
+    fun generate(
+        shape: StructureShape,
+        values: Map<MemberShape, Writable>,
+        data: ObjectNode = Node.objectNode(),
+        ctx: Ctx = Ctx(),
+    ) = writable {
+        render(this, shape, values, data, ctx)
+    }
+
+    fun render(
+        writer: RustWriter,
+        shape: StructureShape,
+        values: Map<MemberShape, Writable>,
+        data: ObjectNode,
+        ctx: Ctx = Ctx(),
+    ) {
+        val symbolProvider = codegenContext.symbolProvider
+        writer.withBlock("{", "}") {
+            for (member in shape.members()) {
+                val dataHasValue = data.getMember(member.memberName).isPresent
+                val hasValue = values.containsKey(member) || dataHasValue
+                check(member.isOptional || hasValue)
+                val value = if (member.isOptional && !hasValue) {
+                    writable("None")
+                } else {
+                    writable {
+                        values[member]
+                            ?.let { it(this) }
+                            ?: super.renderMember(
+                                this,
+                                member,
+                                data.expectMember(member.memberName),
+                                ctx,
+                            )
+                    }
+                }
+                val name = symbolProvider.toMemberName(member)
+                writer.rustTemplate(
+                    "let $name = #{value};",
+                    "value" to value,
+                )
+            }
+            writer.withBlockTemplate("#{T} {", "}", "T" to symbolProvider.toSymbol(shape)) {
+                for (member in shape.members()) {
+                    val name = symbolProvider.toMemberName(member)
+                    writer.rustTemplate("$name,")
+                }
+            }
+        }
+    }
+}
 
 class ServerBuilderInstantiator(
     private val symbolProvider: RustSymbolProvider,

@@ -179,7 +179,7 @@ class ConstrainedCollectionGeneratorTest {
             project.withModule(ServerRustModule.Model) {
                 render(codegenContext, this, shape)
 
-                val instantiator = serverInstantiator(codegenContext)
+                val instantiator = ServerInstantiator(codegenContext)
                 for ((idx, validList) in testCase.validLists.withIndex()) {
                     val shapeNameIdx = "${shapeName}_$idx"
                     val buildValidFnName = "build_valid_$shapeNameIdx"

@@ -81,7 +81,7 @@ class ConstrainedMapGeneratorTest {
         project.withModule(ServerRustModule.Model) {
             render(codegenContext, this, constrainedMapShape)
 
-            val instantiator = serverInstantiator(codegenContext)
+            val instantiator = ServerInstantiator(codegenContext)
             rustBlock("##[cfg(test)] fn build_valid_map() -> std::collections::HashMap<String, String>") {
                 instantiator.render(this, constrainedMapShape, testCase.validMap)
             }
