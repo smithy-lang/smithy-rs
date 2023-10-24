@@ -14,6 +14,12 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+/// This module is named after the `http-body` version number since we anticipate
+/// needing to provide equivalent functionality for 1.x of that crate in the future.
+/// The name has a suffix `_x` to avoid name collision with a third-party `http-body-0-4`.
+#[cfg(feature = "http-body-0-4-x")]
+pub mod http_body_0_4_x;
+
 /// A generic, boxed error that's `Send` and `Sync`
 pub type Error = Box<dyn StdError + Send + Sync>;
 
@@ -84,34 +90,15 @@ impl Debug for Inner {
 }
 
 impl SdkBody {
-    #[cfg(feature = "http-body-0-4-x")]
-    /// Construct an `SdkBody` from a type that implements [`http_body_0_4::Body<Data = Bytes>`](http_body_0_4::Body).
-    ///
-    /// _Note: This is only available with `http-body-0-4-x` enabled._
-    pub fn from_body_0_4<T, E>(body: T) -> Self
-    where
-        T: http_body_0_4::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
-        E: Into<Error> + 'static,
-    {
-        Self {
-            inner: Inner::Dyn {
-                inner: BoxBody::HttpBody04(http_body_0_4::combinators::BoxBody::new(
-                    body.map_err(Into::into),
-                )),
-            },
-            rebuild: None,
-            bytes_contents: None,
-        }
-    }
-
     /// Construct an explicitly retryable SDK body
     ///
     /// _Note: This is probably not what you want_
     ///
     /// All bodies constructed from in-memory data (`String`, `Vec<u8>`, `Bytes`, etc.) will be
-    /// retryable out of the box. If you want to read data from a file, you should use
-    /// [`ByteStream::from_path_body_0_4`](crate::byte_stream::ByteStream::from_path_body_0_4). This function
-    /// is only necessary when you need to enable retries for your own streaming container.
+    /// retryable out of the box. If you want to read data from a file, you should turn on a feature
+    /// `http-body-0-4-x` and use [`ByteStream::from_path_body_0_4`](crate::byte_stream::ByteStream::from_path_body_0_4).
+    ///
+    /// This function is only necessary when you need to enable retries for your own streaming container.
     pub fn retryable(f: impl Fn() -> SdkBody + Send + Sync + 'static) -> Self {
         let initial = f();
         SdkBody {
@@ -303,13 +290,6 @@ impl From<Bytes> for SdkBody {
     }
 }
 
-#[cfg(all(feature = "http-body-0-4-x", feature = "hyper-0-14-x"))]
-impl From<hyper_0_14::Body> for SdkBody {
-    fn from(body: hyper_0_14::Body) -> Self {
-        SdkBody::from_body_0_4(body)
-    }
-}
-
 impl From<Vec<u8>> for SdkBody {
     fn from(data: Vec<u8>) -> Self {
         Self::from(Bytes::from(data))
@@ -328,40 +308,6 @@ impl From<&[u8]> for SdkBody {
     }
 }
 
-#[cfg(feature = "http-body-0-4-x")]
-impl http_body_0_4::Body for SdkBody {
-    type Data = Bytes;
-    type Error = Error;
-
-    fn poll_data(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_next(cx)
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Self::Error>> {
-        Poll::Ready(Ok(None))
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.is_end_stream()
-    }
-
-    fn size_hint(&self) -> http_body_0_4::SizeHint {
-        let mut result = http_body_0_4::SizeHint::default();
-        let (lower, upper) = self.bounds_on_remaining_length();
-        result.set_lower(lower);
-        if let Some(u) = upper {
-            result.set_upper(u)
-        }
-        result
-    }
-}
-
 #[cfg(test)]
 mod test {
     use crate::body::SdkBody;
@@ -371,16 +317,6 @@ mod test {
     fn valid_size_hint() {
         assert_eq!(SdkBody::from("hello").content_length(), Some(5));
         assert_eq!(SdkBody::from("").content_length(), Some(0));
-    }
-
-    #[cfg(feature = "http-body-0-4-x")]
-    #[test]
-    fn map_preserve_preserves_bytes_hint() {
-        let initial = SdkBody::from("hello!");
-        assert_eq!(initial.bytes(), Some(b"hello!".as_slice()));
-
-        let new_body = initial.map_preserve_contents(|body| SdkBody::from_body_0_4(body));
-        assert_eq!(new_body.bytes(), Some(b"hello!".as_slice()));
     }
 
     #[allow(clippy::bool_assert_comparison)]
@@ -413,14 +349,6 @@ mod test {
     fn sdkbody_debug_once() {
         let body = SdkBody::from("123");
         assert!(format!("{:?}", body).contains("Once"));
-    }
-
-    #[cfg(feature = "http-body-0-4-x")]
-    #[test]
-    fn sdkbody_debug_dyn() {
-        let hyper_body = hyper_0_14::Body::channel().1;
-        let body = SdkBody::from_body_0_4(hyper_body);
-        assert!(format!("{:?}", body).contains("BoxBody"));
     }
 
     #[test]
