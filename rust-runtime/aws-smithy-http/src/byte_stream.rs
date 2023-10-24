@@ -22,3 +22,11 @@ pub mod error {
     #[deprecated(note = "Moved to `aws_smithy_types::byte_stream::error::Error`.")]
     pub type Error = aws_smithy_types::byte_stream::error::Error;
 }
+
+#[cfg(feature = "rt-tokio")]
+#[deprecated(note = "Moved to `aws_smithy_types::byte_stream::FsBuilder`.")]
+pub type FsBuilder = aws_smithy_types::byte_stream::FsBuilder;
+
+#[cfg(feature = "rt-tokio")]
+#[deprecated(note = "Moved to `aws_smithy_types::byte_stream::Length`.")]
+pub type Length = aws_smithy_types::byte_stream::Length;
