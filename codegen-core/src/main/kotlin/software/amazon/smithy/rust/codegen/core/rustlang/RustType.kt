@@ -67,10 +67,10 @@ sealed class RustType {
      * | RustType.Integer(32)                               | i32                                                                  |
      * | RustType.Integer(64)                               | i64                                                                  |
      * | RustType.String                                    | std::string::String                                                  |
-     * | RustType.Vec(RustType.String)                      | std::vec::Vec::<std::string::String>                                 |
+     * | RustType.Vec(RustType.String)                      | std::vec::Vec<std::string::String>                                   |
      * | RustType.Slice(RustType.String)                    | [std::string::String]                                                |
      * | RustType.HashMap(RustType.String, RustType.String) | std::collections::HashMap::<std::string::String, std::string::String>|
-     * | RustType.HashSet(RustType.String)                  | std::vec::Vec::<std::string::String>                                 |
+     * | RustType.HashSet(RustType.String)                  | std::vec::Vec<std::string::String>                                   |
      * | RustType.Reference("&", RustType.String)           | &std::string::String                                                 |
      * | RustType.Reference("&mut", RustType.String)        | &mut std::string::String                                             |
      * | RustType.Reference("&'static", RustType.String)    | &'static std::string::String                                         |
@@ -244,7 +244,7 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Float -> this.name
         is RustType.Integer -> this.name
         is RustType.String -> this.name
-        is RustType.Vec -> "${this.name}::<${this.member.render(fullyQualified)}>"
+        is RustType.Vec -> "${this.name}<${this.member.render(fullyQualified)}>"
         is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
         is RustType.HashMap -> "${this.name}::<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
         is RustType.HashSet -> "${this.name}::<${this.member.render(fullyQualified)}>"
