@@ -77,7 +77,7 @@ internal class RustTypesTest {
     fun `RustType_HashMap_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.HashMap(RustType.String, RustType.String).writable,
-            "'::std::collections::HashMap<::std::string::String, ::std::string::String>'",
+            "'::std::collections::HashMap::<::std::string::String, ::std::string::String>'",
         )
     }
 
@@ -87,7 +87,7 @@ internal class RustTypesTest {
             RustType.HashSet(RustType.String).writable,
             // Rust doesn't guarantee that `HashSet`s are insertion ordered, so we use a `Vec` instead.
             // This is called out in a comment in the RustType.HashSet declaration
-            "'::std::vec::Vec<::std::string::String>'",
+            "'::std::vec::Vec::<::std::string::String>'",
         )
     }
 
