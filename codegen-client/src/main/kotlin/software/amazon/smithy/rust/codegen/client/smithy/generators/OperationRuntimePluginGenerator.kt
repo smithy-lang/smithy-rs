@@ -5,23 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
-import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.noAuthSchemeShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import java.util.logging.Logger
 
 /**
  * Generates operation-level runtime plugins
@@ -29,7 +21,6 @@ import java.util.logging.Logger
 class OperationRuntimePluginGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
-    private val logger: Logger = Logger.getLogger(javaClass.name)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
@@ -57,7 +48,6 @@ class OperationRuntimePluginGenerator(
         writer: RustWriter,
         operationShape: OperationShape,
         operationStructName: String,
-        authSchemeOptions: List<AuthSchemeOption>,
         customizations: List<OperationCustomization>,
     ) {
         writer.rustTemplate(
@@ -80,7 +70,6 @@ class OperationRuntimePluginGenerator(
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
                     #{Cow}::Owned(
                         #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
-                            #{auth_options}
                             #{interceptors}
                             #{retry_classifiers}
                     )
@@ -91,7 +80,6 @@ class OperationRuntimePluginGenerator(
             """,
             *codegenScope,
             *preludeScope,
-            "auth_options" to generateAuthOptions(operationShape, authSchemeOptions),
             "additional_config" to writable {
                 writeCustomizations(
                     customizations,
@@ -121,56 +109,5 @@ class OperationRuntimePluginGenerator(
                 )
             },
         )
-    }
-
-    private fun generateAuthOptions(
-        operationShape: OperationShape,
-        authSchemeOptions: List<AuthSchemeOption>,
-    ): Writable = writable {
-        if (authSchemeOptions.any { it is AuthSchemeOption.CustomResolver }) {
-            throw IllegalStateException("AuthSchemeOption.CustomResolver is unimplemented")
-        } else {
-            withBlockTemplate(
-                """
-                .with_auth_scheme_option_resolver(#{Some}(
-                    #{SharedAuthSchemeOptionResolver}::new(
-                        #{StaticAuthSchemeOptionResolver}::new(vec![
-                """,
-                "]))))",
-                *codegenScope,
-            ) {
-                var noSupportedAuthSchemes = true
-                val authSchemes = ServiceIndex.of(codegenContext.model)
-                    .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
-
-                for (schemeShapeId in authSchemes.keys) {
-                    val optionsForScheme = authSchemeOptions.filter {
-                        when (it) {
-                            is AuthSchemeOption.CustomResolver -> false
-                            is AuthSchemeOption.StaticAuthSchemeOption -> {
-                                it.schemeShapeId == schemeShapeId
-                            }
-                        }
-                    }
-
-                    if (optionsForScheme.isNotEmpty()) {
-                        optionsForScheme.forEach { (it as AuthSchemeOption.StaticAuthSchemeOption).constructor(this) }
-                        noSupportedAuthSchemes = false
-                    } else {
-                        logger.warning(
-                            "No auth scheme implementation available for $schemeShapeId. " +
-                                "The generated client will not attempt to use this auth scheme.",
-                        )
-                    }
-                }
-                if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
-                    val authOption = authSchemeOptions.find {
-                        it is AuthSchemeOption.StaticAuthSchemeOption && it.schemeShapeId == noAuthSchemeShapeId
-                    }
-                        ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")
-                    (authOption as AuthSchemeOption.StaticAuthSchemeOption).constructor(this)
-                }
-            }
-        }
     }
 }

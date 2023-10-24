@@ -97,9 +97,11 @@ class HttpAuthDecorator : ClientCodegenDecorator {
                 options.add(
                     StaticAuthSchemeOption(
                         schemeShapeId,
-                        writable {
-                            rustTemplate("$name,", *codegenScope)
-                        },
+                        listOf(
+                            writable {
+                                rustTemplate(name, *codegenScope)
+                            },
+                        ),
                     ),
                 )
             }

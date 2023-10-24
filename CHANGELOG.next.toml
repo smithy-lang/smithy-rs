@@ -468,3 +468,9 @@ message = "Clients now have a default async sleep implementation so that one doe
 references = ["smithy-rs#3071"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Enable custom auth schemes to work by changing the code generated auth options to be set at the client level at `DEFAULTS` priority."
+references = ["smithy-rs#3034", "smithy-rs#3087"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
