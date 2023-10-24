@@ -41,6 +41,8 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "SigV4AuthDecorator"
     override val order: Byte = 0
 
+    private val sigv4a = "sigv4a"
+
     private fun sigv4(runtimeConfig: RuntimeConfig) = writable {
         val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
         rust("#T", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
@@ -48,7 +50,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
 
     private fun sigv4a(runtimeConfig: RuntimeConfig) = writable {
         val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
-        featureGateBlock("sigv4a") {
+        featureGateBlock(sigv4a) {
             rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
         }
     }
@@ -58,7 +60,7 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> {
-        val supportsSigV4a = codegenContext.serviceShape.supportedAuthSchemes().contains("sig4a")
+        val supportsSigV4a = codegenContext.serviceShape.supportedAuthSchemes().contains(sigv4a)
             .thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
         return baseAuthSchemeOptions + AuthSchemeOption.StaticAuthSchemeOption(
             SigV4Trait.ID,
