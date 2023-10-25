@@ -489,7 +489,7 @@ author = "rcoh"
 
 [[smithy-rs]]
 message = "Publicly exposed types from `http-body` and `hyper` crates within `aws-smithy-types` are now feature-gated. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3089) for details."
-references = ["smithy-rs#3033", "smithy-rs#3088"]
+references = ["smithy-rs#3033", "smithy-rs#3088", "smithy-rs#3101"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
 
