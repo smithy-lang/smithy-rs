@@ -486,3 +486,11 @@ message = "`ByteStream::poll_next` is now feature-gated. You can turn on a cargo
 references = ["smithy-rs#3033", "smithy-rs#3088"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+The [`connection`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/connection/index.html) and [`result`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/result/index.html) modules in `aws-smithy-http` have been moved to `aws_smithy_types`. Type aliases for all affected pub items, except for a trait, are left in `aws_smithy_http` for backwards compatibility but are deprecated. Due to lack of trait aliases, the moved trait `CreateUnhandledError` needs to be used from `aws-smithy-types`.
+"""
+references = ["smithy-rs#3092", "smithy-rs#3093"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
