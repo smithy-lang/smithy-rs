@@ -306,7 +306,9 @@ open class Instantiator(
         headers: Map<String, String>,
         ctx: Ctx,
     ) {
+        val renderedMembers = mutableSetOf<MemberShape>()
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
+            renderedMembers.add(memberShape)
             when (constructPattern) {
                 InstantiatorConstructPattern.DIRECT -> {
                     val fieldName = symbolProvider.toMemberName(memberShape)
@@ -338,7 +340,7 @@ open class Instantiator(
                 .filter { it.value.hasTrait<HttpHeaderTrait>() }
                 .forEach { (_, value) ->
                     val trait = value.expectTrait<HttpHeaderTrait>().value
-                    headers.get(trait)?.let { renderMemberHelper(value, Node.from(it)) }
+                    headers[trait]?.let { renderMemberHelper(value, Node.from(it)) }
                 }
         }
 
@@ -356,6 +358,13 @@ open class Instantiator(
             ?.let {
                 renderMemberHelper(it.value, fillDefaultValue(model.expectShape(it.value.target)))
             }
+
+        if (constructPattern == InstantiatorConstructPattern.DIRECT) {
+            val membersToRender = shape.allMembers.values.minus(renderedMembers)
+            check(membersToRender.all { it.isOptional })
+            membersToRender
+                .forEach { renderMemberHelper(it, Node.nullNode()) }
+        }
     }
 
     /**
