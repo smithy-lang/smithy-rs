@@ -294,6 +294,7 @@ open class ServerCodegenVisitor(
                 this,
                 shape,
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                structSettings = codegenContext.structSettings(),
             ).render()
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->
@@ -621,6 +622,7 @@ open class ServerCodegenVisitor(
      *  - Operations ser/de
      *  - Errors via `ServerOperationErrorGenerator`
      *  - OperationShapes via `ServerOperationGenerator`
+     *  - Additional structure shapes via `postprocessGenerateAdditionalStructures`
      */
     override fun operationShape(shape: OperationShape) {
         // Generate errors.
@@ -637,6 +639,9 @@ open class ServerCodegenVisitor(
         rustCrate.withModule(ServerRustModule.Operation) {
             protocolGenerator.renderOperation(this, shape)
         }
+
+        codegenDecorator.postprocessGenerateAdditionalStructures(shape)
+            .forEach { structureShape -> this.structureShape(structureShape) }
     }
 
     override fun blobShape(shape: BlobShape) {

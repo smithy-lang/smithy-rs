@@ -8,6 +8,8 @@ package software.amazon.smithy.rust.codegen.core.smithy
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 
 /**
  * [CodegenContext] contains code-generation context that is _common to all_  smithy-rs plugins.
@@ -17,7 +19,7 @@ import software.amazon.smithy.model.shapes.ShapeId
  * If your data is specific to the `rust-client-codegen` client plugin, put it in [ClientCodegenContext] instead.
  * If your data is specific to the `rust-server-codegen` server plugin, put it in [ServerCodegenContext] instead.
  */
-open class CodegenContext(
+abstract class CodegenContext(
     /**
      * The smithy model.
      *
@@ -89,4 +91,8 @@ open class CodegenContext(
     fun expectModuleDocProvider(): ModuleDocProvider = checkNotNull(moduleDocProvider) {
         "A ModuleDocProvider must be set on the CodegenContext"
     }
+
+    fun structSettings() = StructSettings(settings.codegenConfig.flattenCollectionAccessors)
+
+    abstract fun builderInstantiator(): BuilderInstantiator
 }

@@ -7,9 +7,6 @@ use http::header::{AUTHORIZATION, USER_AGENT};
 use std::borrow::Cow;
 use std::time::Duration;
 
-/// HTTP signing parameters
-pub type SigningParams<'a> = crate::SigningParams<'a, SigningSettings>;
-
 const HEADER_NAME_X_RAY_TRACE_ID: &str = "x-amzn-trace-id";
 
 /// HTTP-specific signing settings
@@ -84,6 +81,16 @@ pub enum UriPathNormalizationMode {
 
     /// Don't normalize the URI path (S3, for example, rejects normalized paths in some instances)
     Disabled,
+}
+
+impl From<bool> for UriPathNormalizationMode {
+    fn from(value: bool) -> Self {
+        if value {
+            UriPathNormalizationMode::Enabled
+        } else {
+            UriPathNormalizationMode::Disabled
+        }
+    }
 }
 
 /// Config value to specify whether X-Amz-Security-Token should be part of the canonical request.

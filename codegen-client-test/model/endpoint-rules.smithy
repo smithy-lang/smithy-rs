@@ -20,7 +20,6 @@ use aws.protocols#awsJson1_1
               }],
     "parameters": {
         "Bucket": { "required": false, "type": "String" },
-        "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
     }
 })
 service TestService {

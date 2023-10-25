@@ -19,7 +19,6 @@ apply BackplaneControlService @endpointRuleSet({
                   "endpoint": { "url": "https://www.example.com" }
               }],
     "parameters": {
-        "Bucket": { "required": false, "type": "String" },
         "Region": { "required": false, "type": "String", "builtIn": "AWS::Region" },
     }
 })

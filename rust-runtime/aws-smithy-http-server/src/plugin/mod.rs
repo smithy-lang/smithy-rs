@@ -264,12 +264,13 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///
 /// # Example implementation of a model plugin
 ///
-/// Model plugins are most useful when you really need to rely on the actual shape of your
-/// modeled operation input, operation output, and/or operation errors. For this reason, most
-/// model plugins' implementation are _operation-specific_: somewhere in the type signature
-/// of their definition, they'll rely on a operation shape's types. It is therefore important
-/// that you scope application of model plugins to the operations they are meant to work on, via
-/// [`Scoped`](crate::plugin::Scoped) or [`filter_by_operation`](crate::plugin::filter_by_operation).
+/// Model plugins are most useful when you really need to rely on the actual shape of your modeled
+/// operation input, operation output, and/or operation errors. For this reason, most (but not all)
+/// model plugins are _operation-specific_: somewhere in the type signature of their definition,
+/// they'll rely on a particular operation shape's types. It is therefore important that you scope
+/// application of model plugins to the operations they are meant to work on, via
+/// [`Scoped`](crate::plugin::Scoped) or
+/// [`filter_by_operation`](crate::plugin::filter_by_operation).
 ///
 /// Below is an example implementation of a model plugin that can only be applied to the
 /// `CheckHealth` operation: note how in the `Service` trait implementation, we require access to

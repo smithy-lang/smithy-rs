@@ -12,7 +12,8 @@ use crate::http_request::uri_path_normalization::normalize_uri_path;
 use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::PercentEncodingMode;
 use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
-use crate::sign::sha256_hex_string;
+use crate::sign::v4::sha256_hex_string;
+use crate::SignatureVersion;
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
 use http::{HeaderMap, HeaderValue, Uri};
@@ -22,6 +23,9 @@ use std::convert::TryFrom;
 use std::fmt;
 use std::str::FromStr;
 use std::time::SystemTime;
+
+#[cfg(feature = "sigv4a")]
+pub(crate) mod sigv4a;
 
 pub(crate) mod header {
     pub(crate) const X_AMZ_CONTENT_SHA_256: &str = "x-amz-content-sha256";
@@ -46,32 +50,36 @@ const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD-TRAILER";
 
 #[derive(Debug, PartialEq)]
-pub(super) struct HeaderValues<'a> {
-    pub(super) content_sha256: Cow<'a, str>,
-    pub(super) date_time: String,
-    pub(super) security_token: Option<&'a str>,
-    pub(super) signed_headers: SignedHeaders,
+pub(crate) struct HeaderValues<'a> {
+    pub(crate) content_sha256: Cow<'a, str>,
+    pub(crate) date_time: String,
+    pub(crate) security_token: Option<&'a str>,
+    pub(crate) signed_headers: SignedHeaders,
+    #[cfg(feature = "sigv4a")]
+    pub(crate) region_set: Option<&'a str>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) struct QueryParamValues<'a> {
-    pub(super) algorithm: &'static str,
-    pub(super) content_sha256: Cow<'a, str>,
-    pub(super) credential: String,
-    pub(super) date_time: String,
-    pub(super) expires: String,
-    pub(super) security_token: Option<&'a str>,
-    pub(super) signed_headers: SignedHeaders,
+pub(crate) struct QueryParamValues<'a> {
+    pub(crate) algorithm: &'static str,
+    pub(crate) content_sha256: Cow<'a, str>,
+    pub(crate) credential: String,
+    pub(crate) date_time: String,
+    pub(crate) expires: String,
+    pub(crate) security_token: Option<&'a str>,
+    pub(crate) signed_headers: SignedHeaders,
+    #[cfg(feature = "sigv4a")]
+    pub(crate) region_set: Option<&'a str>,
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) enum SignatureValues<'a> {
+pub(crate) enum SignatureValues<'a> {
     Headers(HeaderValues<'a>),
     QueryParams(QueryParamValues<'a>),
 }
 
 impl<'a> SignatureValues<'a> {
-    pub(super) fn signed_headers(&self) -> &SignedHeaders {
+    pub(crate) fn signed_headers(&self) -> &SignedHeaders {
         match self {
             SignatureValues::Headers(values) => &values.signed_headers,
             SignatureValues::QueryParams(values) => &values.signed_headers,
@@ -85,14 +93,14 @@ impl<'a> SignatureValues<'a> {
         }
     }
 
-    pub(super) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
+    pub(crate) fn as_headers(&self) -> Option<&HeaderValues<'_>> {
         match self {
             SignatureValues::Headers(values) => Some(values),
             _ => None,
         }
     }
 
-    pub(super) fn into_query_params(self) -> Result<QueryParamValues<'a>, Self> {
+    pub(crate) fn into_query_params(self) -> Result<QueryParamValues<'a>, Self> {
         match self {
             SignatureValues::QueryParams(values) => Ok(values),
             _ => Err(self),
@@ -101,12 +109,12 @@ impl<'a> SignatureValues<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) struct CanonicalRequest<'a> {
-    pub(super) method: &'a str,
-    pub(super) path: Cow<'a, str>,
-    pub(super) params: Option<String>,
-    pub(super) headers: HeaderMap,
-    pub(super) values: SignatureValues<'a>,
+pub(crate) struct CanonicalRequest<'a> {
+    pub(crate) method: &'a str,
+    pub(crate) path: Cow<'a, str>,
+    pub(crate) params: Option<String>,
+    pub(crate) headers: HeaderMap,
+    pub(crate) values: SignatureValues<'a>,
 }
 
 impl<'a> CanonicalRequest<'a> {
@@ -126,64 +134,85 @@ impl<'a> CanonicalRequest<'a> {
     ///   included before calculating the signature, add it, otherwise omit it.
     /// - `settings.signature_location` determines where the signature will be placed in a request,
     ///   and also alters the kinds of signing values that go along with it in the request.
-    pub(super) fn from<'b>(
+    pub(crate) fn from<'b>(
         req: &'b SignableRequest<'b>,
         params: &'b SigningParams<'b>,
     ) -> Result<CanonicalRequest<'b>, CanonicalRequestError> {
         let creds = params
             .credentials()
-            .ok_or_else(CanonicalRequestError::unsupported_credential_type)?;
+            .map_err(|_| CanonicalRequestError::unsupported_identity_type())?;
         // Path encoding: if specified, re-encode % as %25
         // Set method and path into CanonicalRequest
         let path = req.uri().path();
-        let path = match params.settings.uri_path_normalization_mode {
+        let path = match params.settings().uri_path_normalization_mode {
             UriPathNormalizationMode::Enabled => normalize_uri_path(path),
             UriPathNormalizationMode::Disabled => Cow::Borrowed(path),
         };
-        let path = match params.settings.percent_encoding_mode {
+        let path = match params.settings().percent_encoding_mode {
             // The string is already URI encoded, we don't need to encode everything again, just `%`
             PercentEncodingMode::Double => Cow::Owned(percent_encode_path(&path)),
             PercentEncodingMode::Single => path,
         };
         let payload_hash = Self::payload_hash(req.body());
 
-        let date_time = format_date_time(params.time);
+        let date_time = format_date_time(*params.time());
         let (signed_headers, canonical_headers) =
             Self::headers(req, params, &payload_hash, &date_time)?;
         let signed_headers = SignedHeaders::new(signed_headers);
 
-        let security_token = match params.settings.session_token_mode {
+        let security_token = match params.settings().session_token_mode {
             SessionTokenMode::Include => creds.session_token(),
             SessionTokenMode::Exclude => None,
         };
 
-        let values = match params.settings.signature_location {
+        let values = match params.settings().signature_location {
             SignatureLocation::Headers => SignatureValues::Headers(HeaderValues {
                 content_sha256: payload_hash,
                 date_time,
                 security_token,
                 signed_headers,
+                #[cfg(feature = "sigv4a")]
+                region_set: params.region_set(),
             }),
-            SignatureLocation::QueryParams => SignatureValues::QueryParams(QueryParamValues {
-                algorithm: "AWS4-HMAC-SHA256",
-                content_sha256: payload_hash,
-                credential: format!(
-                    "{}/{}/{}/{}/aws4_request",
-                    creds.access_key_id(),
-                    format_date(params.time),
-                    params.region,
-                    params.name,
-                ),
-                date_time,
-                expires: params
-                    .settings
-                    .expires_in
-                    .expect("presigning requires expires_in")
-                    .as_secs()
-                    .to_string(),
-                security_token,
-                signed_headers,
-            }),
+            SignatureLocation::QueryParams => {
+                let credential = match params {
+                    SigningParams::V4(params) => {
+                        format!(
+                            "{}/{}/{}/{}/aws4_request",
+                            creds.access_key_id(),
+                            format_date(params.time),
+                            params.region,
+                            params.name,
+                        )
+                    }
+                    #[cfg(feature = "sigv4a")]
+                    SigningParams::V4a(params) => {
+                        format!(
+                            "{}/{}/{}/aws4_request",
+                            creds.access_key_id(),
+                            format_date(params.time),
+                            params.name,
+                        )
+                    }
+                };
+
+                SignatureValues::QueryParams(QueryParamValues {
+                    algorithm: params.algorithm(),
+                    content_sha256: payload_hash,
+                    credential,
+                    date_time,
+                    expires: params
+                        .settings()
+                        .expires_in
+                        .expect("presigning requires expires_in")
+                        .as_secs()
+                        .to_string(),
+                    security_token,
+                    signed_headers,
+                    #[cfg(feature = "sigv4a")]
+                    region_set: params.region_set(),
+                })
+            }
         };
 
         let creq = CanonicalRequest {
@@ -202,9 +231,6 @@ impl<'a> CanonicalRequest<'a> {
         payload_hash: &str,
         date_time: &str,
     ) -> Result<(Vec<CanonicalHeaderName>, HeaderMap), CanonicalRequestError> {
-        let creds = params
-            .credentials()
-            .ok_or_else(CanonicalRequestError::unsupported_credential_type)?;
         // Header computation:
         // The canonical request will include headers not present in the input. We need to clone and
         // normalize the headers from the original request and add:
@@ -224,7 +250,10 @@ impl<'a> CanonicalRequest<'a> {
 
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
-        if params.settings.signature_location == SignatureLocation::Headers {
+        if params.settings().signature_location == SignatureLocation::Headers {
+            let creds = params
+                .credentials()
+                .map_err(|_| CanonicalRequestError::unsupported_identity_type())?;
             Self::insert_date_header(&mut canonical_headers, date_time);
 
             if let Some(security_token) = creds.session_token() {
@@ -233,27 +262,33 @@ impl<'a> CanonicalRequest<'a> {
                 canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
             }
 
-            if params.settings.payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
+            if params.settings().payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
                 let header = HeaderValue::from_str(payload_hash)?;
                 canonical_headers.insert(header::X_AMZ_CONTENT_SHA_256, header);
+            }
+
+            #[cfg(feature = "sigv4a")]
+            if let Some(region_set) = params.region_set() {
+                let header = HeaderValue::from_str(region_set)?;
+                canonical_headers.insert(sigv4a::header::X_AMZ_REGION_SET, header);
             }
         }
 
         let mut signed_headers = Vec::with_capacity(canonical_headers.len());
         for name in canonical_headers.keys() {
-            if let Some(excluded_headers) = params.settings.excluded_headers.as_ref() {
+            if let Some(excluded_headers) = params.settings().excluded_headers.as_ref() {
                 if excluded_headers.iter().any(|it| name.as_str() == it) {
                     continue;
                 }
             }
 
-            if params.settings.session_token_mode == SessionTokenMode::Exclude
+            if params.settings().session_token_mode == SessionTokenMode::Exclude
                 && name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN)
             {
                 continue;
             }
 
-            if params.settings.signature_location == SignatureLocation::QueryParams {
+            if params.settings().signature_location == SignatureLocation::QueryParams {
                 // The X-Amz-User-Agent header should not be signed if this is for a presigned URL
                 if name == HeaderName::from_static(header::X_AMZ_USER_AGENT) {
                     continue;
@@ -295,6 +330,12 @@ impl<'a> CanonicalRequest<'a> {
         if let SignatureValues::QueryParams(values) = values {
             add_param(&mut params, param::X_AMZ_DATE, &values.date_time);
             add_param(&mut params, param::X_AMZ_EXPIRES, &values.expires);
+
+            #[cfg(feature = "sigv4a")]
+            if let Some(regions) = values.region_set {
+                add_param(&mut params, sigv4a::param::X_AMZ_REGION_SET, regions);
+            }
+
             add_param(&mut params, param::X_AMZ_ALGORITHM, values.algorithm);
             add_param(&mut params, param::X_AMZ_CREDENTIAL, &values.credential);
             add_param(
@@ -378,8 +419,7 @@ impl<'a> fmt::Display for CanonicalRequest<'a> {
         }
         writeln!(f)?;
         // write out the signed headers
-        write!(f, "{}", self.values.signed_headers().as_str())?;
-        writeln!(f)?;
+        writeln!(f, "{}", self.values.signed_headers().as_str())?;
         write!(f, "{}", self.values.content_sha256())?;
         Ok(())
     }
@@ -421,7 +461,7 @@ fn normalize_header_value(header_value: &str) -> Result<HeaderValue, CanonicalRe
 }
 
 #[derive(Debug, PartialEq, Default)]
-pub(super) struct SignedHeaders {
+pub(crate) struct SignedHeaders {
     headers: Vec<CanonicalHeaderName>,
     formatted: String,
 }
@@ -445,7 +485,7 @@ impl SignedHeaders {
         value
     }
 
-    pub(super) fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.formatted
     }
 }
@@ -472,10 +512,16 @@ impl Ord for CanonicalHeaderName {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-pub(super) struct SigningScope<'a> {
-    pub(super) time: SystemTime,
-    pub(super) region: &'a str,
-    pub(super) service: &'a str,
+pub(crate) struct SigningScope<'a> {
+    pub(crate) time: SystemTime,
+    pub(crate) region: &'a str,
+    pub(crate) service: &'a str,
+}
+
+impl<'a> SigningScope<'a> {
+    pub(crate) fn v4a_display(&self) -> String {
+        format!("{}/{}/aws4_request", format_date(self.time), self.service)
+    }
 }
 
 impl<'a> fmt::Display for SigningScope<'a> {
@@ -490,17 +536,19 @@ impl<'a> fmt::Display for SigningScope<'a> {
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub(super) struct StringToSign<'a> {
-    pub(super) scope: SigningScope<'a>,
-    pub(super) time: SystemTime,
-    pub(super) region: &'a str,
-    pub(super) service: &'a str,
-    pub(super) hashed_creq: &'a str,
+#[derive(PartialEq, Debug, Clone)]
+pub(crate) struct StringToSign<'a> {
+    pub(crate) algorithm: &'static str,
+    pub(crate) scope: SigningScope<'a>,
+    pub(crate) time: SystemTime,
+    pub(crate) region: &'a str,
+    pub(crate) service: &'a str,
+    pub(crate) hashed_creq: &'a str,
+    signature_version: SignatureVersion,
 }
 
 impl<'a> StringToSign<'a> {
-    pub(crate) fn new(
+    pub(crate) fn new_v4(
         time: SystemTime,
         region: &'a str,
         service: &'a str,
@@ -512,11 +560,38 @@ impl<'a> StringToSign<'a> {
             service,
         };
         Self {
+            algorithm: HMAC_256,
             scope,
             time,
             region,
             service,
             hashed_creq,
+            signature_version: SignatureVersion::V4,
+        }
+    }
+
+    #[cfg(feature = "sigv4a")]
+    pub(crate) fn new_v4a(
+        time: SystemTime,
+        region_set: &'a str,
+        service: &'a str,
+        hashed_creq: &'a str,
+    ) -> Self {
+        use crate::sign::v4a::ECDSA_256;
+
+        let scope = SigningScope {
+            time,
+            region: region_set,
+            service,
+        };
+        Self {
+            algorithm: ECDSA_256,
+            scope,
+            time,
+            region: region_set,
+            service,
+            hashed_creq,
+            signature_version: SignatureVersion::V4a,
         }
     }
 }
@@ -526,9 +601,12 @@ impl<'a> fmt::Display for StringToSign<'a> {
         write!(
             f,
             "{}\n{}\n{}\n{}",
-            HMAC_256,
+            self.algorithm,
             format_date_time(self.time),
-            self.scope,
+            match self.signature_version {
+                SignatureVersion::V4 => self.scope.to_string(),
+                SignatureVersion::V4a => self.scope.v4a_display(),
+            },
             self.hashed_creq
         )
     }
@@ -540,12 +618,13 @@ mod tests {
     use crate::http_request::canonical_request::{
         normalize_header_value, trim_all, CanonicalRequest, SigningScope, StringToSign,
     };
-    use crate::http_request::test::{test_canonical_request, test_request, test_sts};
+    use crate::http_request::test;
     use crate::http_request::{
         PayloadChecksumKind, SessionTokenMode, SignableBody, SignableRequest, SignatureLocation,
         SigningParams, SigningSettings,
     };
-    use crate::sign::sha256_hex_string;
+    use crate::sign::v4;
+    use crate::sign::v4::sha256_hex_string;
     use aws_credential_types::Credentials;
     use aws_smithy_http::query_writer::QueryWriter;
     use aws_smithy_runtime_api::client::identity::Identity;
@@ -555,18 +634,20 @@ mod tests {
     use std::time::Duration;
 
     fn signing_params(identity: &Identity, settings: SigningSettings) -> SigningParams<'_> {
-        SigningParams {
-            identity,
-            region: "test-region",
-            name: "testservicename",
-            time: parse_date_time("20210511T154045Z").unwrap(),
-            settings,
-        }
+        v4::signing_params::Builder::default()
+            .identity(identity)
+            .region("test-region")
+            .name("testservicename")
+            .time(parse_date_time("20210511T154045Z").unwrap())
+            .settings(settings)
+            .build()
+            .unwrap()
+            .into()
     }
 
     #[test]
     fn test_repeated_header() {
-        let mut req = test_request("get-vanilla-query-order-key-case");
+        let mut req = test::v4::test_request("get-vanilla-query-order-key-case");
         req.headers.push((
             "x-amz-object-attributes".to_string(),
             "Checksum".to_string(),
@@ -578,6 +659,7 @@ mod tests {
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+            session_token_mode: SessionTokenMode::Exclude,
             ..Default::default()
         };
         let identity = Credentials::for_tests().into();
@@ -596,10 +678,11 @@ mod tests {
 
     #[test]
     fn test_set_xamz_sha_256() {
-        let req = test_request("get-vanilla-query-order-key-case");
+        let req = test::v4::test_request("get-vanilla-query-order-key-case");
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             payload_checksum_kind: PayloadChecksumKind::XAmzSha256,
+            session_token_mode: SessionTokenMode::Exclude,
             ..Default::default()
         };
         let identity = Credentials::for_tests().into();
@@ -615,14 +698,14 @@ mod tests {
             "host;x-amz-content-sha256;x-amz-date"
         );
 
-        signing_params.settings.payload_checksum_kind = PayloadChecksumKind::NoHeader;
+        signing_params.set_payload_checksum_kind(PayloadChecksumKind::NoHeader);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(creq.values.signed_headers().as_str(), "host;x-amz-date");
     }
 
     #[test]
     fn test_unsigned_payload() {
-        let mut req = test_request("get-vanilla-query-order-key-case");
+        let mut req = test::v4::test_request("get-vanilla-query-order-key-case");
         req.set_body(SignableBody::UnsignedPayload);
         let req: SignableRequest<'_> = SignableRequest::from(&req);
 
@@ -640,7 +723,7 @@ mod tests {
     #[test]
     fn test_precomputed_payload() {
         let payload_hash = "44ce7dd67c959e0d3524ffac1771dfbba87d2b6b4b4e99e42034a8b803f8b072";
-        let mut req = test_request("get-vanilla-query-order-key-case");
+        let mut req = test::v4::test_request("get-vanilla-query-order-key-case");
         req.set_body(SignableBody::Precomputed(String::from(payload_hash)));
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
@@ -668,17 +751,17 @@ mod tests {
     #[test]
     fn test_string_to_sign() {
         let time = parse_date_time("20150830T123600Z").unwrap();
-        let creq = test_canonical_request("get-vanilla-query-order-key-case");
-        let expected_sts = test_sts("get-vanilla-query-order-key-case");
+        let creq = test::v4::test_canonical_request("get-vanilla-query-order-key-case");
+        let expected_sts = test::v4::test_sts("get-vanilla-query-order-key-case");
         let encoded = sha256_hex_string(creq.as_bytes());
 
-        let actual = StringToSign::new(time, "us-east-1", "service", &encoded);
+        let actual = StringToSign::new_v4(time, "us-east-1", "service", &encoded);
         assert_eq!(expected_sts, actual.to_string());
     }
 
     #[test]
     fn test_digest_of_canonical_request() {
-        let creq = test_canonical_request("get-vanilla-query-order-key-case");
+        let creq = test::v4::test_canonical_request("get-vanilla-query-order-key-case");
         let expected = "816cd5b414d056048ba4f7c5386d6e0533120fb1fcfa93762cf0fc39e2cf19e0";
         let actual = sha256_hex_string(creq.as_bytes());
         assert_eq!(expected, actual);
@@ -686,26 +769,26 @@ mod tests {
 
     #[test]
     fn test_double_url_encode_path() {
-        let req = test_request("double-encode-path");
+        let req = test::v4::test_request("double-encode-path");
         let req = SignableRequest::from(&req);
         let identity = Credentials::for_tests().into();
         let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
-        let expected = test_canonical_request("double-encode-path");
+        let expected = test::v4::test_canonical_request("double-encode-path");
         let actual = format!("{}", creq);
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_double_url_encode() {
-        let req = test_request("double-url-encode");
+        let req = test::v4::test_request("double-url-encode");
         let req = SignableRequest::from(&req);
         let identity = Credentials::for_tests().into();
         let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
-        let expected = test_canonical_request("double-url-encode");
+        let expected = test::v4::test_canonical_request("double-url-encode");
         let actual = format!("{}", creq);
         assert_eq!(actual, expected);
     }
@@ -750,7 +833,7 @@ mod tests {
 
     #[test]
     fn test_omit_session_token() {
-        let req = test_request("get-vanilla-query-order-key-case");
+        let req = test::v4::test_request("get-vanilla-query-order-key-case");
         let req = SignableRequest::from(&req);
         let settings = SigningSettings {
             session_token_mode: SessionTokenMode::Include,
@@ -769,7 +852,7 @@ mod tests {
             "notarealsessiontoken"
         );
 
-        signing_params.settings.session_token_mode = SessionTokenMode::Exclude;
+        signing_params.set_session_token_mode(SessionTokenMode::Exclude);
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         assert_eq!(
             creq.headers.get("x-amz-security-token").unwrap(),
@@ -843,11 +926,25 @@ mod tests {
         );
     }
 
+    #[allow(clippy::ptr_arg)] // The proptest macro requires this arg to be a Vec instead of a slice.
+    fn valid_input(input: &Vec<String>) -> bool {
+        [
+            "content-length".to_owned(),
+            "content-type".to_owned(),
+            "host".to_owned(),
+        ]
+        .iter()
+        .all(|element| !input.contains(element))
+    }
+
     proptest! {
-       #[test]
-       fn presigning_header_exclusion_with_explicit_exclusion_list_specified(
-           excluded_headers in prop::collection::vec("[a-z]{1,20}", 1..10),
-       ) {
+        #[test]
+        fn presigning_header_exclusion_with_explicit_exclusion_list_specified(
+            excluded_headers in prop::collection::vec("[a-z]{1,20}", 1..10).prop_filter(
+                "`excluded_headers` should pass the `valid_input` check",
+                valid_input,
+            )
+        ) {
             let mut request_builder = http::Request::builder()
                 .uri("https://some-endpoint.some-region.amazonaws.com")
                 .header("content-type", "application/xml")

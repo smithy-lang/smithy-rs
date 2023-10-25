@@ -2,63 +2,13 @@
 name = "aws-smithy-client"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
-description = "Client for smithy-rs."
+description = "This crate is no longer used by smithy-rs and is deprecated."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-
-[features]
-rt-tokio = ["aws-smithy-async/rt-tokio"]
-test-util = ["dep:aws-smithy-protocol-test", "dep:serde", "dep:serde_json", "serde?/derive"]
-wiremock = ["test-util", "dep:hyper", "hyper?/server", "hyper?/h2", "rustls", "tokio/full"]
-native-tls = []
-allow-compilation = [] # our tests use `cargo test --all-features` and native-tls breaks CI
-rustls = ["dep:hyper-rustls", "dep:lazy_static", "dep:rustls", "client-hyper", "rt-tokio"]
-client-hyper = ["dep:hyper", "hyper?/client", "hyper?/http2", "hyper?/http1", "hyper?/tcp"]
-hyper-webpki-doctest-only = ["dep:hyper-rustls", "hyper-rustls?/webpki-roots"]
-
-[dependencies]
-aws-smithy-async = { path = "../aws-smithy-async" }
-aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-http-tower = { path = "../aws-smithy-http-tower" }
-aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
-aws-smithy-types = { path = "../aws-smithy-types" }
-bytes = "1"
-fastrand = "2.0.0"
-http = "0.2.3"
-http-body = "0.4.4"
-hyper = { version = "0.14.26", default-features = false, optional = true }
-# cargo does not support optional test dependencies, so to completely disable rustls
-# we need to add the webpki-roots feature here.
-# https://github.com/rust-lang/cargo/issues/1596
-hyper-rustls = { version = "0.24", optional = true, features = ["rustls-native-certs", "http2"] }
-hyper-tls = { version = "0.5.0", optional = true }
-rustls = { version = "0.21.1", optional = true }
-lazy_static = { version = "1", optional = true }
-pin-project-lite = "0.2.7"
-serde = { version = "1", features = ["derive"], optional = true }
-serde_json = { version = "1", optional = true }
-tokio = { version = "1.13.1" }
-tower = { version = "0.4.6", features = ["util", "retry"] }
-tracing = "0.1"
-
-[dev-dependencies]
-aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio"] }
-hyper-tls = { version = "0.5.0" }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-tokio = { version = "1.23.1", features = ["full", "test-util"] }
-tower-test = "0.4.0"
-tracing-subscriber = "0.3.16"
-tracing-test = "0.2.4"
-
 
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
-
-[[test]]
-name = "e2e_test"
-required-features = ["test-util", "rt-tokio"]

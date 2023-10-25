@@ -3,15 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::body::SdkBody;
 use crate::result::{ConnectorError, SdkError};
 use aws_smithy_eventstream::frame::{
     DecodedFrame, Message, MessageFrameDecoder, UnmarshallMessage, UnmarshalledMessage,
 };
+use aws_smithy_types::body::SdkBody;
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
-use hyper::body::HttpBody;
+use http_body::Body;
 use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
@@ -276,10 +276,10 @@ impl<T, E> Receiver<T, E> {
 #[cfg(test)]
 mod tests {
     use super::{Receiver, UnmarshallMessage};
-    use crate::body::SdkBody;
     use crate::result::SdkError;
     use aws_smithy_eventstream::error::Error as EventStreamError;
     use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshalledMessage};
+    use aws_smithy_types::body::SdkBody;
     use bytes::Bytes;
     use hyper::body::Body;
     use std::error::Error as StdError;

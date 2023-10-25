@@ -30,19 +30,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyClient = RuntimeType.smithyClient(runtimeConfig)
     private val smithyHttp = RuntimeType.smithyHttp(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
 
     val awsTypes = AwsRuntimeType.awsTypes(runtimeConfig)
     val connectorError = smithyHttp.resolve("result::ConnectorError")
-    val connectorSettings = smithyClient.resolve("http_connector::ConnectorSettings")
-    val dynConnector = smithyClient.resolve("erase::DynConnector")
-    val dynMiddleware = smithyClient.resolve("erase::DynMiddleware")
     val retryConfig = smithyTypes.resolve("retry::RetryConfig")
-    val smithyClientBuilder = smithyClient.resolve("Builder")
-    val smithyClientRetry = smithyClient.resolve("retry")
-    val smithyConnector = smithyClient.resolve("bounds::SmithyConnector")
     val timeoutConfig = smithyTypes.resolve("timeout::TimeoutConfig")
 }
 
@@ -57,17 +50,15 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         val types = Types(runtimeConfig)
         FluentClientGenerator(
             codegenContext,
-            reexportSmithyClientBuilder = false,
             customizations = listOf(
                 AwsPresignedFluentBuilderMethod(codegenContext),
                 AwsFluentClientDocs(codegenContext),
             ),
-        ).render(rustCrate, listOf(CustomizableOperationTestHelpers(runtimeConfig)))
+        ).render(rustCrate, emptyList())
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }
-        val awsSmithyClient = "aws-smithy-client"
-        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("$awsSmithyClient/rustls")))
+        rustCrate.mergeFeature(Feature("rustls", default = true, listOf("aws-smithy-runtime/tls-rustls")))
     }
 
     override fun libRsCustomizations(
@@ -99,7 +90,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                 let mut ${params.configBuilderName} = ${params.configBuilderName};
                 ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
 
-                let config = ${params.configBuilderName}.http_connector(${params.connectorName}).build();
+                let config = ${params.configBuilderName}.http_client(${params.httpClientName}).build();
                 let ${params.clientName} = #{Client}::from_conf(config);
                 """,
                 "Client" to ClientRustModule.root.toType().resolve("Client"),
@@ -112,15 +103,9 @@ private class AwsFluentClientExtensions(private val codegenContext: ClientCodege
     private val codegenScope = arrayOf(
         "Arc" to RuntimeType.Arc,
         "ConnectorError" to types.connectorError,
-        "ConnectorSettings" to types.connectorSettings,
-        "DynConnector" to types.dynConnector,
-        "DynMiddleware" to types.dynMiddleware,
         "RetryConfig" to types.retryConfig,
-        "SmithyConnector" to types.smithyConnector,
         "TimeoutConfig" to types.timeoutConfig,
-        "SmithyClientBuilder" to types.smithyClientBuilder,
         "aws_types" to types.awsTypes,
-        "retry" to types.smithyClientRetry,
     )
 
     fun render(writer: RustWriter) {

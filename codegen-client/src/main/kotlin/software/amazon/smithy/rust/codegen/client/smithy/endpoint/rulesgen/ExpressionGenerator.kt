@@ -6,13 +6,15 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 import org.jetbrains.annotations.Contract
-import software.amazon.smithy.rulesengine.language.eval.Type
-import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
-import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
-import software.amazon.smithy.rulesengine.language.syntax.expr.Reference
-import software.amazon.smithy.rulesengine.language.syntax.fn.FunctionDefinition
-import software.amazon.smithy.rulesengine.language.syntax.fn.GetAttr
-import software.amazon.smithy.rulesengine.language.visit.ExpressionVisitor
+import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
+import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
+import software.amazon.smithy.rulesengine.language.evaluation.type.Type
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
@@ -51,7 +53,7 @@ class ExpressionGenerator(
         override fun visitRef(ref: Reference) = writable {
             if (ownership == Ownership.Owned) {
                 when (ref.type()) {
-                    is Type.Bool -> rust("*${ref.name.rustName()}")
+                    is BooleanType -> rust("*${ref.name.rustName()}")
                     else -> rust("${ref.name.rustName()}.to_owned()")
                 }
             } else {
@@ -75,8 +77,8 @@ class ExpressionGenerator(
                         }
                     }
                 }
-                if (ownership == Ownership.Owned && getAttr.type() != Type.bool()) {
-                    if (getAttr.type() is Type.Option) {
+                if (ownership == Ownership.Owned && getAttr.type() != Type.booleanType()) {
+                    if (getAttr.type() is OptionalType) {
                         rust(".map(|t|t.to_owned())")
                     } else {
                         rust(".to_owned()")

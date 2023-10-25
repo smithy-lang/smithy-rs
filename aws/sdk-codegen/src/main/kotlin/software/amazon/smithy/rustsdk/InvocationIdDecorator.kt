@@ -45,7 +45,7 @@ private class InvocationIdRuntimePluginCustomization(
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
+            section.registerInterceptor(this) {
                 rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
             }
         }

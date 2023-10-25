@@ -17,7 +17,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
     private val runtimeConfig = codegenContext.runtimeConfig
 
     private val codegenScope = arrayOf(
-        "Interceptor" to RuntimeType.interceptor(runtimeConfig),
+        "Intercept" to RuntimeType.intercept(runtimeConfig),
         "SharedInterceptor" to RuntimeType.sharedInterceptor(runtimeConfig),
     )
 
@@ -37,7 +37,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(
                         """
-                        /// Add an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
+                        /// Add an [interceptor](#{Intercept}) that runs at specific stages of the request execution pipeline.
                         ///
                         /// Interceptors targeted at a certain stage are executed according to the pre-defined priority.
                         /// The SDK provides a default set of interceptors. An interceptor configured by this method
@@ -61,7 +61,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         ///
                         /// ##[derive(Debug)]
                         /// pub struct UriModifierInterceptor;
-                        /// impl Interceptor for UriModifierInterceptor {
+                        /// impl Intercept for UriModifierInterceptor {
                         ///     fn modify_before_signing(
                         ///         &self,
                         ///         context: &mut InterceptorContext<BeforeTransmit>,
@@ -81,7 +81,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         /// ## }
                         /// ## }
                         /// ```
-                        pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
+                        pub fn interceptor(mut self, interceptor: impl #{Intercept} + 'static) -> Self {
                             self.push_interceptor(#{SharedInterceptor}::new(interceptor));
                             self
                         }
@@ -111,7 +111,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
                         /// fn modify_request_uri(builder: &mut Builder) {
                         ///     ##[derive(Debug)]
                         ///     pub struct UriModifierInterceptor;
-                        ///     impl Interceptor for UriModifierInterceptor {
+                        ///     impl Intercept for UriModifierInterceptor {
                         ///         fn modify_before_signing(
                         ///             &self,
                         ///             context: &mut InterceptorContext<BeforeTransmit>,

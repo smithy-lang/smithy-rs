@@ -29,7 +29,7 @@ class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : Li
 
     private fun crateLayout(): Writable =
         writable {
-            val serviceName = codegenContext.serviceShape?.getTrait<TitleTrait>()?.value ?: "the service"
+            val serviceName = codegenContext.serviceShape.getTrait<TitleTrait>()?.value ?: "the service"
             containerDocs(
                 """
                 The entry point for most customers will be [`Client`], which exposes one method for each API

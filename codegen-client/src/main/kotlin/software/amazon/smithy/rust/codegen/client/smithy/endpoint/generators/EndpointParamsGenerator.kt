@@ -5,7 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
-import software.amazon.smithy.rulesengine.language.eval.Value
+import software.amazon.smithy.rulesengine.language.evaluation.value.BooleanValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.StringValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.Value
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -38,9 +40,9 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 // internals contains the actual resolver function
-fun endpointImplModule(codegenContext: ClientCodegenContext) = RustModule.private("internals", parent = ClientRustModule.Config.endpoint)
+fun endpointImplModule() = RustModule.private("internals", parent = ClientRustModule.Config.endpoint)
 
-fun endpointTestsModule(codegenContext: ClientCodegenContext) = RustModule.new(
+fun endpointTestsModule() = RustModule.new(
     "test",
     visibility = Visibility.PRIVATE,
     parent = ClientRustModule.Config.endpoint,
@@ -216,8 +218,8 @@ internal class EndpointParamsGenerator(
 
     private fun value(value: Value): String {
         return when (value) {
-            is Value.String -> value.value().dq() + ".to_string()"
-            is Value.Bool -> value.expectBool().toString()
+            is StringValue -> value.value.dq() + ".to_string()"
+            is BooleanValue -> value.value.toString()
             else -> TODO("unexpected type: $value")
         }
     }

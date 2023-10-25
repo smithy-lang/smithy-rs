@@ -5,10 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -85,6 +88,7 @@ class JsonSerializerGeneratorTest {
             member: Top
         }
 
+        @input
         structure OpInput {
             @httpHeader("x-test")
             someHeader: String,
@@ -98,10 +102,17 @@ class JsonSerializerGeneratorTest {
         }
     """.asSmithyModel()
 
-    @Test
-    fun `generates valid serializers`() {
+    @ParameterizedTest
+    @CsvSource(
+        "CLIENT",
+        "CLIENT_CAREFUL",
+        "CLIENT_ZERO_VALUE_V1",
+        "CLIENT_ZERO_VALUE_V1_NO_INPUT",
+        "SERVER",
+    )
+    fun `generates valid serializers`(nullabilityCheckMode: NullableIndex.CheckMode) {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
-        val codegenContext = testCodegenContext(model)
+        val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
         val parserSerializer = JsonSerializerGenerator(
             codegenContext,
@@ -111,7 +122,7 @@ class JsonSerializerGeneratorTest {
         val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
 
-        val project = TestWorkspace.testProject(testSymbolProvider(model))
+        val project = TestWorkspace.testProject(symbolProvider)
         project.lib {
             unitTest(
                 "json_serializers",
@@ -137,7 +148,174 @@ class JsonSerializerGeneratorTest {
                         .choice(Choice::Unknown)
                         .build()
                 ).build().unwrap();
-                let serialized = ${format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
+                ${format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
+                """,
+            )
+        }
+        model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
+            project.moduleFor(top) {
+                UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
+                val enum = model.lookup<StringShape>("test#FooEnum")
+                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+            }
+        }
+
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    private val baseModelWithRequiredTypes = """
+        namespace test
+        use aws.protocols#restJson1
+
+        union Choice {
+            blob: Blob,
+            boolean: Boolean,
+            date: Timestamp,
+            document: Document,
+            enum: FooEnum,
+            int: Integer,
+            list: SomeList,
+            listSparse: SomeSparseList,
+            long: Long,
+            map: MyMap,
+            mapSparse: MySparseMap,
+            number: Double,
+            s: String,
+            top: Top,
+            unit: Unit,
+        }
+
+        @enum([{name: "FOO", value: "FOO"}])
+        string FooEnum
+
+        map MyMap {
+            key: String,
+            value: Choice,
+        }
+
+        @sparse
+        map MySparseMap {
+            key: String,
+            value: Choice,
+        }
+
+        list SomeList {
+            member: Choice
+        }
+
+        @sparse
+        list SomeSparseList {
+            member: Choice
+        }
+
+        structure Top {
+            @required
+            choice: Choice,
+            @required
+            field: String,
+            @required
+            extra: Long,
+            @jsonName("rec")
+            recursive: TopList
+        }
+
+        list TopList {
+            member: Top
+        }
+
+        @input
+        structure OpInput {
+            @httpHeader("x-test")
+            someHeader: String,
+
+            @required
+            boolean: Boolean,
+            list: SomeList,
+            map: MyMap,
+
+            @required
+            top: Top
+        }
+
+        @http(uri: "/top", method: "POST")
+        operation Op {
+            input: OpInput,
+        }
+    """.asSmithyModel()
+
+    @ParameterizedTest
+    @CsvSource(
+        "CLIENT",
+        "CLIENT_CAREFUL",
+        "CLIENT_ZERO_VALUE_V1",
+        "CLIENT_ZERO_VALUE_V1_NO_INPUT",
+        "SERVER",
+    )
+    fun `generates valid serializers for required types`(nullabilityCheckMode: NullableIndex.CheckMode) {
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModelWithRequiredTypes))
+        val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserSerializer = JsonSerializerGenerator(
+            codegenContext,
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+            ::restJsonFieldName,
+        )
+        val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
+        val documentGenerator = parserSerializer.documentSerializer()
+
+        val project = TestWorkspace.testProject(testSymbolProvider(model))
+
+        // Depending on the nullability check mode, the builder can be fallible or not. When it's fallible, we need to
+        // add unwrap calls.
+        val builderIsFallible =
+            BuilderGenerator.hasFallibleBuilder(model.lookup<StructureShape>("test#Top"), symbolProvider)
+        val maybeUnwrap = if (builderIsFallible) { ".unwrap()" } else { "" }
+        project.lib {
+            unitTest(
+                "json_serializers",
+                """
+                use test_model::{Choice, Top};
+
+                // Generate the document serializer even though it's not tested directly
+                // ${format(documentGenerator)}
+
+                let input = crate::test_input::OpInput::builder()
+                    .top(
+                        Top::builder()
+                            .field("Hello")
+                            .choice(Choice::Boolean(true))
+                            .extra(45)
+                            .recursive(
+                                Top::builder()
+                                    .field("World!")
+                                    .choice(Choice::Boolean(true))
+                                    .extra(55)
+                                    .build()
+                                    $maybeUnwrap
+                            )
+                            .build()
+                            $maybeUnwrap
+                    )
+                    .boolean(true)
+                    .build()
+                    .unwrap();
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert_eq!(output, r#"{"boolean":true,"top":{"choice":{"boolean":true},"field":"Hello","extra":45,"rec":[{"choice":{"boolean":true},"field":"World!","extra":55}]}}"#);
+
+                let input = crate::test_input::OpInput::builder().top(
+                    Top::builder()
+                        .field("Hello")
+                        .choice(Choice::Unknown)
+                        .extra(45)
+                        .build()
+                        $maybeUnwrap
+                ).boolean(false).build().unwrap();
+                ${format(operationGenerator)}(&input).expect_err("cannot serialize unknown variant");
                 """,
             )
         }

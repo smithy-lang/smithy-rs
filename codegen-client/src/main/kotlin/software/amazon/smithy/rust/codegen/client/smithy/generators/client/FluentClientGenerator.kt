@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -35,12 +36,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -50,14 +50,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
-    private val reexportSmithyClientBuilder: Boolean = true,
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
     companion object {
@@ -94,38 +95,12 @@ class FluentClientGenerator(
 
     private fun renderFluentClient(crate: RustCrate) {
         crate.withModule(ClientRustModule.client) {
-            if (reexportSmithyClientBuilder) {
-                rustTemplate(
-                    """
-                    ##[doc(inline)]
-                    pub use #{client}::Builder;
-                    """,
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                )
-            }
-            val clientScope = arrayOf(
-                *preludeScope,
-                "Arc" to RuntimeType.Arc,
-                "client" to RuntimeType.smithyClient(runtimeConfig),
-                "client_docs" to writable
-                    {
-                        customizations.forEach {
-                            it.section(
-                                FluentClientSection.FluentClientDocs(
-                                    serviceShape,
-                                ),
-                            )(this)
-                        }
-                    },
-                "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
-                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
-            )
             rustTemplate(
                 """
                 ##[derive(Debug)]
                 pub(crate) struct Handle {
                     pub(crate) conf: crate::Config,
+                    ##[allow(dead_code)] // unused when a service does not provide any operations
                     pub(crate) runtime_plugins: #{RuntimePlugins},
                 }
 
@@ -140,25 +115,22 @@ class FluentClientGenerator(
                     ///
                     /// ## Panics
                     ///
-                    /// This method will panic if the `conf` has retry or timeouts enabled without a `sleep_impl`.
-                    /// If you experience this panic, it can be fixed by setting the `sleep_impl`, or by disabling
-                    /// retries and timeouts.
+                    /// This method will panic in the following cases:
+                    ///
+                    /// - Retries or timeouts are enabled without a `sleep_impl` configured.
+                    /// - Identity caching is enabled without a `sleep_impl` and `time_source` configured.
+                    ///
+                    /// The panic message for each of these will have instructions on how to resolve them.
                     pub fn from_conf(conf: crate::Config) -> Self {
-                        let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                        let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
-                        let sleep_impl = conf.sleep_impl();
-                        if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
-                            panic!("An async sleep implementation is required for retries or timeouts to work. \
-                                    Set the `sleep_impl` on the Config passed into this function to fix this panic.");
+                        let handle = Handle {
+                            conf: conf.clone(),
+                            runtime_plugins: #{base_client_runtime_plugins}(conf),
+                        };
+                        if let Err(err) = Self::validate_config(&handle) {
+                            panic!("Invalid client configuration: {err}");
                         }
-
                         Self {
-                            handle: #{Arc}::new(
-                                Handle {
-                                    conf: conf.clone(),
-                                    runtime_plugins: #{base_client_runtime_plugins}(conf),
-                                }
-                            )
+                            handle: #{Arc}::new(handle)
                         }
                     }
 
@@ -166,10 +138,32 @@ class FluentClientGenerator(
                     pub fn config(&self) -> &crate::Config {
                         &self.handle.conf
                     }
+
+                    fn validate_config(handle: &Handle) -> Result<(), #{BoxError}> {
+                        let mut cfg = #{ConfigBag}::base();
+                        handle.runtime_plugins
+                            .apply_client_configuration(&mut cfg)?
+                            .validate_base_client_config(&cfg)?;
+                        Ok(())
+                    }
                 }
                 """,
-                *clientScope,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
+                *preludeScope,
+                "Arc" to RuntimeType.Arc,
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
+                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                "client_docs" to writable {
+                    customizations.forEach {
+                        it.section(
+                            FluentClientSection.FluentClientDocs(
+                                serviceShape,
+                            ),
+                        )(this)
+                    }
+                },
+                "ConfigBag" to RuntimeType.configBag(runtimeConfig),
+                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                "tracing" to CargoDependency.Tracing.toType(),
             )
         }
 
@@ -180,10 +174,7 @@ class FluentClientGenerator(
 
             val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
-                rustBlockTemplate(
-                    "impl super::Client",
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                ) {
+                rustBlock("impl super::Client") {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                     val maybePaginated = if (operation.isPaginated(model)) {
                         "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
@@ -326,10 +317,7 @@ class FluentClientGenerator(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
-        rustBlockTemplate(
-            "impl $builderName",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-        ) {
+        rustBlock("impl $builderName") {
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
                 "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
@@ -387,21 +375,11 @@ class FluentClientGenerator(
                     #{Operation}::orchestrate(&runtime_plugins, input).await
                 }
 
-                /// Consumes this builder, creating a customizable operation that can be modified before being
-                /// sent.
-                // TODO(enableNewSmithyRuntimeCleanup): Remove `async` and `Result` once we switch to orchestrator
-                pub async fn customize(
+                /// Consumes this builder, creating a customizable operation that can be modified before being sent.
+                pub fn customize(
                     self,
-                ) -> #{Result}<
-                    #{CustomizableOperation}<
-                        #{OperationOutput},
-                        #{OperationError},
-                        Self,
-                    >,
-                    #{SdkError}<#{OperationError}>,
-                >
-                {
-                    #{Ok}(#{CustomizableOperation}::new(self))
+                ) -> #{CustomizableOperation}<#{OperationOutput}, #{OperationError}, Self> {
+                    #{CustomizableOperation}::new(self)
                 }
                 """,
                 *orchestratorScope,
@@ -433,7 +411,7 @@ class FluentClientGenerator(
                         """
                         /// Create a paginator for this request
                         ///
-                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
+                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
                         pub fn into_paginator(self) -> #{Paginator} {
                             #{Paginator}::new(self.handle, self.inner)
                         }
@@ -470,8 +448,10 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
+        val api = RuntimeType.smithyRuntimeApi(rc)
+        val rt = RuntimeType.smithyRuntime(rc)
         rustTemplate(
             """
             pub(crate) fn base_client_runtime_plugins(
@@ -479,12 +459,20 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             ) -> #{RuntimePlugins} {
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+
                 let mut plugins = #{RuntimePlugins}::new()
+                    // defaults
+                    .with_client_plugins(#{default_plugins}(
+                        #{DefaultPluginParams}::new()
+                            .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
+                    ))
+                    // user config
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
                             .with_runtime_components(config.runtime_components.clone())
                     )
+                    // codegen config
                     .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
                     .with_client_plugin(#{NoAuthRuntimePlugin}::new());
                 for plugin in configured_plugins {
@@ -494,13 +482,14 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             }
             """,
             *preludeScope,
-            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-            "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-            "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
+            "default_plugins" to rt.resolve("client::defaults::default_plugins"),
+            "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+            "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
+            "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
         )
     }
+}
 
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
@@ -528,7 +517,7 @@ private fun generateOperationShapeDocs(
             else -> "(undocumented)"
         }
 
-        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink): $docs"
+        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink):<br>required: **${memberShape.isRequired}**<br>$docs<br>"
     }
 }
 

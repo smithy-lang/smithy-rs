@@ -10,15 +10,24 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["test-util"]
+test-util = []
+
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
-aws-sdk-s3control = { path = "../../build/aws-sdk/sdk/s3control" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
-aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-sdk-s3control = { path = "../../build/aws-sdk/sdk/s3control", features = ["test-util"] }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1.0.0"
 http = "0.2.0"
 serde_json = "1.0.0"
 tokio = { version = "1.23.1", features = ["full", "test-util"] }
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
+
+[[test]]
+name = "signing-it"
+required-features = ["test-util"]

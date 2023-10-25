@@ -10,12 +10,17 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["test-util"]
+test-util = []
+
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
-aws-sdk-qldbsession = { path = "../../build/aws-sdk/sdk/qldbsession" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rustls"] }
+aws-sdk-qldbsession = { path = "../../build/aws-sdk/sdk/qldbsession", features = ["test-util"] }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 http = "0.2.0"
 tokio = { version = "1.23.1", features = ["full"]}
