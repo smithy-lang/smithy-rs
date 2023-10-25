@@ -73,9 +73,9 @@ open class ServerRootGenerator(
             //! ```rust,no_run
             //! ## use std::net::SocketAddr;
             //! ## async fn dummy() {
-            //! use $crateName::$serviceName;
+            //! use $crateName::{${serviceName}Config, $serviceName};
             //!
-            //! ## let app = $serviceName::builder_without_plugins().build_unchecked();
+            //! ## let app = $serviceName::builder(${serviceName}Config::builder().build()).build_unchecked();
             //! let server = app.into_make_service();
             //! let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!     .expect("unable to parse the server bind address and port");
@@ -92,7 +92,7 @@ open class ServerRootGenerator(
             //! use $crateName::$serviceName;
             //!
             //! ## async fn dummy() {
-            //! ## let app = $serviceName::builder_without_plugins().build_unchecked();
+            //! ## let app = $serviceName::builder(${serviceName}Config::builder().build()).build_unchecked();
             //! let handler = LambdaHandler::new(app);
             //! lambda_http::run(handler).await.unwrap();
             //! ## }
@@ -100,8 +100,7 @@ open class ServerRootGenerator(
             //!
             //! ## Building the $serviceName
             //!
-            //! To construct [`$serviceName`] we use [`$builderName`] returned by [`$serviceName::builder_without_plugins`]
-            //! or [`$serviceName::builder_with_plugins`].
+            //! To construct [`$serviceName`] we use [`$builderName`] returned by [`$serviceName::builder`].
             //!
             //! #### Plugins
             //!
@@ -110,18 +109,18 @@ open class ServerRootGenerator(
             //! plugin marked with [`ModelMarker`](aws_smithy_http_server::plugin::ModelMarker).
             //! Plugins allow you to build middleware which is aware of the operation it is being applied to.
             //!
-            //! ```rust
-            //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin;
+            //! ```rust,no_run
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
             //! ## use #{Hyper}::Body;
             //! use #{SmithyHttpServer}::plugin::HttpPlugins;
-            //! use $crateName::{$serviceName, $builderName};
+            //! use $crateName::{${serviceName}Config, $serviceName, $builderName};
             //!
             //! let http_plugins = HttpPlugins::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
-            //! let builder: $builderName<Body, _, _, _> = $serviceName::builder_with_plugins(http_plugins, IdentityPlugin);
+            //! let config = ${serviceName}Config::builder().build();
+            //! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);
             //! ```
             //!
             //! Check out [`#{SmithyHttpServer}::plugin`] to learn more about plugins.
@@ -136,7 +135,7 @@ open class ServerRootGenerator(
             //! * A `Result<Output, Error>` if your operation has modeled errors, or
             //! * An `Output` otherwise.
             //!
-            //! ```rust
+            //! ```rust,no_run
             //! ## struct Input;
             //! ## struct Output;
             //! ## struct Error;
@@ -147,7 +146,7 @@ open class ServerRootGenerator(
             //!
             //! Handlers can accept up to 8 extractors:
             //!
-            //! ```rust
+            //! ```rust,no_run
             //! ## struct Input;
             //! ## struct Output;
             //! ## struct Error;
@@ -187,11 +186,12 @@ open class ServerRootGenerator(
             //!
             //! ```rust
             //! ## use std::net::SocketAddr;
-            //! use $crateName::$serviceName;
+            //! use $crateName::{${serviceName}Config, $serviceName};
             //!
             //! ##[#{Tokio}::main]
             //! pub async fn main() {
-            //!    let app = $serviceName::builder_without_plugins()
+            //!    let config = ${serviceName}Config::builder().build();
+            //!    let app = $serviceName::builder(config)
             ${builderFieldNames.values.joinToString("\n") { "//!        .$it($it)" }}
             //!        .build()
             //!        .expect("failed to build an instance of $serviceName");
@@ -237,6 +237,6 @@ open class ServerRootGenerator(
     fun render(rustWriter: RustWriter) {
         documentation(rustWriter)
 
-        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Builder, Config, MissingOperationsError};")
+        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Config, ${serviceName}Builder, MissingOperationsError};")
     }
 }

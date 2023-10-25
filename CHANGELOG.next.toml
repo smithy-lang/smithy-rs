@@ -474,3 +474,9 @@ message = "Enable custom auth schemes to work by changing the code generated aut
 references = ["smithy-rs#3034", "smithy-rs#3087"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Service builder initialization now takes in a `${serviceName}Config` object on which plugins and layers should be registered. The `builder_with_plugins` and `builder_without_plugins` methods on the service builder, as well as the `layer` and `boxed` methods on the built service have been deprecated, and will be removed in a future release. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3096) for more details."
+references = ["smithy-rs#3095", "smithy-rs#3096"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
+author = "david-perez"

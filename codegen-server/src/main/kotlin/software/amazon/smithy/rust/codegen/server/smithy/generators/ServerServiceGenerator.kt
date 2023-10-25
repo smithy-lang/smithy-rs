@@ -53,8 +53,6 @@ class ServerServiceGenerator(
     private val serviceId = service.id
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
-    // TODO Remove
-    private val builderBodyGenericTypeName = "Body"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
@@ -119,13 +117,13 @@ class ServerServiceGenerator(
                 /// ## Example
                 ///
                 /// ```no_run
-                /// use $crateName::{Config, $serviceName};
+                /// use $crateName::{$serviceName, ${serviceName}Config};
                 ///
                 #{HandlerImports:W}
                 ///
                 #{Handler:W}
                 ///
-                /// let config = Config::builder().build();
+                /// let config = ${serviceName}Config::builder().build();
                 /// let app = $serviceName::builder(config)
                 ///     .$fieldName(handler)
                 ///     /* Set other handlers */
@@ -182,13 +180,13 @@ class ServerServiceGenerator(
                 /// ## Example
                 ///
                 /// ```no_run
-                /// use $crateName::{Config, $serviceName};
+                /// use $crateName::{$serviceName, ${serviceName}Config};
                 ///
                 #{HandlerImports:W}
                 ///
                 #{HandlerFixed:W}
                 ///
-                /// let config = Config::builder().build();
+                /// let config = ${serviceName}Config::builder().build();
                 /// let svc = #{Tower}::util::service_fn(handler);
                 /// let app = $serviceName::builder(config)
                 ///     .${fieldName}_service(svc)
@@ -298,12 +296,18 @@ class ServerServiceGenerator(
             /// Forgetting to register a handler for one or more operations will result in an error.
             ///
             /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
-            /// unspecified route requested.
-            pub fn build(self) -> Result<$serviceName<L::Service>, MissingOperationsError>
+            /// unspecified route is requested.
+            pub fn build(self) -> Result<
+                $serviceName<
+                    #{SmithyHttpServer}::routing::RoutingService<
+                        #{Router}<L::Service>,
+                        #{Protocol},
+                    >,
+                >,
+                MissingOperationsError,
+            >
             where
-                L: #{Tower}::Layer<
-                    #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>
-                >
+                L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
             {
                 let router = {
                     use #{SmithyHttpServer}::operation::OperationShape;
@@ -320,9 +324,8 @@ class ServerServiceGenerator(
 
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
-                let svc = self
-                    .layer
-                    .layer(#{SmithyHttpServer}::routing::RoutingService::new(router));
+                let svc = #{SmithyHttpServer}::routing::RoutingService::new(router);
+                let svc = svc.map(|s| s.layer(self.layer));
                 Ok($serviceName { svc })
             }
             """,
@@ -388,7 +391,7 @@ class ServerServiceGenerator(
             /// not have a registered handler.
             pub fn build_unchecked(self) -> $serviceName<L::Service>
             where
-                $builderBodyGenericTypeName: Send + 'static,
+                Body: Send + 'static,
                 L: #{Tower}::Layer<
                     #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>
                 >
@@ -409,7 +412,7 @@ class ServerServiceGenerator(
 
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
-        val builderGenerics = listOf(builderBodyGenericTypeName, "L", "HttpPl", "ModelPl").joinToString(", ")
+        val builderGenerics = listOf("Body", "L", "HttpPl", "ModelPl").joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
@@ -474,7 +477,6 @@ class ServerServiceGenerator(
     private fun serviceStruct(): Writable = writable {
         documentShape(service, model)
 
-        // TODO Deprecate builder_{with,without}_plugins.
         rustTemplate(
             """
             ///
@@ -486,13 +488,16 @@ class ServerServiceGenerator(
             }
             
             impl $serviceName<()> {
+                /// Constructs a builder for [`$serviceName`].
+                /// You must specify a configuration object holding any plugins and layers that should be applied 
+                /// to the operations in this service.
                 pub fn builder<
                     Body, 
                     L,
                     HttpPl: #{SmithyHttpServer}::plugin::HttpMarker,
                     ModelPl: #{SmithyHttpServer}::plugin::ModelMarker,
                 >(
-                    config: Config<L, HttpPl, ModelPl>,
+                    config: ${serviceName}Config<L, HttpPl, ModelPl>,
                 ) -> $builderName<Body, L, HttpPl, ModelPl> {
                     $builderName {
                         #{NotSetFields1:W},
@@ -510,6 +515,10 @@ class ServerServiceGenerator(
                 /// Check out [`HttpPlugins`](#{SmithyHttpServer}::plugin::HttpPlugins) and
                 /// [`ModelPlugins`](#{SmithyHttpServer}::plugin::ModelPlugins) if you need to apply
                 /// multiple plugins.
+                ##[deprecated(
+                    since = "0.57.0",
+                    note = "please use the `builder` constructor and register plugins on the `${serviceName}Config` object instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
+                )]
                 pub fn builder_with_plugins<
                     Body, 
                     HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, 
@@ -529,6 +538,10 @@ class ServerServiceGenerator(
                 /// Constructs a builder for [`$serviceName`].
                 ///
                 /// Use [`$serviceName::builder_with_plugins`] if you need to specify plugins.
+                ##[deprecated(
+                    since = "0.57.0",
+                    note = "please use the `builder` constructor instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
+                )]
                 pub fn builder_without_plugins<Body>() -> $builderName<
                     Body, 
                     #{Tower}::layer::util::Identity,
@@ -552,7 +565,6 @@ class ServerServiceGenerator(
                 }
             }
             
-            // TODO Deprecate these.
             impl<S>
                 $serviceName<
                     #{SmithyHttpServer}::routing::RoutingService<
@@ -562,6 +574,10 @@ class ServerServiceGenerator(
                 >
             {
                 /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
+                ##[deprecated(
+                    since = "0.57.0",
+                    note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
+                )]
                 pub fn layer<L>(
                     self,
                     layer: &L,
@@ -582,6 +598,10 @@ class ServerServiceGenerator(
                 /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
                 ///
                 /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
+                ##[deprecated(
+                    since = "0.57.0",
+                    note = "please use `boxed` on the `${serviceName}Config` object instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
+                )]
                 pub fn boxed<B>(
                     self,
                 ) -> $serviceName<

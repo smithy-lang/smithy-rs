@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
@@ -26,19 +27,21 @@ class ServiceConfigGenerator(
             "Stack" to RuntimeType.Tower.resolve("layer::util::Stack"),
         )
     }
+    private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun render(writer: RustWriter) {
         // TODO Docs
+        // TODO Should probably make `build` fallible.
         writer.rustTemplate(
             """
             ##[derive(#{Debug})]
-            pub struct Config<L, H, M> {
+            pub struct ${serviceName}Config<L, H, M> {
                 layers: L,
                 http_plugins: H,
                 model_plugins: M,
             }
 
-            impl Config<(), (), ()> {
+            impl ${serviceName}Config<(), (), ()> {
                 pub fn builder() -> config::Builder<
                     #{Tower}::layer::util::Identity,
                     #{SmithyHttpServer}::plugin::IdentityPlugin,
@@ -52,7 +55,7 @@ class ServiceConfigGenerator(
                 }
             }
 
-            /// Module hosting the builder for [`Config`].
+            /// Module hosting the builder for [`${serviceName}Config`].
             pub mod config {
                 ##[derive(#{Debug})]
                 pub struct Builder<L, H, M> {
@@ -96,8 +99,8 @@ class ServiceConfigGenerator(
                         }
                     }
 
-                    pub fn build(self) -> super::Config<L, H, M> {
-                        super::Config {
+                    pub fn build(self) -> super::${serviceName}Config<L, H, M> {
+                        super::${serviceName}Config {
                             layers: self.layers,
                             http_plugins: self.http_plugins,
                             model_plugins: self.model_plugins,

@@ -41,24 +41,27 @@ service PokemonService {
 
 Smithy Rust will use this model to produce the following API:
 
-```rust
+```rust,no_run
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
-# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonService};
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
+# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonServiceConfig, PokemonService};
 // A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
     todo!()
 }
 
+let config = PokemonServiceConfig::builder().build();
+
 // Use the service builder to create `PokemonService`.
-let pokemon_service = PokemonService::builder_without_plugins()
+let pokemon_service = PokemonService::builder(config)
     // Pass the handler directly to the service builder...
     .get_pokemon_species(get_pokemon_species)
     /* other operation setters */
     .build()
-    # ; Result::<(), ()>::Ok(())
     .expect("failed to create an instance of the Pokémon service");
-# let pokemon_service: Result<PokemonService<aws_smithy_http_server::routing::Route>, _> = pokemon_service;
+# let pokemon_service: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = pokemon_service;
 ```
 
 ## Operations
