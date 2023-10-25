@@ -55,8 +55,8 @@ class FluentClientGeneratorTest {
     fun `generate correct input docs`() {
         val expectations = mapOf(
             "listValue" to "list_value(impl Into<String>)",
-            "doubleListValue" to "double_list_value(Vec<String>)",
-            "mapValue" to "map_value(impl Into<String>, Vec<String>)",
+            "doubleListValue" to "double_list_value(Vec::<String>)",
+            "mapValue" to "map_value(impl Into<String>, Vec::<String>)",
             "byteValue" to "byte_value(i8)",
         )
         expectations.forEach { (name, expect) ->

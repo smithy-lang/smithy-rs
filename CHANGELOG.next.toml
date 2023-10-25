@@ -474,3 +474,15 @@ message = "Enable custom auth schemes to work by changing the code generated aut
 references = ["smithy-rs#3034", "smithy-rs#3087"]
 meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Publicly exposed types from `http-body` and `hyper` crates within `aws-smithy-types` are now feature-gated. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3089) for details."
+references = ["smithy-rs#3033", "smithy-rs#3088"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`ByteStream::poll_next` is now feature-gated. You can turn on a cargo feature `byte-stream-poll-next` in `aws-smithy-types` to use it."
+references = ["smithy-rs#3033", "smithy-rs#3088"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
