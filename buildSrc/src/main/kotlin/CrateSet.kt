@@ -18,7 +18,7 @@ object CrateSet {
 
     val AWS_SDK_RUNTIME = listOf(
         Crate("aws-config", STABLE_VERSION_PROP_NAME),
-        Crate("aws-credential-types", STABLE_VERSION_PROP_NAME),
+        Crate("aws-credential-types", UNSTABLE_VERSION_PROP_NAME),
         Crate("aws-endpoint", UNSTABLE_VERSION_PROP_NAME),
         Crate("aws-http", UNSTABLE_VERSION_PROP_NAME),
         Crate("aws-hyper", UNSTABLE_VERSION_PROP_NAME),
