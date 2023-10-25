@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.NullNode
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
@@ -103,19 +104,15 @@ class ServerInstantiator(private val codegenContext: CodegenContext) : Instantia
                 val dataHasValue = data.getMember(member.memberName).isPresent
                 val hasValue = values.containsKey(member) || dataHasValue
                 check(member.isOptional || hasValue)
-                val value = if (member.isOptional && !hasValue) {
-                    writable("None")
-                } else {
-                    writable {
-                        values[member]
-                            ?.let { it(this) }
-                            ?: super.renderMember(
-                                this,
-                                member,
-                                data.expectMember(member.memberName),
-                                ctx,
-                            )
-                    }
+                val value = writable {
+                    values[member]
+                        ?.let { it(this) }
+                        ?: super.renderMember(
+                            this,
+                            member,
+                            data.getMember(member.memberName).orElse(Node.nullNode()),
+                            ctx,
+                        )
                 }
                 val name = symbolProvider.toMemberName(member)
                 writer.rustTemplate(

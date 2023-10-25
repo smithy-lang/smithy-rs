@@ -269,7 +269,8 @@ class ServerInstantiatorTest {
                 val writables = mapOf(
                     Pair(model.lookup<MemberShape>("com.test#Inner\$map"), writable("Some(result)")),
                 )
-                rustTemplate("""
+                rustTemplate(
+                    """
                     let mut result = #{Map}::new();
                     let map = #{Map}::new();
                     let k1 = #{Inner} { map: Some(map) };
@@ -285,7 +286,7 @@ class ServerInstantiatorTest {
                 """,
                     "Inner" to symbolProvider.toSymbol(inner),
                     "Map" to RustType.HashMap(RustType.String, symbolProvider.toSymbol(inner).rustType()),
-                    )
+                )
                 withBlock("let inner = ", ";") {
                     sut.render(this, model.lookup("com.test#Inner"), writables, data as ObjectNode)
                 }
@@ -312,11 +313,13 @@ class ServerInstantiatorTest {
                     Pair(model.lookup("com.test#NestedStruct\$num") as MemberShape, writable("myStruct.n")),
                 )
 
-                rust("""
+                rust(
+                    """
                     struct MyTestStruct { str: String, n: i32, f: f32 }
                     let str = String::from("hello");
                     let myStruct = MyTestStruct { str, n: 42, f: 0.42 };
-                """)
+                """,
+                )
                 withBlock("let result = ", ";") {
                     sut.render(this, model.lookup("com.test#NestedStruct"), writables, data as ObjectNode)
                 }
@@ -326,7 +329,7 @@ class ServerInstantiatorTest {
                     let expected = #{NestedStruct} {str, num: 42};
                     assert_eq!(result, expected);
                     """,
-                    "NestedStruct" to symbolProvider.toSymbol(nestedStruct)
+                    "NestedStruct" to symbolProvider.toSymbol(nestedStruct),
                 )
             }
         }
