@@ -6,8 +6,6 @@
 use crate::client::http::connection_poisoning::CaptureSmithyConnection;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-use aws_smithy_http::connection::ConnectionMetadata;
-use aws_smithy_http::result::ConnectorError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
@@ -17,7 +15,9 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::connection::ConnectionMetadata;
 use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_smithy_types::result::ConnectorError;
 use aws_smithy_types::retry::ErrorKind;
 use http::{Extensions, Uri};
 use hyper::client::connect::{capture_connection, CaptureConnection, Connection, HttpInfo};

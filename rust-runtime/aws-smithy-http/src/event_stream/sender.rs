@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::result::SdkError;
 use aws_smithy_eventstream::frame::{MarshallMessage, SignMessage};
+use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::result::SdkError;
 use bytes::Bytes;
 use futures_core::Stream;
 use std::error::Error as StdError;
@@ -140,7 +141,7 @@ impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
 }
 
 impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
-    type Item = Result<Bytes, SdkError<E>>;
+    type Item = Result<Bytes, SdkError<E, http::Response<SdkBody>>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.stream.as_mut().poll_next(cx) {
@@ -195,12 +196,12 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
 mod tests {
     use super::MarshallMessage;
     use crate::event_stream::{EventStreamSender, MessageStreamAdapter};
-    use crate::result::SdkError;
     use async_stream::stream;
     use aws_smithy_eventstream::error::Error as EventStreamError;
     use aws_smithy_eventstream::frame::{
         Header, HeaderValue, Message, NoOpSigner, SignMessage, SignMessageError,
     };
+    use aws_smithy_types::result::SdkError;
     use bytes::Bytes;
     use futures_core::Stream;
     use futures_util::stream::StreamExt;

@@ -6,7 +6,7 @@
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_credential_types::Credentials;
 use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
-use aws_smithy_http::result::SdkError;
+use aws_smithy_types::result::SdkError;
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::region::Region;
 use aws_types::SdkConfig;

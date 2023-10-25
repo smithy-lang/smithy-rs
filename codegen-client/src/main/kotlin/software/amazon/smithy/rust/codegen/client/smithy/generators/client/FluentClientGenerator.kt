@@ -264,7 +264,6 @@ class FluentClientGenerator(
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
             )
         }
 

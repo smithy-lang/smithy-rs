@@ -4,11 +4,11 @@
  */
 
 use aws_smithy_http::http::HttpHeaders;
-use aws_smithy_http::result::SdkError;
 use aws_smithy_types::error::metadata::{
     Builder as ErrorMetadataBuilder, ErrorMetadata, ProvideErrorMetadata,
 };
 use aws_smithy_types::error::Unhandled;
+use aws_smithy_types::result::SdkError;
 use http::{HeaderMap, HeaderValue};
 
 const EXTENDED_REQUEST_ID: &str = "s3_extended_request_id";
@@ -94,8 +94,8 @@ fn extract_extended_request_id(headers: &HeaderMap<HeaderValue>) -> Option<&str>
 #[cfg(test)]
 mod test {
     use super::*;
-    use aws_smithy_http::result::SdkError;
     use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::result::SdkError;
     use http::Response;
 
     #[test]

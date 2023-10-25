@@ -4,7 +4,6 @@
  */
 
 use crate::client::retries::classifiers::run_classifiers_on_ctx;
-use aws_smithy_http::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     AfterDeserializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
@@ -13,6 +12,7 @@ use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::retries::classifiers::RetryAction;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
+use aws_smithy_types::connection::ConnectionMetadata;
 use aws_smithy_types::retry::{ReconnectMode, RetryConfig};
 use std::fmt;
 use std::sync::{Arc, Mutex};

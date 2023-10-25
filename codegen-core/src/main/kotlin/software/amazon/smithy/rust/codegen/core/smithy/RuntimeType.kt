@@ -436,9 +436,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun queryFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("query::$func")
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("body::SdkBody")
-        fun sdkError(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("result::SdkError")
-        fun sdkSuccess(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyHttp(runtimeConfig).resolve("result::SdkSuccess")
+        fun sdkError(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("result::SdkError")
 
         fun parseTimestampFormat(
             codegenTarget: CodegenTarget,

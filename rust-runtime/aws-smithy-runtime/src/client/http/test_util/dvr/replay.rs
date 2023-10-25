@@ -4,7 +4,6 @@
  */
 
 use super::{Action, ConnectionId, Direction, Event, NetworkTraffic};
-use aws_smithy_http::result::ConnectorError;
 use aws_smithy_protocol_test::MediaType;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
@@ -14,6 +13,7 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_smithy_types::result::ConnectorError;
 use bytes::{Bytes, BytesMut};
 use http::{Request, Version};
 use http_body::Body;

@@ -28,8 +28,8 @@
 //! Use the [`ConfigBag`] instead.
 
 use crate::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
-use aws_smithy_http::result::SdkError;
 use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::result::SdkError;
 use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
 use phase::Phase;
 use std::fmt::Debug;
