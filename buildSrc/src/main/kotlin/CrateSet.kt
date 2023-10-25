@@ -12,7 +12,7 @@ object CrateSet {
     /*
      * Crates marked as `STABLE_VERSION_PROP_NAME` should have the following package metadata in their `Cargo.toml`
      *
-     * [package.metadata.release-tooling]
+     * [package.metadata.smithy-rs-release-tooling]
      * stable = true
      */
 

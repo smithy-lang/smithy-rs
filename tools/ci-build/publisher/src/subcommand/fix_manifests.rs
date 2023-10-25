@@ -87,7 +87,7 @@ impl Manifest {
     fn stability(&self) -> Result<PackageStability> {
         let value = self
             .metadata
-            .get("package.metadata.release-tooling")
+            .get("package.metadata.smithy-rs-release-tooling")
             .and_then(|v| v.get("stable"));
         match value {
             None => Ok(PackageStability::Unstable),
