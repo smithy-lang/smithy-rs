@@ -87,6 +87,12 @@ pub struct FsBuilder {
     offset: Option<u64>,
 }
 
+impl Default for FsBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// The length (in bytes) to read. Determines whether or not a short read counts as an error.
 #[allow(missing_debug_implementations)]
 pub enum Length {
