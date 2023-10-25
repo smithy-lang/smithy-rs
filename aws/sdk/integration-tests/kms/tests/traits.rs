@@ -14,7 +14,9 @@ fn assert_debug<T: std::fmt::Debug>() {}
 #[tokio::test]
 async fn types_are_send_sync() {
     assert_send_sync::<kms::Error>();
-    assert_send_sync::<kms::error::SdkError<CreateAliasError>>();
+    assert_send_sync::<
+        kms::error::SdkError<CreateAliasError, http::Response<aws_smithy_types::body::SdkBody>>,
+    >();
     assert_send_sync::<kms::operation::create_alias::CreateAliasError>();
     assert_send_sync::<kms::operation::create_alias::CreateAliasOutput>();
     assert_send_sync::<kms::Client>();
