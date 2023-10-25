@@ -13,6 +13,9 @@ allowed_external_types = [
     # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
     "aws_smithy_eventstream::*",
 
+    # Consider moving making this crate 1.0
+    "aws_smithy_runtime::client::identity::cache::IdentityCache",
+
     ### All below this line need to be fixed:
     # The following are not OK
     "aws_http::request_id::RequestId", # move to aws-types
