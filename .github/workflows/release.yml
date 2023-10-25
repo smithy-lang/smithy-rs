@@ -19,20 +19,23 @@ on:
     inputs:
       commit_sha:
         description: |
-          The SHA of the git commit that you want to release.
+          Commit SHA: The SHA of the git commit that you want to release.
           You must use the non-abbreviated SHA (e.g. b2318b0 won't work!).
         required: true
         type: string
       stable_semantic_version:
-        description: The semver tag that you want to release for stable crates (e.g. 1.0.2)
+        description: |
+          Stable semantic version: The semver tag that you want to release for stable crates (e.g. 1.0.2)
         required: true
         type: string
       unstable_semantic_version:
-        description: The semver tag that you want to release for unstable crates (e.g. 0.52.1)
+        description: |
+          Unstable semantic version: The semver tag that you want to release for unstable crates (e.g. 0.52.1)
         required: true
         type: string
       dry_run:
-        description: Dry runs will only produce release artifacts, but they will not cut a release tag in GitHub nor publish to crates.io
+        description: |
+          Dry run: When selected, it only produces release artifacts, but will not cut a release tag in GitHub or publish to crates.io
         required: true
         type: boolean
         default: true
