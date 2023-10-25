@@ -417,7 +417,7 @@ class ServerServiceGenerator(
             """
             /// The service builder for [`$serviceName`].
             ///
-            /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
+            /// Constructed via [`$serviceName::builder`].
             pub struct $builderName<$builderGenerics> {
                 ${builderFields.joinToString(", ")},
                 layer: L,

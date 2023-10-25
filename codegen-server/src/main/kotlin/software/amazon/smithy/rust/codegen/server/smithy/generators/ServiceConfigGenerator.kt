@@ -31,7 +31,6 @@ class ServiceConfigGenerator(
 
     fun render(writer: RustWriter) {
         // TODO Docs
-        // TODO Should probably make `build` fallible.
         writer.rustTemplate(
             """
             ##[derive(#{Debug})]

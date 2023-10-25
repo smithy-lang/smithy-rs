@@ -466,7 +466,9 @@ stateDiagram-v2
     S --> [*]: HTTP Response
 ```
 
-The service builder API requires plugins to be specified upfront - they must be passed as an argument to `builder_with_plugins` and cannot be modified afterwards.
+The service builder API requires plugins to be specified upfront - they must be
+registered in the config object, which is passed as an argument to `builder`.
+Plugins cannot be modified afterwards.
 
 You might find yourself wanting to apply _multiple_ plugins to your service.
 This can be accommodated via [`HttpPlugins`] and [`ModelPlugins`].
@@ -513,7 +515,7 @@ let http_plugins = HttpPlugins::new()
 The service builder is the primary public API, generated for every [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html).
 At a high-level, the service builder takes as input a function for each Smithy Operation and returns a single HTTP service. The signature of each function, also known as _handlers_, must match the constraints of the corresponding Smithy model.
 
-You can create an instance of a service builder by calling either `builder_without_plugins` or `builder_with_plugins` on the corresponding service struct.
+You can create an instance of a service builder by calling `builder` on the corresponding service struct.
 
 ```rust
 # extern crate aws_smithy_http_server;
