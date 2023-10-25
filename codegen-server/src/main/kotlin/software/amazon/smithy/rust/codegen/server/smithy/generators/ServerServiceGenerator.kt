@@ -584,7 +584,7 @@ class ServerServiceGenerator(
                 /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
                 pub fn boxed<B>(
                     self,
-                ) -> SimpleService<
+                ) -> $serviceName<
                     #{SmithyHttpServer}::routing::RoutingService<
                         #{Router}<
                             #{SmithyHttpServer}::routing::Route<B>,
