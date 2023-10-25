@@ -18,10 +18,12 @@ pub mod body;
 pub mod byte_stream;
 /// A typemap for storing configuration.
 pub mod config_bag;
+pub mod connection;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
 pub mod primitive;
+pub mod result;
 pub mod retry;
 pub mod timeout;
 
