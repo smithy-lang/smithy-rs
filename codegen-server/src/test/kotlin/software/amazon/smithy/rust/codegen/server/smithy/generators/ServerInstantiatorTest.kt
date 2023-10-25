@@ -5,26 +5,21 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
-import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
-import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -244,96 +239,13 @@ class ServerInstantiatorTest {
     }
 
     @Test
-    fun `uses writable for shapes`() {
-        val inner = model.lookup<StructureShape>("com.test#Inner")
-        val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
+    fun `use direct instantiation and not the builder`() {
+        val shape = model.lookup<StructureShape>("com.test#MyStruct")
         val sut = ServerInstantiator(codegenContext)
+        val data = Node.parse("""{ "foo": "hello", "bar": 1, "baz": 42, "ts": 0, "byteValue": 0 }""")
 
-        val project = TestWorkspace.testProject(model)
-        inner.renderWithModelBuilder(model, symbolProvider, project)
-        nestedStruct.renderWithModelBuilder(model, symbolProvider, project)
-        project.moduleFor(inner) {
-            val nestedUnion = model.lookup<UnionShape>("com.test#NestedUnion")
-            UnionGenerator(model, symbolProvider, this, nestedUnion).render()
-
-            unitTest("writable_for_maps") {
-                val data = Node.parse(
-                    """
-                    {
-                        "k1": { "map": {} },
-                        "k2": { "map": { "k3": {} } },
-                        "k3": { }
-                    }
-                    """,
-                )
-                val writables = mapOf(
-                    Pair(model.lookup<MemberShape>("com.test#Inner\$map"), writable("Some(result)")),
-                )
-                rustTemplate(
-                    """
-                    let mut result = #{Map}::new();
-                    let map = #{Map}::new();
-                    let k1 = #{Inner} { map: Some(map) };
-                    result.insert("k1".to_owned(), k1);
-                    let k3 = {
-                        let mut ret = #{Map}::new();
-                        ret.insert("k3".to_owned(), #{Inner} { map: None });
-                        ret
-                    };
-                    let k2 = #{Inner} { map: Some(k3) };
-                    result.insert("k2".to_owned(), k2);
-                    result.insert("k3".to_owned(), #{Inner} { map: None });
-                """,
-                    "Inner" to symbolProvider.toSymbol(inner),
-                    "Map" to RustType.HashMap(RustType.String, symbolProvider.toSymbol(inner).rustType()),
-                )
-                withBlock("let inner = ", ";") {
-                    sut.render(this, model.lookup("com.test#Inner"), writables, data as ObjectNode)
-                }
-                rust(
-                    """
-                    assert_eq!(inner.map().unwrap().len(), 3);
-                    assert_eq!(inner.map().unwrap().get("k1").unwrap().map.as_ref().unwrap().len(), 0);
-                    assert_eq!(inner.map().unwrap().get("k2").unwrap().map.as_ref().unwrap().len(), 1);
-                    assert_eq!(inner.map().unwrap().get("k3").unwrap().map, None);
-                    """,
-                )
-            }
-
-            unitTest("writable_preferred_over_node_data") {
-                val data = Node.parse(
-                    """
-                    {
-                        "str": "world",
-                        "num": 1
-                    }
-                    """,
-                )
-                val writables = mapOf(
-                    Pair(model.lookup("com.test#NestedStruct\$num") as MemberShape, writable("myStruct.n")),
-                )
-
-                rust(
-                    """
-                    struct MyTestStruct { str: String, n: i32, f: f32 }
-                    let str = String::from("hello");
-                    let myStruct = MyTestStruct { str, n: 42, f: 0.42 };
-                """,
-                )
-                withBlock("let result = ", ";") {
-                    sut.render(this, model.lookup("com.test#NestedStruct"), writables, data as ObjectNode)
-                }
-                rustTemplate(
-                    """
-                    let str = String::from("world");
-                    let expected = #{NestedStruct} {str, num: 42};
-                    assert_eq!(result, expected);
-                    """,
-                    "NestedStruct" to symbolProvider.toSymbol(nestedStruct),
-                )
-            }
-        }
-        project.compileAndTest(runClippy = true)
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
+        sut.render(writer, shape, data)
+        writer.toString() shouldNotContain "builder()"
     }
-
 }

@@ -46,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -89,12 +90,18 @@ open class Instantiator(
     /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
     private val customizations: List<InstantiatorCustomization> = listOf(),
+    private val constructPattern: InstantiatorConstructPattern = InstantiatorConstructPattern.BUILDER,
 ) {
     data class Ctx(
         // The `http` crate requires that headers be lowercase, but Smithy protocol tests
         // contain headers with uppercase keys.
         val lowercaseMapKeys: Boolean = false,
     )
+
+    enum class InstantiatorConstructPattern {
+        DIRECT,
+        BUILDER,
+    }
 
     /**
      * Client and server structures have different builder types. `Instantiator` needs to know how the builder
@@ -274,13 +281,21 @@ open class Instantiator(
         headers: Map<String, String>,
         ctx: Ctx,
     ) {
-        writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
+        when (constructPattern) {
+            InstantiatorConstructPattern.DIRECT ->
+                writer.withBlockTemplate("#{T} {", "}", "T" to symbolProvider.toSymbol(shape)) {
+                    renderStructureMembers(writer, shape, data, headers, ctx)
+                }
+            InstantiatorConstructPattern.BUILDER -> {
+                writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
 
-        renderStructureMembers(writer, shape, data, headers, ctx)
+                renderStructureMembers(writer, shape, data, headers, ctx)
 
-        writer.rust(".build()")
-        if (builderKindBehavior.hasFallibleBuilder(shape)) {
-            writer.rust(".unwrap()")
+                writer.rust(".build()")
+                if (builderKindBehavior.hasFallibleBuilder(shape)) {
+                    writer.rust(".unwrap()")
+                }
+            }
         }
     }
 
@@ -292,9 +307,19 @@ open class Instantiator(
         ctx: Ctx,
     ) {
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
-            val setterName = builderKindBehavior.setterName(memberShape)
-            writer.withBlock(".$setterName(", ")") {
-                renderMember(this, memberShape, value, ctx)
+            when (constructPattern) {
+                InstantiatorConstructPattern.DIRECT -> {
+                    val fieldName = symbolProvider.toMemberName(memberShape)
+                    writer.withBlock("$fieldName:", ",") {
+                        renderMember(this, memberShape, value, ctx)
+                    }
+                }
+                InstantiatorConstructPattern.BUILDER -> {
+                    val setterName = builderKindBehavior.setterName(memberShape)
+                    writer.withBlock(".$setterName(", ")") {
+                        renderMember(this, memberShape, value, ctx)
+                    }
+                }
             }
         }
 
