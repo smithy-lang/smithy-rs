@@ -4,8 +4,9 @@
  */
 
 use crate::protocol::rest_xml::RestXml;
-use crate::response::IntoResponse;
+use crate::response::{IntoResponse, IntoResponseUniform};
 use crate::runtime_error::InternalFailureException;
+use crate::service::ServiceShape;
 use crate::{extension::RuntimeErrorExtension, runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 use http::StatusCode;
 
@@ -42,13 +43,25 @@ impl RuntimeError {
     }
 }
 
-impl IntoResponse<RestXml> for InternalFailureException {
+impl IntoResponseUniform<RestXml> for InternalFailureException {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
-        IntoResponse::<RestXml>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
+        IntoResponseUniform::<RestXml>::into_response(RuntimeError::InternalFailure(crate::Error::new(String::new())))
     }
 }
 
-impl IntoResponse<RestXml> for RuntimeError {
+impl<Ser, Op> IntoResponse<Ser, Op> for RuntimeError
+where
+    Ser: ServiceShape,
+    Self: IntoResponseUniform<Ser::Protocol>,
+{
+    fn into_response(self) -> http::Response<crate::body::BoxBody> {
+        IntoResponseUniform::<Ser::Protocol>::into_response(RuntimeError::InternalFailure(crate::Error::new(
+            String::new(),
+        )))
+    }
+}
+
+impl IntoResponseUniform<RestXml> for RuntimeError {
     fn into_response(self) -> http::Response<crate::body::BoxBody> {
         let res = http::Response::builder()
             .status(self.status_code())

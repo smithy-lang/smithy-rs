@@ -5,14 +5,14 @@
 
 use crate::body::{empty, BoxBody};
 use crate::extension::RuntimeErrorExtension;
-use crate::response::IntoResponse;
+use crate::response::IntoResponseUniform;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
 
 use super::AwsJson1_1;
 
 pub use crate::protocol::aws_json::router::*;
 
-impl IntoResponse<AwsJson1_1> for Error {
+impl IntoResponseUniform<AwsJson1_1> for Error {
     fn into_response(self) -> http::Response<BoxBody> {
         match self {
             Error::MethodNotAllowed => method_disallowed(),

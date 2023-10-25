@@ -70,6 +70,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
@@ -173,6 +174,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     private val codegenScope = arrayOf(
         "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
@@ -302,7 +304,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
 
-            impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+            impl<B> #{SmithyHttpServer}::request::FromRequest<crate::$serviceName, crate::operation_shape::$operationName, B> for #{I}
             where
                 B: #{SmithyHttpServer}::body::HttpBody + Send,
                 B: 'static,
@@ -334,7 +336,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             """,
             *codegenScope,
             "I" to inputSymbol,
-            "Marker" to protocol.markerStruct(),
             "parse_request" to serverParseRequest(operationShape),
             "verifyAcceptHeader" to verifyAcceptHeader,
             "verifyAcceptHeaderStaticContentTypeInit" to verifyAcceptHeaderStaticContentTypeInit,
@@ -348,13 +349,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         // to let them know.
         rustTemplate(
             """
-            impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{O} {
+            impl #{SmithyHttpServer}::response::IntoResponse<crate::$serviceName, crate::operation_shape::$operationName> for #{O} {
                 fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                     match #{serialize_response}(self) {
                         Ok(response) => response,
                         Err(e) => {
                             #{Tracing}::error!(error = %e, "failed to serialize response");
-                            #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                            #{SmithyHttpServer}::response::IntoResponse::<crate::$serviceName, crate::operation_shape::$operationName>::into_response(#{RuntimeError}::from(e))
                         }
                     }
                 }
@@ -362,14 +363,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             """,
             *codegenScope,
             "O" to outputSymbol,
-            "Marker" to protocol.markerStruct(),
             "serialize_response" to serverSerializeResponse(operationShape),
         )
 
         if (operationShape.operationErrors(model).isNotEmpty()) {
             rustTemplate(
                 """
-                impl #{SmithyHttpServer}::response::IntoResponse<#{Marker}> for #{E} {
+                impl #{SmithyHttpServer}::response::IntoResponse<crate::$serviceName, crate::operation_shape::$operationName> for #{E} {
                     fn into_response(self) -> #{SmithyHttpServer}::response::Response {
                         match #{serialize_error}(&self) {
                             Ok(mut response) => {
@@ -378,7 +378,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             },
                             Err(e) => {
                                 #{Tracing}::error!(error = %e, "failed to serialize response");
-                                #{SmithyHttpServer}::response::IntoResponse::<#{Marker}>::into_response(#{RuntimeError}::from(e))
+                                #{SmithyHttpServer}::response::IntoResponse::<crate::$serviceName, crate::operation_shape::$operationName>::into_response(#{RuntimeError}::from(e))
                             }
                         }
                     }
@@ -386,7 +386,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 """.trimIndent(),
                 *codegenScope,
                 "E" to errorSymbol,
-                "Marker" to protocol.markerStruct(),
                 "serialize_error" to serverSerializeError(operationShape),
             )
         }

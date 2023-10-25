@@ -21,43 +21,33 @@ use crate::{
     runtime_error::InternalFailureException, service::ServiceShape,
 };
 
-use super::OperationShape;
+use super::{FixedService, OperationShape};
 
 /// A [`Plugin`] responsible for taking an operation [`Service`], accepting and returning Smithy
 /// types and converting it into a [`Service`] taking and returning [`http`] types.
 ///
 /// See [`Upgrade`].
-#[derive(Debug, Clone)]
-pub struct UpgradePlugin<Extractors> {
-    _extractors: PhantomData<Extractors>,
-}
+#[derive(Debug, Default, Clone)]
+pub struct UpgradePlugin;
 
-impl<Extractors> Default for UpgradePlugin<Extractors> {
-    fn default() -> Self {
-        Self {
-            _extractors: PhantomData,
-        }
-    }
-}
-
-impl<Extractors> UpgradePlugin<Extractors> {
+impl UpgradePlugin {
     /// Creates a new [`UpgradePlugin`].
     pub fn new() -> Self {
         Self::default()
     }
 }
 
-impl<Ser, Op, T, Extractors> Plugin<Ser, Op, T> for UpgradePlugin<Extractors>
+impl<Ser, Op, T> Plugin<Ser, Op, T> for UpgradePlugin
 where
     Ser: ServiceShape,
     Op: OperationShape,
 {
-    type Output = Upgrade<Ser::Protocol, (Op::Input, Extractors), T>;
+    type Output = Upgrade<Ser, Op, T>;
 
     fn apply(&self, inner: T) -> Self::Output {
         Upgrade {
-            _protocol: PhantomData,
-            _input: PhantomData,
+            _service: PhantomData,
+            _operation: PhantomData,
             inner,
         }
     }
@@ -65,20 +55,20 @@ where
 
 /// A [`Service`] responsible for wrapping an operation [`Service`] accepting and returning Smithy
 /// types, and converting it into a [`Service`] accepting and returning [`http`] types.
-pub struct Upgrade<Protocol, Input, S> {
-    _protocol: PhantomData<Protocol>,
-    _input: PhantomData<Input>,
+pub struct Upgrade<Ser, Op, S> {
+    _service: PhantomData<Ser>,
+    _operation: PhantomData<Op>,
     inner: S,
 }
 
-impl<P, Input, S> Clone for Upgrade<P, Input, S>
+impl<Ser, Op, S> Clone for Upgrade<Ser, Op, S>
 where
     S: Clone,
 {
     fn clone(&self) -> Self {
         Self {
-            _protocol: PhantomData,
-            _input: PhantomData,
+            _service: PhantomData,
+            _operation: PhantomData,
             inner: self.inner.clone(),
         }
     }
@@ -99,27 +89,27 @@ pin_project! {
     }
 }
 
-type InnerAlias<Input, Protocol, B, S> = Inner<<Input as FromRequest<Protocol, B>>::Future, Oneshot<S, Input>>;
+type InnerAlias<Input, Ser, Op, B, S> = Inner<<Input as FromRequest<Ser, Op, B>>::Future, Oneshot<S, Input>>;
 
 pin_project! {
     /// The [`Service::Future`] of [`Upgrade`].
-    pub struct UpgradeFuture<Protocol, Input, B, S>
+    pub struct UpgradeFuture<Ser, Op, B, S>
     where
-        Input: FromRequest<Protocol, B>,
-        S: Service<Input>,
+        S: FixedService,
+        S::FixedInput: FromRequest<Ser, Op, B>,
     {
         service: Option<S>,
         #[pin]
-        inner: InnerAlias<Input, Protocol, B, S>
+        inner: InnerAlias<S::FixedInput, Ser, Op, B, S>
     }
 }
 
-impl<P, Input, B, S> Future for UpgradeFuture<P, Input, B, S>
+impl<Ser, Op, B, S> Future for UpgradeFuture<Ser, Op, B, S>
 where
-    Input: FromRequest<P, B>,
-    S: Service<Input>,
-    S::Response: IntoResponse<P>,
-    S::Error: IntoResponse<P>,
+    S: FixedService,
+    S::FixedInput: FromRequest<Ser, Op, B>,
+    S::Response: IntoResponse<Ser, Op>,
+    S::Error: IntoResponse<Ser, Op>,
 {
     type Output = Result<http::Response<crate::body::BoxBody>, Infallible>;
 
@@ -155,16 +145,16 @@ where
     }
 }
 
-impl<P, Input, B, S> Service<http::Request<B>> for Upgrade<P, Input, S>
+impl<Ser, Op, B, S> Service<http::Request<B>> for Upgrade<Ser, Op, S>
 where
-    Input: FromRequest<P, B>,
-    S: Service<Input> + Clone,
-    S::Response: IntoResponse<P>,
-    S::Error: IntoResponse<P>,
+    S: FixedService + Clone,
+    S::FixedInput: FromRequest<Ser, Op, B>,
+    S::Response: IntoResponse<Ser, Op>,
+    S::Error: IntoResponse<Ser, Op>,
 {
     type Response = http::Response<crate::body::BoxBody>;
     type Error = Infallible;
-    type Future = UpgradeFuture<P, Input, B, S>;
+    type Future = UpgradeFuture<Ser, Op, B, S>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
@@ -176,7 +166,7 @@ where
         UpgradeFuture {
             service: Some(service),
             inner: Inner::FromRequest {
-                inner: <Input as FromRequest<P, B>>::from_request(req),
+                inner: <S::FixedInput as FromRequest<Ser, Op, B>>::from_request(req),
             },
         }
     }
@@ -184,25 +174,25 @@ where
 
 /// A [`Service`] which always returns an internal failure message and logs an error.
 #[derive(Copy)]
-pub struct MissingFailure<P> {
-    _protocol: PhantomData<fn(P)>,
+pub struct MissingFailure<Ser, Op> {
+    _protocol: PhantomData<fn((Ser, Op))>,
 }
 
-impl<P> Default for MissingFailure<P> {
+impl<Ser, Op> Default for MissingFailure<Ser, Op> {
     fn default() -> Self {
         Self { _protocol: PhantomData }
     }
 }
 
-impl<P> Clone for MissingFailure<P> {
+impl<Ser, Op> Clone for MissingFailure<Ser, Op> {
     fn clone(&self) -> Self {
         MissingFailure { _protocol: PhantomData }
     }
 }
 
-impl<R, P> Service<R> for MissingFailure<P>
+impl<R, Ser, Op> Service<R> for MissingFailure<Ser, Op>
 where
-    InternalFailureException: IntoResponse<P>,
+    InternalFailureException: IntoResponse<Ser, Op>,
 {
     type Response = http::Response<BoxBody>;
     type Error = Infallible;

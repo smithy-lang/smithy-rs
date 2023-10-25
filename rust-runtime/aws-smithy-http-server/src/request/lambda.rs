@@ -25,13 +25,13 @@ use crate::{body::BoxBody, response::IntoResponse};
 #[error("`Context` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::LambdaHandler`")]
 pub struct MissingContext;
 
-impl<Protocol> IntoResponse<Protocol> for MissingContext {
+impl<Ser, Op> IntoResponse<Ser, Op> for MissingContext {
     fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
 }
 
-impl<P> FromParts<P> for Context {
+impl<Ser, Op> FromParts<Ser, Op> for Context {
     type Rejection = MissingContext;
 
     fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
@@ -56,13 +56,13 @@ pub struct MissingGatewayContextV1 {
     inner: MissingGatewayContextTypeV1,
 }
 
-impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV1 {
+impl<Ser, Op> IntoResponse<Ser, Op> for MissingGatewayContextV1 {
     fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
 }
 
-impl<P> FromParts<P> for ApiGatewayProxyRequestContext {
+impl<Ser, Op> FromParts<Ser, Op> for ApiGatewayProxyRequestContext {
     type Rejection = MissingGatewayContextV1;
 
     fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
@@ -96,13 +96,13 @@ pub struct MissingGatewayContextV2 {
     inner: MissingGatewayContextTypeV2,
 }
 
-impl<Protocol> IntoResponse<Protocol> for MissingGatewayContextV2 {
+impl<Ser, Op> IntoResponse<Ser, Op> for MissingGatewayContextV2 {
     fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
 }
 
-impl<P> FromParts<P> for ApiGatewayV2httpRequestContext {
+impl<Ser, Op> FromParts<Ser, Op> for ApiGatewayV2httpRequestContext {
     type Rejection = MissingGatewayContextV2;
 
     fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {

@@ -79,15 +79,15 @@ fn internal_server_error() -> http::Response<BoxBody> {
 
 /// Provides a protocol aware extraction from a [`Request`]. This borrows the [`Parts`], in contrast to
 /// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
-pub trait FromParts<Protocol>: Sized {
+pub trait FromParts<Ser, Op>: Sized {
     /// The type of the extraction failures.
-    type Rejection: IntoResponse<Protocol>;
+    type Rejection: IntoResponse<Ser, Op>;
 
     /// Extracts `self` from a [`Parts`] synchronously.
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;
 }
 
-impl<P> FromParts<P> for () {
+impl<Ser, Op> FromParts<Ser, Op> for () {
     type Rejection = Infallible;
 
     fn from_parts(_parts: &mut Parts) -> Result<Self, Self::Rejection> {
@@ -95,9 +95,9 @@ impl<P> FromParts<P> for () {
     }
 }
 
-impl<P, T> FromParts<P> for (T,)
+impl<Ser, Op, T> FromParts<Ser, Op> for (T,)
 where
-    T: FromParts<P>,
+    T: FromParts<Ser, Op>,
 {
     type Rejection = T::Rejection;
 
@@ -108,9 +108,9 @@ where
 
 macro_rules! impl_from_parts {
     ($error_name:ident, $($var:ident),+) => (
-        impl<P, $($var,)*> FromParts<P> for ($($var),*)
+        impl<Ser, Op, $($var,)*> FromParts<Ser, Op> for ($($var),*)
         where
-            $($var: FromParts<P>,)*
+            $($var: FromParts<Ser, Op>,)*
         {
             type Rejection = any_rejections::$error_name<$($var::Rejection),*>;
 
@@ -137,9 +137,9 @@ impl_from_parts!(Eight, A, B, C, D, E, F, G, H);
 ///
 /// This should not be implemented by hand. Code generation should implement this for your operations input. To extract
 /// items from a HTTP request [`FromParts`] should be used.
-pub trait FromRequest<Protocol, B>: Sized {
+pub trait FromRequest<Ser, Op, B>: Sized {
     /// The type of the extraction failures.
-    type Rejection: IntoResponse<Protocol>;
+    type Rejection: IntoResponse<Ser, Op>;
     /// The type of the extraction [`Future`].
     type Future: Future<Output = Result<Self, Self::Rejection>>;
 
@@ -147,39 +147,64 @@ pub trait FromRequest<Protocol, B>: Sized {
     fn from_request(request: Request<B>) -> Self::Future;
 }
 
-impl<P, B, T1> FromRequest<P, B> for (T1,)
-where
-    T1: FromRequest<P, B>,
-{
-    type Rejection = T1::Rejection;
-    type Future = MapOk<T1::Future, fn(T1) -> (T1,)>;
+macro_rules! impl_from_request {
+    ($($var:ident),*) => (
+        #[allow(unused_parens)]
+        impl<Ser, Op, B, T, $($var),*> FromRequest<Ser, Op, B> for (T, $($var),*)
+        where
+            T: FromRequest<Ser, Op, B>,
+            $(
+                $var: FromParts<Ser, Op>
+            ),*
+        {
+            type Rejection = any_rejections::Two<
+                T::Rejection,
+                <($($var),*) as FromParts<Ser, Op>>::Rejection
+            >;
 
-    fn from_request(request: Request<B>) -> Self::Future {
-        T1::from_request(request).map_ok(|t1| (t1,))
-    }
+            type Future = MapOk<
+                TryJoin<
+                    MapErr<T::Future, fn(T::Rejection) -> Self::Rejection>,
+                    Ready<Result<($($var),*), Self::Rejection>>
+                >,
+                fn((T, ($($var),*))) -> Self
+            >;
+
+            #[allow(non_snake_case)]
+            fn from_request(request: Request<B>) -> Self::Future {
+                let (mut parts, body) = request.into_parts();
+                let vars = <($($var),*) as FromParts<Ser, Op>>::from_parts(&mut parts).map_err(any_rejections::Two::B);
+
+                let request = Request::from_parts(parts, body);
+                // This is required to coerce the closure
+                let map_err: fn(_) -> _ = |err| any_rejections::Two::A(err);
+                let t = T::from_request(request).map_err(map_err);
+                let closure: fn((T, ($($var),*))) -> (T, $($var),*) = |x| {
+                    let (t, ($($var),*)) = x;
+                    (t, $($var),*)
+                };
+                try_join(
+                    t,
+                    ready(vars)
+                ).map_ok(closure)
+            }
+        }
+    )
 }
 
-impl<P, B, T1, T2> FromRequest<P, B> for (T1, T2)
-where
-    T1: FromRequest<P, B>,
-    T2: FromParts<P>,
-{
-    type Rejection = any_rejections::Two<T1::Rejection, T2::Rejection>;
-    type Future = TryJoin<MapErr<T1::Future, fn(T1::Rejection) -> Self::Rejection>, Ready<Result<T2, Self::Rejection>>>;
+impl_from_request!();
+impl_from_request!(T0);
+impl_from_request!(T0, T1);
+impl_from_request!(T0, T1, T2);
+impl_from_request!(T0, T1, T2, T3);
+impl_from_request!(T0, T1, T2, T3, T4);
+impl_from_request!(T0, T1, T2, T3, T4, T5);
+impl_from_request!(T0, T1, T2, T3, T4, T5, T6);
+impl_from_request!(T0, T1, T2, T3, T4, T5, T6, T7);
 
-    fn from_request(request: Request<B>) -> Self::Future {
-        let (mut parts, body) = request.into_parts();
-        let t2_result = T2::from_parts(&mut parts).map_err(any_rejections::Two::B);
-        try_join(
-            T1::from_request(Request::from_parts(parts, body)).map_err(any_rejections::Two::A),
-            ready(t2_result),
-        )
-    }
-}
-
-impl<P, T> FromParts<P> for Option<T>
+impl<Ser, Op, T> FromParts<Ser, Op> for Option<T>
 where
-    T: FromParts<P>,
+    T: FromParts<Ser, Op>,
 {
     type Rejection = Infallible;
 
@@ -188,9 +213,9 @@ where
     }
 }
 
-impl<P, T> FromParts<P> for Result<T, T::Rejection>
+impl<Ser, Op, T> FromParts<Ser, Op> for Result<T, T::Rejection>
 where
-    T: FromParts<P>,
+    T: FromParts<Ser, Op>,
 {
     type Rejection = Infallible;
 

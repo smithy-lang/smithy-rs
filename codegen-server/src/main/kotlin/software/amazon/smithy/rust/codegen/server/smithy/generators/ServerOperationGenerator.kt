@@ -57,10 +57,6 @@ class ServerOperationGenerator(
 
             impl #{SmithyHttpServer}::operation::OperationShape for $operationName {
                 const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new(${operationIdAbsolute.dq()}, ${operationId.namespace.dq()}, ${operationId.name.dq()});
-
-                type Input = crate::input::${operationName}Input;
-                type Output = crate::output::${operationName}Output;
-                type Error = #{Error:W};
             }
 
             impl #{SmithyHttpServer}::instrumentation::sensitivity::Sensitivity for $operationName {

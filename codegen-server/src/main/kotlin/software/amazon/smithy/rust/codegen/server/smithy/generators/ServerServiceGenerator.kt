@@ -39,6 +39,7 @@ class ServerServiceGenerator(
     private val codegenScope =
         arrayOf(
             "Bytes" to RuntimeType.Bytes,
+            "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
             "Http" to RuntimeType.Http,
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
             "HttpBody" to RuntimeType.HttpBody,
@@ -129,19 +130,20 @@ class ServerServiceGenerator(
                 ///     /* Set other handlers */
                 ///     .build()
                 ///     .unwrap();
-                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ## fn check<S: #{Tower}::Service<#{Http}::Request<#{SmithyHttp}::body::SdkBody>>>(_: S) {}
+                /// ## check(app);
                 /// ```
                 ///
-                pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
+                pub fn $fieldName<Input, HandlerType>(self, handler: HandlerType) -> Self
                 where
-                    HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
+                    HandlerType: #{SmithyHttpServer}::operation::Handler<Input>,
 
                     ModelPl: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
-                        #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
+                        #{SmithyHttpServer}::operation::FixInput<Input, #{SmithyHttpServer}::operation::IntoService<HandlerType>>
                     >,
-                    #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                    #{SmithyHttpServer}::operation::UpgradePlugin: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
                         ModelPl::Output
@@ -150,7 +152,7 @@ class ServerServiceGenerator(
                         $serviceName,
                         crate::operation_shape::$structName,
                         <
-                            #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                            #{SmithyHttpServer}::operation::UpgradePlugin
                             as #{SmithyHttpServer}::plugin::Plugin<
                                 $serviceName,
                                 crate::operation_shape::$structName,
@@ -163,13 +165,8 @@ class ServerServiceGenerator(
                     <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
-                    use #{SmithyHttpServer}::operation::OperationShapeExt;
-                    use #{SmithyHttpServer}::plugin::Plugin;
-                    let svc = crate::operation_shape::$structName::from_handler(handler);
-                    let svc = self.model_plugin.apply(svc);
-                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
-                    let svc = self.http_plugin.apply(svc);
-                    self.${fieldName}_custom(svc)
+                    let svc = #{SmithyHttpServer}::operation::IntoService::new(handler);
+                    self.${fieldName}_service(svc)
                 }
 
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -192,19 +189,18 @@ class ServerServiceGenerator(
                 ///     /* Set other handlers */
                 ///     .build()
                 ///     .unwrap();
-                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ## fn check<S: #{Tower}::Service<#{Http}::Request<#{SmithyHttp}::body::SdkBody>>>(_: S) {}
+                /// ## check(app);
                 /// ```
                 ///
-                pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
+                pub fn ${fieldName}_service<Input, S>(self, service: S) -> Self
                 where
-                    S: #{SmithyHttpServer}::operation::OperationService<crate::operation_shape::$structName, ServiceExtractors>,
-
                     ModelPl: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
-                        #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
+                        #{SmithyHttpServer}::operation::FixInput<Input, S>
                     >,
-                    #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                    #{SmithyHttpServer}::operation::UpgradePlugin: #{SmithyHttpServer}::plugin::Plugin<
                         $serviceName,
                         crate::operation_shape::$structName,
                         ModelPl::Output
@@ -213,7 +209,7 @@ class ServerServiceGenerator(
                         $serviceName,
                         crate::operation_shape::$structName,
                         <
-                            #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                            #{SmithyHttpServer}::operation::UpgradePlugin
                             as #{SmithyHttpServer}::plugin::Plugin<
                                 $serviceName,
                                 crate::operation_shape::$structName,
@@ -226,11 +222,10 @@ class ServerServiceGenerator(
                     <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
-                    use #{SmithyHttpServer}::operation::OperationShapeExt;
                     use #{SmithyHttpServer}::plugin::Plugin;
-                    let svc = crate::operation_shape::$structName::from_service(service);
+                    let svc = #{SmithyHttpServer}::operation::FixInput::new(service);
                     let svc = self.model_plugin.apply(svc);
-                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::new().apply(svc);
                     let svc = self.http_plugin.apply(svc);
                     self.${fieldName}_custom(svc)
                 }
@@ -295,7 +290,13 @@ class ServerServiceGenerator(
             ///
             /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
             /// unspecified route requested.
-            pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
+            pub fn build(self) -> Result<$serviceName<
+                #{SmithyHttpServer}::routing::RoutingService<
+                    #{Router} <
+                        #{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>
+                        >
+                    >
+                >, MissingOperationsError>
             {
                 let router = {
                     use #{SmithyHttpServer}::operation::OperationShape;
@@ -313,7 +314,7 @@ class ServerServiceGenerator(
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
                 Ok($serviceName {
-                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
+                    inner: #{SmithyHttpServer}::routing::RoutingService::new(router),
                 })
             }
             """,
@@ -359,7 +360,7 @@ class ServerServiceGenerator(
                     (
                         $requestSpecsModuleName::$specBuilderFunctionName(),
                         self.$fieldName.unwrap_or_else(|| {
-                            let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
+                            let svc = #{SmithyHttpServer}::operation::MissingFailure::<$serviceName, #{Protocol}>::default();
                             #{SmithyHttpServer}::routing::Route::new(svc)
                         })
                     ),
@@ -376,13 +377,19 @@ class ServerServiceGenerator(
             ///
             /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
             /// not have a registered handler.
-            pub fn build_unchecked(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>
+            pub fn build_unchecked(self) -> $serviceName<
+                #{SmithyHttpServer}::routing::RoutingService<
+                    #{Router} <
+                        #{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>
+                        >
+                    >
+                >
             where
                 $builderBodyGenericTypeName: Send + 'static
             {
                 let router = #{Router}::from_iter([#{Pairs:W}]);
                 $serviceName {
-                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
+                    inner: #{SmithyHttpServer}::routing::RoutingService::new(router),
                 }
             }
             """,
@@ -463,8 +470,8 @@ class ServerServiceGenerator(
             ///
             /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
-            pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
-                router: #{SmithyHttpServer}::routing::RoutingService<#{Router}<S>, #{Protocol}>,
+            pub struct $serviceName<S = ()> {
+                inner: S,
             }
 
             impl $serviceName<()> {
@@ -498,7 +505,6 @@ class ServerServiceGenerator(
                     #{SmithyHttpServer}::routing::IntoMakeService::new(self)
                 }
 
-
                 /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
                 pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
                     #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
@@ -510,7 +516,7 @@ class ServerServiceGenerator(
                     L: #{Tower}::Layer<S>
                 {
                     $serviceName {
-                        router: self.router.map(|s| s.layer(layer))
+                        inner: layer.layer(self.inner)
                     }
                 }
 
@@ -530,22 +536,26 @@ class ServerServiceGenerator(
                 }
             }
 
-            impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
+            impl<B, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
             where
-                S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
-                RespB: #{HttpBody}::Body<Data = #{Bytes}> + Send + 'static,
-                RespB::Error: Into<Box<dyn std::error::Error + Send + Sync>>
+                S: #{Tower}::Service<
+                    #{Http}::Request<B>,
+                    Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>
+                > + Clone,
+                S::Error: #{SmithyHttpServer}::response::IntoResponseUniform<<$serviceName as #{SmithyHttpServer}::service::ServiceShape>::Protocol>
             {
-                type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
+                type Response = S::Response;
                 type Error = S::Error;
-                type Future = #{SmithyHttpServer}::routing::RoutingFuture<S, B>;
+                type Future = #{FuturesUtil}::future::Map<S::Future, fn(Result<Self::Response, Self::Error>) -> Result<Self::Response, Self::Error>>;
 
                 fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
-                    self.router.poll_ready(cx)
+                    self.inner.poll_ready(cx)
                 }
 
                 fn call(&mut self, request: #{Http}::Request<B>) -> Self::Future {
-                    self.router.call(request)
+                    use #{FuturesUtil}::FutureExt;
+                    use #{SmithyHttpServer}::response::IntoResponseUniform;
+                    self.inner.call(request).map(|result| match result { Ok(ok) => Ok(ok), Err(err) => Ok(err.into_response()) })
                 }
             }
             """,

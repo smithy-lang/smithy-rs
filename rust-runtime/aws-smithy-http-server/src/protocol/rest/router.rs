@@ -3,14 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::convert::Infallible;
-
-use crate::body::BoxBody;
 use crate::routing::request_spec::Match;
 use crate::routing::request_spec::RequestSpec;
-use crate::routing::Route;
 use crate::routing::Router;
-use tower::Layer;
 use tower::Service;
 
 use thiserror::Error;
@@ -35,37 +30,9 @@ pub struct RestRouter<S> {
     routes: Vec<(RequestSpec, S)>,
 }
 
-impl<S> RestRouter<S> {
-    /// Applies a [`Layer`] uniformly to all routes.
-    pub fn layer<L>(self, layer: L) -> RestRouter<L::Service>
-    where
-        L: Layer<S>,
-    {
-        RestRouter {
-            routes: self
-                .routes
-                .into_iter()
-                .map(|(request_spec, route)| (request_spec, layer.layer(route)))
-                .collect(),
-        }
-    }
-
-    /// Applies type erasure to the inner route using [`Route::new`].
-    pub fn boxed<B>(self) -> RestRouter<Route<B>>
-    where
-        S: Service<http::Request<B>, Response = http::Response<BoxBody>, Error = Infallible>,
-        S: Send + Clone + 'static,
-        S::Future: Send + 'static,
-    {
-        RestRouter {
-            routes: self.routes.into_iter().map(|(spec, s)| (spec, Route::new(s))).collect(),
-        }
-    }
-}
-
 impl<B, S> Router<B> for RestRouter<S>
 where
-    S: Clone,
+    S: Service<http::Request<B>, Error = std::convert::Infallible> + Clone,
 {
     type Service = S;
     type Error = Error;
@@ -115,11 +82,12 @@ mod tests {
     use crate::{protocol::test_helpers::req, routing::request_spec::*};
 
     use http::Method;
+    use tower::service_fn;
 
     // This test is a rewrite of `mux.spec.ts`.
     // https://github.com/awslabs/smithy-typescript/blob/fbf97a9bf4c1d8cf7f285ea7c24e1f0ef280142a/smithy-typescript-ssdk-libs/server-common/src/httpbinding/mux.spec.ts
-    #[test]
-    fn simple_routing() {
+    #[tokio::test]
+    async fn simple_routing() {
         let request_specs: Vec<(RequestSpec, &'static str)> = vec![
             (
                 RequestSpec::from_parts(
@@ -169,7 +137,10 @@ mod tests {
         // Test both RestJson1 and RestXml routers.
         let router: RestRouter<_> = request_specs
             .into_iter()
-            .map(|(spec, svc_name)| (spec, svc_name))
+            .map(|(spec, svc_name)| {
+                let svc = service_fn(move |_| async move { Ok(http::Request::new(svc_name)) });
+                (spec, svc)
+            })
             .collect();
 
         let hits = vec![
@@ -186,7 +157,14 @@ mod tests {
             ("QueryKeyOnly", Method::POST, "/query_key_only?foo=&"),
         ];
         for (svc_name, method, uri) in &hits {
-            assert_eq!(router.match_route(&req(method, uri, None)).unwrap(), *svc_name);
+            let name = router
+                .match_route(&req(method, uri, None))
+                .unwrap()
+                .call(http::Request::new(()))
+                .await
+                .unwrap()
+                .into_body();
+            assert_eq!(name, *svc_name);
         }
 
         for (_, _, uri) in hits {
@@ -257,7 +235,10 @@ mod tests {
 
         let router: RestRouter<_> = request_specs
             .into_iter()
-            .map(|(spec, svc_name)| (spec, svc_name))
+            .map(|(spec, svc_name)| {
+                let svc = service_fn(move |_| async move { Ok(http::Request::new(svc_name)) });
+                (spec, svc)
+            })
             .collect();
 
         let hits = vec![
@@ -266,8 +247,15 @@ mod tests {
             ("B1", Method::GET, "/b/foo/bar/baz"),
             ("B2", Method::GET, "/b/foo?q=baz"),
         ];
-        for (svc_name, method, uri) in hits {
-            assert_eq!(router.match_route(&req(&method, uri, None)).unwrap(), svc_name);
+        for (svc_name, method, uri) in hits.into_iter() {
+            let name = router
+                .match_route(&req(&method, uri, None))
+                .unwrap()
+                .call(http::Request::new(()))
+                .await
+                .unwrap()
+                .into_body();
+            assert_eq!(name, svc_name);
         }
     }
 }

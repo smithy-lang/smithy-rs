@@ -36,9 +36,9 @@ pub mod any_rejections {
                 $($var ($var),)*
             }
 
-            impl<P, $($var,)*> IntoResponse<P> for $name<$($var),*>
+            impl<Ser, Op, $($var,)*> IntoResponse<Ser, Op> for $name<$($var),*>
             where
-                $($var: IntoResponse<P>,)*
+                $($var: IntoResponse<Ser, Op>,)*
             {
                 #[allow(non_snake_case)]
                 fn into_response(self) -> http::Response<crate::body::BoxBody> {

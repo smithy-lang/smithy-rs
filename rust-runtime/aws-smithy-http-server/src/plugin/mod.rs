@@ -79,8 +79,8 @@
 //! #   type Protocol = ();
 //! #   type Operations = Operation;
 //! # }
-//! # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
-//! # impl OperationShape for GetPokemonSpecies { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+//! # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); }
+//! # impl OperationShape for GetPokemonSpecies { const ID: ShapeId = ShapeId::new("", "", ""); }
 //! # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 //! # impl ContainsOperation<GetPokemonSpecies> for PokemonService { const VALUE: Operation = Operation::GetPokemonSpecies; }
 //! use aws_smithy_http_server::plugin::plugin_from_operation_fn;
@@ -293,9 +293,6 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 /// #         "com.amazonaws.simple",
 /// #         "CheckHealth",
 /// #     );
-/// #     type Input = CheckHealthInput;
-/// #     type Output = CheckHealthOutput;
-/// #     type Error = std::convert::Infallible;
 /// # }
 ///
 /// /// A model plugin that can only be applied to the `CheckHealth` operation.
@@ -328,9 +325,9 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///     _exts: PhantomData<Exts>,
 /// }
 ///
-/// impl<S, Exts> Service<(<CheckHealth as OperationShape>::Input, Exts)> for CheckHealthService<S, Exts>
+/// impl<S, Exts> Service<(CheckHealthInput, Exts)> for CheckHealthService<S, Exts>
 /// where
-///     S: Service<(<CheckHealth as OperationShape>::Input, Exts)>,
+///     S: Service<(CheckHealthInput, Exts)>,
 /// {
 ///     type Response = S::Response;
 ///     type Error = S::Error;
@@ -340,7 +337,7 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///         self.inner.poll_ready(cx)
 ///     }
 ///
-///     fn call(&mut self, req: (<CheckHealth as OperationShape>::Input, Exts)) -> Self::Future {
+///     fn call(&mut self, req: (CheckHealthInput, Exts)) -> Self::Future {
 ///         let (input, _exts) = &req;
 ///
 ///         // We have access to `CheckHealth`'s modeled operation input!
@@ -394,9 +391,6 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 /// #         "com.amazonaws.simple",
 /// #         "CheckHealth",
 /// #     );
-/// #     type Input = CheckHealthInput;
-/// #     type Output = CheckHealthOutput;
-/// #     type Error = std::convert::Infallible;
 /// # }
 ///
 /// #[derive(Clone)]
@@ -405,9 +399,9 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///     _exts: PhantomData<Exts>,
 /// }
 ///
-/// impl<S, Exts> Service<(<CheckHealth as OperationShape>::Input, Exts)> for CheckHealthService<S, Exts>
+/// impl<S, Exts> Service<(CheckHealthInput, Exts)> for CheckHealthService<S, Exts>
 /// where
-///     S: Service<(<CheckHealth as OperationShape>::Input, Exts)>,
+///     S: Service<(CheckHealthInput, Exts)>,
 /// {
 ///     type Response = S::Response;
 ///     type Error = S::Error;
@@ -417,7 +411,7 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 ///         self.inner.poll_ready(cx)
 ///     }
 ///
-///     fn call(&mut self, req: (<CheckHealth as OperationShape>::Input, Exts)) -> Self::Future {
+///     fn call(&mut self, req: (CheckHealthInput, Exts)) -> Self::Future {
 ///         let (input, _exts) = &req;
 ///
 ///         // We have access to `CheckHealth`'s modeled operation input!

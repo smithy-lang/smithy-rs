@@ -14,7 +14,7 @@ use std::{
 
 use aws_smithy_http_server::{
     body::{Body, BoxBody},
-    response::IntoResponse,
+    response::IntoResponseUniform,
 };
 use futures::{future::BoxFuture, TryFutureExt};
 use http::{Request, Response};
@@ -47,7 +47,7 @@ impl<P> PyMiddlewareLayer<P> {
 
 impl<S, P> Layer<S> for PyMiddlewareLayer<P>
 where
-    PyMiddlewareException: IntoResponse<P>,
+    PyMiddlewareException: IntoResponseUniform<P>,
 {
     type Service = PyMiddlewareService<S>;
 

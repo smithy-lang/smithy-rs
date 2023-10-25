@@ -33,10 +33,6 @@
 //!
 //! impl OperationShape for GetShopping {
 //!     const ID: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
-//!
-//!     type Input = CartIdentifier;
-//!     type Output = ShoppingCart;
-//!     type Error = GetShoppingError;
 //! }
 //! ```
 //!
@@ -110,10 +106,6 @@
 //! # pub struct GetShopping;
 //! # impl OperationShape for GetShopping {
 //! #    const ID: ShapeId = ShapeId::new("namespace#GetShopping", "namespace", "GetShopping");
-//! #
-//! #    type Input = CartIdentifier;
-//! #    type Output = ShoppingCart;
-//! #    type Error = GetShoppingError;
 //! # }
 //! # type OpFuture = std::future::Ready<Result<ShoppingCart, GetShoppingError>>;
 //! // Construction of an `Operation` from a `Handler`.
@@ -121,8 +113,6 @@
 //! async fn op_handler(input: CartIdentifier) -> Result<ShoppingCart, GetShoppingError> {
 //!     todo!()
 //! }
-//!
-//! let operation = GetShopping::from_handler(op_handler);
 //!
 //! // Construction of an `Operation` from a `Service`.
 //!
@@ -142,8 +132,6 @@
 //!     }
 //! }
 //!
-//! let operation = GetShopping::from_service(OpService);
-//!
 //! ```
 //!
 //! ## Upgrading Smithy services to HTTP services
@@ -161,11 +149,70 @@
 //! [Smithy operation]: https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation
 
 mod handler;
-mod operation_service;
 mod shape;
 mod upgrade;
 
+use std::{
+    marker::PhantomData,
+    task::{Context, Poll},
+};
+
 pub use handler::*;
-pub use operation_service::*;
 pub use shape::*;
+use tower::Service;
 pub use upgrade::*;
+
+pub trait FixedService: Service<Self::FixedInput> {
+    type FixedInput;
+}
+
+#[derive(Debug)]
+pub struct FixInput<Input, S> {
+    inner: S,
+    _input: PhantomData<Input>,
+}
+
+impl<Input, S> Clone for FixInput<Input, S>
+where
+    S: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _input: PhantomData,
+        }
+    }
+}
+
+impl<Input, S> FixInput<Input, S> {
+    pub fn new(inner: S) -> Self {
+        Self {
+            inner,
+            _input: PhantomData,
+        }
+    }
+}
+
+impl<Input, S> Service<Input> for FixInput<Input, S>
+where
+    S: Service<Input>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Input) -> Self::Future {
+        self.inner.call(req)
+    }
+}
+
+impl<Input, S> FixedService for FixInput<Input, S>
+where
+    S: Service<Input>,
+{
+    type FixedInput = Input;
+}

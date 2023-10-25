@@ -28,7 +28,7 @@ use super::{internal_server_error, FromParts};
 )]
 pub struct MissingConnectInfo;
 
-impl<Protocol> IntoResponse<Protocol> for MissingConnectInfo {
+impl<Ser, Op> IntoResponse<Ser, Op> for MissingConnectInfo {
     fn into_response(self) -> http::Response<BoxBody> {
         internal_server_error()
     }
@@ -45,7 +45,7 @@ pub struct ConnectInfo<T>(
     pub T,
 );
 
-impl<P, T> FromParts<P> for ConnectInfo<T>
+impl<Ser, Op, T> FromParts<Ser, Op> for ConnectInfo<T>
 where
     T: Send + Sync + 'static,
 {

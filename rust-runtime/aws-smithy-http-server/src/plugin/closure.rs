@@ -41,8 +41,8 @@ where
 /// #   type Protocol = ();
 /// #   type Operations = Operation;
 /// # }
-/// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
-/// # impl OperationShape for GetPokemonSpecies { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
+/// # impl OperationShape for CheckHealth { const ID: ShapeId = ShapeId::new("", "", ""); }
+/// # impl OperationShape for GetPokemonSpecies { const ID: ShapeId = ShapeId::new("", "", ""); }
 /// # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 /// # impl ContainsOperation<GetPokemonSpecies> for PokemonService { const VALUE: Operation = Operation::GetPokemonSpecies; }
 /// use aws_smithy_http_server::plugin::plugin_from_operation_fn;
