@@ -551,10 +551,7 @@ class RustWriter private constructor(
         if (this.className.contains("AbstractCodeWriter") || this.className.startsWith("java.lang")) {
             return false
         }
-        if (this.fileName == "RustWriter.kt") {
-            return false
-        }
-        return true
+        return this.fileName != "RustWriter.kt"
     }
 
     private val preamble = mutableListOf<Writable>()

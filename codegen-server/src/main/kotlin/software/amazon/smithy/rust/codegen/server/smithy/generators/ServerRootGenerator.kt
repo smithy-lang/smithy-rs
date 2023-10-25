@@ -121,7 +121,7 @@ open class ServerRootGenerator(
             //! let http_plugins = HttpPlugins::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
-            //! let builder: $builderName<Body, _, _> = $serviceName::builder_with_plugins(http_plugins, IdentityPlugin);
+            //! let builder: $builderName<Body, _, _, _> = $serviceName::builder_with_plugins(http_plugins, IdentityPlugin);
             //! ```
             //!
             //! Check out [`#{SmithyHttpServer}::plugin`] to learn more about plugins.
@@ -237,6 +237,6 @@ open class ServerRootGenerator(
     fun render(rustWriter: RustWriter) {
         documentation(rustWriter)
 
-        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Builder, MissingOperationsError};")
+        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Builder, Config, MissingOperationsError};")
     }
 }
