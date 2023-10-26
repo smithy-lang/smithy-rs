@@ -5,12 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -68,15 +71,17 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         codegenContext.symbolProvider.toSymbol(memberShape).isOptional()
 }
 
-class ServerInstantiator(codegenContext: CodegenContext) : Instantiator(
-    codegenContext.symbolProvider,
-    codegenContext.model,
-    codegenContext.runtimeConfig,
-    ServerBuilderKindBehavior(codegenContext),
-    defaultsForRequiredFields = true,
-    customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
-    constructPattern = InstantiatorConstructPattern.DIRECT,
-)
+class ServerInstantiator(codegenContext: CodegenContext, customWritable: CustomWritable = CustomWritable()) :
+    Instantiator(
+        codegenContext.symbolProvider,
+        codegenContext.model,
+        codegenContext.runtimeConfig,
+        ServerBuilderKindBehavior(codegenContext),
+        defaultsForRequiredFields = true,
+        customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
+        constructPattern = InstantiatorConstructPattern.DIRECT,
+        customWritable = customWritable,
+    )
 
 class ServerBuilderInstantiator(
     private val symbolProvider: RustSymbolProvider,
