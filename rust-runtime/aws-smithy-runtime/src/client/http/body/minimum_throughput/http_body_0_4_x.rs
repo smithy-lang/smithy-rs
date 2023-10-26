@@ -22,19 +22,16 @@ where
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
         let now = self.time_source.now();
-        let mut a_log_was_pushed_this_poll = false;
         // Attempt to read the data from the inner body, then update the
         // throughput logs.
         let mut this = self.as_mut().project();
         // Push a start log if we haven't already done so.
         if this.throughput_logs.is_empty() {
             this.throughput_logs.push((now, 0));
-            a_log_was_pushed_this_poll = true;
         }
         let poll_res = match this.inner.poll_data(cx) {
             Poll::Ready(Some(Ok(bytes))) => {
                 this.throughput_logs.push((now, bytes.len() as u64));
-                a_log_was_pushed_this_poll = true;
                 Poll::Ready(Some(Ok(bytes)))
             }
             Poll::Pending => Poll::Pending,
@@ -52,18 +49,7 @@ where
             sleep_fut = this
                 .async_sleep
                 .sleep(this.minimum_throughput.per_time_elapsed());
-            // If we already pushed a log during this poll, don't set a
-            // "floating back". Otherwise, do set one.
-            //
-            // The floating back acts as a end-bound for the purposes of
-            // calculating throughput for a given time span. 0-byte logs
-            // don't affect the throughput calculation except when they are
-            // the first or last log. The starting log is pushed the first
-            // time this is polled. If no data was emitted during a poll,
-            // then we set the floating back.
-            if !a_log_was_pushed_this_poll {
-                this.throughput_logs.set_floating_back(now);
-            }
+
             // We also schedule a wake up for current task to ensure that
             // it gets polled at least one more time.
             cx.waker().wake_by_ref();
@@ -71,7 +57,7 @@ where
         this.sleep_fut.replace(sleep_fut);
 
         // Calculate the current throughput and emit an error if it's too low.
-        let actual_throughput = this.throughput_logs.calculate_throughput()?;
+        let actual_throughput = this.throughput_logs.calculate_throughput(now);
         let is_below_minimum_throughput = actual_throughput
             .map(|t| t < self.minimum_throughput)
             .unwrap_or_default();
@@ -89,56 +75,8 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http::HeaderMap>, Self::Error>> {
-        let now = self.time_source.now();
-        let mut a_log_was_pushed_this_poll = false;
-        // Attempt to read the data from the inner body, then update the
-        // throughput logs.
-        let mut this = self.as_mut().project();
-        let poll_res = match this.inner.poll_trailers(cx) {
-            Poll::Ready(Ok(Some(trailers))) => {
-                let size_of_all_keys: u64 = trailers.keys().map(|k| k.as_str().len() as u64).sum();
-                let size_of_all_values: u64 = trailers.values().map(|v| v.len() as u64).sum();
-                this.throughput_logs
-                    .push((now, size_of_all_keys + size_of_all_values));
-                a_log_was_pushed_this_poll = true;
-                Poll::Ready(Ok(Some(trailers)))
-            }
-            Poll::Pending => Poll::Pending,
-            // If we've read all the data or an error occurred, then return that result.
-            res => return res,
-        };
-
-        // Check the sleep future to see if it needs refreshing.
-        let mut sleep_fut = this.sleep_fut.take().unwrap_or_else(|| {
-            this.async_sleep
-                .sleep(this.minimum_throughput.per_time_elapsed())
-        });
-        // The strategy here is the same as when polling for data. Read those
-        // comments first if you have questions.
-        if let Poll::Ready(()) = pin!(&mut sleep_fut).poll(cx) {
-            sleep_fut = this
-                .async_sleep
-                .sleep(this.minimum_throughput.per_time_elapsed());
-            if !a_log_was_pushed_this_poll {
-                this.throughput_logs.set_floating_back(now);
-            }
-            cx.waker().wake_by_ref();
-        };
-        this.sleep_fut.replace(sleep_fut);
-
-        // Calculate the current throughput and emit an error if it's too low.
-        let actual_throughput = this.throughput_logs.calculate_throughput()?;
-        let is_below_minimum_throughput = actual_throughput
-            .map(|t| t < self.minimum_throughput)
-            .unwrap_or_default();
-        if is_below_minimum_throughput {
-            Poll::Ready(Err(Box::new(Error::ThroughputBelowMinimum {
-                expected: self.minimum_throughput,
-                actual: actual_throughput.unwrap(),
-            })))
-        } else {
-            poll_res
-        }
+        let this = self.as_mut().project();
+        this.inner.poll_trailers(cx)
     }
 }
 
@@ -166,7 +104,7 @@ mod test {
     struct NeverBody;
 
     impl Body for NeverBody {
-        type Data = bytes::Bytes;
+        type Data = Bytes;
         type Error = Box<(dyn StdError + Send + Sync + 'static)>;
 
         fn poll_data(
@@ -237,7 +175,9 @@ mod test {
 
         // Will send ~8 bytes per second.
         let stream = create_test_stream(async_sleep.clone());
-        let body = ByteStream::new(SdkBody::from(hyper_0_14::body::Body::wrap_stream(stream)));
+        let body = ByteStream::new(SdkBody::from_body_0_4(hyper_0_14::body::Body::wrap_stream(
+            stream,
+        )));
         let body = body.map(move |body| {
             let time_source = time_clone.clone();
             // We don't want to log these sleeps because it would duplicate
@@ -348,7 +288,9 @@ mod test {
         let time_clone = time_source.clone();
 
         let stream = create_shrinking_sine_wave_stream(async_sleep.clone());
-        let body = ByteStream::new(SdkBody::from(hyper_0_14::body::Body::wrap_stream(stream)));
+        let body = ByteStream::new(SdkBody::from_body_0_4(hyper_0_14::body::Body::wrap_stream(
+            stream,
+        )));
         let res = body
             .map(move |body| {
                 let time_source = time_clone.clone();

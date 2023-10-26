@@ -13,14 +13,10 @@ use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::shared::IntoShared;
 use std::fmt;
-use std::future::Future;
 use std::time::Duration;
 use throughput::{Throughput, ThroughputLogs};
 
-/// This module is named after the `http-body` version number since we anticipate
-/// needing to provide equivalent functionality for 1.x of that crate in the future.
-/// The name has a suffix `_x` to avoid name collision with a third-party `http-body-0-4`.
-#[cfg(feature = "http-body-0-4-x")]
+/// An implementation of v0.4 `http_body::Body` for `MinimumThroughputBody` and related code.
 pub mod http_body_0_4_x;
 
 mod throughput;
@@ -75,7 +71,6 @@ enum Error {
         expected: Throughput,
         actual: Throughput,
     },
-    TimeTravel(BoxError),
 }
 
 impl fmt::Display for Error {
@@ -87,10 +82,6 @@ impl fmt::Display for Error {
                     "minimum throughput was specified at {expected}, but throughput of {actual} was observed",
                 )
             }
-            Self::TimeTravel(_) => write!(
-                f,
-                "negative time has elapsed while reading the inner body, this is a bug"
-            ),
         }
     }
 }
