@@ -457,9 +457,9 @@ author = "ysaito1001"
 
 [[smithy-rs]]
 message = """
-`aws_smithy_http::byte_stream::{AggregatedBytes, ByteStream, error::Error}` have been moved to `aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream, error::Error}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+`aws_smithy_http::byte_stream::{AggregatedBytes, ByteStream, error::Error, FsBuilder, Length}` have been moved to `aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream, error::Error, FsBuilder, Length}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
 """
-references = ["smithy-rs#3076"]
+references = ["smithy-rs#3076", "smithy-rs#3091"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
 
