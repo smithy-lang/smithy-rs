@@ -40,12 +40,9 @@ def main(skip_generation=False):
     for path in list(os.listdir())[:10]:
         eprint(f'checking {path}...', end='')
         if path not in deny_list and get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
-            (status, out, err) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
-            if status != 0:
-                eprint(f"failed to load pkgid! {err}")
-                exit(1)
-            else:
-                pkgid = parse_package_id(out)
+            get_cmd_output('cargo generate-lockfile', quiet=True)
+            (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
+            pkgid = parse_package_id(out)
             (status, out, err) = get_cmd_output(f'cargo semver-checks check-release '
                                     f'--baseline-rev {BASE_BRANCH} '
                                     # in order to get semver-checks to work with publish-false crates, need to specify
