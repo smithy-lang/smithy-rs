@@ -46,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -89,12 +90,23 @@ open class Instantiator(
     /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
     private val customizations: List<InstantiatorCustomization> = listOf(),
+    private val constructPattern: InstantiatorConstructPattern = InstantiatorConstructPattern.BUILDER,
 ) {
     data class Ctx(
         // The `http` crate requires that headers be lowercase, but Smithy protocol tests
         // contain headers with uppercase keys.
         val lowercaseMapKeys: Boolean = false,
     )
+
+    /**
+     * A struct can be built by:
+     * * direct instantiation: A { field_1: value_1, field_2: value_2 }
+     * * its associated builder: A::builder().field_1(value_1).field_2(value_2).build()
+     */
+    enum class InstantiatorConstructPattern {
+        DIRECT,
+        BUILDER,
+    }
 
     /**
      * Client and server structures have different builder types. `Instantiator` needs to know how the builder
@@ -274,13 +286,21 @@ open class Instantiator(
         headers: Map<String, String>,
         ctx: Ctx,
     ) {
-        writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
+        when (constructPattern) {
+            InstantiatorConstructPattern.DIRECT ->
+                writer.withBlockTemplate("#{T} {", "}", "T" to symbolProvider.toSymbol(shape)) {
+                    renderStructureMembers(writer, shape, data, headers, ctx)
+                }
+            InstantiatorConstructPattern.BUILDER -> {
+                writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
 
-        renderStructureMembers(writer, shape, data, headers, ctx)
+                renderStructureMembers(writer, shape, data, headers, ctx)
 
-        writer.rust(".build()")
-        if (builderKindBehavior.hasFallibleBuilder(shape)) {
-            writer.rust(".unwrap()")
+                writer.rust(".build()")
+                if (builderKindBehavior.hasFallibleBuilder(shape)) {
+                    writer.rust(".unwrap()")
+                }
+            }
         }
     }
 
@@ -291,10 +311,22 @@ open class Instantiator(
         headers: Map<String, String>,
         ctx: Ctx,
     ) {
+        val renderedMembers = mutableSetOf<MemberShape>()
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
-            val setterName = builderKindBehavior.setterName(memberShape)
-            writer.withBlock(".$setterName(", ")") {
-                renderMember(this, memberShape, value, ctx)
+            renderedMembers.add(memberShape)
+            when (constructPattern) {
+                InstantiatorConstructPattern.DIRECT -> {
+                    val fieldName = symbolProvider.toMemberName(memberShape)
+                    writer.withBlock("$fieldName:", ",") {
+                        renderMember(this, memberShape, value, ctx)
+                    }
+                }
+                InstantiatorConstructPattern.BUILDER -> {
+                    val setterName = builderKindBehavior.setterName(memberShape)
+                    writer.withBlock(".$setterName(", ")") {
+                        renderMember(this, memberShape, value, ctx)
+                    }
+                }
             }
         }
 
@@ -313,7 +345,7 @@ open class Instantiator(
                 .filter { it.value.hasTrait<HttpHeaderTrait>() }
                 .forEach { (_, value) ->
                     val trait = value.expectTrait<HttpHeaderTrait>().value
-                    headers.get(trait)?.let { renderMemberHelper(value, Node.from(it)) }
+                    headers[trait]?.let { renderMemberHelper(value, Node.from(it)) }
                 }
         }
 
@@ -331,6 +363,13 @@ open class Instantiator(
             ?.let {
                 renderMemberHelper(it.value, fillDefaultValue(model.expectShape(it.value.target)))
             }
+
+        if (constructPattern == InstantiatorConstructPattern.DIRECT) {
+            val membersToRender = shape.allMembers.values.minus(renderedMembers)
+            check(membersToRender.all { it.isOptional })
+            membersToRender
+                .forEach { renderMemberHelper(it, Node.nullNode()) }
+        }
     }
 
     /**

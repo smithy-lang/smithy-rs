@@ -5,12 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
@@ -78,11 +80,13 @@ class ServerInstantiatorTest {
             int: Integer
         }
 
+        integer MyInteger
+
         structure NestedStruct {
             @required
             str: String,
             @required
-            num: Integer
+            num: MyInteger
         }
 
         structure MyStructRequired {
@@ -136,7 +140,7 @@ class ServerInstantiatorTest {
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
         val union = model.lookup<UnionShape>("com.test#NestedUnion")
-        val sut = serverInstantiator(codegenContext)
+        val sut = ServerInstantiator(codegenContext)
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
@@ -191,7 +195,7 @@ class ServerInstantiatorTest {
     @Test
     fun `generate named enums`() {
         val shape = model.lookup<StringShape>("com.test#NamedEnum")
-        val sut = serverInstantiator(codegenContext)
+        val sut = ServerInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
@@ -214,7 +218,7 @@ class ServerInstantiatorTest {
     @Test
     fun `generate unnamed enums`() {
         val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
-        val sut = serverInstantiator(codegenContext)
+        val sut = ServerInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
@@ -232,5 +236,16 @@ class ServerInstantiatorTest {
             }
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `use direct instantiation and not the builder`() {
+        val shape = model.lookup<StructureShape>("com.test#MyStruct")
+        val sut = ServerInstantiator(codegenContext)
+        val data = Node.parse("""{ "foo": "hello", "bar": 1, "baz": 42, "ts": 0, "byteValue": 0 }""")
+
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
+        sut.render(writer, shape, data)
+        writer.toString() shouldNotContain "builder()"
     }
 }

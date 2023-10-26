@@ -68,15 +68,15 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         codegenContext.symbolProvider.toSymbol(memberShape).isOptional()
 }
 
-fun serverInstantiator(codegenContext: CodegenContext) =
-    Instantiator(
-        codegenContext.symbolProvider,
-        codegenContext.model,
-        codegenContext.runtimeConfig,
-        ServerBuilderKindBehavior(codegenContext),
-        defaultsForRequiredFields = true,
-        customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
-    )
+class ServerInstantiator(codegenContext: CodegenContext) : Instantiator(
+    codegenContext.symbolProvider,
+    codegenContext.model,
+    codegenContext.runtimeConfig,
+    ServerBuilderKindBehavior(codegenContext),
+    defaultsForRequiredFields = true,
+    customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
+    constructPattern = InstantiatorConstructPattern.DIRECT,
+)
 
 class ServerBuilderInstantiator(
     private val symbolProvider: RustSymbolProvider,
