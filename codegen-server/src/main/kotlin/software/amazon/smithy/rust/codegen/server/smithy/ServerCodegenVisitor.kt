@@ -591,7 +591,7 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating a service $shape")
         val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
 
-        // Generate root
+        // Generate root.
         rustCrate.lib {
             ServerRootGenerator(
                 serverProtocol,
@@ -599,15 +599,15 @@ open class ServerCodegenVisitor(
             ).render(this)
         }
 
-        // Generate server re-exports
+        // Generate server re-exports.
         rustCrate.withModule(ServerRustModule.Server) {
             ServerRuntimeTypesReExportsGenerator(codegenContext).render(this)
         }
 
-        // Generate protocol tests
+        // Generate protocol tests.
         protocolTests()
 
-        // Generate service module
+        // Generate service module.
         rustCrate.withModule(ServerRustModule.Service) {
             ServerServiceGenerator(
                 codegenContext,
@@ -617,7 +617,6 @@ open class ServerCodegenVisitor(
             ServiceConfigGenerator(codegenContext).render(this)
 
             ScopeMacroGenerator(codegenContext).render(this)
-
         }
     }
 

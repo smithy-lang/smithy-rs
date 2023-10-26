@@ -236,6 +236,6 @@ open class ServerRootGenerator(
     fun render(rustWriter: RustWriter) {
         documentation(rustWriter)
 
-        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Config, ${serviceName}Builder, MissingOperationsError};")
+        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Config, ${serviceName}ConfigBuilder, ${serviceName}Builder, MissingOperationsError};")
     }
 }
