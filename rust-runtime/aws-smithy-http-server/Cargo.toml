@@ -21,7 +21,7 @@ request-id = ["dep:uuid"]
 async-trait = "0.1"
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "hyper-0-14-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.1"
 futures-util = { version = "0.3.16", default-features = false }
