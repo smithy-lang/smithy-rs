@@ -119,7 +119,7 @@ pub fn default_client() -> Option<SharedHttpClient> {
     }
 }
 
-/// [`HttpConnector`] that uses [`hyper`] to make HTTP requests.
+/// [`HttpConnector`] that uses [`hyper_0_14`] to make HTTP requests.
 ///
 /// This connector also implements socket connect and read timeouts.
 ///
@@ -298,7 +298,7 @@ impl HyperConnectorBuilder {
     }
 }
 
-/// Adapter from a [`hyper::Client`](hyper::Client) to [`HttpConnector`].
+/// Adapter from a [`hyper_0_14::Client`] to [`HttpConnector`].
 ///
 /// This adapter also enables TCP `CONNECT` and HTTP `READ` timeouts via [`HyperConnector::builder`].
 struct Adapter<C> {
@@ -388,7 +388,7 @@ fn downcast_error(err: BoxError) -> ConnectorError {
     ConnectorError::other(err, None)
 }
 
-/// Convert a [`hyper::Error`] into a [`ConnectorError`]
+/// Convert a [`hyper_0_14::Error`] into a [`ConnectorError`]
 fn to_connector_error(err: hyper_0_14::Error) -> ConnectorError {
     if err.is_timeout() || find_source::<timeout_middleware::HttpTimeoutError>(&err).is_some() {
         ConnectorError::timeout(err.into())

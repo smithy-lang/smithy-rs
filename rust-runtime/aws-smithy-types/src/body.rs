@@ -6,7 +6,6 @@
 //! Types for representing the body of an HTTP request or response
 
 use bytes::Bytes;
-use http::{HeaderMap, HeaderValue};
 use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
@@ -164,23 +163,19 @@ impl SdkBody {
         }
     }
 
+    #[cfg(feature = "http-body-0-4-x")]
     pub(crate) fn poll_next_trailers(
         self: Pin<&mut Self>,
         #[allow(unused)] cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Error>> {
+    ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Error>> {
         let this = self.project();
         match this.inner.project() {
             InnerProj::Once { .. } => Poll::Ready(Ok(None)),
             InnerProj::Dyn { inner } => match inner.get_mut() {
-                #[cfg(feature = "http-body-0-4-x")]
                 BoxBody::HttpBody04(box_body) => {
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_trailers(cx)
                 }
-                #[allow(unreachable_patterns)]
-                _ => unreachable!(
-                    "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
-                ),
             },
             InnerProj::Taken => Poll::Ready(Err(
                 "A `Taken` body should never be polled for trailers".into(),
