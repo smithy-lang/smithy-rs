@@ -597,11 +597,7 @@ class ServerServiceGenerator(
 
                 /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
                 ///
-                /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
-                ##[deprecated(
-                    since = "0.57.0",
-                    note = "please use `boxed` on the `${serviceName}Config` object instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
-                )]
+                /// This has the effect of erasing all types accumulated via layers.
                 pub fn boxed<B>(
                     self,
                 ) -> $serviceName<

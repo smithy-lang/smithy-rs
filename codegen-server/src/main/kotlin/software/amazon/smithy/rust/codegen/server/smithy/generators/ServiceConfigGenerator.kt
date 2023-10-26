@@ -30,9 +30,32 @@ class ServiceConfigGenerator(
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun render(writer: RustWriter) {
-        // TODO Docs
         writer.rustTemplate(
             """
+            /// Configuration for the [`$serviceName`]. This is the central place where to register and
+            /// configure [`#{Tower}::Layer`]s, HTTP plugins, and model plugins.
+            ///
+            /// ```rust,no_run
+            /// ## use simple::${serviceName}Config;
+            /// ## use #{SmithyHttpServer}::plugin::IdentityPlugin;
+            /// ## use #{Tower}::layer::util::Identity;
+            /// ## let authentication_plugin = IdentityPlugin;
+            /// ## let authorization_plugin = IdentityPlugin;
+            /// ## let server_request_id_provider_layer = Identity::new();
+            ///
+            /// let config = ${serviceName}Config::builder()
+            ///     // Layers get executed first...
+            ///     .layer(server_request_id_provider_layer)
+            ///     // ...then HTTP plugins...
+            ///     .http_plugin(authentication_plugin)
+            ///     // ...and right after deserialization, model plugins.
+            ///     .model_plugin(authorization_plugin)
+            ///     .build();
+            /// ```
+            ///
+            /// See the [`plugin`] system for details.
+            ///
+            /// [`plugin`]: #{SmithyHttpServer}::plugin
             ##[derive(#{Debug})]
             pub struct ${serviceName}Config<L, H, M> {
                 layers: L,
@@ -56,6 +79,7 @@ class ServiceConfigGenerator(
 
             /// Module hosting the builder for [`${serviceName}Config`].
             pub mod config {
+                /// Builder returned by [`${serviceName}Config::builder()`].
                 ##[derive(#{Debug})]
                 pub struct Builder<L, H, M> {
                     pub(crate) layers: L,
@@ -64,6 +88,7 @@ class ServiceConfigGenerator(
                 }
 
                 impl<L, H, M> Builder<L, H, M> {
+                    /// Add a [`#{Tower}::Layer`] to the service.
                     pub fn layer<NewLayer>(self, layer: NewLayer) -> Builder<#{Stack}<NewLayer, L>, H, M> {
                         Builder {
                             layers: #{Stack}::new(layer, self.layers),
@@ -72,6 +97,9 @@ class ServiceConfigGenerator(
                         }
                     }
 
+                    /// Add a HTTP [plugin] to the service.
+                    ///
+                    /// [plugin]: #{SmithyHttpServer}::plugin
                     // We eagerly require `NewPlugin: HttpMarker`, despite not really needing it, because compiler
                     // errors get _substantially_ better if the user makes a mistake.
                     pub fn http_plugin<NewPlugin: #{HttpMarker}>(
@@ -85,6 +113,9 @@ class ServiceConfigGenerator(
                         }
                     }
 
+                    /// Add a model [plugin] to the service.
+                    ///
+                    /// [plugin]: #{SmithyHttpServer}::plugin
                     // We eagerly require `NewPlugin: ModelMarker`, despite not really needing it, because compiler
                     // errors get _substantially_ better if the user makes a mistake.
                     pub fn model_plugin<NewPlugin: #{ModelMarker}>(
@@ -98,6 +129,7 @@ class ServiceConfigGenerator(
                         }
                     }
 
+                    /// Build the configuration.
                     pub fn build(self) -> super::${serviceName}Config<L, H, M> {
                         super::${serviceName}Config {
                             layers: self.layers,
