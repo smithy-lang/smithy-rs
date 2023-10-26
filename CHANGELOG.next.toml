@@ -427,6 +427,18 @@ references = ["smithy-rs#3043", "smithy-rs#3078"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "A bug was fixed where the credentials-process provider was executing the subprocess in the worker thread, potentially stalling the runtime."
+references = ["smithy-rs#3052"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The `credentials-process` feature was added to `aws-config`. If you currently use `no-default-features` for `aws-config`, you MUST enable this feature to use the [`CredentialProcessProvider`](https://docs.rs/aws-config/latest/aws_config/credential_process/struct.CredentialProcessProvider.html) provider directly or via `~/.aws/config`."
+references = ["smithy-rs#3052"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
 [[smithy-rs]]
 message = """
 `aws_smithy_http::operation::error::{BuildError, SerializationError}` have been moved to `aws_smithy_types::error::operation::{BuildError, SerializationError}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
@@ -445,9 +457,9 @@ author = "ysaito1001"
 
 [[smithy-rs]]
 message = """
-`aws_smithy_http::byte_stream::{AggregatedBytes, ByteStream, error::Error}` have been moved to `aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream, error::Error}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+`aws_smithy_http::byte_stream::{AggregatedBytes, ByteStream, error::Error, FsBuilder, Length}` have been moved to `aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream, error::Error, FsBuilder, Length}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
 """
-references = ["smithy-rs#3076"]
+references = ["smithy-rs#3076", "smithy-rs#3091"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
 
@@ -468,3 +480,21 @@ message = "Clients now have a default async sleep implementation so that one doe
 references = ["smithy-rs#3071"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Enable custom auth schemes to work by changing the code generated auth options to be set at the client level at `DEFAULTS` priority."
+references = ["smithy-rs#3034", "smithy-rs#3087"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Publicly exposed types from `http-body` and `hyper` crates within `aws-smithy-types` are now feature-gated. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3089) for details."
+references = ["smithy-rs#3033", "smithy-rs#3088"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`ByteStream::poll_next` is now feature-gated. You can turn on a cargo feature `byte-stream-poll-next` in `aws-smithy-types` to use it."
+references = ["smithy-rs#3033", "smithy-rs#3088"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"

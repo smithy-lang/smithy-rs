@@ -12,26 +12,25 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 client = ["aws-smithy-runtime-api/client"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
-connector-hyper-0-14-x = ["dep:hyper", "hyper?/client", "hyper?/http2", "hyper?/http1", "hyper?/tcp", "hyper?/stream"]
-http-0-x = ["dep:http-body", "dep:http"]
+connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream"]
 tls-rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
 rt-tokio = ["tokio/rt"]
 
 # Features for testing
 test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber", "dep:serde", "dep:serde_json"]
-wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper?/server"]
+wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper-0-14?/server"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
 bytes = "1"
 fastrand = "2.0.0"
-http = { version = "0.2.8", optional = true }
-http-body = { version = "0.4.5", optional = true }
-hyper = { version = "0.14.26", default-features = false, optional = true }
+http = { version = "0.2.8" }
+http-body-0-4 = { package = "http-body", version = "0.4.4" }
+hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }
 hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 once_cell = "1.18.0"
 pin-project-lite = "0.2.7"

@@ -23,10 +23,10 @@ use aws_smithy_runtime::{ev, match_events};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
-use aws_smithy_types::body::{BoxBody, SdkBody};
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, ReconnectMode, RetryConfig};
 use aws_smithy_types::timeout::TimeoutConfig;
-use hyper::client::Builder as HyperBuilder;
+use hyper_0_14::client::Builder as HyperBuilder;
 use std::fmt;
 use std::time::Duration;
 
@@ -119,13 +119,13 @@ async fn wire_level_test(
     reconnect_mode: ReconnectMode,
     match_clause: impl Fn(&[RecordedEvent]),
 ) {
-    let mut hyper_builder = hyper::Client::builder();
+    let mut hyper_builder = hyper_0_14::Client::builder();
     hyper_builder_settings(&mut hyper_builder);
 
     let mock = WireMockServer::start(events).await;
     let http_client = HyperClientBuilder::new()
         .hyper_builder(hyper_builder)
-        .build(hyper::client::HttpConnector::new_with_resolver(
+        .build(hyper_0_14::client::HttpConnector::new_with_resolver(
             mock.dns_resolver(),
         ));
 
@@ -150,7 +150,7 @@ async fn wire_level_test(
                 let request = http::Request::builder()
                     .uri(endpoint_url.clone())
                     // Make the body non-replayable since we don't actually want to retry
-                    .body(SdkBody::from_dyn(BoxBody::new(SdkBody::from("body"))))
+                    .body(SdkBody::from_body_0_4(SdkBody::from("body")))
                     .unwrap()
                     .try_into()
                     .unwrap();
