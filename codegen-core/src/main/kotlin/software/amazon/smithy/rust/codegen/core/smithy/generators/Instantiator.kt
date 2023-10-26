@@ -98,6 +98,11 @@ open class Instantiator(
         val lowercaseMapKeys: Boolean = false,
     )
 
+    /**
+     * A struct can be built by:
+     * * direct instantiation: A { field_1: value_1, field_2: value_2 }
+     * * its associated builder: A::builder().field_1(value_1).field_2(value_2).build()
+     */
     enum class InstantiatorConstructPattern {
         DIRECT,
         BUILDER,
