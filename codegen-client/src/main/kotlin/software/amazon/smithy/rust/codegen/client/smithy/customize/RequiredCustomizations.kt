@@ -92,13 +92,14 @@ class RequiredCustomizations : ClientCodegenDecorator {
             rustTemplate(
                 """
                 /// Error type returned by the client.
-                pub use #{SdkError};
+                pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;
 
                 pub use #{DisplayErrorContext};
                 pub use #{ProvideErrorMetadata};
                 """,
                 "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
                 "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+                "R" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(rc),
             )
         }
