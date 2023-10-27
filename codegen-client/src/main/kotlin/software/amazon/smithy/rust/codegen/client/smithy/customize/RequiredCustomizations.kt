@@ -71,12 +71,12 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val rc = codegenContext.runtimeConfig
 
-        // Add rt-tokio and http-body-0-4-x features for `ByteStream::from_path_0_4`
+        // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(
             Feature(
                 "rt-tokio",
                 true,
-                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio", "aws-smithy-types/http-body-0-4-x"),
+                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio"),
             ),
         )
 

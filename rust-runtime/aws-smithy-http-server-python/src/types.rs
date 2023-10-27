@@ -407,7 +407,7 @@ impl ByteStream {
     #[staticmethod]
     pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
         let byte_stream = Handle::current().block_on(async {
-            aws_smithy_types::byte_stream::ByteStream::from_path_body_0_4(path)
+            aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))
         })?;
@@ -423,7 +423,7 @@ impl ByteStream {
     #[staticmethod]
     pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let byte_stream = aws_smithy_types::byte_stream::ByteStream::from_path_body_0_4(path)
+            let byte_stream = aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self(Arc::new(Mutex::new(byte_stream))))

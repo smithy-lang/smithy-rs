@@ -269,7 +269,7 @@ mod tests {
         let crc32c_checksum = crc32c_checksum.finalize();
 
         let mut request = HttpRequest::new(
-            ByteStream::read_with_body_0_4_from()
+            ByteStream::read_from()
                 .path(&file)
                 .buffer_size(1024)
                 .build()
