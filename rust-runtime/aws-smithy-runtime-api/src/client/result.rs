@@ -418,21 +418,20 @@ impl<E, R> SdkError<E, R> {
     where
         E: std::error::Error + Send + Sync + 'static,
     {
-        use SdkError::*;
         match self {
-            ConstructionFailure(context) => Ok(context.source),
-            TimeoutError(context) => Ok(context.source),
-            ResponseError(context) => Ok(context.source),
-            DispatchFailure(context) => Ok(context.source.into()),
-            ServiceError(context) => Ok(context.source.into()),
+            SdkError::ConstructionFailure(context) => Ok(context.source),
+            SdkError::TimeoutError(context) => Ok(context.source),
+            SdkError::ResponseError(context) => Ok(context.source),
+            SdkError::DispatchFailure(context) => Ok(context.source.into()),
+            SdkError::ServiceError(context) => Ok(context.source.into()),
         }
     }
 
     /// Return a reference to this error's raw response, if it contains one. Otherwise, return `None`.
     pub fn raw_response(&self) -> Option<&R> {
         match self {
-            Self::ServiceError(inner) => Some(inner.raw()),
-            Self::ResponseError(inner) => Some(inner.raw()),
+            SdkError::ServiceError(inner) => Some(inner.raw()),
+            SdkError::ResponseError(inner) => Some(inner.raw()),
             _ => None,
         }
     }
@@ -441,14 +440,16 @@ impl<E, R> SdkError<E, R> {
     #[doc(hidden)]
     pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
         match self {
-            Self::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
+            SdkError::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
                 source: map(context.source),
                 raw: context.raw,
             }),
-            Self::ConstructionFailure(context) => SdkError::<E2, R>::ConstructionFailure(context),
-            Self::DispatchFailure(context) => SdkError::<E2, R>::DispatchFailure(context),
-            Self::ResponseError(context) => SdkError::<E2, R>::ResponseError(context),
-            Self::TimeoutError(context) => SdkError::<E2, R>::TimeoutError(context),
+            SdkError::ConstructionFailure(context) => {
+                SdkError::<E2, R>::ConstructionFailure(context)
+            }
+            SdkError::DispatchFailure(context) => SdkError::<E2, R>::DispatchFailure(context),
+            SdkError::ResponseError(context) => SdkError::<E2, R>::ResponseError(context),
+            SdkError::TimeoutError(context) => SdkError::<E2, R>::TimeoutError(context),
         }
     }
 }
@@ -471,13 +472,12 @@ where
     R: Debug,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        use SdkError::*;
         match self {
-            ConstructionFailure(context) => Some(context.source.as_ref()),
-            TimeoutError(context) => Some(context.source.as_ref()),
-            ResponseError(context) => Some(context.source.as_ref()),
-            DispatchFailure(context) => Some(&context.source),
-            ServiceError(context) => Some(&context.source),
+            SdkError::ConstructionFailure(context) => Some(context.source.as_ref()),
+            SdkError::TimeoutError(context) => Some(context.source.as_ref()),
+            SdkError::ResponseError(context) => Some(context.source.as_ref()),
+            SdkError::DispatchFailure(context) => Some(&context.source),
+            SdkError::ServiceError(context) => Some(&context.source),
         }
     }
 }
@@ -488,11 +488,11 @@ where
 {
     fn meta(&self) -> &aws_smithy_types::Error {
         match self {
-            Self::ConstructionFailure(_) => &EMPTY_ERROR_METADATA,
-            Self::TimeoutError(_) => &EMPTY_ERROR_METADATA,
-            Self::DispatchFailure(_) => &EMPTY_ERROR_METADATA,
-            Self::ResponseError(_) => &EMPTY_ERROR_METADATA,
-            Self::ServiceError(err) => err.source.meta(),
+            SdkError::ConstructionFailure(_) => &EMPTY_ERROR_METADATA,
+            SdkError::TimeoutError(_) => &EMPTY_ERROR_METADATA,
+            SdkError::DispatchFailure(_) => &EMPTY_ERROR_METADATA,
+            SdkError::ResponseError(_) => &EMPTY_ERROR_METADATA,
+            SdkError::ServiceError(err) => err.source.meta(),
         }
     }
 }
