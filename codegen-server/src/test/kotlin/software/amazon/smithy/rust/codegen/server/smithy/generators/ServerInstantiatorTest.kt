@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
@@ -288,6 +287,7 @@ class ServerInstantiatorTest {
                 rust(
                     """
                     assert_eq!(result.num, 42);
+                    assert_eq!(result.str, "hello");
                     """,
                 )
             }
@@ -331,11 +331,10 @@ class ServerInstantiatorTest {
                 withBlock("let result = ", ";") {
                     sut.render(this, inner, data as ObjectNode)
                 }
-                rustTemplate(
+                rust(
                     """
                     assert_eq!(result.map().unwrap().get("k1").unwrap().map().unwrap().get("k2").unwrap().map(), None);
                     """,
-                    "NestedStruct" to symbolProvider.toSymbol(nestedStruct),
                 )
             }
         }
