@@ -357,6 +357,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
 
+        fun sdkError(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("client::result::SdkError")
+
         fun intercept(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::Intercept")
 
@@ -436,9 +439,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun queryFormat(runtimeConfig: RuntimeConfig, func: String) = smithyHttp(runtimeConfig).resolve("query::$func")
         fun sdkBody(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("body::SdkBody")
-        fun sdkError(runtimeConfig: RuntimeConfig): RuntimeType = smithyHttp(runtimeConfig).resolve("result::SdkError")
-        fun sdkSuccess(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyHttp(runtimeConfig).resolve("result::SdkSuccess")
 
         fun parseTimestampFormat(
             codegenTarget: CodegenTarget,

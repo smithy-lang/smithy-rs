@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::result::SdkError;
 use aws_smithy_eventstream::frame::{MarshallMessage, SignMessage};
+use aws_smithy_runtime_api::client::result::SdkError;
 use bytes::Bytes;
 use futures_core::Stream;
 use std::error::Error as StdError;
@@ -195,12 +195,12 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
 mod tests {
     use super::MarshallMessage;
     use crate::event_stream::{EventStreamSender, MessageStreamAdapter};
-    use crate::result::SdkError;
     use async_stream::stream;
     use aws_smithy_eventstream::error::Error as EventStreamError;
     use aws_smithy_eventstream::frame::{
         Header, HeaderValue, Message, NoOpSigner, SignMessage, SignMessageError,
     };
+    use aws_smithy_runtime_api::client::result::SdkError;
     use bytes::Bytes;
     use futures_core::Stream;
     use futures_util::stream::StreamExt;
