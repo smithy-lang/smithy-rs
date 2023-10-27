@@ -140,7 +140,8 @@ impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
 }
 
 impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
-    type Item = Result<Bytes, SdkError<E>>;
+    type Item =
+        Result<Bytes, SdkError<E, aws_smithy_runtime_api::client::orchestrator::HttpResponse>>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.stream.as_mut().poll_next(cx) {
