@@ -11,7 +11,6 @@
 ///
 /// The example can be run using `cargo run --example use-config-bag`.
 ///
-//use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 use std::time::Instant;
