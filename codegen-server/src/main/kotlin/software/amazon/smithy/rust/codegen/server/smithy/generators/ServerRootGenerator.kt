@@ -73,7 +73,7 @@ open class ServerRootGenerator(
             //! ```rust,no_run
             //! ## use std::net::SocketAddr;
             //! ## async fn dummy() {
-            //! use $crateName::{${serviceName}Config, $serviceName};
+            //! use $crateName::{$serviceName, ${serviceName}Config};
             //!
             //! ## let app = $serviceName::builder(${serviceName}Config::builder().build()).build_unchecked();
             //! let server = app.into_make_service();
@@ -113,7 +113,7 @@ open class ServerRootGenerator(
             //! ## use #{SmithyHttpServer}::plugin::IdentityPlugin as MetricsPlugin;
             //! ## use #{Hyper}::Body;
             //! use #{SmithyHttpServer}::plugin::HttpPlugins;
-            //! use $crateName::{${serviceName}Config, $serviceName, $builderName};
+            //! use $crateName::{$serviceName, ${serviceName}Config, $builderName};
             //!
             //! let http_plugins = HttpPlugins::new()
             //!         .push(LoggingPlugin)
@@ -185,7 +185,7 @@ open class ServerRootGenerator(
             //!
             //! ```rust
             //! ## use std::net::SocketAddr;
-            //! use $crateName::{${serviceName}Config, $serviceName};
+            //! use $crateName::{$serviceName, ${serviceName}Config};
             //!
             //! ##[#{Tokio}::main]
             //! pub async fn main() {
