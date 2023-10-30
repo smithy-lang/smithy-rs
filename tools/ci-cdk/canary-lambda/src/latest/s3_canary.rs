@@ -17,10 +17,15 @@ const METADATA_TEST_VALUE: &str = "some   value";
 
 mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| s3_canary(
     s3::Client::new(sdk_config),
-    env.s3_bucket_name.clone()
+    env.s3_bucket_name.clone(),
+    env.s3_mrap_bucket_arn.clone()
 ));
 
-pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Result<()> {
+pub async fn s3_canary(
+    client: s3::Client,
+    s3_bucket_name: String,
+    s3_mrap_bucket_arn: String,
+) -> anyhow::Result<()> {
     let test_key = Uuid::new_v4().as_u128().to_string();
 
     // Look for the test object and expect that it doesn't exist
@@ -82,33 +87,34 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         return Err(CanaryError(format!("presigned URL returned bad data: {:?}", response)).into());
     }
 
-    let mut result = Ok(());
-    match output.metadata() {
-        Some(map) => {
-            // Option::as_deref doesn't work here since the deref of &String is String
-            let value = map.get("something").map(|s| s.as_str()).unwrap_or("");
-            if value != METADATA_TEST_VALUE {
-                result = Err(CanaryError(format!(
+    let metadata_value = output
+        .metadata()
+        .and_then(|m| m.get("something"))
+        .map(String::as_str);
+    let result: anyhow::Result<()> = match metadata_value {
+        Some(value) => {
+            if value == METADATA_TEST_VALUE {
+                let payload = output
+                    .body
+                    .collect()
+                    .await
+                    .context("download s3::GetObject[2] body")?
+                    .into_bytes();
+                if std::str::from_utf8(payload.as_ref()).context("s3 payload")? == "test" {
+                    Ok(())
+                } else {
+                    Err(CanaryError("S3 object body didn't match what was put there".into()).into())
+                }
+            } else {
+                Err(CanaryError(format!(
                     "S3 metadata was incorrect. Expected `{}` but got `{}`.",
                     METADATA_TEST_VALUE, value
                 ))
-                .into());
+                .into())
             }
         }
-        None => {
-            result = Err(CanaryError("S3 metadata was missing".into()).into());
-        }
-    }
-
-    let payload = output
-        .body
-        .collect()
-        .await
-        .context("download s3::GetObject[2] body")?
-        .into_bytes();
-    if std::str::from_utf8(payload.as_ref()).context("s3 payload")? != "test" {
-        result = Err(CanaryError("S3 object body didn't match what was put there".into()).into());
-    }
+        None => Err(CanaryError("S3 metadata was missing".into()).into()),
+    };
 
     // Delete the test object
     client
@@ -119,12 +125,67 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         .await
         .context("s3::DeleteObject")?;
 
+    // Return early if the result is an error
+    result?;
+
+    // Put the test object
+    client
+        .put_object()
+        .bucket(&s3_mrap_bucket_arn)
+        .key(&test_key)
+        .body(ByteStream::from_static(b"test"))
+        .metadata("something", METADATA_TEST_VALUE)
+        .send()
+        .await
+        .context("s3::PutObject[MRAP]")?;
+
+    // Get the test object and verify it looks correct
+    let output = client
+        .get_object()
+        .bucket(&s3_mrap_bucket_arn)
+        .key(&test_key)
+        .send()
+        .await
+        .context("s3::GetObject[MRAP]")?;
+
+    let metadata_value = output
+        .metadata()
+        .and_then(|m| m.get("something"))
+        .map(String::as_str);
+    let result = match metadata_value {
+        Some(value) => {
+            if value == METADATA_TEST_VALUE {
+                Ok(())
+            } else {
+                Err(CanaryError(format!(
+                    "S3 metadata was incorrect. Expected `{}` but got `{}`.",
+                    METADATA_TEST_VALUE, value
+                ))
+                .into())
+            }
+        }
+        None => Err(CanaryError("S3 metadata was missing".into()).into()),
+    };
+
+    // Delete the test object
+    client
+        .delete_object()
+        .bucket(&s3_mrap_bucket_arn)
+        .key(&test_key)
+        .send()
+        .await
+        .context("s3::DeleteObject")?;
+
     result
 }
 
 // This test runs against an actual AWS account. Comment out the `ignore` to run it.
-// Be sure to set the `TEST_S3_BUCKET` environment variable to the S3 bucket to use,
-// and also make sure the credential profile sets the region (or set `AWS_DEFAULT_PROFILE`).
+// Be sure the following environment variables are set:
+//
+// - `TEST_S3_BUCKET`: The S3 bucket to use
+// - `TEST_S3_MRAP_BUCKET_ARN`: The MRAP bucket ARN to use
+//
+// Also, make sure the correct region (likely `us-west-2`) by the credentials or explictly.
 #[ignore]
 #[cfg(test)]
 #[tokio::test]
@@ -134,6 +195,7 @@ async fn test_s3_canary() {
     s3_canary(
         client,
         std::env::var("TEST_S3_BUCKET").expect("TEST_S3_BUCKET must be set"),
+        std::env::var("TEST_S3_MRAP_BUCKET_ARN").expect("TEST_S3_MRAP_BUCKET_ARN must be set"),
     )
     .await
     .expect("success");
