@@ -73,6 +73,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGe
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntimeTypesReExportsGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
@@ -590,7 +591,7 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating a service $shape")
         val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
 
-        // Generate root
+        // Generate root.
         rustCrate.lib {
             ServerRootGenerator(
                 serverProtocol,
@@ -598,20 +599,22 @@ open class ServerCodegenVisitor(
             ).render(this)
         }
 
-        // Generate server re-exports
+        // Generate server re-exports.
         rustCrate.withModule(ServerRustModule.Server) {
             ServerRuntimeTypesReExportsGenerator(codegenContext).render(this)
         }
 
-        // Generate protocol tests
+        // Generate protocol tests.
         protocolTests()
 
-        // Generate service module
+        // Generate service module.
         rustCrate.withModule(ServerRustModule.Service) {
             ServerServiceGenerator(
                 codegenContext,
                 serverProtocol,
             ).render(this)
+
+            ServiceConfigGenerator(codegenContext).render(this)
 
             ScopeMacroGenerator(codegenContext).render(this)
         }

@@ -147,16 +147,20 @@ The output of the Smithy service builder provides the user with a `Service<http:
 # impl<S> Layer<S> for TimeoutLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
 # use pokemon_service_server_sdk::{input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
-use pokemon_service_server_sdk::PokemonService;
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
+use pokemon_service_server_sdk::{PokemonServiceConfig, PokemonService};
 use tower::Layer;
 
+let config = PokemonServiceConfig::builder().build();
+
 // This is a HTTP `Service`.
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
+# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
 
 // Construct `TimeoutLayer`.
 let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
@@ -167,7 +171,9 @@ let app = timeout_layer.layer(app);
 
 ### B. Route Middleware
 
-A _single_ layer can be applied to _all_ routes inside the `Router`. This exists as a method on the output of the service builder.
+A _single_ layer can be applied to _all_ routes inside the `Router`. This
+exists as a method on the `PokemonServiceConfig` builder object, which is passed into the
+service builder.
 
 ```rust,no_run
 # extern crate tower;
@@ -175,25 +181,26 @@ A _single_ layer can be applied to _all_ routes inside the `Router`. This exists
 # extern crate aws_smithy_http_server;
 # use tower::{util::service_fn, Layer};
 # use std::time::Duration;
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
 # use pokemon_service_server_sdk::{input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct MetricsLayer;
 # impl MetricsLayer { pub fn new() -> Self { Self } }
 # impl<S> Layer<S> for MetricsLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 
 // Construct `MetricsLayer`.
 let metrics_layer = MetricsLayer::new();
 
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_without_plugins()
+let config = PokemonServiceConfig::builder().layer(metrics_layer).build();
+
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
-    .unwrap()
-    # ; let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
-    # app
-    // Apply HTTP logging after routing.
-    .layer(&metrics_layer);
+    .unwrap();
+# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
 ```
 
 Note that requests pass through this middleware immediately _after_ routing succeeds and therefore will _not_ be encountered if routing fails. This means that the [TraceLayer](https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html) in the example above does _not_ provide logs unless routing has completed. This contrasts to [middleware A](#a-outer-middleware), which _all_ requests/responses pass through when entering/leaving the service.
@@ -209,12 +216,14 @@ A "HTTP layer" can be applied to specific operations.
 # use tower::{util::service_fn, Layer};
 # use std::time::Duration;
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
 # use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # struct LoggingLayer;
 # impl LoggingLayer { pub fn new() -> Self { Self } }
 # impl<S> Layer<S> for LoggingLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
-use pokemon_service_server_sdk::{PokemonService, scope};
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig, scope};
 
 scope! {
     /// Only log on `GetPokemonSpecies` and `GetStorage`
@@ -228,12 +237,14 @@ let logging_plugin = LayerPlugin(LoggingLayer::new());
 let logging_plugin = Scoped::new::<LoggingScope>(logging_plugin);
 let http_plugins = HttpPlugins::new().push(logging_plugin);
 
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
+# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
 ```
 
 This middleware transforms the operations HTTP requests and responses.
@@ -250,10 +261,12 @@ A "model layer" can be applied to specific operations.
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
 # use aws_smithy_http_server::{operation::*, plugin::*};
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
 # struct BufferLayer;
 # impl BufferLayer { pub fn new(size: usize) -> Self { Self } }
 # impl<S> Layer<S> for BufferLayer { type Service = S; fn layer(&self, svc: S) -> Self::Service { svc } }
-use pokemon_service_server_sdk::{PokemonService, scope};
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig, scope};
 
 scope! {
     /// Only buffer on `GetPokemonSpecies` and `GetStorage`
@@ -265,14 +278,14 @@ scope! {
 // Construct `BufferLayer`.
 let buffer_plugin = LayerPlugin(BufferLayer::new(3));
 let buffer_plugin = Scoped::new::<BufferScope>(buffer_plugin);
-let model_plugins = ModelPlugins::new().push(buffer_plugin);
+let config = PokemonServiceConfig::builder().model_plugin(buffer_plugin).build();
 
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
+# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
 ```
 
 In contrast to [position C](#c-operation-specific-http-middleware), this middleware transforms the operations modelled inputs to modelled outputs.
@@ -283,7 +296,7 @@ Suppose we want to apply a different `Layer` to every operation. In this case, p
 
 Consider the following middleware:
 
-```rust
+```rust,no_run
 # extern crate aws_smithy_http_server;
 # extern crate tower;
 use aws_smithy_http_server::shape_id::ShapeId;
@@ -320,7 +333,7 @@ The plugin system provides a way to construct then apply `Layer`s in position [C
 
 An example of a `PrintPlugin` which prints the operation name:
 
-```rust
+```rust,no_run
 # extern crate aws_smithy_http_server;
 # use aws_smithy_http_server::shape_id::ShapeId;
 # pub struct PrintService<S> { inner: S, operation_id: ShapeId, service_id: ShapeId }
@@ -349,7 +362,7 @@ where
 
 You can provide a custom method to add your plugin to a collection of  `HttpPlugins` or `ModelPlugins` via an extension trait. For example, for `HttpPlugins`:
 
-```rust
+```rust,no_run
 # extern crate aws_smithy_http_server;
 # pub struct PrintPlugin;
 # impl aws_smithy_http_server::plugin::HttpMarker for PrintPlugin { }
@@ -383,19 +396,22 @@ This allows for:
 # impl<EP> PrintExt<EP> for HttpPlugins<EP> { fn print(self) -> HttpPlugins<PluginStack<PrintPlugin, EP>> { self.push(PrintPlugin) }}
 # use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 # let handler = |req: GetPokemonSpeciesInput| async { Result::<GetPokemonSpeciesOutput, GetPokemonSpeciesError>::Ok(todo!()) };
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
 use aws_smithy_http_server::plugin::{IdentityPlugin, HttpPlugins};
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 
 let http_plugins = HttpPlugins::new()
     // [..other plugins..]
     // The custom method!
     .print();
-let app /* : PokemonService<Route<B>> */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+let app /* : PokemonService<Route<B>> */ = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-# let app: PokemonService<aws_smithy_http_server::routing::Route> = app;
+# let app: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = app;
 ```
 
 The custom `print` method hides the details of the `Plugin` trait from the average consumer.
