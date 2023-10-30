@@ -247,15 +247,18 @@
   instrumentation::InstrumentExt,
   plugin::{IdentityPlugin, HttpPlugins}
 };
-use pokemon_service_server_sdk::PokemonService;
+<span class="boring">use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+</span><span class="boring">use aws_smithy_http_server::routing::{Route, RoutingService};
+</span>use pokemon_service_server_sdk::{PokemonServiceConfig, PokemonService};
 
 let http_plugins = HttpPlugins::new().instrument();
-let app = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+let app = PokemonService::builder(config)
   .get_pokemon_species(handler)
   /* ... */
   .build()
   .unwrap();
-<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+<span class="boring">let app: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = app;
 </span><span class="boring">}</span></code></pre></pre>
 <!-- TODO: Link to it when the logging module is no longer `#[doc(hidden)]` -->
 <h3 id="example"><a class="header" href="#example">Example</a></h3>

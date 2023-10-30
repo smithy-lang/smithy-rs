@@ -254,7 +254,7 @@ advantage of zero-cost usage of <code>'static str</code>. We will seal this trai
 
 //! Http Request Types
 
-use aws_smithy_http::body::SdkBody;
+use aws_smithy_types::body::SdkBody;
 use http as http0;
 use http::header::{InvalidHeaderName, InvalidHeaderValue};
 use http::uri::InvalidUri;
@@ -629,7 +629,7 @@ impl Headers {
         key: impl AsHeaderComponent,
         value: impl AsHeaderComponent,
     ) -&gt; Result&lt;Option&lt;String&gt;, HttpError&gt; {
-        let key = header_name(key.into_maybe_static()?)?;
+        let key = header_name(key)?;
         let value = header_value(value.into_maybe_static()?)?;
         Ok(self
             .headers
@@ -653,8 +653,10 @@ impl Headers {
     /// Removes all headers with a given key
     ///
     /// If there are multiple entries for this key, the first entry is returned
-    pub fn remove(&amp;mut self, key: &amp;str) -&gt; Option&lt;HeaderValue&gt; {
-        self.headers.remove(key)
+    pub fn remove(&amp;mut self, key: impl AsRef&lt;str&gt;) -&gt; Option&lt;String&gt; {
+        self.headers
+            .remove(key.as_ref())
+            .map(|h| h.as_str().to_string())
     }
 
     /// Appends a value to a given key
@@ -676,6 +678,9 @@ mod sealed {
         /// If the component can be represented as a Cow&lt;'static, str&gt;, return it
         fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt;;
 
+        /// Return a string reference to this header
+        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt;;
+
         /// If a component is already internally represented as a `http02x::HeaderName`, return it
         fn repr_as_http02x_header_name(self) -&gt; Result&lt;http0::HeaderName, Self&gt;
         where
@@ -689,17 +694,29 @@ mod sealed {
         fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
             Ok(Cow::Borrowed(self))
         }
+
+        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
+            Ok(self)
+        }
     }
 
     impl AsHeaderComponent for String {
         fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
             Ok(Cow::Owned(self))
         }
+
+        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
+            Ok(self)
+        }
     }
 
     impl AsHeaderComponent for Cow&lt;'static, str&gt; {
         fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
             Ok(self)
+        }
+
+        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
+            Ok(self.as_ref())
         }
     }
 
@@ -711,11 +728,19 @@ mod sealed {
                     .to_string(),
             ))
         }
+
+        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
+            std::str::from_utf8(self.as_bytes()).map_err(HttpError::header_was_not_a_string)
+        }
     }
 
     impl AsHeaderComponent for http0::HeaderName {
         fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
             Ok(self.to_string().into())
+        }
+
+        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
+            Ok(self.as_ref())
         }
 
         fn repr_as_http02x_header_name(self) -&gt; Result&lt;http0::HeaderName, Self&gt;
@@ -865,7 +890,7 @@ fn header_value(value: MaybeStatic) -&gt; Result&lt;HeaderValue, HttpError&gt; {
 #[cfg(test)]
 mod test {
     use crate::client::orchestrator::HttpRequest;
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_types::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
 

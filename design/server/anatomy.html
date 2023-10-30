@@ -207,25 +207,28 @@ service PokemonService {
 }
 </code></pre>
 <p>Smithy Rust will use this model to produce the following API:</p>
-<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate pokemon_service_server_sdk;
 </span><span class="boring">extern crate aws_smithy_http_server;
-</span><span class="boring">use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonService};
+</span><span class="boring">use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+</span><span class="boring">use aws_smithy_http_server::routing::{Route, RoutingService};
+</span><span class="boring">use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonServiceConfig, PokemonService};
 </span>// A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -&gt; Result&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt; {
     todo!()
 }
 
+let config = PokemonServiceConfig::builder().build();
+
 // Use the service builder to create `PokemonService`.
-let pokemon_service = PokemonService::builder_without_plugins()
+let pokemon_service = PokemonService::builder(config)
     // Pass the handler directly to the service builder...
     .get_pokemon_species(get_pokemon_species)
     /* other operation setters */
     .build()
-<span class="boring">    ; Result::&lt;(), ()&gt;::Ok(())
-</span>    .expect(&quot;failed to create an instance of the Pokémon service&quot;);
-<span class="boring">let pokemon_service: Result&lt;PokemonService&lt;aws_smithy_http_server::routing::Route&gt;, _&gt; = pokemon_service;
+    .expect(&quot;failed to create an instance of the Pokémon service&quot;);
+<span class="boring">let pokemon_service: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = pokemon_service;
 </span><span class="boring">}</span></code></pre></pre>
 <h2 id="operations"><a class="header" href="#operations">Operations</a></h2>
 <p>A <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Smithy Operation</a> specifies the input, output, and possible errors of an API operation. One might characterize a Smithy Operation as syntax for specifying a function type.</p>
@@ -581,7 +584,9 @@ parameterized them and change behavior depending on the context in which it's ap
     }
     S --&gt; [*]: HTTP Response
 </pre>
-<p>The service builder API requires plugins to be specified upfront - they must be passed as an argument to <code>builder_with_plugins</code> and cannot be modified afterwards.</p>
+<p>The service builder API requires plugins to be specified upfront - they must be
+registered in the config object, which is passed as an argument to <code>builder</code>.
+Plugins cannot be modified afterwards.</p>
 <p>You might find yourself wanting to apply <em>multiple</em> plugins to your service.
 This can be accommodated via [<code>HttpPlugins</code>] and [<code>ModelPlugins</code>].</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
@@ -622,7 +627,7 @@ let http_plugins = HttpPlugins::new()
 <h2 id="builders"><a class="header" href="#builders">Builders</a></h2>
 <p>The service builder is the primary public API, generated for every <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html">Smithy Service</a>.
 At a high-level, the service builder takes as input a function for each Smithy Operation and returns a single HTTP service. The signature of each function, also known as <em>handlers</em>, must match the constraints of the corresponding Smithy model.</p>
-<p>You can create an instance of a service builder by calling either <code>builder_without_plugins</code> or <code>builder_with_plugins</code> on the corresponding service struct.</p>
+<p>You can create an instance of a service builder by calling <code>builder</code> on the corresponding service struct.</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;

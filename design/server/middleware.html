@@ -301,16 +301,20 @@ impl&lt;S&gt; Layer&lt;S&gt; for NewLayer {
 </span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for TimeoutLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
 </span><span class="boring">use pokemon_service_server_sdk::{input::*, output::*, error::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
-</span>use pokemon_service_server_sdk::PokemonService;
+</span><span class="boring">use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+</span><span class="boring">use aws_smithy_http_server::routing::{Route, RoutingService};
+</span>use pokemon_service_server_sdk::{PokemonServiceConfig, PokemonService};
 use tower::Layer;
 
+let config = PokemonServiceConfig::builder().build();
+
 // This is a HTTP `Service`.
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+<span class="boring">let app: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = app;
 </span>
 // Construct `TimeoutLayer`.
 let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
@@ -319,7 +323,9 @@ let timeout_layer = TimeoutLayer::new(Duration::from_secs(3));
 let app = timeout_layer.layer(app);
 <span class="boring">}</span></code></pre></pre>
 <h3 id="b-route-middleware"><a class="header" href="#b-route-middleware">B. Route Middleware</a></h3>
-<p>A <em>single</em> layer can be applied to <em>all</em> routes inside the <code>Router</code>. This exists as a method on the output of the service builder.</p>
+<p>A <em>single</em> layer can be applied to <em>all</em> routes inside the <code>Router</code>. This
+exists as a method on the <code>PokemonServiceConfig</code> builder object, which is passed into the
+service builder.</p>
 <pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate tower;
@@ -327,26 +333,27 @@ let app = timeout_layer.layer(app);
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">use tower::{util::service_fn, Layer};
 </span><span class="boring">use std::time::Duration;
+</span><span class="boring">use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+</span><span class="boring">use aws_smithy_http_server::routing::{Route, RoutingService};
 </span><span class="boring">use pokemon_service_server_sdk::{input::*, output::*, error::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
 </span><span class="boring">struct MetricsLayer;
 </span><span class="boring">impl MetricsLayer { pub fn new() -&gt; Self { Self } }
 </span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for MetricsLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
-</span>use pokemon_service_server_sdk::PokemonService;
+</span>use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 
 // Construct `MetricsLayer`.
 let metrics_layer = MetricsLayer::new();
 
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_without_plugins()
+let config = PokemonServiceConfig::builder().layer(metrics_layer).build();
+
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
-    .unwrap()
-<span class="boring">    ; let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
-</span><span class="boring">    app
-</span>    // Apply HTTP logging after routing.
-    .layer(&amp;metrics_layer);
-<span class="boring">}</span></code></pre></pre>
+    .unwrap();
+<span class="boring">let app: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = app;
+</span><span class="boring">}</span></code></pre></pre>
 <p>Note that requests pass through this middleware immediately <em>after</em> routing succeeds and therefore will <em>not</em> be encountered if routing fails. This means that the <a href="https://docs.rs/tower-http/latest/tower_http/trace/struct.TraceLayer.html">TraceLayer</a> in the example above does <em>not</em> provide logs unless routing has completed. This contrasts to <a href="#a-outer-middleware">middleware A</a>, which <em>all</em> requests/responses pass through when entering/leaving the service.</p>
 <h3 id="c-operation-specific-http-middleware"><a class="header" href="#c-operation-specific-http-middleware">C. Operation Specific HTTP Middleware</a></h3>
 <p>A &quot;HTTP layer&quot; can be applied to specific operations.</p>
@@ -358,12 +365,14 @@ let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_w
 </span><span class="boring">use tower::{util::service_fn, Layer};
 </span><span class="boring">use std::time::Duration;
 </span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
+</span><span class="boring">use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+</span><span class="boring">use aws_smithy_http_server::routing::{Route, RoutingService};
 </span><span class="boring">use aws_smithy_http_server::{operation::OperationShapeExt, plugin::*, operation::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
 </span><span class="boring">struct LoggingLayer;
 </span><span class="boring">impl LoggingLayer { pub fn new() -&gt; Self { Self } }
 </span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for LoggingLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
-</span>use pokemon_service_server_sdk::{PokemonService, scope};
+</span>use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig, scope};
 
 scope! {
     /// Only log on `GetPokemonSpecies` and `GetStorage`
@@ -377,12 +386,14 @@ let logging_plugin = LayerPlugin(LoggingLayer::new());
 let logging_plugin = Scoped::new::&lt;LoggingScope&gt;(logging_plugin);
 let http_plugins = HttpPlugins::new().push(logging_plugin);
 
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+<span class="boring">let app: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = app;
 </span><span class="boring">}</span></code></pre></pre>
 <p>This middleware transforms the operations HTTP requests and responses.</p>
 <h3 id="d-operation-specific-model-middleware"><a class="header" href="#d-operation-specific-model-middleware">D. Operation Specific Model Middleware</a></h3>
@@ -396,10 +407,12 @@ let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_w
 </span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
 </span><span class="boring">use aws_smithy_http_server::{operation::*, plugin::*};
+</span><span class="boring">use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+</span><span class="boring">use aws_smithy_http_server::routing::{Route, RoutingService};
 </span><span class="boring">struct BufferLayer;
 </span><span class="boring">impl BufferLayer { pub fn new(size: usize) -&gt; Self { Self } }
 </span><span class="boring">impl&lt;S&gt; Layer&lt;S&gt; for BufferLayer { type Service = S; fn layer(&amp;self, svc: S) -&gt; Self::Service { svc } }
-</span>use pokemon_service_server_sdk::{PokemonService, scope};
+</span>use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig, scope};
 
 scope! {
     /// Only buffer on `GetPokemonSpecies` and `GetStorage`
@@ -411,20 +424,20 @@ scope! {
 // Construct `BufferLayer`.
 let buffer_plugin = LayerPlugin(BufferLayer::new(3));
 let buffer_plugin = Scoped::new::&lt;BufferScope&gt;(buffer_plugin);
-let model_plugins = ModelPlugins::new().push(buffer_plugin);
+let config = PokemonServiceConfig::builder().model_plugin(buffer_plugin).build();
 
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(IdentityPlugin, model_plugins)
+let app = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+<span class="boring">let app: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = app;
 </span><span class="boring">}</span></code></pre></pre>
 <p>In contrast to <a href="#c-operation-specific-http-middleware">position C</a>, this middleware transforms the operations modelled inputs to modelled outputs.</p>
 <h2 id="plugin-system"><a class="header" href="#plugin-system">Plugin System</a></h2>
 <p>Suppose we want to apply a different <code>Layer</code> to every operation. In this case, position B (<code>PokemonService::layer</code>) will not suffice because it applies a single <code>Layer</code> to all routes and while position C (<code>Operation::layer</code>) would work, it'd require the customer constructs the <code>Layer</code> by hand for every operation.</p>
 <p>Consider the following middleware:</p>
-<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">extern crate tower;
@@ -459,7 +472,7 @@ where
 <span class="boring">}</span></code></pre></pre>
 <p>The plugin system provides a way to construct then apply <code>Layer</code>s in position <a href="#c-operation-specific-http-middleware">C</a> and <a href="#d-operation-specific-model-middleware">D</a>, using the <a href="https://awslabs.github.io/smithy/2.0/aws/protocols/index.html">protocol</a> and <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service-operations">operation shape</a> as parameters.</p>
 <p>An example of a <code>PrintPlugin</code> which prints the operation name:</p>
-<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">use aws_smithy_http_server::shape_id::ShapeId;
@@ -487,7 +500,7 @@ where
 }
 <span class="boring">}</span></code></pre></pre>
 <p>You can provide a custom method to add your plugin to a collection of  <code>HttpPlugins</code> or <code>ModelPlugins</code> via an extension trait. For example, for <code>HttpPlugins</code>:</p>
-<pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust no_run edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
 </span><span class="boring">pub struct PrintPlugin;
@@ -521,19 +534,22 @@ impl&lt;ExistingPlugins&gt; PrintExt&lt;ExistingPlugins&gt; for HttpPlugins&lt;E
 </span><span class="boring">impl&lt;EP&gt; PrintExt&lt;EP&gt; for HttpPlugins&lt;EP&gt; { fn print(self) -&gt; HttpPlugins&lt;PluginStack&lt;PrintPlugin, EP&gt;&gt; { self.push(PrintPlugin) }}
 </span><span class="boring">use pokemon_service_server_sdk::{operation_shape::GetPokemonSpecies, input::*, output::*, error::*};
 </span><span class="boring">let handler = |req: GetPokemonSpeciesInput| async { Result::&lt;GetPokemonSpeciesOutput, GetPokemonSpeciesError&gt;::Ok(todo!()) };
+</span><span class="boring">use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+</span><span class="boring">use aws_smithy_http_server::routing::{Route, RoutingService};
 </span>use aws_smithy_http_server::plugin::{IdentityPlugin, HttpPlugins};
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 
 let http_plugins = HttpPlugins::new()
     // [..other plugins..]
     // The custom method!
     .print();
-let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder_with_plugins(http_plugins, IdentityPlugin)
+let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+let app /* : PokemonService&lt;Route&lt;B&gt;&gt; */ = PokemonService::builder(config)
     .get_pokemon_species(handler)
     /* ... */
     .build()
     .unwrap();
-<span class="boring">let app: PokemonService&lt;aws_smithy_http_server::routing::Route&gt; = app;
+<span class="boring">let app: PokemonService&lt;RoutingService&lt;RestRouter&lt;Route&gt;, RestJson1&gt;&gt;  = app;
 </span><span class="boring">}</span></code></pre></pre>
 <p>The custom <code>print</code> method hides the details of the <code>Plugin</code> trait from the average consumer.
 They interact with the utility methods on <code>HttpPlugins</code> and enjoy the self-contained documentation.</p>
