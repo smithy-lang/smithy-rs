@@ -91,7 +91,7 @@ open class Instantiator(
     private val defaultsForRequiredFields: Boolean = false,
     private val customizations: List<InstantiatorCustomization> = listOf(),
     private val constructPattern: InstantiatorConstructPattern = InstantiatorConstructPattern.BUILDER,
-    private val customWritable: CustomWritable = CustomWritable(),
+    private val customWritable: CustomWritable = NoCustomWritable(),
 ) {
     data class Ctx(
         // The `http` crate requires that headers be lowercase, but Smithy protocol tests
@@ -124,11 +124,15 @@ open class Instantiator(
     }
 
     /**
-     * Customize how each shape is rendered, instead of relying on static `Node` data
+     * Customize how each shape is rendered, instead of relying on static `Node` data.
      */
-    open class CustomWritable {
-        // Return `null` for the default behavior
-        open fun render(shape: Shape): Writable? = null
+    interface CustomWritable {
+        // Return `null` to rely on the default behavior, which uses the static `Node` data.
+        fun generate(shape: Shape): Writable?
+    }
+
+    class NoCustomWritable : CustomWritable {
+        override fun generate(shape: Shape): Writable? = null
     }
 
     fun generate(shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) = writable {
@@ -142,7 +146,7 @@ open class Instantiator(
         headers: Map<String, String> = mapOf(),
         ctx: Ctx = Ctx(),
     ) {
-        customWritable.render(shape)
+        customWritable.generate(shape)
             ?.let { it(writer) }
             ?: run {
                 when (shape) {
@@ -176,7 +180,7 @@ open class Instantiator(
     private fun renderMember(writer: RustWriter, memberShape: MemberShape, data: Node, ctx: Ctx) {
         val targetShape = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
-        customWritable.render(memberShape)
+        customWritable.generate(memberShape)
             ?.let { it(writer) }
             ?: run {
                 if (data is NullNode && !targetShape.isDocumentShape) {
@@ -311,7 +315,6 @@ open class Instantiator(
         shape: StructureShape,
         data: ObjectNode,
         headers: Map<String, String>,
-
         ctx: Ctx,
     ) {
         when (constructPattern) {
@@ -338,7 +341,6 @@ open class Instantiator(
         shape: StructureShape,
         data: ObjectNode,
         headers: Map<String, String>,
-
         ctx: Ctx,
     ) {
         val renderedMembers = mutableSetOf<MemberShape>()
@@ -432,9 +434,9 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
     fun instantiate(
         shape: SimpleShape,
         data: Node,
-        customWritable: Instantiator.CustomWritable = Instantiator.CustomWritable(),
+        customWritable: Instantiator.CustomWritable = Instantiator.NoCustomWritable(),
     ): Writable =
-        customWritable.render(shape) ?: writable {
+        customWritable.generate(shape) ?: writable {
             when (shape) {
                 // Simple Shapes
                 is TimestampShape -> {

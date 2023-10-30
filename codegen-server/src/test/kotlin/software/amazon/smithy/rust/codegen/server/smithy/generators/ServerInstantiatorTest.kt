@@ -272,7 +272,7 @@ class ServerInstantiatorTest {
                 val sut = ServerInstantiator(
                     codegenContext,
                     customWritable = object : Instantiator.CustomWritable() {
-                        override fun render(shape: Shape): Writable? =
+                        override fun generate(shape: Shape): Writable? =
                             if (model.lookup<MemberShape>("com.test#NestedStruct\$num") == shape) {
                                 writable("40 + 2")
                             } else {
@@ -298,7 +298,7 @@ class ServerInstantiatorTest {
                     codegenContext,
                     customWritable = object : Instantiator.CustomWritable() {
                         private var n: Int = 0
-                        override fun render(shape: Shape): Writable? =
+                        override fun generate(shape: Shape): Writable? =
                             if (shape != map) {
                                 null
                             } else if (n != 2) {
