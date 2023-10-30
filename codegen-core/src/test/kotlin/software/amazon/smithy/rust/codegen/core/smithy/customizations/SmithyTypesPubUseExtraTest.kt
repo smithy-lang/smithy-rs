@@ -50,7 +50,11 @@ class SmithyTypesPubUseExtraTest {
         unionMember: String = "",
         additionalShape: String = "",
     ) = RustWriter.root().let { writer ->
-        pubUseSmithyPrimitives(testCodegenContext(model), modelWithMember(inputMember, outputMember, unionMember, additionalShape))(writer)
+        pubUseSmithyPrimitives(
+            testCodegenContext(model),
+            modelWithMember(inputMember, outputMember, unionMember, additionalShape),
+            rustCrate,
+        )(writer)
         writer.toString()
     }
 
