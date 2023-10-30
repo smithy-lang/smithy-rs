@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::http::HttpHeaders;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::http::{Headers, Response};
 use aws_smithy_types::error::metadata::{
@@ -21,14 +20,11 @@ pub trait RequestIdExt {
     fn extended_request_id(&self) -> Option<&str>;
 }
 
-impl<E, R> RequestIdExt for SdkError<E, R>
-where
-    R: HttpHeaders,
-{
+impl<E> RequestIdExt for SdkError<E, Response> {
     fn extended_request_id(&self) -> Option<&str> {
         match self {
-            Self::ResponseError(err) => err.raw().http_headers().extended_request_id(),
-            Self::ServiceError(err) => err.raw().http_headers().extended_request_id(),
+            Self::ResponseError(err) => err.raw().headers().extended_request_id(),
+            Self::ServiceError(err) => err.raw().headers().extended_request_id(),
             _ => None,
         }
     }
