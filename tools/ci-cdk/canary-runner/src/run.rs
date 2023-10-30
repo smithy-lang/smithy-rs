@@ -503,7 +503,8 @@ mod tests {
                 cdk_output: Some("../cdk-outputs.json".into()),
                 lambda_code_s3_bucket_name: None,
                 lambda_test_s3_bucket_name: None,
-                lambda_execution_role_arn: None
+                lambda_execution_role_arn: None,
+                lambda_test_s3_mrap_bucket_arn: None
             },
             RunArgs::try_parse_from([
                 "run",
@@ -532,6 +533,8 @@ mod tests {
             "bucket-for-test",
             "--lambda-execution-role-arn",
             "arn:aws:lambda::role/exe-role",
+            "--lambda-test-s3-mrap-bucket-arn",
+            "arn:aws:s3::000000000000:accesspoint/example.mrap",
         ])
         .unwrap();
         assert_eq!(
@@ -544,6 +547,8 @@ mod tests {
                 lambda_code_s3_bucket_name: "bucket-for-code".to_owned(),
                 lambda_test_s3_bucket_name: "bucket-for-test".to_owned(),
                 lambda_execution_role_arn: "arn:aws:lambda::role/exe-role".to_owned(),
+                lambda_test_s3_mrap_bucket_arn: "arn:aws:s3::000000000000:accesspoint/example.mrap"
+                    .to_owned(),
             },
             Options::load_from(run_args).unwrap(),
         );

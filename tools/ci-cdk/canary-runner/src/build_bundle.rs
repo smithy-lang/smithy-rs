@@ -585,14 +585,14 @@ default = ["latest"]
             }),
         );
         assert_eq!(
-            "release-2023-09-25".to_string(),
+            "release-2023-10-26".to_string(),
             enabled_feature(&CrateSource::VersionsManifest {
                 versions: versions.clone(),
-                release_tag: "release-2023-09-25".parse().unwrap(),
+                release_tag: "release-2023-10-26".parse().unwrap(),
             }),
         );
         assert_eq!(
-            "release-2023-09-25".to_string(),
+            "release-2023-10-26".to_string(),
             enabled_feature(&CrateSource::VersionsManifest {
                 versions,
                 release_tag: "release-2023-01-13".parse().unwrap(),
