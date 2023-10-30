@@ -89,6 +89,13 @@ class InlineDependency(
         private fun forInlineableRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(RustModule.private(name), "/inlineable/src/$name.rs", *additionalDependencies)
 
+        fun eventStreamReceiver(runtimeConfig: RuntimeConfig) =
+            forInlineableRustFile(
+                "event_stream_receiver",
+                CargoDependency.smithyHttp(runtimeConfig),
+                CargoDependency.smithyRuntimeApi(runtimeConfig),
+            )
+
         fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) = forInlineableRustFile("auth_plugin", CargoDependency.smithyRuntimeApi(runtimeConfig))
 
         fun jsonErrors(runtimeConfig: RuntimeConfig) =

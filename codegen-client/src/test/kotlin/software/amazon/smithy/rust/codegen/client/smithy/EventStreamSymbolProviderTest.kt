@@ -69,7 +69,7 @@ class EventStreamSymbolProviderTest {
             listOf(someStream, someStreamError),
         )
         outputType shouldBe RustType.Application(
-            RuntimeType.eventStreamReceiver(TestRuntimeConfig).toSymbol().rustType(),
+            RuntimeType.eventStreamReceiverWrapper(TestRuntimeConfig).toSymbol().rustType(),
             listOf(someStream, someStreamError),
         )
     }

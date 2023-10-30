@@ -53,7 +53,7 @@ class EventStreamSymbolProvider(
                     (shape.isOutputEventStream(model) && target == CodegenTarget.SERVER)
                 val outer = when (isSender) {
                     true -> RuntimeType.eventStreamSender(runtimeConfig).toSymbol().rustType()
-                    else -> RuntimeType.eventStreamReceiver(runtimeConfig).toSymbol().rustType()
+                    else -> RuntimeType.eventStreamReceiverWrapper(runtimeConfig).toSymbol().rustType()
                 }
                 val rustType = RustType.Application(outer, listOf(innerT, errorT))
                 return initial.toBuilder()
