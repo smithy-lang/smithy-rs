@@ -19,7 +19,7 @@ default = ["gated-tests"]
 
 [dependencies]
 async-trait = "0.1"
-aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
