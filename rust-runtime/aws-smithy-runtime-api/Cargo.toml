@@ -17,7 +17,6 @@ test-util = ["aws-smithy-types/test-util"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
-aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
 http = "0.2.9"

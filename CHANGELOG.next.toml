@@ -489,7 +489,7 @@ author = "rcoh"
 
 [[smithy-rs]]
 message = "Publicly exposed types from `http-body` and `hyper` crates within `aws-smithy-types` are now feature-gated. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3089) for details."
-references = ["smithy-rs#3033", "smithy-rs#3088"]
+references = ["smithy-rs#3033", "smithy-rs#3088", "smithy-rs#3101"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"
 
@@ -497,6 +497,14 @@ author = "ysaito1001"
 message = "`ByteStream::poll_next` is now feature-gated. You can turn on a cargo feature `byte-stream-poll-next` in `aws-smithy-types` to use it."
 references = ["smithy-rs#3033", "smithy-rs#3088"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+The [`connection`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/connection/index.html) and [`result`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/result/index.html) modules in `aws-smithy-http` have been moved to `aws-smithy-runtime-api`. Type aliases for all affected pub items, except for a trait, are left in `aws-smithy-http` for backwards compatibility but are deprecated. Due to lack of trait aliases, the moved trait `CreateUnhandledError` needs to be used from `aws-smithy-runtime-api`.
+"""
+references = ["smithy-rs#3092", "smithy-rs#3093"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
 
 [[smithy-rs]]
