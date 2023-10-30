@@ -4,6 +4,7 @@
  */
 
 use aws_smithy_protocol_test::{assert_ok, validate_body, MediaType};
+use aws_smithy_runtime_api::client::http::request::Request;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
@@ -11,7 +12,9 @@ use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
+use aws_smithy_types::body::SdkBody;
 use http::header::CONTENT_TYPE;
+use http::Response;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -29,10 +32,21 @@ pub struct ReplayEvent {
 
 impl ReplayEvent {
     /// Creates a new `ReplayEvent`.
-    pub fn new(request: impl TryInto<HttpRequest>, response: impl TryInto<HttpResponse>) -> Self {
+    pub fn new<B1: Into<SdkBody>, B2: Into<SdkBody>>(
+        request: impl TryInto<Request<B1>>,
+        response: impl TryInto<Response<B2>>,
+    ) -> Self {
         Self {
-            request: request.try_into().ok().expect("invalid request"),
-            response: response.try_into().ok().expect("invalid response"),
+            request: request
+                .try_into()
+                .ok()
+                .expect("invalid request")
+                .map(|b| b.into()),
+            response: response
+                .try_into()
+                .ok()
+                .expect("invalid response")
+                .map(|b| b.into()),
         }
     }
 
@@ -258,5 +272,13 @@ impl HttpClient for StaticReplayClient {
         _: &RuntimeComponents,
     ) -> SharedHttpConnector {
         self.clone().into_shared()
+    }
+}
+
+#[cfg(test)]
+mod test_instantiate {
+    #[test]
+    fn test_instantiating_from_strings() {
+        let _ = super::ReplayEvent::new(http::Request::new("1234"), http::Response::new("1234"));
     }
 }
