@@ -8,6 +8,7 @@ use crate::{mk_canary, CanaryEnv};
 use anyhow::Context;
 use aws_config::SdkConfig;
 use aws_sdk_s3 as s3;
+use s3::config::Region;
 use s3::presigning::PresigningConfig;
 use s3::primitives::ByteStream;
 use std::time::Duration;
@@ -128,6 +129,13 @@ pub async fn s3_canary(
     // Return early if the result is an error
     result?;
 
+    // We deliberately use a region that doesn't exist here so that we can
+    // ensure these requests are SigV4a requests. Because the current endpoint
+    // resolver always resolves the wildcard region ('*') for SigV4a requests,
+    // setting a fictitious region ensures that the request would fail if it was
+    // a SigV4 request. Therefore, because the request doesn't fail, we can be
+    // sure it's a successful Sigv4a request.
+    let config_override = s3::Config::builder().region(Region::new("parts-unknown"));
     // Put the test object
     client
         .put_object()
@@ -135,6 +143,8 @@ pub async fn s3_canary(
         .key(&test_key)
         .body(ByteStream::from_static(b"test"))
         .metadata("something", METADATA_TEST_VALUE)
+        .customize()
+        .config_override(config_override.clone())
         .send()
         .await
         .context("s3::PutObject[MRAP]")?;
@@ -144,6 +154,8 @@ pub async fn s3_canary(
         .get_object()
         .bucket(&s3_mrap_bucket_arn)
         .key(&test_key)
+        .customize()
+        .config_override(config_override.clone())
         .send()
         .await
         .context("s3::GetObject[MRAP]")?;
@@ -172,6 +184,8 @@ pub async fn s3_canary(
         .delete_object()
         .bucket(&s3_mrap_bucket_arn)
         .key(&test_key)
+        .customize()
+        .config_override(config_override)
         .send()
         .await
         .context("s3::DeleteObject")?;
