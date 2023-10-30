@@ -133,7 +133,8 @@ open class StructureGenerator(
         if (accessorMembers.isEmpty()) {
             return
         }
-        writer.rustBlock("impl $name") {
+        val lifetimes = lifetimeDeclaration()
+        writer.rustBlock("impl $lifetimes $name $lifetimes") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 val memberType = memberSymbol.rustType()
