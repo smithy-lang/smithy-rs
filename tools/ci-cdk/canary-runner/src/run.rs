@@ -344,7 +344,7 @@ async fn upload_bundle(
     Ok(())
 }
 
-#[allow(clippy::too-many-arguments)]
+#[allow(clippy::too_many_arguments)]
 async fn create_lambda_fn(
     lambda_client: lambda::Client,
     bundle_name: &str,
