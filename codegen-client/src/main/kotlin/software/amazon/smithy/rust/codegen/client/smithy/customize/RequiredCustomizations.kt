@@ -86,7 +86,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         ResiliencyReExportCustomization(codegenContext).extras(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Primitives) {
-            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
+            pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
         }
         rustCrate.withModule(ClientRustModule.Error) {
             rustTemplate(

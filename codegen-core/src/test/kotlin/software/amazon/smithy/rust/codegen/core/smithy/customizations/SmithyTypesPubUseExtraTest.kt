@@ -8,8 +8,11 @@ package software.amazon.smithy.rust.codegen.core.smithy.customizations
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGeneratorTest.Companion.model
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 
 class SmithyTypesPubUseExtraTest {
@@ -43,6 +46,22 @@ class SmithyTypesPubUseExtraTest {
         """.asSmithyModel()
     }
 
+    private val rustCrate: RustCrate
+    private val codegenContext: CodegenContext = testCodegenContext(model)
+
+    init {
+        val (context, _) = generatePluginContext(
+            model,
+            runtimeConfig = codegenContext.runtimeConfig,
+        )
+        rustCrate = RustCrate(
+            context.fileManifest,
+            codegenContext.symbolProvider,
+            codegenContext.settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
+        )
+    }
+
     private fun reexportsWithEmptyModel() = reexportsWithMember()
     private fun reexportsWithMember(
         inputMember: String = "",
@@ -50,7 +69,11 @@ class SmithyTypesPubUseExtraTest {
         unionMember: String = "",
         additionalShape: String = "",
     ) = RustWriter.root().let { writer ->
-        pubUseSmithyPrimitives(testCodegenContext(model), modelWithMember(inputMember, outputMember, unionMember, additionalShape))(writer)
+        pubUseSmithyPrimitives(
+            codegenContext,
+            modelWithMember(inputMember, outputMember, unionMember, additionalShape),
+            rustCrate,
+        )(writer)
         writer.toString()
     }
 
