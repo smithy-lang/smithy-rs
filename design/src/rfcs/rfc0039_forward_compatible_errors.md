@@ -40,6 +40,8 @@ The user experience if this RFC is implemented
 
 In the current version of the SDK, users match the `Unhandled` variant. They can then read the code from the `Unhandled` variant because [`Unhandled`](https://docs.rs/aws-smithy-types/0.56.1/aws_smithy_types/error/struct.Unhandled.html) implements the `ProvideErrorMetadata` trait as well as the standard-library `std::error::Error` trait.
 
+> Note: It's possible to write correct code today because the operation-level and service-level errors already expose `code()` via `ProvideErrorMetadata`. This RFC describes mechanisms to guide customers to write forward-compatible code.
+
 ```rust,ignore
 # fn docs() {
     match client.get_object().send().await {
