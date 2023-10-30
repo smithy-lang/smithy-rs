@@ -95,10 +95,9 @@ impl SdkBody {
     /// _Note: This is probably not what you want_
     ///
     /// All bodies constructed from in-memory data (`String`, `Vec<u8>`, `Bytes`, etc.) will be
-    /// retryable out of the box. If you want to read data from a file, you should turn on a feature
-    /// `http-body-0-4-x` and use `ByteStream::from_path_body_0_4`.
-    ///
-    /// This function is only necessary when you need to enable retries for your own streaming container.
+    /// retryable out of the box. If you want to read data from a file, you should use
+    /// [`ByteStream::from_path`](crate::byte_stream::ByteStream::from_path). This function
+    /// is only necessary when you need to enable retries for your own streaming container.
     pub fn retryable(f: impl Fn() -> SdkBody + Send + Sync + 'static) -> Self {
         let initial = f();
         SdkBody {
@@ -160,6 +159,26 @@ impl SdkBody {
             InnerProj::Taken => {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
+        }
+    }
+
+    #[cfg(feature = "http-body-0-4-x")]
+    pub(crate) fn poll_next_trailers(
+        self: Pin<&mut Self>,
+        #[allow(unused)] cx: &mut Context<'_>,
+    ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Error>> {
+        let this = self.project();
+        match this.inner.project() {
+            InnerProj::Once { .. } => Poll::Ready(Ok(None)),
+            InnerProj::Dyn { inner } => match inner.get_mut() {
+                BoxBody::HttpBody04(box_body) => {
+                    use http_body_0_4::Body;
+                    Pin::new(box_body).poll_trailers(cx)
+                }
+            },
+            InnerProj::Taken => Poll::Ready(Err(
+                "A `Taken` body should never be polled for trailers".into(),
+            )),
         }
     }
 

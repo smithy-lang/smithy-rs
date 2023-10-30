@@ -71,12 +71,12 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val rc = codegenContext.runtimeConfig
 
-        // Add rt-tokio and http-body-0-4-x features for `ByteStream::from_path_0_4`
+        // Add rt-tokio feature for `ByteStream::from_path`
         rustCrate.mergeFeature(
             Feature(
                 "rt-tokio",
                 true,
-                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio", "aws-smithy-types/http-body-0-4-x"),
+                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio"),
             ),
         )
 
@@ -92,13 +92,14 @@ class RequiredCustomizations : ClientCodegenDecorator {
             rustTemplate(
                 """
                 /// Error type returned by the client.
-                pub use #{SdkError};
+                pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;
 
                 pub use #{DisplayErrorContext};
                 pub use #{ProvideErrorMetadata};
                 """,
                 "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
                 "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+                "R" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(rc),
             )
         }
