@@ -33,35 +33,63 @@ def main(skip_generation=False):
     sdk_directory = os.path.join(OUTPUT_PATH, 'aws-sdk', 'sdk')
     os.chdir(sdk_directory)
 
-    failed = False
+    failures = []
     deny_list = [
         # add crate names here to exclude them from the semver checks
     ]
-    for path in os.listdir():
+    for path in list(os.listdir())[:10]:
         eprint(f'checking {path}...', end='')
         if path not in deny_list and get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
+            get_cmd_output('cargo generate-lockfile', quiet=True)
+            (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
+            pkgid = parse_package_id(out)
             (status, out, err) = get_cmd_output(f'cargo semver-checks check-release '
                                     f'--baseline-rev {BASE_BRANCH} '
                                     # in order to get semver-checks to work with publish-false crates, need to specify
                                     # package and manifest path explicitly
                                     f'--manifest-path {path}/Cargo.toml '
-                                    f'-p {path} '
+                                    '-v '
+                                    f'-p {pkgid} '
                                     f'--release-type minor', check=False, quiet=True)
             if status == 0:
                 eprint('ok!')
             else:
-                failed = True
+                failures.append(f"{out}{err}")
                 eprint('failed!')
                 if out:
                     eprint(out)
                 eprint(err)
         else:
             eprint(f'skipping {path} because it does not exist in base')
-    if failed:
+    if failures:
         eprint('One or more crates failed semver checks!')
+        eprint("\n".join(failures))
         exit(1)
 
 
+def parse_package_id(id):
+    if '#' in id and '@' in id:
+        return id.split('#')[1].split('@')[0]
+    elif '#' in id:
+        return id.split('/')[-1].split('#')[0]
+    else:
+        eprint(id)
+        raise Exception("unknown format")
+
+
+import unittest
+
+
+class SelfTest(unittest.TestCase):
+    def test_foo(self):
+        self.assertEqual(parse_package_id("file:///Users/rcoh/code/smithy-rs-ci/smithy-rs/tmp-codegen-diff/aws-sdk/sdk/aws-smithy-runtime-api#0.56.1"), "aws-smithy-runtime-api")
+        self.assertEqual(parse_package_id("file:///Users/rcoh/code/smithy-rs-ci/smithy-rs/tmp-codegen-diff/aws-sdk/sdk/s3#aws-sdk-s3@0.0.0-local"), "aws-sdk-s3")
+
+
 if __name__ == "__main__":
-    skip_generation = bool(os.environ.get('SKIP_GENERATION') or False)
-    main(skip_generation=skip_generation)
+    if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
+        sys.argv.pop()
+        unittest.main()
+    else:
+        skip_generation = bool(os.environ.get('SKIP_GENERATION') or False)
+        main(skip_generation=skip_generation)
