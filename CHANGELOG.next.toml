@@ -512,3 +512,19 @@ message = "Service builder initialization now takes in a `${serviceName}Config` 
 references = ["smithy-rs#3095", "smithy-rs#3096"]
 meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = """
+An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. You can continue using `.recv()` method on it, but the error type returned by that method is now opaque as opposed to [`SdkError<E, RawMessage>`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv); It is only an informative error instead of an actionable one you can match on.
+"""
+references = ["smithy-rs#3100", "smithy-rs#3114"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = """
+An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. You can continue using `.recv()` method on it, but the error type returned by that method is now opaque as opposed to [`SdkError<E, RawMessage>`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv); It is only an informative error instead of an actionable one you can match on.
+"""
+references = ["smithy-rs#3100", "smithy-rs#3114"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1"
