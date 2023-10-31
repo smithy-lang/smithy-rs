@@ -41,7 +41,7 @@ internal class ServiceConfigGeneratorTest {
                         docs = "Docs",
                         params = listOf(
                             Binding("auth_spec", RuntimeType.String),
-                            Binding("authorizer", RuntimeType.U64)
+                            Binding("authorizer", RuntimeType.U64),
                         ),
                         errorType = RuntimeType.std.resolve("io::Error"),
                         initializer = Initializer(
@@ -88,7 +88,7 @@ internal class ServiceConfigGeneratorTest {
                     use crate::{SimpleServiceConfig, SimpleServiceConfigError};
                     use aws_smithy_http_server::plugin::IdentityPlugin;
                     use crate::server::plugin::PluginStack;
-                    """
+                    """,
                 )
 
                 unitTest("successful_config_initialization") {
@@ -117,7 +117,7 @@ internal class ServiceConfigGeneratorTest {
                             .unwrap_err();
                         let expected = std::io::Error::new(std::io::ErrorKind::Other, "failure 2").to_string();
                         assert_eq!(actual_err.to_string(), expected);
-                        """
+                        """,
                     )
                 }
 
@@ -129,7 +129,7 @@ internal class ServiceConfigGeneratorTest {
                             .unwrap_err();
                         let expected = std::io::Error::new(std::io::ErrorKind::Other, "failure 1").to_string();
                         assert_eq!(actual_err.to_string(), expected);
-                        """
+                        """,
                     )
                 }
 
@@ -139,7 +139,7 @@ internal class ServiceConfigGeneratorTest {
                         let actual_err = SimpleServiceConfig::builder().build().unwrap_err();
                         let expected = SimpleServiceConfigError::AwsAuthNotConfigured.to_string();
                         assert_eq!(actual_err.to_string(), expected);
-                        """
+                        """,
                     )
                 }
             }

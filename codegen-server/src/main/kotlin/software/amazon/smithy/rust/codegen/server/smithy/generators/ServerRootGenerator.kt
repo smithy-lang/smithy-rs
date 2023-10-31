@@ -261,7 +261,7 @@ open class ServerRootGenerator(
                 ${serviceName}Builder,
                 MissingOperationsError
             };
-            """
+            """,
         )
     }
 }

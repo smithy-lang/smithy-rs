@@ -393,10 +393,12 @@ class ServiceConfigGenerator(
                     rust("self.${it.requiredBuilderFlagName()} = true;")
                 }
                 conditionalBlock("Ok(", ")", conditional = it.errorType != null) {
-                    val registrations = (it.initializer.layerBindings.map { ".layer(${it.name})" } +
-                        it.initializer.httpPluginBindings.map { ".http_plugin(${it.name})" } +
-                        it.initializer.modelPluginBindings.map { ".model_plugin(${it.name})" }).joinToString("")
-                    rust("self${registrations}")
+                    val registrations = (
+                        it.initializer.layerBindings.map { ".layer(${it.name})" } +
+                            it.initializer.httpPluginBindings.map { ".http_plugin(${it.name})" } +
+                            it.initializer.modelPluginBindings.map { ".model_plugin(${it.name})" }
+                        ).joinToString("")
+                    rust("self$registrations")
                 }
             }
         }
