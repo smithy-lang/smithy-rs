@@ -48,15 +48,11 @@ private fun testServiceShapeFor(model: Model) =
 fun serverTestSymbolProvider(model: Model, serviceShape: ServiceShape? = null) =
     serverTestSymbolProviders(model, serviceShape).symbolProvider
 
-private class ServerTestCodegenDecorator : ServerCodegenDecorator {
-    override val name = "test"
-    override val order: Byte = 0
-}
-
 fun serverTestSymbolProviders(
     model: Model,
     serviceShape: ServiceShape? = null,
     settings: ServerRustSettings? = null,
+    decorators: List<ServerCodegenDecorator> = emptyList(),
 ) =
     ServerSymbolProviders.from(
         serverTestRustSettings(),
@@ -68,7 +64,7 @@ fun serverTestSymbolProviders(
                 (serviceShape ?: testServiceShapeFor(model)).id,
             )
             ).codegenConfig.publicConstrainedTypes,
-        ServerTestCodegenDecorator(),
+        CombinedServerCodegenDecorator(decorators),
         RustServerCodegenPlugin::baseSymbolProvider,
     )
 
@@ -113,7 +109,7 @@ fun serverTestCodegenContext(
         service,
         ServerTestRustSymbolProviderConfig,
         settings.codegenConfig.publicConstrainedTypes,
-        CombinedServerCodegenDecorator(decorators + listOf(ServerTestCodegenDecorator())),
+        CombinedServerCodegenDecorator(decorators),
         RustServerCodegenPlugin::baseSymbolProvider,
     )
 
