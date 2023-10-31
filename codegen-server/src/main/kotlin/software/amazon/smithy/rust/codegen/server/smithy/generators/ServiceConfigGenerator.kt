@@ -133,7 +133,7 @@ class ServiceConfigGenerator(
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun render(writer: RustWriter) {
-        val unwrapConfigBuilder = if (isBuilderFallible()) {
+        val unwrapConfigBuilder = if (isBuilderFallible) {
             """
             ///    .expect("config failed to build");
             """
@@ -262,16 +262,17 @@ class ServiceConfigGenerator(
         )
     }
 
-    private fun isBuilderFallible() = configMethods.isBuilderFallible()
+    private val isBuilderFallible = configMethods.isBuilderFallible()
 
     private fun builderBuildRequiredMethodChecks() = configMethods.filter { it.isRequired }.map {
         writable {
-            rust(
+            rustTemplate(
                 """
                 if !self.${it.requiredBuilderFlagName()} {
-                    return Err(${serviceName}ConfigError::${it.requiredErrorVariant()});
+                    return #{Err}(${serviceName}ConfigError::${it.requiredErrorVariant()});
                 }
                 """,
+                *codegenScope,
             )
         }
     }.join("\n")
@@ -293,13 +294,13 @@ class ServiceConfigGenerator(
             writable {
                 rust(
                     """
-                    ##[error("service is not fully configured; invoke `${it.requiredBuilderFlagName()}` on the config builder")]
+                    ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
                     ${it.requiredErrorVariant()},
                     """,
                 )
             }
         }
-        if (isBuilderFallible()) {
+        if (isBuilderFallible) {
             rustTemplate(
                 """
                 ##[derive(Debug, #{ThisError}::Error)]
@@ -407,7 +408,7 @@ class ServiceConfigGenerator(
     private fun builderBuildReturnType() = writable {
         val t = "super::${serviceName}Config<L, H, M>"
 
-        if (isBuilderFallible()) {
+        if (isBuilderFallible) {
             rustTemplate("#{Result}<$t, ${serviceName}ConfigError>", *codegenScope)
         } else {
             rust(t)
@@ -427,7 +428,7 @@ class ServiceConfigGenerator(
                 "BuilderBuildRequiredMethodChecks" to builderBuildRequiredMethodChecks(),
             )
 
-            conditionalBlock("Ok(", ")", isBuilderFallible()) {
+            conditionalBlock("Ok(", ")", isBuilderFallible) {
                 rust(
                     """
                     super::${serviceName}Config {
