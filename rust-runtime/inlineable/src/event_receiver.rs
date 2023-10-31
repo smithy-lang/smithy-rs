@@ -7,7 +7,6 @@ use aws_smithy_http::event_stream::Receiver;
 use aws_smithy_runtime_api::box_error::BoxError;
 
 #[derive(Debug)]
-#[non_exhaustive]
 /// Receives unmarshalled events at a time out of an Event Stream.
 pub struct EventReceiver<T, E> {
     inner: Receiver<T, E>,
