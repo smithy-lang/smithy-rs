@@ -87,11 +87,11 @@ data class Initializer(
      * [Rust statements]: https://doc.rust-lang.org/reference/statements.html
      */
     val code: Writable,
-    /** Ordered list of layers that should be applied. **/
+    /** Ordered list of layers that should be applied. Layers are executed in the order they appear in the list. **/
     val layerBindings: List<Binding>,
-    /** Ordered list of HTTP plugins that should be applied. **/
+    /** Ordered list of HTTP plugins that should be applied. Http plugins are executed in the order they appear in the list. **/
     val httpPluginBindings: List<Binding>,
-    /** Ordered list of model plugins that should be applied. **/
+    /** Ordered list of model plugins that should be applied. Model plugins are executed in the order they appear in the list. **/
     val modelPluginBindings: List<Binding>,
 )
 
@@ -290,17 +290,17 @@ class ServiceConfigGenerator(
     }.join("\n")
 
     private fun builderRequiredMethodError() = writable {
-        val variants = configMethods.filter { it.isRequired }.map {
-            writable {
-                rust(
-                    """
+        if (isBuilderFallible) {
+            val variants = configMethods.filter { it.isRequired }.map {
+                writable {
+                    rust(
+                        """
                     ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
                     ${it.requiredErrorVariant()},
                     """,
-                )
+                    )
+                }
             }
-        }
-        if (isBuilderFallible) {
             rustTemplate(
                 """
                 ##[derive(Debug, #{ThisError}::Error)]
@@ -320,10 +320,11 @@ class ServiceConfigGenerator(
                 writable { rustTemplate("${binding.name}: #{BindingTy},", "BindingTy" to binding.ty) }
             }.join("\n")
 
-            // This produces a nested type like: "S<B, S<B, T>>", where
-            // - "S" denotes a "stack type" with two generic type parameters: the first is the top of the stack and the
-            //   second is the rest of the stack. For example, `aws_smithy_http_server::plugin::PluginStack`.
-            // - "B" is the type of the "thing" that is added.
+            // This produces a nested type like: "S<B, S<A, T>>", where
+            // - "S" denotes a "stack type" with two generic type parameters: the first is the "inner" part of the stack
+            //   and the second is the "outer" part  of the stack. The outer part gets executed first. For an example,
+            //   see `aws_smithy_http_server::plugin::PluginStack`.
+            // - "A", "B" are the types of the "things" that are added.
             // - "T" is the generic type variable name used in the enclosing impl block.
             fun List<Binding>.stackReturnType(genericTypeVarName: String, stackType: RuntimeType): Writable =
                 this.fold(writable { rust(genericTypeVarName) }) { acc, next ->
