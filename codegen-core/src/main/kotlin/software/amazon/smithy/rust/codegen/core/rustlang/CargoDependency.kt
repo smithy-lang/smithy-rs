@@ -89,9 +89,9 @@ class InlineDependency(
         private fun forInlineableRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(RustModule.private(name), "/inlineable/src/$name.rs", *additionalDependencies)
 
-        fun eventStreamReceiver(runtimeConfig: RuntimeConfig) =
+        fun eventReceiver(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
-                "event_stream_receiver",
+                "event_receiver",
                 CargoDependency.smithyHttp(runtimeConfig),
                 CargoDependency.smithyRuntimeApi(runtimeConfig),
             )

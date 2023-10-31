@@ -268,8 +268,8 @@ class HttpBindingGenerator(
                     rust("${outputT.rustType().qualifiedName()}::new(unmarshaller, body)")
                 } else {
                     rustTemplate(
-                        "#{Wrapper}::new(#{Receiver}::new(unmarshaller, body))",
-                        "Wrapper" to RuntimeType.eventStreamReceiverWrapper(runtimeConfig),
+                        "#{EventReceiver}::new(#{Receiver}::new(unmarshaller, body))",
+                        "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
                         "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
                     )
                 }

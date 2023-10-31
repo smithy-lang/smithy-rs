@@ -57,7 +57,7 @@ class EventStreamSymbolProvider(
                         if (target == CodegenTarget.SERVER) {
                             RuntimeType.eventStreamReceiver(runtimeConfig).toSymbol().rustType()
                         } else {
-                            RuntimeType.eventStreamReceiverWrapper(runtimeConfig).toSymbol().rustType()
+                            RuntimeType.eventReceiver(runtimeConfig).toSymbol().rustType()
                         }
                     }
                 }

@@ -14,7 +14,7 @@ mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
 #[allow(unused)]
-mod event_stream_receiver;
+mod event_receiver;
 #[allow(dead_code)]
 mod idempotency_token;
 #[allow(dead_code)]
