@@ -102,6 +102,10 @@ pub struct RunArgs {
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_test_s3_bucket_name: Option<String>,
 
+    /// The name of the S3 bucket for the canary Lambda to interact with
+    #[clap(long, required_unless_present = "cdk-output")]
+    lambda_test_s3_mrap_bucket_arn: Option<String>,
+
     /// The ARN of the role that the Lambda will execute as
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_execution_role_arn: Option<String>,
@@ -116,6 +120,7 @@ struct Options {
     expected_speech_text_by_transcribe: Option<String>,
     lambda_code_s3_bucket_name: String,
     lambda_test_s3_bucket_name: String,
+    lambda_test_s3_mrap_bucket_arn: String,
     lambda_execution_role_arn: String,
 }
 
@@ -128,6 +133,8 @@ impl Options {
                 lambda_code_s3_bucket_name: String,
                 #[serde(rename = "canarytestbucketname")]
                 lambda_test_s3_bucket_name: String,
+                #[serde(rename = "canarytestmrapbucketarn")]
+                lambda_test_s3_mrap_bucket_arn: String,
                 #[serde(rename = "lambdaexecutionrolearn")]
                 lambda_execution_role_arn: String,
             }
@@ -149,6 +156,7 @@ impl Options {
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
                 lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
                 lambda_test_s3_bucket_name: value.inner.lambda_test_s3_bucket_name,
+                lambda_test_s3_mrap_bucket_arn: value.inner.lambda_test_s3_mrap_bucket_arn,
                 lambda_execution_role_arn: value.inner.lambda_execution_role_arn,
             })
         } else {
@@ -160,6 +168,9 @@ impl Options {
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
                 lambda_code_s3_bucket_name: run_opt.lambda_code_s3_bucket_name.expect("required"),
                 lambda_test_s3_bucket_name: run_opt.lambda_test_s3_bucket_name.expect("required"),
+                lambda_test_s3_mrap_bucket_arn: run_opt
+                    .lambda_test_s3_mrap_bucket_arn
+                    .expect("required"),
                 lambda_execution_role_arn: run_opt.lambda_execution_role_arn.expect("required"),
             })
         }
@@ -265,6 +276,7 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
         options.expected_speech_text_by_transcribe.as_ref(),
         &options.lambda_code_s3_bucket_name,
         &options.lambda_test_s3_bucket_name,
+        &options.lambda_test_s3_mrap_bucket_arn,
     )
     .await
     .context(here!())?;
@@ -332,6 +344,7 @@ async fn upload_bundle(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_lambda_fn(
     lambda_client: lambda::Client,
     bundle_name: &str,
@@ -340,6 +353,7 @@ async fn create_lambda_fn(
     expected_speech_text_by_transcribe: Option<&String>,
     code_s3_bucket: &str,
     test_s3_bucket: &str,
+    test_s3_mrap_bucket_arn: &str,
 ) -> Result<()> {
     use lambda::types::*;
 
@@ -348,6 +362,7 @@ async fn create_lambda_fn(
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
             .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
+            .variables("CANARY_S3_MRAP_BUCKET_ARN", test_s3_mrap_bucket_arn)
             .variables(
                 "CANARY_EXPECTED_TRANSCRIBE_RESULT",
                 expected_speech_text_by_transcribe,
@@ -355,7 +370,8 @@ async fn create_lambda_fn(
         None => Environment::builder()
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
-            .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket),
+            .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
+            .variables("CANARY_S3_MRAP_BUCKET_ARN", test_s3_mrap_bucket_arn),
     };
 
     lambda_client
@@ -487,7 +503,8 @@ mod tests {
                 cdk_output: Some("../cdk-outputs.json".into()),
                 lambda_code_s3_bucket_name: None,
                 lambda_test_s3_bucket_name: None,
-                lambda_execution_role_arn: None
+                lambda_execution_role_arn: None,
+                lambda_test_s3_mrap_bucket_arn: None
             },
             RunArgs::try_parse_from([
                 "run",
@@ -516,6 +533,8 @@ mod tests {
             "bucket-for-test",
             "--lambda-execution-role-arn",
             "arn:aws:lambda::role/exe-role",
+            "--lambda-test-s3-mrap-bucket-arn",
+            "arn:aws:s3::000000000000:accesspoint/example.mrap",
         ])
         .unwrap();
         assert_eq!(
@@ -528,6 +547,8 @@ mod tests {
                 lambda_code_s3_bucket_name: "bucket-for-code".to_owned(),
                 lambda_test_s3_bucket_name: "bucket-for-test".to_owned(),
                 lambda_execution_role_arn: "arn:aws:lambda::role/exe-role".to_owned(),
+                lambda_test_s3_mrap_bucket_arn: "arn:aws:s3::000000000000:accesspoint/example.mrap"
+                    .to_owned(),
             },
             Options::load_from(run_args).unwrap(),
         );
