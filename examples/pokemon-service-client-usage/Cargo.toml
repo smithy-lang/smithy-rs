@@ -30,7 +30,7 @@ hyper = { version = "0.14.25", features = ["client", "full"] }
 tokio = {version = "1.26.0", features=["full"]}
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-rustls = "0.21.7"
+rustls = "0.21.8"
 hyper-rustls = "0.24.1"
 http = "0.2.9"
 uuid = {version="1.4.1", features = ["v4"]}
