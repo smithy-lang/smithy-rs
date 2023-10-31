@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output
 class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
+    private val isConfigBuilderFallible: Boolean,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -107,6 +108,11 @@ class ServerServiceGenerator(
             val docHandler = DocHandlerGenerator(codegenContext, operationShape, "handler", "///")
             val handler = docHandler.docSignature()
             val handlerFixed = docHandler.docFixedSignature()
+            val unwrapConfigBuilder = if (isConfigBuilderFallible) {
+                ".expect(\"config failed to build\")"
+            } else {
+                ""
+            }
             rustTemplate(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -123,7 +129,7 @@ class ServerServiceGenerator(
                 ///
                 #{Handler:W}
                 ///
-                /// let config = ${serviceName}Config::builder().build();
+                /// let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
                 /// let app = $serviceName::builder(config)
                 ///     .$fieldName(handler)
                 ///     /* Set other handlers */
@@ -186,7 +192,7 @@ class ServerServiceGenerator(
                 ///
                 #{HandlerFixed:W}
                 ///
-                /// let config = ${serviceName}Config::builder().build();
+                /// let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
                 /// let svc = #{Tower}::util::service_fn(handler);
                 /// let app = $serviceName::builder(config)
                 ///     .${fieldName}_service(svc)
