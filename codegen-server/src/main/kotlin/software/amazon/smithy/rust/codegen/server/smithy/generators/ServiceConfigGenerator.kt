@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -23,16 +22,25 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 
 fun List<ConfigMethod>.isBuilderFallible() = this.any { it.isRequired }
 
-// TODO Docs
+/**
+ * Contains all data necessary to render a method on the config builder object to apply arbitrary layers, HTTP plugins,
+ * and model plugins.
+ */
 data class ConfigMethod(
+    /** The name of the method. **/
     val name: String,
+    /** The Rust docs for the method. **/
     val docs: String,
+    /** The parameters of the method. **/
     val params: List<Binding>,
+    /** In case the method is fallible, the error type it returns. **/
     val errorType: RuntimeType?,
+    /** The code block inside the method. **/
     val initializer: Initializer,
     /** Whether the user must invoke the method or not. **/
     val isRequired: Boolean,
 ) {
+    /** The name of the flag on the config builder object that tracks whether the _required_ method has already been invoked or not. **/
     fun requiredBuilderFlagName(): String {
         check(isRequired) {
             "Config method is not required so it shouldn't need a field in the builder tracking whether it has been configured"
@@ -40,6 +48,7 @@ data class ConfigMethod(
         return "${name}_configured"
     }
 
+    /** The name of the enum variant on the config builder's error struct for a _required_ method. **/
     fun requiredErrorVariant(): String {
         check(isRequired) {
             "Config method is not required so it shouldn't need an error variant"
@@ -48,17 +57,60 @@ data class ConfigMethod(
     }
 }
 
-// TODO Docs
+/**
+ * Represents the code block inside the method that initializes and configures a set of layers, HTTP plugins, and/or model
+ * plugins.
+ */
 data class Initializer(
+    /**
+     * The code itself that initializes and configures the layers, HTTP plugins, and/or model plugins. This should be
+     * a set of [Rust statements] that, after execution, defines one variable binding per layer/HTTP plugin/model plugin
+     * that it has configured and wants to apply. The code may use the method's input arguments (see [params] in
+     * [ConfigMethod]) to perform checks and initialize the bindings.
+     *
+     * For example, the following code performs checks on the `authorizer` and `auth_spec` input arguments, returning
+     * an error (see [errorType] in [ConfigMethod]) in case these checks fail, and leaves two plugins defined in two
+     * variable bindings, `authn_plugin` and `authz_plugin`.
+     *
+     * ```rust
+     * if authorizer != 69 {
+     * return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
+     * }
+
+     * if auth_spec.len() != 69 {
+     * return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
+     * }
+     * let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
+     * let authz_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
+     * ```
+     *
+     * [Rust statements]: https://doc.rust-lang.org/reference/statements.html
+     */
     val code: Writable,
-    /** Ordered list of layers that will be applied. **/
+    /** Ordered list of layers that should be applied. **/
     val layerBindings: List<Binding>,
+    /** Ordered list of HTTP plugins that should be applied. **/
     val httpPluginBindings: List<Binding>,
+    /** Ordered list of model plugins that should be applied. **/
     val modelPluginBindings: List<Binding>,
 )
 
+/**
+ * Represents a variable binding. For example, the following Rust code:
+ *
+ * ```rust
+ * fn foo(bar: String) {
+ *     let baz: u64 = 69;
+ * }
+ *
+ * has two variable bindings. The `bar` name is bound to a `String` variable and the `baz` name is bound to a
+ * `u64` variable.
+ * ```
+ */
 data class Binding(
+    /** The name of the variable. */
     val name: String,
+    /** The type of the variable. */
     val ty: RuntimeType,
 )
 
@@ -232,10 +284,6 @@ class ServiceConfigGenerator(
         writable { rust("${it.requiredBuilderFlagName()}: false,") }
     }.join("\n")
 
-    /**
-     *
-     * If you can come up with a better function name please change it.
-     */
     private fun builderRequiredMethodFlagsMove() = configMethods.filter { it.isRequired }.map {
         writable { rust("${it.requiredBuilderFlagName()}: self.${it.requiredBuilderFlagName()},") }
     }.join("\n")
