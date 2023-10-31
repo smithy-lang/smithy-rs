@@ -74,11 +74,11 @@ data class Initializer(
      *
      * ```rust
      * if authorizer != 69 {
-     * return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
+     *     return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
      * }
 
      * if auth_spec.len() != 69 {
-     * return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
+     *     return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
      * }
      * let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
      * let authz_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
