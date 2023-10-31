@@ -512,3 +512,9 @@ message = "Service builder initialization now takes in a `${serviceName}Config` 
 references = ["smithy-rs#3095", "smithy-rs#3096"]
 meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "server" }
 author = "david-perez"
+
+[[smithy-rs]]
+message = "Upgrade `ring` to 0.17.5."
+references = ["smithy-rs#3112", "smithy-rs#3116"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
