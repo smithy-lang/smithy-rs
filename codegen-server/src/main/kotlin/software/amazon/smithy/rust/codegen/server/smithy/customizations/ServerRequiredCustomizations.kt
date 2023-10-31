@@ -47,7 +47,7 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
         )
 
         rustCrate.withModule(ServerRustModule.Types) {
-            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
+            pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
             rustTemplate(
                 """
                 pub use #{DisplayErrorContext};

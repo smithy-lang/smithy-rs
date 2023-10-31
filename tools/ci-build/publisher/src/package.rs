@@ -289,6 +289,7 @@ fn read_dependencies<P: ParseIntoVersion>(
                     result.push(PackageHandle::new(name, version));
                 }
             }
+            Dependency::Inherited(_) => panic!("workspace deps are unsupported"),
         }
     }
     Ok(result)
@@ -299,13 +300,14 @@ fn read_package<P: ParseIntoVersion>(
     path: &Path,
     manifest_bytes: &[u8],
 ) -> Result<Option<Package>> {
-    let manifest = Manifest::from_slice(manifest_bytes)
+    let mut manifest = Manifest::from_slice(manifest_bytes)
         .with_context(|| format!("failed to load package manifest for {:?}", path))?;
+    manifest.complete_from_path(path)?;
     if let Some(package) = manifest.package {
         let name = package.name;
-        let version = parse_version::<P>(path, &package.version)?;
+        let version = parse_version::<P>(path, &package.version.unwrap())?;
         let handle = PackageHandle::new(name, version);
-        let publish = match package.publish {
+        let publish = match package.publish.unwrap() {
             cargo_toml::Publish::Flag(true) => Publish::Allowed,
             _ => Publish::NotAllowed,
         };
