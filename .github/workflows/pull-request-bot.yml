@@ -99,7 +99,7 @@ jobs:
         java-version: ${{ env.java_version }}
     - uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: ${{ env.rust_version }}
+        toolchain: nightly
     - name: Generate doc preview
       id: generate-preview
       # Only generate three of the smallest services since the doc build can be very large. STS and SSO must be
@@ -119,7 +119,8 @@ jobs:
         # Add server runtime crates to the workspace
         sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python","sdk\/aws-smithy-http-server-typescript",/' Cargo.toml
 
-        cargo doc --no-deps --all-features
+        RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
+
         popd
         ./tools/ci-scripts/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 
