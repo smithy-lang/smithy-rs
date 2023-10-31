@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output
 open class ServerRootGenerator(
     val protocol: ServerProtocol,
     private val codegenContext: ServerCodegenContext,
+    private val isConfigBuilderFallible: Boolean,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
     private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
@@ -57,6 +58,8 @@ open class ServerRootGenerator(
             }
             .join("//!\n")
 
+        val unwrapConfigBuilder = if (isConfigBuilderFallible) ".expect(\"config failed to build\")" else ""
+
         writer.rustTemplate(
             """
             //! A fast and customizable Rust implementation of the $serviceName Smithy service.
@@ -75,7 +78,10 @@ open class ServerRootGenerator(
             //! ## async fn dummy() {
             //! use $crateName::{$serviceName, ${serviceName}Config};
             //!
-            //! ## let app = $serviceName::builder(${serviceName}Config::builder().build()).build_unchecked();
+            //! ## let app = $serviceName::builder(
+            //! ##     ${serviceName}Config::builder()
+            //! ##         .build()$unwrapConfigBuilder
+            //! ## ).build_unchecked();
             //! let server = app.into_make_service();
             //! let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!     .expect("unable to parse the server bind address and port");
@@ -92,7 +98,10 @@ open class ServerRootGenerator(
             //! use $crateName::$serviceName;
             //!
             //! ## async fn dummy() {
-            //! ## let app = $serviceName::builder(${serviceName}Config::builder().build()).build_unchecked();
+            //! ## let app = $serviceName::builder(
+            //! ##     ${serviceName}Config::builder()
+            //! ##         .build()$unwrapConfigBuilder
+            //! ## ).build_unchecked();
             //! let handler = LambdaHandler::new(app);
             //! lambda_http::run(handler).await.unwrap();
             //! ## }
@@ -118,7 +127,7 @@ open class ServerRootGenerator(
             //! let http_plugins = HttpPlugins::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
-            //! let config = ${serviceName}Config::builder().build();
+            //! let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
             //! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);
             //! ```
             //!
@@ -183,13 +192,13 @@ open class ServerRootGenerator(
             //!
             //! ## Example
             //!
-            //! ```rust
+            //! ```rust,no_run
             //! ## use std::net::SocketAddr;
             //! use $crateName::{$serviceName, ${serviceName}Config};
             //!
             //! ##[#{Tokio}::main]
             //! pub async fn main() {
-            //!    let config = ${serviceName}Config::builder().build();
+            //!    let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
             //!    let app = $serviceName::builder(config)
             ${builderFieldNames.values.joinToString("\n") { "//!        .$it($it)" }}
             //!        .build()
@@ -236,6 +245,23 @@ open class ServerRootGenerator(
     fun render(rustWriter: RustWriter) {
         documentation(rustWriter)
 
-        rustWriter.rust("pub use crate::service::{$serviceName, ${serviceName}Config, ${serviceName}ConfigBuilder, ${serviceName}Builder, MissingOperationsError};")
+        // Only export config builder error if fallible.
+        val configErrorReExport = if (isConfigBuilderFallible) {
+            "${serviceName}ConfigError,"
+        } else {
+            ""
+        }
+        rustWriter.rust(
+            """
+            pub use crate::service::{
+                $serviceName,
+                ${serviceName}Config,
+                ${serviceName}ConfigBuilder,
+                $configErrorReExport
+                ${serviceName}Builder,
+                MissingOperationsError
+            };
+            """,
+        )
     }
 }

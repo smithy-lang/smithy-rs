@@ -78,6 +78,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.isBuilderFallible
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
@@ -591,11 +592,15 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating a service $shape")
         val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
 
+        val configMethods = codegenDecorator.configMethods(codegenContext)
+        val isConfigBuilderFallible = configMethods.isBuilderFallible()
+
         // Generate root.
         rustCrate.lib {
             ServerRootGenerator(
                 serverProtocol,
                 codegenContext,
+                isConfigBuilderFallible,
             ).render(this)
         }
 
@@ -612,9 +617,10 @@ open class ServerCodegenVisitor(
             ServerServiceGenerator(
                 codegenContext,
                 serverProtocol,
+                isConfigBuilderFallible,
             ).render(this)
 
-            ServiceConfigGenerator(codegenContext).render(this)
+            ServiceConfigGenerator(codegenContext, configMethods).render(this)
 
             ScopeMacroGenerator(codegenContext).render(this)
         }

@@ -4,6 +4,7 @@
  */
 
 use super::{HttpMarker, ModelMarker, Plugin};
+use std::fmt::Debug;
 
 /// A wrapper struct which composes an `Inner` and an `Outer` [`Plugin`].
 ///
@@ -13,6 +14,7 @@ use super::{HttpMarker, ModelMarker, Plugin};
 /// [`HttpPlugins`](crate::plugin::HttpPlugins), and the primary tool for composing HTTP plugins is
 /// [`ModelPlugins`](crate::plugin::ModelPlugins); if you are an application writer, you should
 /// prefer composing plugins using these.
+#[derive(Debug)]
 pub struct PluginStack<Inner, Outer> {
     inner: Inner,
     outer: Outer,

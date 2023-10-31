@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ValidationResult
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConfigMethod
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import java.util.logging.Logger
@@ -41,6 +42,12 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
      * Therefore, ensure that all the structure shapes returned by this method are not in the service's closure.
      */
     fun postprocessGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> = emptyList()
+
+    /**
+     * Configuration methods that should be injected into the `${serviceName}Config` struct to allow users to configure
+     * pre-applied layers and plugins.
+     */
+    fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> = emptyList()
 }
 
 /**
@@ -74,10 +81,11 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
             decorator.postprocessValidationExceptionNotAttachedErrorMessage(accumulated)
         }
 
-    override fun postprocessGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> {
-        return orderedDecorators.map { decorator -> decorator.postprocessGenerateAdditionalStructures(operationShape) }
-            .flatten()
-    }
+    override fun postprocessGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> =
+        orderedDecorators.flatMap { it.postprocessGenerateAdditionalStructures(operationShape) }
+
+    override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> =
+        orderedDecorators.flatMap { it.configMethods(codegenContext) }
 
     companion object {
         fun fromClasspath(

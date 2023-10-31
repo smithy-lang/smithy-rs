@@ -294,7 +294,7 @@ class TestWriterDelegator(
 }
 
 /**
- * Generate a newtest module
+ * Generate a new test module
  *
  * This should only be used in test code—the generated module name will be something like `tests_123`
  */
