@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 1st, 2023
+==================
+**New this release:**
+- (client, [smithy-rs#3112](https://github.com/awslabs/smithy-rs/issues/3112), [smithy-rs#3116](https://github.com/awslabs/smithy-rs/issues/3116)) Upgrade `ring` to 0.17.5.
+
+
 October 31st, 2023
 ==================
 **Breaking Changes:**
