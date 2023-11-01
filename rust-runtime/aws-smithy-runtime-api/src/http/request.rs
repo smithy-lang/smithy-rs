@@ -279,7 +279,7 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
 
 #[cfg(test)]
 mod test {
-    use crate::client::orchestrator::HttpRequest;
+    use super::*;
     use aws_smithy_types::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::Uri;
@@ -290,7 +290,7 @@ mod test {
             .header("k", "😹")
             .body(SdkBody::empty())
             .unwrap();
-        let request: HttpRequest = request
+        let request: Request = request
             .try_into()
             .expect("failed to convert a non-string header");
         assert_eq!(request.headers().get("k"), Some("😹"))
