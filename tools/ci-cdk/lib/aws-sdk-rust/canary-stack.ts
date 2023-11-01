@@ -168,6 +168,12 @@ export class CanaryStack extends Stack {
         // Allow canaries to talk to their test bucket
         this.canaryTestBucket.grantReadWrite(this.lambdaExecutionRole);
 
+        this.lambdaExecutionRole.addToPolicy(new PolicyStatement({
+            actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+            effect: Effect.ALLOW,
+            resources: [`${canaryTestMrapBucketArn}`, `${canaryTestMrapBucketArn}/object/*`],
+        }));
+
         // Allow canaries to call Transcribe's StartStreamTranscription
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
