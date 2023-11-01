@@ -11,12 +11,6 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[smithy-rs]]
-message = "Upgrade `ring` to 0.17.5."
-references = ["smithy-rs#3112", "smithy-rs#3116"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
 [[aws-sdk-rust]]
 message = "Fix aws-sdk-rust#930 (PutSnapshotBlock)"
 references = ["smithy-rs#3126", "aws-sdk-rust#930"]
