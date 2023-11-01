@@ -118,7 +118,7 @@ jobs:
         # Add server runtime crates to the workspace
         sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python","sdk\/aws-smithy-http-server-typescript",/' Cargo.toml
 
-        RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features
+        RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps
 
         popd
         ./tools/ci-scripts/generate-doc-preview-index.sh ${{ inputs.base_revision }}
