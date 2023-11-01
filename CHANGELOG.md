@@ -1,4 +1,75 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+October 31st, 2023
+==================
+**Breaking Changes:**
+- :warning::tada: (client, [smithy-rs#2417](https://github.com/awslabs/smithy-rs/issues/2417), [smithy-rs#3018](https://github.com/awslabs/smithy-rs/issues/3018)) Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.
+
+    For more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).
+- :warning: (client, [smithy-rs#3011](https://github.com/awslabs/smithy-rs/issues/3011)) HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details.
+- :warning: (client, [smithy-rs#3038](https://github.com/awslabs/smithy-rs/issues/3038)) The `enableNewSmithyRuntime: middleware` opt-out flag in smithy-build.json has been removed and no longer opts out of the client orchestrator implementation. Middleware is no longer supported. If you haven't already upgraded to the orchestrator, see [the guide](https://github.com/awslabs/smithy-rs/discussions/2887).
+- :warning: (client, [smithy-rs#2909](https://github.com/awslabs/smithy-rs/issues/2909)) It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method.
+- :warning: (all, [smithy-rs#2948](https://github.com/awslabs/smithy-rs/issues/2948)) Update MSRV to Rust 1.70.0
+- :warning: (client, [smithy-rs#2970](https://github.com/awslabs/smithy-rs/issues/2970)) `aws_smithy_client::hyper_ext::Adapter` was moved/renamed to `aws_smithy_runtime::client::connectors::hyper_connector::HyperConnector`.
+- :warning: (client, [smithy-rs#2970](https://github.com/awslabs/smithy-rs/issues/2970)) Test connectors moved into `aws_smithy_runtime::client::connectors::test_util` behind the `test-util` feature.
+- :warning: (client, [smithy-rs#2970](https://github.com/awslabs/smithy-rs/issues/2970)) DVR's RecordingConnection and ReplayingConnection were renamed to RecordingConnector and ReplayingConnector respectively.
+- :warning: (client, [smithy-rs#2970](https://github.com/awslabs/smithy-rs/issues/2970)) TestConnection was renamed to EventConnector.
+- :warning: (all, [smithy-rs#2973](https://github.com/awslabs/smithy-rs/issues/2973)) Remove `once_cell` from public API.
+- :warning: (all, [smithy-rs#2995](https://github.com/awslabs/smithy-rs/issues/2995)) Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. This is enabled by default for clients and can be disabled by updating your smithy-build.json with the following setting:
+    ```json
+    {
+      "codegen": {
+        "flattenCollectionAccessors": false,
+        ...
+      }
+    }
+    ```
+- :warning: (client, [smithy-rs#2978](https://github.com/awslabs/smithy-rs/issues/2978)) The `futures_core::stream::Stream` trait has been removed from public API. `FnStream` only supports `next`, `try_next`, `collect`, and `try_collect` methods. [`TryFlatMap::flat_map`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.TryFlatMap.html#method.flat_map) returns [`PaginationStream`](https://docs.rs/aws-smithy-async/latest/aws_smithy_async/future/pagination_stream/struct.PaginationStream.html), which should be preferred to `FnStream` at an interface level. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner. Finally, `fn_stream` has been moved to be a child module of `pagination_stream`.
+- :warning: (client, [smithy-rs#2983](https://github.com/awslabs/smithy-rs/issues/2983)) The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner.
+- :warning: (client, [smithy-rs#2997](https://github.com/awslabs/smithy-rs/issues/2997)) `StaticUriEndpointResolver`'s `uri` constructor now takes a `String` instead of a `Uri`.
+- :warning: (server, [smithy-rs#3038](https://github.com/awslabs/smithy-rs/issues/3038)) `SdkError` is no longer re-exported in generated server crates.
+- :warning: (client, [smithy-rs#3039](https://github.com/awslabs/smithy-rs/issues/3039)) The `customize()` method is now sync and infallible. Remove any `await`s and error handling from it to make things compile again.
+- :bug::warning: (all, [smithy-rs#3037](https://github.com/awslabs/smithy-rs/issues/3037), [aws-sdk-rust#756](https://github.com/awslabs/aws-sdk-rust/issues/756)) Our algorithm for converting identifiers to `snake_case` has been updated. This may result in a small change for some identifiers, particularly acronyms ending in `s`, e.g. `ACLs`.
+- :warning: (client, [smithy-rs#3055](https://github.com/awslabs/smithy-rs/issues/3055)) The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively.
+- :warning: (client, [smithy-rs#3032](https://github.com/awslabs/smithy-rs/issues/3032)) [`EndpointPrefix::new`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/struct.EndpointPrefix.html#method.new) no longer returns `crate::operation::error::BuildError` for an Err variant, instead returns a more specific [`InvalidEndpointError`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/endpoint/error/struct.InvalidEndpointError.html).
+- :warning: (client, [smithy-rs#3061](https://github.com/awslabs/smithy-rs/issues/3061)) Lifetimes have been added to the `EndpointResolver` trait.
+- :warning: (client, [smithy-rs#3065](https://github.com/awslabs/smithy-rs/issues/3065)) Several traits have been renamed from noun form to verb form to be more idiomatic:
+    - `AuthSchemeOptionResolver` -> `ResolveAuthSchemeOptions`
+    - `EndpointResolver` -> `ResolveEndpoint`
+    - `IdentityResolver` -> `ResolveIdentity`
+    - `Signer` -> `Sign`
+    - `RequestSerializer` -> `SerializeRequest`
+    - `ResponseDeserializer` -> `DeserializeResponse`
+    - `Interceptor` -> `Intercept`
+- :warning: (client, [smithy-rs#3059](https://github.com/awslabs/smithy-rs/issues/3059)) **This change has [detailed upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3067)**. A summary is below.<br><br> The `HttpRequest` type alias now points to `aws-smithy-runtime-api::client::http::Request`. This is a first-party request type to allow us to gracefully support `http = 1.0` when it arrives. Most customer code using this method should be unaffected. `TryFrom`/`TryInto` conversions are provided for `http = 0.2.*`.
+- :warning: (client, [smithy-rs#2917](https://github.com/awslabs/smithy-rs/issues/2917)) `RuntimeComponents` have been added as an argument to the `IdentityResolver::resolve_identity` trait function.
+- :warning: (client, [smithy-rs#3072](https://github.com/awslabs/smithy-rs/issues/3072)) The `idempotency_provider` field has been removed from config as a public field. If you need access to this field, it is still available from the context of an interceptor.
+- :warning: (client, [smithy-rs#3078](https://github.com/awslabs/smithy-rs/issues/3078)) The `config::Builder::endpoint_resolver` method no longer accepts `&'static str`. Use `config::Builder::endpoint_url` instead.
+- :warning: (client, [smithy-rs#3043](https://github.com/awslabs/smithy-rs/issues/3043), [smithy-rs#3078](https://github.com/awslabs/smithy-rs/issues/3078)) **This change has [detailed upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3079).** <br><br>The endpoint interfaces from `aws-smithy-http` have been removed. Service-specific endpoint resolver traits have been added.
+- :warning: (all, [smithy-rs#3054](https://github.com/awslabs/smithy-rs/issues/3054), [smithy-rs#3070](https://github.com/awslabs/smithy-rs/issues/3070)) `aws_smithy_http::operation::error::{BuildError, SerializationError}` have been moved to `aws_smithy_types::error::operation::{BuildError, SerializationError}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+- :warning: (all, [smithy-rs#3076](https://github.com/awslabs/smithy-rs/issues/3076)) `aws_smithy_http::body::{BoxBody, Error, SdkBody}` have been moved to `aws_smithy_types::body::{BoxBody, Error, SdkBody}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+- :warning: (all, [smithy-rs#3076](https://github.com/awslabs/smithy-rs/issues/3076), [smithy-rs#3091](https://github.com/awslabs/smithy-rs/issues/3091)) `aws_smithy_http::byte_stream::{AggregatedBytes, ByteStream, error::Error, FsBuilder, Length}` have been moved to `aws_smithy_types::byte_stream::{AggregatedBytes, ByteStream, error::Error, FsBuilder, Length}`. Type aliases for them are left in `aws_smithy_http` for backwards compatibility but are deprecated.
+- :warning: (client, [smithy-rs#3077](https://github.com/awslabs/smithy-rs/issues/3077)) **Behavior Break!** Identities for auth are now cached by default. See the `Config` builder's `identity_cache()` method docs for an example of how to disable this caching.
+- :warning: (all, [smithy-rs#3033](https://github.com/awslabs/smithy-rs/issues/3033), [smithy-rs#3088](https://github.com/awslabs/smithy-rs/issues/3088), [smithy-rs#3101](https://github.com/awslabs/smithy-rs/issues/3101)) Publicly exposed types from `http-body` and `hyper` crates within `aws-smithy-types` are now feature-gated. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3089) for details.
+- :warning: (all, [smithy-rs#3033](https://github.com/awslabs/smithy-rs/issues/3033), [smithy-rs#3088](https://github.com/awslabs/smithy-rs/issues/3088)) `ByteStream::poll_next` is now feature-gated. You can turn on a cargo feature `byte-stream-poll-next` in `aws-smithy-types` to use it.
+- :warning: (client, [smithy-rs#3092](https://github.com/awslabs/smithy-rs/issues/3092), [smithy-rs#3093](https://github.com/awslabs/smithy-rs/issues/3093)) The [`connection`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/connection/index.html) and [`result`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/result/index.html) modules in `aws-smithy-http` have been moved to `aws-smithy-runtime-api`. Type aliases for all affected pub items, except for a trait, are left in `aws-smithy-http` for backwards compatibility but are deprecated. Due to lack of trait aliases, the moved trait `CreateUnhandledError` needs to be used from `aws-smithy-runtime-api`.
+- :bug::warning: (server, [smithy-rs#3095](https://github.com/awslabs/smithy-rs/issues/3095), [smithy-rs#3096](https://github.com/awslabs/smithy-rs/issues/3096)) Service builder initialization now takes in a `${serviceName}Config` object on which plugins and layers should be registered. The `builder_with_plugins` and `builder_without_plugins` methods on the service builder, as well as the `layer` method on the built service have been deprecated, and will be removed in a future release. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3096) for more details.
+
+**New this release:**
+- :tada: (client, [smithy-rs#2916](https://github.com/awslabs/smithy-rs/issues/2916), [smithy-rs#1767](https://github.com/awslabs/smithy-rs/issues/1767)) Support for Smithy IDLv2 nullability is now enabled by default. You can maintain the old behavior by setting `nullabilityCheckMode: "CLIENT_ZERO_VALUE_V1" in your codegen config.
+    For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929).
+- :tada: (server, [smithy-rs#3005](https://github.com/awslabs/smithy-rs/issues/3005)) Python middleware can set URI. This can be used to route a request to a different handler.
+- :tada: (client, [smithy-rs#3071](https://github.com/awslabs/smithy-rs/issues/3071)) Clients now have a default async sleep implementation so that one does not need to be specified if you're using Tokio.
+- :bug: (client, [smithy-rs#2944](https://github.com/awslabs/smithy-rs/issues/2944), [smithy-rs#2951](https://github.com/awslabs/smithy-rs/issues/2951)) `CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again.
+- :bug: (client, [smithy-rs#2960](https://github.com/awslabs/smithy-rs/issues/2960)) Generate a region setter when a model uses SigV4.
+- :bug: (all, [smithy-rs#2969](https://github.com/awslabs/smithy-rs/issues/2969), [smithy-rs#1896](https://github.com/awslabs/smithy-rs/issues/1896)) Fix code generation for union members with the `@httpPayload` trait.
+- (client, [smithy-rs#2964](https://github.com/awslabs/smithy-rs/issues/2964)) Required members with @contextParam are now treated as client-side required.
+- :bug: (client, [smithy-rs#2926](https://github.com/awslabs/smithy-rs/issues/2926), [smithy-rs#2972](https://github.com/awslabs/smithy-rs/issues/2972)) Fix regression with redacting sensitive HTTP response bodies.
+- :bug: (all, [smithy-rs#2831](https://github.com/awslabs/smithy-rs/issues/2831), [aws-sdk-rust#818](https://github.com/awslabs/aws-sdk-rust/issues/818)) Omit fractional seconds from `http-date` format.
+- :bug: (client, [smithy-rs#2985](https://github.com/awslabs/smithy-rs/issues/2985)) Source defaults from the default trait instead of implicitly based on type. This has minimal changes in the generated code.
+- (client, [smithy-rs#2996](https://github.com/awslabs/smithy-rs/issues/2996)) Produce better docs when items are marked @required
+- :bug: (client, [smithy-rs#3034](https://github.com/awslabs/smithy-rs/issues/3034), [smithy-rs#3087](https://github.com/awslabs/smithy-rs/issues/3087)) Enable custom auth schemes to work by changing the code generated auth options to be set at the client level at `DEFAULTS` priority.
+
+
 August 22nd, 2023
 =================
 **Breaking Changes:**
