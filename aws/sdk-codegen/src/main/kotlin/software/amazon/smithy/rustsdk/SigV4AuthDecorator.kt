@@ -226,7 +226,7 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                 if (authSchemes.containsKey(SigV4Trait.ID)) {
                     val unsignedPayload = section.operationShape.hasTrait<UnsignedPayloadTrait>()
                     val doubleUriEncode = unsignedPayload || !disableDoubleEncode(codegenContext.serviceShape)
-                    val contentSha256Header = needsAmzSha256(codegenContext.serviceShape)
+                    val contentSha256Header = needsAmzSha256(codegenContext.serviceShape) || unsignedPayload
                     val normalizeUrlPath = !disableUriPathNormalization(codegenContext.serviceShape)
                     rustTemplate(
                         """
