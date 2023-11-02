@@ -284,6 +284,19 @@ inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType = wh
     else -> this
 }
 
+/** Extracts the inner Reference type */
+fun RustType.innerReference(): RustType? = when(this) {
+    is RustType.Option -> this.stripOuter<RustType.Option>().innerReference()
+    is RustType.Box -> this.stripOuter<RustType.Box>().innerReference()
+    is RustType.Dyn -> this.stripOuter<RustType.Dyn>().innerReference()
+    is RustType.Vec -> this.stripOuter<RustType.Vec>().innerReference()
+    is RustType.Slice -> this.stripOuter<RustType.Slice>().innerReference()
+    is RustType.HashMap -> this.member.innerReference()
+    is RustType.HashSet -> this.member.innerReference()
+    is RustType.Reference -> this
+    else -> null
+}
+
 /** Wraps a type in Option if it isn't already */
 fun RustType.asOptional(): RustType = when (this) {
     is RustType.Option -> this
