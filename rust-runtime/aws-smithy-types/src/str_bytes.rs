@@ -16,7 +16,7 @@ use std::str::Utf8Error;
 ///
 /// Example construction from a `&str`:
 /// ```rust
-/// use aws_smithy_eventstream::str_bytes::StrBytes;
+/// use aws_smithy_types::str_bytes::StrBytes;
 ///
 /// let value: StrBytes = "example".into();
 /// assert_eq!("example", value.as_str());
@@ -26,7 +26,7 @@ use std::str::Utf8Error;
 /// Example construction from `Bytes`:
 /// ```rust
 /// use bytes::Bytes;
-/// use aws_smithy_eventstream::str_bytes::StrBytes;
+/// use aws_smithy_types::str_bytes::StrBytes;
 /// use std::convert::TryInto;
 ///
 /// let bytes = Bytes::from_static(b"example");

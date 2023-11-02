@@ -21,6 +21,7 @@ pub mod config_bag;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
+pub mod event_stream;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
@@ -31,6 +32,7 @@ pub mod type_erasure;
 mod blob;
 mod document;
 mod number;
+pub mod str_bytes;
 
 pub use blob::Blob;
 pub use date_time::DateTime;
