@@ -61,6 +61,7 @@ use std::time::Duration;
 
 /// Http Request Types
 pub mod request {
+    use aws_smithy_types::body::SdkBody;
     /// Deprecated: This type has moved to `aws_smithy_runtime_api::http::HttpError`.
     #[deprecated(note = "This type has moved to `aws_smithy_runtime_api::http::HttpError`.")]
     pub type HttpError = crate::http::HttpError;
@@ -75,7 +76,7 @@ pub mod request {
     pub type HeadersIter<'a> = crate::http::HeadersIter<'a>;
     /// Deprecated: This type has moved to `aws_smithy_runtime_api::http::Request`.
     #[deprecated(note = "This type has moved to `aws_smithy_runtime_api::http::Request`.")]
-    pub type Request = crate::http::Request;
+    pub type Request<B = SdkBody> = crate::http::Request<B>;
 }
 
 new_type_future! {
@@ -277,5 +278,21 @@ impl HttpConnectorSettings {
     /// from the time the request is initiated.
     pub fn read_timeout(&self) -> Option<Duration> {
         self.read_timeout
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    #[allow(deprecated)]
+    fn re_export_has_default_generic() {
+        let req1 = super::request::Request::empty();
+        let req2 = super::request::Request::<()>::new(());
+        fn takes_req(_req: &super::request::Request) {}
+        fn takes_generic_req<B>(_req: &super::request::Request<B>) {}
+
+        takes_req(&req1);
+        takes_generic_req(&req1);
+        takes_generic_req(&req2);
     }
 }
