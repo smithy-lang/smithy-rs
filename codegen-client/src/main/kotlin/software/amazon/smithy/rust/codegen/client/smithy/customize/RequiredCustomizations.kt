@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitivesEventStream
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 
 val TestUtilFeature = Feature("test-util", false, listOf())
@@ -85,8 +86,11 @@ class RequiredCustomizations : ClientCodegenDecorator {
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext).extras(rustCrate)
 
-        rustCrate.withModule(ClientRustModule.Primitives) {
+        rustCrate.withModule(ClientRustModule.primitives) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
+        }
+        rustCrate.withModule(ClientRustModule.Primitives.EventStream) {
+            pubUseSmithyPrimitivesEventStream(codegenContext, codegenContext.model)(this)
         }
         rustCrate.withModule(ClientRustModule.Error) {
             rustTemplate(

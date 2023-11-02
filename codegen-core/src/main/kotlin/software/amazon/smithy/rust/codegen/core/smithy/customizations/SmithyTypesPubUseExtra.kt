@@ -80,16 +80,23 @@ fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model, rustCra
             "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
         )
     }
+}
+
+/** Adds re-export statements for event-stream-related Smithy primitives */
+fun pubUseSmithyPrimitivesEventStream(codegenContext: CodegenContext, model: Model): Writable = writable {
+    val rc = codegenContext.runtimeConfig
     if (codegenContext.serviceShape.hasEventStreamOperations(model)) {
         rustTemplate(
             """
             pub use #{Header};
             pub use #{HeaderValue};
             pub use #{Message};
+            pub use #{StrBytes};
             """,
             "Header" to RuntimeType.smithyTypes(rc).resolve("event_stream::Header"),
             "HeaderValue" to RuntimeType.smithyTypes(rc).resolve("event_stream::HeaderValue"),
             "Message" to RuntimeType.smithyTypes(rc).resolve("event_stream::Message"),
+            "StrBytes" to RuntimeType.smithyTypes(rc).resolve("str_bytes::StrBytes"),
         )
     }
 }
