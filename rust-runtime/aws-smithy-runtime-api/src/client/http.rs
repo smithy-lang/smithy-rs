@@ -59,6 +59,25 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Http Request Types
+pub mod request {
+    /// Deprecated: This type has moved to `aws_smithy_runtime_api::http::HttpError`.
+    #[deprecated(note = "This type has moved to `aws_smithy_runtime_api::http::HttpError`.")]
+    pub type HttpError = crate::http::HttpError;
+    /// Deprecated: This type has moved to `aws_smithy_runtime_api::http::HeaderValue`.
+    #[deprecated(note = "This type has moved to `aws_smithy_runtime_api::http::HeaderValue`.")]
+    pub type HeaderValue = crate::http::HeaderValue;
+    /// Deprecated: This type has moved to `aws_smithy_runtime_api::http::Headers`.
+    #[deprecated(note = "This type has moved to `aws_smithy_runtime_api::http::Headers`.")]
+    pub type Headers = crate::http::Headers;
+    /// Deprecated: This type has moved to `aws_smithy_runtime_api::http::HeadersIter`.
+    #[deprecated(note = "This type has moved to `aws_smithy_runtime_api::http::HeadersIter`.")]
+    pub type HeadersIter<'a> = crate::http::HeadersIter<'a>;
+    /// Deprecated: This type has moved to `aws_smithy_runtime_api::http::Request`.
+    #[deprecated(note = "This type has moved to `aws_smithy_runtime_api::http::Request`.")]
+    pub type Request = crate::http::Request;
+}
+
 new_type_future! {
     #[doc = "Future for [`HttpConnector::call`]."]
     pub struct HttpConnectorFuture<'static, HttpResponse, ConnectorError>;
