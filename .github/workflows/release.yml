@@ -232,9 +232,9 @@ jobs:
             echo "Crates to publish not found!"
             exit 1
           fi
-          # The following owner list command fails without a valid crates.io auth token
           echo "Checking cargo auth token..."
-          cargo owner --list aws-smithy-types
+          # This version has already been yanked. This command succeeds if we have a token with permission to yank the crate.
+          cargo yank aws-sigv4 --version 0.55.0
         else
           publisher publish -y --location .
         fi
