@@ -11,9 +11,16 @@ use libfuzzer_sys::fuzz_target;
 fuzz_target!(|message: ArbMessage| {
     let message = message.into();
     let mut buffer = Vec::new();
-    if write_message_to(&message, &mut buffer).is_ok() {
-        let mut data = &buffer[..];
-        let parsed = read_message_from(&mut data).unwrap();
-        assert_eq!(message, parsed);
+    match write_message_to(&message, &mut buffer) {
+        Ok(_) => {
+            let mut data = &buffer[..];
+            let parsed = read_message_from(&mut data).unwrap();
+            assert_eq!(message, parsed);
+        }
+        Err(err) => {
+            if !err.is_invalid_message() {
+                panic!("unexpected error on write: {}", err),
+            }
+        }
     }
 });
