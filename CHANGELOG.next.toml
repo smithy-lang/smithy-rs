@@ -16,3 +16,11 @@ message = "Fix aws-sdk-rust#930 (PutSnapshotBlock)"
 references = ["smithy-rs#3126", "aws-sdk-rust#930"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+
+[[smithy-rs]]
+message = """
+`Message`, `Header`, `HeaderValue`, and `StrBytes` have been moved to `aws-smithy-types` from `aws-smithy-eventstream`. `Message::read_from` and `Message::write_to` remain in `aws-smithy-eventstream` but they are converted to free functions with the names `read_message_from` and `write_message_to` respectively.
+"""
+references = ["smithy-rs#3139"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "ysaito1001"
