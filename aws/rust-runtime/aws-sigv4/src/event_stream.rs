@@ -103,7 +103,7 @@ pub fn sign_message<'a>(
 ) -> Result<SigningOutput<Message>, SigningError> {
     let message_payload = {
         let mut payload = Vec::new();
-        write_message_to(&message, &mut payload).unwrap();
+        write_message_to(message, &mut payload).unwrap();
         payload
     };
     sign_payload(Some(message_payload), last_signature, params)
