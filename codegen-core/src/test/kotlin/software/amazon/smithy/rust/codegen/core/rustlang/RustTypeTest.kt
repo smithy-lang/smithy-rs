@@ -220,4 +220,13 @@ internal class RustTypesTest {
         val attributeMacro = Attribute(derive())
         forInputExpectOutput(writable { attributeMacro.render(this) }, "")
     }
+
+    @Test
+    fun `finds inner reference type`() {
+        val innerReference = RustType.Reference("a", RustType.Bool)
+        val type = RustType.Box(RustType.Option(innerReference))
+
+        type.innerReference() shouldBe innerReference
+        RustType.Bool.innerReference() shouldBe null
+    }
 }
