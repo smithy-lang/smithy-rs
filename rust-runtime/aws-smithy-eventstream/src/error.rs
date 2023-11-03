@@ -55,15 +55,15 @@ impl Error {
     /// Returns true if the error is one generated during serialization
     pub fn is_invalid_message(&self) -> bool {
         use ErrorKind::*;
-        match self.kind {
+        matches!(
+            self.kind,
             HeadersTooLong
-            | PayloadTooLong
-            | MessageTooLong
-            | InvalidHeaderNameLength
-            | TimestampValueTooLarge(_)
-            | Marshalling(_) => true,
-            _ => false,
-        }
+                | PayloadTooLong
+                | MessageTooLong
+                | InvalidHeaderNameLength
+                | TimestampValueTooLarge(_)
+                | Marshalling(_)
+        )
     }
 }
 
