@@ -18,6 +18,12 @@ meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
 [[smithy-rs]]
+message = "The HTTP `Request`, `Response`, `Headers`, and `HeaderValue` types have been moved from `aws_smithy_runtime_api::client::http::*` into `aws_smithy_runtime_api::http`"
+references = ["smithy-rs#3138"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
 message = """
 `Message`, `Header`, `HeaderValue`, and `StrBytes` have been moved to `aws-smithy-types` from `aws-smithy-eventstream`. `Message::read_from` and `Message::write_to` remain in `aws-smithy-eventstream` but they are converted to free functions with the names `read_message_from` and `write_message_to` respectively.
 """

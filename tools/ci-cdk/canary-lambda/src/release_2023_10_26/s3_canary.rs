@@ -17,10 +17,15 @@ const METADATA_TEST_VALUE: &str = "some   value";
 
 mk_canary!("s3", |sdk_config: &SdkConfig, env: &CanaryEnv| s3_canary(
     s3::Client::new(sdk_config),
-    env.s3_bucket_name.clone()
+    env.s3_bucket_name.clone(),
+    env.s3_mrap_bucket_arn.clone()
 ));
 
-pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Result<()> {
+pub async fn s3_canary(
+    client: s3::Client,
+    s3_bucket_name: String,
+    _s3_mrap_bucket_arn: String,
+) -> anyhow::Result<()> {
     let test_key = Uuid::new_v4().as_u128().to_string();
 
     // Look for the test object and expect that it doesn't exist
@@ -110,6 +115,10 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         result = Err(CanaryError("S3 object body didn't match what was put there".into()).into());
     }
 
+    {
+        println!("skipping MRAP tests because they're unsupported in this version.")
+    }
+
     // Delete the test object
     client
         .delete_object()
@@ -134,6 +143,7 @@ async fn test_s3_canary() {
     s3_canary(
         client,
         std::env::var("TEST_S3_BUCKET").expect("TEST_S3_BUCKET must be set"),
+        "MRAP bucket ARN is unused in this version.".to_owned(),
     )
     .await
     .expect("success");
