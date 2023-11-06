@@ -48,12 +48,7 @@ pub async fn transcribe_canary(
         .await?;
 
     let mut full_message = String::new();
-    while let Some(event) = output
-        .transcript_result_stream
-        .recv()
-        .await
-        .map_err(|e| anyhow::Error::msg(format!("failed to receive event: {e:#?}")))?
-    {
+    while let Some(event) = output.transcript_result_stream.recv().await? {
         match event {
             TranscriptResultStream::TranscriptEvent(transcript_event) => {
                 let transcript = transcript_event.transcript.unwrap();

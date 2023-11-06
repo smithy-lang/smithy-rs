@@ -6,7 +6,8 @@
 //! Types relevant to event stream serialization/deserialization
 
 use crate::str_bytes::StrBytes;
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
+use bytes_utils::SegmentedBuf;
 
 mod value {
     use crate::str_bytes::StrBytes;
@@ -181,5 +182,23 @@ impl Message {
     /// Returns the payload bytes.
     pub fn payload(&self) -> &Bytes {
         &self.payload
+    }
+}
+
+/// Raw message from an event stream receiver when a [`SdkError::ResponseError`] is returned.
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum RawMessage {
+    /// Message was decoded into a valid frame, but failed to unmarshall into a modeled type.
+    Decoded(Message),
+    /// Message failed to be decoded into a valid frame. The raw bytes may not be available in the
+    /// case where decoding consumed the buffer.
+    Invalid(Option<Bytes>),
+}
+
+impl RawMessage {
+    /// Creates a `RawMessage` for failure to decode a message into a valid frame.
+    pub fn invalid(buf: &mut SegmentedBuf<Bytes>) -> Self {
+        Self::Invalid(Some(buf.copy_to_bytes(buf.remaining())))
     }
 }

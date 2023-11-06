@@ -8,7 +8,7 @@ use aws_smithy_eventstream::frame::{
 };
 use aws_smithy_runtime_api::client::result::{ConnectorError, SdkError};
 use aws_smithy_types::body::SdkBody;
-use aws_smithy_types::event_stream::Message;
+use aws_smithy_types::event_stream::{Message, RawMessage};
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
@@ -84,23 +84,6 @@ impl RecvBuf {
             RecvBuf::EosPartial(_) => panic!("already end of stream; this is a bug"),
             RecvBuf::Terminated => panic!("stream terminated; this is a bug"),
         }
-    }
-}
-
-/// Raw message from a [`Receiver`] when a [`SdkError::ResponseError`] is returned.
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum RawMessage {
-    /// Message was decoded into a valid frame, but failed to unmarshall into a modeled type.
-    Decoded(Message),
-    /// Message failed to be decoded into a valid frame. The raw bytes may not be available in the
-    /// case where decoding consumed the buffer.
-    Invalid(Option<Bytes>),
-}
-
-impl RawMessage {
-    pub(crate) fn invalid(buf: &mut SegmentedBuf<Bytes>) -> Self {
-        Self::Invalid(Some(buf.copy_to_bytes(buf.remaining())))
     }
 }
 

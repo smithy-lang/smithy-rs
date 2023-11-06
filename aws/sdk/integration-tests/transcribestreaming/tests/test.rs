@@ -5,10 +5,11 @@
 
 use async_stream::stream;
 use aws_sdk_transcribestreaming::config::{Credentials, Region};
+use aws_sdk_transcribestreaming::error::SdkError;
 use aws_sdk_transcribestreaming::operation::start_stream_transcription::StartStreamTranscriptionOutput;
 use aws_sdk_transcribestreaming::primitives::event_stream::{HeaderValue, Message};
 use aws_sdk_transcribestreaming::primitives::Blob;
-use aws_sdk_transcribestreaming::types::error::AudioStreamError;
+use aws_sdk_transcribestreaming::types::error::{AudioStreamError, TranscriptResultStreamError};
 use aws_sdk_transcribestreaming::types::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
@@ -75,10 +76,15 @@ async fn test_error() {
         start_request("us-east-1", include_str!("error.json"), input_stream).await;
 
     match output.transcript_result_stream.recv().await {
-        Err(err) => {
-            assert!(format!("{err:?}")
-                .contains("A complete signal was sent without the preceding empty frame."),)
-        }
+        Err(SdkError::ServiceError(context)) => match context.err() {
+            TranscriptResultStreamError::BadRequestException(err) => {
+                assert_eq!(
+                    Some("A complete signal was sent without the preceding empty frame."),
+                    err.message()
+                );
+            }
+            otherwise => panic!("Expected BadRequestException, got: {:?}", otherwise),
+        },
         otherwise => panic!("Expected BadRequestException, got: {:?}", otherwise),
     }
 

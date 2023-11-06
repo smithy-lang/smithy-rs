@@ -4,7 +4,8 @@
  */
 
 use aws_smithy_http::event_stream::Receiver;
-use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_types::event_stream::RawMessage;
 
 #[derive(Debug)]
 /// Receives unmarshalled events at a time out of an Event Stream.
@@ -18,12 +19,10 @@ impl<T, E> EventReceiver<T, E> {
     }
 
     /// Asynchronously tries to receive an event from the stream. If the stream has ended, it
-    /// returns an `Ok(None)`. If there is an error, such as failing to unmarshall a message in
-    /// the stream, it returns an [`BoxError`].
-    pub async fn recv(&mut self) -> Result<Option<T>, BoxError>
-    where
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        self.inner.recv().await.map_err(Into::into)
+    /// returns an `Ok(None)`. If there is a transport layer error, it will return
+    /// `Err(SdkError::DispatchFailure)`. Service-modeled errors will be a part of the returned
+    /// messages.
+    pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E, RawMessage>> {
+        self.inner.recv().await
     }
 }

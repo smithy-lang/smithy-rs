@@ -94,6 +94,7 @@ class InlineDependency(
                 "event_receiver",
                 CargoDependency.smithyHttp(runtimeConfig),
                 CargoDependency.smithyRuntimeApi(runtimeConfig),
+                CargoDependency.smithyTypes(runtimeConfig),
             )
 
         fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) = forInlineableRustFile("auth_plugin", CargoDependency.smithyRuntimeApi(runtimeConfig))
