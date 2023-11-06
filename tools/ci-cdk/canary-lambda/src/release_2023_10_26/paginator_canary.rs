@@ -4,12 +4,11 @@
  */
 
 use crate::mk_canary;
+use crate::CanaryEnv;
 use anyhow::bail;
-
 use aws_sdk_ec2 as ec2;
 use aws_sdk_ec2::types::InstanceType;
-
-use crate::CanaryEnv;
+use tokio_stream::StreamExt;
 
 mk_canary!(
     "ec2_paginator",

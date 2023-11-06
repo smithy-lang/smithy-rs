@@ -28,7 +28,8 @@ object EventStreamUnmarshallTestCases {
         val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("test#TestStruct"))
         rust(
             """
-            use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
+            use aws_smithy_eventstream::frame::{UnmarshallMessage, UnmarshalledMessage};
+            use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
             use aws_smithy_types::{Blob, DateTime};
             use $testStreamError;
             use ${typesModule.fullyQualifiedPath()}::*;

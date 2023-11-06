@@ -64,14 +64,15 @@ class EventStreamUnmarshallerGenerator(
         symbolProvider.symbolForEventStreamError(unionShape)
     }
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope = arrayOf(
         "Blob" to RuntimeType.blob(runtimeConfig),
         "expect_fns" to smithyEventStream.resolve("smithy"),
         "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
-        "Message" to smithyEventStream.resolve("frame::Message"),
-        "Header" to smithyEventStream.resolve("frame::Header"),
-        "HeaderValue" to smithyEventStream.resolve("frame::HeaderValue"),
+        "Message" to smithyTypes.resolve("event_stream::Message"),
+        "Header" to smithyTypes.resolve("event_stream::Header"),
+        "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
         "Error" to smithyEventStream.resolve("error::Error"),
         "OpError" to errorSymbol,
         "SmithyError" to RuntimeType.smithyTypes(runtimeConfig).resolve("Error"),
