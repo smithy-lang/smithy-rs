@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 
 /** Returns true if the model has normal streaming operations (excluding event streams) */
@@ -77,6 +78,25 @@ fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model, rustCra
             "AggregatedBytes" to RuntimeType.smithyTypes(rc).resolve("byte_stream::AggregatedBytes"),
             "Error" to RuntimeType.smithyTypes(rc).resolve("byte_stream::error::Error"),
             "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
+        )
+    }
+}
+
+/** Adds re-export statements for event-stream-related Smithy primitives */
+fun pubUseSmithyPrimitivesEventStream(codegenContext: CodegenContext, model: Model): Writable = writable {
+    val rc = codegenContext.runtimeConfig
+    if (codegenContext.serviceShape.hasEventStreamOperations(model)) {
+        rustTemplate(
+            """
+            pub use #{Header};
+            pub use #{HeaderValue};
+            pub use #{Message};
+            pub use #{StrBytes};
+            """,
+            "Header" to RuntimeType.smithyTypes(rc).resolve("event_stream::Header"),
+            "HeaderValue" to RuntimeType.smithyTypes(rc).resolve("event_stream::HeaderValue"),
+            "Message" to RuntimeType.smithyTypes(rc).resolve("event_stream::Message"),
+            "StrBytes" to RuntimeType.smithyTypes(rc).resolve("str_bytes::StrBytes"),
         )
     }
 }

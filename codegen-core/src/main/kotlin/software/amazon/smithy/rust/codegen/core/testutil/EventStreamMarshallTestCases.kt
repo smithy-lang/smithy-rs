@@ -35,7 +35,8 @@ object EventStreamMarshallTestCases {
         val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("test#TestStruct"))
         rustTemplate(
             """
-            use aws_smithy_eventstream::frame::{Message, Header, HeaderValue, MarshallMessage};
+            use aws_smithy_eventstream::frame::MarshallMessage;
+            use aws_smithy_types::event_stream::{Message, Header, HeaderValue};
             use std::collections::HashMap;
             use aws_smithy_types::{Blob, DateTime};
             use ${typesModule.fullyQualifiedPath()}::*;
