@@ -185,7 +185,7 @@ impl Message {
     }
 }
 
-/// Raw message from an event stream receiver when a [`SdkError::ResponseError`] is returned.
+/// Raw message from an event stream receiver when a response error is encountered.
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum RawMessage {
