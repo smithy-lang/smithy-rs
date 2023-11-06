@@ -7,7 +7,7 @@ data class Crate(val name: String, val versionPropertyName: String)
 
 object CrateSet {
     const val STABLE_VERSION_PROP_NAME = "smithy.rs.runtime.crate.stable.version"
-    private const val UNSTABLE_VERSION_PROP_NAME = "smithy.rs.runtime.crate.unstable.version"
+    const val UNSTABLE_VERSION_PROP_NAME = "smithy.rs.runtime.crate.unstable.version"
 
     /*
      * Crates marked as `STABLE_VERSION_PROP_NAME` should have the following package metadata in their `Cargo.toml`
@@ -29,7 +29,7 @@ object CrateSet {
         Crate("aws-types", STABLE_VERSION_PROP_NAME),
     )
 
-    private val SMITHY_RUNTIME_COMMON = listOf(
+    val SMITHY_RUNTIME_COMMON = listOf(
         Crate("aws-smithy-async", STABLE_VERSION_PROP_NAME),
         Crate("aws-smithy-checksums", UNSTABLE_VERSION_PROP_NAME),
         Crate("aws-smithy-client", UNSTABLE_VERSION_PROP_NAME),
@@ -49,7 +49,7 @@ object CrateSet {
 
     val AWS_SDK_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON
 
-    private val SERVER_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON + listOf(
+    val SERVER_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON + listOf(
         Crate("aws-smithy-http-server", UNSTABLE_VERSION_PROP_NAME),
         Crate("aws-smithy-http-server-python", UNSTABLE_VERSION_PROP_NAME),
         Crate("aws-smithy-http-server-typescript", UNSTABLE_VERSION_PROP_NAME),
