@@ -161,4 +161,22 @@ mod tests {
             update_gradle_properties(gradle_properties, &version, &STABLE_VERSION_REGEX).unwrap();
         assert_eq!("smithy.rs.runtime.crate.stable.version=1.0.3", updated);
     }
+
+    #[test]
+    fn downgrading_stable_crate_should_be_caught_as_err() {
+        let gradle_properties = "smithy.rs.runtime.crate.stable.version=1.0.2";
+        let version = semver::Version::new(1, 0, 1);
+        let result = update_gradle_properties(gradle_properties, &version, &STABLE_VERSION_REGEX);
+        assert!(result.is_err());
+        assert!(format!("{:?}", result).contains("downgrade"));
+    }
+
+    #[test]
+    fn downgrading_unstable_crate_should_be_caught_as_err() {
+        let gradle_properties = "smithy.rs.runtime.crate.unstable.version=0.57.1";
+        let version = semver::Version::new(0, 57, 0);
+        let result = update_gradle_properties(gradle_properties, &version, &UNSTABLE_VERSION_REGEX);
+        assert!(result.is_err());
+        assert!(format!("{:?}", result).contains("downgrade"));
+    }
 }
