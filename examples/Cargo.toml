@@ -7,6 +7,7 @@ members = [
     "pokemon-service-lambda",
     "pokemon-service-server-sdk",
     "pokemon-service-client",
+    "pokemon-service-client-usage",
 
 ]
 

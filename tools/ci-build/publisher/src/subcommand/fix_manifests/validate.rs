@@ -7,6 +7,7 @@ use crate::fs::Fs;
 use crate::package::discover_and_validate_package_batches;
 use crate::subcommand::fix_manifests::Versions;
 use anyhow::{anyhow, bail, Result};
+use semver::Version;
 use smithy_rs_tool_common::package::PackageCategory;
 use std::path::Path;
 use tracing::info;
@@ -48,7 +49,7 @@ pub(super) fn validate_before_fixes(
     Ok(())
 }
 
-fn confirm_version(name: &str, expected: &semver::Version, actual: &semver::Version) -> Result<()> {
+fn confirm_version(name: &str, expected: &Version, actual: &Version) -> Result<()> {
     if expected != actual {
         bail!(
             "Crate named `{}` should be at version `{}` but is at `{}`",
@@ -83,7 +84,7 @@ mod test {
             map.insert(
                 (*name).into(),
                 VersionWithMetadata {
-                    version: semver::Version::from_str(version).unwrap(),
+                    version: Version::from_str(version).unwrap(),
                     publish: true,
                     stability: *stability,
                 },

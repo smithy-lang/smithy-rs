@@ -28,7 +28,7 @@
 //! Use the [`ConfigBag`] instead.
 
 use crate::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
-use aws_smithy_http::result::SdkError;
+use crate::client::result::SdkError;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
 use phase::Phase;
@@ -428,7 +428,7 @@ impl fmt::Display for RewindResult {
 #[cfg(all(test, feature = "test-util"))]
 mod tests {
     use super::*;
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_types::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
 

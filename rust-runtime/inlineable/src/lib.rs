@@ -26,6 +26,10 @@ mod serialization_settings;
 
 #[allow(unused)]
 mod endpoint_lib;
+
+#[allow(unused)]
+mod auth_plugin;
+
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
 #[cfg(test)]

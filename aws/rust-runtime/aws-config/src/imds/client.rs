@@ -13,9 +13,6 @@ use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_runtime::user_agent::UserAgentInterceptor;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
-use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy;
 use aws_smithy_runtime_api::client::auth::AuthSchemeOptionResolverParams;
@@ -26,11 +23,14 @@ use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{
     HttpRequest, OrchestratorError, SensitiveOutput,
 };
+use aws_smithy_runtime_api::client::result::ConnectorError;
+use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::client::retries::classifiers::{
     ClassifyRetry, RetryAction, SharedRetryClassifier,
 };
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{FrozenLayer, Layer};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::retry::RetryConfig;
@@ -433,7 +433,6 @@ impl Builder {
             .runtime_plugin(common_plugin.clone())
             .runtime_plugin(TokenRuntimePlugin::new(
                 common_plugin,
-                config.time_source(),
                 self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
             ))
             .with_connection_poisoning()
@@ -583,8 +582,6 @@ pub(crate) mod test {
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep};
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::result::ConnectorError;
     use aws_smithy_runtime::client::http::test_util::{
         capture_request, ReplayEvent, StaticReplayClient,
     };
@@ -595,7 +592,9 @@ pub(crate) mod test {
     use aws_smithy_runtime_api::client::orchestrator::{
         HttpRequest, HttpResponse, OrchestratorError,
     };
+    use aws_smithy_runtime_api::client::result::ConnectorError;
     use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+    use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
     use http::header::USER_AGENT;
@@ -748,6 +747,7 @@ pub(crate) mod test {
     /// Tokens are refreshed up to 120 seconds early to avoid using an expired token.
     #[tokio::test]
     async fn token_refresh_buffer() {
+        let _logs = capture_test_logs();
         let (_, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
@@ -785,11 +785,14 @@ pub(crate) mod test {
             .token_ttl(Duration::from_secs(600))
             .build();
 
+        tracing::info!("resp1 -----------------------------------------------------------");
         let resp1 = client.get("/latest/metadata").await.expect("success");
         // now the cached credential has expired
         time_source.advance(Duration::from_secs(400));
+        tracing::info!("resp2 -----------------------------------------------------------");
         let resp2 = client.get("/latest/metadata").await.expect("success");
         time_source.advance(Duration::from_secs(150));
+        tracing::info!("resp3 -----------------------------------------------------------");
         let resp3 = client.get("/latest/metadata").await.expect("success");
         http_client.assert_requests_match(&[]);
         assert_eq!("test-imds-output1", resp1.as_ref());

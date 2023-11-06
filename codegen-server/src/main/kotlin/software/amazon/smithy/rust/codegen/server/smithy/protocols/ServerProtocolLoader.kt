@@ -28,7 +28,7 @@ class StreamPayloadSerializerCustomization() : ServerHttpBoundProtocolCustomizat
                 // implements the `Stream` trait, so no need to wrap it in the new-type.
                 section.params.payloadGenerator.generatePayload(this, section.params.shapeName, section.params.shape)
             } else {
-                // Otherwise, the stream payload is `aws_smithy_http::byte_stream::ByteStream`. We wrap it in the
+                // Otherwise, the stream payload is `aws_smithy_types::byte_stream::ByteStream`. We wrap it in the
                 // new-type to enable the `Stream` trait.
                 withBlockTemplate(
                     "#{FuturesStreamCompatByteStream}::new(",

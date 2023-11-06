@@ -78,6 +78,10 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
 
                     ${section.serviceConfigBuilder}.set_http_client(${section.sdkConfig}.http_client());
                     ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
+
+                    if let Some(cache) = ${section.sdkConfig}.identity_cache() {
+                        ${section.serviceConfigBuilder}.set_identity_cache(cache);
+                    }
                     """,
                 )
             },

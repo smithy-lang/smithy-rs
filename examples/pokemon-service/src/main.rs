@@ -28,7 +28,7 @@ use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing,
     stream_pokemon_radio, State,
 };
-use pokemon_service_server_sdk::{scope, PokemonService};
+use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
 
 use crate::authz::AuthorizationPlugin;
 
@@ -49,15 +49,15 @@ pub async fn main() {
     setup_tracing();
 
     scope! {
-        /// A scope containing `GetPokemonSpecies` and `GetStorage`
+        /// A scope containing `GetPokemonSpecies` and `GetStorage`.
         struct PrintScope {
             includes: [GetPokemonSpecies, GetStorage]
         }
     }
-    // Scope the `PrintPlugin`, defined in `plugin.rs`, to `PrintScope`
+    // Scope the `PrintPlugin`, defined in `plugin.rs`, to `PrintScope`.
     let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 
-    let plugins = HttpPlugins::new()
+    let http_plugins = HttpPlugins::new()
         // Apply the scoped `PrintPlugin`
         .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
@@ -70,7 +70,20 @@ pub async fn main() {
     let authz_plugin = AuthorizationPlugin::new();
     let model_plugins = ModelPlugins::new().push(authz_plugin);
 
-    let app = PokemonService::builder_with_plugins(plugins, model_plugins)
+    let config = PokemonServiceConfig::builder()
+        // Set up shared state and middlewares.
+        .layer(AddExtensionLayer::new(Arc::new(State::default())))
+        // Handle `/ping` health check requests.
+        .layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+            StatusCode::OK
+        }))
+        // Add server request IDs.
+        .layer(ServerRequestIdProviderLayer::new())
+        .http_plugin(http_plugins)
+        .model_plugin(model_plugins)
+        .build();
+
+    let app = PokemonService::builder(config)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -83,16 +96,6 @@ pub async fn main() {
         .stream_pokemon_radio(stream_pokemon_radio)
         .build()
         .expect("failed to build an instance of PokemonService");
-
-    let app = app
-        // Setup shared state and middlewares.
-        .layer(&AddExtensionLayer::new(Arc::new(State::default())))
-        // Handle `/ping` health check requests.
-        .layer(&AlbHealthCheckLayer::from_handler("/ping", |_req| async {
-            StatusCode::OK
-        }))
-        // Add server request IDs.
-        .layer(&ServerRequestIdProviderLayer::new());
 
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.

@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
@@ -17,6 +16,7 @@ use aws_smithy_runtime_api::client::interceptors::{
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::error::Error as StdError;
@@ -65,6 +65,11 @@ macro_rules! interceptor_impl_fn {
             runtime_components: &RuntimeComponents,
             cfg: &mut ConfigBag,
         ) -> Result<(), InterceptorError> {
+            tracing::trace!(concat!(
+                "running `",
+                stringify!($interceptor),
+                "` interceptors"
+            ));
             let mut result: Result<(), (&str, BoxError)> = Ok(());
             let ctx = ctx.into();
             for interceptor in self.into_iter() {

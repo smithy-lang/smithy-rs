@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.asRef
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.innerReference
 import software.amazon.smithy.rust.codegen.core.rustlang.isCopy
 import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
@@ -93,7 +94,7 @@ open class StructureGenerator(
      */
     private fun lifetimeDeclaration(): String {
         val lifetimes = members
-            .map { symbolProvider.toSymbol(it).rustType() }
+            .map { symbolProvider.toSymbol(it).rustType().innerReference() }
             .mapNotNull {
                 when (it) {
                     is RustType.Reference -> it.lifetime
@@ -133,7 +134,8 @@ open class StructureGenerator(
         if (accessorMembers.isEmpty()) {
             return
         }
-        writer.rustBlock("impl $name") {
+        val lifetimes = lifetimeDeclaration()
+        writer.rustBlock("impl $lifetimes $name $lifetimes") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 val memberType = memberSymbol.rustType()

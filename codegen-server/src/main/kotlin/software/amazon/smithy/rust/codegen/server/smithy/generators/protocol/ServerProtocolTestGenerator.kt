@@ -54,7 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
 
@@ -94,7 +94,7 @@ class ServerProtocolTestGenerator(
         inputT to outputT
     }
 
-    private val instantiator = serverInstantiator(codegenContext)
+    private val instantiator = ServerInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -467,7 +467,8 @@ class ServerProtocolTestGenerator(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
-            let service = crate::service::$serviceName::builder_without_plugins::<#{Hyper}::body::Body>()
+            let config = crate::service::${serviceName}Config::builder().build();
+            let service = crate::service::$serviceName::builder::<#{Hyper}::body::Body, _, _, _>(config)
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {

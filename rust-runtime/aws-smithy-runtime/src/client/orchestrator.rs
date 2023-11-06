@@ -12,9 +12,6 @@ use crate::client::orchestrator::endpoints::orchestrate_endpoint;
 use crate::client::orchestrator::http::{log_response_body, read_body};
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::byte_stream::ByteStream;
-use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::interceptors::context::{
@@ -23,22 +20,28 @@ use aws_smithy_runtime_api::client::interceptors::context::{
 use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, LoadedRequestBody, OrchestratorError,
 };
+use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
 use aws_smithy_runtime_api::client::ser_de::{
     DeserializeResponse, SerializeRequest, SharedRequestSerializer, SharedResponseDeserializer,
 };
+use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::byte_stream::ByteStream;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
 mod auth;
+
 /// Defines types that implement a trait for endpoint resolution
 pub mod endpoints;
+
 /// Defines types that work with HTTP types
 mod http;
+
 /// Utility for making one-off unmodeled requests with the orchestrator.
 #[doc(hidden)]
 pub mod operation;
@@ -182,10 +185,13 @@ fn apply_configuration(
     continue_on_err!([ctx] => Interceptors::new(operation_rc_builder.interceptors()).read_before_execution(true, ctx, cfg));
 
     // The order below is important. Client interceptors must run before operation interceptors.
-    Ok(RuntimeComponents::builder("merged orchestrator components")
+    let components = RuntimeComponents::builder("merged orchestrator components")
         .merge_from(&client_rc_builder)
         .merge_from(&operation_rc_builder)
-        .build()?)
+        .build()?;
+
+    components.validate_final_config(cfg)?;
+    Ok(components)
 }
 
 #[instrument(skip_all, level = "debug")]
@@ -516,7 +522,7 @@ mod tests {
     impl TestOperationRuntimePlugin {
         fn new() -> Self {
             Self {
-                builder: RuntimeComponentsBuilder::new("TestOperationRuntimePlugin")
+                builder: RuntimeComponentsBuilder::for_tests()
                     .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())))
                     .with_endpoint_resolver(Some(SharedEndpointResolver::new(
                         StaticUriEndpointResolver::http_localhost(8080),

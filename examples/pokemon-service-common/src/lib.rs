@@ -15,13 +15,15 @@ use std::{
 };
 
 use async_stream::stream;
-use aws_smithy_http::{body::SdkBody, byte_stream::ByteStream};
 use aws_smithy_http_server::Extension;
 use aws_smithy_runtime::client::http::hyper_014::HyperConnector;
 use aws_smithy_runtime_api::client::http::HttpConnector;
 use http::Uri;
 use pokemon_service_server_sdk::{
-    error, input, model, model::CapturingPayload, output, types::Blob,
+    error, input, model,
+    model::CapturingPayload,
+    output,
+    types::{Blob, ByteStream, SdkBody},
 };
 use rand::{seq::SliceRandom, Rng};
 use tracing_subscriber::{prelude::*, EnvFilter};

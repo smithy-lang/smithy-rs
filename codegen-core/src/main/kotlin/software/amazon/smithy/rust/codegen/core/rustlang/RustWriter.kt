@@ -169,6 +169,12 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     this.write(contents.trim(), *args)
 }
 
+fun <T : AbstractCodeWriter<T>> T.rawRust(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
+) {
+    this.write(escape(contents.trim()))
+}
+
 /**
  * Convenience wrapper that tells Intellij that the contents of this block are Rust
  */
@@ -545,10 +551,7 @@ class RustWriter private constructor(
         if (this.className.contains("AbstractCodeWriter") || this.className.startsWith("java.lang")) {
             return false
         }
-        if (this.fileName == "RustWriter.kt") {
-            return false
-        }
-        return true
+        return this.fileName != "RustWriter.kt"
     }
 
     private val preamble = mutableListOf<Writable>()

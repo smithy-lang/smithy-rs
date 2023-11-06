@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ConnectionPoisoningRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdentityCacheConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.MetadataCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
@@ -56,6 +57,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations +
         ResiliencyConfigCustomization(codegenContext) +
+        IdentityCacheConfigCustomization(codegenContext) +
         InterceptorConfigCustomization(codegenContext) +
         TimeSourceCustomization(codegenContext) +
         RetryClassifierConfigCustomization(codegenContext)
@@ -74,7 +76,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
             Feature(
                 "rt-tokio",
                 true,
-                listOf("aws-smithy-async/rt-tokio", "aws-smithy-http/rt-tokio"),
+                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio"),
             ),
         )
 
@@ -84,19 +86,20 @@ class RequiredCustomizations : ClientCodegenDecorator {
         ResiliencyReExportCustomization(codegenContext).extras(rustCrate)
 
         rustCrate.withModule(ClientRustModule.Primitives) {
-            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
+            pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
         }
         rustCrate.withModule(ClientRustModule.Error) {
             rustTemplate(
                 """
                 /// Error type returned by the client.
-                pub use #{SdkError};
+                pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;
 
                 pub use #{DisplayErrorContext};
                 pub use #{ProvideErrorMetadata};
                 """,
                 "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
                 "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+                "R" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(rc),
             )
         }
