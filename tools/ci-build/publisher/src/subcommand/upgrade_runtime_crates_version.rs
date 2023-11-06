@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context};
 use clap::Parser;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use smithy_rs_tool_common::package::PackageStability;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
@@ -48,7 +49,7 @@ pub async fn subcommand_upgrade_runtime_crates_version(
     let updated_gradle_properties = update_gradle_properties(
         &gradle_properties,
         &upgraded_unstable_version,
-        &UNSTABLE_VERSION_REGEX,
+        PackageStability::Unstable,
     )
     .with_context(|| {
         format!(
@@ -64,7 +65,7 @@ pub async fn subcommand_upgrade_runtime_crates_version(
         update_gradle_properties(
             &updated_gradle_properties,
             &upgraded_stable_version,
-            &STABLE_VERSION_REGEX,
+            PackageStability::Stable,
         )
         .with_context(|| {
             format!(
@@ -87,8 +88,12 @@ pub async fn subcommand_upgrade_runtime_crates_version(
 fn update_gradle_properties<'a>(
     gradle_properties: &'a str,
     upgraded_version: &semver::Version,
-    version_regex: &Regex,
+    package_stability: PackageStability,
 ) -> Result<Cow<'a, str>, anyhow::Error> {
+    let version_regex = match package_stability {
+        PackageStability::Stable => &STABLE_VERSION_REGEX,
+        PackageStability::Unstable => &UNSTABLE_VERSION_REGEX,
+    };
     let current_version = version_regex
         .captures(gradle_properties)
         .ok_or_else(|| anyhow!("Failed to extract the expected runtime crates version"))?;
@@ -122,16 +127,16 @@ async fn update_gradle_properties_file(
 
 #[cfg(test)]
 mod tests {
-    use crate::subcommand::upgrade_runtime_crates_version::{
-        update_gradle_properties, STABLE_VERSION_REGEX, UNSTABLE_VERSION_REGEX,
-    };
+    use crate::subcommand::upgrade_runtime_crates_version::update_gradle_properties;
+    use smithy_rs_tool_common::package::PackageStability;
 
     #[test]
     fn upgrading_works_with_actual_unstable_version() {
         let gradle_properties = "smithy.rs.runtime.crate.unstable.version=0.54.2";
         let version = semver::Version::new(0, 54, 3);
         let updated =
-            update_gradle_properties(gradle_properties, &version, &UNSTABLE_VERSION_REGEX).unwrap();
+            update_gradle_properties(gradle_properties, &version, PackageStability::Unstable)
+                .unwrap();
         assert_eq!("smithy.rs.runtime.crate.unstable.version=0.54.3", updated);
     }
 
@@ -140,7 +145,8 @@ mod tests {
         let gradle_properties = "smithy.rs.runtime.crate.unstable.version=0.0.0-smithy-rs-head";
         let version = semver::Version::new(0, 54, 3);
         let updated =
-            update_gradle_properties(gradle_properties, &version, &UNSTABLE_VERSION_REGEX).unwrap();
+            update_gradle_properties(gradle_properties, &version, PackageStability::Unstable)
+                .unwrap();
         assert_eq!("smithy.rs.runtime.crate.unstable.version=0.54.3", updated);
     }
 
@@ -149,7 +155,8 @@ mod tests {
         let gradle_properties = "smithy.rs.runtime.crate.stable.version=1.0.2";
         let version = semver::Version::new(1, 0, 3);
         let updated =
-            update_gradle_properties(gradle_properties, &version, &STABLE_VERSION_REGEX).unwrap();
+            update_gradle_properties(gradle_properties, &version, PackageStability::Stable)
+                .unwrap();
         assert_eq!("smithy.rs.runtime.crate.stable.version=1.0.3", updated);
     }
 
@@ -158,7 +165,8 @@ mod tests {
         let gradle_properties = "smithy.rs.runtime.crate.stable.version=0.0.0-smithy-rs-head";
         let version = semver::Version::new(1, 0, 3);
         let updated =
-            update_gradle_properties(gradle_properties, &version, &STABLE_VERSION_REGEX).unwrap();
+            update_gradle_properties(gradle_properties, &version, PackageStability::Stable)
+                .unwrap();
         assert_eq!("smithy.rs.runtime.crate.stable.version=1.0.3", updated);
     }
 
@@ -166,7 +174,8 @@ mod tests {
     fn downgrading_stable_crate_should_be_caught_as_err() {
         let gradle_properties = "smithy.rs.runtime.crate.stable.version=1.0.2";
         let version = semver::Version::new(1, 0, 1);
-        let result = update_gradle_properties(gradle_properties, &version, &STABLE_VERSION_REGEX);
+        let result =
+            update_gradle_properties(gradle_properties, &version, PackageStability::Stable);
         assert!(result.is_err());
         assert!(format!("{:?}", result).contains("downgrade"));
     }
@@ -175,7 +184,8 @@ mod tests {
     fn downgrading_unstable_crate_should_be_caught_as_err() {
         let gradle_properties = "smithy.rs.runtime.crate.unstable.version=0.57.1";
         let version = semver::Version::new(0, 57, 0);
-        let result = update_gradle_properties(gradle_properties, &version, &UNSTABLE_VERSION_REGEX);
+        let result =
+            update_gradle_properties(gradle_properties, &version, PackageStability::Unstable);
         assert!(result.is_err());
         assert!(format!("{:?}", result).contains("downgrade"));
     }
