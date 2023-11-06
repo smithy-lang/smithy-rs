@@ -56,6 +56,8 @@ pub async fn subcommand_upgrade_runtime_crates_version(
             &args.gradle_properties_path
         )
     })?;
+    // TODO(GA): Error out if args.stable_version starts with "0."
+    //  https://github.com/awslabs/smithy-rs/pull/3082#discussion_r1378637315
     let updated_gradle_properties = if let Some(stable_version) = &args.stable_version {
         let upgraded_stable_version = semver::Version::parse(stable_version.as_str())
             .with_context(|| format!("{} is not a valid semver version", &stable_version))?;
