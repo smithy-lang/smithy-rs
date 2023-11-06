@@ -193,11 +193,12 @@ impl<T, E> Receiver<T, E> {
         }
         if self.buffer.has_data() {
             trace!(remaining_data = ?self.buffer, "data left over in the event stream response stream");
+            let buf = self.buffer.buffered();
             return Err(SdkError::response_error(
                 ReceiverError {
                     kind: ReceiverErrorKind::UnexpectedEndOfStream,
                 },
-                RawMessage::invalid(self.buffer.buffered()),
+                RawMessage::invalid(Some(buf.copy_to_bytes(buf.remaining()))),
             ));
         }
         Ok(None)

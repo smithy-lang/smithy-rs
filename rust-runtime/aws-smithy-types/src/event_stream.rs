@@ -6,8 +6,7 @@
 //! Types relevant to event stream serialization/deserialization
 
 use crate::str_bytes::StrBytes;
-use bytes::{Buf, Bytes};
-use bytes_utils::SegmentedBuf;
+use bytes::Bytes;
 
 mod value {
     use crate::str_bytes::StrBytes;
@@ -198,7 +197,7 @@ pub enum RawMessage {
 
 impl RawMessage {
     /// Creates a `RawMessage` for failure to decode a message into a valid frame.
-    pub fn invalid(buf: &mut SegmentedBuf<Bytes>) -> Self {
-        Self::Invalid(Some(buf.copy_to_bytes(buf.remaining())))
+    pub fn invalid(bytes: Option<Bytes>) -> Self {
+        Self::Invalid(bytes)
     }
 }
