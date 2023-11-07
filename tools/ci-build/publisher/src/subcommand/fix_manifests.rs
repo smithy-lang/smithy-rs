@@ -188,6 +188,7 @@ fn fix_dep_set(versions: &VersionView, key: &str, metadata: &mut Value) -> Resul
     Ok(changed)
 }
 
+// Update a version of `dep_name` that has a path dependency to be that appearing in `versions`.
 fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Result<usize> {
     if !table.contains_key("path") {
         return Ok(0);

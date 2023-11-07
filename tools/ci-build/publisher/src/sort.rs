@@ -34,7 +34,7 @@ pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
 
     Ok(order
         .into_iter()
-        .map(&mut |handle| packages.remove(&handle).unwrap())
+        .map(&mut |handle: PackageHandle| packages.remove(&handle).unwrap())
         .collect())
 }
 

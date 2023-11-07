@@ -7,8 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
@@ -82,9 +80,8 @@ internal class ServiceConfigGeneratorTest {
         model.lookup<ServiceShape>("com.example#ResourceService").needsIdempotencyToken(model) shouldBe true
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = ["middleware", "orchestrator"])
-    fun `generate customizations as specified`(smithyRuntimeModeStr: String) {
+    @Test
+    fun `generate customizations as specified`() {
         class ServiceCustomizer(private val codegenContext: ClientCodegenContext) :
             NamedCustomization<ServiceConfig>() {
 

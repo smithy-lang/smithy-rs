@@ -8,8 +8,11 @@ publish = false
 
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-sdk-ec2 = { path = "../../build/aws-sdk/sdk/ec2" }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util"]}
 tokio = { version = "1.23.1", features = ["full"]}
 http = "0.2.0"
 tokio-stream = "0.1.5"

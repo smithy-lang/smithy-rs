@@ -91,7 +91,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
             when (section) {
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                    section.registerInterceptor(runtimeConfig, this) {
+                    section.registerInterceptor(this) {
                         rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
                     }
                 }
@@ -105,6 +105,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         private val codegenScope = arrayOf(
             *preludeScope,
             "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
+            "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
         )
 
         override fun section(section: ServiceConfig): Writable =
@@ -153,6 +154,15 @@ class UserAgentDecorator : ClientCodegenDecorator {
                         pub fn app_name(&self) -> #{Option}<&#{AppName}> {
                            self.config.load::<#{AppName}>()
                         }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                is ServiceConfig.DefaultForTests -> writable {
+                    rustTemplate(
+                        """
+                        self.config.store_put(#{AwsUserAgent}::for_tests());
                         """,
                         *codegenScope,
                     )

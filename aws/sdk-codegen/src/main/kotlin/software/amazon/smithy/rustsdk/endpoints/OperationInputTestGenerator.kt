@@ -8,7 +8,7 @@ package software.amazon.smithy.rustsdk.endpoints
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rulesengine.traits.EndpointTestOperationInput
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -59,9 +59,9 @@ class OperationInputTestDecorator : ClientCodegenDecorator {
 private val deprecatedBuiltins =
     setOf(
         // The Rust SDK DOES NOT support the S3 global endpoint because we do not support bucket redirects
-        Builtins.S3_USE_GLOBAL_ENDPOINT,
+        AwsBuiltIns.S3_USE_GLOBAL_ENDPOINT,
         // STS global endpoint was deprecated after STS regionalization
-        Builtins.STS_USE_GLOBAL_ENDPOINT,
+        AwsBuiltIns.STS_USE_GLOBAL_ENDPOINT,
     ).map { it.builtIn.get() }
 
 fun usesDeprecatedBuiltIns(testOperationInput: EndpointTestOperationInput): Boolean {
@@ -83,12 +83,12 @@ fun usesDeprecatedBuiltIns(testOperationInput: EndpointTestOperationInput): Bool
  *         "AWS::S3::UseArnRegion": false
  *     } */
  *     /* clientParams: {} */
- *     let (conn, rcvr) = aws_smithy_client::test_connection::capture_request(None);
+ *     let (http_client, rcvr) = aws_smithy_runtime::client::http::test_util::capture_request(None);
  *     let conf = {
  *         #[allow(unused_mut)]
  *         let mut builder = aws_sdk_s3::Config::builder()
  *             .with_test_defaults()
- *             .http_connector(conn);
+ *             .http_client(http_client);
  *         let builder = builder.region(aws_types::region::Region::new("us-west-2"));
  *         let builder = builder.use_arn_region(false);
  *         builder.build()
@@ -122,22 +122,14 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private val model = ctx.model
     private val instantiator = ClientInstantiator(ctx)
 
-    /** the Rust SDK doesn't support SigV4a — search  endpoint.properties.authSchemes[].name */
-    private fun EndpointTestCase.isSigV4a() =
-        expect.endpoint.orNull()?.properties?.get("authSchemes")?.asArrayNode()?.orNull()
-            ?.map { it.expectObjectNode().expectStringMember("name").value }?.contains("sigv4a") == true
-
     fun generateInput(testOperationInput: EndpointTestOperationInput) = writable {
         val operationName = testOperationInput.operationName.toSnakeCase()
-        if (test.isSigV4a()) {
-            Attribute.shouldPanic("no request was received").render(this)
-        }
         tokioTest(safeName("operation_input_test_$operationName")) {
             rustTemplate(
                 """
                 /* builtIns: ${escape(Node.prettyPrintJson(testOperationInput.builtInParams))} */
                 /* clientParams: ${escape(Node.prettyPrintJson(testOperationInput.clientParams))} */
-                let (conn, rcvr) = #{capture_request}(None);
+                let (http_client, rcvr) = #{capture_request}(None);
                 let conf = #{conf};
                 let client = $moduleName::Client::from_conf(conf);
                 let _result = dbg!(#{invoke_operation});
@@ -195,7 +187,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private fun config(operationInput: EndpointTestOperationInput) = writable {
         rustBlock("") {
             Attribute.AllowUnusedMut.render(this)
-            rust("let mut builder = $moduleName::Config::builder().with_test_defaults().http_connector(conn);")
+            rust("let mut builder = $moduleName::Config::builder().with_test_defaults().http_client(http_client);")
             operationInput.builtInParams.members.forEach { (builtIn, value) ->
                 val setter = endpointCustomizations.firstNotNullOfOrNull {
                     it.setBuiltInOnServiceConfig(

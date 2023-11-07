@@ -32,7 +32,7 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             // Track the latency between client and server.
-            section.registerInterceptor(runtimeConfig, this) {
+            section.registerInterceptor(this) {
                 rust(
                     "#T::new()",
                     awsRuntime.resolve("service_clock_skew::ServiceClockSkewInterceptor"),
@@ -40,7 +40,7 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
             }
 
             // Add request metadata to outgoing requests. Sets a header.
-            section.registerInterceptor(runtimeConfig, this) {
+            section.registerInterceptor(this) {
                 rust("#T::new()", awsRuntime.resolve("request_info::RequestInfoInterceptor"))
             }
         }

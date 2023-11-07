@@ -19,7 +19,7 @@ async fn simple_integration_test() {
     let client = common::client();
 
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
-    assert_eq!(0, service_statistics_out.calls_count.unwrap());
+    assert_eq!(0, service_statistics_out.calls_count);
 
     let pokemon_species_output = client
         .get_pokemon_species()
@@ -27,10 +27,10 @@ async fn simple_integration_test() {
         .send()
         .await
         .unwrap();
-    assert_eq!("pikachu", pokemon_species_output.name().unwrap());
+    assert_eq!("pikachu", pokemon_species_output.name());
 
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
-    assert_eq!(1, service_statistics_out.calls_count.unwrap());
+    assert_eq!(1, service_statistics_out.calls_count);
 
     let storage_err = client
         .get_storage()
@@ -56,12 +56,12 @@ async fn simple_integration_test() {
         .await
         .unwrap();
     assert_eq!(
-        Some(vec![
+        vec![
             "bulbasaur".to_string(),
             "charmander".to_string(),
             "squirtle".to_string(),
             "pikachu".to_string()
-        ]),
+        ],
         storage_out.collection
     );
 
@@ -80,7 +80,7 @@ async fn simple_integration_test() {
     );
 
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
-    assert_eq!(2, service_statistics_out.calls_count.unwrap());
+    assert_eq!(2, service_statistics_out.calls_count);
 
     let hyper_client = hyper::Client::new();
     let health_check_url = format!("{}/ping", common::base_url());

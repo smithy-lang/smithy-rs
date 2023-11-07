@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import io.kotest.matchers.string.shouldContainInOrder
 import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -15,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -84,7 +86,6 @@ class StructureGeneratorTest {
         val credentials = model.lookup<StructureShape>("com.test#Credentials")
         val secretStructure = model.lookup<StructureShape>("com.test#SecretStructure")
         val structWithInnerSecretStructure = model.lookup<StructureShape>("com.test#StructWithInnerSecretStructure")
-        val error = model.lookup<StructureShape>("com.test#MyError")
 
         val rustReservedWordConfig: RustReservedWordConfig = RustReservedWordConfig(
             structureMemberMap = StructureGenerator.structureMemberNameMap,
@@ -93,13 +94,15 @@ class StructureGeneratorTest {
         )
     }
 
+    private fun structureGenerator(model: Model, provider: RustSymbolProvider, writer: RustWriter, shape: StructureShape) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
+
     @Test
     fun `generate basic structures`() {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.useShapeWriter(inner) {
-            StructureGenerator(model, provider, this, inner, emptyList()).render()
-            StructureGenerator(model, provider, this, struct, emptyList()).render()
+            structureGenerator(model, provider, this, inner).render()
+            structureGenerator(model, provider, this, struct).render()
             unitTest(
                 "struct_fields_optional",
                 """
@@ -121,11 +124,11 @@ class StructureGeneratorTest {
 
         project.lib { Attribute.AllowDeprecated.render(this) }
         project.moduleFor(inner) {
-            val innerGenerator = StructureGenerator(model, provider, this, inner, emptyList())
+            val innerGenerator = structureGenerator(model, provider, this, inner)
             innerGenerator.render()
         }
         project.withModule(RustModule.public("structs")) {
-            val generator = StructureGenerator(model, provider, this, struct, emptyList())
+            val generator = structureGenerator(model, provider, this, struct)
             generator.render()
         }
         // By putting the test in another module, it can't access the struct
@@ -148,7 +151,7 @@ class StructureGeneratorTest {
     fun `generate a custom debug implementation when the sensitive trait is applied to some members`() {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         TestWorkspace.testProject().unitTest {
-            StructureGenerator(model, provider, this, credentials, emptyList()).render()
+            structureGenerator(model, provider, this, credentials).render()
 
             this.unitTest(
                 "sensitive_fields_redacted",
@@ -168,7 +171,7 @@ class StructureGeneratorTest {
     fun `generate a custom debug implementation when the sensitive trait is applied to the struct`() {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         TestWorkspace.testProject().unitTest {
-            StructureGenerator(model, provider, this, secretStructure, emptyList()).render()
+            structureGenerator(model, provider, this, secretStructure).render()
 
             this.unitTest(
                 "sensitive_structure_redacted",
@@ -187,8 +190,8 @@ class StructureGeneratorTest {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         val project = TestWorkspace.testProject(provider)
         project.useShapeWriter(inner) {
-            val secretGenerator = StructureGenerator(model, provider, this, secretStructure, emptyList())
-            val generator = StructureGenerator(model, provider, this, structWithInnerSecretStructure, emptyList())
+            val secretGenerator = structureGenerator(model, provider, this, secretStructure)
+            val generator = structureGenerator(model, provider, this, structWithInnerSecretStructure)
             secretGenerator.render()
             generator.render()
             unitTest(
@@ -231,8 +234,8 @@ class StructureGeneratorTest {
             Attribute.DenyMissingDocs.render(this)
         }
         project.moduleFor(model.lookup("com.test#Inner")) {
-            StructureGenerator(model, provider, this, model.lookup("com.test#Inner"), emptyList()).render()
-            StructureGenerator(model, provider, this, model.lookup("com.test#MyStruct"), emptyList()).render()
+            structureGenerator(model, provider, this, model.lookup("com.test#Inner")).render()
+            structureGenerator(model, provider, this, model.lookup("com.test#MyStruct")).render()
         }
 
         project.compileAndTest()
@@ -242,7 +245,7 @@ class StructureGeneratorTest {
     fun `documents are optional in structs`() {
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         TestWorkspace.testProject().unitTest {
-            StructureGenerator(model, provider, this, structWithDoc, emptyList()).render()
+            structureGenerator(model, provider, this, structWithDoc).render()
             rust(
                 """
                 let _struct = StructWithDoc {
@@ -275,10 +278,10 @@ class StructureGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
         project.moduleFor(model.lookup("test#Foo")) {
-            StructureGenerator(model, provider, this, model.lookup("test#Foo"), emptyList()).render()
-            StructureGenerator(model, provider, this, model.lookup("test#Bar"), emptyList()).render()
-            StructureGenerator(model, provider, this, model.lookup("test#Baz"), emptyList()).render()
-            StructureGenerator(model, provider, this, model.lookup("test#Qux"), emptyList()).render()
+            structureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            structureGenerator(model, provider, this, model.lookup("test#Bar")).render()
+            structureGenerator(model, provider, this, model.lookup("test#Baz")).render()
+            structureGenerator(model, provider, this, model.lookup("test#Qux")).render()
         }
 
         // turn on clippy to check the semver-compliant version of `since`.
@@ -308,9 +311,9 @@ class StructureGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.lib { rust("##![allow(deprecated)]") }
         project.moduleFor(model.lookup("test#Nested")) {
-            StructureGenerator(model, provider, this, model.lookup("test#Nested"), emptyList()).render()
-            StructureGenerator(model, provider, this, model.lookup("test#Foo"), emptyList()).render()
-            StructureGenerator(model, provider, this, model.lookup("test#Bar"), emptyList()).render()
+            structureGenerator(model, provider, this, model.lookup("test#Nested")).render()
+            structureGenerator(model, provider, this, model.lookup("test#Foo")).render()
+            structureGenerator(model, provider, this, model.lookup("test#Bar")).render()
         }
 
         project.compileAndTest()
@@ -357,8 +360,8 @@ class StructureGeneratorTest {
         val project = TestWorkspace.testProject(provider)
 
         project.useShapeWriter(inner) {
-            StructureGenerator(testModel, provider, this, testModel.lookup("test#One"), emptyList()).render()
-            StructureGenerator(testModel, provider, this, testModel.lookup("test#Two"), emptyList()).render()
+            structureGenerator(testModel, provider, this, testModel.lookup("test#One")).render()
+            structureGenerator(testModel, provider, this, testModel.lookup("test#Two")).render()
 
             rustBlock("fn compile_test_one(one: &crate::test_model::One)") {
                 rust(
@@ -415,7 +418,7 @@ class StructureGeneratorTest {
 
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         RustWriter.forModule("test").let { writer ->
-            StructureGenerator(model, provider, writer, struct, emptyList()).render()
+            structureGenerator(model, provider, writer, struct).render()
             writer.toString().shouldNotContain("#[doc(hidden)]")
         }
     }
@@ -431,7 +434,7 @@ class StructureGeneratorTest {
 
         val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
         RustWriter.forModule("test").let { writer ->
-            StructureGenerator(model, provider, writer, struct, emptyList()).render()
+            structureGenerator(model, provider, writer, struct).render()
             writer.toString().shouldNotContain("#[doc(hidden)]")
         }
     }

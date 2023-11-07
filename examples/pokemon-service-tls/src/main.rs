@@ -36,7 +36,7 @@ use pokemon_service_common::{
     capture_pokemon, check_health, do_nothing, get_pokemon_species, get_server_statistics,
     get_storage, setup_tracing, stream_pokemon_radio, State,
 };
-use pokemon_service_server_sdk::PokemonService;
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 use pokemon_service_tls::{DEFAULT_ADDRESS, DEFAULT_PORT, DEFAULT_TEST_CERT, DEFAULT_TEST_KEY};
 
 #[derive(Parser, Debug)]
@@ -61,7 +61,11 @@ pub async fn main() {
     let args = Args::parse();
     setup_tracing();
 
-    let app = PokemonService::builder_without_plugins()
+    let config = PokemonServiceConfig::builder()
+        // Set up shared state and middlewares.
+        .layer(AddExtensionLayer::new(Arc::new(State::default())))
+        .build();
+    let app = PokemonService::builder(config)
         // Build a registry containing implementations to all the operations in the service. These
         // are async functions or async closures that take as input the operation's input and
         // return the operation's output.
@@ -73,9 +77,7 @@ pub async fn main() {
         .check_health(check_health)
         .stream_pokemon_radio(stream_pokemon_radio)
         .build()
-        .expect("failed to build an instance of PokemonService")
-        // Set up shared state and middlewares.
-        .layer(&AddExtensionLayer::new(Arc::new(State::default())));
+        .expect("failed to build an instance of PokemonService");
 
     let addr: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()

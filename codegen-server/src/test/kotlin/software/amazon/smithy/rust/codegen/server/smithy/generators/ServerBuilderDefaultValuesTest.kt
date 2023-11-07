@@ -197,7 +197,7 @@ class ServerBuilderDefaultValuesTest {
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
         ).render(writer)
-        StructureGenerator(model, symbolProvider, writer, struct, emptyList()).render()
+        StructureGenerator(model, symbolProvider, writer, struct, emptyList(), codegenContext.structSettings()).render()
     }
 
     private fun writeServerBuilderGenerator(rustCrate: RustCrate, writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
@@ -220,7 +220,7 @@ class ServerBuilderDefaultValuesTest {
             model.lookup<EnumShape>("com.test#Language"),
             SmithyValidationExceptionConversionGenerator(codegenContext),
         ).render(writer)
-        StructureGenerator(model, symbolProvider, writer, struct, emptyList()).render()
+        StructureGenerator(model, symbolProvider, writer, struct, emptyList(), codegenContext.structSettings()).render()
     }
 
     private fun structSetters(values: Map<String, String?>, optional: Boolean) = writable {

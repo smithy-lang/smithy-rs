@@ -26,11 +26,11 @@ mod latest;
 #[cfg(feature = "latest")]
 pub(crate) use latest as current_canary;
 
-// NOTE: This module can be deleted 3 releases after release-2023-01-26
-#[cfg(feature = "release-2023-01-26")]
-mod release_2023_01_26;
-#[cfg(feature = "release-2023-01-26")]
-pub(crate) use release_2023_01_26 as current_canary;
+// NOTE: This module can be deleted 3 releases after release-2023-10-26
+#[cfg(feature = "release-2023-10-26")]
+mod release_2023_10_26;
+#[cfg(feature = "release-2023-10-26")]
+pub(crate) use release_2023_10_26 as current_canary;
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {

@@ -141,7 +141,14 @@ async def middleware(request, next):
     body = bytes(await request.body).decode()
     body_reversed = body[::-1]
     request.body = body_reversed.encode()
+    # Add a new header
     request.headers["X-From-Middleware"] = "yes"
+    # Change an existing header.
+    request.headers["X-Existing"] = "changed"
+    # Delete an existing header.
+    del request.headers["X-To-Delete"]
+    # Change the URI.
+    request.uri = "/changed_uri"
     return await next(request)
 "#,
     );
@@ -149,7 +156,10 @@ async def middleware(request, next):
 
     let th = tokio::spawn(async move {
         let (req, send_response) = handle.next_request().await.unwrap();
-        assert_eq!(&"yes", req.headers().get("X-From-Middleware").unwrap());
+        assert_eq!("yes", req.headers().get("X-From-Middleware").unwrap());
+        assert_eq!("changed", req.headers().get("X-Existing").unwrap());
+        assert!(req.headers().get("X-To-Delete").is_none());
+        assert_eq!("/changed_uri", req.uri());
         let req_body = hyper::body::to_bytes(req.into_body()).await.unwrap();
         assert_eq!(req_body, "hello server".chars().rev().collect::<String>());
         send_response.send_response(
@@ -159,7 +169,13 @@ async def middleware(request, next):
         );
     });
 
-    let request = simple_request("hello server");
+    let mut request = simple_request("hello server");
+    assert_ne!(request.uri(), "/changed_uri");
+    // Add a header that the middleware should modify.
+    let headers_mut = request.headers_mut();
+    headers_mut.insert("X-Existing", http::HeaderValue::from_static("yes"));
+    // Add a header that the middleware should remove.
+    headers_mut.insert("X-To-Delete", http::HeaderValue::from_static("delete-this"));
     let response = service.call(request);
     assert_body(response.await?, "hello client").await;
 

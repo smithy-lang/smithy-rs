@@ -8,12 +8,15 @@ package software.amazon.smithy.rust.codegen.core.smithy.customizations
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 
 /** Returns true if the model has normal streaming operations (excluding event streams) */
@@ -41,7 +44,7 @@ private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(m
 private fun hasDateTimes(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isTimestampShape)
 
 /** Adds re-export statements for Smithy primitives */
-fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writable = writable {
+fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model, rustCrate: RustCrate): Writable = writable {
     val rc = codegenContext.runtimeConfig
     if (hasBlobs(model)) {
         rustTemplate("pub use #{Blob};", "Blob" to RuntimeType.blob(rc))
@@ -57,6 +60,13 @@ fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writab
         )
     }
     if (hasStreamingOperations(model)) {
+        rustCrate.mergeFeature(
+            Feature(
+                "rt-tokio",
+                true,
+                listOf("aws-smithy-types/rt-tokio"),
+            ),
+        )
         rustTemplate(
             """
             pub use #{ByteStream};
@@ -64,10 +74,29 @@ fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model): Writab
             pub use #{Error} as ByteStreamError;
             pub use #{SdkBody};
             """,
-            "ByteStream" to RuntimeType.smithyHttp(rc).resolve("byte_stream::ByteStream"),
-            "AggregatedBytes" to RuntimeType.smithyHttp(rc).resolve("byte_stream::AggregatedBytes"),
-            "Error" to RuntimeType.smithyHttp(rc).resolve("byte_stream::error::Error"),
-            "SdkBody" to RuntimeType.smithyHttp(rc).resolve("body::SdkBody"),
+            "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
+            "AggregatedBytes" to RuntimeType.smithyTypes(rc).resolve("byte_stream::AggregatedBytes"),
+            "Error" to RuntimeType.smithyTypes(rc).resolve("byte_stream::error::Error"),
+            "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
+        )
+    }
+}
+
+/** Adds re-export statements for event-stream-related Smithy primitives */
+fun pubUseSmithyPrimitivesEventStream(codegenContext: CodegenContext, model: Model): Writable = writable {
+    val rc = codegenContext.runtimeConfig
+    if (codegenContext.serviceShape.hasEventStreamOperations(model)) {
+        rustTemplate(
+            """
+            pub use #{Header};
+            pub use #{HeaderValue};
+            pub use #{Message};
+            pub use #{StrBytes};
+            """,
+            "Header" to RuntimeType.smithyTypes(rc).resolve("event_stream::Header"),
+            "HeaderValue" to RuntimeType.smithyTypes(rc).resolve("event_stream::HeaderValue"),
+            "Message" to RuntimeType.smithyTypes(rc).resolve("event_stream::Message"),
+            "StrBytes" to RuntimeType.smithyTypes(rc).resolve("str_bytes::StrBytes"),
         )
     }
 }

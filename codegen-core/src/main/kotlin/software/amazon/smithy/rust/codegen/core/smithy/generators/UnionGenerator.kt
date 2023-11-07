@@ -109,7 +109,6 @@ open class UnionGenerator(
     private fun renderImplBlock(unionSymbol: Symbol) {
         writer.rustBlock("impl ${unionSymbol.name}") {
             sortedMembers.forEach { member ->
-                val memberSymbol = symbolProvider.toSymbol(member)
                 val funcNamePart = member.memberName.toSnakeCase()
                 val variantName = symbolProvider.toMemberName(member)
 

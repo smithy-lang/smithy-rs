@@ -63,9 +63,11 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
     "aws-sdk-transcribestreaming",
 ];
 
+// The elements in this `Vec` should be sorted in an ascending order by the release date.
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
-        ReleaseTag::from_str("release-2023-01-26").unwrap(), // last version before the crate reorg
+        // last version before addition of Sigv4a MRAP test
+        ReleaseTag::from_str("release-2023-10-26").unwrap(),
     ];
 }
 
@@ -112,58 +114,23 @@ enum CrateSource {
     },
 }
 
-fn enabled_features(crate_source: &CrateSource) -> Vec<String> {
-    let mut enabled = Vec::new();
+fn enabled_feature(crate_source: &CrateSource) -> String {
     if let CrateSource::VersionsManifest { release_tag, .. } = crate_source {
-        // we want to select the newest module specified after this release
+        // we want to select the oldest module specified after this release
         for notable in NOTABLE_SDK_RELEASE_TAGS.iter() {
             tracing::debug!(release_tag = ?release_tag, notable = ?notable, "considering if release tag came before notable release");
             if release_tag <= notable {
                 tracing::debug!("selecting {} as chosen release", notable);
-                enabled.push(notable.as_str().into());
-                break;
+                return notable.as_str().into();
             }
         }
     }
-    if enabled.is_empty() {
-        enabled.push("latest".into());
-    }
-    enabled
+    "latest".into()
 }
 
 fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
     let mut output = BASE_MANIFEST.to_string();
-    for &sdk_crate in REQUIRED_SDK_CRATES {
-        match &crate_source {
-            CrateSource::Path(path) => {
-                let path_name = match sdk_crate.strip_prefix("aws-sdk-") {
-                    Some(path) => path,
-                    None => sdk_crate,
-                };
-                let crate_path = path.join(path_name);
-                writeln!(
-                    output,
-                    r#"{sdk_crate} = {{ path = "{path}" }}"#,
-                    path = crate_path.to_string_lossy()
-                )
-                .unwrap()
-            }
-            CrateSource::VersionsManifest {
-                versions,
-                release_tag,
-            } => match versions.crates.get(sdk_crate) {
-                Some(version) => writeln!(
-                    output,
-                    r#"{sdk_crate} = "{version}""#,
-                    version = version.version
-                )
-                .unwrap(),
-                None => {
-                    bail!("Couldn't find `{sdk_crate}` in versions.toml for `{release_tag}`")
-                }
-            },
-        }
-    }
+    write_dependencies(REQUIRED_SDK_CRATES, &mut output, &crate_source)?;
     write!(output, "\n[features]\n").unwrap();
     writeln!(output, "latest = []").unwrap();
     for release_tag in NOTABLE_SDK_RELEASE_TAGS.iter() {
@@ -176,15 +143,50 @@ fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
     }
     writeln!(
         output,
-        "default = [{enabled}]",
-        enabled = enabled_features(&crate_source)
-            .into_iter()
-            .map(|f| format!("\"{f}\""))
-            .collect::<Vec<String>>()
-            .join(", ")
+        "default = [\"{enabled}\"]",
+        enabled = enabled_feature(&crate_source)
     )
     .unwrap();
     Ok(output)
+}
+
+fn write_dependencies(
+    required_crates: &[&str],
+    output: &mut String,
+    crate_source: &CrateSource,
+) -> Result<()> {
+    for &required_crate in required_crates {
+        match &crate_source {
+            CrateSource::Path(path) => {
+                let path_name = match required_crate.strip_prefix("aws-sdk-") {
+                    Some(path) => path,
+                    None => required_crate,
+                };
+                let crate_path = path.join(path_name);
+                writeln!(
+                    output,
+                    r#"{required_crate} = {{ path = "{path}" }}"#,
+                    path = crate_path.to_string_lossy()
+                )
+                .unwrap()
+            }
+            CrateSource::VersionsManifest {
+                versions,
+                release_tag,
+            } => match versions.crates.get(required_crate) {
+                Some(version) => writeln!(
+                    output,
+                    r#"{required_crate} = "{version}""#,
+                    version = version.version
+                )
+                .unwrap(),
+                None => {
+                    bail!("Couldn't find `{required_crate}` in versions.toml for `{release_tag}`")
+                }
+            },
+        }
+    }
+    Ok(())
 }
 
 fn sha1_file(path: &Path) -> Result<String> {
@@ -441,7 +443,7 @@ aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
 
 [features]
 latest = []
-"release-2023-01-26" = []
+"release-2023-10-26" = []
 default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::Path("some/sdk/path".into())).expect("success")
@@ -505,7 +507,7 @@ aws-sdk-transcribestreaming = "0.16.0"
 
 [features]
 latest = []
-"release-2023-01-26" = []
+"release-2023-10-26" = []
 default = ["latest"]
 "#,
             generate_crate_manifest(CrateSource::VersionsManifest {
@@ -523,7 +525,7 @@ default = ["latest"]
                     .collect(),
                     release: None,
                 },
-                release_tag: ReleaseTag::from_str("release-2023-05-26").unwrap(),
+                release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
             })
             .expect("success")
         );
@@ -577,26 +579,25 @@ default = ["latest"]
             release: None,
         };
         assert_eq!(
-            enabled_features(&CrateSource::VersionsManifest {
+            "latest".to_string(),
+            enabled_feature(&CrateSource::VersionsManifest {
                 versions: versions.clone(),
-                release_tag: "release-2023-02-23".parse().unwrap(),
+                release_tag: "release-9999-12-31".parse().unwrap(),
             }),
-            vec!["latest".to_string()]
-        );
-
-        assert_eq!(
-            enabled_features(&CrateSource::VersionsManifest {
-                versions: versions.clone(),
-                release_tag: "release-2023-01-26".parse().unwrap(),
-            }),
-            vec!["release-2023-01-26".to_string()]
         );
         assert_eq!(
-            enabled_features(&CrateSource::VersionsManifest {
+            "release-2023-10-26".to_string(),
+            enabled_feature(&CrateSource::VersionsManifest {
+                versions: versions.clone(),
+                release_tag: "release-2023-10-26".parse().unwrap(),
+            }),
+        );
+        assert_eq!(
+            "release-2023-10-26".to_string(),
+            enabled_feature(&CrateSource::VersionsManifest {
                 versions,
                 release_tag: "release-2023-01-13".parse().unwrap(),
             }),
-            vec!["release-2023-01-26".to_string()]
         );
     }
 }

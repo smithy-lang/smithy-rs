@@ -2,24 +2,10 @@
 name = "aws-smithy-http-tower"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
-description = "Tower-compatible shims for smithy-rs middleware."
+description = "This crate is no longer used by smithy-rs and is deprecated."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-
-[dependencies]
-aws-smithy-types = { path = "../aws-smithy-types" }
-aws-smithy-http = { path = "../aws-smithy-http" }
-tower = { version = "0.4.4" }
-pin-project-lite = "0.2.9"
-http = "0.2.3"
-bytes = "1"
-http-body = "0.4.4"
-tracing = "0.1"
-
-[dev-dependencies]
-tower = { version = "0.4.4", features = ["util"] }
-tokio = { version = "1.23.1", features = ["full"]}
 
 [package.metadata.docs.rs]
 all-features = true

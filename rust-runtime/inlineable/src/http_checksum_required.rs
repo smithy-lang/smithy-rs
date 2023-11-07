@@ -25,7 +25,7 @@ impl RuntimePlugin for HttpChecksumRequiredRuntimePlugin {
 #[derive(Debug)]
 struct HttpChecksumRequiredInterceptor;
 
-impl Interceptor for HttpChecksumRequiredInterceptor {
+impl Intercept for HttpChecksumRequiredInterceptor {
     fn modify_before_signing(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,

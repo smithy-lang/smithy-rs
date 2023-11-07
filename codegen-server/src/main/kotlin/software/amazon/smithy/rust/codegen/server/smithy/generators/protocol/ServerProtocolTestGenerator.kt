@@ -54,7 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
 
@@ -94,7 +94,7 @@ class ServerProtocolTestGenerator(
         inputT to outputT
     }
 
-    private val instantiator = serverInstantiator(codegenContext)
+    private val instantiator = ServerInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -467,7 +467,8 @@ class ServerProtocolTestGenerator(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
-            let service = crate::service::$serviceName::builder_without_plugins::<#{Hyper}::body::Body>()
+            let config = crate::service::${serviceName}Config::builder().build();
+            let service = crate::service::$serviceName::builder::<#{Hyper}::body::Body, _, _, _>(config)
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {
@@ -561,9 +562,9 @@ class ServerProtocolTestGenerator(
 
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpResponseTestCase) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
-        checkForbidHeaders(rustWriter, "&http_response.headers()", testCase.forbidHeaders)
-        checkRequiredHeaders(rustWriter, "&http_response.headers()", testCase.requireHeaders)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
+        checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
+        checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -579,7 +580,7 @@ class ServerProtocolTestGenerator(
 
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpMalformedResponseDefinition) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
@@ -770,6 +771,7 @@ class ServerProtocolTestGenerator(
             FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAccelerateAddressing", TestType.Request),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostDualstackAccelerateAddressing", TestType.Request),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3OperationAddressingPreferred", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3OperationNoErrorWrappingResponse", TestType.Response),
 
             // AwsJson1.0 failing tests.
             FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTraitWithHostLabel", TestType.Request),
