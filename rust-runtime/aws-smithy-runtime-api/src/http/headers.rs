@@ -83,8 +83,8 @@ impl Headers {
     }
 
     /// Returns true if this header is present
-    pub fn contains_key(&self, key: &str) -> bool {
-        self.headers.contains_key(key)
+    pub fn contains_key(&self, key: impl AsRef<str>) -> bool {
+        self.headers.contains_key(key.as_ref())
     }
 
     /// Insert a value into the headers structure.
@@ -149,6 +149,30 @@ impl Headers {
     pub fn append(&mut self, key: impl AsHeaderComponent, value: impl AsHeaderComponent) -> bool {
         self.try_append(key, value)
             .expect("HeaderName or HeaderValue was invalid")
+    }
+}
+
+impl TryFrom<HeaderMap> for Headers {
+    type Error = HttpError;
+
+    fn try_from(value: HeaderMap) -> Result<Self, Self::Error> {
+        if let Some(e) = value
+            .values()
+            .filter_map(|value| std::str::from_utf8(value.as_bytes()).err())
+            .next()
+        {
+            Err(HttpError::header_was_not_a_string(e))
+        } else {
+            let mut string_safe_headers: HeaderMap<HeaderValue> = Default::default();
+            string_safe_headers.extend(
+                value
+                    .into_iter()
+                    .map(|(k, v)| (k, HeaderValue::from_http02x(v).expect("validated above"))),
+            );
+            Ok(Headers {
+                headers: string_safe_headers,
+            })
+        }
     }
 }
 

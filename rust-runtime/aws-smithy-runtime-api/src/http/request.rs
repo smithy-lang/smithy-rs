@@ -5,8 +5,8 @@
 
 //! Http Request Types
 
-use crate::http::error::HttpError;
-use crate::http::headers::{HeaderValue, Headers};
+use crate::http::Headers;
+use crate::http::HttpError;
 use aws_smithy_types::body::SdkBody;
 use http as http0;
 use http0::uri::PathAndQuery;
@@ -248,32 +248,15 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
     type Error = HttpError;
 
     fn try_from(value: http::Request<B>) -> Result<Self, Self::Error> {
-        if let Some(e) = value
-            .headers()
-            .values()
-            .filter_map(|value| std::str::from_utf8(value.as_bytes()).err())
-            .next()
-        {
-            Err(HttpError::header_was_not_a_string(e))
-        } else {
-            let (parts, body) = value.into_parts();
-            let mut string_safe_headers: HeaderMap<HeaderValue> = Default::default();
-            string_safe_headers.extend(
-                parts
-                    .headers
-                    .into_iter()
-                    .map(|(k, v)| (k, HeaderValue::from_http02x(v).expect("validated above"))),
-            );
-            Ok(Self {
-                body,
-                uri: parts.uri.into(),
-                method: parts.method.clone(),
-                extensions: parts.extensions,
-                headers: Headers {
-                    headers: string_safe_headers,
-                },
-            })
-        }
+        let (parts, body) = value.into_parts();
+        let headers = Headers::try_from(parts.headers)?;
+        Ok(Self {
+            body,
+            uri: parts.uri.into(),
+            method: parts.method.clone(),
+            extensions: parts.extensions,
+            headers,
+        })
     }
 }
 
