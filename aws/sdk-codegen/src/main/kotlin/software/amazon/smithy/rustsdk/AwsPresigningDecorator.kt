@@ -185,7 +185,7 @@ class AwsPresignedFluentBuilderMethod(
                     })
                 })?;
             let request = context.take_request().expect("request set before transmit");
-            Ok(#{PresignedRequest}::new(request.map(|_| ())))
+            #{PresignedRequest}::new(request).map_err(#{SdkError}::construction_failure)
             """,
             *codegenScope,
             "Operation" to codegenContext.symbolProvider.toSymbol(section.operationShape),

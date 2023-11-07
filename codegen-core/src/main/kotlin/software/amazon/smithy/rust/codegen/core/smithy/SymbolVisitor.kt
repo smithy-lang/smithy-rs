@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.knowledge.NullableIndex.CheckMode
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.BigDecimalShape
 import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
@@ -37,6 +38,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -48,6 +50,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.RustBoxTrait
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import kotlin.reflect.KClass
@@ -79,16 +82,18 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
-fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String = value.letIf(toSymbol(member).isOptional()) {
-    "Some($value)"
-}
+fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String =
+    value.letIf(toSymbol(member).isOptional()) {
+        "Some($value)"
+    }
 
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
-fun SymbolProvider.toOptional(member: MemberShape, value: String): String = value.letIf(!toSymbol(member).isOptional()) {
-    "Some($value)"
-}
+fun SymbolProvider.toOptional(member: MemberShape, value: String): String =
+    value.letIf(!toSymbol(member).isOptional()) {
+        "Some($value)"
+    }
 
 /**
  * Services can rename their contained shapes. See https://awslabs.github.io/smithy/1.0/spec/core/model.html#service
@@ -111,7 +116,7 @@ fun Shape.contextName(serviceShape: ServiceShape?): String {
  */
 open class SymbolVisitor(
     settings: CoreRustSettings,
-    override val model: Model,
+    final override val model: Model,
     private val serviceShape: ServiceShape?,
     override val config: RustSymbolProviderConfig,
 ) : RustSymbolProvider, ShapeVisitor<Symbol> {
@@ -170,7 +175,7 @@ open class SymbolVisitor(
     }
 
     private fun simpleShape(shape: SimpleShape): Symbol {
-        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).setDefault(Default.RustDefault).build()
+        return symbolBuilder(shape, SimpleShapes.getValue(shape::class)).build()
     }
 
     override fun booleanShape(shape: BooleanShape): Symbol = simpleShape(shape)
@@ -187,7 +192,7 @@ open class SymbolVisitor(
             val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
             symbolBuilder(shape, rustType).locatedIn(moduleForShape(shape)).build()
         } else {
-            simpleShape(shape)
+            symbolBuilder(shape, RustType.String).build()
         }
     }
 
@@ -263,13 +268,24 @@ open class SymbolVisitor(
 
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
+        val defaultValue = shape.getMemberTrait(model, DefaultTrait::class.java).orNull()?.let { trait ->
+            if (target.isDocumentShape || target.isTimestampShape) {
+                Default.NonZeroDefault(trait.toNode())
+            } else {
+                when (val value = trait.toNode()) {
+                    Node.from(""), Node.from(0), Node.from(false), Node.arrayNode(), Node.objectNode() -> Default.RustDefault
+                    Node.nullNode() -> Default.NoDefault
+                    else -> Default.NonZeroDefault(value)
+                }
+            }
+        } ?: Default.NoDefault
         // Handle boxing first, so we end up with Option<Box<_>>, not Box<Option<_>>.
         return handleOptionality(
             handleRustBoxing(toSymbol(target), shape),
             shape,
             nullableIndex,
             config.nullabilityCheckMode,
-        )
+        ).toBuilder().setDefault(defaultValue).build()
     }
 
     override fun timestampShape(shape: TimestampShape?): Symbol {
@@ -297,7 +313,12 @@ fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder =
         // If we ever generate a `thisisabug.rs`, there is a bug in our symbol generation
         .definitionFile("thisisabug.rs")
 
-fun handleOptionality(symbol: Symbol, member: MemberShape, nullableIndex: NullableIndex, nullabilityCheckMode: CheckMode): Symbol =
+fun handleOptionality(
+    symbol: Symbol,
+    member: MemberShape,
+    nullableIndex: NullableIndex,
+    nullabilityCheckMode: CheckMode,
+): Symbol =
     symbol.letIf(nullableIndex.isMemberNullable(member, nullabilityCheckMode)) { symbol.makeOptional() }
 
 /**

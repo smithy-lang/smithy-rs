@@ -10,7 +10,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
@@ -72,35 +71,12 @@ sealed class OperationSection(name: String) : Section(name) {
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalInterceptors") {
         fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
-            val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
             writer.rustTemplate(
-                """
-                .with_interceptor(
-                    #{SharedInterceptor}::new(
-                        #{interceptor}
-                    ) as _
-                )
-                """,
+                ".with_interceptor(#{interceptor})",
                 "interceptor" to interceptor,
-                "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
             )
         }
     }
-
-    /**
-     * Hook for adding retry classifiers to an operation's `RetryClassifiers` bundle.
-     *
-     * Should emit 1+ lines of code that look like the following:
-     * ```rust
-     * .with_classifier(AwsErrorCodeClassifier::new())
-     * .with_classifier(HttpStatusCodeClassifier::new())
-     * ```
-     */
-    data class RetryClassifier(
-        override val customizations: List<OperationCustomization>,
-        val configBagName: String,
-        val operationShape: OperationShape,
-    ) : OperationSection("RetryClassifier")
 
     /**
      * Hook for adding supporting types for operation-specific runtime plugins.
@@ -119,12 +95,21 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalRuntimePlugins") {
-        fun addServiceRuntimePlugin(writer: RustWriter, plugin: Writable) {
-            writer.rustTemplate(".with_service_plugin(#{plugin})", "plugin" to plugin)
+        fun addClientPlugin(writer: RustWriter, plugin: Writable) {
+            writer.rustTemplate(".with_client_plugin(#{plugin})", "plugin" to plugin)
         }
 
         fun addOperationRuntimePlugin(writer: RustWriter, plugin: Writable) {
             writer.rustTemplate(".with_operation_plugin(#{plugin})", "plugin" to plugin)
+        }
+    }
+
+    data class RetryClassifiers(
+        override val customizations: List<OperationCustomization>,
+        val operationShape: OperationShape,
+    ) : OperationSection("RetryClassifiers") {
+        fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
+            writer.rustTemplate(".with_retry_classifier(#{classifier})", "classifier" to classifier)
         }
     }
 }

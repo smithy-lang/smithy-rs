@@ -8,6 +8,7 @@ description = "A smithy Rust service to retrieve information about Pokémon."
 
 [dependencies]
 clap = { version = "4.1.11", features = ["derive"] }
+http = "0.2"
 hyper = { version = "0.14.26", features = ["server"] }
 tokio = "1.26.0"
 tower = "0.4"
@@ -31,7 +32,5 @@ hyper = { version = "0.14.26", features = ["server", "client"] }
 hyper-rustls = { version = "0.24", features = ["http2"] }
 
 # Local paths
-aws-smithy-client = { path = "../../rust-runtime/aws-smithy-client/", features = ["rustls"] }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
-aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
 pokemon-service-client = { path = "../pokemon-service-client/" }

@@ -6,10 +6,9 @@
 use aws_sdk_s3::config::interceptors::BeforeTransmitInterceptorContextMut;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
-use aws_smithy_client::erase::DynConnector;
-use aws_smithy_client::test_connection::capture_request;
+use aws_smithy_runtime::client::http::test_util::capture_request;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
 use http::header::USER_AGENT;
@@ -25,7 +24,7 @@ async fn interceptor_priority() {
 
     #[derive(Debug)]
     struct TestInterceptor(&'static str);
-    impl Interceptor for TestInterceptor {
+    impl Intercept for TestInterceptor {
         fn name(&self) -> &'static str {
             "TestInterceptor"
         }
@@ -57,13 +56,13 @@ async fn interceptor_priority() {
         }
     }
 
-    let (conn, rx) = capture_request(None);
+    let (http_client, rx) = capture_request(None);
 
     // The first `TestInterceptor` will put `value1` into config
     let config = aws_sdk_s3::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
-        .http_connector(DynConnector::new(conn))
+        .http_client(http_client)
         .interceptor(TestInterceptor("value1"))
         .build();
     let client = Client::from_conf(config);
@@ -75,8 +74,6 @@ async fn interceptor_priority() {
             .bucket("test-bucket")
             .prefix("prefix~")
             .customize()
-            .await
-            .unwrap()
             .interceptor(TestInterceptor("value2"))
             .send()
             .await
@@ -84,17 +81,17 @@ async fn interceptor_priority() {
     .expect_err("no fake response set");
 
     let request = rx.expect_request();
-    assert_eq!("value2", request.headers()["test-header"]);
+    assert_eq!("value2", request.headers().get("test-header").unwrap());
 }
 
 #[tokio::test]
 async fn set_test_user_agent_through_request_mutation() {
-    let (conn, rx) = capture_request(None);
+    let (http_client, rx) = capture_request(None);
 
     let config = aws_sdk_s3::Config::builder()
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
-        .http_connector(DynConnector::new(conn.clone()))
+        .http_client(http_client.clone())
         .build();
     let client = Client::from_conf(config);
 
@@ -104,8 +101,6 @@ async fn set_test_user_agent_through_request_mutation() {
             .bucket("test-bucket")
             .prefix("prefix~")
             .customize()
-            .await
-            .unwrap()
             .mutate_request(|request| {
                 let headers = request.headers_mut();
                 headers.insert(USER_AGENT, HeaderValue::try_from("test").unwrap());
@@ -117,6 +112,6 @@ async fn set_test_user_agent_through_request_mutation() {
     .expect_err("no fake response set");
 
     let request = rx.expect_request();
-    assert_eq!("test", request.headers()[USER_AGENT]);
-    assert_eq!("test", request.headers()["x-amz-user-agent"]);
+    assert_eq!("test", request.headers().get(USER_AGENT).unwrap());
+    assert_eq!("test", request.headers().get("x-amz-user-agent").unwrap());
 }

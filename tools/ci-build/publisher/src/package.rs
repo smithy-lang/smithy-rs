@@ -218,6 +218,7 @@ fn read_dependencies(path: &Path, dependencies: &DepsSet) -> Result<Vec<PackageH
                     result.push(PackageHandle::new(name, version));
                 }
             }
+            Dependency::Inherited(_) => panic!("workspace deps are unsupported"),
         }
     }
     Ok(result)
@@ -225,13 +226,14 @@ fn read_dependencies(path: &Path, dependencies: &DepsSet) -> Result<Vec<PackageH
 
 /// Returns `Ok(None)` when the Cargo.toml is a workspace rather than a package
 fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Option<Package>> {
-    let manifest = Manifest::from_slice(manifest_bytes)
+    let mut manifest = Manifest::from_slice(manifest_bytes)
         .with_context(|| format!("failed to load package manifest for {:?}", path))?;
+    manifest.complete_from_path(path)?;
     if let Some(package) = manifest.package {
         let name = package.name;
-        let version = parse_version(path, &package.version)?;
+        let version = parse_version(path, &package.version.unwrap())?;
         let handle = PackageHandle { name, version };
-        let publish = match package.publish {
+        let publish = match package.publish.unwrap() {
             cargo_toml::Publish::Flag(true) => Publish::Allowed,
             _ => Publish::NotAllowed,
         };

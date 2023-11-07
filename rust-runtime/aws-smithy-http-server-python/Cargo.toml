@@ -16,7 +16,7 @@ publish = true
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.2"
 futures = "0.3"

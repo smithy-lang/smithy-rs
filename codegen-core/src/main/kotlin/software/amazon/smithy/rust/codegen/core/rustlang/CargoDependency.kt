@@ -89,6 +89,16 @@ class InlineDependency(
         private fun forInlineableRustFile(name: String, vararg additionalDependencies: RustDependency) =
             forRustFile(RustModule.private(name), "/inlineable/src/$name.rs", *additionalDependencies)
 
+        fun eventReceiver(runtimeConfig: RuntimeConfig) =
+            forInlineableRustFile(
+                "event_receiver",
+                CargoDependency.smithyHttp(runtimeConfig),
+                CargoDependency.smithyRuntimeApi(runtimeConfig),
+                CargoDependency.smithyTypes(runtimeConfig),
+            )
+
+        fun defaultAuthPlugin(runtimeConfig: RuntimeConfig) = forInlineableRustFile("auth_plugin", CargoDependency.smithyRuntimeApi(runtimeConfig))
+
         fun jsonErrors(runtimeConfig: RuntimeConfig) =
             forInlineableRustFile(
                 "json_errors",
@@ -236,7 +246,7 @@ data class CargoDependency(
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
         val PercentEncoding: CargoDependency = CargoDependency("percent-encoding", CratesIo("2.0.0"))
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
-        val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.16.0"))
+        val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.17.5"))
         val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.7"))
         val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
@@ -245,7 +255,7 @@ data class CargoDependency(
         val Approx: CargoDependency = CargoDependency("approx", CratesIo("0.5.1"), DependencyScope.Dev)
         val AsyncStd: CargoDependency = CargoDependency("async-std", CratesIo("1.12.0"), DependencyScope.Dev)
         val AsyncStream: CargoDependency = CargoDependency("async-stream", CratesIo("0.3.0"), DependencyScope.Dev)
-        val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.4.0"), DependencyScope.Dev)
+        val Criterion: CargoDependency = CargoDependency("criterion", CratesIo("0.5.0"), DependencyScope.Dev)
         val FuturesCore: CargoDependency = CargoDependency("futures-core", CratesIo("0.3.25"), DependencyScope.Dev)
         val FuturesUtil: CargoDependency =
             CargoDependency("futures-util", CratesIo("0.3.25"), DependencyScope.Dev, defaultFeatures = false)
@@ -283,14 +293,9 @@ data class CargoDependency(
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
         fun smithyChecksums(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-checksums")
-        fun smithyClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-client")
-        fun smithyClientTestUtil(runtimeConfig: RuntimeConfig) =
-            smithyClient(runtimeConfig).toDevDependency().withFeature("test-util")
 
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
         fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
-        fun smithyHttpAuth(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-auth")
-        fun smithyHttpTower(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-tower")
         fun smithyJson(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-json")
         fun smithyProtocolTestHelpers(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-protocol-test", scope = DependencyScope.Dev)
@@ -298,6 +303,7 @@ data class CargoDependency(
         fun smithyQuery(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-query")
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime")
             .withFeature("client")
+        fun smithyRuntimeTestUtil(runtimeConfig: RuntimeConfig) = smithyRuntime(runtimeConfig).toDevDependency().withFeature("test-util")
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-runtime-api")
             .withFeature("client")
         fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =

@@ -73,10 +73,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRootGe
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerRuntimeTypesReExportsGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerServiceGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerStructureConstrainedTraitImpl
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServiceConfigGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedCollectionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedMapGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.isBuilderFallible
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
@@ -294,6 +296,7 @@ open class ServerCodegenVisitor(
                 this,
                 shape,
                 codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                structSettings = codegenContext.structSettings(),
             ).render()
 
             shape.getTrait<ErrorTrait>()?.also { errorTrait ->
@@ -589,28 +592,35 @@ open class ServerCodegenVisitor(
         logger.info("[rust-server-codegen] Generating a service $shape")
         val serverProtocol = protocolGeneratorFactory.protocol(codegenContext) as ServerProtocol
 
-        // Generate root
+        val configMethods = codegenDecorator.configMethods(codegenContext)
+        val isConfigBuilderFallible = configMethods.isBuilderFallible()
+
+        // Generate root.
         rustCrate.lib {
             ServerRootGenerator(
                 serverProtocol,
                 codegenContext,
+                isConfigBuilderFallible,
             ).render(this)
         }
 
-        // Generate server re-exports
+        // Generate server re-exports.
         rustCrate.withModule(ServerRustModule.Server) {
             ServerRuntimeTypesReExportsGenerator(codegenContext).render(this)
         }
 
-        // Generate protocol tests
+        // Generate protocol tests.
         protocolTests()
 
-        // Generate service module
+        // Generate service module.
         rustCrate.withModule(ServerRustModule.Service) {
             ServerServiceGenerator(
                 codegenContext,
                 serverProtocol,
+                isConfigBuilderFallible,
             ).render(this)
+
+            ServiceConfigGenerator(codegenContext, configMethods).render(this)
 
             ScopeMacroGenerator(codegenContext).render(this)
         }
@@ -621,6 +631,7 @@ open class ServerCodegenVisitor(
      *  - Operations ser/de
      *  - Errors via `ServerOperationErrorGenerator`
      *  - OperationShapes via `ServerOperationGenerator`
+     *  - Additional structure shapes via `postprocessGenerateAdditionalStructures`
      */
     override fun operationShape(shape: OperationShape) {
         // Generate errors.
@@ -637,6 +648,9 @@ open class ServerCodegenVisitor(
         rustCrate.withModule(ServerRustModule.Operation) {
             protocolGenerator.renderOperation(this, shape)
         }
+
+        codegenDecorator.postprocessGenerateAdditionalStructures(shape)
+            .forEach { structureShape -> this.structureShape(structureShape) }
     }
 
     override fun blobShape(shape: BlobShape) {

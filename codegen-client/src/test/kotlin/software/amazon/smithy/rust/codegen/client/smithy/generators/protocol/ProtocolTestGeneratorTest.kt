@@ -34,13 +34,13 @@ private class TestServiceRuntimePluginCustomization(
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             val rc = context.runtimeConfig
-            section.registerInterceptor(rc, this) {
+            section.registerInterceptor(this) {
                 rustTemplate(
                     """
                     {
                         ##[derive(::std::fmt::Debug)]
                         struct TestInterceptor;
-                        impl #{Interceptor} for TestInterceptor {
+                        impl #{Intercept} for TestInterceptor {
                             fn name(&self) -> &'static str {
                                 "TestInterceptor"
                             }
@@ -55,7 +55,7 @@ private class TestServiceRuntimePluginCustomization(
                                 let mut fake_req = ::http::Request::builder()
                                     $fakeRequestBuilder
                                     .body(#{SdkBody}::from($fakeRequestBody))
-                                    .expect("valid request");
+                                    .expect("valid request").try_into().unwrap();
                                 ::std::mem::swap(
                                     context.request_mut(),
                                     &mut fake_req,
@@ -71,7 +71,7 @@ private class TestServiceRuntimePluginCustomization(
                     "BeforeTransmitInterceptorContextMut" to RT.beforeTransmitInterceptorContextMut(rc),
                     "BoxError" to RT.boxError(rc),
                     "ConfigBag" to RT.configBag(rc),
-                    "Interceptor" to RT.interceptor(rc),
+                    "Intercept" to RT.intercept(rc),
                     "RuntimeComponents" to RT.runtimeComponents(rc),
                     "SdkBody" to RT.sdkBody(rc),
                 )
@@ -92,7 +92,7 @@ private class TestOperationCustomization(
                 // Override the default response deserializer with our fake output
                 ##[derive(::std::fmt::Debug)]
                 struct TestDeser;
-                impl #{ResponseDeserializer} for TestDeser {
+                impl #{DeserializeResponse} for TestDeser {
                     fn deserialize_nonstreaming(
                         &self,
                         _response: &#{HttpResponse},
@@ -114,7 +114,7 @@ private class TestOperationCustomization(
                 "HttpResponse" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
                 "Output" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Output"),
-                "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
+                "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
             )
         }
     }

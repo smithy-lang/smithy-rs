@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
@@ -81,6 +82,8 @@ data class ClientRustSettings(
 data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
+    override val flattenCollectionAccessors: Boolean = defaultFlattenAccessors,
+    val nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
     val renameExceptions: Boolean = defaultRenameExceptions,
     val includeFluentClient: Boolean = defaultIncludeFluentClient,
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
@@ -90,7 +93,7 @@ data class ClientCodegenConfig(
     val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
     val enableUserConfigurableRuntimePlugins: Boolean = defaultEnableUserConfigurableRuntimePlugins,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode,
+    formatTimeoutSeconds, debugMode, defaultFlattenAccessors,
 ) {
     companion object {
         private const val defaultRenameExceptions = true
@@ -99,11 +102,16 @@ data class ClientCodegenConfig(
         private val defaultEventStreamAllowList: Set<String> = emptySet()
         private const val defaultIncludeEndpointUrlConfig = true
         private const val defaultEnableUserConfigurableRuntimePlugins = true
+        private const val defaultNullabilityCheckMode = "CLIENT"
+
+        // Note: only clients default to true, servers default to false
+        private const val defaultFlattenAccessors = true
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenAccessors),
                     debugMode = coreCodegenConfig.debugMode,
                     eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList").map { array ->
                         array.toList().mapNotNull { node ->
@@ -115,11 +123,13 @@ data class ClientCodegenConfig(
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
                     includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
                     enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
+                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", defaultNullabilityCheckMode)),
                 )
             } else {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
+                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(defaultNullabilityCheckMode),
                 )
             }
     }

@@ -232,6 +232,7 @@
                     "arnNamespace": "s3",
                     "cloudFormationName": "S3Control",
                     "cloudTrailEventSource": "s3control.amazonaws.com",
+                    "docId": "s3control-2018-08-20",
                     "endpointPrefix": "s3-control"
                 },
                 "aws.auth#sigv4": {
@@ -322,7 +323,6 @@
                                     ]
                                 }
                             ],
-                            "type": "tree",
                             "rules": [
                                 {
                                     "conditions": [
@@ -353,7 +353,6 @@
                                             "assign": "url"
                                         }
                                     ],
-                                    "type": "tree",
                                     "rules": [
                                         {
                                             "conditions": [
@@ -367,7 +366,6 @@
                                                     "assign": "partitionResult"
                                                 }
                                             ],
-                                            "type": "tree",
                                             "rules": [
                                                 {
                                                     "conditions": [
@@ -417,9 +415,11 @@
                                                     },
                                                     "type": "endpoint"
                                                 }
-                                            ]
+                                            ],
+                                            "type": "tree"
                                         }
-                                    ]
+                                    ],
+                                    "type": "tree"
                                 },
                                 {
                                     "conditions": [
@@ -432,7 +432,6 @@
                                             ]
                                         }
                                     ],
-                                    "type": "tree",
                                     "rules": [
                                         {
                                             "conditions": [
@@ -446,7 +445,6 @@
                                                     "assign": "partitionResult"
                                                 }
                                             ],
-                                            "type": "tree",
                                             "rules": [
                                                 {
                                                     "conditions": [
@@ -574,7 +572,6 @@
                                                             ]
                                                         }
                                                     ],
-                                                    "type": "tree",
                                                     "rules": [
                                                         {
                                                             "conditions": [
@@ -673,16 +670,19 @@
                                                             },
                                                             "type": "endpoint"
                                                         }
-                                                    ]
+                                                    ],
+                                                    "type": "tree"
                                                 },
                                                 {
                                                     "conditions": [],
                                                     "error": "Invalid region: region was not a valid DNS name.",
                                                     "type": "error"
                                                 }
-                                            ]
+                                            ],
+                                            "type": "tree"
                                         }
-                                    ]
+                                    ],
+                                    "type": "tree"
                                 },
                                 {
                                     "conditions": [
@@ -704,7 +704,6 @@
                                             "assign": "accessPointArn"
                                         }
                                     ],
-                                    "type": "tree",
                                     "rules": [
                                         {
                                             "conditions": [
@@ -733,7 +732,6 @@
                                                     ]
                                                 }
                                             ],
-                                            "type": "tree",
                                             "rules": [
                                                 {
                                                     "conditions": [
@@ -753,7 +751,6 @@
                                                             ]
                                                         }
                                                     ],
-                                                    "type": "tree",
                                                     "rules": [
                                                         {
                                                             "conditions": [
@@ -783,7 +780,6 @@
                                                                     "assign": "outpostId"
                                                                 }
                                                             ],
-                                                            "type": "tree",
                                                             "rules": [
                                                                 {
                                                                     "conditions": [
@@ -797,7 +793,6 @@
                                                                             ]
                                                                         }
                                                                     ],
-                                                                    "type": "tree",
                                                                     "rules": [
                                                                         {
                                                                             "conditions": [
@@ -854,7 +849,6 @@
                                                                                     "assign": "partitionResult"
                                                                                 }
                                                                             ],
-                                                                            "type": "tree",
                                                                             "rules": [
                                                                                 {
                                                                                     "conditions": [
@@ -874,7 +868,6 @@
                                                                                             "assign": "arnPartition"
                                                                                         }
                                                                                     ],
-                                                                                    "type": "tree",
                                                                                     "rules": [
                                                                                         {
                                                                                             "conditions": [
@@ -902,7 +895,6 @@
                                                                                                     ]
                                                                                                 }
                                                                                             ],
-                                                                                            "type": "tree",
                                                                                             "rules": [
                                                                                                 {
                                                                                                     "conditions": [
@@ -922,7 +914,6 @@
                                                                                                             ]
                                                                                                         }
                                                                                                     ],
-                                                                                                    "type": "tree",
                                                                                                     "rules": [
                                                                                                         {
                                                                                                             "conditions": [
@@ -947,7 +938,6 @@
                                                                                                                     ]
                                                                                                                 }
                                                                                                             ],
-                                                                                                            "type": "tree",
                                                                                                             "rules": [
                                                                                                                 {
                                                                                                                     "conditions": [
@@ -967,7 +957,6 @@
                                                                                                                             ]
                                                                                                                         }
                                                                                                                     ],
-                                                                                                                    "type": "tree",
                                                                                                                     "rules": [
                                                                                                                         {
                                                                                                                             "conditions": [
@@ -1010,7 +999,6 @@
                                                                                                                                     "assign": "outpostType"
                                                                                                                                 }
                                                                                                                             ],
-                                                                                                                            "type": "tree",
                                                                                                                             "rules": [
                                                                                                                                 {
                                                                                                                                     "conditions": [
@@ -1025,7 +1013,6 @@
                                                                                                                                             "assign": "accessPointName"
                                                                                                                                         }
                                                                                                                                     ],
-                                                                                                                                    "type": "tree",
                                                                                                                                     "rules": [
                                                                                                                                         {
                                                                                                                                             "conditions": [
@@ -1039,7 +1026,6 @@
                                                                                                                                                     ]
                                                                                                                                                 }
                                                                                                                                             ],
-                                                                                                                                            "type": "tree",
                                                                                                                                             "rules": [
                                                                                                                                                 {
                                                                                                                                                     "conditions": [
@@ -1144,83 +1130,97 @@
                                                                                                                                                     },
                                                                                                                                                     "type": "endpoint"
                                                                                                                                                 }
-                                                                                                                                            ]
+                                                                                                                                            ],
+                                                                                                                                            "type": "tree"
                                                                                                                                         },
                                                                                                                                         {
                                                                                                                                             "conditions": [],
                                                                                                                                             "error": "Expected an outpost type `accesspoint`, found `{outpostType}`",
                                                                                                                                             "type": "error"
                                                                                                                                         }
-                                                                                                                                    ]
+                                                                                                                                    ],
+                                                                                                                                    "type": "tree"
                                                                                                                                 },
                                                                                                                                 {
                                                                                                                                     "conditions": [],
                                                                                                                                     "error": "Invalid ARN: expected an access point name",
                                                                                                                                     "type": "error"
                                                                                                                                 }
-                                                                                                                            ]
+                                                                                                                            ],
+                                                                                                                            "type": "tree"
                                                                                                                         },
                                                                                                                         {
                                                                                                                             "conditions": [],
                                                                                                                             "error": "Invalid ARN: Expected a 4-component resource",
                                                                                                                             "type": "error"
                                                                                                                         }
-                                                                                                                    ]
+                                                                                                                    ],
+                                                                                                                    "type": "tree"
                                                                                                                 },
                                                                                                                 {
                                                                                                                     "conditions": [],
                                                                                                                     "error": "Invalid ARN: The account id may only contain a-z, A-Z, 0-9 and `-`. Found: `{accessPointArn#accountId}`",
                                                                                                                     "type": "error"
                                                                                                                 }
-                                                                                                            ]
+                                                                                                            ],
+                                                                                                            "type": "tree"
                                                                                                         },
                                                                                                         {
                                                                                                             "conditions": [],
                                                                                                             "error": "Invalid ARN: missing account ID",
                                                                                                             "type": "error"
                                                                                                         }
-                                                                                                    ]
+                                                                                                    ],
+                                                                                                    "type": "tree"
                                                                                                 },
                                                                                                 {
                                                                                                     "conditions": [],
                                                                                                     "error": "Invalid region in ARN: `{accessPointArn#region}` (invalid DNS name)",
                                                                                                     "type": "error"
                                                                                                 }
-                                                                                            ]
+                                                                                            ],
+                                                                                            "type": "tree"
                                                                                         },
                                                                                         {
                                                                                             "conditions": [],
                                                                                             "error": "Client was configured for partition `{partitionResult#name}` but ARN has `{arnPartition#name}`",
                                                                                             "type": "error"
                                                                                         }
-                                                                                    ]
+                                                                                    ],
+                                                                                    "type": "tree"
                                                                                 }
-                                                                            ]
+                                                                            ],
+                                                                            "type": "tree"
                                                                         }
-                                                                    ]
+                                                                    ],
+                                                                    "type": "tree"
                                                                 },
                                                                 {
                                                                     "conditions": [],
                                                                     "error": "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`., found: `{outpostId}`",
                                                                     "type": "error"
                                                                 }
-                                                            ]
+                                                            ],
+                                                            "type": "tree"
                                                         },
                                                         {
                                                             "conditions": [],
                                                             "error": "Invalid ARN: The Outpost Id was not set",
                                                             "type": "error"
                                                         }
-                                                    ]
+                                                    ],
+                                                    "type": "tree"
                                                 }
-                                            ]
+                                            ],
+                                            "type": "tree"
                                         },
                                         {
                                             "conditions": [],
                                             "error": "Invalid ARN: No ARN type specified",
                                             "type": "error"
                                         }
-                                    ]
+                                    ],
+                                    "type": "tree"
                                 },
                                 {
                                     "conditions": [
@@ -1242,7 +1242,6 @@
                                             "assign": "bucketArn"
                                         }
                                     ],
-                                    "type": "tree",
                                     "rules": [
                                         {
                                             "conditions": [
@@ -1271,7 +1270,6 @@
                                                     ]
                                                 }
                                             ],
-                                            "type": "tree",
                                             "rules": [
                                                 {
                                                     "conditions": [
@@ -1291,7 +1289,6 @@
                                                             ]
                                                         }
                                                     ],
-                                                    "type": "tree",
                                                     "rules": [
                                                         {
                                                             "conditions": [
@@ -1321,7 +1318,6 @@
                                                                     "assign": "outpostId"
                                                                 }
                                                             ],
-                                                            "type": "tree",
                                                             "rules": [
                                                                 {
                                                                     "conditions": [
@@ -1335,7 +1331,6 @@
                                                                             ]
                                                                         }
                                                                     ],
-                                                                    "type": "tree",
                                                                     "rules": [
                                                                         {
                                                                             "conditions": [
@@ -1398,7 +1393,6 @@
                                                                                     "assign": "arnPartition"
                                                                                 }
                                                                             ],
-                                                                            "type": "tree",
                                                                             "rules": [
                                                                                 {
                                                                                     "conditions": [
@@ -1412,7 +1406,6 @@
                                                                                             "assign": "partitionResult"
                                                                                         }
                                                                                     ],
-                                                                                    "type": "tree",
                                                                                     "rules": [
                                                                                         {
                                                                                             "conditions": [
@@ -1440,7 +1433,6 @@
                                                                                                     ]
                                                                                                 }
                                                                                             ],
-                                                                                            "type": "tree",
                                                                                             "rules": [
                                                                                                 {
                                                                                                     "conditions": [
@@ -1460,7 +1452,6 @@
                                                                                                             ]
                                                                                                         }
                                                                                                     ],
-                                                                                                    "type": "tree",
                                                                                                     "rules": [
                                                                                                         {
                                                                                                             "conditions": [
@@ -1485,7 +1476,6 @@
                                                                                                                     ]
                                                                                                                 }
                                                                                                             ],
-                                                                                                            "type": "tree",
                                                                                                             "rules": [
                                                                                                                 {
                                                                                                                     "conditions": [
@@ -1505,7 +1495,6 @@
                                                                                                                             ]
                                                                                                                         }
                                                                                                                     ],
-                                                                                                                    "type": "tree",
                                                                                                                     "rules": [
                                                                                                                         {
                                                                                                                             "conditions": [
@@ -1548,7 +1537,6 @@
                                                                                                                                     "assign": "outpostType"
                                                                                                                                 }
                                                                                                                             ],
-                                                                                                                            "type": "tree",
                                                                                                                             "rules": [
                                                                                                                                 {
                                                                                                                                     "conditions": [
@@ -1563,7 +1551,6 @@
                                                                                                                                             "assign": "bucketName"
                                                                                                                                         }
                                                                                                                                     ],
-                                                                                                                                    "type": "tree",
                                                                                                                                     "rules": [
                                                                                                                                         {
                                                                                                                                             "conditions": [
@@ -1577,7 +1564,6 @@
                                                                                                                                                     ]
                                                                                                                                                 }
                                                                                                                                             ],
-                                                                                                                                            "type": "tree",
                                                                                                                                             "rules": [
                                                                                                                                                 {
                                                                                                                                                     "conditions": [
@@ -1682,83 +1668,97 @@
                                                                                                                                                     },
                                                                                                                                                     "type": "endpoint"
                                                                                                                                                 }
-                                                                                                                                            ]
+                                                                                                                                            ],
+                                                                                                                                            "type": "tree"
                                                                                                                                         },
                                                                                                                                         {
                                                                                                                                             "conditions": [],
                                                                                                                                             "error": "Invalid ARN: Expected an outpost type `bucket`, found `{outpostType}`",
                                                                                                                                             "type": "error"
                                                                                                                                         }
-                                                                                                                                    ]
+                                                                                                                                    ],
+                                                                                                                                    "type": "tree"
                                                                                                                                 },
                                                                                                                                 {
                                                                                                                                     "conditions": [],
                                                                                                                                     "error": "Invalid ARN: expected a bucket name",
                                                                                                                                     "type": "error"
                                                                                                                                 }
-                                                                                                                            ]
+                                                                                                                            ],
+                                                                                                                            "type": "tree"
                                                                                                                         },
                                                                                                                         {
                                                                                                                             "conditions": [],
                                                                                                                             "error": "Invalid ARN: Expected a 4-component resource",
                                                                                                                             "type": "error"
                                                                                                                         }
-                                                                                                                    ]
+                                                                                                                    ],
+                                                                                                                    "type": "tree"
                                                                                                                 },
                                                                                                                 {
                                                                                                                     "conditions": [],
                                                                                                                     "error": "Invalid ARN: The account id may only contain a-z, A-Z, 0-9 and `-`. Found: `{bucketArn#accountId}`",
                                                                                                                     "type": "error"
                                                                                                                 }
-                                                                                                            ]
+                                                                                                            ],
+                                                                                                            "type": "tree"
                                                                                                         },
                                                                                                         {
                                                                                                             "conditions": [],
                                                                                                             "error": "Invalid ARN: missing account ID",
                                                                                                             "type": "error"
                                                                                                         }
-                                                                                                    ]
+                                                                                                    ],
+                                                                                                    "type": "tree"
                                                                                                 },
                                                                                                 {
                                                                                                     "conditions": [],
                                                                                                     "error": "Invalid region in ARN: `{bucketArn#region}` (invalid DNS name)",
                                                                                                     "type": "error"
                                                                                                 }
-                                                                                            ]
+                                                                                            ],
+                                                                                            "type": "tree"
                                                                                         },
                                                                                         {
                                                                                             "conditions": [],
                                                                                             "error": "Client was configured for partition `{partitionResult#name}` but ARN has `{arnPartition#name}`",
                                                                                             "type": "error"
                                                                                         }
-                                                                                    ]
+                                                                                    ],
+                                                                                    "type": "tree"
                                                                                 }
-                                                                            ]
+                                                                            ],
+                                                                            "type": "tree"
                                                                         }
-                                                                    ]
+                                                                    ],
+                                                                    "type": "tree"
                                                                 },
                                                                 {
                                                                     "conditions": [],
                                                                     "error": "Invalid ARN: The outpost Id must only contain a-z, A-Z, 0-9 and `-`., found: `{outpostId}`",
                                                                     "type": "error"
                                                                 }
-                                                            ]
+                                                            ],
+                                                            "type": "tree"
                                                         },
                                                         {
                                                             "conditions": [],
                                                             "error": "Invalid ARN: The Outpost Id was not set",
                                                             "type": "error"
                                                         }
-                                                    ]
+                                                    ],
+                                                    "type": "tree"
                                                 }
-                                            ]
+                                            ],
+                                            "type": "tree"
                                         },
                                         {
                                             "conditions": [],
                                             "error": "Invalid ARN: No ARN type specified",
                                             "type": "error"
                                         }
-                                    ]
+                                    ],
+                                    "type": "tree"
                                 },
                                 {
                                     "conditions": [
@@ -1772,7 +1772,6 @@
                                             "assign": "partitionResult"
                                         }
                                     ],
-                                    "type": "tree",
                                     "rules": [
                                         {
                                             "conditions": [
@@ -1786,7 +1785,6 @@
                                                     ]
                                                 }
                                             ],
-                                            "type": "tree",
                                             "rules": [
                                                 {
                                                     "conditions": [
@@ -1902,7 +1900,6 @@
                                                             "assign": "url"
                                                         }
                                                     ],
-                                                    "type": "tree",
                                                     "rules": [
                                                         {
                                                             "conditions": [
@@ -1981,7 +1978,8 @@
                                                             },
                                                             "type": "endpoint"
                                                         }
-                                                    ]
+                                                    ],
+                                                    "type": "tree"
                                                 },
                                                 {
                                                     "conditions": [
@@ -2379,16 +2377,19 @@
                                                     },
                                                     "type": "endpoint"
                                                 }
-                                            ]
+                                            ],
+                                            "type": "tree"
                                         },
                                         {
                                             "conditions": [],
                                             "error": "Invalid region: region was not a valid DNS name.",
                                             "type": "error"
                                         }
-                                    ]
+                                    ],
+                                    "type": "tree"
                                 }
-                            ]
+                            ],
+                            "type": "tree"
                         },
                         {
                             "conditions": [],
@@ -11743,7 +11744,6 @@
         "com.amazonaws.s3control#MinStorageBytesPercentage": {
             "type": "double",
             "traits": {
-                "smithy.api#default": 0,
                 "smithy.api#range": {
                     "min": 0.1,
                     "max": 100
@@ -15080,14 +15080,12 @@
                 "MaxDepth": {
                     "target": "com.amazonaws.s3control#StorageLensPrefixLevelMaxDepth",
                     "traits": {
-                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The max depth of the selection criteria</p>"
                     }
                 },
                 "MinStorageBytesPercentage": {
                     "target": "com.amazonaws.s3control#MinStorageBytesPercentage",
                     "traits": {
-                        "smithy.api#default": 0,
                         "smithy.api#documentation": "<p>The minimum number of storage bytes percentage whose metrics will be selected.</p>\n         <note>\n            <p>You must choose a value greater than or equal to <code>1.0</code>.</p>\n         </note>"
                     }
                 }
@@ -15302,7 +15300,6 @@
         "com.amazonaws.s3control#StorageLensPrefixLevelMaxDepth": {
             "type": "integer",
             "traits": {
-                "smithy.api#default": 0,
                 "smithy.api#range": {
                     "min": 1,
                     "max": 10

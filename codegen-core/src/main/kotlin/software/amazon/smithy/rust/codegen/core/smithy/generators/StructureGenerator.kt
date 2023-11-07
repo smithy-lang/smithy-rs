@@ -16,12 +16,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.asDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.asRef
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.innerReference
 import software.amazon.smithy.rust.codegen.core.rustlang.isCopy
 import software.amazon.smithy.rust.codegen.core.rustlang.isDeref
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -53,12 +56,15 @@ sealed class StructureSection(name: String) : Section(name) {
 /** Customizations for StructureGenerator */
 abstract class StructureCustomization : NamedCustomization<StructureSection>()
 
+data class StructSettings(val flattenVecAccessors: Boolean)
+
 open class StructureGenerator(
     val model: Model,
     private val symbolProvider: RustSymbolProvider,
     private val writer: RustWriter,
     private val shape: StructureShape,
     private val customizations: List<StructureCustomization>,
+    private val structSettings: StructSettings,
 ) {
     companion object {
         /** Reserved struct member names */
@@ -88,7 +94,7 @@ open class StructureGenerator(
      */
     private fun lifetimeDeclaration(): String {
         val lifetimes = members
-            .map { symbolProvider.toSymbol(it).rustType() }
+            .map { symbolProvider.toSymbol(it).rustType().innerReference() }
             .mapNotNull {
                 when (it) {
                     is RustType.Reference -> it.lifetime
@@ -128,18 +134,30 @@ open class StructureGenerator(
         if (accessorMembers.isEmpty()) {
             return
         }
-        writer.rustBlock("impl $name") {
+        val lifetimes = lifetimeDeclaration()
+        writer.rustBlock("impl $lifetimes $name $lifetimes") {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
-                writer.renderMemberDoc(member, memberSymbol)
-                writer.deprecatedShape(member)
                 val memberType = memberSymbol.rustType()
+                var unwrapOrDefault = false
                 val returnType = when {
+                    // Automatically flatten vecs
+                    structSettings.flattenVecAccessors && memberType is RustType.Option && memberType.stripOuter<RustType.Option>() is RustType.Vec -> {
+                        unwrapOrDefault = true
+                        memberType.stripOuter<RustType.Option>().asDeref().asRef()
+                    }
                     memberType.isCopy() -> memberType
                     memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
                     memberType.isDeref() -> memberType.asDeref().asRef()
                     else -> memberType.asRef()
                 }
+                writer.renderMemberDoc(member, memberSymbol)
+                if (unwrapOrDefault) {
+                    // Add a newline
+                    writer.docs("")
+                    writer.docs("If no value was sent for this field, a default will be set. If you want to determine if no value was sent, use `.$memberName.is_none()`.")
+                }
+                writer.deprecatedShape(member)
                 writer.rustBlock("pub fn $memberName(&self) -> ${returnType.render()}") {
                     when {
                         memberType.isCopy() -> rust("self.$memberName")
@@ -147,6 +165,9 @@ open class StructureGenerator(
                         memberType is RustType.Option -> rust("self.$memberName.as_ref()")
                         memberType.isDeref() -> rust("use std::ops::Deref; self.$memberName.deref()")
                         else -> rust("&self.$memberName")
+                    }
+                    if (unwrapOrDefault) {
+                        rust(".unwrap_or_default()")
                     }
                 }
             }

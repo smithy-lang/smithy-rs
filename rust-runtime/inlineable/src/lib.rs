@@ -13,6 +13,8 @@ mod client_idempotency_token;
 mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
+#[allow(unused)]
+mod event_receiver;
 #[allow(dead_code)]
 mod idempotency_token;
 #[allow(dead_code)]
@@ -26,6 +28,10 @@ mod serialization_settings;
 
 #[allow(unused)]
 mod endpoint_lib;
+
+#[allow(unused)]
+mod auth_plugin;
+
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
 #[cfg(test)]

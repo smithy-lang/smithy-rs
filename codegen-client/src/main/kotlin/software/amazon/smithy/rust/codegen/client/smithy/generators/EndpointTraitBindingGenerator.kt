@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -72,20 +71,17 @@ class EndpointTraitBindings(
                         rust("let $field = &$input.$field;")
                     }
                     if (generateValidation) {
+                        val errorString = "$field was unset or empty but must be set as part of the endpoint prefix"
                         val contents =
-                            // TODO(enableNewSmithyRuntimeCleanup): Remove the allow attribute once all places need .into method
                             """
                             if $field.is_empty() {
-                                ##[allow(clippy::useless_conversion)]
-                                return Err(#{invalidFieldError:W}.into())
+                                return Err(#{InvalidEndpointError}::failed_to_construct_uri("$errorString").into());
                             }
                             """
                         rustTemplate(
                             contents,
-                            "invalidFieldError" to OperationBuildError(runtimeConfig).invalidField(
-                                field,
-                                "$field was unset or empty but must be set as part of the endpoint prefix",
-                            ),
+                            "InvalidEndpointError" to RuntimeType.smithyHttp(runtimeConfig)
+                                .resolve("endpoint::error::InvalidEndpointError"),
                         )
                     }
                     "${label.content} = $field"

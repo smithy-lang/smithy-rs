@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
@@ -166,6 +167,12 @@ fun <T : AbstractCodeWriter<T>> T.rust(
     vararg args: Any,
 ) {
     this.write(contents.trim(), *args)
+}
+
+fun <T : AbstractCodeWriter<T>> T.rawRust(
+    @Language("Rust", prefix = "macro_rules! foo { () =>  {{\n", suffix = "\n}}}") contents: String,
+) {
+    this.write(escape(contents.trim()))
 }
 
 /**
@@ -440,6 +447,13 @@ fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
     }
 }
 
+/** Write a `#[cfg(feature = "...")]` block for the given feature */
+fun RustWriter.featureGateBlock(feature: String, block: Writable) {
+    rustBlock("##[cfg(feature = ${feature.dq()})]") {
+        block()
+    }
+}
+
 /**
  * Write _exactly_ the text as written into the code writer without newlines or formatting
  */
@@ -537,10 +551,7 @@ class RustWriter private constructor(
         if (this.className.contains("AbstractCodeWriter") || this.className.startsWith("java.lang")) {
             return false
         }
-        if (this.fileName == "RustWriter.kt") {
-            return false
-        }
-        return true
+        return this.fileName != "RustWriter.kt"
     }
 
     private val preamble = mutableListOf<Writable>()

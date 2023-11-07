@@ -13,9 +13,9 @@ use aws_sdk_s3::types::{
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_async::assert_elapsed;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
-use aws_smithy_client::never::NeverConnector;
-use aws_smithy_http::result::SdkError;
+use aws_smithy_runtime::client::http::test_util::NeverClient;
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::fmt::Debug;
@@ -87,14 +87,14 @@ fn test_async_std_runtime_retry() {
 }
 
 async fn timeout_test(sleep_impl: SharedAsyncSleep) -> Result<(), Box<dyn std::error::Error>> {
-    let conn = NeverConnector::new();
+    let http_client = NeverClient::new();
     let region = Region::from_static("us-east-2");
     let timeout_config = TimeoutConfig::builder()
         .operation_timeout(Duration::from_secs_f32(0.5))
         .build();
     let config = Config::builder()
         .region(region)
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .credentials_provider(Credentials::for_tests())
         .timeout_config(timeout_config)
         .sleep_impl(sleep_impl)
@@ -141,10 +141,10 @@ async fn timeout_test(sleep_impl: SharedAsyncSleep) -> Result<(), Box<dyn std::e
 }
 
 async fn retry_test(sleep_impl: SharedAsyncSleep) -> Result<(), Box<dyn std::error::Error>> {
-    let conn = NeverConnector::new();
+    let http_client = NeverClient::new();
     let conf = aws_types::SdkConfig::builder()
         .region(Region::new("us-east-2"))
-        .http_connector(conn.clone())
+        .http_client(http_client.clone())
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .retry_config(RetryConfig::standard().with_max_attempts(3))
         .timeout_config(
@@ -167,7 +167,7 @@ async fn retry_test(sleep_impl: SharedAsyncSleep) -> Result<(), Box<dyn std::err
     );
     assert_eq!(
         3,
-        conn.num_calls(),
+        http_client.num_calls(),
         "client level timeouts should be retried"
     );
 

@@ -9,25 +9,26 @@ license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
-client-hyper = ["aws-smithy-client/client-hyper"]
-rustls = ["aws-smithy-client/rustls", "client-hyper"]
-native-tls = []
+client-hyper = ["aws-smithy-runtime/connector-hyper-0-14-x"]
+rustls = ["aws-smithy-runtime/tls-rustls", "client-hyper"]
 allow-compilation = [] # our tests use `cargo test --all-features` and native-tls breaks CI
-rt-tokio = ["aws-smithy-async/rt-tokio", "tokio/rt"]
-credentials-sso = ["dep:aws-sdk-sso", "dep:ring", "dep:hex", "dep:zeroize"]
+rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
+sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
+credentials-process = ["tokio/process"]
 
-default = ["client-hyper", "rustls", "rt-tokio", "credentials-sso"]
+default = ["client-hyper", "rustls", "rt-tokio", "credentials-process", "sso"]
 
 [dependencies]
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types" }
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
-aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", default-features = false }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
-aws-smithy-http-tower = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http-tower" }
 aws-smithy-json = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-json" }
+aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client"] }
+aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-types" }
+aws-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-runtime" }
 aws-types = { path = "../../sdk/build/aws-sdk/sdk/aws-types" }
 hyper = { version = "0.14.26", default-features = false }
 time = { version = "0.3.4", features = ["parsing"] }
@@ -39,15 +40,20 @@ fastrand = "2.0.0"
 
 bytes = "1.1.0"
 http = "0.2.4"
-tower = { version = "0.4.8" }
 
 # implementation detail of SSO credential caching
 aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false, optional = true }
-ring = { version = "0.16", optional = true }
+ring = { version = "0.17.5", optional = true }
 hex = { version = "0.4.3", optional = true }
 zeroize = { version = "1", optional = true }
 
+# implementation detail of SSO OIDC `CreateToken` for SSO token providers
+aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-features = false, optional = true }
+
 [dev-dependencies]
+aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x", "test-util"] }
+aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
 futures-util = { version = "0.3.16", default-features = false }
 tracing-test = "0.2.1"
 tracing-subscriber = { version = "0.3.16", features = ["fmt", "json"] }
@@ -61,12 +67,9 @@ arbitrary = "1.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-smithy-client = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "rt-tokio", "client-hyper"] }
-
 # used for a usage example
 hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http2", "http1"] }
-aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
+aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

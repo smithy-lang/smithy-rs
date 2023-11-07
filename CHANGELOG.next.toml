@@ -11,106 +11,38 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[smithy-rs]]
-message = "It's now possible to nest runtime components with the `RuntimePlugin` trait. A `current_components` argument was added to the `runtime_components` method so that components configured from previous runtime plugins can be referenced in the current runtime plugin. Ordering of runtime plugins was also introduced via a new `RuntimePlugin::order` method."
-references = ["smithy-rs#2909"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client"}
-author = "jdisanti"
-
 [[aws-sdk-rust]]
-message = """Several breaking changes were made to the aws-sigv4 API to remove the direct HTTP dependency:
-- The `take_parameters` and `take_headers` APIs were removed from `SigningInstructions`. Use `into_parts()` instead
-- The arguments of `SignableRequest::new` were changed to accept string types instead of types from the HTTP crate
-- `SigningInstructions::apply_to_request` was gated beyond an `http0-compat` feature flag for backwards compatibility. This API MAY be removed in a future release.
-- Several public accessors were removed from `SigningInstructions`.
-"""
-references = ["smithy-rs#2921"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+message = "Fix aws-sdk-rust#930 (PutSnapshotBlock)"
+references = ["smithy-rs#3126", "aws-sdk-rust#930"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
-[[aws-sdk-rust]]
-message = "In sigV4-related code, rename 'signing service' to 'signing name'. This aligns with the terminology used by the endpoint resolver."
-references = ["smithy-rs#2911"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
+[[smithy-rs]]
+message = "The HTTP `Request`, `Response`, `Headers`, and `HeaderValue` types have been moved from `aws_smithy_runtime_api::client::http::*` into `aws_smithy_runtime_api::http`"
+references = ["smithy-rs#3138"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+`Message`, `Header`, `HeaderValue`, and `StrBytes` have been moved to `aws-smithy-types` from `aws-smithy-eventstream`. `Message::read_from` and `Message::write_to` remain in `aws-smithy-eventstream` but they are converted to free functions with the names `read_message_from` and `write_message_to` respectively.
+"""
+references = ["smithy-rs#3139"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).
+"""
+references = ["smithy-rs#3100", "smithy-rs#3114"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
 
 [[aws-sdk-rust]]
 message = """
-All versions of SigningParams have been updated to contain an [`Identity`](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/identity/struct.Identity.html)
-as opposed to AWS credentials in `&str` form. [Read more](https://github.com/awslabs/aws-sdk-rust/discussions/868).
+An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).
 """
-references = ["smithy-rs#2913"]
+references = ["smithy-rs#3100", "smithy-rs#3114"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[aws-sdk-rust]]
-message = "Update MSRV to Rust 1.70.0"
-references = ["smithy-rs#2948"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "Velfi"
-
-[[smithy-rs]]
-message = "Update MSRV to Rust 1.70.0"
-references = ["smithy-rs#2948"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
-author = "Velfi"
-
-[[aws-sdk-rust]]
-message = "Correctly identify HTTP 200 responses from S3 with `<Error>` as the root Element as errors. **Note**: This a behavior change and will change the error type returned by the SDK in some cases."
-references = ["smithy-rs#2958", "aws-sdk-rust#873"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Allow `no_credentials` to be used with all S3 operations."
-references = ["smithy-rs#2955", "aws-sdk-rust#878"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
-references = ["smithy-rs#2944", "smithy-rs#2951"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again."
-references = ["smithy-rs#2944", "smithy-rs#2951"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "Generate a region setter when a model uses SigV4."
-references = ["smithy-rs#2960"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix code generation for union members with the `@httpPayload` trait."
-references = ["smithy-rs#2969", "smithy-rs#1896"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "Make `bucket` required for request construction for S3. When `bucket` is not set, a **different** operation than intended can be triggered."
-references = ["smithy-rs#1668", "aws-sdk-rust#873", "smithy-rs#2964"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
-
-[[smithy-rs]]
-message = "Required members with @contextParam are now treated as client-side required."
-references = ["smithy-rs#2964"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, target = "client" }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Remove `once_cell` from public API"
-references = ["smithy-rs#2973"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = "Remove `once_cell` from public API"
-references = ["smithy-rs#2973"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "ysaito1001"

@@ -10,7 +10,6 @@ use aws_sdk_ec2 as ec2;
 use aws_sdk_ec2::types::InstanceType;
 
 use crate::CanaryEnv;
-use tokio_stream::StreamExt;
 
 mk_canary!(
     "ec2_paginator",
@@ -39,7 +38,7 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
         }
         num_pages += 1;
     }
-    if dbg!(num_pages) < 2 {
+    if num_pages < 2 {
         bail!(
             "expected 3+ pages containing ~60 results but got {} pages",
             num_pages
@@ -60,7 +59,7 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
 
 #[cfg(test)]
 mod test {
-    use crate::latest::paginator_canary::paginator_canary;
+    use super::paginator_canary;
 
     #[tokio::test]
     async fn test_paginator() {

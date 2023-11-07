@@ -7,14 +7,15 @@ use async_stream::stream;
 use aws_sdk_transcribestreaming::config::{Credentials, Region};
 use aws_sdk_transcribestreaming::error::SdkError;
 use aws_sdk_transcribestreaming::operation::start_stream_transcription::StartStreamTranscriptionOutput;
+use aws_sdk_transcribestreaming::primitives::event_stream::{HeaderValue, Message};
 use aws_sdk_transcribestreaming::primitives::Blob;
 use aws_sdk_transcribestreaming::types::error::{AudioStreamError, TranscriptResultStreamError};
 use aws_sdk_transcribestreaming::types::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
 };
 use aws_sdk_transcribestreaming::{Client, Config};
-use aws_smithy_client::dvr::{Event, ReplayingConnection};
-use aws_smithy_eventstream::frame::{DecodedFrame, HeaderValue, Message, MessageFrameDecoder};
+use aws_smithy_eventstream::frame::{read_message_from, DecodedFrame, MessageFrameDecoder};
+use aws_smithy_runtime::client::http::test_util::dvr::{Event, ReplayingClient};
 use bytes::BufMut;
 use futures_core::Stream;
 use std::collections::{BTreeMap, BTreeSet};
@@ -98,14 +99,14 @@ async fn start_request(
     region: &'static str,
     events_json: &str,
     input_stream: impl Stream<Item = Result<AudioStream, AudioStreamError>> + Send + Sync + 'static,
-) -> (ReplayingConnection, StartStreamTranscriptionOutput) {
+) -> (ReplayingClient, StartStreamTranscriptionOutput) {
     let events: Vec<Event> = serde_json::from_str(events_json).unwrap();
-    let replayer = ReplayingConnection::new(events);
+    let replayer = ReplayingClient::new(events);
 
     let region = Region::from_static(region);
     let config = Config::builder()
         .region(region)
-        .http_connector(replayer.clone())
+        .http_client(replayer.clone())
         .credentials_provider(Credentials::for_tests())
         .build();
     let client = Client::from_conf(config);
@@ -132,7 +133,7 @@ fn decode_frames(mut body: &[u8]) -> Vec<(Message, Option<Message>)> {
         let inner_msg = if msg.payload().is_empty() {
             None
         } else {
-            Some(Message::read_from(msg.payload().as_ref()).unwrap())
+            Some(read_message_from(msg.payload().as_ref()).unwrap())
         };
         result.push((msg, inner_msg));
     }

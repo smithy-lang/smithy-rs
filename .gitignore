@@ -50,6 +50,7 @@ target/
 
 # IDEs
 .idea/
+.vscode/
 .project
 .settings
 .classpath

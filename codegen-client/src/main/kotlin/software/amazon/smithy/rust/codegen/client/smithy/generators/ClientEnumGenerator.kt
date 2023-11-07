@@ -177,5 +177,5 @@ class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringSha
         codegenContext.model,
         codegenContext.symbolProvider,
         shape,
-        InfallibleEnumType(ClientRustModule.Primitives),
+        InfallibleEnumType(ClientRustModule.primitives),
     )

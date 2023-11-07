@@ -53,7 +53,6 @@ class EndpointTypesGenerator(
                 it,
                 params,
                 codegenContext = codegenContext,
-                endpointCustomizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext),
             ).generate()
         }
             ?: {}

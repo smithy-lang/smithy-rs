@@ -78,7 +78,16 @@ object ClientRustModule {
     val Meta = RustModule.public("meta")
     val Input = RustModule.public("input")
     val Output = RustModule.public("output")
-    val Primitives = RustModule.public("primitives")
+
+    /** crate::primitives */
+    val primitives = Primitives.self
+    object Primitives {
+        /** crate::primitives */
+        val self = RustModule.public("primitives")
+
+        /** crate::primitives::event_stream */
+        val EventStream = RustModule.public("event_stream", parent = self)
+    }
 
     /** crate::types */
     val types = Types.self
@@ -104,13 +113,14 @@ class ClientModuleDocProvider(
             ClientRustModule.Config.endpoint -> strDoc("Types needed to configure endpoint resolution.")
             ClientRustModule.Config.retry -> strDoc("Retry configuration.")
             ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")
-            ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Interceptor`](crate::config::Interceptor).")
+            ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Intercept`](crate::config::Intercept).")
             ClientRustModule.Error -> strDoc("Common errors and error handling utilities.")
             ClientRustModule.Operation -> strDoc("All operations that this crate can perform.")
             ClientRustModule.Meta -> strDoc("Information about this crate.")
             ClientRustModule.Input -> PANIC("this module shouldn't exist in the new scheme")
             ClientRustModule.Output -> PANIC("this module shouldn't exist in the new scheme")
-            ClientRustModule.Primitives -> strDoc("Primitives such as `Blob` or `DateTime` used by other types.")
+            ClientRustModule.primitives -> strDoc("Primitives such as `Blob` or `DateTime` used by other types.")
+            ClientRustModule.Primitives.EventStream -> strDoc("Event stream related primitives such as `Message` or `Header`.")
             ClientRustModule.types -> strDoc("Data structures used by operation inputs/outputs.")
             ClientRustModule.Types.Error -> strDoc("Error types that $serviceName can respond with.")
             else -> TODO("Document this module: $module")
@@ -149,7 +159,6 @@ class ClientModuleDocProvider(
 
                 let result = client.$opFnName()
                     .customize()
-                    .await?
                     .mutate_request(|req| {
                         // Add `x-example-header` with value
                         req.headers_mut()

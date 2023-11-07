@@ -81,11 +81,28 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import java.util.logging.Logger
 
+data class StreamPayloadSerializerParams(
+    val codegenContext: ServerCodegenContext,
+    val payloadGenerator: ServerHttpBoundProtocolPayloadGenerator,
+    val shapeName: String,
+    val shape: OperationShape,
+)
+
 /**
  * Class describing a ServerHttpBoundProtocol section that can be used in a customization.
  */
 sealed class ServerHttpBoundProtocolSection(name: String) : Section(name) {
     data class AfterTimestampDeserializedMember(val shape: MemberShape) : ServerHttpBoundProtocolSection("AfterTimestampDeserializedMember")
+
+    /**
+     * Represent a section for rendering the serialized stream payload.
+     *
+     * If the payload does not implement the `futures_core::stream::Stream`, which is the case for
+     * `aws_smithy_types::byte_stream::ByteStream`, the section needs to be overridden and renders a new-type wrapper
+     * around the payload to enable the `Stream` trait.
+     */
+    data class WrapStreamPayload(val params: StreamPayloadSerializerParams) :
+        ServerHttpBoundProtocolSection("WrapStreamPayload")
 }
 
 /**
@@ -172,8 +189,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         "OnceCell" to RuntimeType.OnceCell,
         "PercentEncoding" to RuntimeType.PercentEncoding,
         "Regex" to RuntimeType.Regex,
-        "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
         "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
         "RuntimeError" to protocol.runtimeError(runtimeConfig),
         "RequestRejection" to protocol.requestRejection(runtimeConfig),
         "ResponseRejection" to protocol.responseRejection(runtimeConfig),
@@ -540,7 +557,18 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         operationShape.outputShape(model).findStreamingMember(model)?.let {
             val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
             withBlockTemplate("let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(", "));", *codegenScope) {
-                payloadGenerator.generatePayload(this, "output", operationShape)
+                for (customization in customizations) {
+                    customization.section(
+                        ServerHttpBoundProtocolSection.WrapStreamPayload(
+                            StreamPayloadSerializerParams(
+                                codegenContext,
+                                payloadGenerator,
+                                "output",
+                                operationShape,
+                            ),
+                        ),
+                    )(this)
+                }
             }
         } ?: run {
             val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
@@ -707,7 +735,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     #{SmithyHttpServer}::protocol::content_type_header_classifier(
-                        &parts.headers, 
+                        &parts.headers,
                         Some("$expectedRequestContentType"),
                     )?;
                     input = #{parser}(bytes.as_ref(), input)?;
@@ -1241,7 +1269,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            "\n B: Into<#{SmithyHttp}::byte_stream::ByteStream>,"
+            "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
         } else {
             ""
         }
