@@ -32,12 +32,12 @@ private class HttpConnectorConfigCustomization(
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
-        "HttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::HttpClient"),
+        "Connection" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::Connection"),
+        "HttpClient" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::http::HttpClient"),
         "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
         "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
-        "SharedHttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::SharedHttpClient"),
+        "SharedHttpClient" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::http::SharedHttpClient"),
         "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
     )
 

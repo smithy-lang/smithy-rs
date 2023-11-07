@@ -307,10 +307,10 @@ class DefaultProtocolTestGenerator(
             });
             """,
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-            "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc)
+            "SharedResponseDeserializer" to RT.smithyRuntimeApiClient(rc)
                 .resolve("client::ser_de::SharedResponseDeserializer"),
             "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-            "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
+            "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
         )

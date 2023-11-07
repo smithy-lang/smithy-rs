@@ -18,7 +18,7 @@ class ClientRuntimeTypesReExportGenerator(
 ) {
     fun render() {
         val rc = codegenContext.runtimeConfig
-        val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(rc)
 
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
@@ -43,7 +43,7 @@ class ClientRuntimeTypesReExportGenerator(
                     pub use #{config_bag}::FrozenLayer;
                     pub use #{RuntimeComponentsBuilder};
                     """,
-                    "runtime_plugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin"),
+                    "runtime_plugin" to RuntimeType.smithyRuntimeApiClient(rc).resolve("client::runtime_plugin"),
                     "config_bag" to RuntimeType.smithyTypes(rc).resolve("config_bag"),
                     "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
                 )

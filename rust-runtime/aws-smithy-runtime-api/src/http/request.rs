@@ -180,6 +180,11 @@ impl<B> Request<B> {
         &mut self.body
     }
 
+    /// Converts this request into the request body.
+    pub fn into_body(self) -> B {
+        self.body
+    }
+
     /// Returns the method associated with this request
     pub fn method(&self) -> &str {
         self.method.as_str()

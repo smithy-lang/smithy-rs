@@ -87,7 +87,7 @@ class PaginatorGenerator private constructor(
         "Builder" to symbolProvider.symbolForBuilder(operation.inputShape(model)),
 
         // SDK Types
-        "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+        "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
         "SdkError" to RuntimeType.sdkError(runtimeConfig),
         "pagination_stream" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::pagination_stream"),
 

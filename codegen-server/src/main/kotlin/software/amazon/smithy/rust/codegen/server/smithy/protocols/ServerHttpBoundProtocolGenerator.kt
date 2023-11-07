@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
@@ -722,7 +723,17 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             inputShape.serverBuilderSymbol(codegenContext),
         )
         Attribute.AllowUnusedVariables.render(this)
-        rust("let (parts, body) = request.into_parts();")
+        rustTemplate(
+            """
+            let uri = request.uri().clone();
+            let request = #{Request}::try_from(request)
+                .map_err(|err| #{ParseError}::new("failed to convert headers").with_source(err))?;
+            """,
+            *preludeScope,
+            "ParseError" to RuntimeType.smithyHttp(runtimeConfig).resolve("header::ParseError"),
+            "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
+            "Uri" to RuntimeType.Http.resolve("uri::Uri"),
+        )
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
 
@@ -735,7 +746,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 rustTemplate(
                     """
                     #{SmithyHttpServer}::protocol::content_type_header_classifier(
-                        &parts.headers,
+                        request.headers(),
                         Some("$expectedRequestContentType"),
                     )?;
                     input = #{parser}(bytes.as_ref(), input)?;
@@ -773,7 +784,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(&parts.headers)?;
+                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(request.headers())?;
                     """,
                     *codegenScope,
                 )
@@ -817,7 +828,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             {
-                                Some(#{Deserializer}(&mut body.into().into_inner())?)
+                                Some(#{Deserializer}(&mut request.into_body().into().into_inner())?)
                             }
                             """,
                             "Deserializer" to deserializer,
@@ -896,7 +907,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 },
             )
         with(writer) {
-            rustTemplate("let input_string = parts.uri.path();")
+            rustTemplate("let input_string = uri.path();")
             if (greedyLabelIndex >= 0 && greedyLabelIndex + 1 < httpTrait.uri.segments.size) {
                 rustTemplate(
                     """
@@ -981,7 +992,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         with(writer) {
             rustTemplate(
                 """
-                let query_string = parts.uri.query().unwrap_or("");
+                let query_string = uri.query().unwrap_or("");
                 let pairs = #{FormUrlEncoded}::parse(query_string.as_bytes());
                 """.trimIndent(),
                 *codegenScope,
@@ -1152,7 +1163,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(&parts.headers)?
+            #{deserializer}(request.headers())?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,
@@ -1166,7 +1177,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(&parts.headers)?
+            #{deserializer}(request.headers())?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,

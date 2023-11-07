@@ -18,7 +18,7 @@ class IdentityCacheConfigCustomization(codegenContext: ClientCodegenContext) : C
     private val moduleUseName = codegenContext.moduleUseName()
 
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val api = RuntimeType.smithyRuntimeApi(rc)
+        val api = RuntimeType.smithyRuntimeApiClient(rc)
         arrayOf(
             *preludeScope,
             "ResolveCachedIdentity" to api.resolve("client::identity::ResolveCachedIdentity"),

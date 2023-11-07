@@ -38,7 +38,7 @@ private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegen
                         InlineAwsDependency.forRustFile(
                             "apigateway_interceptors",
                             additionalDependency = arrayOf(
-                                CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig),
+                                CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
                             ),
                         ),
                     ).resolve("AcceptHeaderInterceptor"),

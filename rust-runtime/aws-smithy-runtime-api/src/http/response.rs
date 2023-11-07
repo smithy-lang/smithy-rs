@@ -145,6 +145,11 @@ impl<B> Response<B> {
         &mut self.body
     }
 
+    /// Converts this response into the response body.
+    pub fn into_body(self) -> B {
+        self.body
+    }
+
     /// Adds an extension to the response extensions
     pub fn add_extension<T: Send + Sync + Clone + 'static>(&mut self, extension: T) {
         self.extensions.insert(extension);

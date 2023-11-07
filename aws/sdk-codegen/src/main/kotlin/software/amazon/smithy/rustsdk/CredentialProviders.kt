@@ -135,7 +135,7 @@ class CredentialsIdentityResolverRegistration(
             is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                 rustBlockTemplate("if let Some(creds_provider) = ${section.serviceConfigName}.credentials_provider()") {
                     val codegenScope = arrayOf(
-                        "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        "SharedIdentityResolver" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                             .resolve("client::identity::SharedIdentityResolver"),
                         "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
                             .resolve("auth::sigv4a::SCHEME_ID"),

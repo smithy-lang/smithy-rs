@@ -43,7 +43,7 @@ class MetadataCustomizationTest {
                 "Intercept" to RuntimeType.intercept(runtimeConfig),
                 "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
                 "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-                "RuntimeComponents" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "RuntimeComponents" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::runtime_components::RuntimeComponents"),
             )
             rustCrate.testModule {

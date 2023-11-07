@@ -106,10 +106,6 @@ impl Intercept for ResponseHeaderLoggingInterceptor {
             .find(|(header_name, _)| *header_name == "x-request-id");
 
         if let Some((_, server_id)) = header_received {
-            let server_id = server_id
-                .to_str()
-                .map_err(|e| Box::new(RequestIdError::NonParsableServerRequestId(e.to_string())))?;
-
             let request_details = cfg
                 .get_mut::<RequestId>()
                 .ok_or_else(|| Box::new(RequestIdError::ClientRequestIdMissing()))?;

@@ -11,6 +11,7 @@ pub mod rest_json_1;
 pub mod rest_xml;
 
 use crate::rejection::MissingContentTypeReason;
+use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
 use http::HeaderMap;
 
 #[cfg(test)]
@@ -40,9 +41,15 @@ pub mod test_helpers {
 /// When there are no modeled inputs,
 /// a request body is empty and the content-type request header must not be set
 #[allow(clippy::result_large_err)]
-pub fn content_type_header_empty_body_no_modeled_input(headers: &HeaderMap) -> Result<(), MissingContentTypeReason> {
+pub fn content_type_header_empty_body_no_modeled_input(
+    headers: &SmithyHeaders,
+) -> Result<(), MissingContentTypeReason> {
     if headers.contains_key(http::header::CONTENT_TYPE) {
-        let found_mime = parse_content_type(headers)?;
+        let found_mime = headers
+            .get(http::header::CONTENT_TYPE)
+            .unwrap() // The header is present, `unwrap` will not panic.
+            .parse::<mime::Mime>()
+            .map_err(MissingContentTypeReason::MimeParseError)?;
         Err(MissingContentTypeReason::UnexpectedMimeType {
             expected_mime: None,
             found_mime: Some(found_mime),
@@ -133,11 +140,12 @@ pub fn accept_header_classifier(headers: &HeaderMap, content_type: &mime::Mime) 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aws_smithy_runtime_api::http::Headers;
     use http::header::{HeaderValue, ACCEPT, CONTENT_TYPE};
 
     fn req_content_type(content_type: &'static str) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_str(content_type).unwrap());
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
         headers
     }
 
@@ -151,13 +159,14 @@ mod tests {
 
     #[test]
     fn check_content_type_header_empty_body_no_modeled_input() {
-        assert!(content_type_header_empty_body_no_modeled_input(&HeaderMap::new()).is_ok());
+        assert!(content_type_header_empty_body_no_modeled_input(&Headers::new()).is_ok());
     }
 
     #[test]
     fn check_invalid_content_type_header_empty_body_no_modeled_input() {
-        let valid_request = req_content_type("application/json");
-        let result = content_type_header_empty_body_no_modeled_input(&valid_request).unwrap_err();
+        let mut valid = Headers::new();
+        valid.insert(CONTENT_TYPE, "application/json");
+        let result = content_type_header_empty_body_no_modeled_input(&valid).unwrap_err();
         assert!(matches!(
             result,
             MissingContentTypeReason::UnexpectedMimeType {

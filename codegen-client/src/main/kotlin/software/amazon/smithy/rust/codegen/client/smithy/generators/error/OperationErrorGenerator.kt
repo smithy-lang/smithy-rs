@@ -54,7 +54,7 @@ class OperationErrorGenerator(
     private val runtimeConfig = symbolProvider.config.runtimeConfig
     private val errorMetadata = errorMetadata(symbolProvider.config.runtimeConfig)
     private val createUnhandledError =
-        RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::result::CreateUnhandledError")
+        RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::result::CreateUnhandledError")
 
     private fun operationErrors(): List<StructureShape> =
         (operationOrEventStream as OperationShape).operationErrors(model).map { it.asStructureShape().get() }

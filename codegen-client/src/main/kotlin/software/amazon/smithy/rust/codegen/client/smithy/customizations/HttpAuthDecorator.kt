@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     val smithyRuntime =
         CargoDependency.smithyRuntime(runtimeConfig).withFeature("http-auth").toType()
-    val smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-auth").toType()
+    val smithyRuntimeApi = CargoDependency.smithyRuntimeApiClient(runtimeConfig).withFeature("http-auth").toType()
     val authHttp = smithyRuntime.resolve("client::auth::http")
     val authHttpApi = smithyRuntimeApi.resolve("client::auth::http")
     return arrayOf(
