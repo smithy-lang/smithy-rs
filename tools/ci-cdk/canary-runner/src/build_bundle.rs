@@ -66,7 +66,8 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
 // The elements in this `Vec` should be sorted in an ascending order by the release date.
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
-        ReleaseTag::from_str("release-2023-10-26").unwrap(), // last version before addition of Sigv4a MRAP test
+        // last version before addition of Sigv4a MRAP test
+        ReleaseTag::from_str("release-2023-10-26").unwrap(),
     ];
 }
 

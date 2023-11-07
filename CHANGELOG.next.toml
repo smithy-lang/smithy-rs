@@ -30,3 +30,19 @@ message = """
 references = ["smithy-rs#3139"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = """
+An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).
+"""
+references = ["smithy-rs#3100", "smithy-rs#3114"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = """
+An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).
+"""
+references = ["smithy-rs#3100", "smithy-rs#3114"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "ysaito1001"

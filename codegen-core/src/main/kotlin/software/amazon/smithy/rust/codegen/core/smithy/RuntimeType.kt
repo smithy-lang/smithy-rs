@@ -405,6 +405,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun eventStreamReceiver(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyHttp(runtimeConfig).resolve("event_stream::Receiver")
 
+        fun eventReceiver(runtimeConfig: RuntimeConfig) =
+            forInlineDependency(InlineDependency.eventReceiver(runtimeConfig)).resolve("EventReceiver")
+
         fun eventStreamSender(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyHttp(runtimeConfig).resolve("event_stream::EventStreamSender")
 
