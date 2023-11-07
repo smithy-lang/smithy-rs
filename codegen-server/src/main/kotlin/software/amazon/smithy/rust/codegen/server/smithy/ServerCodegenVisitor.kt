@@ -624,6 +624,9 @@ open class ServerCodegenVisitor(
 
             ScopeMacroGenerator(codegenContext).render(this)
         }
+
+        codegenDecorator.postprocessServiceGenerateAdditionalStructures(shape)
+            .forEach { structureShape -> this.structureShape(structureShape) }
     }
 
     /**
@@ -649,7 +652,7 @@ open class ServerCodegenVisitor(
             protocolGenerator.renderOperation(this, shape)
         }
 
-        codegenDecorator.postprocessGenerateAdditionalStructures(shape)
+        codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)
             .forEach { structureShape -> this.structureShape(structureShape) }
     }
 
