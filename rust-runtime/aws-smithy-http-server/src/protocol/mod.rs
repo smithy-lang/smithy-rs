@@ -145,7 +145,7 @@ mod tests {
 
     fn req_content_type(content_type: &'static str) -> HeaderMap {
         let mut headers = HeaderMap::new();
-        headers.insert(CONTENT_TYPE, HeaderValue::from_static(content_type));
+        headers.insert(CONTENT_TYPE, HeaderValue::from_str(content_type).unwrap());
         headers
     }
 

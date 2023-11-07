@@ -277,7 +277,11 @@ class DefaultProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let mut http_response = #T::new()", RT.HttpResponseBuilder)
+        rustTemplate(
+            "let mut http_response = #{Response}::try_from(#{HttpResponseBuilder}::new()",
+            "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
+            "HttpResponseBuilder" to RT.HttpResponseBuilder,
+        )
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -285,7 +289,8 @@ class DefaultProtocolTestGenerator(
             """
             .status(${testCase.code})
             .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
-            .unwrap();
+            .unwrap()
+            ).unwrap();
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
