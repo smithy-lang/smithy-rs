@@ -48,6 +48,7 @@
 //! Consult `crate::protocol::$protocolName::rejection` for rejection types for other protocols.
 
 use crate::rejection::MissingContentTypeReason;
+use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
@@ -163,6 +164,10 @@ pub enum RequestRejection {
     // This rejection is constructed directly in the code-generated SDK instead of in this crate.
     #[error("request does not adhere to modeled constraints: {0}")]
     ConstraintViolation(String),
+
+    /// Typically happens when the request has headers that are not valid UTF-8.
+    #[error("failed to convert request: {0}")]
+    HttpConversion(#[from] HttpError),
 }
 
 // Consider a conversion between `T` and `U` followed by a bubbling up of the conversion error

@@ -269,7 +269,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
                         rustTemplate(
                             """
-                            #{SmithyHttpServer}::protocol::content_type_header_classifier(
+                            #{SmithyHttpServer}::protocol::content_type_header_classifier_http(
                                 request.headers(),
                                 Some("$expectedRequestContentType"),
                             )?;
@@ -725,14 +725,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         Attribute.AllowUnusedVariables.render(this)
         rustTemplate(
             """
-            let uri = request.uri().clone();
-            let request = #{Request}::try_from(request)
-                .map_err(|err| #{ParseError}::new("failed to convert headers").with_source(err))?;
+            let #{RequestParts} { uri, headers, body, .. } = #{Request}::try_from(request)?.into_parts();
             """,
             *preludeScope,
             "ParseError" to RuntimeType.smithyHttp(runtimeConfig).resolve("header::ParseError"),
             "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
-            "Uri" to RuntimeType.Http.resolve("uri::Uri"),
+            "RequestParts" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::RequestParts"),
         )
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
@@ -745,8 +743,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocol::content_type_header_classifier(
-                        request.headers(),
+                    #{SmithyHttpServer}::protocol::content_type_header_classifier_smithy(
+                        &headers,
                         Some("$expectedRequestContentType"),
                     )?;
                     input = #{parser}(bytes.as_ref(), input)?;
@@ -784,7 +782,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(request.headers())?;
+                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(&headers)?;
                     """,
                     *codegenScope,
                 )
@@ -828,7 +826,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         rustTemplate(
                             """
                             {
-                                Some(#{Deserializer}(&mut request.into_body().into().into_inner())?)
+                                Some(#{Deserializer}(&mut body.into().into_inner())?)
                             }
                             """,
                             "Deserializer" to deserializer,
@@ -1163,7 +1161,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(request.headers())?
+            #{deserializer}(&headers)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,
@@ -1177,7 +1175,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(request.headers())?
+            #{deserializer}(&headers)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,

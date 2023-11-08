@@ -13,6 +13,17 @@ use http0::uri::PathAndQuery;
 use http0::{Extensions, HeaderMap, Method};
 use std::borrow::Cow;
 
+/// Parts struct useful for structural decomposition that the [`Request`] type can be converted into.
+#[non_exhaustive]
+pub struct RequestParts<B = SdkBody> {
+    /// Request URI.
+    pub uri: Uri,
+    /// Request headers.
+    pub headers: Headers,
+    /// Request body.
+    pub body: B,
+}
+
 #[derive(Debug)]
 /// An HTTP Request Type
 pub struct Request<B = SdkBody> {
@@ -55,6 +66,16 @@ impl Uri {
         self.as_string = new_uri.to_string();
         self.parsed = new_uri;
         Ok(())
+    }
+
+    /// Returns the URI path.
+    pub fn path(&self) -> &str {
+        self.parsed.path()
+    }
+
+    /// Returns the URI query string.
+    pub fn query(&self) -> Option<&str> {
+        self.parsed.query()
     }
 }
 
@@ -157,6 +178,15 @@ impl<B> Request<B> {
             method: Method::GET,
             extensions: Default::default(),
             headers: Default::default(),
+        }
+    }
+
+    /// Convert this request into its parts.
+    pub fn into_parts(self) -> RequestParts<B> {
+        RequestParts {
+            uri: self.uri,
+            headers: self.headers,
+            body: self.body,
         }
     }
 
