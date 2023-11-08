@@ -7,19 +7,19 @@ use crate::cargo;
 use crate::package::PackageHandle;
 use crate::retry::{run_with_retry, BoxError, ErrorClass};
 use crates_io_api::{AsyncClient, Error};
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::Path;
 use std::time::Duration;
 use tracing::info;
 
-lazy_static! {
-    pub static ref CRATES_IO_CLIENT: AsyncClient = AsyncClient::new(
+pub static CRATES_IO_CLIENT: Lazy<AsyncClient> = Lazy::new(|| {
+    AsyncClient::new(
         "AWS_RUST_SDK_PUBLISHER (aws-sdk-rust@amazon.com)",
-        Duration::from_secs(1)
+        Duration::from_secs(1),
     )
-    .expect("valid client");
-}
+    .expect("valid client")
+});
 
 /// Return `true` if there is at least one version published on crates.io associated with
 /// the specified crate name.
