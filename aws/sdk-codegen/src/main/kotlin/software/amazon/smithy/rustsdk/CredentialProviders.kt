@@ -65,7 +65,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
 /**
  * Add a `.credentials_provider` field and builder to the `Config` for a given service
  */
-class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+class CredentialProviderConfig(private val codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         *preludeScope,
@@ -74,6 +74,10 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
             .resolve("provider::ProvideCredentials"),
         "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
             .resolve("provider::SharedCredentialsProvider"),
+        "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+            .resolve("auth::sigv4a::SCHEME_ID"),
+        "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+            .resolve("auth::sigv4::SCHEME_ID"),
         "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
     )
 
@@ -103,16 +107,34 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
                     *codegenScope,
                 )
 
-                rustTemplate(
+                rustBlockTemplate(
                     """
                     /// Sets the credentials provider for this service
-                    pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
-                        self.config.store_or_unset(credentials_provider);
-                        self
-                    }
+                    pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self
                     """,
                     *codegenScope,
-                )
+                ) {
+                    rustBlockTemplate(
+                        """
+                        if let Some(credentials_provider) = credentials_provider
+                        """,
+                        *codegenScope,
+                    ) {
+                        if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                            featureGateBlock("sigv4a") {
+                                rustTemplate(
+                                    "self.runtime_components.push_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider.clone());",
+                                    *codegenScope,
+                                )
+                            }
+                        }
+                        rustTemplate(
+                            "self.runtime_components.push_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
+                            *codegenScope,
+                        )
+                    }
+                    rust("self")
+                }
             }
 
             is ServiceConfig.DefaultForTests -> rustTemplate(
