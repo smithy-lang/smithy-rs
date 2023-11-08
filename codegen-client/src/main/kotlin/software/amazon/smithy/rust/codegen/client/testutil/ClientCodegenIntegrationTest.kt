@@ -18,7 +18,7 @@ import java.nio.file.Path
 
 fun clientIntegrationTest(
     model: Model,
-    params: IntegrationTestParams = IntegrationTestParams(),
+    params: IntegrationTestParams = IntegrationTestParams(cargoCommand = "cargo test --features behavior-version-latest"),
     additionalDecorators: List<ClientCodegenDecorator> = listOf(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ): Path {
