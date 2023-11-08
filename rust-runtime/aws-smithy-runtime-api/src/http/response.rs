@@ -198,7 +198,6 @@ impl<B> TryFrom<http0::Response<B>> for Response<B> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::client::orchestrator::HttpResponse;
     use aws_smithy_types::body::SdkBody;
 
     #[test]
@@ -208,7 +207,7 @@ mod test {
             .header("k", "😹")
             .body(SdkBody::empty())
             .unwrap();
-        let response: HttpResponse = response
+        let response: Response = response
             .try_into()
             .expect("failed to convert a non-string header");
         assert_eq!(response.headers().get("k"), Some("😹"))
