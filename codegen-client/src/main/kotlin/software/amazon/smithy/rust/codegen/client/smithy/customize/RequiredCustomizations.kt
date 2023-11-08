@@ -22,6 +22,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSour
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.StalledStreamProtectionConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.StalledStreamProtectionConfigReExportCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -61,7 +63,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
         IdentityCacheConfigCustomization(codegenContext) +
         InterceptorConfigCustomization(codegenContext) +
         TimeSourceCustomization(codegenContext) +
-        RetryClassifierConfigCustomization(codegenContext)
+        RetryClassifierConfigCustomization(codegenContext) +
+        StalledStreamProtectionConfigCustomization(codegenContext)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
@@ -85,6 +88,9 @@ class RequiredCustomizations : ClientCodegenDecorator {
 
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext).extras(rustCrate)
+
+        // Re-export stalled-stream protection config
+        StalledStreamProtectionConfigReExportCustomization(codegenContext).extras(rustCrate)
 
         rustCrate.withModule(ClientRustModule.primitives) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)

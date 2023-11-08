@@ -41,3 +41,7 @@ pub mod identity;
 
 /// Interceptors for Smithy clients.
 pub mod interceptors;
+
+#[cfg(feature = "stalled-stream-protection")]
+/// Stalled stream protection for clients
+pub mod stalled_stream_protection;

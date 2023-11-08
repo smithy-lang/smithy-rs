@@ -45,3 +45,6 @@ pub use document::Document;
 )]
 pub use error::ErrorMetadata as Error;
 pub use number::Number;
+
+#[cfg(feature = "stalled-stream-protection")]
+pub mod stalled_stream_protection;

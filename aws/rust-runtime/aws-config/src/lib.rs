@@ -176,6 +176,9 @@ mod loader {
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
 
+    #[cfg(feature = "stalled-stream-protection")]
+    use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
+
     #[derive(Default, Debug)]
     enum CredentialsProviderOption {
         /// No provider was set by the user. We can set up the default credentials provider chain.
@@ -210,6 +213,8 @@ mod loader {
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
+        #[cfg(feature = "stalled-stream-protection")]
+        stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
     }
@@ -555,6 +560,37 @@ mod loader {
             self
         }
 
+        #[cfg(feature = "stalled-stream-protection")]
+        /// Override [`the StoppedStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
+        /// This configures stopped stream protection. When enabled, upload and download streams
+        /// that stop (stream no data) for longer than a configured grace period will return an error.
+        ///
+        /// _Note_: When an override is provided, the default implementation is replaced.
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # async fn create_config() {
+        /// use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
+        /// use std::time::Duration;
+        /// let config = aws_config::from_env()
+        ///     .stalled_stream_protection_config(
+        ///         StalledStreamProtectionConfig::new_enabled()
+        ///             .with_grace_period(Duration::from_secs(1))
+        ///             .build()
+        ///     )
+        ///     .load()
+        ///     .await;
+        /// # }
+        /// ```
+        pub fn stalled_stream_protection_config(
+            mut self,
+            stalled_stream_protection_config: StalledStreamProtectionConfig,
+        ) -> Self {
+            self.stalled_stream_protection_config = Some(stalled_stream_protection_config);
+            self
+        }
+
         /// Set configuration for all sub-loaders (credentials, region etc.)
         ///
         /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
@@ -700,6 +736,8 @@ mod loader {
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
+            #[cfg(feature = "stalled-stream-protection")]
+            builder.set_stalled_stream_protection_config(self.stalled_stream_protection_config);
             builder.build()
         }
     }
