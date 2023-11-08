@@ -17,10 +17,16 @@ references = ["smithy-rs#3126", "aws-sdk-rust#930"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "[Upgrade guidance for HTTP Request/Response changes](https://github.com/awslabs/aws-sdk-rust/discussions/950). HTTP request types moved, and a new HTTP response type was added."
+references = ["smithy-rs#3138", "smithy-rs#3148"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
 [[smithy-rs]]
-message = "The HTTP `Request`, `Response`, `Headers`, and `HeaderValue` types have been moved from `aws_smithy_runtime_api::client::http::*` into `aws_smithy_runtime_api::http`"
-references = ["smithy-rs#3138"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+message = "[Upgrade guidance for HTTP Request/Response changes](https://github.com/awslabs/smithy-rs/discussions/3154). HTTP request types moved, and a new HTTP response type was added."
+references = ["smithy-rs#3138", "smithy-rs#3148"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all" }
 author = "jdisanti"
 
 [[smithy-rs]]
