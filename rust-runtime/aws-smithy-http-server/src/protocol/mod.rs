@@ -89,7 +89,7 @@ pub fn content_type_header_classifier_http(
         let content_type = content_type.to_str().map_err(MissingContentTypeReason::ToStrError)?;
         content_type_header_classifier(content_type, expected_content_type)
     } else {
-        return Ok(());
+        Ok(())
     }
 }
 
