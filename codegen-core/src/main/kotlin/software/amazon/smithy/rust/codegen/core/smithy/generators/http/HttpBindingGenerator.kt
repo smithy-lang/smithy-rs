@@ -38,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -254,15 +255,25 @@ class HttpBindingGenerator(
             operationShape,
             targetShape,
         ).render()
-        val receiver = outputT.rustType().qualifiedName()
         rustTemplate(
             """
             let unmarshaller = #{unmarshallerConstructorFn}();
             let body = std::mem::replace(body, #{SdkBody}::taken());
-            Ok($receiver::new(unmarshaller, body))
+            Ok(#{receiver:W})
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "unmarshallerConstructorFn" to unmarshallerConstructorFn,
+            "receiver" to writable {
+                if (codegenTarget == CodegenTarget.SERVER) {
+                    rust("${outputT.rustType().qualifiedName()}::new(unmarshaller, body)")
+                } else {
+                    rustTemplate(
+                        "#{EventReceiver}::new(#{Receiver}::new(unmarshaller, body))",
+                        "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
+                        "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
+                    )
+                }
+            },
         )
     }
 
