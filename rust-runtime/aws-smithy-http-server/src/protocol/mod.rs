@@ -39,6 +39,7 @@ pub mod test_helpers {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_mime(content_type: &str) -> Result<mime::Mime, MissingContentTypeReason> {
     content_type
         .parse::<mime::Mime>()

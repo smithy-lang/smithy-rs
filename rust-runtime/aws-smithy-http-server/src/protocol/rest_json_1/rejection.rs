@@ -117,7 +117,7 @@ pub enum RequestRejection {
 
     /// Used when checking the `Content-Type` header.
     /// This is bubbled up in the generated SDK when calling
-    /// [`crate::protocol::content_type_header_classifier`] in `from_request`.
+    /// [`crate::protocol::content_type_header_classifier_smithy`] in `from_request`.
     #[error("expected `Content-Type` header not found: {0}")]
     MissingContentType(#[from] MissingContentTypeReason),
 

@@ -37,9 +37,6 @@ impl Storable for RequestId {
 
 #[derive(Debug, thiserror::Error)]
 enum RequestIdError {
-    /// The server-sent request ID cannot be converted into a string during parsing.
-    #[error("RequestID sent by the server cannot be parsed into a string. Error: {0}")]
-    NonParsableServerRequestId(String),
     /// Client side
     #[error("Client side request ID has not been set")]
     ClientRequestIdMissing(),
