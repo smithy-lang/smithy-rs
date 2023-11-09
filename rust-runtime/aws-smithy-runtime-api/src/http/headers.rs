@@ -92,7 +92,7 @@ impl Headers {
     /// This will *replace* any existing value for this key. Returns the previous associated value if any.
     ///
     /// # Panics
-    /// If the key or value are not valid ASCII, this function will panic.
+    /// If the key is not valid ASCII, or if the value is not valid UTF-8, this function will panic.
     pub fn insert(
         &mut self,
         key: impl AsHeaderComponent,
@@ -109,7 +109,7 @@ impl Headers {
     ///
     /// This will *replace* any existing value for this key. Returns the previous associated value if any.
     ///
-    /// If the key or value are not valid ASCII, an error is returned
+    /// If the key is not valid ASCII, or if the value is not valid UTF-8, this function will return an error.
     pub fn try_insert(
         &mut self,
         key: impl AsHeaderComponent,
@@ -125,7 +125,17 @@ impl Headers {
 
     /// Appends a value to a given key
     ///
-    /// If the key or value are NOT valid ASCII, an error is returned
+    /// # Panics
+    /// If the key is not valid ASCII, or if the value is not valid UTF-8, this function will panic.
+    pub fn append(&mut self, key: impl AsHeaderComponent, value: impl AsHeaderComponent) -> bool {
+        let key = header_name(key.into_maybe_static().unwrap(), false).unwrap();
+        let value = header_value(value.into_maybe_static().unwrap(), false).unwrap();
+        self.headers.append(key, value)
+    }
+
+    /// Appends a value to a given key
+    ///
+    /// If the key is not valid ASCII, or if the value is not valid UTF-8, this function will return an error.
     pub fn try_append(
         &mut self,
         key: impl AsHeaderComponent,
@@ -143,16 +153,6 @@ impl Headers {
         self.headers
             .remove(key.as_ref())
             .map(|h| h.as_str().to_string())
-    }
-
-    /// Appends a value to a given key
-    ///
-    /// # Panics
-    /// If the key or value are NOT valid ASCII, this function will panic
-    pub fn append(&mut self, key: impl AsHeaderComponent, value: impl AsHeaderComponent) -> bool {
-        let key = header_name(key.into_maybe_static().unwrap(), false).unwrap();
-        let value = header_value(value.into_maybe_static().unwrap(), false).unwrap();
-        self.headers.append(key, value)
     }
 }
 
@@ -335,9 +335,9 @@ fn header_name(
     panic_safe: bool,
 ) -> Result<http0::HeaderName, HttpError> {
     name.repr_as_http02x_header_name().or_else(|name| {
-        name.into_maybe_static().and_then(|cow| {
-            if cow.chars().any(|c| c.is_uppercase()) {
-                return Err(HttpError::new("Header names must be all lower case"));
+        name.into_maybe_static().and_then(|mut cow| {
+            if cow.chars().any(|c| c.is_ascii_uppercase()) {
+                cow = Cow::Owned(cow.to_ascii_uppercase());
             }
             match cow {
                 Cow::Borrowed(s) if panic_safe => {
@@ -376,6 +376,17 @@ mod tests {
         let _ = "a\nb"
             .parse::<HeaderValue>()
             .expect_err("cannot contain control characters");
+    }
+
+    #[test]
+    fn no_panic_insert_upper_case_header_name() {
+        let mut headers = Headers::new();
+        headers.insert("I-Have-Upper-Case", "foo");
+    }
+    #[test]
+    fn no_panic_append_upper_case_header_name() {
+        let mut headers = Headers::new();
+        headers.append("I-Have-Upper-Case", "foo");
     }
 
     #[test]
@@ -434,5 +445,19 @@ mod tests {
                 http0::HeaderValue::from_bytes(&[0xC0, 0x80]).unwrap()
             )
             .is_err());
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn insert_header_prop_test(input in ".*") {
+            let mut headers = Headers::new();
+            let _ = headers.try_insert(input.clone(), input);
+        }
+
+        #[test]
+        fn append_header_prop_test(input in ".*") {
+            let mut headers = Headers::new();
+            let _ = headers.try_append(input.clone(), input);
+        }
     }
 }
