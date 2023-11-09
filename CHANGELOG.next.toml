@@ -17,6 +17,12 @@ references = ["smithy-rs#3126", "aws-sdk-rust#930"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "Change `ByteStream::into_async_read` to return `AsyncBufRead`"
+references = ["smithy-rs#3164"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "utkarshgupta137"
+
 [[smithy-rs]]
 message = "The HTTP `Request`, `Response`, `Headers`, and `HeaderValue` types have been moved from `aws_smithy_runtime_api::client::http::*` into `aws_smithy_runtime_api::http`"
 references = ["smithy-rs#3138"]
