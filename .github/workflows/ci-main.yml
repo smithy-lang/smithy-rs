@@ -21,7 +21,7 @@ env:
 jobs:
   # Build and upload the Docker build image if necessary
   acquire-base-image:
-    runs-on: smithy_ubuntu-latest_8-core
+    runs-on: ubuntu-latest # smithy_ubuntu-latest_8-core
     name: Acquire Base Image
     outputs:
       docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}

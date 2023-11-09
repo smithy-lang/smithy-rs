@@ -32,7 +32,7 @@ env:
   apt_dependencies: libssl-dev gnuplot jq
 jobs:
   generate-diff:
-    runs-on: smithy_ubuntu-latest_8-core
+    runs-on: ubuntu-latest # smithy_ubuntu-latest_8-core
     name: Generate diff and upload to S3
     env:
       AWS_REGION: us-west-2
@@ -67,7 +67,7 @@ jobs:
         fi
 
   generate-doc-preview:
-    runs-on: smithy_ubuntu-latest_8-core
+    runs-on: ubuntu-latest # smithy_ubuntu-latest_8-core
     name: Generate rustdoc preview and upload to S3
     env:
       AWS_REGION: us-west-2

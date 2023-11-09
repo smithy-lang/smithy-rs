@@ -39,7 +39,7 @@ jobs:
   # and also runs some checks/lints so that those are run sooner rather than later.
   generate:
     name: Generate
-    runs-on: smithy_ubuntu-latest_8-core
+    runs-on: ubuntu-latest # smithy_ubuntu-latest_8-core
     # To avoid repeating setup boilerplate, we have the actual commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -74,7 +74,7 @@ jobs:
   # code to have already been generated in order to run.
   test-codegen:
     name: Test Codegen
-    runs-on: ${{ matrix.test.runner }}
+    runs-on: ubuntu-latest # ${{ matrix.test.runner }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -129,7 +129,7 @@ jobs:
   test-sdk:
     name: Test the SDK
     needs: generate
-    runs-on: ${{ matrix.test.runner }}
+    runs-on: ubuntu-latest # ${{ matrix.test.runner }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
