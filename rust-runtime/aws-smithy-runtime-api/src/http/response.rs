@@ -81,7 +81,7 @@ impl<B> Response<B> {
     ///
     /// Depending on the internal storage type, this operation may be free or it may have an internal
     /// cost.
-    pub fn into_http02x(self) -> Result<http0::Response<B>, HttpError> {
+    pub fn try_into_http02x(self) -> Result<http0::Response<B>, HttpError> {
         let mut res = http::Response::builder()
             .status(
                 http0::StatusCode::from_u16(self.status.into())
@@ -230,7 +230,7 @@ mod test {
         assert_eq!("b", req.headers().get("a").unwrap());
         req.headers_mut().append("a", "c");
         assert_eq!("b", req.headers().get("a").unwrap());
-        let http0 = req.into_http02x().unwrap();
+        let http0 = req.try_into_http02x().unwrap();
         assert_eq!(200, http0.status().as_u16());
     }
 

@@ -132,7 +132,7 @@ impl<B> TryInto<http0::Request<B>> for Request<B> {
     type Error = HttpError;
 
     fn try_into(self) -> Result<http::Request<B>, Self::Error> {
-        self.into_http02x()
+        self.try_into_http02x()
     }
 }
 
@@ -141,7 +141,7 @@ impl<B> Request<B> {
     ///
     /// Depending on the internal storage type, this operation may be free or it may have an internal
     /// cost.
-    pub fn into_http02x(self) -> Result<http0::Request<B>, HttpError> {
+    pub fn try_into_http02x(self) -> Result<http0::Request<B>, HttpError> {
         let mut req = http::Request::builder()
             .uri(self.uri.parsed)
             .method(self.method)
@@ -325,7 +325,7 @@ mod test {
         assert_eq!(req.headers().get("a").unwrap(), "b");
         req.headers_mut().append("a", "c");
         assert_eq!(req.headers().get("a").unwrap(), "b");
-        let http0 = req.into_http02x().unwrap();
+        let http0 = req.try_into_http02x().unwrap();
         assert_eq!(http0.uri(), "http://foo.com");
     }
 
@@ -339,7 +339,7 @@ mod test {
         assert_eq!(req.uri(), "http://foo.com/");
         req.set_uri("http://bar.com").unwrap();
         assert_eq!(req.uri(), "http://bar.com");
-        let http0 = req.into_http02x().unwrap();
+        let http0 = req.try_into_http02x().unwrap();
         assert_eq!(http0.uri(), "http://bar.com");
     }
 

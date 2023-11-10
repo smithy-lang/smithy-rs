@@ -345,7 +345,7 @@ where
     C::Error: Into<BoxError>,
 {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        let mut request = match request.into_http02x() {
+        let mut request = match request.try_into_http02x() {
             Ok(request) => request,
             Err(err) => {
                 return HttpConnectorFuture::ready(Err(ConnectorError::other(err.into(), None)));

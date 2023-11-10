@@ -295,7 +295,7 @@ impl HttpConnector for ReplayingClient {
                     .extend_from_slice(data.expect("in memory request should not fail").as_ref())
             }
             request
-                .into_http02x()
+                .try_into_http02x()
                 .unwrap()
                 .map(|_body| Bytes::from(data_read))
         });
