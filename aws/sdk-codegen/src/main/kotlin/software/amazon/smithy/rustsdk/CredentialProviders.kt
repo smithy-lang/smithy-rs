@@ -113,7 +113,7 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                         if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
                             featureGateBlock("sigv4a") {
                                 rustTemplate(
-                                    "self.runtime_components.push_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider.clone());",
+                                    "self.runtime_components.push_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
                                     *codegenScope,
                                 )
                             }
