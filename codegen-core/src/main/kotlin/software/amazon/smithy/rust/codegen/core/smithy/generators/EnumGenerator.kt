@@ -88,7 +88,7 @@ class EnumMemberModel(
          *
          * Ordinarily, the symbol provider would determine this name, but the enum trait doesn't allow for this.
          *
-         * TODO(https://github.com/awslabs/smithy-rs/issues/1700): Remove this function when refactoring to EnumShape.
+         * TODO(https://github.com/smithy-lang/smithy-rs/issues/1700): Remove this function when refactoring to EnumShape.
          */
         @Deprecated("This function will go away when we handle EnumShape instead of EnumTrait")
         fun toEnumVariantName(

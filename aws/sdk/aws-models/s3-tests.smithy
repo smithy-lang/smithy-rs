@@ -8,7 +8,7 @@ use smithy.test#httpRequestTests
 apply NotFound @httpResponseTests([
     {
         id: "HeadObjectEmptyBody",
-        documentation: "This test case validates https://github.com/awslabs/smithy-rs/issues/456",
+        documentation: "This test case validates https://github.com/smithy-lang/smithy-rs/issues/456",
         params: {
         },
         bodyMediaType: "application/xml",

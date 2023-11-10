@@ -535,7 +535,7 @@ class DefaultProtocolTestGenerator(
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
         private val DisableTests = setOf<String>(
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2891): Implement support for `@requestCompression`
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/2891): Implement support for `@requestCompression`
             "SDKAppendedGzipAfterProvidedEncoding_restJson1",
             "SDKAppendedGzipAfterProvidedEncoding_restXml",
             "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_0",

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -25,7 +26,9 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "AsyncSleep" to sleepModule.resolve("AsyncSleep"),
+        "AsyncSleep" to configReexport(sleepModule.resolve("AsyncSleep")),
+        "SharedAsyncSleep" to configReexport(sleepModule.resolve("SharedAsyncSleep")),
+        "Sleep" to configReexport(sleepModule.resolve("Sleep")),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
         "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
         "debug" to RuntimeType.Tracing.resolve("debug"),
@@ -36,7 +39,6 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
         "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
         "SharedRetryStrategy" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::retries::SharedRetryStrategy"),
         "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
-        "Sleep" to sleepModule.resolve("Sleep"),
         "StandardRetryStrategy" to retries.resolve("strategy::StandardRetryStrategy"),
         "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
         "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
@@ -286,7 +288,7 @@ class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
     fun extras(rustCrate: RustCrate) {
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
-                "pub use #{sleep}::{AsyncSleep, SharedAsyncSleep, Sleep};",
+                "pub use #{sleep}::{Sleep};",
                 "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
             )
         }

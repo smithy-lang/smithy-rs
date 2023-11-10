@@ -86,7 +86,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
      *
      * But it's a SHOULD; we could strip the namespace if we wanted to. In fact, we did so in smithy-rs versions
      * 0.52.0 to 0.55.4; see:
-     * - https://github.com/awslabs/smithy-rs/pull/1982
+     * - https://github.com/smithy-lang/smithy-rs/pull/1982
      * - https://github.com/awslabs/smithy/pull/1493
      * - https://github.com/awslabs/smithy/issues/1494
      */

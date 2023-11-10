@@ -114,8 +114,8 @@ The new release process would be:
 
 ### Short-term Changes Checklist
 
-- [x] Prepare runtime crate manifests for publication to crates.io (https://github.com/awslabs/smithy-rs/pull/755)
-- [x] Update SDK generator to set correct crate versions (https://github.com/awslabs/smithy-rs/pull/755)
+- [x] Prepare runtime crate manifests for publication to crates.io (https://github.com/smithy-lang/smithy-rs/pull/755)
+- [x] Update SDK generator to set correct crate versions (https://github.com/smithy-lang/smithy-rs/pull/755)
 - [x] Write bulk publish script
 - [x] Write bulk yank script
 - [x] Write automation to sync smithy-rs to aws-sdk-rust

@@ -42,7 +42,7 @@ echo "${C_YELLOW}## Checking the wasm32-unknown-unknown and wasm32-wasi targets$
 cargo check --target wasm32-unknown-unknown --no-default-features
 cargo check --target wasm32-wasi --no-default-features
 
-# TODO(https://github.com/awslabs/smithy-rs/issues/2499): Uncomment the following once aws-config tests compile for WASM
+# TODO(https://github.com/smithy-lang/smithy-rs/issues/2499): Uncomment the following once aws-config tests compile for WASM
 # echo "${C_YELLOW}## Testing the wasm32-unknown-unknown and wasm32-wasi targets${C_RESET}"
 # wasm-pack test --node -- --no-default-features
 # cargo wasi test --no-default-features

@@ -25,7 +25,7 @@ impl Lint for TodosHaveContext {
                     ext.eq_ignore_ascii_case("rs")
                         || ext.eq_ignore_ascii_case("toml")
                         || ext.eq_ignore_ascii_case("txt")
-                        // TODO(https://github.com/awslabs/smithy-rs/issues/2077)
+                        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2077)
                         // || ext.eq_ignore_ascii_case("md")
                         || ext.eq_ignore_ascii_case("sh")
                         || ext.eq_ignore_ascii_case("py")

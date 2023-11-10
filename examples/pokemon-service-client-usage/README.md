@@ -6,14 +6,14 @@ with a Smithy-based service.
 ## Pre-requisites
 
 1. Build the `pokemon-service-client` and `pokemon-service` by invoking `make` in the
-   [examples](https://github.com/awslabs/smithy-rs/tree/main/examples) folder.
+   [examples](https://github.com/smithy-lang/smithy-rs/tree/main/examples) folder.
 
 ```console
 make
 ```
 
 2. Run the Pokemon service locally by issuing the following command from the
-   [examples](https://github.com/awslabs/smithy-rs/tree/main/examples) folder. This
+   [examples](https://github.com/smithy-lang/smithy-rs/tree/main/examples) folder. This
    will launch the Smithy-Rs based service on TCP port 13734.
 
 ```console
@@ -23,7 +23,7 @@ cargo run --bin pokemon-service
 ## Running the examples
 
 You can view a list of examples by running `cargo run --example` from the
-[pokemon-service-client-usage](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage)
+[pokemon-service-client-usage](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service-client-usage)
 folder. To run an example, pass its name to the `cargo run --example` command, e.g.:
 
 ```console

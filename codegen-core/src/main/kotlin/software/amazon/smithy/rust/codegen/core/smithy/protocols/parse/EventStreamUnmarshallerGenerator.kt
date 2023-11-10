@@ -341,7 +341,7 @@ class EventStreamUnmarshallerGenerator(
                     // TODO(EventStream): Errors on the operation can be disjoint with errors in the union,
                     //  so we need to generate a new top-level Error type for each event stream union.
                     when (codegenTarget) {
-                        // TODO(https://github.com/awslabs/smithy-rs/issues/1970) It should be possible to unify these branches now
+                        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1970) It should be possible to unify these branches now
                         CodegenTarget.CLIENT -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             val parser = protocol.structuredDataParser().errorParser(target)

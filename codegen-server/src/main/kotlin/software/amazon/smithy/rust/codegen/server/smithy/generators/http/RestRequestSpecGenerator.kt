@@ -35,7 +35,7 @@ class RestRequestSpecGenerator(
                 it to requestSpecModule.resolve(it)
             }.toTypedArray()
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/950): Support the `endpoint` trait.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/950): Support the `endpoint` trait.
         val pathSegmentsVec = writable {
             withBlock("vec![", "]") {
                 for (segment in httpTrait.uri.segments) {

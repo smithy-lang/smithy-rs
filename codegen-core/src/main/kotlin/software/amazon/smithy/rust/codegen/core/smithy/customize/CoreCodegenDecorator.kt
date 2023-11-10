@@ -83,7 +83,7 @@ interface CoreCodegenDecorator<CodegenContext, CodegenSettings> {
         baseCustomizations: List<StructureCustomization>,
     ): List<StructureCustomization> = baseCustomizations
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): Move builder customizations into `ClientCodegenDecorator`
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): Move builder customizations into `ClientCodegenDecorator`
     /**
      * Hook to customize generated builders.
      */
