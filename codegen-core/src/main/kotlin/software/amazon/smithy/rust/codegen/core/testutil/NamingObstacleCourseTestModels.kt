@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.testutil
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 
 object NamingObstacleCourseTestModels {
@@ -169,4 +170,56 @@ object NamingObstacleCourseTestModels {
             """,
         )
     }.toString().asSmithyModel()
+
+    fun reusedInputOutputShapesModel(protocol: Trait) = """
+        namespace test
+        use ${protocol.toShapeId()}
+        use aws.api#service
+        @${protocol.toShapeId().name}
+        @service(sdkId: "test")
+        service Service {
+            version: "2006-03-01",
+            operations: [GetThing, GetThingNested]
+        }
+
+        // re-use get thing output in a list & in an operation
+        @http(uri: "/SomeOperation2", method: "POST")
+        operation GetThing {
+            output: GetThingOutput
+            input: GetThingOutput
+        }
+
+        structure GetThingOutput {
+            @required
+            meta: String
+        }
+
+        structure GetThingInput {
+            @required
+            meta: String
+        }
+
+        @http(uri: "/SomeOperation3", method: "POST")
+        operation GetThingNested {
+            input: GetThingADifferentWayOutput
+            output: GetThingADifferentWayOutput
+        }
+
+        structure GetThingADifferentWayOutput {
+            things: GetThings,
+            thingsInput: GetThingsInput
+        }
+
+        structure GetThingADifferentWayInput {
+            things: GetThings
+        }
+
+
+        list GetThings {
+            member: GetThingOutput
+        }
+        list GetThingsInput {
+            member: GetThingInput
+        }
+    """.asSmithyModel()
 }
