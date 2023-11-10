@@ -12,7 +12,7 @@ use http0::{Extensions, HeaderMap};
 use std::fmt;
 
 /// HTTP response status code
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct StatusCode(u16);
 
 impl StatusCode {
@@ -46,6 +46,12 @@ impl TryFrom<u16> for StatusCode {
         } else {
             Err(HttpError::invalid_status_code())
         }
+    }
+}
+
+impl From<http0::StatusCode> for StatusCode {
+    fn from(value: http0::StatusCode) -> Self {
+        Self(value.as_u16())
     }
 }
 
