@@ -140,10 +140,8 @@ where
         Some(v) => v,
         None => return Ok(None),
     };
-    let value =
-        std::str::from_utf8(first.as_bytes()).map_err(|_| ParseError::new("invalid utf-8"))?;
     match values.next() {
-        None => T::from_str(value.trim())
+        None => T::from_str(first.trim())
             .map_err(|err| ParseError::new("failed to parse string").with_source(err))
             .map(Some),
         Some(_) => Err(ParseError::new(
