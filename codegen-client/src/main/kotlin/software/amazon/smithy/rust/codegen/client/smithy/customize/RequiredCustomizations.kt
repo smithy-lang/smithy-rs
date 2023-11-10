@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersi
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitivesEventStream
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 
 val TestUtilFeature = Feature("test-util", false, listOf())
 
@@ -97,6 +98,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
                 """
                 /// Error type returned by the client.
                 pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;
+                pub use #{BuildError};
+                pub use #{ConnectorError};
 
                 pub use #{DisplayErrorContext};
                 pub use #{ProvideErrorMetadata};
@@ -105,6 +108,9 @@ class RequiredCustomizations : ClientCodegenDecorator {
                 "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
                 "R" to RuntimeType.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(rc),
+                // this can't use the auto-rexport because the builder generator is defined in codegen core
+                "BuildError" to rc.operationBuildError(),
+                "ConnectorError" to RuntimeType.smithyRuntimeApi(rc).resolve("client::result::ConnectorError"),
             )
         }
 
