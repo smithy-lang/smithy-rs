@@ -16,3 +16,9 @@ message = "Fix aws-sdk-rust#930 (PutSnapshotBlock)"
 references = ["smithy-rs#3126", "aws-sdk-rust#930"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix exclusively setting the credentials provider at operation config-override time. It's now possible to set the credentials when an operation is sent (via `.config_override()`), rather than at client-creation time."
+references = ["smithy-rs#3156", "aws-sdk-rust#901"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
