@@ -281,7 +281,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         // Implement `from_request` trait for input types.
         val inputFuture = "${inputSymbol.name}Future"
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """
             #{verifyAcceptHeaderStaticContentTypeInit:W}
@@ -886,7 +886,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             .joinToString(
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1289): Note we're limited to 21 labels because of `tuple`.
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1289): Note we're limited to 21 labels because of `tuple`.
                 prefix = if (segments.size > 1) "#{Nom}::sequence::tuple::<_, _, #{Nom}::error::Error<&str>, _>((" else "",
                 postfix = if (segments.size > 1) "))" else "",
                 transform = { parser ->
@@ -990,7 +990,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             if (queryParamsBinding != null) {
                 val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
                 val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Here we only check the target shape;
                 //  constraint traits on member shapes are not implemented yet.
                 val targetSymbol = unconstrainedShapeSymbolProvider.toSymbol(target)
                 withBlock("let mut query_params: #T = ", ";", targetSymbol) {
@@ -1075,7 +1075,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
                 if (queryParamsBinding != null) {
                     val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
-                    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Here we only check the target shape;
                     //  constraint traits on member shapes are not implemented yet.
                     val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
@@ -1116,7 +1116,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             queryBindingsTargetingCollection.forEach { binding ->
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
                 val hasConstrainedTarget =
                     model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)

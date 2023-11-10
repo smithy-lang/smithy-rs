@@ -526,7 +526,7 @@ class ServerProtocolTestGenerator(
                 (target is DoubleShape) || (target is FloatShape)
             }
 
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1147) Handle the case of nested floating point members.
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1147) Handle the case of nested floating point members.
             if (hasFloatingPointMembers) {
                 for (member in inputShape.members()) {
                     val memberName = codegenContext.symbolProvider.toMemberName(member)
@@ -569,7 +569,7 @@ class ServerProtocolTestGenerator(
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
         // invoke it with (like in the case of an `httpResponseTest` test case).
-        // In https://github.com/awslabs/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
+        // In https://github.com/smithy-lang/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
         // the operation handler trait implementation instead of directly calling `from_request()`.
 
         // If no request body is defined, then no assertions are made about the body of the message.
@@ -585,7 +585,7 @@ class ServerProtocolTestGenerator(
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
         // invoke it with (like in the case of an `httpResponseTest` test case).
-        // In https://github.com/awslabs/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
+        // In https://github.com/smithy-lang/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
         // the operation handler trait implementation instead of directly calling `from_request()`.
 
         // If no request body is defined, then no assertions are made about the body of the message.
@@ -744,19 +744,19 @@ class ServerProtocolTestGenerator(
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
-            // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
+            // Endpoint trait is not implemented yet, see https://github.com/smithy-lang/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
             FailingTest(RestJson, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
             // Tests involving `@range` on floats.
-            // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy-rs/issues/2007.
+            // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
 
-            // Tests involving floating point shapes and the `@range` trait; see https://github.com/awslabs/smithy-rs/issues/2007
+            // Tests involving floating point shapes and the `@range` trait; see https://github.com/smithy-lang/smithy-rs/issues/2007
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloatOverride", TestType.MalformedRequest),
@@ -810,7 +810,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case1", TestType.MalformedRequest),
 
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2472): We don't respect the `@internal` trait
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/2472): We don't respect the `@internal` trait
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
@@ -831,7 +831,7 @@ class ServerProtocolTestGenerator(
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
         private val DisableTests = setOf<String>(
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2891): Implement support for `@requestCompression`
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/2891): Implement support for `@requestCompression`
             "SDKAppendedGzipAfterProvidedEncoding_restJson1",
             "SDKAppendedGzipAfterProvidedEncoding_restXml",
             "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_0",
@@ -925,7 +925,7 @@ class ServerProtocolTestGenerator(
                 .build()
         }
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Move the fixed versions into
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1288): Move the fixed versions into
         // `rest-json-extras.smithy` and put the unfixed ones in `ExpectFail`: this has the
         // advantage that once our upstream PRs get merged and we upgrade to the next Smithy release, our build will
         // fail and we will take notice to remove the fixes from `rest-json-extras.smithy`. This is exactly what the

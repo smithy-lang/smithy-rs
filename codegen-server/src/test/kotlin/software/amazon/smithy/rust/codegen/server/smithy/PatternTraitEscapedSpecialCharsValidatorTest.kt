@@ -32,7 +32,7 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         events[0].message shouldBe """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern("\\t")`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
         """.trimIndent()
     }
 
@@ -53,7 +53,7 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         events[0].message shouldBe """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern("[.\\n\\r]+")`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
         """.trimIndent()
     }
 

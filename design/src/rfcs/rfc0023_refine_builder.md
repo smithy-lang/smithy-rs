@@ -782,13 +782,13 @@ The API proposed in this RFC has been manually implemented for the Pokemon servi
 ## Changes checklist
 
 - [x] Update `codegen-server` to generate the proposed service builder API
-  - <https://github.com/awslabs/smithy-rs/pull/1954>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1954>
 - [x] Implement `Pluggable` for `PluginStack`
-  - <https://github.com/awslabs/smithy-rs/pull/1954>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1954>
 - [x] Evaluate the introduction of a `PluginBuilder` as the primary API to compose multiple plugins (instead of `PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)`)
-  - <https://github.com/awslabs/smithy-rs/pull/1971>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1971>
 
 [RFC 20]: rfc0020_service_builder.md
-[Pokemon service]: https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy
+[Pokemon service]: https://github.com/smithy-lang/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy
 [typestate builder pattern]: https://www.greyblake.com/blog/builder-with-typestate-in-rust/
 [^further-dev-productivity-improvements]: The impact of a runtime error on developer productivity can be further minimised by encouraging adoption of integration testing; this can be achieved, among other options, by authoring guides that highlight its benefits and provide implementation guidance.

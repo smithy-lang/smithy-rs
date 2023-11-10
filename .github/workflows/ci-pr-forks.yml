@@ -18,7 +18,7 @@ jobs:
   # it uploads the image as a build artifact for other jobs to download and use.
   acquire-base-image:
     name: Acquire Base Image
-    if: ${{ github.event.pull_request.head.repo.full_name != 'awslabs/smithy-rs' }}
+    if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -39,7 +39,7 @@ jobs:
   # Run shared CI after the Docker build image has either been rebuilt or found in ECR
   ci:
     needs: acquire-base-image
-    if: ${{ github.event.pull_request.head.repo.full_name != 'awslabs/smithy-rs' }}
+    if: ${{ github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs' }}
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true

@@ -65,7 +65,7 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
         // They're being added in https://github.com/smithy-lang/smithy/pull/1908
         HttpPayloadWithUnion,
     ],
@@ -317,7 +317,7 @@ operation CaseInsensitiveErrorOperation {
 
 @httpResponseTests([
     {
-        documentation: "Upper case error modeled lower case. See: https://github.com/awslabs/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
+        documentation: "Upper case error modeled lower case. See: https://github.com/smithy-lang/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
         id: "UpperErrorModeledLower",
         protocol: "aws.protocols#restJson1",
         code: 500,

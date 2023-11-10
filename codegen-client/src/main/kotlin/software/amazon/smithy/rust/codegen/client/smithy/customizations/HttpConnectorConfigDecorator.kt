@@ -48,7 +48,7 @@ private class HttpConnectorConfigCustomization(
                     """
                     /// Deprecated. Don't use.
                     ##[deprecated(
-                        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
+                        note = "HTTP connector configuration changed. See https://github.com/smithy-lang/smithy-rs/discussions/3022 for upgrade guidance."
                     )]
                     pub fn http_connector(&self) -> Option<#{SharedHttpClient}> {
                         self.runtime_components.http_client()
@@ -68,7 +68,7 @@ private class HttpConnectorConfigCustomization(
                     """
                     /// Deprecated. Don't use.
                     ##[deprecated(
-                        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
+                        note = "HTTP connector configuration changed. See https://github.com/smithy-lang/smithy-rs/discussions/3022 for upgrade guidance."
                     )]
                     pub fn http_connector(self, http_client: impl #{HttpClient} + 'static) -> Self {
                         self.http_client(http_client)
@@ -76,7 +76,7 @@ private class HttpConnectorConfigCustomization(
 
                     /// Deprecated. Don't use.
                     ##[deprecated(
-                        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
+                        note = "HTTP connector configuration changed. See https://github.com/smithy-lang/smithy-rs/discussions/3022 for upgrade guidance."
                     )]
                     pub fn set_http_connector(&mut self, http_client: Option<#{SharedHttpClient}>) -> &mut Self {
                         self.set_http_client(http_client)

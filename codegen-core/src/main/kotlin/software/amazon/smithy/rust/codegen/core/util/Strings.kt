@@ -125,6 +125,6 @@ fun String.toSnakeCase(): String {
 }
 
 fun String.toPascalCase(): String {
-    // TODO(https://github.com/awslabs/smithy-rs/issues/3047): consider using our updated toSnakeCase (but need to audit diff)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3047): consider using our updated toSnakeCase (but need to audit diff)
     return CaseUtils.toSnakeCase(this).let { CaseUtils.toPascalCase(it) }
 }

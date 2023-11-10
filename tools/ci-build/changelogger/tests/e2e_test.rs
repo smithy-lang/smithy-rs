@@ -300,11 +300,11 @@ fn render_smithy_rs() {
 January 1st, 1970
 =================
 **New this release:**
-- (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change
+- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change
 
 **Contributors**
 Thank you for your contributions! ❤
-- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))
+- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))
 
 
 v0.41.0 (Some date in the past)
@@ -318,7 +318,7 @@ Old entry contents
         r#"{
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
-  "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))\n\n",
+  "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n",
   "prerelease": true
 }"#,
         release_manifest
@@ -393,14 +393,14 @@ fn render_aws_sdk() {
 January 1st, 1970
 =================
 **New this release:**
-- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change
+- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567), @test-dev) Some other change
 
 **Service Features:**
 - `aws-sdk-ec2` (0.12.0): Some API change
 
 **Contributors**
 Thank you for your contributions! ❤
-- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567))
+- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567))
 
 
 v0.41.0 (Some date in the past)
@@ -414,7 +414,7 @@ Old entry contents
         r#"{
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
-  "body": "**New this release:**\n- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/awslabs/smithy-rs/issues/567))\n\n",
+  "body": "**New this release:**\n- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567))\n\n",
   "prerelease": true
 }"#,
         release_manifest
@@ -511,17 +511,17 @@ author = "rcoh"
 January 1st, 1970
 =================
 **Breaking Changes:**
-- :warning: (all, [smithy-rs#3](https://github.com/awslabs/smithy-rs/issues/3)) Third change - empty
+- :warning: (all, [smithy-rs#3](https://github.com/smithy-lang/smithy-rs/issues/3)) Third change - empty
 
 **New this release:**
-- (server, [smithy-rs#1](https://github.com/awslabs/smithy-rs/issues/1), @server-dev) First change - server
-- (all, [smithy-rs#2](https://github.com/awslabs/smithy-rs/issues/2), @another-dev) Second change - should be all
-- (client, [smithy-rs#4](https://github.com/awslabs/smithy-rs/issues/4)) Fourth change - client
+- (server, [smithy-rs#1](https://github.com/smithy-lang/smithy-rs/issues/1), @server-dev) First change - server
+- (all, [smithy-rs#2](https://github.com/smithy-lang/smithy-rs/issues/2), @another-dev) Second change - should be all
+- (client, [smithy-rs#4](https://github.com/smithy-lang/smithy-rs/issues/4)) Fourth change - client
 
 **Contributors**
 Thank you for your contributions! ❤
-- @another-dev ([smithy-rs#2](https://github.com/awslabs/smithy-rs/issues/2))
-- @server-dev ([smithy-rs#1](https://github.com/awslabs/smithy-rs/issues/1))
+- @another-dev ([smithy-rs#2](https://github.com/smithy-lang/smithy-rs/issues/2))
+- @server-dev ([smithy-rs#1](https://github.com/smithy-lang/smithy-rs/issues/1))
 
 
 v0.41.0 (Some date in the past)
@@ -668,11 +668,11 @@ fn render_crate_versions() {
 January 1st, 1970
 =================
 **New this release:**
-- (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change
+- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change
 
 **Contributors**
 Thank you for your contributions! ❤
-- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))
+- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))
 
 **Crate Versions**
 <details>
@@ -697,7 +697,7 @@ Old entry contents
         r#"{
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
-  "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/awslabs/smithy-rs/issues/1234))\n\n**Crate Versions**\n<details>\n<summary>Click to expand to view crate versions...</summary>\n\n|Crate|Version|\n|-|-|\n|aws-config|0.54.1|\n|aws-sdk-accessanalyzer|0.24.0|\n|aws-smithy-async|0.54.1|\n</details>\n\n",
+  "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n**Crate Versions**\n<details>\n<summary>Click to expand to view crate versions...</summary>\n\n|Crate|Version|\n|-|-|\n|aws-config|0.54.1|\n|aws-sdk-accessanalyzer|0.24.0|\n|aws-smithy-async|0.54.1|\n</details>\n\n",
   "prerelease": true
 }"#,
         release_manifest

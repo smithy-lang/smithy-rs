@@ -6,7 +6,7 @@ description = "AWS SDK config and credential provider implementations."
 edition = "2021"
 exclude = ["test-data/*", "integration-tests/*"]
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 client-hyper = ["aws-smithy-runtime/connector-hyper-0-14-x"]
