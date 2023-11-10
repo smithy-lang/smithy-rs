@@ -204,7 +204,7 @@ impl BodyCallback for Box&lt;dyn BodyCallback&gt; {
    fn make_new(&amp;self) -&gt; Box&lt;dyn SendCallback&gt; { BodyCallback::make_new(self) }
 }</code></pre>
 <p>The changes we need to make to <code>ByteStream</code>:</p>
-<p><em>(The current version of <code>ByteStream</code> and <code>Inner</code> can be seen <a href="https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205">here</a>.)</em></p>
+<p><em>(The current version of <code>ByteStream</code> and <code>Inner</code> can be seen <a href="https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205">here</a>.)</em></p>
 <pre><code class="language-rust ignore">// in `aws_smithy_http::byte_stream`...
 
 // We add a new method to `ByteStream` for inserting callbacks
@@ -226,7 +226,7 @@ impl Inner&lt;SdkBody&gt; {
     }
 }</code></pre>
 <p>The changes we need to make to <code>SdkBody</code>:</p>
-<p><em>(The current version of <code>SdkBody</code> can be seen <a href="https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71">here</a>.)</em></p>
+<p><em>(The current version of <code>SdkBody</code> can be seen <a href="https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71">here</a>.)</em></p>
 <pre><code class="language-rust ignore">// In aws_smithy_http::body...
 
 #[pin_project]

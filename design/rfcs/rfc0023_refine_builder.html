@@ -203,7 +203,7 @@ We rely on eagerly upgrading the registered handlers and operations to <code>Rou
 <li>There should be no significant degradation in runtime performance (i.e. startup time for applications).</li>
 </ul>
 <h2 id="handling-missing-operations"><a class="header" href="#handling-missing-operations">Handling missing operations</a></h2>
-<p>Let's start by reviewing the API proposed in <a href="rfc0020_service_builder.html">RFC 20</a>. We will use the <a href="https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy">Pokemon service</a> as our driving example throughout the RFC.
+<p>Let's start by reviewing the API proposed in <a href="rfc0020_service_builder.html">RFC 20</a>. We will use the <a href="https://github.com/smithy-lang/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy">Pokemon service</a> as our driving example throughout the RFC.
 This is what the startup code looks like:</p>
 <pre><code class="language-rust ignore">#[tokio::main]
 pub async fn main() {
@@ -773,19 +773,19 @@ let app = PokemonService::builder(plugin_stack)
 <li><input disabled="" type="checkbox" checked=""/>
 Update <code>codegen-server</code> to generate the proposed service builder API
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1954">https://github.com/awslabs/smithy-rs/pull/1954</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1954">https://github.com/smithy-lang/smithy-rs/pull/1954</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Implement <code>Pluggable</code> for <code>PluginStack</code>
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1954">https://github.com/awslabs/smithy-rs/pull/1954</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1954">https://github.com/smithy-lang/smithy-rs/pull/1954</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Evaluate the introduction of a <code>PluginBuilder</code> as the primary API to compose multiple plugins (instead of <code>PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)</code>)
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1971">https://github.com/awslabs/smithy-rs/pull/1971</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1971">https://github.com/smithy-lang/smithy-rs/pull/1971</a></li>
 </ul>
 </li>
 </ul>

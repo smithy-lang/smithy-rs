@@ -174,7 +174,7 @@
                         <h1 id="the-anatomy-of-a-service"><a class="header" href="#the-anatomy-of-a-service">The Anatomy of a Service</a></h1>
 <p>What is <a href="https://awslabs.github.io/smithy/2.0/index.html">Smithy</a>? At a high-level, it's a grammar for specifying services while leaving the business logic undefined. A <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service">Smithy Service</a> specifies a collection of function signatures in the form of <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Operations</a>, their purpose is to encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.</p>
 <p>This survey is disinterested in the actual Kotlin implementation of the code generator, and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in internal details.</p>
-<p>During the survey we will use the <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy"><code>pokemon.smithy</code></a> model as a reference:</p>
+<p>During the survey we will use the <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy"><code>pokemon.smithy</code></a> model as a reference:</p>
 <pre><code class="language-smithy">/// A Pokémon species forms the basis for at least one Pokémon.
 @title(&quot;Pokémon Species&quot;)
 resource PokemonSpecies {
@@ -378,7 +378,7 @@ let operation = GetPokemonSpecies::from_service(svc);
 <span class="boring">}</span></code></pre></pre>
 <p>To summarize a <em>model service</em> constructed can be constructed from a <code>Handler</code> or a <code>OperationService</code> subject to the constraints of an <code>OperationShape</code>. More detailed information on these conversions is provided in the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/index.html">Handler and OperationService section</a> Rust docs.</p>
 <h2 id="serialization-and-deserialization"><a class="header" href="#serialization-and-deserialization">Serialization and Deserialization</a></h2>
-<p>A <a href="https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits">Smithy protocol</a> specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html"><code>FromRequest</code></a> and <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44"><code>IntoResponse</code></a> traits:</p>
+<p>A <a href="https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits">Smithy protocol</a> specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html"><code>FromRequest</code></a> and <a href="https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44"><code>IntoResponse</code></a> traits:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
@@ -566,7 +566,7 @@ parameterized them and change behavior depending on the context in which it's ap
 </span><span class="boring">  fn apply(&amp;self, input: T) -&gt; Self::Output { &lt;U as Pl&lt;Ser, Op, T&gt;&gt;::apply(self, input) }
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre></pre>
-<p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs">/examples/pokemon-service/src/plugin.rs</a>.</p>
+<p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/smithy-lang/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs">/examples/pokemon-service/src/plugin.rs</a>.</p>
 <p>Plugins can be applied in two places:</p>
 <ul>
 <li>HTTP plugins, which are applied pre-deserialization/post-serialization, acting on HTTP requests/responses.</li>
@@ -709,7 +709,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPl, ModelPl&gt; {
         self.get_pokemon_species = Some(Route::new(svc));
         self
     }</code></pre>
-<p>Handlers and operations are upgraded to a <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52"><code>Route</code></a> as soon as they are registered against the service builder. You can think of <code>Route</code> as a boxing layer in disguise.</p>
+<p>Handlers and operations are upgraded to a <a href="https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52"><code>Route</code></a> as soon as they are registered against the service builder. You can think of <code>Route</code> as a boxing layer in disguise.</p>
 <p>You can transform a builder instance into a complete service (<code>PokemonService</code>) using one of the following methods:</p>
 <ul>
 <li><code>build</code>. The transformation fails if one or more operations do not have a registered handler;</li>

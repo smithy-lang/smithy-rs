@@ -180,7 +180,7 @@
 <tr><td><a href="#union">Union</a></td><td><code>enum</code></td></tr>
 </tbody></table>
 </div>
-<p>Most generated types are controlled by <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt">SymbolVisitor</a>.</p>
+<p>Most generated types are controlled by <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt">SymbolVisitor</a>.</p>
 <h2 id="list"><a class="header" href="#list">List</a></h2>
 <p>List objects in Smithy are transformed into vectors in Rust. Based on the output of the <a href="https://awslabs.github.io/smithy/javadoc/1.5.1/software/amazon/smithy/model/knowledge/NullableIndex.html">NullableIndex</a>, the generated list may be <code>Vec&lt;T&gt;</code> or <code>Vec&lt;Option&lt;T&gt;&gt;</code>.</p>
 <h2 id="set"><a class="header" href="#set">Set</a></h2>
@@ -284,7 +284,7 @@ impl IoUsage {
 <p>Smithy <code>Union</code> is modeled as <code>enum</code> in Rust.</p>
 <ol>
 <li>Generated <code>enum</code>s must be marked <code>#[non_exhaustive]</code>.</li>
-<li>Generated <code>enum</code>s must provide an <code>Unknown</code> variant. If parsing receives an unknown input that doesn't match any of the given union variants, <code>Unknown</code> should be constructed. <a href="https://github.com/awslabs/smithy-rs/issues/185">Tracking Issue</a>.</li>
+<li>Generated <code>enum</code>s must provide an <code>Unknown</code> variant. If parsing receives an unknown input that doesn't match any of the given union variants, <code>Unknown</code> should be constructed. <a href="https://github.com/smithy-lang/smithy-rs/issues/185">Tracking Issue</a>.</li>
 <li>Union members (enum variants) are <strong>not</strong> nullable, because Smithy union members cannot contain null values.</li>
 <li>When union members contain references to other shapes, we generate a wrapping variant (see below).</li>
 <li>Union members do not require <code>#[non_exhaustive]</code>, because changing the shape targeted by a union member is not backwards compatible.</li>

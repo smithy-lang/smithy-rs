@@ -191,7 +191,7 @@ without a major version bump to all crates in the SDK.</li>
 <ul>
 <li><strong>AWS SDK Crate</strong>: A crate that provides a client for calling a given AWS service, such as <code>aws-sdk-s3</code> for calling S3.</li>
 <li><strong>AWS Runtime Crate</strong>: Any runtime crate that the AWS SDK generated code relies on, such as <code>aws-types</code>.</li>
-<li><strong>Smithy Runtime Crate</strong>: Any runtime crate that the <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> generated code relies on, such as <code>smithy-types</code>.</li>
+<li><strong>Smithy Runtime Crate</strong>: Any runtime crate that the <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> generated code relies on, such as <code>smithy-types</code>.</li>
 </ul>
 <h2 id="requirements"><a class="header" href="#requirements">Requirements</a></h2>
 <h3 id="versioning"><a class="header" href="#versioning">Versioning</a></h3>
@@ -212,7 +212,7 @@ all SDK and Smithy runtime crates.</p>
 <li>Breaking changes</li>
 <li>Dependency updates for dependencies that are part of the public API</li>
 <li>Model updates with API changes</li>
-<li>For code-generated crates: when a newer version of <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> is used to generate the crate</li>
+<li>For code-generated crates: when a newer version of <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> is used to generate the crate</li>
 </ul>
 </li>
 <li><code>patch</code>:
@@ -230,7 +230,7 @@ all SDK and Smithy runtime crates.</p>
 <li>Changes that aren't breaking</li>
 <li>Dependency updates for dependencies that are part of the public API</li>
 <li>Model updates with API changes</li>
-<li>For code-generated crates: when a newer version of <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> is used to generate the crate</li>
+<li>For code-generated crates: when a newer version of <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> is used to generate the crate</li>
 </ul>
 </li>
 <li><code>patch</code>:
@@ -283,13 +283,13 @@ model_hash = &quot;&lt;hash&gt;&quot;
 the version numbers from runtime crates directly, and it will use the rules from the next section to determine
 the version numbers for the generated crates.</p>
 <h3 id="versioning-for-code-generated-sdk-service-crates"><a class="header" href="#versioning-for-code-generated-sdk-service-crates">Versioning for Code Generated (SDK Service) Crates</a></h3>
-<p>Code generated crates will have their <code>minor</code> version bumped when the version of <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> used to generate
+<p>Code generated crates will have their <code>minor</code> version bumped when the version of <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> used to generate
 them changes, or when model updates with API changes are made. Three pieces of information are required to
-handle this process: the previously released version number, the <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> version used to generate the code,
+handle this process: the previously released version number, the <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> version used to generate the code,
 and the level of model updates being applied. For this last one, if there are multiple model updates that
 affect only documentation, but then one model update that affects an API, then as a whole they will be
 considered as affecting an API and require a <code>minor</code> version bump.</p>
-<p>The previously released version number will be retrieved from crates.io using its API. The <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> version
+<p>The previously released version number will be retrieved from crates.io using its API. The <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> version
 used during code generation will become a build artifact that is saved to <code>versions.toml</code> in <a href="https://github.com/awslabs/aws-sdk-rust">aws-sdk-rust</a>.
 During phase 1, the tooling required to know if a model is a documentation-only change will not be available,
 so all model changes will result in a <code>minor</code> version bump during this phase.</p>
@@ -303,11 +303,11 @@ so all model changes will result in a <code>minor</code> version bump during thi
 </pre>
 <ul>
 <li><strong>A: smithy-rs changed?</strong>: Compare the <code>smithy_rs_version</code> in the previous <code>versions.toml</code> with the
-next <code>versions.toml</code> file, and if the values are different, consider <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> to have changed.</li>
+next <code>versions.toml</code> file, and if the values are different, consider <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> to have changed.</li>
 <li><strong>B: model changed?</strong>: Similarly, compare the <code>model_hash</code> for the crate in <code>versions.toml</code>.</li>
 </ul>
 <h3 id="versioning-for-runtime-crates"><a class="header" href="#versioning-for-runtime-crates">Versioning for Runtime Crates</a></h3>
-<p>The old scheme of all runtime crates in <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> having a fake <code>0.0.0-smithy-rs-head</code> version number with
+<p>The old scheme of all runtime crates in <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> having a fake <code>0.0.0-smithy-rs-head</code> version number with
 a build step to replace those with a consistent <code>major.minor</code> will be removed. These runtime crates will begin
 having their actual next version number in the Cargo.toml file in smithy-rs.</p>
 <p>This introduces a new problem where a developer can forget to bump a runtime crate version, so a method of
@@ -367,7 +367,7 @@ Update <code>rust-semverver</code> to a newer nightly that can compile <code>aws
 <li><input disabled="" type="checkbox"/>
 Establish initial <code>versions.toml</code> in <code>aws-sdk-rust/main</code></li>
 <li><input disabled="" type="checkbox"/>
-Set version numbers in runtime crates in <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a></li>
+Set version numbers in runtime crates in <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a></li>
 <li><input disabled="" type="checkbox"/>
 Update the auto-sync tool to generate <code>versions.toml</code></li>
 <li><input disabled="" type="checkbox"/>

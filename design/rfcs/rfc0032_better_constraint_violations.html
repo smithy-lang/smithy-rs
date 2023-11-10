@@ -176,7 +176,7 @@
 <p>Status: Accepted</p>
 <p>Applies to: server</p>
 </blockquote>
-<p>During and after <a href="https://github.com/awslabs/smithy-rs/pull/1199">the design</a> and <a href="https://github.com/awslabs/smithy-rs/pull/1342">the core
+<p>During and after <a href="https://github.com/smithy-lang/smithy-rs/pull/1199">the design</a> and <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">the core
 implementation</a> of <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint traits</a> in the server
 SDK, some problems relating to constraint violations were identified. This RFC
 sets out to explain and address three of them: <a href="#impossible-constraint-violations">impossible constraint
@@ -189,9 +189,9 @@ proposed solutions. The three problems are meant to be addressed atomically in
 one changeset (see the <a href="#checklist">Checklist</a>) section.</p>
 <p>Note: code snippets from generated SDKs in this document are abridged so as to
 be didactic and relevant to the point being made. They are accurate with
-regards to commit <a href="https://github.com/awslabs/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc"><code>2226fe</code></a>.</p>
+regards to commit <a href="https://github.com/smithy-lang/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc"><code>2226fe</code></a>.</p>
 <h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
-<p><a href="https://github.com/awslabs/smithy-rs/pull/1199">The design</a> and the description of <a href="https://github.com/awslabs/smithy-rs/pull/1342">the
+<p><a href="https://github.com/smithy-lang/smithy-rs/pull/1199">The design</a> and the description of <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">the
 PR</a> where the core implementation of constraint traits
 was made are recommended prior reading to understand this RFC.</p>
 <ul>
@@ -328,7 +328,7 @@ because they can arise during request deserialization. Indeed, the server
 framework deserializes requests into <strong>fully unconstrained types</strong>. These are
 types holding unconstrained types all the way through their closures. For
 instance, in the case of structure shapes, builder types (the unconstrained
-type corresponding to the structure shape) <a href="https://github.com/awslabs/smithy-rs/pull/1342">hold
+type corresponding to the structure shape) <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">hold
 builders</a> all the way down.</p>
 <p>In the case of the above model, below is the alternate <code>pub(crate)</code> constructor
 the server framework uses upon deserialization. Observe how
@@ -366,7 +366,7 @@ the server framework uses upon deserialization. Observe how
 framework operates that has no bearing on their application code. They
 shouldn't be exposed to impossible constraint violation variants in their Rust
 docs, nor have to <code>match</code> on these variants when handling errors.</p>
-<p>Note: <a href="https://github.com/awslabs/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69">this comment</a> alludes to the problem described above.</p>
+<p>Note: <a href="https://github.com/smithy-lang/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69">this comment</a> alludes to the problem described above.</p>
 <h3 id="solution-proposal"><a class="header" href="#solution-proposal">Solution proposal</a></h3>
 <p>The problem can be mitigated by adding <code>#[doc(hidden)]</code> to the internal
 variants and <code>#[non_exhaustive]</code> to the enum. We're already doing this in some
@@ -391,14 +391,14 @@ violation type into two types, which this RFC proposes:</p>
         ),
     }
 }</code></pre>
-<p>Note that, to some extent, the spirit of this approach is <a href="https://github.com/awslabs/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81">already currently
+<p>Note that, to some extent, the spirit of this approach is <a href="https://github.com/smithy-lang/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81">already currently
 present</a>
 in the case of builder types when <code>publicConstrainedTypes</code> is set to <code>false</code>:</p>
 <ol>
-<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt"><code>ServerBuilderGenerator.kt</code></a> renders the usual builder type that enforces
+<li><a href="https://github.com/smithy-lang/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt"><code>ServerBuilderGenerator.kt</code></a> renders the usual builder type that enforces
 constraint traits, setting its visibility to <code>pub (crate)</code>, for exclusive
 use by the framework.</li>
-<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt"><code>ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt</code></a> renders the
+<li><a href="https://github.com/smithy-lang/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt"><code>ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt</code></a> renders the
 builder type the user is exposed to: this builder does not take in
 constrained types and does not enforce all modeled constraints.</li>
 </ol>
@@ -447,7 +447,7 @@ list ValidationExceptionFieldList {
     member: ValidationExceptionField
 }
 </code></pre>
-<p>It was mentioned in the <a href="https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809300673">constraint traits
+<p>It was mentioned in the <a href="https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809300673">constraint traits
 RFC</a>, and
 implicit in the definition of Smithy's
 <a href="https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy"><code>smithy.framework.ValidationException</code></a>
@@ -491,7 +491,7 @@ impl LengthPatternString {
 
     pub fn compile_regex() -&gt; &amp;'static regex::Regex {
         static REGEX: once_cell::sync::Lazy&lt;regex::Regex&gt; = once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(r#&quot;[a-f0-5]*&quot;#).expect(r#&quot;The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support&quot;#)
+            regex::Regex::new(r#&quot;[a-f0-5]*&quot;#).expect(r#&quot;The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support&quot;#)
         });
 
         &amp;REGEX
@@ -602,7 +602,7 @@ body's size to a reasonable default (see <a href="https://github.com/tokio-rs/ax
 this</a>). We will provide a similar
 request body limiting mechanism regardless.</li>
 </ol>
-<p>This RFC advocates for implementing the first option, arguing that <a href="https://github.com/awslabs/smithy-rs/pull/2040#discussion_r1036226762">it's fair
+<p>This RFC advocates for implementing the first option, arguing that <a href="https://github.com/smithy-lang/smithy-rs/pull/2040#discussion_r1036226762">it's fair
 to say that the framework should return an error that is as informative as
 possible, but it doesn't necessarily have to be
 complete</a>.

@@ -233,7 +233,7 @@ let app: Router = OperationRegistryBuilder::default()
     async fn call(self, req: http::Request) -&gt; http::Response;
 }</code></pre>
 <p>Its purpose is to provide an even interface over closures of the form <code>FnOnce({Operation}Input) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code> and <code>FnOnce({Operation}Input, State) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code>. It's this abstraction which allows the customers to supply both <code>async fn handler(input: {Operation}Input) -&gt; {Operation}Output</code> and <code>async fn handler(input: {Operation}Input, state: Extension&lt;S&gt;) -&gt; {Operation}Output</code> to the service builder.</p>
-<p>We generate <code>Handler</code> implementations for said closures in <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt">ServerOperationHandlerGenerator.kt</a>:</p>
+<p>We generate <code>Handler</code> implementations for said closures in <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt">ServerOperationHandlerGenerator.kt</a>:</p>
 <pre><code class="language-rust ignore">impl&lt;Fun, Fut&gt; Handler&lt;(), Operation0Input&gt; for Fun
 where
     Fun: FnOnce(Operation0Input) -&gt; Fut,
@@ -266,7 +266,7 @@ where
         response
     }
 }</code></pre>
-<p>Creating <code>{Operation}Input</code> from a <code>http::Request</code> and <code>http::Response</code> from a <code>{Operation}Output</code> involves protocol aware serialization/deserialization, for example, it can involve the <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html">HTTP binding traits</a>. The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5">RuntimeError</a> enumerates error cases such as serialization/deserialization failures, <code>extensions().get::&lt;T&gt;()</code> failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the <code>RuntimeError</code> to <code>http::Response</code>. The reader should make note of the influence of the model on the different sections of this procedure.</p>
+<p>Creating <code>{Operation}Input</code> from a <code>http::Request</code> and <code>http::Response</code> from a <code>{Operation}Output</code> involves protocol aware serialization/deserialization, for example, it can involve the <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html">HTTP binding traits</a>. The <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5">RuntimeError</a> enumerates error cases such as serialization/deserialization failures, <code>extensions().get::&lt;T&gt;()</code> failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the <code>RuntimeError</code> to <code>http::Response</code>. The reader should make note of the influence of the model on the different sections of this procedure.</p>
 <p>The <code>request.extensions().get::&lt;T&gt;()</code> present in the <code>Fun: FnOnce(Operation0Input, Extension&lt;S&gt;) -&gt; Fut</code> implementation is the current approach to injecting state into handlers. The customer is required to apply a <a href="https://docs.rs/tower-http/latest/tower_http/add_extension/struct.AddExtensionLayer.html">AddExtensionLayer</a> to the output of the service builder so that, when the request reaches the handler, the <code>extensions().get::&lt;T&gt;()</code> will succeed.</p>
 <p>To convert the closures described above into a <code>Service</code> an <code>OperationHandler</code> is used:</p>
 <pre><code class="language-rust ignore">pub struct OperationHandler&lt;H, T, Input&gt; {
@@ -290,7 +290,7 @@ where
     }
 }</code></pre>
 <h3 id="builder"><a class="header" href="#builder">Builder</a></h3>
-<p>The service builder we provide to the customer is the <code>OperationRegistryBuilder</code>, generated from <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt">ServerOperationRegistryGenerator.kt</a>.</p>
+<p>The service builder we provide to the customer is the <code>OperationRegistryBuilder</code>, generated from <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt">ServerOperationRegistryGenerator.kt</a>.</p>
 <p>Currently, the reference model would generate the following <code>OperationRegistryBuilder</code> and <code>OperationRegistry</code>:</p>
 <pre><code class="language-rust ignore">pub struct OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt; {
     operation1: Option&lt;Op0&gt;,
@@ -350,7 +350,7 @@ where
     }
 }</code></pre>
 <h3 id="router"><a class="header" href="#router">Router</a></h3>
-<p>The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60">aws_smithy_http::routing::Router</a> provides the protocol aware routing of requests to their target , it exists as</p>
+<p>The <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60">aws_smithy_http::routing::Router</a> provides the protocol aware routing of requests to their target , it exists as</p>
 <pre><code class="language-rust ignore">pub struct Route {
     service: Box&lt;dyn Service&lt;http::Request, Response = http::Response&gt;&gt;,
 }
@@ -760,21 +760,21 @@ enum Routes {
 <p>Two downsides of modelling <code>Router</code> in this way are:</p>
 <ul>
 <li><code>Router</code> is larger and has more branches than a protocol specific implementation.</li>
-<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols <code>Routes</code> would have to be extended. A synopsis of this obstruction is presented in <a href="https://github.com/awslabs/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
+<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols <code>Routes</code> would have to be extended. A synopsis of this obstruction is presented in <a href="https://github.com/smithy-lang/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
 </ul>
 <p>After taking the <a href="#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method">Switch <code>From&lt;OperationRegistry&gt; for Router</code> to an <code>OperationRegistry::build</code> method</a> transform, code generation is free to switch between return types based on the model. This allows for a scenario where a <code>@restJson1</code> causes the service builder to output a specific <code>RestJson1Router</code>.</p>
 <h3 id="protocol-specific-errors"><a class="header" href="#protocol-specific-errors">Protocol specific Errors</a></h3>
 <p>Currently, protocol specific routing errors are either:</p>
 <ul>
-<li>Converted to <code>RuntimeError</code>s and then <code>http::Response</code> (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118">unknown_operation</a>).</li>
-<li>Converted directly to a <code>http::Response</code> (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127">method_not_allowed</a>). This is an outlier to the common pattern.</li>
+<li>Converted to <code>RuntimeError</code>s and then <code>http::Response</code> (see <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118">unknown_operation</a>).</li>
+<li>Converted directly to a <code>http::Response</code> (see <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127">method_not_allowed</a>). This is an outlier to the common pattern.</li>
 </ul>
-<p>The <code>from_request</code> functions yield protocol specific errors which are converted to <code>RequestRejection</code>s then <code>RuntimeError</code>s (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210">ServerHttpBoundProtocolGenerator.kt</a>).</p>
+<p>The <code>from_request</code> functions yield protocol specific errors which are converted to <code>RequestRejection</code>s then <code>RuntimeError</code>s (see <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210">ServerHttpBoundProtocolGenerator.kt</a>).</p>
 <p>In these scenarios protocol specific errors are converted into <code>RuntimeError</code> before being converted to a <code>http::Response</code> via <code>into_response</code> method.</p>
 <p>Two downsides of this are:</p>
 <ul>
 <li><code>RuntimeError</code> enumerates all possible errors across all existing protocols, so is larger than modelling the errors for a specific protocol.</li>
-<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols with differing failure modes <code>RuntimeError</code> would have to be extended. As in <a href="#protocol-specific-errors">Protocol specific Errors</a>, a synopsis of this obstruction is presented in <a href="https://github.com/awslabs/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
+<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols with differing failure modes <code>RuntimeError</code> would have to be extended. As in <a href="#protocol-specific-errors">Protocol specific Errors</a>, a synopsis of this obstruction is presented in <a href="https://github.com/smithy-lang/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
 </ul>
 <p>Switching from using <code>RuntimeError</code> to protocol specific errors which satisfy a common interface, <code>IntoResponse</code>, would resolve these problem.</p>
 <h3 id="type-erasure-with-the-name-of-the-smithy-service"><a class="header" href="#type-erasure-with-the-name-of-the-smithy-service">Type erasure with the name of the Smithy service</a></h3>
@@ -858,26 +858,26 @@ let service_0 = Service0::builder()
 <li><input disabled="" type="checkbox" checked=""/>
 Add protocol specific routers to <code>rust-runtime/aws-smithy-http-server</code>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1666">https://github.com/awslabs/smithy-rs/pull/1666</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1666">https://github.com/smithy-lang/smithy-rs/pull/1666</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Add middleware primitives and error types to <code>rust-runtime/aws-smithy-http-server</code>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1679">https://github.com/awslabs/smithy-rs/pull/1679</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1679">https://github.com/smithy-lang/smithy-rs/pull/1679</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Add code generation which outputs new service builder.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1693">https://github.com/awslabs/smithy-rs/pull/1693</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1693">https://github.com/smithy-lang/smithy-rs/pull/1693</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Deprecate <code>OperationRegistryBuilder</code>, <code>OperationRegistry</code> and <code>Router</code>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1886">https://github.com/awslabs/smithy-rs/pull/1886</a></li>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/2161">https://github.com/awslabs/smithy-rs/pull/2161</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1886">https://github.com/smithy-lang/smithy-rs/pull/1886</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/2161">https://github.com/smithy-lang/smithy-rs/pull/2161</a></li>
 </ul>
 </li>
 </ul>

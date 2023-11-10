@@ -190,7 +190,7 @@
 <h3 id="http-stack-terms"><a class="header" href="#http-stack-terms">HTTP stack terms</a></h3>
 <ul>
 <li><strong>Service</strong>: A trait defined in the <a href="https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html"><code>tower-service</code> crate</a>. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.</li>
-<li><strong>Layer</strong>: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. <em>NOTE: The use of <a href="https://github.com/awslabs/smithy-rs/issues/634">Layers can produce compiler errors</a> that are difficult to interpret and defining a layer requires a large amount of boilerplate code.</em></li>
+<li><strong>Layer</strong>: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. <em>NOTE: The use of <a href="https://github.com/smithy-lang/smithy-rs/issues/634">Layers can produce compiler errors</a> that are difficult to interpret and defining a layer requires a large amount of boilerplate code.</em></li>
 <li><strong>Middleware</strong>: a term with several meanings,
 <ul>
 <li>Generically speaking, middleware are similar to Services and Layers in that they modify requests and responses.</li>
@@ -199,13 +199,13 @@
 <li><em>Note: This doesn't apply to the middlewares we use when generating presigned request because those don't wrap a <code>DispatchService</code>.</em></li>
 </ul>
 </li>
-<li>The most notable example of a Middleware is the <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a>. Other notable examples include <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122">MapRequest</a>, <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42">AsyncMapRequest</a>, and <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27">ParseResponse</a>.</li>
+<li>The most notable example of a Middleware is the <a href="https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a>. Other notable examples include <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122">MapRequest</a>, <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42">AsyncMapRequest</a>, and <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27">ParseResponse</a>.</li>
 </ul>
 </li>
 <li><strong>DispatchService</strong>: The innermost part of a group of nested services. The Service that actually makes an HTTP call on behalf of a request. Responsible for parsing success and error responses.</li>
 <li><strong>Connector</strong>: a term with several meanings,
 <ul>
-<li>DynConnectors (a struct that implements <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139">DynConnect</a>) are Services with their specific type erased so that we can do dynamic dispatch.</li>
+<li>DynConnectors (a struct that implements <a href="https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139">DynConnect</a>) are Services with their specific type erased so that we can do dynamic dispatch.</li>
 <li>A term from <code>hyper</code> for any object that implements the <a href="https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html">Connect</a> trait. Really just an alias for <a href="https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html">tower_service::Service</a>. Sometimes referred to as a <code>Connection</code>.</li>
 </ul>
 </li>
@@ -267,7 +267,7 @@ environment variables.</p>
 <h2 id="behind-the-scenes"><a class="header" href="#behind-the-scenes">Behind the scenes</a></h2>
 <p>Timeouts are achieved by racing a future against a <code>tokio::time::Sleep</code> future. The question, then, is &quot;how can I create a future that represents a condition I want to watch for?&quot;. For example, in the case of a <code>ConnectTimeout</code>, how do we watch an ongoing request to see if it's completed the connect-handshake? Our current stack of Middleware acts on requests at different levels of granularity. The timeout Middlewares will be no different.</p>
 <h3 id="middlewares-for-aws-client-requests"><a class="header" href="#middlewares-for-aws-client-requests">Middlewares for AWS Client requests</a></h3>
-<p><em>View <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a> in GitHub</em></p>
+<p><em>View <a href="https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a> in GitHub</em></p>
 <pre><code class="language-rust ignore">#[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct AwsMiddleware;
@@ -289,7 +289,7 @@ impl&lt;S&gt; tower::Layer&lt;S&gt; for AwsMiddleware {
 }</code></pre>
 <p>The above code is only included for context. This RFC doesn't define any timeouts specific to AWS so <code>AwsMiddleware</code> won't require any changes.</p>
 <h3 id="middlewares-for-smithy-client-requests"><a class="header" href="#middlewares-for-smithy-client-requests">Middlewares for Smithy Client requests</a></h3>
-<p><em>View <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175">aws_smithy_client::Client::call_raw</a> in GitHub</em></p>
+<p><em>View <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175">aws_smithy_client::Client::call_raw</a> in GitHub</em></p>
 <pre><code class="language-rust ignore">impl&lt;C, M, R&gt; Client&lt;C, M, R&gt;
   where
           C: bounds::SmithyConnector,

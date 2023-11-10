@@ -356,10 +356,10 @@ the <code>pokemon-service-tls</code> example crate.</p>
 <p>Shape: The core Smithy primitive. A smithy model is composed of nested shapes defining an API.</p>
 </li>
 <li>
-<p><code>Symbol</code>: A Representation of a type including namespaces and any dependencies required to use a type. A shape can be converted into a symbol by a <code>SymbolVisitor</code>. A <code>SymbolVisitor</code> maps shapes to types in your programming language (e.g. Rust). In the Rust SDK, see <a href="https://github.com/awslabs/smithy-rs/blob/c049a37f8cba5f9bec2e96c28db83e7efb2edc53/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt">SymbolVisitor.kt</a>. Symbol visitors are composable—many specific behaviors are mixed in via small &amp; focused symbol providers, e.g. support for the streaming trait is mixed in separately.</p>
+<p><code>Symbol</code>: A Representation of a type including namespaces and any dependencies required to use a type. A shape can be converted into a symbol by a <code>SymbolVisitor</code>. A <code>SymbolVisitor</code> maps shapes to types in your programming language (e.g. Rust). In the Rust SDK, see <a href="https://github.com/smithy-lang/smithy-rs/blob/c049a37f8cba5f9bec2e96c28db83e7efb2edc53/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt">SymbolVisitor.kt</a>. Symbol visitors are composable—many specific behaviors are mixed in via small &amp; focused symbol providers, e.g. support for the streaming trait is mixed in separately.</p>
 </li>
 <li>
-<p><code>Writer</code>: Writers are code generation primitives that collect code prior to being written to a file. Writers enable language specific helpers to be added to simplify codegen for a given language. For example, <code>smithy-rs</code> adds <code>rustBlock</code> to <a href="https://github.com/awslabs/smithy-rs/blob/908dec558e26bbae6fe4b7d9d1c221dd81699b59/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustWriter.kt"><code>RustWriter</code></a> to create a &quot;Rust block&quot; of code.</p>
+<p><code>Writer</code>: Writers are code generation primitives that collect code prior to being written to a file. Writers enable language specific helpers to be added to simplify codegen for a given language. For example, <code>smithy-rs</code> adds <code>rustBlock</code> to <a href="https://github.com/smithy-lang/smithy-rs/blob/908dec558e26bbae6fe4b7d9d1c221dd81699b59/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustWriter.kt"><code>RustWriter</code></a> to create a &quot;Rust block&quot; of code.</p>
 <pre><code class="language-kotlin">writer.rustBlock(&quot;struct Model&quot;) {
     model.fields.forEach {
         write(&quot;${field.name}: #T&quot;, field.symbol)
@@ -393,8 +393,8 @@ the <code>pokemon-service-tls</code> example crate.</p>
 <tr><td>double</td><td><code>f64</code></td></tr>
 <tr><td><a href="smithy/simple_shapes.html#big-numbers">bigInteger</a></td><td><code>BigInteger</code> (Not implemented yet)</td></tr>
 <tr><td><a href="smithy/simple_shapes.html#big-numbers">bigDecimal</a></td><td><code>BigDecimal</code> (Not implemented yet)</td></tr>
-<tr><td><a href="smithy/simple_shapes.html#timestamps">timestamp</a></td><td><a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/date_time/mod.rs"><code>DateTime</code></a></td></tr>
-<tr><td><a href="smithy/simple_shapes.html#documents">document</a></td><td><a href="https://github.com/awslabs/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52"><code>Document</code></a></td></tr>
+<tr><td><a href="smithy/simple_shapes.html#timestamps">timestamp</a></td><td><a href="https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/date_time/mod.rs"><code>DateTime</code></a></td></tr>
+<tr><td><a href="smithy/simple_shapes.html#documents">document</a></td><td><a href="https://github.com/smithy-lang/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52"><code>Document</code></a></td></tr>
 </tbody></table>
 </div>
 <h3 id="big-numbers"><a class="header" href="#big-numbers">Big Numbers</a></h3>
@@ -405,7 +405,7 @@ the <code>pokemon-service-tls</code> example crate.</p>
 pub struct BigDecimal(String);
 <span class="boring">}</span></code></pre></pre>
 <p>This will enable us to add helpers over time as requested. Users will also be able to define their own conversions into their preferred large-number libraries.</p>
-<p>As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked <a href="https://github.com/awslabs/smithy-rs/issues/312">here</a>.</p>
+<p>As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked <a href="https://github.com/smithy-lang/smithy-rs/issues/312">here</a>.</p>
 <h3 id="timestamps"><a class="header" href="#timestamps">Timestamps</a></h3>
 <p><a href="https://github.com/chronotope/chrono">chrono</a> is the current de facto library for datetime in Rust, but it is pre-1.0. DateTimes are represented by an SDK defined structure modeled on <code>std::time::Duration</code> from the Rust standard library.</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
@@ -482,7 +482,7 @@ struct IntermediateStructure {
   |
   = help: insert indirection (e.g., a `Box`, `Rc`, or `&amp;`) at some point to make `main::TopStructure` representable
 </code></pre>
-<p>This occurs because Rust types must be a size known at compile time. The way around this, as the message suggests, is to Box the offending type. <code>smithy-rs</code> implements this design in <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/RecursiveShapeBoxer.kt">RecursiveShapeBoxer.kt</a></p>
+<p>This occurs because Rust types must be a size known at compile time. The way around this, as the message suggests, is to Box the offending type. <code>smithy-rs</code> implements this design in <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/RecursiveShapeBoxer.kt">RecursiveShapeBoxer.kt</a></p>
 <p>To support this, as the message suggests, we must &quot;<code>Box</code>&quot; the offending type. There is a touch of trickiness—only one element in the cycle needs to be boxed, but we need to select it deterministically such that we always pick the same element between multiple codegen runs. To do this the Rust SDK will:</p>
 <ol>
 <li>Topologically sort the graph of shapes.</li>
@@ -526,7 +526,7 @@ struct IntermediateStructure {
 <tr><td><a href="smithy/aggregate_shapes.html#union">Union</a></td><td><code>enum</code></td></tr>
 </tbody></table>
 </div>
-<p>Most generated types are controlled by <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt">SymbolVisitor</a>.</p>
+<p>Most generated types are controlled by <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt">SymbolVisitor</a>.</p>
 <h2 id="list"><a class="header" href="#list">List</a></h2>
 <p>List objects in Smithy are transformed into vectors in Rust. Based on the output of the <a href="https://awslabs.github.io/smithy/javadoc/1.5.1/software/amazon/smithy/model/knowledge/NullableIndex.html">NullableIndex</a>, the generated list may be <code>Vec&lt;T&gt;</code> or <code>Vec&lt;Option&lt;T&gt;&gt;</code>.</p>
 <h2 id="set"><a class="header" href="#set">Set</a></h2>
@@ -630,7 +630,7 @@ impl IoUsage {
 <p>Smithy <code>Union</code> is modeled as <code>enum</code> in Rust.</p>
 <ol>
 <li>Generated <code>enum</code>s must be marked <code>#[non_exhaustive]</code>.</li>
-<li>Generated <code>enum</code>s must provide an <code>Unknown</code> variant. If parsing receives an unknown input that doesn't match any of the given union variants, <code>Unknown</code> should be constructed. <a href="https://github.com/awslabs/smithy-rs/issues/185">Tracking Issue</a>.</li>
+<li>Generated <code>enum</code>s must provide an <code>Unknown</code> variant. If parsing receives an unknown input that doesn't match any of the given union variants, <code>Unknown</code> should be constructed. <a href="https://github.com/smithy-lang/smithy-rs/issues/185">Tracking Issue</a>.</li>
 <li>Union members (enum variants) are <strong>not</strong> nullable, because Smithy union members cannot contain null values.</li>
 <li>When union members contain references to other shapes, we generate a wrapping variant (see below).</li>
 <li>Union members do not require <code>#[non_exhaustive]</code>, because changing the shape targeted by a union member is not backwards compatible.</li>
@@ -1040,7 +1040,7 @@ pub struct TypeErasedBox {
 <p><em>NOTE: When inserting values into a config bag, using one of the <code>set_&lt;component&gt;</code> methods is always preferred, as this prevents mistakes related to inserting similar, but incorrect types.</em></p>
 </blockquote>
 <h3 id="the-actual-code"><a class="header" href="#the-actual-code">The actual code</a></h3>
-<p>The current implementation of <code>orchestrate</code> is defined <a href="https://github.com/awslabs/smithy-rs/blob/8bc93fc04dd8c8d7447bfe3f5196a75cba0b10ba/rust-runtime/aws-smithy-runtime/src/client/orchestrator.rs#L23">here</a>, in the <a href="https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime</code> crate</a>. Related code can be found in the <a href="https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime-api</code> crate</a>.</p>
+<p>The current implementation of <code>orchestrate</code> is defined <a href="https://github.com/smithy-lang/smithy-rs/blob/8bc93fc04dd8c8d7447bfe3f5196a75cba0b10ba/rust-runtime/aws-smithy-runtime/src/client/orchestrator.rs#L23">here</a>, in the <a href="https://github.com/smithy-lang/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime</code> crate</a>. Related code can be found in the <a href="https://github.com/smithy-lang/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime"><code>aws-smithy-runtime-api</code> crate</a>.</p>
 <h2 id="frequently-asked-questions"><a class="header" href="#frequently-asked-questions">Frequently asked questions</a></h2>
 <h3 id="why-cant-users-create-and-use-their-own-runtime-plugins"><a class="header" href="#why-cant-users-create-and-use-their-own-runtime-plugins">Why can't users create and use their own runtime plugins?</a></h3>
 <p>We chose to hide the runtime plugin API from users because we are concerned that exposing it will cause more problems than it solves. Instead, we encourage users to use interceptors. This is because, when setting a runtime plugin, any existing runtime plugin with the same type will be replaced. For example, there can only be one retry strategy or response deserializer. Errors resulting from unintentionally overriding a plugin would be difficult for users to diagnose, and would consume valuable development time.</p>
@@ -1225,7 +1225,7 @@ of the concrete type provided by the identity resolver, and can do any necessary
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="middleware"><a class="header" href="#middleware">Middleware</a></h1>
 <p>The following document provides a brief survey of the various positions middleware can be inserted in Smithy Rust.</p>
-<p>We use the <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy">Pokémon service</a> as a reference model throughout.</p>
+<p>We use the <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy">Pokémon service</a> as a reference model throughout.</p>
 <pre><code class="language-smithy">/// A Pokémon species forms the basis for at least one Pokémon.
 @title(&quot;Pokémon Species&quot;)
 resource PokemonSpecies {
@@ -1828,7 +1828,7 @@ async fn handler(input: ModelInput, arg: CustomerDefined) -&gt; ModelOutput {
 <div style="break-before: page; page-break-before: always;"></div><h1 id="the-anatomy-of-a-service"><a class="header" href="#the-anatomy-of-a-service">The Anatomy of a Service</a></h1>
 <p>What is <a href="https://awslabs.github.io/smithy/2.0/index.html">Smithy</a>? At a high-level, it's a grammar for specifying services while leaving the business logic undefined. A <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#service">Smithy Service</a> specifies a collection of function signatures in the form of <a href="https://awslabs.github.io/smithy/2.0/spec/service-types.html#operation">Operations</a>, their purpose is to encapsulate business logic. A Smithy implementation should, for each Smithy Service, provide a builder, which accepts functions conforming to said signatures, and returns a service subject to the semantics specified by the model.</p>
 <p>This survey is disinterested in the actual Kotlin implementation of the code generator, and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in internal details.</p>
-<p>During the survey we will use the <a href="https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy"><code>pokemon.smithy</code></a> model as a reference:</p>
+<p>During the survey we will use the <a href="https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy"><code>pokemon.smithy</code></a> model as a reference:</p>
 <pre><code class="language-smithy">/// A Pokémon species forms the basis for at least one Pokémon.
 @title(&quot;Pokémon Species&quot;)
 resource PokemonSpecies {
@@ -2032,7 +2032,7 @@ let operation = GetPokemonSpecies::from_service(svc);
 <span class="boring">}</span></code></pre></pre>
 <p>To summarize a <em>model service</em> constructed can be constructed from a <code>Handler</code> or a <code>OperationService</code> subject to the constraints of an <code>OperationShape</code>. More detailed information on these conversions is provided in the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/operation/index.html">Handler and OperationService section</a> Rust docs.</p>
 <h2 id="serialization-and-deserialization"><a class="header" href="#serialization-and-deserialization">Serialization and Deserialization</a></h2>
-<p>A <a href="https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits">Smithy protocol</a> specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html"><code>FromRequest</code></a> and <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44"><code>IntoResponse</code></a> traits:</p>
+<p>A <a href="https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits">Smithy protocol</a> specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the <a href="https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html"><code>FromRequest</code></a> and <a href="https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44"><code>IntoResponse</code></a> traits:</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">extern crate aws_smithy_http_server;
@@ -2220,7 +2220,7 @@ parameterized them and change behavior depending on the context in which it's ap
 </span><span class="boring">  fn apply(&amp;self, input: T) -&gt; Self::Output { &lt;U as Pl&lt;Ser, Op, T&gt;&gt;::apply(self, input) }
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre></pre>
-<p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs">/examples/pokemon-service/src/plugin.rs</a>.</p>
+<p>An example <code>Plugin</code> implementation can be found in <a href="https://github.com/smithy-lang/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs">/examples/pokemon-service/src/plugin.rs</a>.</p>
 <p>Plugins can be applied in two places:</p>
 <ul>
 <li>HTTP plugins, which are applied pre-deserialization/post-serialization, acting on HTTP requests/responses.</li>
@@ -2363,7 +2363,7 @@ pub struct PokemonServiceBuilder&lt;Body, HttpPl, ModelPl&gt; {
         self.get_pokemon_species = Some(Route::new(svc));
         self
     }</code></pre>
-<p>Handlers and operations are upgraded to a <a href="https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52"><code>Route</code></a> as soon as they are registered against the service builder. You can think of <code>Route</code> as a boxing layer in disguise.</p>
+<p>Handlers and operations are upgraded to a <a href="https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52"><code>Route</code></a> as soon as they are registered against the service builder. You can think of <code>Route</code> as a boxing layer in disguise.</p>
 <p>You can transform a builder instance into a complete service (<code>PokemonService</code>) using one of the following methods:</p>
 <ul>
 <li><code>build</code>. The transformation fails if one or more operations do not have a registered handler;</li>
@@ -2512,50 +2512,50 @@ impl&lt;Protocol&gt; IntoResponse&lt;Protocol&gt; for MissingExtension {
 <li><code>/codegen-server</code>: server code generation. Depends on <code>codegen-core</code></li>
 <li><code>/aws</code>: the AWS Rust SDK, it deals with AWS services specifically. The folder structure reflects the project's, with the <code>rust-runtime</code> and the <code>codegen</code></li>
 <li><code>/rust-runtime</code>: the generated client and server crates may depend on crates in this folder. Crates here are not code generated. The only crate that is not published is <code>inlineable</code>,
-which contains common functions used by other crates, <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/CargoDependency.kt#L95-L95">copied into</a> the source crate</li>
+which contains common functions used by other crates, <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/CargoDependency.kt#L95-L95">copied into</a> the source crate</li>
 </ul>
 <p>Crates in <code>/rust-runtime</code> (informally referred to as &quot;runtime crates&quot;) are added to a crate's dependency only when used.
 For example, if a model uses event streams, the generated crates will depend on <a href="https://docs.rs/aws-smithy-eventstream"><code>aws-smithy-eventstream</code></a>.</p>
 <h2 id="generating-code"><a class="header" href="#generating-code">Generating code</a></h2>
-<p><code>smithy-rs</code>'s entry points are Smithy code-generation plugins, and is not a command. One entry point is in <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L34">RustCodegenPlugin::execute</a> and
+<p><code>smithy-rs</code>'s entry points are Smithy code-generation plugins, and is not a command. One entry point is in <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L34">RustCodegenPlugin::execute</a> and
 inherits from <code>SmithyBuildPlugin</code> in <a href="https://github.com/awslabs/smithy/tree/main/smithy-build">smithy-build</a>. Code generation is in Kotlin and shared common, non-Rust specific code with the <a href="https://github.com/awslabs/smithy"><code>smithy</code> Java repository</a>. They plug into the <a href="https://awslabs.github.io/smithy/1.0/guides/building-models/gradle-plugin.html">Smithy gradle</a> plugin, which is a gradle plugin.</p>
 <p>The comment at the beginning of <code>execute</code> describes what a <code>Decorator</code> is and uses the following terms:</p>
 <ul>
 <li>Context: contains the model being generated, projection and settings for the build</li>
-<li>Decorator: (also referred to as customizations) customizes how code is being generated. AWS services are required to sign with the SigV4 protocol, and <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/SigV4SigningDecorator.kt#L45">a decorator</a> adds Rust code to sign requests and responses.
+<li>Decorator: (also referred to as customizations) customizes how code is being generated. AWS services are required to sign with the SigV4 protocol, and <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/SigV4SigningDecorator.kt#L45">a decorator</a> adds Rust code to sign requests and responses.
 Decorators are applied in reverse order of being added and have a priority order.</li>
 <li>Writer: creates files and adds content; it supports templating, using <code>#</code> for substitutions</li>
 <li>Location: the file where a symbol will be written to</li>
 </ul>
-<p>The only task of a <code>RustCodegenPlugin</code> is to construct a <code>CodegenVisitor</code> and call its <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L115-L115">execute()</a> method.</p>
-<p><code>CodegenVisitor::execute()</code> is given a <code>Context</code> and decorators, and calls a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L44">CodegenVisitor</a>.</p>
+<p>The only task of a <code>RustCodegenPlugin</code> is to construct a <code>CodegenVisitor</code> and call its <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L115-L115">execute()</a> method.</p>
+<p><code>CodegenVisitor::execute()</code> is given a <code>Context</code> and decorators, and calls a <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L44">CodegenVisitor</a>.</p>
 <p>CodegenVisitor, RustCodegenPlugin, and wherever there are different implementations between client and server, such as in generating error types,
 have corresponding server versions.</p>
 <p>Objects used throughout code generation are:</p>
 <ul>
-<li>Symbol: a node in a graph, an abstraction that represents the qualified name of a type; symbols reference and depend on other symbols, and have some common properties among languages (such as a namespace or a definition file). For Rust, we add properties to include more metadata about a symbol, such as its <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt#L363-L363">type</a></li>
-<li><a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustTypes.kt#L25-L25">RustType</a>: <code>Option&lt;T&gt;</code>, <code>HashMap</code>, ... along with their namespaces of origin such as <code>std::collections</code></li>
-<li><a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RuntimeTypes.kt#L113-L113">RuntimeType</a>: the information to locate a type, plus the crates it depends on</li>
+<li>Symbol: a node in a graph, an abstraction that represents the qualified name of a type; symbols reference and depend on other symbols, and have some common properties among languages (such as a namespace or a definition file). For Rust, we add properties to include more metadata about a symbol, such as its <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt#L363-L363">type</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustTypes.kt#L25-L25">RustType</a>: <code>Option&lt;T&gt;</code>, <code>HashMap</code>, ... along with their namespaces of origin such as <code>std::collections</code></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RuntimeTypes.kt#L113-L113">RuntimeType</a>: the information to locate a type, plus the crates it depends on</li>
 <li><a href="https://awslabs.github.io/smithy/1.0/spec/core/model.html#shape-id">ShapeId</a>: an immutable object that identifies a <code>Shape</code></li>
 </ul>
 <p>Useful conversions are:</p>
 <pre><code class="language-kotlin">SymbolProvider.toSymbol(shape)
 </code></pre>
 <p>where <code>SymbolProvider</code> constructs symbols for shapes. Some symbols require to create other symbols and types;
-<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L65-L65">event streams</a> and <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/StreamingTraitSymbolProvider.kt#L26-L26">other streaming shapes</a> are an example.
-Symbol providers are all <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L62-L62">applied</a> in order; if a shape uses a reserved keyword in Rust, its name is converted to a new name by a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L26-L26">symbol provider</a>,
-and all other providers will work with this <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L38-L38">new</a> symbol.</p>
+<a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L65-L65">event streams</a> and <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/StreamingTraitSymbolProvider.kt#L26-L26">other streaming shapes</a> are an example.
+Symbol providers are all <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/RustCodegenPlugin.kt#L62-L62">applied</a> in order; if a shape uses a reserved keyword in Rust, its name is converted to a new name by a <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L26-L26">symbol provider</a>,
+and all other providers will work with this <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/EventStreamSymbolProvider.kt#L38-L38">new</a> symbol.</p>
 <pre><code class="language-kotlin">Model.expectShape(shapeId)
 </code></pre>
 <p>Each model has a <code>shapeId</code> to <code>shape</code> map; this method returns the shape associated with this shapeId.</p>
-<p>Some objects implement a <code>transform</code> <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/OperationNormalizer.kt#L52-L52">method</a> that only change the input model, so that code generation will work on that new model. This is used to, for example, add a trait to a shape.</p>
-<p><code>CodegenVisitor</code> is a <code>ShapeVisitor</code>. For all services in the input model, shapes are <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L119-L119">converted into Rust</a>;
-<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L150-L150">here</a> is how a service is constructed,
-<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L172-L172">here</a> a structure and so on.</p>
-<p>Code generation flows from writer to files and entities are (mostly) generated only on a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L119-L126">need-by-need basis</a>.
-The complete result is a <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L42-L42">Rust crate</a>,
-in which all dependencies are written into their modules and <code>lib.rs</code> is generated (<a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L96-L107">here</a>).
-<code>execute()</code> ends by running <a href="https://github.com/awslabs/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L133-L133">cargo fmt</a>,
+<p>Some objects implement a <code>transform</code> <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/OperationNormalizer.kt#L52-L52">method</a> that only change the input model, so that code generation will work on that new model. This is used to, for example, add a trait to a shape.</p>
+<p><code>CodegenVisitor</code> is a <code>ShapeVisitor</code>. For all services in the input model, shapes are <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L119-L119">converted into Rust</a>;
+<a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L150-L150">here</a> is how a service is constructed,
+<a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L172-L172">here</a> a structure and so on.</p>
+<p>Code generation flows from writer to files and entities are (mostly) generated only on a <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L119-L126">need-by-need basis</a>.
+The complete result is a <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L42-L42">Rust crate</a>,
+in which all dependencies are written into their modules and <code>lib.rs</code> is generated (<a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenDelegator.kt#L96-L107">here</a>).
+<code>execute()</code> ends by running <a href="https://github.com/smithy-lang/smithy-rs/blob/db48039065bec890ef387385773b37154b555b14/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/CodegenVisitor.kt#L133-L133">cargo fmt</a>,
 to avoid having to format correctly Rust in <code>Writer</code>s and to be sure the generated code follows the styling rules.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfcs"><a class="header" href="#rfcs">RFCs</a></h1>
 <p><strong>What is an RFC?:</strong> An RFC is a document that proposes a change to <code>smithy-rs</code> or the AWS Rust SDK. Request for Comments means a request for discussion and oversight about the future of the project from maintainers, contributors and users.</p>
@@ -3240,7 +3240,7 @@ look for this synthetic trait when creating the fluent builders and inputs to kn
 <p>If a presignable operation input has a member named <code>presigned</code>, then there will be a name collision with
 the function to generate a presigned URL. To mitigate this, <code>RustReservedWords</code> will be updated
 to rename the <code>presigned</code> member to <code>presigned_value</code>
-<a href="https://github.com/awslabs/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28">similar to how <code>send</code> is renamed</a>.</p>
+<a href="https://github.com/smithy-lang/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28">similar to how <code>send</code> is renamed</a>.</p>
 <h2 id="changes-checklist-2"><a class="header" href="#changes-checklist-2">Changes Checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox" checked=""/>
@@ -3426,7 +3426,7 @@ async fn main() -&gt; Result&lt;(), sts::Error&gt; {
 <li><input disabled="" type="checkbox" checked=""/>
 Create new Kotlin decorator <code>RetryConfigDecorator</code>
 <ul>
-<li>Based on <a href="https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt">RegionDecorator.kt</a></li>
+<li>Based on <a href="https://github.com/smithy-lang/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt">RegionDecorator.kt</a></li>
 <li>This decorator will live in the <code>codegen</code> project because it has relevance outside the SDK</li>
 </ul>
 </li>
@@ -3539,7 +3539,7 @@ compromises the fundamental business objectives of latency and performance.</p>
 <p>The generated service code is responsible for validating the model constraints of input structures.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-service-specific-middleware"><a class="header" href="#rfc-service-specific-middleware">RFC: Service-specific middleware</a></h1>
 <blockquote>
-<p>Status: <a href="https://github.com/awslabs/smithy-rs/pull/959">Implemented</a></p>
+<p>Status: <a href="https://github.com/smithy-lang/smithy-rs/pull/959">Implemented</a></p>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0006_service_specific_middleware.html#changes-checklist">Changes Checklist</a> section.</p>
 <p>Currently, all services use a centralized <code>AwsMiddleware</code> that is defined in the (poorly named) <code>aws-hyper</code> crate. This
@@ -3593,7 +3593,7 @@ Push an updated README to aws-hyper deprecating the package, explaining what hap
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-split-release-process"><a class="header" href="#rfc-split-release-process">RFC: Split Release Process</a></h1>
 <blockquote>
-<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/986">smithy-rs#986</a> and <a href="https://github.com/awslabs/aws-sdk-rust/pull/351">aws-sdk-rust#351</a></p>
+<p>Status: Implemented in <a href="https://github.com/smithy-lang/smithy-rs/pull/986">smithy-rs#986</a> and <a href="https://github.com/awslabs/aws-sdk-rust/pull/351">aws-sdk-rust#351</a></p>
 </blockquote>
 <p>At the time of writing, the <code>aws-sdk-rust</code> repository is used exclusively
 for the entire release process of both the Rust runtime crates from <code>smithy-rs</code> as
@@ -3950,7 +3950,7 @@ Integration test using real traffic</li>
 </blockquote>
 <p>Currently, the AWS Rust SDK's examples are duplicated across
 <a href="https://github.com/awslabs/aws-sdk-rust"><code>awslabs/aws-sdk-rust</code></a>,
-<a href="https://github.com/awslabs/smithy-rs"><code>awslabs/smithy-rs</code></a>,
+<a href="https://github.com/smithy-lang/smithy-rs"><code>smithy-lang/smithy-rs</code></a>,
 and <a href="https://github.com/awsdocs/aws-doc-sdk-examples"><code>awsdocs/aws-doc-sdk-examples</code></a>.
 The <code>smithy-rs</code> repository was formerly the source of truth for examples,
 with the examples being copied over to <code>aws-sdk-rust</code> as part of the release
@@ -4192,7 +4192,7 @@ fn classify_result(
     )
 }</code></pre>
 <p>The retry delay time should be calculated by the same exponential backoff with jitter code that the
-<a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-client/src/retry.rs#L252-L292">default <code>RetryHandler</code> uses in <code>aws-smithy-client</code></a>. This function will need to be split up and made
+<a href="https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-client/src/retry.rs#L252-L292">default <code>RetryHandler</code> uses in <code>aws-smithy-client</code></a>. This function will need to be split up and made
 available to the waiter implementations so that just the delay can be calculated.</p>
 <h2 id="changes-checklist-8"><a class="header" href="#changes-checklist-8">Changes Checklist</a></h2>
 <ul>
@@ -4307,9 +4307,9 @@ necessary.</p>
 <h3 id="short-term-changes-checklist"><a class="header" href="#short-term-changes-checklist">Short-term Changes Checklist</a></h3>
 <ul>
 <li><input disabled="" type="checkbox" checked=""/>
-Prepare runtime crate manifests for publication to crates.io (https://github.com/awslabs/smithy-rs/pull/755)</li>
+Prepare runtime crate manifests for publication to crates.io (https://github.com/smithy-lang/smithy-rs/pull/755)</li>
 <li><input disabled="" type="checkbox" checked=""/>
-Update SDK generator to set correct crate versions (https://github.com/awslabs/smithy-rs/pull/755)</li>
+Update SDK generator to set correct crate versions (https://github.com/smithy-lang/smithy-rs/pull/755)</li>
 <li><input disabled="" type="checkbox" checked=""/>
 Write bulk publish script</li>
 <li><input disabled="" type="checkbox" checked=""/>
@@ -4337,7 +4337,7 @@ without a major version bump to all crates in the SDK.</li>
 <ul>
 <li><strong>AWS SDK Crate</strong>: A crate that provides a client for calling a given AWS service, such as <code>aws-sdk-s3</code> for calling S3.</li>
 <li><strong>AWS Runtime Crate</strong>: Any runtime crate that the AWS SDK generated code relies on, such as <code>aws-types</code>.</li>
-<li><strong>Smithy Runtime Crate</strong>: Any runtime crate that the <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> generated code relies on, such as <code>smithy-types</code>.</li>
+<li><strong>Smithy Runtime Crate</strong>: Any runtime crate that the <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> generated code relies on, such as <code>smithy-types</code>.</li>
 </ul>
 <h2 id="requirements-6"><a class="header" href="#requirements-6">Requirements</a></h2>
 <h3 id="versioning-1"><a class="header" href="#versioning-1">Versioning</a></h3>
@@ -4358,7 +4358,7 @@ all SDK and Smithy runtime crates.</p>
 <li>Breaking changes</li>
 <li>Dependency updates for dependencies that are part of the public API</li>
 <li>Model updates with API changes</li>
-<li>For code-generated crates: when a newer version of <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> is used to generate the crate</li>
+<li>For code-generated crates: when a newer version of <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> is used to generate the crate</li>
 </ul>
 </li>
 <li><code>patch</code>:
@@ -4376,7 +4376,7 @@ all SDK and Smithy runtime crates.</p>
 <li>Changes that aren't breaking</li>
 <li>Dependency updates for dependencies that are part of the public API</li>
 <li>Model updates with API changes</li>
-<li>For code-generated crates: when a newer version of <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> is used to generate the crate</li>
+<li>For code-generated crates: when a newer version of <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> is used to generate the crate</li>
 </ul>
 </li>
 <li><code>patch</code>:
@@ -4429,13 +4429,13 @@ model_hash = &quot;&lt;hash&gt;&quot;
 the version numbers from runtime crates directly, and it will use the rules from the next section to determine
 the version numbers for the generated crates.</p>
 <h3 id="versioning-for-code-generated-sdk-service-crates"><a class="header" href="#versioning-for-code-generated-sdk-service-crates">Versioning for Code Generated (SDK Service) Crates</a></h3>
-<p>Code generated crates will have their <code>minor</code> version bumped when the version of <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> used to generate
+<p>Code generated crates will have their <code>minor</code> version bumped when the version of <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> used to generate
 them changes, or when model updates with API changes are made. Three pieces of information are required to
-handle this process: the previously released version number, the <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> version used to generate the code,
+handle this process: the previously released version number, the <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> version used to generate the code,
 and the level of model updates being applied. For this last one, if there are multiple model updates that
 affect only documentation, but then one model update that affects an API, then as a whole they will be
 considered as affecting an API and require a <code>minor</code> version bump.</p>
-<p>The previously released version number will be retrieved from crates.io using its API. The <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> version
+<p>The previously released version number will be retrieved from crates.io using its API. The <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> version
 used during code generation will become a build artifact that is saved to <code>versions.toml</code> in <a href="https://github.com/awslabs/aws-sdk-rust">aws-sdk-rust</a>.
 During phase 1, the tooling required to know if a model is a documentation-only change will not be available,
 so all model changes will result in a <code>minor</code> version bump during this phase.</p>
@@ -4449,11 +4449,11 @@ so all model changes will result in a <code>minor</code> version bump during thi
 </pre>
 <ul>
 <li><strong>A: smithy-rs changed?</strong>: Compare the <code>smithy_rs_version</code> in the previous <code>versions.toml</code> with the
-next <code>versions.toml</code> file, and if the values are different, consider <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> to have changed.</li>
+next <code>versions.toml</code> file, and if the values are different, consider <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> to have changed.</li>
 <li><strong>B: model changed?</strong>: Similarly, compare the <code>model_hash</code> for the crate in <code>versions.toml</code>.</li>
 </ul>
 <h3 id="versioning-for-runtime-crates"><a class="header" href="#versioning-for-runtime-crates">Versioning for Runtime Crates</a></h3>
-<p>The old scheme of all runtime crates in <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a> having a fake <code>0.0.0-smithy-rs-head</code> version number with
+<p>The old scheme of all runtime crates in <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a> having a fake <code>0.0.0-smithy-rs-head</code> version number with
 a build step to replace those with a consistent <code>major.minor</code> will be removed. These runtime crates will begin
 having their actual next version number in the Cargo.toml file in smithy-rs.</p>
 <p>This introduces a new problem where a developer can forget to bump a runtime crate version, so a method of
@@ -4513,7 +4513,7 @@ Update <code>rust-semverver</code> to a newer nightly that can compile <code>aws
 <li><input disabled="" type="checkbox"/>
 Establish initial <code>versions.toml</code> in <code>aws-sdk-rust/main</code></li>
 <li><input disabled="" type="checkbox"/>
-Set version numbers in runtime crates in <a href="https://github.com/awslabs/smithy-rs">smithy-rs</a></li>
+Set version numbers in runtime crates in <a href="https://github.com/smithy-lang/smithy-rs">smithy-rs</a></li>
 <li><input disabled="" type="checkbox"/>
 Update the auto-sync tool to generate <code>versions.toml</code></li>
 <li><input disabled="" type="checkbox"/>
@@ -4567,7 +4567,7 @@ impl BodyCallback for Box&lt;dyn BodyCallback&gt; {
    fn make_new(&amp;self) -&gt; Box&lt;dyn SendCallback&gt; { BodyCallback::make_new(self) }
 }</code></pre>
 <p>The changes we need to make to <code>ByteStream</code>:</p>
-<p><em>(The current version of <code>ByteStream</code> and <code>Inner</code> can be seen <a href="https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205">here</a>.)</em></p>
+<p><em>(The current version of <code>ByteStream</code> and <code>Inner</code> can be seen <a href="https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205">here</a>.)</em></p>
 <pre><code class="language-rust ignore">// in `aws_smithy_http::byte_stream`...
 
 // We add a new method to `ByteStream` for inserting callbacks
@@ -4589,7 +4589,7 @@ impl Inner&lt;SdkBody&gt; {
     }
 }</code></pre>
 <p>The changes we need to make to <code>SdkBody</code>:</p>
-<p><em>(The current version of <code>SdkBody</code> can be seen <a href="https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71">here</a>.)</em></p>
+<p><em>(The current version of <code>SdkBody</code> can be seen <a href="https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71">here</a>.)</em></p>
 <pre><code class="language-rust ignore">// In aws_smithy_http::body...
 
 #[pin_project]
@@ -4827,7 +4827,7 @@ impl ReadCallback for Crc32cChecksumCallback {
 <h3 id="http-stack-terms"><a class="header" href="#http-stack-terms">HTTP stack terms</a></h3>
 <ul>
 <li><strong>Service</strong>: A trait defined in the <a href="https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html"><code>tower-service</code> crate</a>. The lowest level of abstraction we deal with when making HTTP requests. Services act directly on data to transform and modify that data. A Service is what eventually turns a request into a response.</li>
-<li><strong>Layer</strong>: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. <em>NOTE: The use of <a href="https://github.com/awslabs/smithy-rs/issues/634">Layers can produce compiler errors</a> that are difficult to interpret and defining a layer requires a large amount of boilerplate code.</em></li>
+<li><strong>Layer</strong>: Layers are a higher-order abstraction over services that is used to compose multiple services together, creating a new service from that combination. Nothing prevents us from manually wrapping services within services, but Layers allow us to do it in a flexible and generic manner. Layers don't directly act on data but instead can wrap an existing service with additional functionality, creating a new service. Layers can be thought of as middleware. <em>NOTE: The use of <a href="https://github.com/smithy-lang/smithy-rs/issues/634">Layers can produce compiler errors</a> that are difficult to interpret and defining a layer requires a large amount of boilerplate code.</em></li>
 <li><strong>Middleware</strong>: a term with several meanings,
 <ul>
 <li>Generically speaking, middleware are similar to Services and Layers in that they modify requests and responses.</li>
@@ -4836,13 +4836,13 @@ impl ReadCallback for Crc32cChecksumCallback {
 <li><em>Note: This doesn't apply to the middlewares we use when generating presigned request because those don't wrap a <code>DispatchService</code>.</em></li>
 </ul>
 </li>
-<li>The most notable example of a Middleware is the <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a>. Other notable examples include <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122">MapRequest</a>, <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42">AsyncMapRequest</a>, and <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27">ParseResponse</a>.</li>
+<li>The most notable example of a Middleware is the <a href="https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a>. Other notable examples include <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122">MapRequest</a>, <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42">AsyncMapRequest</a>, and <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27">ParseResponse</a>.</li>
 </ul>
 </li>
 <li><strong>DispatchService</strong>: The innermost part of a group of nested services. The Service that actually makes an HTTP call on behalf of a request. Responsible for parsing success and error responses.</li>
 <li><strong>Connector</strong>: a term with several meanings,
 <ul>
-<li>DynConnectors (a struct that implements <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139">DynConnect</a>) are Services with their specific type erased so that we can do dynamic dispatch.</li>
+<li>DynConnectors (a struct that implements <a href="https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139">DynConnect</a>) are Services with their specific type erased so that we can do dynamic dispatch.</li>
 <li>A term from <code>hyper</code> for any object that implements the <a href="https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html">Connect</a> trait. Really just an alias for <a href="https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html">tower_service::Service</a>. Sometimes referred to as a <code>Connection</code>.</li>
 </ul>
 </li>
@@ -4904,7 +4904,7 @@ environment variables.</p>
 <h2 id="behind-the-scenes-2"><a class="header" href="#behind-the-scenes-2">Behind the scenes</a></h2>
 <p>Timeouts are achieved by racing a future against a <code>tokio::time::Sleep</code> future. The question, then, is &quot;how can I create a future that represents a condition I want to watch for?&quot;. For example, in the case of a <code>ConnectTimeout</code>, how do we watch an ongoing request to see if it's completed the connect-handshake? Our current stack of Middleware acts on requests at different levels of granularity. The timeout Middlewares will be no different.</p>
 <h3 id="middlewares-for-aws-client-requests"><a class="header" href="#middlewares-for-aws-client-requests">Middlewares for AWS Client requests</a></h3>
-<p><em>View <a href="https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a> in GitHub</em></p>
+<p><em>View <a href="https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29">AwsMiddleware</a> in GitHub</em></p>
 <pre><code class="language-rust ignore">#[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct AwsMiddleware;
@@ -4926,7 +4926,7 @@ impl&lt;S&gt; tower::Layer&lt;S&gt; for AwsMiddleware {
 }</code></pre>
 <p>The above code is only included for context. This RFC doesn't define any timeouts specific to AWS so <code>AwsMiddleware</code> won't require any changes.</p>
 <h3 id="middlewares-for-smithy-client-requests"><a class="header" href="#middlewares-for-smithy-client-requests">Middlewares for Smithy Client requests</a></h3>
-<p><em>View <a href="https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175">aws_smithy_client::Client::call_raw</a> in GitHub</em></p>
+<p><em>View <a href="https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175">aws_smithy_client::Client::call_raw</a> in GitHub</em></p>
 <pre><code class="language-rust ignore">impl&lt;C, M, R&gt; Client&lt;C, M, R&gt;
   where
           C: bounds::SmithyConnector,
@@ -5076,7 +5076,7 @@ test single-request timeout doesn't trigger if request completes in time</li>
 <blockquote>
 <p>Cargo &quot;features&quot; provide a mechanism to express conditional compilation and optional dependencies. A package defines a set of named features in the <code>[features]</code> table of <code>Cargo.toml</code>, and each feature can either be enabled or disabled. Features for the package being built can be enabled on the command-line with flags such as <code>--features</code>. Features for dependencies can be enabled in the dependency declaration in <code>Cargo.toml</code>.</p>
 </blockquote>
-<p>We use features in a majority of our runtime crates and in all of our SDK crates. For example, <a href="https://github.com/awslabs/smithy-rs/blob/5a1990791d727652587df51b77df4d1df9058252/aws/rust-runtime/aws-sigv4/Cargo.toml">aws-sigv4</a> uses them to enable event streams. Another common use case is exhibited by <a href="https://github.com/awslabs/aws-sdk-rust/blob/f2b4361b004ee822960ea9791f566fd4eb6d1aba/sdk/s3/Cargo.toml">aws-sdk-s3</a> which uses them to enable the <code>tokio</code> runtime and the TLS implementation used when making requests.</p>
+<p>We use features in a majority of our runtime crates and in all of our SDK crates. For example, <a href="https://github.com/smithy-lang/smithy-rs/blob/5a1990791d727652587df51b77df4d1df9058252/aws/rust-runtime/aws-sigv4/Cargo.toml">aws-sigv4</a> uses them to enable event streams. Another common use case is exhibited by <a href="https://github.com/awslabs/aws-sdk-rust/blob/f2b4361b004ee822960ea9791f566fd4eb6d1aba/sdk/s3/Cargo.toml">aws-sdk-s3</a> which uses them to enable the <code>tokio</code> runtime and the TLS implementation used when making requests.</p>
 <h3 id="features-should-be-additive"><a class="header" href="#features-should-be-additive">Features should be additive</a></h3>
 <p>The Cargo book has this to say:</p>
 <blockquote>
@@ -5141,7 +5141,7 @@ impl&lt;M, R&gt; ClientBuilder&lt;(), M, R&gt; {
 }
 <span class="boring">}</span></code></pre></pre>
 <p>Both features can now be enabled at once without creating a conflict. Since both methods have different names, it's now Ok for them to have different return types.</p>
-<p><a href="https://github.com/awslabs/smithy-rs/blob/2e7ed943513203f1472f2490866dc4fb8a392bd3/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L303"><em>This is real code, see it in context</em></a></p>
+<p><a href="https://github.com/smithy-lang/smithy-rs/blob/2e7ed943513203f1472f2490866dc4fb8a392bd3/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L303"><em>This is real code, see it in context</em></a></p>
 <h3 id="we-should-avoid-using-cfgnotfeature--some-feature"><a class="header" href="#we-should-avoid-using-cfgnotfeature--some-feature">We should avoid using <code>#[cfg(not(feature = &quot;some-feature&quot;))]</code></a></h3>
 <p>At the risk of seeming repetitive, the Cargo book says:</p>
 <blockquote>
@@ -5160,9 +5160,9 @@ pub fn default_async_sleep() -&gt; Option&lt;Arc&lt;dyn AsyncSleep&gt;&gt; {
     None
 }</code></pre>
 <h3 id="dont-default-to-defining-default-features"><a class="header" href="#dont-default-to-defining-default-features">Don't default to defining &quot;default features&quot;</a></h3>
-<p>Because Cargo will use the union of all features enabled on a dependency when building it, we should be wary of marking features as default. Once we do mark features as default, users that want to exclude code and dependencies brought in by those features will have a difficult time doing so. One need look no further than <a href="https://github.com/awslabs/aws-sdk-rust/issues/304">this issue</a> submitted by a user that wanted to use Native TLS and struggled to make sure that Rustls was actually disabled <em>(This issue was resolved in <a href="https://github.com/awslabs/smithy-rs/pull/935">this PR</a> which removed default features from our runtime crates.)</em> This is not to say that we should never use them, as having defaults for the most common use cases means less work for those users.</p>
+<p>Because Cargo will use the union of all features enabled on a dependency when building it, we should be wary of marking features as default. Once we do mark features as default, users that want to exclude code and dependencies brought in by those features will have a difficult time doing so. One need look no further than <a href="https://github.com/awslabs/aws-sdk-rust/issues/304">this issue</a> submitted by a user that wanted to use Native TLS and struggled to make sure that Rustls was actually disabled <em>(This issue was resolved in <a href="https://github.com/smithy-lang/smithy-rs/pull/935">this PR</a> which removed default features from our runtime crates.)</em> This is not to say that we should never use them, as having defaults for the most common use cases means less work for those users.</p>
 <h4 id="when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality"><a class="header" href="#when-a-default-feature-providing-some-functionality-is-disabled-active-features-must-not-automatically-replace-that-functionality">When a default feature providing some functionality is disabled, active features must not automatically replace that functionality</a></h4>
-<p>As the SDK is currently designed, the TLS implementation in use can change depending on what features are pulled in. Currently, if a user disables <code>default-features</code> (which include <code>rustls</code>) and activates the <code>native-tls</code> feature, then we automatically use <code>native-tls</code> when making requests. For an example of what this looks like from the user's perspective, <a href="https://github.com/awslabs/smithy-rs/tree/bc316a0b81b75a00c389f6281a66eb0f5357172a/aws/sdk/examples/using_native_tls_instead_of_rustls">see this example</a>.</p>
+<p>As the SDK is currently designed, the TLS implementation in use can change depending on what features are pulled in. Currently, if a user disables <code>default-features</code> (which include <code>rustls</code>) and activates the <code>native-tls</code> feature, then we automatically use <code>native-tls</code> when making requests. For an example of what this looks like from the user's perspective, <a href="https://github.com/smithy-lang/smithy-rs/tree/bc316a0b81b75a00c389f6281a66eb0f5357172a/aws/sdk/examples/using_native_tls_instead_of_rustls">see this example</a>.</p>
 <p>This RFC proposes that we should have a single default for any configurable functionality and that that functionality depends on a corresponding default feature being active. If <code>default-features</code> are disabled, then so is the corresponding default functionality. In its place would be functionality that fails fast with a message describing why it failed <em>(a default was deactivated but the user didn't set a replacement)</em>, and what the user should do to fix it <em>(with links to documentation and examples where necessary)</em>. We should use <a href="https://doc.rust-lang.org/stable/std/macro.compile_error.html">compile-time errors</a> to communicate failures with users, or <code>panic</code>s for cases that can't be evaluated at compile-time.</p>
 <p>For an example: Say you have a crate with features <code>a</code>, <code>b</code>, <code>c</code> that all provide some version of functionality <code>foo</code>. Feature <code>a</code> is part of <code>default-features</code>. When <code>no-default-features = true</code> but features <code>b</code> and <code>c</code> are active, don't automatically fall back to <code>b</code> or <code>c</code>. Instead, emit an error with a message like this:</p>
 <blockquote>
@@ -6784,7 +6784,7 @@ Comment on older discussions asking about how to do this with this improved appr
 <p>Sensitive data MUST NOT be exposed in things like exception messages or log output. Application of this trait SHOULD NOT affect wire logging (i.e., logging of all data transmitted to and from servers or clients).</p>
 </blockquote>
 <p>This RFC is concerned with solving the problem of honouring this specification in the context of logging.</p>
-<p>Progress has been made towards this goal in the form of the <a href="https://github.com/awslabs/smithy-rs/pull/229">Sensitive Trait PR</a>, which uses code generation to remove sensitive fields from <code>Debug</code> implementations.</p>
+<p>Progress has been made towards this goal in the form of the <a href="https://github.com/smithy-lang/smithy-rs/pull/229">Sensitive Trait PR</a>, which uses code generation to remove sensitive fields from <code>Debug</code> implementations.</p>
 <p>The problem remains open due to the existence of HTTP binding traits and a lack of clearly defined user guidelines which customers may follow to honour the specification.</p>
 <p>This RFC proposes:</p>
 <ul>
@@ -6953,7 +6953,7 @@ where
 <p>The <code>Service::call</code> path, seen in <a href="rfcs/rfc0018_logging_sensitive.html#code-generated-logging-middleware">Code Generated Logging Middleware</a>, is latency-sensitive. Careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping <a href="https://docs.rs/http/latest/http/uri/struct.Uri.html">Uri</a> and <a href="https://docs.rs/http/latest/http/header/struct.HeaderMap.html">HeaderMap</a> then providing a new <a href="https://doc.rust-lang.org/std/fmt/trait.Display.html">Display</a>/<a href="https://doc.rust-lang.org/std/fmt/trait.Debug.html">Debug</a> implementation which skips over the sensitive data is preferable over allocating a new <code>String</code>/<code>HeaderMap</code> and then mutating it.</p>
 <p>These wrappers should be provided alongside the <code>Sensitive</code> struct described in <a href="rfcs/rfc0018_logging_sensitive.html#debug-logging">Debug Logging</a>. If they are implemented on top of <code>Sensitive</code>, they will inherit the same behavior - allowing redactions to be toggled using <code>unredacted-logging</code> feature flag.</p>
 <h3 id="middleware-position"><a class="header" href="#middleware-position">Middleware Position</a></h3>
-<p>This logging middleware should be applied outside of the <a href="https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21">OperationHandler</a> after its construction in the (generated) <code>operation_registry.rs</code> file. The middleware should preserve the associated types of the <code>OperationHandler</code> (<code>Response = Response&lt;BoxBody&gt;</code>, <code>Error = Infallible</code>) to cause minimal disruption.</p>
+<p>This logging middleware should be applied outside of the <a href="https://github.com/smithy-lang/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21">OperationHandler</a> after its construction in the (generated) <code>operation_registry.rs</code> file. The middleware should preserve the associated types of the <code>OperationHandler</code> (<code>Response = Response&lt;BoxBody&gt;</code>, <code>Error = Infallible</code>) to cause minimal disruption.</p>
 <p>An easy position to apply the logging middleware is illustrated below in the form of <code>Logging{Operation}::new</code>:</p>
 <pre><code class="language-rust ignore">let empty_operation = LoggingEmptyOperation::new(operation(registry.empty_operation));
 let get_pokemon_species = LoggingPokemonSpecies::new(operation(registry.get_pokemon_species));
@@ -6964,7 +6964,7 @@ let routes = vec![
     (BoxCloneService::new(get_server_statistics), get_server_statistics_request_spec),
 ];
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);</code></pre>
-<p>Although an acceptable first step, putting logging middleware here is suboptimal - the <code>Router</code> allows a <code>tower::Layer</code> to be applied to the operation by using the <a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146">Router::layer</a> method. This middleware will be applied <em>outside</em> of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the <code>Router</code> must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.</p>
+<p>Although an acceptable first step, putting logging middleware here is suboptimal - the <code>Router</code> allows a <code>tower::Layer</code> to be applied to the operation by using the <a href="https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146">Router::layer</a> method. This middleware will be applied <em>outside</em> of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the <code>Router</code> must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.</p>
 <p>This is a general problem, not specific to this proposal. For example, <a href="rfcs/rfc0018_logging_sensitive.html#use-request-extensions">Use Request Extensions</a> must also solve this problem.</p>
 <p>Fortunately, this problem is separable from the actual implementation of the logging middleware and we can get immediate benefit by application of it in the suboptimal position described above.</p>
 <h3 id="logging-within-the-router"><a class="header" href="#logging-within-the-router">Logging within the Router</a></h3>
@@ -6974,7 +6974,7 @@ let router = aws_smithy_http_server::routing::Router::new_rest_json_router(route
 <p>A guideline should be made available, which includes:</p>
 <ul>
 <li>The <a href="rfcs/rfc0018_logging_sensitive.html#http-binding-traits">HTTP bindings traits</a> and why they are of concern in the presence of <code>@sensitive</code>.</li>
-<li>The <a href="https://github.com/awslabs/smithy-rs/pull/229">Debug implementation</a> on structures.</li>
+<li>The <a href="https://github.com/smithy-lang/smithy-rs/pull/229">Debug implementation</a> on structures.</li>
 <li>How to use the <code>Sensitive</code> struct, HTTP wrappers, and the <code>unredacted-logging</code> feature flag described in <a href="rfcs/rfc0018_logging_sensitive.html#debug-logging">Debug Logging</a> and <a href="rfcs/rfc0018_logging_sensitive.html#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>.</li>
 <li>A warning against the two potential leaks described in <a href="rfcs/rfc0018_logging_sensitive.html#scope-and-guidelines">Scope and Guidelines</a>:
 <ul>
@@ -7102,27 +7102,27 @@ impl&lt;B, S&gt; Service&lt;Request&lt;B&gt;&gt; for Middleware&lt;S&gt; {
 <li><input disabled="" type="checkbox" checked=""/>
 Implement and integrate code generated logging middleware.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1550">https://github.com/awslabs/smithy-rs/pull/1550</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1550">https://github.com/smithy-lang/smithy-rs/pull/1550</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Add logging to <code>Router</code> implementation.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/issues/1666">https://github.com/awslabs/smithy-rs/issues/1666</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/issues/1666">https://github.com/smithy-lang/smithy-rs/issues/1666</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Write developer guideline.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1772">https://github.com/awslabs/smithy-rs/pull/1772</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1772">https://github.com/smithy-lang/smithy-rs/pull/1772</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Refactor <code>Router</code> to allow for better positioning described in <a href="rfcs/rfc0018_logging_sensitive.html#middleware-position">Middleware Position</a>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1620">https://github.com/awslabs/smithy-rs/pull/1620</a></li>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1679">https://github.com/awslabs/smithy-rs/pull/1679</a></li>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1693">https://github.com/awslabs/smithy-rs/pull/1693</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1620">https://github.com/smithy-lang/smithy-rs/pull/1620</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1679">https://github.com/smithy-lang/smithy-rs/pull/1679</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1693">https://github.com/smithy-lang/smithy-rs/pull/1693</a></li>
 </ul>
 </li>
 </ul>
@@ -7167,7 +7167,7 @@ it does not signal termination and thus does not complete the stream.</p>
 <li>Errors need to be marshalled and unmarshalled</li>
 <li><code>Receiver</code> must treat any error coming from the other end as terminal</li>
 </ul>
-<p>The code examples below have been generated using the <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server-test/model/pokemon.smithy#L27">following model</a>:</p>
+<p>The code examples below have been generated using the <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server-test/model/pokemon.smithy#L27">following model</a>:</p>
 <pre><code class="language-smithy">@http(uri: &quot;/capture-pokemon-event/{region}&quot;, method: &quot;POST&quot;)
 operation CapturePokemonOperation {
     input: CapturePokemonOperationEventsInput,
@@ -7259,15 +7259,15 @@ pub enum AttemptCapturingPokemonEventErrorKind {
 <pre><code class="language-rust ignore">pub enum AttemptCapturingPokemonEventError {
     MasterBallUnsuccessful(crate::error::MasterBallUnsuccessful),
 }</code></pre>
-<p>Both are modeled as normal errors, where the <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L50">name</a> comes from <code>Error</code> with a prefix of the union's name.
-In fact, both the <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L71">client</a> and <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerCombinedErrorGenerator.kt#L46">server</a>
+<p>Both are modeled as normal errors, where the <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L50">name</a> comes from <code>Error</code> with a prefix of the union's name.
+In fact, both the <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L71">client</a> and <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerCombinedErrorGenerator.kt#L46">server</a>
 generate operation errors and event stream errors the same way.</p>
-<p>Event stream errors have their own <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/protocols/serialize/EventStreamErrorMarshallerGenerator.kt#L39">marshaller</a>.
+<p>Event stream errors have their own <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/protocols/serialize/EventStreamErrorMarshallerGenerator.kt#L39">marshaller</a>.
 To make it work for users to stream errors, <code>EventStreamSender&lt;&gt;</code>, in addition to the union type <code>T</code>, takes an error type <code>E</code>; that is, the <code>AttemptCapturingPokemonEventError</code> in the example.
-This means that an error from the stream is <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L137">marshalled and sent</a> as a data structure similarly to the union's non-error members.</p>
-<p>On the other side, the <code>Receiver&lt;&gt;</code> needs to terminate the stream upon <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L249">receiving any error</a>.
-A terminated stream has <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L38">no more data</a> and will always be a <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L54">bug</a> to use it.</p>
-<p>An example of how errors can be used on clients, extracted from <a href="https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http-server/examples/pokemon_service/tests/simple_integration_test.rs#L100">this test</a>:</p>
+This means that an error from the stream is <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L137">marshalled and sent</a> as a data structure similarly to the union's non-error members.</p>
+<p>On the other side, the <code>Receiver&lt;&gt;</code> needs to terminate the stream upon <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L249">receiving any error</a>.
+A terminated stream has <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L38">no more data</a> and will always be a <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L54">bug</a> to use it.</p>
+<p>An example of how errors can be used on clients, extracted from <a href="https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http-server/examples/pokemon_service/tests/simple_integration_test.rs#L100">this test</a>:</p>
 <pre><code class="language-rust ignore">yield Err(AttemptCapturingPokemonEventError::new(
     AttemptCapturingPokemonEventErrorKind::MasterBallUnsuccessful(MasterBallUnsuccessful::builder().build()),
     Default::default()
@@ -7347,7 +7347,7 @@ let app: Router = OperationRegistryBuilder::default()
     async fn call(self, req: http::Request) -&gt; http::Response;
 }</code></pre>
 <p>Its purpose is to provide an even interface over closures of the form <code>FnOnce({Operation}Input) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code> and <code>FnOnce({Operation}Input, State) -&gt; impl Future&lt;Output = {Operation}Output&gt;</code>. It's this abstraction which allows the customers to supply both <code>async fn handler(input: {Operation}Input) -&gt; {Operation}Output</code> and <code>async fn handler(input: {Operation}Input, state: Extension&lt;S&gt;) -&gt; {Operation}Output</code> to the service builder.</p>
-<p>We generate <code>Handler</code> implementations for said closures in <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt">ServerOperationHandlerGenerator.kt</a>:</p>
+<p>We generate <code>Handler</code> implementations for said closures in <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt">ServerOperationHandlerGenerator.kt</a>:</p>
 <pre><code class="language-rust ignore">impl&lt;Fun, Fut&gt; Handler&lt;(), Operation0Input&gt; for Fun
 where
     Fun: FnOnce(Operation0Input) -&gt; Fut,
@@ -7380,7 +7380,7 @@ where
         response
     }
 }</code></pre>
-<p>Creating <code>{Operation}Input</code> from a <code>http::Request</code> and <code>http::Response</code> from a <code>{Operation}Output</code> involves protocol aware serialization/deserialization, for example, it can involve the <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html">HTTP binding traits</a>. The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5">RuntimeError</a> enumerates error cases such as serialization/deserialization failures, <code>extensions().get::&lt;T&gt;()</code> failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the <code>RuntimeError</code> to <code>http::Response</code>. The reader should make note of the influence of the model on the different sections of this procedure.</p>
+<p>Creating <code>{Operation}Input</code> from a <code>http::Request</code> and <code>http::Response</code> from a <code>{Operation}Output</code> involves protocol aware serialization/deserialization, for example, it can involve the <a href="https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html">HTTP binding traits</a>. The <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5">RuntimeError</a> enumerates error cases such as serialization/deserialization failures, <code>extensions().get::&lt;T&gt;()</code> failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the <code>RuntimeError</code> to <code>http::Response</code>. The reader should make note of the influence of the model on the different sections of this procedure.</p>
 <p>The <code>request.extensions().get::&lt;T&gt;()</code> present in the <code>Fun: FnOnce(Operation0Input, Extension&lt;S&gt;) -&gt; Fut</code> implementation is the current approach to injecting state into handlers. The customer is required to apply a <a href="https://docs.rs/tower-http/latest/tower_http/add_extension/struct.AddExtensionLayer.html">AddExtensionLayer</a> to the output of the service builder so that, when the request reaches the handler, the <code>extensions().get::&lt;T&gt;()</code> will succeed.</p>
 <p>To convert the closures described above into a <code>Service</code> an <code>OperationHandler</code> is used:</p>
 <pre><code class="language-rust ignore">pub struct OperationHandler&lt;H, T, Input&gt; {
@@ -7404,7 +7404,7 @@ where
     }
 }</code></pre>
 <h3 id="builder"><a class="header" href="#builder">Builder</a></h3>
-<p>The service builder we provide to the customer is the <code>OperationRegistryBuilder</code>, generated from <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt">ServerOperationRegistryGenerator.kt</a>.</p>
+<p>The service builder we provide to the customer is the <code>OperationRegistryBuilder</code>, generated from <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt">ServerOperationRegistryGenerator.kt</a>.</p>
 <p>Currently, the reference model would generate the following <code>OperationRegistryBuilder</code> and <code>OperationRegistry</code>:</p>
 <pre><code class="language-rust ignore">pub struct OperationRegistryBuilder&lt;Op0, In0, Op1, In1&gt; {
     operation1: Option&lt;Op0&gt;,
@@ -7464,7 +7464,7 @@ where
     }
 }</code></pre>
 <h3 id="router"><a class="header" href="#router">Router</a></h3>
-<p>The <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60">aws_smithy_http::routing::Router</a> provides the protocol aware routing of requests to their target , it exists as</p>
+<p>The <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60">aws_smithy_http::routing::Router</a> provides the protocol aware routing of requests to their target , it exists as</p>
 <pre><code class="language-rust ignore">pub struct Route {
     service: Box&lt;dyn Service&lt;http::Request, Response = http::Response&gt;&gt;,
 }
@@ -7874,21 +7874,21 @@ enum Routes {
 <p>Two downsides of modelling <code>Router</code> in this way are:</p>
 <ul>
 <li><code>Router</code> is larger and has more branches than a protocol specific implementation.</li>
-<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols <code>Routes</code> would have to be extended. A synopsis of this obstruction is presented in <a href="https://github.com/awslabs/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
+<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols <code>Routes</code> would have to be extended. A synopsis of this obstruction is presented in <a href="https://github.com/smithy-lang/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
 </ul>
 <p>After taking the <a href="rfcs/rfc0020_service_builder.html#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method">Switch <code>From&lt;OperationRegistry&gt; for Router</code> to an <code>OperationRegistry::build</code> method</a> transform, code generation is free to switch between return types based on the model. This allows for a scenario where a <code>@restJson1</code> causes the service builder to output a specific <code>RestJson1Router</code>.</p>
 <h3 id="protocol-specific-errors"><a class="header" href="#protocol-specific-errors">Protocol specific Errors</a></h3>
 <p>Currently, protocol specific routing errors are either:</p>
 <ul>
-<li>Converted to <code>RuntimeError</code>s and then <code>http::Response</code> (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118">unknown_operation</a>).</li>
-<li>Converted directly to a <code>http::Response</code> (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127">method_not_allowed</a>). This is an outlier to the common pattern.</li>
+<li>Converted to <code>RuntimeError</code>s and then <code>http::Response</code> (see <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118">unknown_operation</a>).</li>
+<li>Converted directly to a <code>http::Response</code> (see <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127">method_not_allowed</a>). This is an outlier to the common pattern.</li>
 </ul>
-<p>The <code>from_request</code> functions yield protocol specific errors which are converted to <code>RequestRejection</code>s then <code>RuntimeError</code>s (see <a href="https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210">ServerHttpBoundProtocolGenerator.kt</a>).</p>
+<p>The <code>from_request</code> functions yield protocol specific errors which are converted to <code>RequestRejection</code>s then <code>RuntimeError</code>s (see <a href="https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210">ServerHttpBoundProtocolGenerator.kt</a>).</p>
 <p>In these scenarios protocol specific errors are converted into <code>RuntimeError</code> before being converted to a <code>http::Response</code> via <code>into_response</code> method.</p>
 <p>Two downsides of this are:</p>
 <ul>
 <li><code>RuntimeError</code> enumerates all possible errors across all existing protocols, so is larger than modelling the errors for a specific protocol.</li>
-<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols with differing failure modes <code>RuntimeError</code> would have to be extended. As in <a href="rfcs/rfc0020_service_builder.html#protocol-specific-errors">Protocol specific Errors</a>, a synopsis of this obstruction is presented in <a href="https://github.com/awslabs/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
+<li>If a third-party wanted to extend <code>smithy-rs</code> to additional protocols with differing failure modes <code>RuntimeError</code> would have to be extended. As in <a href="rfcs/rfc0020_service_builder.html#protocol-specific-errors">Protocol specific Errors</a>, a synopsis of this obstruction is presented in <a href="https://github.com/smithy-lang/smithy-rs/issues/1606">Should we generate the <code>Router</code> type</a> issue.</li>
 </ul>
 <p>Switching from using <code>RuntimeError</code> to protocol specific errors which satisfy a common interface, <code>IntoResponse</code>, would resolve these problem.</p>
 <h3 id="type-erasure-with-the-name-of-the-smithy-service"><a class="header" href="#type-erasure-with-the-name-of-the-smithy-service">Type erasure with the name of the Smithy service</a></h3>
@@ -7972,26 +7972,26 @@ let service_0 = Service0::builder()
 <li><input disabled="" type="checkbox" checked=""/>
 Add protocol specific routers to <code>rust-runtime/aws-smithy-http-server</code>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1666">https://github.com/awslabs/smithy-rs/pull/1666</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1666">https://github.com/smithy-lang/smithy-rs/pull/1666</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Add middleware primitives and error types to <code>rust-runtime/aws-smithy-http-server</code>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1679">https://github.com/awslabs/smithy-rs/pull/1679</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1679">https://github.com/smithy-lang/smithy-rs/pull/1679</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Add code generation which outputs new service builder.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1693">https://github.com/awslabs/smithy-rs/pull/1693</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1693">https://github.com/smithy-lang/smithy-rs/pull/1693</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Deprecate <code>OperationRegistryBuilder</code>, <code>OperationRegistry</code> and <code>Router</code>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1886">https://github.com/awslabs/smithy-rs/pull/1886</a></li>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/2161">https://github.com/awslabs/smithy-rs/pull/2161</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1886">https://github.com/smithy-lang/smithy-rs/pull/1886</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/2161">https://github.com/smithy-lang/smithy-rs/pull/2161</a></li>
 </ul>
 </li>
 </ul>
@@ -8439,7 +8439,7 @@ We rely on eagerly upgrading the registered handlers and operations to <code>Rou
 <li>There should be no significant degradation in runtime performance (i.e. startup time for applications).</li>
 </ul>
 <h2 id="handling-missing-operations"><a class="header" href="#handling-missing-operations">Handling missing operations</a></h2>
-<p>Let's start by reviewing the API proposed in <a href="rfcs/rfc0020_service_builder.html">RFC 20</a>. We will use the <a href="https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy">Pokemon service</a> as our driving example throughout the RFC.
+<p>Let's start by reviewing the API proposed in <a href="rfcs/rfc0020_service_builder.html">RFC 20</a>. We will use the <a href="https://github.com/smithy-lang/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy">Pokemon service</a> as our driving example throughout the RFC.
 This is what the startup code looks like:</p>
 <pre><code class="language-rust ignore">#[tokio::main]
 pub async fn main() {
@@ -9009,19 +9009,19 @@ let app = PokemonService::builder(plugin_stack)
 <li><input disabled="" type="checkbox" checked=""/>
 Update <code>codegen-server</code> to generate the proposed service builder API
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1954">https://github.com/awslabs/smithy-rs/pull/1954</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1954">https://github.com/smithy-lang/smithy-rs/pull/1954</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Implement <code>Pluggable</code> for <code>PluginStack</code>
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1954">https://github.com/awslabs/smithy-rs/pull/1954</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1954">https://github.com/smithy-lang/smithy-rs/pull/1954</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Evaluate the introduction of a <code>PluginBuilder</code> as the primary API to compose multiple plugins (instead of <code>PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)</code>)
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1971">https://github.com/awslabs/smithy-rs/pull/1971</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1971">https://github.com/smithy-lang/smithy-rs/pull/1971</a></li>
 </ul>
 </li>
 </ul>
@@ -9153,11 +9153,11 @@ Implement <code>FromParts</code> for <code>Extension&lt;ClientRequestId&gt;</cod
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-constraint-traits"><a class="header" href="#rfc-constraint-traits">RFC: Constraint traits</a></h1>
 <blockquote>
 <p>Status: Implemented.</p>
-<p>See the description of <a href="https://github.com/awslabs/smithy-rs/pull/1342">the PR</a> that laid the
+<p>See the description of <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">the PR</a> that laid the
 foundation for the implementation of constraint traits for a complete
-reference. See the <a href="https://github.com/awslabs/smithy-rs/pull/2040">Better Constraint Violations</a> RFC too for subsequent
+reference. See the <a href="https://github.com/smithy-lang/smithy-rs/pull/2040">Better Constraint Violations</a> RFC too for subsequent
 improvements to this design.</p>
-<p>See the uber <a href="https://github.com/awslabs/smithy-rs/issues/1401">tracking issue</a> for pending work.</p>
+<p>See the uber <a href="https://github.com/smithy-lang/smithy-rs/issues/1401">tracking issue</a> for pending work.</p>
 </blockquote>
 <p><a href="https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html">Constraint traits</a> are used to constrain the values that can be provided for a
 shape.</p>
@@ -9211,7 +9211,7 @@ service's behavior, so they interpret the model in all its strictness.</p>
 <p>The only constraint trait enforcement that is generated by smithy-rs clients
 should be and is the <code>enum</code> trait, which renders Rust <code>enum</code>s.</p>
 <p>The <code>required</code> trait is already and only enforced by smithy-rs servers since
-<a href="https://github.com/awslabs/smithy-rs/pull/1148">#1148</a>.</p>
+<a href="https://github.com/smithy-lang/smithy-rs/pull/1148">#1148</a>.</p>
 <p>That leaves 4 traits: <code>length</code>, <code>pattern</code>, <code>range</code>, and <code>uniqueItems</code>.</p>
 <h2 id="implementation"><a class="header" href="#implementation">Implementation</a></h2>
 <p>This section addresses how to implement and enforce the <code>length</code>, <code>pattern</code>,
@@ -9325,7 +9325,7 @@ value into the wrapper tuple struct, except for these differences:</p>
 <ol>
 <li>For enums, the client generates an <code>Unknown</code> variant that &quot;contains new
 variants that have been added since this code was generated&quot;. The server
-does not need such a variant (<a href="https://github.com/awslabs/smithy-rs/issues/1187">#1187</a>).</li>
+does not need such a variant (<a href="https://github.com/smithy-lang/smithy-rs/issues/1187">#1187</a>).</li>
 <li>Conversions into the tuple struct are fallible (<code>try_from()</code> instead of
 <code>from()</code>). These errors will result in a <code>my_struct::ConstraintViolation</code>.</li>
 </ol>
@@ -9394,7 +9394,7 @@ immediately render a response, or attempt to parse the entire request and
 provide a complete and structured report?
 <ul>
 <li>UPDATE: We will provide a response containing all violations. See the
-&quot;Collecting Constraint Violations&quot; section in the <a href="https://github.com/awslabs/smithy-rs/pull/2040">Better Constraint
+&quot;Collecting Constraint Violations&quot; section in the <a href="https://github.com/smithy-lang/smithy-rs/pull/2040">Better Constraint
 Violations</a> RFC.</li>
 </ul>
 </li>
@@ -9443,7 +9443,7 @@ standard library makes use of it extensively.</li>
 migrate from one to the other without breaking user code.</p>
 <p>UPDATE: We ended up implementing both designs, adding a flag to opt into the
 alternative design. Refer to the mentions of the <code>publicConstrainedTypes</code> flag
-in the description of the <a href="https://github.com/awslabs/smithy-rs/pull/1342">Builders of builders PR</a>.</p>
+in the description of the <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">Builders of builders PR</a>.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-client-crate-organization"><a class="header" href="#rfc-client-crate-organization">RFC: Client Crate Organization</a></h1>
 <blockquote>
 <p>Status: Implemented</p>
@@ -10311,7 +10311,7 @@ trait ResolveGlobalEndpoint {
 decisions.</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-sdk-credential-cache-type-safety"><a class="header" href="#rfc-sdk-credential-cache-type-safety">RFC: SDK Credential Cache Type Safety</a></h1>
 <blockquote>
-<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/2122">smithy-rs#2122</a></p>
+<p>Status: Implemented in <a href="https://github.com/smithy-lang/smithy-rs/pull/2122">smithy-rs#2122</a></p>
 <p>Applies to: AWS SDK for Rust</p>
 </blockquote>
 <p>At time of writing (2022-10-11), the SDK's credentials provider can be customized by providing:</p>
@@ -10586,10 +10586,10 @@ implement <code>ProvideCredentials</code>.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-finding-new-home-for-credential-types"><a class="header" href="#rfc-finding-new-home-for-credential-types">RFC: Finding New Home for Credential Types</a></h1>
 <blockquote>
-<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/2108">smithy-rs#2108</a></p>
+<p>Status: Implemented in <a href="https://github.com/smithy-lang/smithy-rs/pull/2108">smithy-rs#2108</a></p>
 <p>Applies to: clients</p>
 </blockquote>
-<p>This RFC supplements <a href="https://github.com/awslabs/smithy-rs/blob/main/design/src/rfcs/rfc0028_sdk_credential_cache_type_safety.md">RFC 28</a> and discusses for the selected design where to place the types for credentials providers, credentials caching, and everything else that comes with them.</p>
+<p>This RFC supplements <a href="https://github.com/smithy-lang/smithy-rs/blob/main/design/src/rfcs/rfc0028_sdk_credential_cache_type_safety.md">RFC 28</a> and discusses for the selected design where to place the types for credentials providers, credentials caching, and everything else that comes with them.</p>
 <p>It is assumed that the primary motivation behind the introduction of type safe credentials caching remains the same as the preceding RFC.</p>
 <h2 id="assumptions"><a class="header" href="#assumptions">Assumptions</a></h2>
 <p>This document assumes that the following items in the changes checklist in the preceding RFC have been implemented:</p>
@@ -11110,7 +11110,7 @@ Prepare reproducible compile time benchmark</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-providing-fallback-credentials-on-external-timeout"><a class="header" href="#rfc-providing-fallback-credentials-on-external-timeout">RFC: Providing fallback credentials on external timeout</a></h1>
 <blockquote>
-<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/2246">smithy-rs#2246</a></p>
+<p>Status: Implemented in <a href="https://github.com/smithy-lang/smithy-rs/pull/2246">smithy-rs#2246</a></p>
 <p>Applies to: client</p>
 </blockquote>
 <p>For a summarized list of proposed changes, see the <a href="rfcs/rfc0031_providing_fallback_credentials_on_timeout.html#changes-checklist">Changes Checklist</a> section.</p>
@@ -11383,7 +11383,7 @@ let final_chain = CredentialsProviderChain::first_try(&quot;fallback_recency&quo
 <p>Status: Accepted</p>
 <p>Applies to: server</p>
 </blockquote>
-<p>During and after <a href="https://github.com/awslabs/smithy-rs/pull/1199">the design</a> and <a href="https://github.com/awslabs/smithy-rs/pull/1342">the core
+<p>During and after <a href="https://github.com/smithy-lang/smithy-rs/pull/1199">the design</a> and <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">the core
 implementation</a> of <a href="https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html">constraint traits</a> in the server
 SDK, some problems relating to constraint violations were identified. This RFC
 sets out to explain and address three of them: <a href="rfcs/rfc0032_better_constraint_violations.html#impossible-constraint-violations">impossible constraint
@@ -11396,9 +11396,9 @@ proposed solutions. The three problems are meant to be addressed atomically in
 one changeset (see the <a href="rfcs/rfc0032_better_constraint_violations.html#checklist">Checklist</a>) section.</p>
 <p>Note: code snippets from generated SDKs in this document are abridged so as to
 be didactic and relevant to the point being made. They are accurate with
-regards to commit <a href="https://github.com/awslabs/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc"><code>2226fe</code></a>.</p>
+regards to commit <a href="https://github.com/smithy-lang/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc"><code>2226fe</code></a>.</p>
 <h2 id="terminology-17"><a class="header" href="#terminology-17">Terminology</a></h2>
-<p><a href="https://github.com/awslabs/smithy-rs/pull/1199">The design</a> and the description of <a href="https://github.com/awslabs/smithy-rs/pull/1342">the
+<p><a href="https://github.com/smithy-lang/smithy-rs/pull/1199">The design</a> and the description of <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">the
 PR</a> where the core implementation of constraint traits
 was made are recommended prior reading to understand this RFC.</p>
 <ul>
@@ -11535,7 +11535,7 @@ because they can arise during request deserialization. Indeed, the server
 framework deserializes requests into <strong>fully unconstrained types</strong>. These are
 types holding unconstrained types all the way through their closures. For
 instance, in the case of structure shapes, builder types (the unconstrained
-type corresponding to the structure shape) <a href="https://github.com/awslabs/smithy-rs/pull/1342">hold
+type corresponding to the structure shape) <a href="https://github.com/smithy-lang/smithy-rs/pull/1342">hold
 builders</a> all the way down.</p>
 <p>In the case of the above model, below is the alternate <code>pub(crate)</code> constructor
 the server framework uses upon deserialization. Observe how
@@ -11573,7 +11573,7 @@ the server framework uses upon deserialization. Observe how
 framework operates that has no bearing on their application code. They
 shouldn't be exposed to impossible constraint violation variants in their Rust
 docs, nor have to <code>match</code> on these variants when handling errors.</p>
-<p>Note: <a href="https://github.com/awslabs/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69">this comment</a> alludes to the problem described above.</p>
+<p>Note: <a href="https://github.com/smithy-lang/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69">this comment</a> alludes to the problem described above.</p>
 <h3 id="solution-proposal"><a class="header" href="#solution-proposal">Solution proposal</a></h3>
 <p>The problem can be mitigated by adding <code>#[doc(hidden)]</code> to the internal
 variants and <code>#[non_exhaustive]</code> to the enum. We're already doing this in some
@@ -11598,14 +11598,14 @@ violation type into two types, which this RFC proposes:</p>
         ),
     }
 }</code></pre>
-<p>Note that, to some extent, the spirit of this approach is <a href="https://github.com/awslabs/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81">already currently
+<p>Note that, to some extent, the spirit of this approach is <a href="https://github.com/smithy-lang/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81">already currently
 present</a>
 in the case of builder types when <code>publicConstrainedTypes</code> is set to <code>false</code>:</p>
 <ol>
-<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt"><code>ServerBuilderGenerator.kt</code></a> renders the usual builder type that enforces
+<li><a href="https://github.com/smithy-lang/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt"><code>ServerBuilderGenerator.kt</code></a> renders the usual builder type that enforces
 constraint traits, setting its visibility to <code>pub (crate)</code>, for exclusive
 use by the framework.</li>
-<li><a href="https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt"><code>ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt</code></a> renders the
+<li><a href="https://github.com/smithy-lang/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt"><code>ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt</code></a> renders the
 builder type the user is exposed to: this builder does not take in
 constrained types and does not enforce all modeled constraints.</li>
 </ol>
@@ -11654,7 +11654,7 @@ list ValidationExceptionFieldList {
     member: ValidationExceptionField
 }
 </code></pre>
-<p>It was mentioned in the <a href="https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809300673">constraint traits
+<p>It was mentioned in the <a href="https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809300673">constraint traits
 RFC</a>, and
 implicit in the definition of Smithy's
 <a href="https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy"><code>smithy.framework.ValidationException</code></a>
@@ -11698,7 +11698,7 @@ impl LengthPatternString {
 
     pub fn compile_regex() -&gt; &amp;'static regex::Regex {
         static REGEX: once_cell::sync::Lazy&lt;regex::Regex&gt; = once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(r#&quot;[a-f0-5]*&quot;#).expect(r#&quot;The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support&quot;#)
+            regex::Regex::new(r#&quot;[a-f0-5]*&quot;#).expect(r#&quot;The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support&quot;#)
         });
 
         &amp;REGEX
@@ -11809,7 +11809,7 @@ body's size to a reasonable default (see <a href="https://github.com/tokio-rs/ax
 this</a>). We will provide a similar
 request body limiting mechanism regardless.</li>
 </ol>
-<p>This RFC advocates for implementing the first option, arguing that <a href="https://github.com/awslabs/smithy-rs/pull/2040#discussion_r1036226762">it's fair
+<p>This RFC advocates for implementing the first option, arguing that <a href="https://github.com/smithy-lang/smithy-rs/pull/2040#discussion_r1036226762">it's fair
 to say that the framework should return an error that is as informative as
 possible, but it doesn't necessarily have to be
 complete</a>.
@@ -12071,7 +12071,7 @@ that bounds a request body's size to a reasonable (yet high) default, to prevent
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="rfc-improving-access-to-request-ids-in-sdk-clients"><a class="header" href="#rfc-improving-access-to-request-ids-in-sdk-clients">RFC: Improving access to request IDs in SDK clients</a></h1>
 <blockquote>
-<p>Status: Implemented in <a href="https://github.com/awslabs/smithy-rs/pull/2129">#2129</a></p>
+<p>Status: Implemented in <a href="https://github.com/smithy-lang/smithy-rs/pull/2129">#2129</a></p>
 <p>Applies to: AWS SDK clients</p>
 </blockquote>
 <p>At time of writing, customers can retrieve a request ID in one of four ways in the Rust SDK:</p>
@@ -13031,738 +13031,7 @@ advantage of zero-cost usage of <code>'static str</code>. We will seal this trai
 <h4 id="proposed-implementation"><a class="header" href="#proposed-implementation">Proposed Implementation</a></h4>
 <details>
 <summary>Proposed Implementation of `request`</summary>
-<pre><code class="language-rust ignore">/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
-
-//! Http Request Types
-
-use aws_smithy_types::body::SdkBody;
-use http as http0;
-use http::header::{InvalidHeaderName, InvalidHeaderValue};
-use http::uri::InvalidUri;
-use http0::header::Iter;
-use http0::uri::PathAndQuery;
-use http0::{Extensions, HeaderMap, Method};
-use std::borrow::Cow;
-use std::error::Error;
-use std::fmt::{Debug, Display, Formatter};
-use std::str::{FromStr, Utf8Error};
-
-#[derive(Debug)]
-/// An HTTP Request Type
-pub struct Request&lt;B = SdkBody&gt; {
-    body: B,
-    uri: Uri,
-    method: Method,
-    extensions: Extensions,
-    headers: Headers,
-}
-
-/// A Request URI
-#[derive(Debug, Clone)]
-pub struct Uri {
-    as_string: String,
-    parsed: http0::Uri,
-}
-
-impl Uri {
-    /// Sets `endpoint` as the endpoint for a URL.
-    ///
-    /// An `endpoint` MUST contain a scheme and authority.
-    /// An `endpoint` MAY contain a port and path.
-    ///
-    /// An `endpoint` MUST NOT contain a query
-    pub fn set_endpoint(&amp;mut self, endpoint: &amp;str) -&gt; Result&lt;(), HttpError&gt; {
-        let endpoint: http0::Uri = endpoint.parse().map_err(HttpError::invalid_uri)?;
-        let endpoint = endpoint.into_parts();
-        let authority = endpoint
-            .authority
-            .ok_or_else(|| HttpError::new(&quot;endpoint must contain authority&quot;))?;
-        let scheme = endpoint
-            .scheme
-            .ok_or_else(|| HttpError::new(&quot;endpoint must have scheme&quot;))?;
-        let new_uri = http0::Uri::builder()
-            .authority(authority)
-            .scheme(scheme)
-            .path_and_query(merge_paths(endpoint.path_and_query, &amp;self.parsed).as_ref())
-            .build()
-            .map_err(HttpError::new)?;
-        self.as_string = new_uri.to_string();
-        self.parsed = new_uri;
-        Ok(())
-    }
-}
-
-fn merge_paths(endpoint_path: Option&lt;PathAndQuery&gt;, uri: &amp;http0::Uri) -&gt; Cow&lt;'_, str&gt; {
-    let uri_path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or(&quot;&quot;);
-    let endpoint_path = match endpoint_path {
-        None =&gt; return Cow::Borrowed(uri_path_and_query),
-        Some(path) =&gt; path,
-    };
-    if let Some(query) = endpoint_path.query() {
-        tracing::warn!(query = %query, &quot;query specified in endpoint will be ignored during endpoint resolution&quot;);
-    }
-    let endpoint_path = endpoint_path.path();
-    if endpoint_path.is_empty() {
-        Cow::Borrowed(uri_path_and_query)
-    } else {
-        let ep_no_slash = endpoint_path.strip_suffix('/').unwrap_or(endpoint_path);
-        let uri_path_no_slash = uri_path_and_query
-            .strip_prefix('/')
-            .unwrap_or(uri_path_and_query);
-        Cow::Owned(format!(&quot;{}/{}&quot;, ep_no_slash, uri_path_no_slash))
-    }
-}
-
-impl TryFrom&lt;String&gt; for Uri {
-    type Error = HttpError;
-
-    fn try_from(value: String) -&gt; Result&lt;Self, Self::Error&gt; {
-        let parsed = value.parse().map_err(HttpError::invalid_uri)?;
-        Ok(Uri {
-            as_string: value,
-            parsed,
-        })
-    }
-}
-
-impl&lt;'a&gt; TryFrom&lt;&amp;'a str&gt; for Uri {
-    type Error = HttpError;
-    fn try_from(value: &amp;'a str) -&gt; Result&lt;Self, Self::Error&gt; {
-        Self::try_from(value.to_string())
-    }
-}
-
-impl From&lt;http0::Uri&gt; for Uri {
-    fn from(value: http::Uri) -&gt; Self {
-        Self {
-            as_string: value.to_string(),
-            parsed: value,
-        }
-    }
-}
-
-impl&lt;B&gt; TryInto&lt;http0::Request&lt;B&gt;&gt; for Request&lt;B&gt; {
-    type Error = HttpError;
-
-    fn try_into(self) -&gt; Result&lt;http::Request&lt;B&gt;, Self::Error&gt; {
-        self.into_http02x()
-    }
-}
-
-impl&lt;B&gt; Request&lt;B&gt; {
-    /// Converts this request into an http 0.x request.
-    ///
-    /// Depending on the internal storage type, this operation may be free or it may have an internal
-    /// cost.
-    pub fn into_http02x(self) -&gt; Result&lt;http0::Request&lt;B&gt;, HttpError&gt; {
-        let mut req = http::Request::builder()
-            .uri(self.uri.parsed)
-            .method(self.method)
-            .body(self.body)
-            .expect(&quot;known valid&quot;);
-        let mut headers = HeaderMap::new();
-        headers.extend(
-            self.headers
-                .headers
-                .into_iter()
-                .map(|(k, v)| (k, v.into_http02x())),
-        );
-        *req.headers_mut() = headers;
-        *req.extensions_mut() = self.extensions;
-        Ok(req)
-    }
-
-    /// Update the body of this request to be a new body.
-    pub fn map&lt;U&gt;(self, f: impl Fn(B) -&gt; U) -&gt; Request&lt;U&gt; {
-        Request {
-            body: f(self.body),
-            uri: self.uri,
-            method: self.method,
-            extensions: self.extensions,
-            headers: self.headers,
-        }
-    }
-
-    /// Returns a GET request with no URI
-    pub fn new(body: B) -&gt; Self {
-        Self {
-            body,
-            uri: Uri::from(http0::Uri::from_static(&quot;/&quot;)),
-            method: Method::GET,
-            extensions: Default::default(),
-            headers: Default::default(),
-        }
-    }
-
-    /// Returns a reference to the header map
-    pub fn headers(&amp;self) -&gt; &amp;Headers {
-        &amp;self.headers
-    }
-
-    /// Returns a mutable reference to the header map
-    pub fn headers_mut(&amp;mut self) -&gt; &amp;mut Headers {
-        &amp;mut self.headers
-    }
-
-    /// Returns the body associated with the request
-    pub fn body(&amp;self) -&gt; &amp;B {
-        &amp;self.body
-    }
-
-    /// Returns a mutable reference to the body
-    pub fn body_mut(&amp;mut self) -&gt; &amp;mut B {
-        &amp;mut self.body
-    }
-
-    /// Returns the method associated with this request
-    pub fn method(&amp;self) -&gt; &amp;str {
-        self.method.as_str()
-    }
-
-    /// Returns the URI associated with this request
-    pub fn uri(&amp;self) -&gt; &amp;str {
-        &amp;self.uri.as_string
-    }
-
-    /// Returns a mutable reference the the URI of this http::Request
-    pub fn uri_mut(&amp;mut self) -&gt; &amp;mut Uri {
-        &amp;mut self.uri
-    }
-
-    /// Sets the URI of this request
-    pub fn set_uri&lt;U&gt;(&amp;mut self, uri: U) -&gt; Result&lt;(), U::Error&gt;
-    where
-        U: TryInto&lt;Uri&gt;,
-    {
-        let uri = uri.try_into()?;
-        self.uri = uri;
-        Ok(())
-    }
-
-    /// Adds an extension to the request extensions
-    pub fn add_extension&lt;T: Send + Sync + Clone + 'static&gt;(&amp;mut self, extension: T) {
-        self.extensions.insert(extension);
-    }
-}
-
-impl Request&lt;SdkBody&gt; {
-    /// Attempts to clone this request
-    ///
-    /// If the body is cloneable, this will clone the request. Otherwise `None` will be returned
-    pub fn try_clone(&amp;self) -&gt; Option&lt;Self&gt; {
-        let body = self.body().try_clone()?;
-        Some(Self {
-            body,
-            uri: self.uri.clone(),
-            method: self.method.clone(),
-            extensions: Extensions::new(),
-            headers: self.headers.clone(),
-        })
-    }
-
-    /// Replaces this requests body with [`SdkBody::taken()`]
-    pub fn take_body(&amp;mut self) -&gt; SdkBody {
-        std::mem::replace(self.body_mut(), SdkBody::taken())
-    }
-
-    /// Create a GET request to `/` with an empty body
-    pub fn empty() -&gt; Self {
-        Self::new(SdkBody::empty())
-    }
-
-    /// Creates a GET request to `uri` with an empty body
-    pub fn get(uri: impl AsRef&lt;str&gt;) -&gt; Result&lt;Self, HttpError&gt; {
-        let mut req = Self::new(SdkBody::empty());
-        req.set_uri(uri.as_ref())?;
-        Ok(req)
-    }
-}
-
-impl&lt;B&gt; TryFrom&lt;http0::Request&lt;B&gt;&gt; for Request&lt;B&gt; {
-    type Error = HttpError;
-
-    fn try_from(value: http::Request&lt;B&gt;) -&gt; Result&lt;Self, Self::Error&gt; {
-        if let Some(e) = value
-            .headers()
-            .values()
-            .filter_map(|value| std::str::from_utf8(value.as_bytes()).err())
-            .next()
-        {
-            Err(HttpError::header_was_not_a_string(e))
-        } else {
-            let (parts, body) = value.into_parts();
-            let mut string_safe_headers: HeaderMap&lt;HeaderValue&gt; = Default::default();
-            string_safe_headers.extend(
-                parts
-                    .headers
-                    .into_iter()
-                    .map(|(k, v)| (k, HeaderValue::from_http02x(v).expect(&quot;validated above&quot;))),
-            );
-            Ok(Self {
-                body,
-                uri: parts.uri.into(),
-                method: parts.method.clone(),
-                extensions: parts.extensions,
-                headers: Headers {
-                    headers: string_safe_headers,
-                },
-            })
-        }
-    }
-}
-
-/// An immutable view of request headers
-#[derive(Clone, Default, Debug)]
-pub struct Headers {
-    headers: HeaderMap&lt;HeaderValue&gt;,
-}
-
-impl&lt;'a&gt; IntoIterator for &amp;'a Headers {
-    type Item = (&amp;'a str, &amp;'a str);
-    type IntoIter = HeadersIter&lt;'a&gt;;
-
-    fn into_iter(self) -&gt; Self::IntoIter {
-        HeadersIter {
-            inner: self.headers.iter(),
-        }
-    }
-}
-
-/// An Iterator over headers
-pub struct HeadersIter&lt;'a&gt; {
-    inner: Iter&lt;'a, HeaderValue&gt;,
-}
-
-impl&lt;'a&gt; Iterator for HeadersIter&lt;'a&gt; {
-    type Item = (&amp;'a str, &amp;'a str);
-
-    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
-        self.inner.next().map(|(k, v)| (k.as_str(), v.as_ref()))
-    }
-}
-
-impl Headers {
-    /// Create an empty header map
-    pub fn new() -&gt; Self {
-        Self::default()
-    }
-
-    /// Returns the value for a given key
-    ///
-    /// If multiple values are associated, the first value is returned
-    /// See [HeaderMap::get]
-    pub fn get(&amp;self, key: impl AsRef&lt;str&gt;) -&gt; Option&lt;&amp;str&gt; {
-        self.headers.get(key.as_ref()).map(|v| v.as_ref())
-    }
-
-    /// Returns all values for a given key
-    pub fn get_all(&amp;self, key: impl AsRef&lt;str&gt;) -&gt; impl Iterator&lt;Item = &amp;str&gt; {
-        self.headers
-            .get_all(key.as_ref())
-            .iter()
-            .map(|v| v.as_ref())
-    }
-
-    /// Returns an iterator over the headers
-    pub fn iter(&amp;self) -&gt; HeadersIter&lt;'_&gt; {
-        HeadersIter {
-            inner: self.headers.iter(),
-        }
-    }
-
-    /// Returns the total number of **values** stored in the map
-    pub fn len(&amp;self) -&gt; usize {
-        self.headers.len()
-    }
-
-    /// Returns true if there are no headers
-    pub fn is_empty(&amp;self) -&gt; bool {
-        self.len() == 0
-    }
-
-    /// Returns true if this header is present
-    pub fn contains_key(&amp;self, key: &amp;str) -&gt; bool {
-        self.headers.contains_key(key)
-    }
-
-    /// Insert a value into the headers structure.
-    ///
-    /// This will *replace* any existing value for this key. Returns the previous associated value if any.
-    ///
-    /// # Panics
-    /// If the key or value are not valid ascii, this function will panic.
-    pub fn insert(
-        &amp;mut self,
-        key: impl AsHeaderComponent,
-        value: impl AsHeaderComponent,
-    ) -&gt; Option&lt;String&gt; {
-        self.try_insert(key, value)
-            .expect(&quot;HeaderName or HeaderValue was invalid&quot;)
-    }
-
-    /// Insert a value into the headers structure.
-    ///
-    /// This will *replace* any existing value for this key. Returns the previous associated value if any.
-    ///
-    /// If the key or value are not valid ascii, an error is returned
-    pub fn try_insert(
-        &amp;mut self,
-        key: impl AsHeaderComponent,
-        value: impl AsHeaderComponent,
-    ) -&gt; Result&lt;Option&lt;String&gt;, HttpError&gt; {
-        let key = header_name(key)?;
-        let value = header_value(value.into_maybe_static()?)?;
-        Ok(self
-            .headers
-            .insert(key, value)
-            .map(|old_value| old_value.into()))
-    }
-
-    /// Appends a value to a given key
-    ///
-    /// If the key or value are NOT valid ascii, an error is returned
-    pub fn try_append(
-        &amp;mut self,
-        key: impl AsHeaderComponent,
-        value: impl AsHeaderComponent,
-    ) -&gt; Result&lt;bool, HttpError&gt; {
-        let key = header_name(key.into_maybe_static()?)?;
-        let value = header_value(value.into_maybe_static()?)?;
-        Ok(self.headers.append(key, value))
-    }
-
-    /// Removes all headers with a given key
-    ///
-    /// If there are multiple entries for this key, the first entry is returned
-    pub fn remove(&amp;mut self, key: impl AsRef&lt;str&gt;) -&gt; Option&lt;String&gt; {
-        self.headers
-            .remove(key.as_ref())
-            .map(|h| h.as_str().to_string())
-    }
-
-    /// Appends a value to a given key
-    ///
-    /// # Panics
-    /// If the key or value are NOT valid ascii, this function will panic
-    pub fn append(&amp;mut self, key: impl AsHeaderComponent, value: impl AsHeaderComponent) -&gt; bool {
-        self.try_append(key, value)
-            .expect(&quot;HeaderName or HeaderValue was invalid&quot;)
-    }
-}
-
-use sealed::AsHeaderComponent;
-
-mod sealed {
-    use super::*;
-    /// Trait defining things that may be converted into a header component (name or value)
-    pub trait AsHeaderComponent {
-        /// If the component can be represented as a Cow&lt;'static, str&gt;, return it
-        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt;;
-
-        /// Return a string reference to this header
-        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt;;
-
-        /// If a component is already internally represented as a `http02x::HeaderName`, return it
-        fn repr_as_http02x_header_name(self) -&gt; Result&lt;http0::HeaderName, Self&gt;
-        where
-            Self: Sized,
-        {
-            Err(self)
-        }
-    }
-
-    impl AsHeaderComponent for &amp;'static str {
-        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
-            Ok(Cow::Borrowed(self))
-        }
-
-        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
-            Ok(self)
-        }
-    }
-
-    impl AsHeaderComponent for String {
-        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
-            Ok(Cow::Owned(self))
-        }
-
-        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
-            Ok(self)
-        }
-    }
-
-    impl AsHeaderComponent for Cow&lt;'static, str&gt; {
-        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
-            Ok(self)
-        }
-
-        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
-            Ok(self.as_ref())
-        }
-    }
-
-    impl AsHeaderComponent for http0::HeaderValue {
-        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
-            Ok(Cow::Owned(
-                std::str::from_utf8(self.as_bytes())
-                    .map_err(HttpError::header_was_not_a_string)?
-                    .to_string(),
-            ))
-        }
-
-        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
-            std::str::from_utf8(self.as_bytes()).map_err(HttpError::header_was_not_a_string)
-        }
-    }
-
-    impl AsHeaderComponent for http0::HeaderName {
-        fn into_maybe_static(self) -&gt; Result&lt;MaybeStatic, HttpError&gt; {
-            Ok(self.to_string().into())
-        }
-
-        fn as_str(&amp;self) -&gt; Result&lt;&amp;str, HttpError&gt; {
-            Ok(self.as_ref())
-        }
-
-        fn repr_as_http02x_header_name(self) -&gt; Result&lt;http0::HeaderName, Self&gt;
-        where
-            Self: Sized,
-        {
-            Ok(self)
-        }
-    }
-}
-
-mod header_value {
-    use super::http0;
-    use std::str::Utf8Error;
-
-    /// HeaderValue type
-    ///
-    /// **Note**: Unlike `HeaderValue` in `http`, this only supports UTF-8 header values
-    #[derive(Debug, Clone)]
-    pub struct HeaderValue {
-        _private: http0::HeaderValue,
-    }
-
-    impl HeaderValue {
-        pub(crate) fn from_http02x(value: http0::HeaderValue) -&gt; Result&lt;Self, Utf8Error&gt; {
-            let _ = std::str::from_utf8(value.as_bytes())?;
-            Ok(Self { _private: value })
-        }
-
-        pub(crate) fn into_http02x(self) -&gt; http0::HeaderValue {
-            self._private
-        }
-    }
-
-    impl AsRef&lt;str&gt; for HeaderValue {
-        fn as_ref(&amp;self) -&gt; &amp;str {
-            std::str::from_utf8(self._private.as_bytes())
-                .expect(&quot;unreachable—only strings may be stored&quot;)
-        }
-    }
-
-    impl From&lt;HeaderValue&gt; for String {
-        fn from(value: HeaderValue) -&gt; Self {
-            value.as_ref().to_string()
-        }
-    }
-}
-
-use crate::box_error::BoxError;
-pub use header_value::HeaderValue;
-
-impl HeaderValue {
-    /// Returns the string representation of this header value
-    pub fn as_str(&amp;self) -&gt; &amp;str {
-        self.as_ref()
-    }
-}
-
-impl FromStr for HeaderValue {
-    type Err = HttpError;
-
-    fn from_str(s: &amp;str) -&gt; Result&lt;Self, Self::Err&gt; {
-        HeaderValue::try_from(s.to_string())
-    }
-}
-
-impl TryFrom&lt;String&gt; for HeaderValue {
-    type Error = HttpError;
-
-    fn try_from(value: String) -&gt; Result&lt;Self, Self::Error&gt; {
-        Ok(HeaderValue::from_http02x(
-            http0::HeaderValue::try_from(value).map_err(HttpError::invalid_header_value)?,
-        )
-        .expect(&quot;input was a string&quot;))
-    }
-}
-
-type MaybeStatic = Cow&lt;'static, str&gt;;
-
-#[derive(Debug)]
-/// An error occurred constructing an Http Request.
-///
-/// This is normally due to configuration issues, internal SDK bugs, or other user error.
-pub struct HttpError(BoxError);
-
-impl HttpError {
-    // TODO(httpRefactor): Add better error internals
-    fn new&lt;E: Into&lt;Box&lt;dyn Error + Send + Sync + 'static&gt;&gt;&gt;(err: E) -&gt; Self {
-        HttpError(err.into())
-    }
-
-    fn invalid_header_value(err: InvalidHeaderValue) -&gt; Self {
-        Self(err.into())
-    }
-
-    fn header_was_not_a_string(err: Utf8Error) -&gt; Self {
-        Self(err.into())
-    }
-
-    fn invalid_header_name(err: InvalidHeaderName) -&gt; Self {
-        Self(err.into())
-    }
-
-    fn invalid_uri(err: InvalidUri) -&gt; Self {
-        Self(err.into())
-    }
-}
-
-impl Display for HttpError {
-    fn fmt(&amp;self, f: &amp;mut Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
-        write!(f, &quot;an error occurred creating an HTTP Request&quot;)
-    }
-}
-
-impl Error for HttpError {
-    fn source(&amp;self) -&gt; Option&lt;&amp;(dyn Error + 'static)&gt; {
-        Some(self.0.as_ref())
-    }
-}
-
-fn header_name(name: impl AsHeaderComponent) -&gt; Result&lt;http0::HeaderName, HttpError&gt; {
-    name.repr_as_http02x_header_name().or_else(|name| {
-        name.into_maybe_static().and_then(|cow| {
-            if cow.chars().any(|c| c.is_uppercase()) {
-                return Err(HttpError::new(&quot;Header names must be all lower case&quot;));
-            }
-            match cow {
-                Cow::Borrowed(staticc) =&gt; Ok(http0::HeaderName::from_static(staticc)),
-                Cow::Owned(s) =&gt; {
-                    http0::HeaderName::try_from(s).map_err(HttpError::invalid_header_name)
-                }
-            }
-        })
-    })
-}
-
-fn header_value(value: MaybeStatic) -&gt; Result&lt;HeaderValue, HttpError&gt; {
-    let header = match value {
-        Cow::Borrowed(b) =&gt; http0::HeaderValue::from_static(b),
-        Cow::Owned(s) =&gt; {
-            http0::HeaderValue::try_from(s).map_err(HttpError::invalid_header_value)?
-        }
-    };
-    HeaderValue::from_http02x(header).map_err(HttpError::new)
-}
-
-#[cfg(test)]
-mod test {
-    use crate::client::orchestrator::HttpRequest;
-    use aws_smithy_types::body::SdkBody;
-    use http::header::{AUTHORIZATION, CONTENT_LENGTH};
-    use http::{HeaderValue, Uri};
-
-    #[test]
-    fn headers_can_be_any_string() {
-        let _: HeaderValue = &quot;😹&quot;.parse().expect(&quot;can be any string&quot;);
-        let _: HeaderValue = &quot;abcd&quot;.parse().expect(&quot;can be any string&quot;);
-        let _ = &quot;a\nb&quot;
-            .parse::&lt;HeaderValue&gt;()
-            .expect_err(&quot;cannot contain control characters&quot;);
-    }
-
-    #[test]
-    fn non_ascii_requests() {
-        let request = http::Request::builder()
-            .header(&quot;k&quot;, &quot;😹&quot;)
-            .body(SdkBody::empty())
-            .unwrap();
-        let request: HttpRequest = request
-            .try_into()
-            .expect(&quot;failed to convert a non-string header&quot;);
-        assert_eq!(request.headers().get(&quot;k&quot;), Some(&quot;😹&quot;))
-    }
-
-    #[test]
-    fn request_can_be_created() {
-        let req = http::Request::builder()
-            .uri(&quot;http://foo.com&quot;)
-            .body(SdkBody::from(&quot;hello&quot;))
-            .unwrap();
-        let mut req = super::Request::try_from(req).unwrap();
-        req.headers_mut().insert(&quot;a&quot;, &quot;b&quot;);
-        assert_eq!(req.headers().get(&quot;a&quot;).unwrap(), &quot;b&quot;);
-        req.headers_mut().append(&quot;a&quot;, &quot;c&quot;);
-        assert_eq!(req.headers().get(&quot;a&quot;).unwrap(), &quot;b&quot;);
-        let http0 = req.into_http02x().unwrap();
-        assert_eq!(http0.uri(), &quot;http://foo.com&quot;);
-    }
-
-    #[test]
-    fn uri_mutations() {
-        let req = http::Request::builder()
-            .uri(&quot;http://foo.com&quot;)
-            .body(SdkBody::from(&quot;hello&quot;))
-            .unwrap();
-        let mut req = super::Request::try_from(req).unwrap();
-        assert_eq!(req.uri(), &quot;http://foo.com/&quot;);
-        req.set_uri(&quot;http://bar.com&quot;).unwrap();
-        assert_eq!(req.uri(), &quot;http://bar.com&quot;);
-        let http0 = req.into_http02x().unwrap();
-        assert_eq!(http0.uri(), &quot;http://bar.com&quot;);
-    }
-
-    #[test]
-    #[should_panic]
-    fn header_panics() {
-        let req = http::Request::builder()
-            .uri(&quot;http://foo.com&quot;)
-            .body(SdkBody::from(&quot;hello&quot;))
-            .unwrap();
-        let mut req = super::Request::try_from(req).unwrap();
-        let _ = req
-            .headers_mut()
-            .try_insert(&quot;a\nb&quot;, &quot;a\nb&quot;)
-            .expect_err(&quot;invalid header&quot;);
-        let _ = req.headers_mut().insert(&quot;a\nb&quot;, &quot;a\nb&quot;);
-    }
-
-    #[test]
-    fn try_clone_clones_all_data() {
-        let request = ::http::Request::builder()
-            .uri(Uri::from_static(&quot;https://www.amazon.com&quot;))
-            .method(&quot;POST&quot;)
-            .header(CONTENT_LENGTH, 456)
-            .header(AUTHORIZATION, &quot;Token: hello&quot;)
-            .body(SdkBody::from(&quot;hello world!&quot;))
-            .expect(&quot;valid request&quot;);
-        let request: super::Request = request.try_into().unwrap();
-        let cloned = request.try_clone().expect(&quot;request is cloneable&quot;);
-
-        assert_eq!(&quot;https://www.amazon.com/&quot;, cloned.uri());
-        assert_eq!(&quot;POST&quot;, cloned.method());
-        assert_eq!(2, cloned.headers().len());
-        assert_eq!(&quot;Token: hello&quot;, cloned.headers().get(AUTHORIZATION).unwrap(),);
-        assert_eq!(&quot;456&quot;, cloned.headers().get(CONTENT_LENGTH).unwrap());
-        assert_eq!(&quot;hello world!&quot;.as_bytes(), cloned.body().bytes().unwrap());
-    }
-}</code></pre>
+<pre><code class="language-rust ignore">{{#include ../../../rust-runtime/aws-smithy-runtime-api/src/client/http/request.rs}}</code></pre>
 </details>
 <h3 id="future-work"><a class="header" href="#future-work">Future Work</a></h3>
 <p>Currently, the only way to construct <code>Request</code> is from a compatible type (e.g. <code>http02x::Request</code>)</p>

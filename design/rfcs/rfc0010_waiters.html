@@ -306,7 +306,7 @@ fn classify_result(
     )
 }</code></pre>
 <p>The retry delay time should be calculated by the same exponential backoff with jitter code that the
-<a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-client/src/retry.rs#L252-L292">default <code>RetryHandler</code> uses in <code>aws-smithy-client</code></a>. This function will need to be split up and made
+<a href="https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-client/src/retry.rs#L252-L292">default <code>RetryHandler</code> uses in <code>aws-smithy-client</code></a>. This function will need to be split up and made
 available to the waiter implementations so that just the delay can be calculated.</p>
 <h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
 <ul>

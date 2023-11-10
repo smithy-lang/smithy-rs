@@ -339,7 +339,7 @@ look for this synthetic trait when creating the fluent builders and inputs to kn
 <p>If a presignable operation input has a member named <code>presigned</code>, then there will be a name collision with
 the function to generate a presigned URL. To mitigate this, <code>RustReservedWords</code> will be updated
 to rename the <code>presigned</code> member to <code>presigned_value</code>
-<a href="https://github.com/awslabs/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28">similar to how <code>send</code> is renamed</a>.</p>
+<a href="https://github.com/smithy-lang/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28">similar to how <code>send</code> is renamed</a>.</p>
 <h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes Checklist</a></h2>
 <ul>
 <li><input disabled="" type="checkbox" checked=""/>

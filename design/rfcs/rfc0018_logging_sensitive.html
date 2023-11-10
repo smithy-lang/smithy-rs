@@ -180,7 +180,7 @@
 <p>Sensitive data MUST NOT be exposed in things like exception messages or log output. Application of this trait SHOULD NOT affect wire logging (i.e., logging of all data transmitted to and from servers or clients).</p>
 </blockquote>
 <p>This RFC is concerned with solving the problem of honouring this specification in the context of logging.</p>
-<p>Progress has been made towards this goal in the form of the <a href="https://github.com/awslabs/smithy-rs/pull/229">Sensitive Trait PR</a>, which uses code generation to remove sensitive fields from <code>Debug</code> implementations.</p>
+<p>Progress has been made towards this goal in the form of the <a href="https://github.com/smithy-lang/smithy-rs/pull/229">Sensitive Trait PR</a>, which uses code generation to remove sensitive fields from <code>Debug</code> implementations.</p>
 <p>The problem remains open due to the existence of HTTP binding traits and a lack of clearly defined user guidelines which customers may follow to honour the specification.</p>
 <p>This RFC proposes:</p>
 <ul>
@@ -349,7 +349,7 @@ where
 <p>The <code>Service::call</code> path, seen in <a href="#code-generated-logging-middleware">Code Generated Logging Middleware</a>, is latency-sensitive. Careful implementation is required to avoid excess allocations during redaction of sensitive data. Wrapping <a href="https://docs.rs/http/latest/http/uri/struct.Uri.html">Uri</a> and <a href="https://docs.rs/http/latest/http/header/struct.HeaderMap.html">HeaderMap</a> then providing a new <a href="https://doc.rust-lang.org/std/fmt/trait.Display.html">Display</a>/<a href="https://doc.rust-lang.org/std/fmt/trait.Debug.html">Debug</a> implementation which skips over the sensitive data is preferable over allocating a new <code>String</code>/<code>HeaderMap</code> and then mutating it.</p>
 <p>These wrappers should be provided alongside the <code>Sensitive</code> struct described in <a href="#debug-logging">Debug Logging</a>. If they are implemented on top of <code>Sensitive</code>, they will inherit the same behavior - allowing redactions to be toggled using <code>unredacted-logging</code> feature flag.</p>
 <h3 id="middleware-position"><a class="header" href="#middleware-position">Middleware Position</a></h3>
-<p>This logging middleware should be applied outside of the <a href="https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21">OperationHandler</a> after its construction in the (generated) <code>operation_registry.rs</code> file. The middleware should preserve the associated types of the <code>OperationHandler</code> (<code>Response = Response&lt;BoxBody&gt;</code>, <code>Error = Infallible</code>) to cause minimal disruption.</p>
+<p>This logging middleware should be applied outside of the <a href="https://github.com/smithy-lang/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21">OperationHandler</a> after its construction in the (generated) <code>operation_registry.rs</code> file. The middleware should preserve the associated types of the <code>OperationHandler</code> (<code>Response = Response&lt;BoxBody&gt;</code>, <code>Error = Infallible</code>) to cause minimal disruption.</p>
 <p>An easy position to apply the logging middleware is illustrated below in the form of <code>Logging{Operation}::new</code>:</p>
 <pre><code class="language-rust ignore">let empty_operation = LoggingEmptyOperation::new(operation(registry.empty_operation));
 let get_pokemon_species = LoggingPokemonSpecies::new(operation(registry.get_pokemon_species));
@@ -360,7 +360,7 @@ let routes = vec![
     (BoxCloneService::new(get_server_statistics), get_server_statistics_request_spec),
 ];
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);</code></pre>
-<p>Although an acceptable first step, putting logging middleware here is suboptimal - the <code>Router</code> allows a <code>tower::Layer</code> to be applied to the operation by using the <a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146">Router::layer</a> method. This middleware will be applied <em>outside</em> of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the <code>Router</code> must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.</p>
+<p>Although an acceptable first step, putting logging middleware here is suboptimal - the <code>Router</code> allows a <code>tower::Layer</code> to be applied to the operation by using the <a href="https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146">Router::layer</a> method. This middleware will be applied <em>outside</em> of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the <code>Router</code> must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.</p>
 <p>This is a general problem, not specific to this proposal. For example, <a href="#use-request-extensions">Use Request Extensions</a> must also solve this problem.</p>
 <p>Fortunately, this problem is separable from the actual implementation of the logging middleware and we can get immediate benefit by application of it in the suboptimal position described above.</p>
 <h3 id="logging-within-the-router"><a class="header" href="#logging-within-the-router">Logging within the Router</a></h3>
@@ -370,7 +370,7 @@ let router = aws_smithy_http_server::routing::Router::new_rest_json_router(route
 <p>A guideline should be made available, which includes:</p>
 <ul>
 <li>The <a href="#http-binding-traits">HTTP bindings traits</a> and why they are of concern in the presence of <code>@sensitive</code>.</li>
-<li>The <a href="https://github.com/awslabs/smithy-rs/pull/229">Debug implementation</a> on structures.</li>
+<li>The <a href="https://github.com/smithy-lang/smithy-rs/pull/229">Debug implementation</a> on structures.</li>
 <li>How to use the <code>Sensitive</code> struct, HTTP wrappers, and the <code>unredacted-logging</code> feature flag described in <a href="#debug-logging">Debug Logging</a> and <a href="#http-debugdisplay-wrappers">HTTP Debug/Display Wrappers</a>.</li>
 <li>A warning against the two potential leaks described in <a href="#scope-and-guidelines">Scope and Guidelines</a>:
 <ul>
@@ -498,27 +498,27 @@ impl&lt;B, S&gt; Service&lt;Request&lt;B&gt;&gt; for Middleware&lt;S&gt; {
 <li><input disabled="" type="checkbox" checked=""/>
 Implement and integrate code generated logging middleware.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1550">https://github.com/awslabs/smithy-rs/pull/1550</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1550">https://github.com/smithy-lang/smithy-rs/pull/1550</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Add logging to <code>Router</code> implementation.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/issues/1666">https://github.com/awslabs/smithy-rs/issues/1666</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/issues/1666">https://github.com/smithy-lang/smithy-rs/issues/1666</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Write developer guideline.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1772">https://github.com/awslabs/smithy-rs/pull/1772</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1772">https://github.com/smithy-lang/smithy-rs/pull/1772</a></li>
 </ul>
 </li>
 <li><input disabled="" type="checkbox" checked=""/>
 Refactor <code>Router</code> to allow for better positioning described in <a href="#middleware-position">Middleware Position</a>.
 <ul>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1620">https://github.com/awslabs/smithy-rs/pull/1620</a></li>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1679">https://github.com/awslabs/smithy-rs/pull/1679</a></li>
-<li><a href="https://github.com/awslabs/smithy-rs/pull/1693">https://github.com/awslabs/smithy-rs/pull/1693</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1620">https://github.com/smithy-lang/smithy-rs/pull/1620</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1679">https://github.com/smithy-lang/smithy-rs/pull/1679</a></li>
+<li><a href="https://github.com/smithy-lang/smithy-rs/pull/1693">https://github.com/smithy-lang/smithy-rs/pull/1693</a></li>
 </ul>
 </li>
 </ul>

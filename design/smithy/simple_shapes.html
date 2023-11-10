@@ -184,8 +184,8 @@
 <tr><td>double</td><td><code>f64</code></td></tr>
 <tr><td><a href="#big-numbers">bigInteger</a></td><td><code>BigInteger</code> (Not implemented yet)</td></tr>
 <tr><td><a href="#big-numbers">bigDecimal</a></td><td><code>BigDecimal</code> (Not implemented yet)</td></tr>
-<tr><td><a href="#timestamps">timestamp</a></td><td><a href="https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/date_time/mod.rs"><code>DateTime</code></a></td></tr>
-<tr><td><a href="#documents">document</a></td><td><a href="https://github.com/awslabs/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52"><code>Document</code></a></td></tr>
+<tr><td><a href="#timestamps">timestamp</a></td><td><a href="https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/date_time/mod.rs"><code>DateTime</code></a></td></tr>
+<tr><td><a href="#documents">document</a></td><td><a href="https://github.com/smithy-lang/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52"><code>Document</code></a></td></tr>
 </tbody></table>
 </div>
 <h3 id="big-numbers"><a class="header" href="#big-numbers">Big Numbers</a></h3>
@@ -196,7 +196,7 @@
 pub struct BigDecimal(String);
 <span class="boring">}</span></code></pre></pre>
 <p>This will enable us to add helpers over time as requested. Users will also be able to define their own conversions into their preferred large-number libraries.</p>
-<p>As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked <a href="https://github.com/awslabs/smithy-rs/issues/312">here</a>.</p>
+<p>As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked <a href="https://github.com/smithy-lang/smithy-rs/issues/312">here</a>.</p>
 <h3 id="timestamps"><a class="header" href="#timestamps">Timestamps</a></h3>
 <p><a href="https://github.com/chronotope/chrono">chrono</a> is the current de facto library for datetime in Rust, but it is pre-1.0. DateTimes are represented by an SDK defined structure modeled on <code>std::time::Duration</code> from the Rust standard library.</p>
 <pre><pre class="playground"><code class="language-rust edition2021"><span class="boring">#![allow(unused)]
