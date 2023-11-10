@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.supportedAuthSchemes
@@ -59,11 +60,15 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         *preludeScope,
-        "Credentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials"),
-        "ProvideCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-            .resolve("provider::ProvideCredentials"),
-        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-            .resolve("provider::SharedCredentialsProvider"),
+        "Credentials" to configReexport(AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials")),
+        "ProvideCredentials" to configReexport(
+            AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                .resolve("provider::ProvideCredentials"),
+        ),
+        "SharedCredentialsProvider" to configReexport(
+            AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                .resolve("provider::SharedCredentialsProvider"),
+        ),
         "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
             .resolve("auth::sigv4a::SCHEME_ID"),
         "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
