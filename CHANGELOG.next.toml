@@ -58,3 +58,52 @@ message = "Fix exclusively setting the credentials provider at operation config-
 references = ["smithy-rs#3156", "aws-sdk-rust#901"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = """Enable conversion from `BuildError` into `SdkError` & `<service>::Error`. This allows customers to write the following code:
+```rust
+async fn do_a_thing(client: &Client) -> Result<SdkError<SomeOperationError>> {
+    client.run_operation().complex_field(ComplexField::builder()
+        .a("a")
+        .b("b")
+        .build()?
+    ).send().await?;
+}
+```
+
+Previously, `?` could not be used in this position.
+"""
+references = ["smithy-rs#3173", "smithy-rs#3171"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """Enable conversion from `BuildError` into `SdkError` & `<service>::Error`. This allows customers to write the following code:
+```rust
+async fn create_table(dynamo_client: &Client) -> Result<(), SdkError<CreateTableError>> {
+    dynamo_client
+        .create_table()
+        .table_name("test")
+        .key_schema(
+            KeySchemaElement::builder()
+                .attribute_name("year")
+                .key_type(KeyType::Hash)
+                .build()?, // Previously, `?` could not be used here
+        )
+        .send()
+        .await?;
+    Ok(())
+}
+```
+
+Previously, `?` could not be used in this position.
+"""
+references = ["smithy-rs#3173", "smithy-rs#3171"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "ProvideCredentials and SharedCredentialsProvider are now re-exported."
+references = ["smithy-rs#3173", "smithy-rs#3155"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
