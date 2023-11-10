@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.logging.Level
 
 private sealed class UnsupportedConstraintMessageKind {
-    private val constraintTraitsUberIssue = "https://github.com/awslabs/smithy-rs/issues/1401"
+    private val constraintTraitsUberIssue = "https://github.com/smithy-lang/smithy-rs/issues/1401"
 
     fun intoLogMessage(ignoreUnsupportedConstraints: Boolean): LogMessage {
         fun buildMessage(intro: String, willSupport: Boolean, trackingIssue: String? = null, canBeIgnored: Boolean = true): String {
@@ -109,7 +109,7 @@ private sealed class UnsupportedConstraintMessageKind {
                     shape,
                     rangeTrait,
                     willSupport = false,
-                    trackingIssue = "https://github.com/awslabs/smithy-rs/issues/2007",
+                    trackingIssue = "https://github.com/smithy-lang/smithy-rs/issues/2007",
                 ),
             )
 
@@ -172,8 +172,8 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     validationExceptionShapeId: ShapeId,
 ): ValidationResult {
     // Traverse the model and error out if an operation uses constrained input, but it does not have
-    // `ValidationException` attached in `errors`. https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809424783
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): This check will go away once we add support for
+    // `ValidationException` attached in `errors`. https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809424783
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): This check will go away once we add support for
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
     val walker = DirectedWalker(model)
     val operationsWithConstrainedInputWithoutValidationExceptionSet = walker.walkShapes(service)
@@ -256,7 +256,7 @@ fun validateUnsupportedConstraints(
         unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet + unsupportedConstraintErrorShapeReachableViaAnEventStreamSet
 
     // 3. Range trait used on unsupported shapes.
-    // TODO(https://github.com/awslabs/smithy-rs/issues/2007)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/2007)
     val unsupportedRangeTraitOnShapeSet = walker
         .walkShapes(service)
         .asSequence()

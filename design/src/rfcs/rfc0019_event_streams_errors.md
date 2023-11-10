@@ -46,7 +46,7 @@ In order to implement this feature:
 * Errors need to be marshalled and unmarshalled
 * `Receiver` must treat any error coming from the other end as terminal
 
-The code examples below have been generated using the [following model](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server-test/model/pokemon.smithy#L27):
+The code examples below have been generated using the [following model](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server-test/model/pokemon.smithy#L27):
 ```smithy
 @http(uri: "/capture-pokemon-event/{region}", method: "POST")
 operation CapturePokemonOperation {
@@ -148,18 +148,18 @@ pub enum AttemptCapturingPokemonEventError {
 }
 ```
 
-Both are modeled as normal errors, where the [name](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L50) comes from `Error` with a prefix of the union's name.
-In fact, both the [client](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L71) and [server](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerCombinedErrorGenerator.kt#L46)
+Both are modeled as normal errors, where the [name](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L50) comes from `Error` with a prefix of the union's name.
+In fact, both the [client](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/generators/error/CombinedErrorGenerator.kt#L71) and [server](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerCombinedErrorGenerator.kt#L46)
 generate operation errors and event stream errors the same way.
 
-Event stream errors have their own [marshaller](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/protocols/serialize/EventStreamErrorMarshallerGenerator.kt#L39).
+Event stream errors have their own [marshaller](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/protocols/serialize/EventStreamErrorMarshallerGenerator.kt#L39).
 To make it work for users to stream errors, `EventStreamSender<>`, in addition to the union type `T`, takes an error type `E`; that is, the `AttemptCapturingPokemonEventError` in the example.
-This means that an error from the stream is [marshalled and sent](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L137) as a data structure similarly to the union's non-error members.
+This means that an error from the stream is [marshalled and sent](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/sender.rs#L137) as a data structure similarly to the union's non-error members.
 
-On the other side, the `Receiver<>` needs to terminate the stream upon [receiving any error](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L249).
-A terminated stream has [no more data](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L38) and will always be a [bug](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L54) to use it.
+On the other side, the `Receiver<>` needs to terminate the stream upon [receiving any error](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L249).
+A terminated stream has [no more data](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L38) and will always be a [bug](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http/src/event_stream/receiver.rs#L54) to use it.
 
-An example of how errors can be used on clients, extracted from [this test](https://github.com/awslabs/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http-server/examples/pokemon_service/tests/simple_integration_test.rs#L100):
+An example of how errors can be used on clients, extracted from [this test](https://github.com/smithy-lang/smithy-rs/blob/8f7e03ff8a84236955a65dba3d21c4bdbf17a9f4/rust-runtime/aws-smithy-http-server/examples/pokemon_service/tests/simple_integration_test.rs#L100):
 ```rust,ignore
 yield Err(AttemptCapturingPokemonEventError::new(
     AttemptCapturingPokemonEventErrorKind::MasterBallUnsuccessful(MasterBallUnsuccessful::builder().build()),

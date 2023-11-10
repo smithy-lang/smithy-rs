@@ -261,12 +261,12 @@ Changes are broken into to sections:
 [hjr3/hyper-timeout]: https://github.com/hjr3/hyper-timeout
 [sfackler/tokio-io-timeout]: https://github.com/sfackler/tokio-io-timeout
 [tower_service::Service]: https://docs.rs/tower-service/0.3.1/tower_service/trait.Service.html
-[AwsMiddleware]: https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29
-[MapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122
-[AsyncMapRequest]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42
-[ParseResponse]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27
-[DynConnect]: https://github.com/awslabs/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139
+[AwsMiddleware]: https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/aws/rust-runtime/aws-hyper/src/lib.rs#L29
+[MapRequest]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L122
+[AsyncMapRequest]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/map_request.rs#L42
+[ParseResponse]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-http-tower/src/parse_response.rs#L27
+[DynConnect]: https://github.com/smithy-lang/smithy-rs/blob/1aa59693eed10713dec0f3774a8a25ca271dbf39/rust-runtime/aws-smithy-client/src/erase.rs#L139
 [Connect]: https://docs.rs/hyper/0.14.14/hyper/client/connect/trait.Connect.html
 [tower::layer::util::Stack]: https://docs.rs/tower/0.4.10/tower/layer/util/struct.Stack.html
-[aws_smithy_client::Client::call_raw]: https://github.com/awslabs/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175
-[Layers can produce compiler errors]: https://github.com/awslabs/smithy-rs/issues/634
+[aws_smithy_client::Client::call_raw]: https://github.com/smithy-lang/smithy-rs/blob/841f51113fb14e2922793951ce16bda3e16cb51f/rust-runtime/aws-smithy-client/src/lib.rs#L175
+[Layers can produce compiler errors]: https://github.com/smithy-lang/smithy-rs/issues/634

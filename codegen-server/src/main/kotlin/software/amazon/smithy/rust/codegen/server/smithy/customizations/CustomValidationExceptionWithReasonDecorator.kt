@@ -44,7 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
  * The shape definition is in [CustomValidationExceptionWithReasonDecoratorTest].
  *
  * This is just an example to showcase experimental support for custom validation exceptions.
- * TODO(https://github.com/awslabs/smithy-rs/pull/2053): this will go away once we implement the RFC, when users will be
+ * TODO(https://github.com/smithy-lang/smithy-rs/pull/2053): this will go away once we implement the RFC, when users will be
  *  able to define the converters in their Rust application code.
  */
 class CustomValidationExceptionWithReasonDecorator : ServerCodegenDecorator {
@@ -80,7 +80,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                     };
                     Self::ConstraintViolation(
                         crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
-                            .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+                            .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                     )
                 }
             }

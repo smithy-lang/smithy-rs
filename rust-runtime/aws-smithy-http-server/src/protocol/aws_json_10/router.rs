@@ -23,7 +23,7 @@ impl IntoResponse<AwsJson1_0> for Error {
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(empty())
-                .expect("invalid HTTP response for AWS JSON 1.0 routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
+                .expect("invalid HTTP response for AWS JSON 1.0 routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
         }
     }
 }

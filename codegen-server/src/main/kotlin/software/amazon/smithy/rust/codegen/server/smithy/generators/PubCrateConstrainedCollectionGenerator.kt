@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPubl
  * traits' enforcement, this type is converted into the regular `Vec` the user
  * sees via the generated converters.
  *
- * TODO(https://github.com/awslabs/smithy-rs/issues/1401) If the collection
+ * TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) If the collection
  *  shape is _directly_ constrained, use [ConstrainedCollectionGenerator]
  *  instead.
  */

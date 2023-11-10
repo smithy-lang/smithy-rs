@@ -50,11 +50,11 @@ class AwsJsonHttpBindingResolver(
 
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2237): support non-streaming members too
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): support non-streaming members too
         if (members.size > 1 && members.any { it.isStreaming(model) }) {
             throw CodegenException(
                 "We only support one payload member if that payload contains a streaming member." +
-                    "Tracking issue to relax this constraint: https://github.com/awslabs/smithy-rs/issues/2237",
+                    "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/2237",
             )
         }
 

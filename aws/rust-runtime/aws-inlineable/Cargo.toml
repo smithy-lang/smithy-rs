@@ -9,7 +9,7 @@ are to allow this crate to be compilable and testable in isolation, no client co
 edition = "2021"
 license = "Apache-2.0"
 publish = false
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
