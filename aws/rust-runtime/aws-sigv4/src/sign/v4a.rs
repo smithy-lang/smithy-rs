@@ -13,7 +13,7 @@ use std::time::SystemTime;
 use zeroize::Zeroizing;
 
 const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
-static BIG_N_MINUS_2: U256 = {
+const BIG_N_MINUS_2: U256 = {
     // The N value from section 3.2.1.3 of https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf
     // Used as the N value for the algorithm described in section A.2.2 of https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf
     // *(Basically a prime number blessed by the NSA for use in p256)*
