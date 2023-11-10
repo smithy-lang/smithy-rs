@@ -1021,7 +1021,7 @@ dependencies = [
  "dialoguer",
  "fs-err",
  "handlebars",
- "lazy_static",
+ "once_cell",
  "pretty_assertions",
  "regex",
  "semver",

@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.customize
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
@@ -41,7 +42,15 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
      * making the resulting crate not compile (since it will contain more than one struct with the same name).
      * Therefore, ensure that all the structure shapes returned by this method are not in the service's closure.
      */
-    fun postprocessGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> = emptyList()
+    fun postprocessOperationGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> = emptyList()
+
+    /**
+     * For each service, this hook allows decorators to return a collection of structure shapes that will additionally be generated.
+     * If a structure shape is in the service's closure, note that returning it here will cause for it to be generated more than once,
+     * making the resulting crate not compile (since it will contain more than one struct with the same name).
+     * Therefore, ensure that all the structure shapes returned by this method are not in the service's closure.
+     */
+    fun postprocessServiceGenerateAdditionalStructures(serviceShape: ServiceShape): List<StructureShape> = emptyList()
 
     /**
      * Configuration methods that should be injected into the `${serviceName}Config` struct to allow users to configure
@@ -81,8 +90,11 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
             decorator.postprocessValidationExceptionNotAttachedErrorMessage(accumulated)
         }
 
-    override fun postprocessGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> =
-        orderedDecorators.flatMap { it.postprocessGenerateAdditionalStructures(operationShape) }
+    override fun postprocessOperationGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> =
+        orderedDecorators.flatMap { it.postprocessOperationGenerateAdditionalStructures(operationShape) }
+
+    override fun postprocessServiceGenerateAdditionalStructures(serviceShape: ServiceShape): List<StructureShape> =
+        orderedDecorators.flatMap { it.postprocessServiceGenerateAdditionalStructures(serviceShape) }
 
     override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> =
         orderedDecorators.flatMap { it.configMethods(codegenContext) }
