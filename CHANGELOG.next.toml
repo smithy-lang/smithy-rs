@@ -107,3 +107,9 @@ message = "ProvideCredentials and SharedCredentialsProvider are now re-exported.
 references = ["smithy-rs#3173", "smithy-rs#3155"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The `RequestId` trait has moved from the aws-http crate into aws-types."
+references = ["smithy-rs#3160"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"

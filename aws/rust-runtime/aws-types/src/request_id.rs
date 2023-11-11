@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::http::HttpHeaders;
-use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+//! AWS-specific request ID support
+
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_runtime_api::http::Response;
 use aws_smithy_types::error::metadata::{
     Builder as ErrorMetadataBuilder, ErrorMetadata, ProvideErrorMetadata,
 };
@@ -21,14 +22,11 @@ pub trait RequestId {
     fn request_id(&self) -> Option<&str>;
 }
 
-impl<E, R> RequestId for SdkError<E, R>
-where
-    R: HttpHeaders,
-{
+impl<E> RequestId for SdkError<E, Response> {
     fn request_id(&self) -> Option<&str> {
         match self {
-            Self::ResponseError(err) => err.raw().http_headers().request_id(),
-            Self::ServiceError(err) => err.raw().http_headers().request_id(),
+            Self::ResponseError(err) => err.raw().headers().request_id(),
+            Self::ServiceError(err) => err.raw().headers().request_id(),
             _ => None,
         }
     }
@@ -46,7 +44,7 @@ impl RequestId for Unhandled {
     }
 }
 
-impl RequestId for HttpResponse {
+impl<B> RequestId for Response<B> {
     fn request_id(&self) -> Option<&str> {
         self.headers().request_id()
     }
@@ -84,6 +82,7 @@ pub fn apply_request_id(builder: ErrorMetadataBuilder, headers: &Headers) -> Err
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
     use aws_smithy_types::body::SdkBody;
     use http::{HeaderValue, Response};
 
