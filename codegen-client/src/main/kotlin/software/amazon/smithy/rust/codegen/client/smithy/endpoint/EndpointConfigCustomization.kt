@@ -26,7 +26,7 @@ internal class EndpointConfigCustomization(
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
-    private val epModule = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint")
+    private val epModule = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint")
     private val epRuntimeModule = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints")
 
     private val codegenScope = arrayOf(

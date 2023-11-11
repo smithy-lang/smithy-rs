@@ -64,7 +64,7 @@ impl Intercept for WireFormatInterceptor {
         // Get the response type from the context.
         let response = context.response();
         // Print the response.
-        if response.status() == StatusCode::OK {
+        if response.status().as_u16() == StatusCode::OK.as_u16() {
             tracing::info!(?response, "Response received:");
         } else {
             tracing::error!(?response);

@@ -43,7 +43,7 @@ class EndpointParamsInterceptorGenerator(
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-        val runtimeApi = CargoDependency.smithyRuntimeApi(rc).toType()
+        val runtimeApi = CargoDependency.smithyRuntimeApiClient(rc).toType()
         val interceptors = runtimeApi.resolve("client::interceptors")
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         arrayOf(

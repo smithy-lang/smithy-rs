@@ -278,7 +278,7 @@ class ServiceConfigGenerator(
         "RuntimeComponentsBuilder" to configReexport(RuntimeType.runtimeComponentsBuilder(runtimeConfig)),
         "RuntimePlugin" to configReexport(RuntimeType.runtimePlugin(runtimeConfig)),
         "SharedRuntimePlugin" to configReexport(RuntimeType.sharedRuntimePlugin(runtimeConfig)),
-        "runtime_plugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin"),
+        "runtime_plugin" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_plugin"),
     )
 
     fun render(writer: RustWriter) {

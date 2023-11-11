@@ -91,11 +91,11 @@ open class OperationGenerator(
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
                 "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
-                "Input" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Input"),
+                "Input" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Input"),
                 "Operation" to symbolProvider.toSymbol(operationShape),
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
@@ -164,9 +164,9 @@ open class OperationGenerator(
                 }
                 """,
                 *codegenScope,
-                "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
+                "Error" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Error"),
                 "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-                "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "OrchestratorError" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::error::OrchestratorError"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),

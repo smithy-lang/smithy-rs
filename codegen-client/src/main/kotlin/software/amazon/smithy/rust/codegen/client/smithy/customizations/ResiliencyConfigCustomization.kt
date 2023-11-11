@@ -36,10 +36,10 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
         "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
         "RetryPartition" to retries.resolve("RetryPartition"),
-        "SharedRetryStrategy" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-            .resolve("client::retries::SharedRetryStrategy"),
-        "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
-        "StandardRetryStrategy" to retries.resolve("strategy::StandardRetryStrategy"),
+        "SharedAsyncSleep" to configReexport(sleepModule.resolve("SharedAsyncSleep")),
+        "SharedRetryStrategy" to configReexport(RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::retries::SharedRetryStrategy")),
+        "SharedTimeSource" to configReexport(RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource")),
+        "StandardRetryStrategy" to configReexport(retries.resolve("strategy::StandardRetryStrategy")),
         "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
         "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
     )

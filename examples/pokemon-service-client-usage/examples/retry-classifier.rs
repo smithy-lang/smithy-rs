@@ -53,7 +53,7 @@ impl ClassifyRetry for SampleRetryClassifier {
             .and_then(|err| err.downcast_ref::<GetServerStatisticsError>())
         {
             if let Some(response) = ctx.response() {
-                if response.status() == StatusCode::SERVICE_UNAVAILABLE {
+                if response.status() == StatusCode::SERVICE_UNAVAILABLE.into() {
                     return RetryAction::server_error();
                 }
             }

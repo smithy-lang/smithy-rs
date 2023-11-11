@@ -32,7 +32,7 @@ aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"
 fastrand = "2.0.1"
-futures-util = { version = "0.3.16", default-features = false }
+futures-util = { version = "0.3.16" }
 hdrhistogram = "7.5.2"
 http = "0.2.3"
 http-body = "0.4.5"

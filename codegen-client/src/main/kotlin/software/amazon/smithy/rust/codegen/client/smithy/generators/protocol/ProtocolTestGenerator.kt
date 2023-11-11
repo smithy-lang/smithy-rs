@@ -277,7 +277,11 @@ class DefaultProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let mut http_response = #T::new()", RT.HttpResponseBuilder)
+        rustTemplate(
+            "let mut http_response = #{Response}::try_from(#{HttpResponseBuilder}::new()",
+            "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
+            "HttpResponseBuilder" to RT.HttpResponseBuilder,
+        )
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -285,7 +289,8 @@ class DefaultProtocolTestGenerator(
             """
             .status(${testCase.code})
             .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
-            .unwrap();
+            .unwrap()
+            ).unwrap();
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
@@ -307,10 +312,10 @@ class DefaultProtocolTestGenerator(
             });
             """,
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-            "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc)
+            "SharedResponseDeserializer" to RT.smithyRuntimeApiClient(rc)
                 .resolve("client::ser_de::SharedResponseDeserializer"),
             "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-            "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
+            "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
         )

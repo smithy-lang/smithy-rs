@@ -75,7 +75,7 @@ class TrimResourceIdCustomization(
         when (section) {
             is OperationSection.AdditionalInterceptors -> {
                 section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                    val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                    val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
                     val interceptor =
                         RuntimeType.forInlineDependency(
                             InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),

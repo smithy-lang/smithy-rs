@@ -18,7 +18,7 @@ class ClientRuntimeTypesReExportGenerator(
 ) {
     fun render() {
         val rc = codegenContext.runtimeConfig
-        val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(rc)
 
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(

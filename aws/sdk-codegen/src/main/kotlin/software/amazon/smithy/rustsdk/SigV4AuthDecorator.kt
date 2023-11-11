@@ -157,7 +157,7 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
         arrayOf(
             "SigV4AuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4AuthScheme"),
             "SigV4aAuthScheme" to awsRuntime.resolve("auth::sigv4a::SigV4aAuthScheme"),
-            "SharedAuthScheme" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
+            "SharedAuthScheme" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
         )
     }
 

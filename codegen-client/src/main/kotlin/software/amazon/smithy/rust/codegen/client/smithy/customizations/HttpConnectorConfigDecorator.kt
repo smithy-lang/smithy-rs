@@ -34,11 +34,11 @@ private class HttpConnectorConfigCustomization(
     private val codegenScope = arrayOf(
         *preludeScope,
         "HttpClient" to configReexport(
-            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::HttpClient"),
+            RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::http::HttpClient"),
         ),
         "IntoShared" to configReexport(RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared")),
         "SharedHttpClient" to configReexport(
-            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::SharedHttpClient"),
+            RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::http::SharedHttpClient"),
         ),
     )
 
