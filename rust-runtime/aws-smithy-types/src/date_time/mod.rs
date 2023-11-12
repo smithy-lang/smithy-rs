@@ -13,6 +13,7 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::fmt;
+use std::fmt::Display;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -329,6 +330,14 @@ impl Ord for DateTime {
     }
 }
 
+impl Display for DateTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let datetime =
+            chrono::NaiveDateTime::from_timestamp_opt(self.seconds, self.subsecond_nanos).unwrap();
+        let formatted = datetime.format("%Y-%m-%dT%H:%M:%S%.fZ");
+        write!(f, "{}", formatted)
+    }
+}
 /// Failure to convert a `DateTime` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]

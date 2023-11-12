@@ -14,7 +14,15 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 byte-stream-poll-next = []
 http-body-0-4-x = ["dep:http-body-0-4"]
 hyper-0-14-x = ["dep:hyper-0-14"]
-rt-tokio = ["dep:http-body-0-4", "dep:tokio-util", "dep:tokio", "tokio?/rt", "tokio?/fs", "tokio?/io-util", "tokio-util?/io"]
+rt-tokio = [
+    "dep:http-body-0-4",
+    "dep:tokio-util",
+    "dep:tokio",
+    "tokio?/rt",
+    "tokio?/fs",
+    "tokio?/io-util",
+    "tokio-util?/io",
+]
 test-util = []
 serde-serialize = []
 serde-deserialize = []
@@ -32,6 +40,7 @@ pin-project-lite = "0.2.9"
 pin-utils = "0.1.0"
 ryu = "1.0.5"
 time = { version = "0.3.4", features = ["parsing"] }
+chrono = "0.4.31"
 
 # ByteStream internals
 futures-core = "0.3.14"
