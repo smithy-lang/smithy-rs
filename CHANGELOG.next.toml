@@ -11,6 +11,14 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[smithy-rs]]
+message = """
+Fix rust rendering of @error structs when fields have default implementation
+"""
+references = ["smithy-rs#3182"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "all"}
+author = "codypenta"
+
 [[aws-sdk-rust]]
 message = "Change `ByteStream::into_async_read` to return `AsyncBufRead`"
 references = ["smithy-rs#3164"]
