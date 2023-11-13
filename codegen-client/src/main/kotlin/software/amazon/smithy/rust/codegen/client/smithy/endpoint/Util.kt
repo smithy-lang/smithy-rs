@@ -58,8 +58,8 @@ class Types(runtimeConfig: RuntimeConfig) {
     private val smithyTypesEndpointModule = RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
     val smithyHttpEndpointModule = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint")
     val smithyEndpoint = smithyTypesEndpointModule.resolve("Endpoint")
-    val endpointFuture = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint::EndpointFuture")
-    private val endpointRtApi = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint")
+    val endpointFuture = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint::EndpointFuture")
+    private val endpointRtApi = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint")
     val resolveEndpointError = smithyHttpEndpointModule.resolve("ResolveEndpointError")
 
     fun toArray() = arrayOf(

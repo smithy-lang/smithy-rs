@@ -95,7 +95,7 @@ structure InnermostShape {
     @required
     aDouble: Double,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/312)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/312)
     // @required
     // aBigInteger: BigInteger,
 

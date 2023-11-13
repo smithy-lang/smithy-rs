@@ -5,7 +5,7 @@ authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@a
 description = "Cross-service types for the AWS SDK."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 # This feature is to be used only for doc comments
@@ -38,3 +38,9 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+# make sure to keep crate stability in sync with the second element of the following tuple in
+# buildSrc/src/main/kotlin/CrateSet.kt:
+#  Crate("aws-types", STABLE_VERSION_PROP_NAME),
+[package.metadata.smithy-rs-release-tooling]
+stable = true

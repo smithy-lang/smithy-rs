@@ -35,7 +35,7 @@ private fun RuntimeConfig.awsInlineableHttpRequestChecksum() = RuntimeType.forIn
         CargoDependency.Tracing,
         CargoDependency.smithyChecksums(this),
         CargoDependency.smithyHttp(this),
-        CargoDependency.smithyRuntimeApi(this),
+        CargoDependency.smithyRuntimeApiClient(this),
         CargoDependency.smithyTypes(this),
     ),
 )
@@ -105,7 +105,7 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
 }
 
 // This generator was implemented based on this spec:
-// https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
+// https://smithy-lang.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
 class HttpRequestChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
@@ -122,7 +122,7 @@ class HttpRequestChecksumCustomization(
             is OperationSection.AdditionalInterceptors -> {
                 if (requestAlgorithmMember != null) {
                     section.registerInterceptor(runtimeConfig, this) {
-                        val runtimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
+                        val runtimeApi = RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                         rustTemplate(
                             """
                             #{RequestChecksumInterceptor}::new(|input: &#{Input}| {

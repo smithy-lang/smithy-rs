@@ -109,7 +109,7 @@ object TestWorkspace {
             )
             newProject.resolve("rust-toolchain.toml").writeText(
                 // help rust select the right version when we run cargo test
-                // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this from the msrv property using a
                 //  method as we do for runtime crate versions
                 "[toolchain]\nchannel = \"1.70.0\"\n",
             )
@@ -294,7 +294,7 @@ class TestWriterDelegator(
 }
 
 /**
- * Generate a newtest module
+ * Generate a new test module
  *
  * This should only be used in test code—the generated module name will be something like `tests_123`
  */

@@ -12,12 +12,12 @@ Example updating SDK examples to use SDK version 0.5.0 with Smithy version 0.35.
 $ sdk-versioner \
   --sdk-version 0.5.0 \
   --smithy-version 0.35.0 \
-  path/to/aws-doc-sdk-examples/rust_dev_preview
+  path/to/aws-doc-sdk-examples/rust
 ```
 
 Example updating SDK examples to refer to local generated code:
 ```bash
 $ sdk-versioner \
   --sdk-path path/to/smithy-rs/aws/sdk/build/aws-sdk/sdk \
-  path/to/aws-doc-sdk-examples/rust_dev_preview
+  path/to/aws-doc-sdk-examples/rust
 ```

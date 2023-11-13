@@ -13,6 +13,7 @@
     rust_2018_idioms,
     unreachable_pub
 )]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 pub mod base64;
 pub mod body;
 pub mod byte_stream;
@@ -21,6 +22,7 @@ pub mod config_bag;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
+pub mod event_stream;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
@@ -31,6 +33,7 @@ pub mod type_erasure;
 mod blob;
 mod document;
 mod number;
+pub mod str_bytes;
 
 pub use blob::Blob;
 pub use date_time::DateTime;

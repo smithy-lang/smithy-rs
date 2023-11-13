@@ -29,7 +29,7 @@ class TsServerOperationErrorGenerator(
         renderFromTsErr(writer)
     }
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/2317): match the Ts error type and return the right one.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/2317): match the Ts error type and return the right one.
     private fun renderFromTsErr(writer: RustWriter) {
         writer.rustTemplate(
             """

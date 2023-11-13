@@ -19,7 +19,7 @@ class AwsRequestIdDecorator : BaseRequestIdDecorator() {
     override val accessorFunctionName: String = "request_id"
 
     private fun requestIdModule(codegenContext: ClientCodegenContext): RuntimeType =
-        AwsRuntimeType.awsHttp(codegenContext.runtimeConfig).resolve("request_id")
+        AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("request_id")
 
     override fun accessorTrait(codegenContext: ClientCodegenContext): RuntimeType =
         requestIdModule(codegenContext).resolve("RequestId")

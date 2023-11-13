@@ -157,7 +157,7 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
         arrayOf(
             "SigV4AuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4AuthScheme"),
             "SigV4aAuthScheme" to awsRuntime.resolve("auth::sigv4a::SigV4aAuthScheme"),
-            "SharedAuthScheme" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
+            "SharedAuthScheme" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
         )
     }
 
@@ -226,7 +226,7 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                 if (authSchemes.containsKey(SigV4Trait.ID)) {
                     val unsignedPayload = section.operationShape.hasTrait<UnsignedPayloadTrait>()
                     val doubleUriEncode = unsignedPayload || !disableDoubleEncode(codegenContext.serviceShape)
-                    val contentSha256Header = needsAmzSha256(codegenContext.serviceShape)
+                    val contentSha256Header = needsAmzSha256(codegenContext.serviceShape) || unsignedPayload
                     val normalizeUrlPath = !disableUriPathNormalization(codegenContext.serviceShape)
                     rustTemplate(
                         """

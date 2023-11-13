@@ -26,13 +26,12 @@ internal class EndpointConfigCustomization(
     ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
-    private val epModule = RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::endpoint")
+    private val epModule = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint")
     private val epRuntimeModule = RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::endpoints")
 
     private val codegenScope = arrayOf(
         *preludeScope,
         "Params" to typesGenerator.paramsStruct(),
-        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
         "SharedEndpointResolver" to epModule.resolve("SharedEndpointResolver"),
         "StaticUriEndpointResolver" to epRuntimeModule.resolve("StaticUriEndpointResolver"),
@@ -90,7 +89,6 @@ internal class EndpointConfigCustomization(
                                 ##[allow(deprecated)]
                                 self.set_endpoint_resolver(
                                     endpoint_url.map(|url| {
-                                        use #{IntoShared};
                                         #{StaticUriEndpointResolver}::uri(url).into_shared()
                                     })
                                 );

@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.traits.IdempotencyTokenTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -271,13 +272,13 @@ class ServiceConfigGenerator(
         "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
         "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
         "Cow" to RuntimeType.Cow,
-        "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-        "Layer" to smithyTypes.resolve("config_bag::Layer"),
+        "FrozenLayer" to configReexport(smithyTypes.resolve("config_bag::FrozenLayer")),
+        "Layer" to configReexport(smithyTypes.resolve("config_bag::Layer")),
         "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
-        "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
-        "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-        "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
-        "runtime_plugin" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin"),
+        "RuntimeComponentsBuilder" to configReexport(RuntimeType.runtimeComponentsBuilder(runtimeConfig)),
+        "RuntimePlugin" to configReexport(RuntimeType.runtimePlugin(runtimeConfig)),
+        "SharedRuntimePlugin" to configReexport(RuntimeType.sharedRuntimePlugin(runtimeConfig)),
+        "runtime_plugin" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_plugin"),
     )
 
     fun render(writer: RustWriter) {

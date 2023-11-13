@@ -7,7 +7,7 @@
 //! [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo) is used. [`ConnectInfo`]'s
 //! [`FromParts`] implementation allows it to be extracted from the [`http::Request`].
 //!
-//! The [`example service`](https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/main.rs)
+//! The [`example service`](https://github.com/smithy-lang/smithy-rs/blob/main/examples/pokemon-service/src/main.rs)
 //! illustrates the use of [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 //! and [`ConnectInfo`] with a service builder.
 

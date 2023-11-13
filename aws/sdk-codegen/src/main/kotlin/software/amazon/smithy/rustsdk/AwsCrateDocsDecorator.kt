@@ -119,11 +119,12 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
         if (includeHeader) {
             template(asComments, escape("# $moduleName\n"))
         }
+        // NOTE: when you change this, you must also change SDK_README.md.hb
         template(
             asComments,
             """
-            **Please Note: The SDK is currently in Developer Preview and is intended strictly for
-            feedback purposes only. Do not use this SDK for production workloads.**${"\n"}
+            **Please Note: The SDK is currently released as a developer preview, without support or assistance for use
+            on production workloads. Any use in production is at your own risk.**${"\n"}
             """.trimIndent(),
         )
 

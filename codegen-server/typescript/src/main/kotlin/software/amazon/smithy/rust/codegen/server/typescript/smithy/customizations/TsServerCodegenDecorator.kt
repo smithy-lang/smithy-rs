@@ -62,7 +62,7 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
         val name = codegenContext.settings.moduleName.toSnakeCase()
         val version = codegenContext.settings.moduleVersion
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2317): we should probably use a real JSON writer, but I did not want to add
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2317): we should probably use a real JSON writer, but I did not want to add
         //  other external libraries at this stage.
         rustCrate.withFile("package.json") {
             val content = """{

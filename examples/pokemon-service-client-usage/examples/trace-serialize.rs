@@ -9,7 +9,7 @@
 /// purposes and may be useful in debugging scenarios. Please don't use this as-is in production.
 ///
 /// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
-/// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
+/// Refer to the [README.md](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example trace-serialize`.
@@ -64,7 +64,7 @@ impl Intercept for WireFormatInterceptor {
         // Get the response type from the context.
         let response = context.response();
         // Print the response.
-        if response.status() == StatusCode::OK {
+        if response.status().as_u16() == StatusCode::OK.as_u16() {
             tracing::info!(?response, "Response received:");
         } else {
             tracing::error!(?response);
