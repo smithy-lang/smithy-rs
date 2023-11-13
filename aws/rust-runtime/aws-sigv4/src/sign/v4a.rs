@@ -5,7 +5,8 @@
 
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
-use crypto_bigint::{U256, Encoding, CheckedAdd};
+use crypto_bigint::{U256, Encoding, CheckedAdd, CheckedSub};
+use once_cell::sync::Lazy;
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey};
 use std::io::Write;
@@ -13,13 +14,13 @@ use std::time::SystemTime;
 use zeroize::Zeroizing;
 
 const ALGORITHM: &[u8] = b"AWS4-ECDSA-P256-SHA256";
-const BIG_N_MINUS_2: U256 = {
+const BIG_N_MINUS_2: Lazy<U256> = Lazy::new(|| {
     // The N value from section 3.2.1.3 of https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf
     // Used as the N value for the algorithm described in section A.2.2 of https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf
     // *(Basically a prime number blessed by the NSA for use in p256)*
     const ORDER: U256 = U256::from_be_hex("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
-    ORDER.shr_vartime(1)
-};
+    ORDER.checked_sub(&U256::from(2u32)).unwrap()
+});
 
 /// Calculates a Sigv4a signature
 pub fn calculate_signature(signing_key: impl AsRef<[u8]>, string_to_sign: &[u8]) -> String {
@@ -63,7 +64,7 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
 
         // It would be more secure for this to be a constant time comparison, but because this
         // is for client usage, that's not as big a deal.
-        if k0 <= BIG_N_MINUS_2 {
+        if k0 <= *BIG_N_MINUS_2 {
             let pk = k0.checked_add(&U256::ONE).unwrap_or(U256::ZERO);
             let d = Zeroizing::new(pk.to_be_bytes());
             break SigningKey::from_bytes(d.as_ref()).unwrap();
