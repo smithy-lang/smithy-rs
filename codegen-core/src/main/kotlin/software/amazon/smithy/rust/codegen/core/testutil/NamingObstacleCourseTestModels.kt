@@ -171,6 +171,11 @@ object NamingObstacleCourseTestModels {
         )
     }.toString().asSmithyModel()
 
+    /**
+     * This targets two bug classes:
+     * - operation inputs used as nested outputs
+     * - operation outputs used as nested outputs
+     */
     fun reusedInputOutputShapesModel(protocol: Trait) = """
         namespace test
         use ${protocol.toShapeId()}
@@ -179,14 +184,22 @@ object NamingObstacleCourseTestModels {
         @service(sdkId: "test")
         service Service {
             version: "2006-03-01",
-            operations: [GetThing, GetThingNested]
+            operations: [GetThing, ReuseGetThingIO]
         }
 
         // re-use get thing output in a list & in an operation
         @http(uri: "/SomeOperation2", method: "POST")
         operation GetThing {
             output: GetThingOutput
-            input: GetThingOutput
+            input: GetThingInput
+        }
+
+        // an operation that re-uses the input and output shapes from `GetThing` above. this has caused issues in the
+        // past with operation/input shape confusion during function signature generation
+        @http(uri: "/SomeOperation3", method: "POST")
+        operation ReuseGetThingIO {
+            input: GetThingNested
+            output: GetThingNested
         }
 
         structure GetThingOutput {
@@ -199,26 +212,18 @@ object NamingObstacleCourseTestModels {
             meta: String
         }
 
-        @http(uri: "/SomeOperation3", method: "POST")
-        operation GetThingNested {
-            input: GetThingADifferentWayOutput
-            output: GetThingADifferentWayOutput
+        // nested structure which reuses input and output shapes internally
+        structure GetThingNested {
+            thingsOut: GetThingOutputList,
+            thingsIn: GetThingInputList,
+            thingOut: GetThingOutput,
+            thingIn: GetThingInput
         }
 
-        structure GetThingADifferentWayOutput {
-            things: GetThings,
-            thingsInput: GetThingsInput
-        }
-
-        structure GetThingADifferentWayInput {
-            things: GetThings
-        }
-
-
-        list GetThings {
+        list GetThingOutputList {
             member: GetThingOutput
         }
-        list GetThingsInput {
+        list GetThingInputList {
             member: GetThingInput
         }
     """.asSmithyModel()
