@@ -13,7 +13,7 @@ default = ["sign-http"]
 http0-compat = ["dep:http"]
 sign-http = ["dep:http", "dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
-sigv4a = ["dep:p256", "dep:num-bigint", "dep:zeroize", "dep:ring"]
+sigv4a = ["dep:p256", "dep:crypto-bigint", "dep:zeroize", "dep:ring"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
@@ -33,7 +33,7 @@ percent-encoding = { version = "2.1", optional = true }
 regex = "1.5"
 ring = { version = "0.17.5", optional = true }
 sha2 = "0.10"
-crypto-bigint = "0.5"
+crypto-bigint = { version = "0.5", optional = true }
 time = "0.3.5"
 tracing = "0.1"
 zeroize = { version = "^1", optional = true }
