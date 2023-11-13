@@ -5,7 +5,7 @@
 
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
-use crypto_bigint::{U256, Encoding, CheckedAdd, CheckedSub};
+use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
 use once_cell::sync::Lazy;
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey};
