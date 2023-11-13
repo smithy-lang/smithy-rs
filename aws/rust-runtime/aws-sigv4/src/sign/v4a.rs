@@ -18,7 +18,8 @@ const BIG_N_MINUS_2: Lazy<U256> = Lazy::new(|| {
     // The N value from section 3.2.1.3 of https://nvlpubs.nist.gov/nistpubs/SpecialPublications/NIST.SP.800-186.pdf
     // Used as the N value for the algorithm described in section A.2.2 of https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf
     // *(Basically a prime number blessed by the NSA for use in p256)*
-    const ORDER: U256 = U256::from_be_hex("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
+    const ORDER: U256 =
+        U256::from_be_hex("ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551");
     ORDER.checked_sub(&U256::from(2u32)).unwrap()
 });
 
