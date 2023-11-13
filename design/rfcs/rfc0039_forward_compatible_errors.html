@@ -1,0 +1,330 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>RFC-0039: Forward Compatible Errors - Smithy Rust</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+    </head>
+    <body class="sidebar-visible no-js">
+    <div id="body-container">
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('light')
+            html.classList.add(theme);
+            var body = document.querySelector('body');
+            body.classList.remove('no-js')
+            body.classList.add('js');
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var body = document.querySelector('body');
+            var sidebar = null;
+            var sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+            }
+            sidebar_toggle.checked = sidebar === 'visible';
+            body.classList.remove('sidebar-visible');
+            body.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../overview.html"><strong aria-hidden="true">1.</strong> Design Overview</a></li><li class="chapter-item expanded "><a href="../tenets.html"><strong aria-hidden="true">2.</strong> Tenets</a></li><li class="chapter-item expanded "><a href="../faq.html"><strong aria-hidden="true">3.</strong> Design FAQ</a></li><li class="chapter-item expanded "><a href="../transport/overview.html"><strong aria-hidden="true">4.</strong> Transport</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../transport/operation.html"><strong aria-hidden="true">4.1.</strong> HTTP Operations</a></li><li class="chapter-item expanded "><a href="../transport/middleware.html"><strong aria-hidden="true">4.2.</strong> HTTP Middleware</a></li><li class="chapter-item expanded "><a href="../transport/connector.html"><strong aria-hidden="true">4.3.</strong> TLS Connector</a></li></ol></li><li class="chapter-item expanded "><a href="../smithy/overview.html"><strong aria-hidden="true">5.</strong> Smithy</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../smithy/simple_shapes.html"><strong aria-hidden="true">5.1.</strong> Simple Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/recursive_shapes.html"><strong aria-hidden="true">5.2.</strong> Recursive Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/aggregate_shapes.html"><strong aria-hidden="true">5.3.</strong> Aggregate Shapes</a></li><li class="chapter-item expanded "><a href="../smithy/endpoint.html"><strong aria-hidden="true">5.4.</strong> Endpoint Resolution</a></li><li class="chapter-item expanded "><a href="../smithy/backwards-compat.html"><strong aria-hidden="true">5.5.</strong> Backwards Compatibility</a></li></ol></li><li class="chapter-item expanded "><a href="../client/overview.html"><strong aria-hidden="true">6.</strong> Client</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../client/orchestrator.html"><strong aria-hidden="true">6.1.</strong> What is the 'orchestrator' and why does it exist?</a></li><li class="chapter-item expanded "><a href="../client/identity_and_auth.html"><strong aria-hidden="true">6.2.</strong> Identity and Auth</a></li></ol></li><li class="chapter-item expanded "><a href="../server/overview.html"><strong aria-hidden="true">7.</strong> Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../server/middleware.html"><strong aria-hidden="true">7.1.</strong> Middleware</a></li><li class="chapter-item expanded "><a href="../server/instrumentation.html"><strong aria-hidden="true">7.2.</strong> Instrumentation</a></li><li class="chapter-item expanded "><a href="../server/from_parts.html"><strong aria-hidden="true">7.3.</strong> Accessing Un-modelled Data</a></li><li class="chapter-item expanded "><a href="../server/anatomy.html"><strong aria-hidden="true">7.4.</strong> The Anatomy of a Service</a></li><li class="chapter-item expanded "><a href="../server/code_generation.html"><strong aria-hidden="true">7.5.</strong> Generating Common Service Code</a></li></ol></li><li class="chapter-item expanded "><a href="../rfcs/overview.html"><strong aria-hidden="true">8.</strong> RFCs</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../rfcs/rfc0001_shared_config.html"><strong aria-hidden="true">8.1.</strong> RFC-0001: Sharing configuration between multiple clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0002_http_versions.html"><strong aria-hidden="true">8.2.</strong> RFC-0002: Supporting multiple HTTP versions for SDKs that use Event Stream</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0003_presigning_api.html"><strong aria-hidden="true">8.3.</strong> RFC-0003: API for Pre-signed URLs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0004_retry_behavior.html"><strong aria-hidden="true">8.4.</strong> RFC-0004: Retry Behavior</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0005_service_generation.html"><strong aria-hidden="true">8.5.</strong> RFC-0005: Smithy Rust service framework</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0006_service_specific_middleware.html"><strong aria-hidden="true">8.6.</strong> RFC-0006: Service-specific middleware</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0007_split_release_process.html"><strong aria-hidden="true">8.7.</strong> RFC-0007: Split release process</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0008_paginators.html"><strong aria-hidden="true">8.8.</strong> RFC-0008: Paginators</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0009_example_consolidation.html"><strong aria-hidden="true">8.9.</strong> RFC-0009: Example Consolidation</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0010_waiters.html"><strong aria-hidden="true">8.10.</strong> RFC-0010: Waiters</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0011_crates_io_alpha_publishing.html"><strong aria-hidden="true">8.11.</strong> RFC-0011: Publishing Alpha to Crates.io</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0012_independent_crate_versioning.html"><strong aria-hidden="true">8.12.</strong> RFC-0012: Independent Crate Versioning</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0013_body_callback_apis.html"><strong aria-hidden="true">8.13.</strong> RFC-0013: Body Callback APIs</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0014_timeout_config.html"><strong aria-hidden="true">8.14.</strong> RFC-0014: Fine-grained timeout configuration</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0015_using_features_responsibly.html"><strong aria-hidden="true">8.15.</strong> RFC-0015: How Cargo "features" should be used in the SDK and runtime crates</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0016_flexible_checksum_support.html"><strong aria-hidden="true">8.16.</strong> RFC-0016: Supporting Flexible Checksums</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0017_customizable_client_operations.html"><strong aria-hidden="true">8.17.</strong> RFC-0017: Customizable Client Operations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0018_logging_sensitive.html"><strong aria-hidden="true">8.18.</strong> RFC-0018: Logging in the Presence of Sensitive Data</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0019_event_streams_errors.html"><strong aria-hidden="true">8.19.</strong> RFC-0019: Event Streams Errors</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0020_service_builder.html"><strong aria-hidden="true">8.20.</strong> RFC-0020: Service Builder Improvements</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0021_dependency_versions.html"><strong aria-hidden="true">8.21.</strong> RFC-0021: Dependency Versions</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0022_error_context_and_compatibility.html"><strong aria-hidden="true">8.22.</strong> RFC-0022: Error Context and Compatibility</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0023_refine_builder.html"><strong aria-hidden="true">8.23.</strong> RFC-0023: Evolving the new service builder API</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0024_request_id.html"><strong aria-hidden="true">8.24.</strong> RFC-0024: RequestID</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0025_constraint_traits.html"><strong aria-hidden="true">8.25.</strong> RFC-0025: Constraint traits</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0026_client_crate_organization.html"><strong aria-hidden="true">8.26.</strong> RFC-0026: Client Crate Organization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0027_endpoints_20.html"><strong aria-hidden="true">8.27.</strong> RFC-0027: Endpoints 2.0</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0028_sdk_credential_cache_type_safety.html"><strong aria-hidden="true">8.28.</strong> RFC-0028: SDK Credential Cache Type Safety</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0029_new_home_for_cred_types.html"><strong aria-hidden="true">8.29.</strong> RFC-0029: Finding New Home for Credential Types</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0030_serialization_and_deserialization.html"><strong aria-hidden="true">8.30.</strong> RFC-0030: Serialization And Deserialization</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0031_providing_fallback_credentials_on_timeout.html"><strong aria-hidden="true">8.31.</strong> RFC-0031: Providing Fallback Credentials on Timeout</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0032_better_constraint_violations.html"><strong aria-hidden="true">8.32.</strong> RFC-0032: Better Constraint Violations</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0033_improve_sdk_request_id_access.html"><strong aria-hidden="true">8.33.</strong> RFC-0033: Improving access to request IDs in SDK clients</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0034_smithy_orchestrator.html"><strong aria-hidden="true">8.34.</strong> RFC-0034: Smithy Orchestrator</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0035_collection_defaults.html"><strong aria-hidden="true">8.35.</strong> RFC-0035: Collection Defaults</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0036_http_dep_elimination.html"><strong aria-hidden="true">8.36.</strong> RFC-0036: HTTP Dependency Exposure</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0037_http_wrapper.html"><strong aria-hidden="true">8.37.</strong> RFC-0037: The HTTP Wrapper</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0038_retry_classifier_customization.html"><strong aria-hidden="true">8.38.</strong> RFC-0038: User-configurable retry classification</a></li><li class="chapter-item expanded "><a href="../rfcs/rfc0039_forward_compatible_errors.html" class="active"><strong aria-hidden="true">8.39.</strong> RFC-0039: Forward Compatible Errors</a></li></ol></li><li class="chapter-item expanded "><a href="../contributing/overview.html"><strong aria-hidden="true">9.</strong> Contributing</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../contributing/writing_and_debugging_a_low-level_feature_that_relies_on_HTTP.html"><strong aria-hidden="true">9.1.</strong> Writing and debugging a low-level feature that relies on HTTP</a></li></ol></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <!-- Track and set sidebar scroll position -->
+        <script>
+            var sidebarScrollbox = document.querySelector('#sidebar .sidebar-scrollbox');
+            sidebarScrollbox.addEventListener('click', function(e) {
+                if (e.target.tagName === 'A') {
+                    sessionStorage.setItem('sidebar-scroll', sidebarScrollbox.scrollTop);
+                }
+            }, { passive: true });
+            var sidebarScrollTop = sessionStorage.getItem('sidebar-scroll');
+            sessionStorage.removeItem('sidebar-scroll');
+            if (sidebarScrollTop) {
+                // preserve sidebar scroll position when navigating via links within sidebar
+                sidebarScrollbox.scrollTop = sidebarScrollTop;
+            } else {
+                // scroll sidebar to current active section when navigating via "next/previous chapter" buttons
+                var activeSection = document.querySelector('#sidebar .active');
+                if (activeSection) {
+                    activeSection.scrollIntoView({ block: 'center' });
+                }
+            }
+        </script>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Smithy Rust</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
+<h1 id="rfc-forward-compatible-errors"><a class="header" href="#rfc-forward-compatible-errors">RFC: Forward Compatible Errors</a></h1>
+<!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
+<blockquote>
+<p>Status: RFC</p>
+<p>Applies to: client</p>
+</blockquote>
+<!-- A great RFC will include a list of changes at the bottom so that the implementor can be sure they haven't missed anything -->
+<p>For a summarized list of proposed changes, see the <a href="#changes-checklist">Changes Checklist</a> section.</p>
+<!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
+<p>This RFC defines an approach for making it forwards-compatible to convert <strong>unmodeled</strong> <code>Unhandled</code> errors into modeled ones. This occurs as servers update their models to include errors that were previously unmodeled.</p>
+<p>Currently, SDK errors are <strong>not</strong> forward compatible in this way. If a customer matches <code>Unhandled</code> in addition to the <code>_</code> branch and a new variant is added, <strong>they will fail to match the new variant</strong>. We currently handle this issue with enums by prevent useful information from being readable from the <code>Unknown</code> variant.</p>
+<p>This is related to ongoing work on the <a href="https://github.com/rust-lang/rust/issues/89554"><code>non_exhaustive_omitted_patterns</code> lint</a> which would produce a compiler warning when a new variant was added even when <code>_</code> was used.</p>
+<!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
+<h2 id="terminology"><a class="header" href="#terminology">Terminology</a></h2>
+<p>For purposes of discussion, consider the following error:</p>
+<pre><code class="language-rust ignore">#[non_exhaustive]
+pub enum AbortMultipartUploadError {
+    NoSuchUpload(NoSuchUpload),
+    Unhandled(Unhandled),
+}</code></pre>
+<ul>
+<li><strong>Modeled Error</strong>: An error with an named variant, e.g. <code>NoSuchUpload</code> above</li>
+<li><strong>Unmodeled Error</strong>: Any other error, e.g. if the server returned <code>ValidationException</code> for the above operation.</li>
+<li><strong>Error code</strong>: All errors across all protocols provide a <code>code</code>, a unique method to identify an error across the service closure.</li>
+</ul>
+<!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
+<h2 id="the-user-experience-if-this-rfc-is-implemented"><a class="header" href="#the-user-experience-if-this-rfc-is-implemented">The user experience if this RFC is implemented</a></h2>
+<p>In the current version of the SDK, users match the <code>Unhandled</code> variant. They can then read the code from the <code>Unhandled</code> variant because <a href="https://docs.rs/aws-smithy-types/0.56.1/aws_smithy_types/error/struct.Unhandled.html"><code>Unhandled</code></a> implements the <code>ProvideErrorMetadata</code> trait as well as the standard-library <code>std::error::Error</code> trait.</p>
+<blockquote>
+<p>Note: It's possible to write correct code today because the operation-level and service-level errors already expose <code>code()</code> via <code>ProvideErrorMetadata</code>. This RFC describes mechanisms to guide customers to write forward-compatible code.</p>
+</blockquote>
+<pre><code class="language-rust ignore"><span class="boring">fn docs() {
+</span>    match client.get_object().send().await {
+        Ok(obj) =&gt; { ... },
+        Err(e) =&gt; match e.into_service_error() {
+            GetObjectError::NotFound =&gt; { ... },
+            GetObjectError::Unhandled(err) if err.code() == &quot;ValidationException&quot; =&gt; { ... }
+            other =&gt; { /** do something with this variant */ }
+        }
+    }
+<span class="boring">}</span></code></pre>
+<p>We must instead guide customers into the following pattern:</p>
+<pre><code class="language-rust ignore"><span class="boring">fn docs() {
+</span>    match client.get_object().send().await {
+        Ok(obj) =&gt; { ... },
+        Err(e) =&gt; match e.into_service_error() {
+            GetObjectError::NotFound =&gt; { ... },
+            err if err.code() == &quot;ValidationException&quot; =&gt; { ... },
+            err =&gt; warn!(&quot;{}&quot;, err.code()),
+        }
+    }
+<span class="boring">}</span></code></pre>
+<p>In this example, because customers are <em>not</em> matching on the <code>Unhandled</code> variant explicitly this code is forward compatible for <code>ValidationException</code> being introduced in the future.</p>
+<p><strong>Guiding Customers to this Pattern</strong>
+There are two areas we need to handle:</p>
+<ol>
+<li>Prevent customers from extracting useful information from <code>Unhandled</code></li>
+<li>Alert customers <em>currently</em> using unhandled what to use instead. For example, the following code is still problematic:
+<pre><code class="language-rust ignore">    match err {
+        GetObjectError::NotFound =&gt; { ... },
+        err @ GetObject::Unhandled(_) if err.code() == Some(&quot;ValidationException&quot;) =&gt; { ... }
+    }</code></pre>
+</li>
+</ol>
+<p>For <code>1</code>, we need to remove the <code>ProvideErrorMetadata</code> trait implementation from <code>Unhandled</code>. We would expose this isntead through a layer of indirection to enable code generated to code to still read the data.</p>
+<p>For <code>2</code>, we would deprecate the <code>Unhandled</code> variants with a message clearly indicating how this code should be written.</p>
+<h2 id="how-to-actually-implement-this-rfc"><a class="header" href="#how-to-actually-implement-this-rfc">How to actually implement this RFC</a></h2>
+<h3 id="locking-down-unhandled"><a class="header" href="#locking-down-unhandled">Locking down <code>Unhandled</code></a></h3>
+<p>In order to prevent accidental matching on <code>Unhandled</code>, we need to make it hard to extract useful information from <code>Unhandled</code> itself. We will do this by removing the <code>ProvideErrorMetadata</code> trait implementation and exposing the following method:</p>
+<pre><code class="language-rust ignore">#[doc(hidden)]
+/// Introspect the error metadata of this error.
+///
+/// This method should NOT be used from external code because matching on `Unhandled` directly is a backwards-compatibility
+/// hazard. See `RFC-0039` for more information.
+pub fn introspect(&amp;self) -&gt; impl ProvideErrorMetadata + '_ {
+   struct Introspected&lt;'a&gt;(&amp;'a Unhandled);
+   impl ProvideErrorMetadata for Introspected { ... }
+   Introspected(self)
+}</code></pre>
+<p>Generated code would this use <code>introspect</code> when supporting <strong>top-level</strong> <code>ErrorMetadata</code> (e.g. for <a href="https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/enum.Error.html"><code>aws_sdk_s3::Error</code></a>).</p>
+<h3 id="deprecating-the-variant"><a class="header" href="#deprecating-the-variant">Deprecating the Variant</a></h3>
+<p>The <code>Unhandled</code> variant will be deprecated to prevent users from matching on it inadvertently.</p>
+<pre><code class="language-rust ignore">enum GetObjectError {
+   NotFound(NotFound),
+   #[deprecated(&quot;Matching on `Unhandled` directly is a backwards compatibility hazard. Use `err if err.error_code() == ...` instead. See [here](&lt;docs about using errors&gt;) for more information.&quot;)]
+   Unhandled(Unhandled)
+}</code></pre>
+<h3 id=""><a class="header" href="#"></a></h3>
+<!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
+<h2 id="changes-checklist"><a class="header" href="#changes-checklist">Changes checklist</a></h2>
+<ul>
+<li><input disabled="" type="checkbox"/>
+Generate code to deprecate unhandled variants. Determine the best way to allow <code>Unhandled</code> to continue to be constructed in client code</li>
+<li><input disabled="" type="checkbox"/>
+Generate code to deprecate the <code>Unhandled</code> variant for the service meta-error. Consider how this interacts with non-service errors.</li>
+<li><input disabled="" type="checkbox"/>
+Update <code>Unhandled</code> to make it useless on its own and expose information via an <code>Introspect</code> doc hidden struct.</li>
+<li><input disabled="" type="checkbox"/>
+Update developer guide to address this issue.</li>
+<li><input disabled="" type="checkbox"/>
+Changelog &amp; Upgrade Guidance</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../rfcs/rfc0038_retry_classifier_customization.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../contributing/overview.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../rfcs/rfc0038_retry_classifier_customization.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../contributing/overview.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../static/mermaid.min.js"></script>
+        <script src="../static/mermaid-init.js"></script>
+
+
+    </div>
+    </body>
+</html>
