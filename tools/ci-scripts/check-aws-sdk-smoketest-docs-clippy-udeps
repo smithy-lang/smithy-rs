@@ -10,7 +10,7 @@ set -eux
 pushd aws-sdk-smoketest &>/dev/null
 
 # Override "fail on warning" for smoke test docs since DynamoDB's modeled docs cause rustdoc warnings
-RUSTDOCFLAGS="" cargo doc --no-deps --document-private-items --all-features
+RUSTDOCFLAGS="--cfg docsrs" cargo +"${RUST_NIGHTLY_VERSION}" doc --no-deps --document-private-items --all-features
 
 cargo clippy --all-features
 cargo +"${RUST_NIGHTLY_VERSION}" udeps

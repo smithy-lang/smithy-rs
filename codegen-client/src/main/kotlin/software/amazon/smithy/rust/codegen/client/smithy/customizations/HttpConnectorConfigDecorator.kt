@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
@@ -32,13 +33,13 @@ private class HttpConnectorConfigCustomization(
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
-        "HttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::HttpClient"),
-        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
-        "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
-        "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
-        "SharedHttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::SharedHttpClient"),
-        "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
+        "HttpClient" to configReexport(
+            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::HttpClient"),
+        ),
+        "IntoShared" to configReexport(RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared")),
+        "SharedHttpClient" to configReexport(
+            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::SharedHttpClient"),
+        ),
     )
 
     override fun section(section: ServiceConfig): Writable {
