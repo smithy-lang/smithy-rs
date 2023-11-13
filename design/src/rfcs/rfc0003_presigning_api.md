@@ -193,7 +193,7 @@ look for this synthetic trait when creating the fluent builders and inputs to kn
 If a presignable operation input has a member named `presigned`, then there will be a name collision with
 the function to generate a presigned URL. To mitigate this, `RustReservedWords` will be updated
 to rename the `presigned` member to `presigned_value`
-[similar to how `send` is renamed](https://github.com/awslabs/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28).
+[similar to how `send` is renamed](https://github.com/smithy-lang/smithy-rs/blob/3d61226b5d446f4cc20bf4969f0e56d106cf478b/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/rustlang/RustReservedWords.kt#L28).
 
 Changes Checklist
 -----------------

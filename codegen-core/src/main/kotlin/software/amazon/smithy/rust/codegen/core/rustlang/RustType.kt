@@ -284,6 +284,13 @@ inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType = wh
     else -> this
 }
 
+/** Extracts the inner Reference type */
+fun RustType.innerReference(): RustType? = when (this) {
+    is RustType.Reference -> this
+    is RustType.Container -> this.member.innerReference()
+    else -> null
+}
+
 /** Wraps a type in Option if it isn't already */
 fun RustType.asOptional(): RustType = when (this) {
     is RustType.Option -> this
@@ -478,7 +485,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
 
     // These were supposed to be a part of companion object but we decided to move it out to here to avoid NPE
     // You can find the discussion here.
-    // https://github.com/awslabs/smithy-rs/discussions/2248
+    // https://github.com/smithy-lang/smithy-rs/discussions/2248
     public fun SerdeSerialize(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
     }

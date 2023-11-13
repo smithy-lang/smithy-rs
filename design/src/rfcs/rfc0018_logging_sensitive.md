@@ -8,7 +8,7 @@ Smithy provides a [sensitive trait](https://awslabs.github.io/smithy/1.0/spec/co
 
 This RFC is concerned with solving the problem of honouring this specification in the context of logging.
 
-Progress has been made towards this goal in the form of the [Sensitive Trait PR](https://github.com/awslabs/smithy-rs/pull/229), which uses code generation to remove sensitive fields from `Debug` implementations.
+Progress has been made towards this goal in the form of the [Sensitive Trait PR](https://github.com/smithy-lang/smithy-rs/pull/229), which uses code generation to remove sensitive fields from `Debug` implementations.
 
 The problem remains open due to the existence of HTTP binding traits and a lack of clearly defined user guidelines which customers may follow to honour the specification.
 
@@ -222,7 +222,7 @@ These wrappers should be provided alongside the `Sensitive` struct described in 
 
 ### Middleware Position
 
-This logging middleware should be applied outside of the [OperationHandler](https://github.com/awslabs/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) after its construction in the (generated) `operation_registry.rs` file. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) to cause minimal disruption.
+This logging middleware should be applied outside of the [OperationHandler](https://github.com/smithy-lang/smithy-rs/blob/cd0563020abcde866a741fa123e3f2e18e1be1c9/rust-runtime/inlineable/src/server_operation_handler_trait.rs#L17-L21) after its construction in the (generated) `operation_registry.rs` file. The middleware should preserve the associated types of the `OperationHandler` (`Response = Response<BoxBody>`, `Error = Infallible`) to cause minimal disruption.
 
 An easy position to apply the logging middleware is illustrated below in the form of `Logging{Operation}::new`:
 
@@ -238,7 +238,7 @@ let routes = vec![
 let router = aws_smithy_http_server::routing::Router::new_rest_json_router(routes);
 ```
 
-Although an acceptable first step, putting logging middleware here is suboptimal - the `Router` allows a `tower::Layer` to be applied to the operation by using the [Router::layer](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146) method. This middleware will be applied _outside_ of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the `Router` must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.
+Although an acceptable first step, putting logging middleware here is suboptimal - the `Router` allows a `tower::Layer` to be applied to the operation by using the [Router::layer](https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L146) method. This middleware will be applied _outside_ of the logging middleware and, as a result, will not be subject to the span of any middleware. Therefore, the `Router` must be changed to allow for middleware to be applied within the logging middleware rather than outside of it.
 
 This is a general problem, not specific to this proposal. For example, [Use Request Extensions](#use-request-extensions) must also solve this problem.
 
@@ -255,7 +255,7 @@ In the case of AWS JSON 1.0 and 1.1 protocols, the request URI is always `/`, pu
 A guideline should be made available, which includes:
 
 - The [HTTP bindings traits](#http-binding-traits) and why they are of concern in the presence of `@sensitive`.
-- The [Debug implementation](https://github.com/awslabs/smithy-rs/pull/229) on structures.
+- The [Debug implementation](https://github.com/smithy-lang/smithy-rs/pull/229) on structures.
 - How to use the `Sensitive` struct, HTTP wrappers, and the `unredacted-logging` feature flag described in [Debug Logging](#debug-logging) and [HTTP Debug/Display Wrappers](#http-debugdisplay-wrappers).
 - A warning against the two potential leaks described in [Scope and Guidelines](#scope-and-guidelines):
   - Sensitive data leaking from third-party dependencies.
@@ -395,12 +395,12 @@ Code generation would be need to be used in order to produce the filtering crite
 ## Changes Checklist
 
 - [x] Implement and integrate code generated logging middleware.
-  - <https://github.com/awslabs/smithy-rs/pull/1550>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1550>
 - [x] Add logging to `Router` implementation.
-  - <https://github.com/awslabs/smithy-rs/issues/1666>
+  - <https://github.com/smithy-lang/smithy-rs/issues/1666>
 - [x] Write developer guideline.
-  - <https://github.com/awslabs/smithy-rs/pull/1772>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1772>
 - [x] Refactor `Router` to allow for better positioning described in [Middleware Position](#middleware-position).
-  - <https://github.com/awslabs/smithy-rs/pull/1620>
-  - <https://github.com/awslabs/smithy-rs/pull/1679>
-  - <https://github.com/awslabs/smithy-rs/pull/1693>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1620>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1679>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1693>

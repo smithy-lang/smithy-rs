@@ -7,7 +7,7 @@
 /// This example demonstrates how to handle service generated errors.
 ///
 /// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
-/// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
+/// Refer to the [README.md](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example handling-errors`.
@@ -46,7 +46,7 @@ async fn main() {
 
     // The following example sends an incorrect passcode to the operation `get_storage`,
     // which will return
-    // [StorageAccessNotAuthorized](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy#L48)
+    // [StorageAccessNotAuthorized](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy#L48)
     let response_result = client
         .get_storage()
         .user("ash")

@@ -11,7 +11,7 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -109,14 +108,6 @@ class RegionDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        if (usesRegion(codegenContext)) {
-            rustCrate.withModule(ClientRustModule.config) {
-                rust("pub use #T::Region;", region(codegenContext.runtimeConfig))
-            }
-        }
-    }
-
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         if (!usesRegion(codegenContext)) {
             return listOf()
@@ -157,7 +148,7 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "Region" to region.resolve("Region"),
+        "Region" to configReexport(region.resolve("Region")),
     )
 
     override fun section(section: ServiceConfig) = writable {

@@ -70,7 +70,7 @@ impl Args {
     }
 }
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/2810): Remove `SdkPath` and just use a `PathBuf` with the new logic
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/2810): Remove `SdkPath` and just use a `PathBuf` with the new logic
 // This is only around for backwards compatibility for the next release's sync process0
 enum SdkPath {
     /// Don't even attempt to resolve the correct relative path to dependencies

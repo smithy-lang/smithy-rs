@@ -239,7 +239,7 @@ open class ServerCodegenVisitor(
             validateUnsupportedConstraints(model, service, codegenContext.settings.codegenConfig),
         )) {
             for (logMessage in validationResult.messages) {
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1756): These are getting duplicated.
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1756): These are getting duplicated.
                 logger.log(logMessage.level, logMessage.message)
             }
             if (validationResult.shouldAbort) {
@@ -260,7 +260,7 @@ open class ServerCodegenVisitor(
             model,
             codegenDecorator.crateManifestCustomizations(codegenContext),
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false,
         )
         try {
@@ -624,6 +624,9 @@ open class ServerCodegenVisitor(
 
             ScopeMacroGenerator(codegenContext).render(this)
         }
+
+        codegenDecorator.postprocessServiceGenerateAdditionalStructures(shape)
+            .forEach { structureShape -> this.structureShape(structureShape) }
     }
 
     /**
@@ -649,7 +652,7 @@ open class ServerCodegenVisitor(
             protocolGenerator.renderOperation(this, shape)
         }
 
-        codegenDecorator.postprocessGenerateAdditionalStructures(shape)
+        codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)
             .forEach { structureShape -> this.structureShape(structureShape) }
     }
 

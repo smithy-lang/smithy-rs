@@ -79,7 +79,7 @@ pub fn content_type_header_classifier(
         let expected_mime = expected_content_type
             .parse::<mime::Mime>()
             // `expected_content_type` comes from the codegen.
-            .expect("BUG: MIME parsing failed, `expected_content_type` is not valid. Please file a bug report under https://github.com/awslabs/smithy-rs/issues");
+            .expect("BUG: MIME parsing failed, `expected_content_type` is not valid. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues");
         if expected_content_type != found_mime {
             return Err(MissingContentTypeReason::UnexpectedMimeType {
                 expected_mime: Some(expected_mime),

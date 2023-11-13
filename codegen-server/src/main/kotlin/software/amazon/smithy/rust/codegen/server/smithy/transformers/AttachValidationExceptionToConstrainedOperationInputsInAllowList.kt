@@ -26,9 +26,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
  * Until we implement said mode, we manually attach the error to build these models, since we don't own them (they're
  * either actual AWS service model excerpts, or they come from the `awslabs/smithy` library.
  *
- * [1]: https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809424783
+ * [1]: https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809424783
  *
- * TODO(https://github.com/awslabs/smithy-rs/issues/1401): This transformer will go away once we add support for
+ * TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): This transformer will go away once we add support for
  *  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
  */
 object AttachValidationExceptionToConstrainedOperationInputsInAllowList {

@@ -34,7 +34,7 @@
 
 //! Types and traits for extracting data from requests.
 //!
-//! See [Accessing Un-modelled data](https://github.com/awslabs/smithy-rs/blob/main/design/src/server/from_parts.md)
+//! See [Accessing Un-modelled data](https://github.com/smithy-lang/smithy-rs/blob/main/design/src/server/from_parts.md)
 //! a comprehensive overview.
 //!
 //! The following implementations exist:

@@ -51,10 +51,6 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             writer.rust("runtime_components.set_endpoint_resolver(Some(#T));", resolver)
         }
 
-        fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
-            writer.rust("runtime_components.push_identity_resolver(#T);", identityResolver)
-        }
-
         fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
             writer.rust("runtime_components.push_retry_classifier(#T);", classifier)
         }

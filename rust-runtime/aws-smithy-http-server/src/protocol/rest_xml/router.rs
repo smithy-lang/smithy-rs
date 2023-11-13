@@ -24,7 +24,7 @@ impl IntoResponse<RestXml> for Error {
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(empty())
-                .expect("invalid HTTP response for REST XML routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
+                .expect("invalid HTTP response for REST XML routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
             Error::MethodNotAllowed => method_disallowed(),
         }
     }
