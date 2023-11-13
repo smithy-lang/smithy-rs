@@ -113,3 +113,27 @@ message = "The `RequestId` trait has moved from the aws-http crate into aws-type
 references = ["smithy-rs#3160"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Add `ProvideErrorMetadata` impl for service `Error` type."
+references = ["aws-sdk-rust#780", "smithy-rs#3189"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Add `ProvideErrorMetadata` impl for service `Error` type."
+references = ["aws-sdk-rust#780", "smithy-rs#3189"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Remove deprecated error kind type aliases."
+references = ["smithy-rs#3189"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Remove deprecated error kind type aliases."
+references = ["smithy-rs#3189"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
