@@ -412,7 +412,7 @@
       "age": 2
     },
     {
-      "message": "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/awslabs/smithy-rs/discussions/3022) for details.",
+      "message": "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/smithy-lang/smithy-rs/discussions/3022) for details.",
       "meta": {
         "bug": false,
         "breaking": true,
@@ -454,7 +454,7 @@
       "age": 2
     },
     {
-      "message": "Struct members modeled as required are no longer wrapped in `Option`s [when possible](https://smithy.io/2.0/spec/aggregate-types.html#structure-member-optionality). For upgrade guidance and more info, see [here](https://github.com/awslabs/smithy-rs/discussions/2929).",
+      "message": "Struct members modeled as required are no longer wrapped in `Option`s [when possible](https://smithy.io/2.0/spec/aggregate-types.html#structure-member-optionality). For upgrade guidance and more info, see [here](https://github.com/smithy-lang/smithy-rs/discussions/2929).",
       "meta": {
         "bug": false,
         "breaking": true,
@@ -686,7 +686,7 @@
       "age": 2
     },
     {
-      "message": "Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.\n\nFor more information, see the [guide](https://github.com/awslabs/smithy-rs/discussions/3050).\n",
+      "message": "Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.\n\nFor more information, see the [guide](https://github.com/smithy-lang/smithy-rs/discussions/3050).\n",
       "meta": {
         "bug": false,
         "breaking": true,

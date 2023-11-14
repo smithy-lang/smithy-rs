@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
@@ -268,7 +269,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                         val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
                         rustTemplate(
                             """
-                            #{SmithyHttpServer}::protocol::content_type_header_classifier(
+                            #{SmithyHttpServer}::protocol::content_type_header_classifier_http(
                                 request.headers(),
                                 Some("$expectedRequestContentType"),
                             )?;
@@ -281,7 +282,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         // Implement `from_request` trait for input types.
         val inputFuture = "${inputSymbol.name}Future"
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """
             #{verifyAcceptHeaderStaticContentTypeInit:W}
@@ -722,7 +723,15 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             inputShape.serverBuilderSymbol(codegenContext),
         )
         Attribute.AllowUnusedVariables.render(this)
-        rust("let (parts, body) = request.into_parts();")
+        rustTemplate(
+            """
+            let #{RequestParts} { uri, headers, body, .. } = #{Request}::try_from(request)?.into_parts();
+            """,
+            *preludeScope,
+            "ParseError" to RuntimeType.smithyHttp(runtimeConfig).resolve("header::ParseError"),
+            "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
+            "RequestParts" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::RequestParts"),
+        )
         val parser = structuredDataParser.serverInputParser(operationShape)
         val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
 
@@ -734,8 +743,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocol::content_type_header_classifier(
-                        &parts.headers,
+                    #{SmithyHttpServer}::protocol::content_type_header_classifier_smithy(
+                        &headers,
                         Some("$expectedRequestContentType"),
                     )?;
                     input = #{parser}(bytes.as_ref(), input)?;
@@ -773,7 +782,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
                     """
-                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(&parts.headers)?;
+                    #{SmithyHttpServer}::protocol::content_type_header_empty_body_no_modeled_input(&headers)?;
                     """,
                     *codegenScope,
                 )
@@ -886,7 +895,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             .joinToString(
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1289): Note we're limited to 21 labels because of `tuple`.
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1289): Note we're limited to 21 labels because of `tuple`.
                 prefix = if (segments.size > 1) "#{Nom}::sequence::tuple::<_, _, #{Nom}::error::Error<&str>, _>((" else "",
                 postfix = if (segments.size > 1) "))" else "",
                 transform = { parser ->
@@ -896,7 +905,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 },
             )
         with(writer) {
-            rustTemplate("let input_string = parts.uri.path();")
+            rustTemplate("let input_string = uri.path();")
             if (greedyLabelIndex >= 0 && greedyLabelIndex + 1 < httpTrait.uri.segments.size) {
                 rustTemplate(
                     """
@@ -981,7 +990,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         with(writer) {
             rustTemplate(
                 """
-                let query_string = parts.uri.query().unwrap_or("");
+                let query_string = uri.query().unwrap_or("");
                 let pairs = #{FormUrlEncoded}::parse(query_string.as_bytes());
                 """.trimIndent(),
                 *codegenScope,
@@ -990,7 +999,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             if (queryParamsBinding != null) {
                 val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
                 val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Here we only check the target shape;
                 //  constraint traits on member shapes are not implemented yet.
                 val targetSymbol = unconstrainedShapeSymbolProvider.toSymbol(target)
                 withBlock("let mut query_params: #T = ", ";", targetSymbol) {
@@ -1075,7 +1084,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
                 if (queryParamsBinding != null) {
                     val target = model.expectShape(queryParamsBinding.member.target, MapShape::class.java)
-                    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Here we only check the target shape;
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Here we only check the target shape;
                     //  constraint traits on member shapes are not implemented yet.
                     val hasConstrainedTarget = target.canReachConstrainedShape(model, symbolProvider)
                     when (queryParamsBinding.queryParamsBindingTargetMapValueType()) {
@@ -1116,7 +1125,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 }
             }
             queryBindingsTargetingCollection.forEach { binding ->
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
                 val hasConstrainedTarget =
                     model.expectShape(binding.member.target, CollectionShape::class.java).canReachConstrainedShape(model, symbolProvider)
@@ -1152,7 +1161,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializeHeaderFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(&parts.headers)?
+            #{deserializer}(&headers)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,
@@ -1166,7 +1175,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val deserializer = httpBindingGenerator.generateDeserializePrefixHeadersFn(binding)
         writer.rustTemplate(
             """
-            #{deserializer}(&parts.headers)?
+            #{deserializer}(&headers)?
             """.trimIndent(),
             "deserializer" to deserializer,
             *codegenScope,

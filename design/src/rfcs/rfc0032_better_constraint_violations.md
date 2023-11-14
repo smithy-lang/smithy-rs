@@ -21,9 +21,9 @@ Note: code snippets from generated SDKs in this document are abridged so as to
 be didactic and relevant to the point being made. They are accurate with
 regards to commit [`2226fe`].
 
-[constraint-traits-rfc]: https://github.com/awslabs/smithy-rs/pull/1199
-[builders-of-builders-pr]: https://github.com/awslabs/smithy-rs/pull/1342
-[`2226fe`]: https://github.com/awslabs/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc
+[constraint-traits-rfc]: https://github.com/smithy-lang/smithy-rs/pull/1199
+[builders-of-builders-pr]: https://github.com/smithy-lang/smithy-rs/pull/1342
+[`2226fe`]: https://github.com/smithy-lang/smithy-rs/tree/2226feff8f7fa884204f81a50d7e016386912acc
 [constraint traits]: https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html
 
 Terminology
@@ -244,7 +244,7 @@ docs, nor have to `match` on these variants when handling errors.
 
 Note: [this comment] alludes to the problem described above.
 
-[this comment]: https://github.com/awslabs/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69
+[this comment]: https://github.com/smithy-lang/smithy-rs/blob/27020be3421fb93e35692803f9a795f92feb1d19/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/MapConstraintViolationGenerator.kt#L66-L69
 
 ### Solution proposal
 
@@ -276,7 +276,7 @@ pub mod length_map {
 ```
 
 Note that, to some extent, the spirit of this approach is [already currently
-present](https://github.com/awslabs/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81)
+present](https://github.com/smithy-lang/smithy-rs/blob/9a4c1f304f6f5237d480cfb56dad2951d927d424/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt#L78-L81)
 in the case of builder types when `publicConstrainedTypes` is set to `false`:
 
 1. [`ServerBuilderGenerator.kt`] renders the usual builder type that enforces
@@ -286,8 +286,8 @@ in the case of builder types when `publicConstrainedTypes` is set to `false`:
    builder type the user is exposed to: this builder does not take in
    constrained types and does not enforce all modeled constraints.
 
-[`ServerBuilderGenerator.kt`]: https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt
-[`ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt`]: https://github.com/awslabs/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt
+[`ServerBuilderGenerator.kt`]: https://github.com/smithy-lang/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGenerator.kt
+[`ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt`]: https://github.com/smithy-lang/smithy-rs/blob/2226feff8f7fa884204f81a50d7e016386912acc/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerBuilderGeneratorWithoutPublicConstrainedTypes.kt
 
 Collecting constraint violations
 --------------------------------
@@ -342,7 +342,7 @@ list ValidationExceptionFieldList {
 ```
 
 It was mentioned in the [constraint traits
-RFC](https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809300673), and
+RFC](https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809300673), and
 implicit in the definition of Smithy's
 [`smithy.framework.ValidationException`](https://github.com/awslabs/smithy/blob/main/smithy-validation-model/model/smithy.framework.validation.smithy)
 shape, that server frameworks should respond with a _complete_ collection of
@@ -392,7 +392,7 @@ impl LengthPatternString {
 
     pub fn compile_regex() -> &'static regex::Regex {
         static REGEX: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(r#"[a-f0-5]*"#).expect(r#"The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support"#)
+            regex::Regex::new(r#"[a-f0-5]*"#).expect(r#"The regular expression [a-f0-5]* is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"#)
         });
 
         &REGEX
@@ -518,7 +518,7 @@ due to performance concerns.
 This RFC advocates for implementing the first option, arguing that [it's fair
 to say that the framework should return an error that is as informative as
 possible, but it doesn't necessarily have to be
-complete](https://github.com/awslabs/smithy-rs/pull/2040#discussion_r1036226762).
+complete](https://github.com/smithy-lang/smithy-rs/pull/2040#discussion_r1036226762).
 However, we will also write a layer, applied by default to all server SDKs,
 that bounds a request body's size to a reasonable (yet high) default. Relying
 on users to manually apply the layer is dangerous, since such a configuration

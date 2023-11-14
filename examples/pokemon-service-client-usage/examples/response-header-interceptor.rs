@@ -6,7 +6,7 @@
 /// into the output type.
 ///
 /// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
-/// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
+/// Refer to the [README.md](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example response-header-interceptor`.
@@ -37,9 +37,6 @@ impl Storable for RequestId {
 
 #[derive(Debug, thiserror::Error)]
 enum RequestIdError {
-    /// The server-sent request ID cannot be converted into a string during parsing.
-    #[error("RequestID sent by the server cannot be parsed into a string. Error: {0}")]
-    NonParsableServerRequestId(String),
     /// Client side
     #[error("Client side request ID has not been set")]
     ClientRequestIdMissing(),
@@ -106,10 +103,6 @@ impl Intercept for ResponseHeaderLoggingInterceptor {
             .find(|(header_name, _)| *header_name == "x-request-id");
 
         if let Some((_, server_id)) = header_received {
-            let server_id = server_id
-                .to_str()
-                .map_err(|e| Box::new(RequestIdError::NonParsableServerRequestId(e.to_string())))?;
-
             let request_details = cfg
                 .get_mut::<RequestId>()
                 .ok_or_else(|| Box::new(RequestIdError::ClientRequestIdMissing()))?;

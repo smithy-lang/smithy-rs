@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/awslabs/smithy-rs.git"
+    "url": "git+https://github.com/smithy-lang/smithy-rs.git"
   },
   "author": "AWS Rust SDK Team",
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/awslabs/smithy-rs/issues"
+    "url": "https://github.com/smithy-lang/smithy-rs/issues"
   },
-  "homepage": "https://github.com/awslabs/smithy-rs#readme",
+  "homepage": "https://github.com/smithy-lang/smithy-rs#readme",
   "publish": false,
   "devDependencies": {
     "@types/node": "20.1.7",

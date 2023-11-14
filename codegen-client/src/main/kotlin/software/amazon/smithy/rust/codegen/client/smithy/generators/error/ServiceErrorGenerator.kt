@@ -21,12 +21,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.allErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 
@@ -65,6 +68,8 @@ class ServiceErrorGenerator(
         crate.withModule(RustModule.private("error_meta")) {
             renderDefinition()
             renderImplDisplay()
+            renderImplFromBuildError()
+            renderImplProvideErrorMetadata()
             // Every operation error can be converted into service::Error
             operations.forEach { operationShape ->
                 // operation errors
@@ -106,6 +111,21 @@ class ServiceErrorGenerator(
                 }
             }
         }
+    }
+
+    private fun RustWriter.renderImplFromBuildError() {
+        rustTemplate(
+            """
+            impl From<#{BuildError}> for Error {
+                fn from(value: #{BuildError}) -> Self {
+                    Error::Unhandled(#{Unhandled}::builder().source(value).build())
+                }
+            }
+
+            """,
+            "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
+            "Unhandled" to unhandledError(codegenContext.runtimeConfig),
+        )
     }
 
     private fun RustWriter.renderImplFrom(errorSymbol: Symbol, errors: List<ShapeId>) {
@@ -158,6 +178,32 @@ class ServiceErrorGenerator(
                 }
             }
         }
+    }
+
+    private fun RustWriter.renderImplProvideErrorMetadata() {
+        rustTemplate(
+            """
+            impl #{ProvideErrorMetadata} for Error {
+                fn meta(&self) -> &#{ErrorMetadata} {
+                    match self {
+                        #{matchers}
+                        Self::Unhandled(inner) => inner.meta(),
+                    }
+                }
+            }
+            """,
+            *preludeScope,
+            "ErrorMetadata" to RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                .resolve("error::metadata::ErrorMetadata"),
+            "ProvideErrorMetadata" to RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                .resolve("error::metadata::ProvideErrorMetadata"),
+            "matchers" to writable {
+                allErrors.forEach { errorShape ->
+                    val errSymbol = symbolProvider.toSymbol(errorShape)
+                    rust("Self::${errSymbol.name}(inner) => inner.meta(),")
+                }
+            },
+        )
     }
 
     private fun RustWriter.renderDefinition() {

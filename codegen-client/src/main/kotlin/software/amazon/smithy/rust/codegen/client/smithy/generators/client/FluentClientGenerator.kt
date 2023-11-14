@@ -259,7 +259,7 @@ class FluentClientGenerator(
                 """,
                 *preludeScope,
                 "RawResponseType" to
-                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
@@ -344,7 +344,7 @@ class FluentClientGenerator(
                 *preludeScope,
                 "CustomizableOperation" to ClientRustModule.Client.customize.toType()
                     .resolve("CustomizableOperation"),
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
@@ -449,7 +449,7 @@ class FluentClientGenerator(
 
 private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
-        val api = RuntimeType.smithyRuntimeApi(rc)
+        val api = RuntimeType.smithyRuntimeApiClient(rc)
         val rt = RuntimeType.smithyRuntime(rc)
         rustTemplate(
             """

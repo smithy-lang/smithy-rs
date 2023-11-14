@@ -10,4 +10,4 @@
 /// [`crate::protocol::rest_json_1::runtime_error::RuntimeError::InternalFailure`] variant.
 pub struct InternalFailureException;
 
-pub const INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE: &str = "invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
+pub const INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE: &str = "invalid HTTP response for `RuntimeError`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";

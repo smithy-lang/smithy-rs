@@ -4,7 +4,7 @@ What is [Smithy](https://awslabs.github.io/smithy/2.0/index.html)? At a high-lev
 
 This survey is disinterested in the actual Kotlin implementation of the code generator, and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in internal details.
 
-During the survey we will use the [`pokemon.smithy`](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
+During the survey we will use the [`pokemon.smithy`](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
 
 ```smithy
 /// A Pokémon species forms the basis for at least one Pokémon.
@@ -228,7 +228,7 @@ To summarize a _model service_ constructed can be constructed from a `Handler` o
 
 ## Serialization and Deserialization
 
-A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html) and [`IntoResponse`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
+A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html) and [`IntoResponse`](https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
 
 ```rust
 # extern crate aws_smithy_http_server;
@@ -445,7 +445,7 @@ pub trait Plugin<Service, Operation, T> {
 # }
 ```
 
-An example `Plugin` implementation can be found in [/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs).
+An example `Plugin` implementation can be found in [/examples/pokemon-service/src/plugin.rs](https://github.com/smithy-lang/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs).
 
 Plugins can be applied in two places:
 
@@ -602,7 +602,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
     }
 ```
 
-Handlers and operations are upgraded to a [`Route`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52) as soon as they are registered against the service builder. You can think of `Route` as a boxing layer in disguise.
+Handlers and operations are upgraded to a [`Route`](https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52) as soon as they are registered against the service builder. You can think of `Route` as a boxing layer in disguise.
 
 You can transform a builder instance into a complete service (`PokemonService`) using one of the following methods:
 

@@ -204,7 +204,7 @@ fun Project.registerModifyMtimeTask() {
     // hashes coincide.
     // Debugging tip: it is useful to run with `CARGO_LOG=cargo::core::compiler::fingerprint=trace` to learn why Cargo
     // determines a compilation unit needs a rebuild.
-    // For more information see https://github.com/awslabs/smithy-rs/issues/1412.
+    // For more information see https://github.com/smithy-lang/smithy-rs/issues/1412.
     this.tasks.register("modifyMtime") {
         description = "modify Rust files' `mtime` if the contents did not change"
         dependsOn("generateSmithyBuild")

@@ -50,9 +50,11 @@ class ProtocolParserGenerator(
     private val symbolProvider: RustSymbolProvider = codegenContext.symbolProvider
 
     private val codegenScope = arrayOf(
+        "Bytes" to RuntimeType.Bytes,
+        "Headers" to RuntimeType.headers(codegenContext.runtimeConfig),
+        "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
         "http" to RuntimeType.Http,
         "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
-        "Bytes" to RuntimeType.Bytes,
         "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
     )
 
@@ -66,7 +68,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{http}::header::HeaderMap, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -94,7 +96,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_error") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{http}::header::HeaderMap, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, _response_body: &[u8]) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,
@@ -193,7 +195,7 @@ class ProtocolParserGenerator(
         return protocolFunctions.deserializeFn(operationShape, fnNameSuffix = "http_response") { fnName ->
             Attribute.AllowClippyUnnecessaryWraps.render(this)
             rustBlockTemplate(
-                "pub fn $fnName(response: &mut #{http}::Response<#{SdkBody}>) -> std::result::Result<#{O}, #{E}>",
+                "pub fn $fnName(response: &mut #{Response}) -> std::result::Result<#{O}, #{E}>",
                 *codegenScope,
                 "O" to outputSymbol,
                 "E" to errorSymbol,

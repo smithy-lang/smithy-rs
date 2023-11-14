@@ -30,11 +30,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyHttp = RuntimeType.smithyHttp(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
 
     val awsTypes = AwsRuntimeType.awsTypes(runtimeConfig)
-    val connectorError = smithyHttp.resolve("result::ConnectorError")
     val retryConfig = smithyTypes.resolve("retry::RetryConfig")
     val timeoutConfig = smithyTypes.resolve("timeout::TimeoutConfig")
 }
@@ -102,7 +100,6 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
 private class AwsFluentClientExtensions(private val codegenContext: ClientCodegenContext, private val types: Types) {
     private val codegenScope = arrayOf(
         "Arc" to RuntimeType.Arc,
-        "ConnectorError" to types.connectorError,
         "RetryConfig" to types.retryConfig,
         "TimeoutConfig" to types.timeoutConfig,
         "aws_types" to types.awsTypes,

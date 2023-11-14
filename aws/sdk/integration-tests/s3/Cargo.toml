@@ -5,7 +5,7 @@ version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -32,7 +32,7 @@ aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"
 fastrand = "2.0.1"
-futures-util = { version = "0.3.16", default-features = false }
+futures-util = { version = "0.3.16" }
 hdrhistogram = "7.5.2"
 http = "0.2.3"
 http-body = "0.4.5"
