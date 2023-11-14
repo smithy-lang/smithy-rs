@@ -343,7 +343,11 @@ fun TestWriterDelegator.compileAndTest(
         // cargo fmt errors are useless, ignore
     }
 
-    baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
+    baseDir.writeDotCargoConfigToml(listOf(
+        "--allow", "dead_code",
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
+        "--allow", "warnings",
+    ))
 
     val testOutput = "cargo test".runCommand(baseDir)
     if (runClippy) {
