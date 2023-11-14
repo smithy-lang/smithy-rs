@@ -82,14 +82,14 @@ class OperationErrorGenerator(
                 val errorVariantSymbol = symbolProvider.toSymbol(errorVariant)
                 write("${errorVariantSymbol.name}(#T),", errorVariantSymbol)
             }
-            rust(
+            rustTemplate(
                 """
                 /// An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).
-                ##[deprecated(note = "Don't directly match on `Unhandled`. Instead, match on `_` and use \
-                    the `ProvideErrorMetadata` trait to retrieve information about the unhandled error.")]
-                Unhandled(#T),
+                #{deprecation}
+                Unhandled(#{Unhandled}),
                 """,
-                unhandledError(runtimeConfig),
+                "deprecation" to writable { renderUnhandledErrorDeprecation() },
+                "Unhandled" to unhandledError(runtimeConfig),
             )
         }
 
@@ -128,7 +128,18 @@ class OperationErrorGenerator(
             rustBlock("fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result") {
                 delegateToVariants(errors) { variantMatch ->
                     when (variantMatch) {
-                        is VariantMatch.Unhandled -> writable { rust("f.write_str(\"unhandled error\")") }
+                        is VariantMatch.Unhandled -> writable {
+                            rustTemplate(
+                                """
+                                if let Some(code) = #{ProvideErrorMetadata}::code(self) {
+                                    write!(f, "unhandled error ({code})")
+                                } else {
+                                    f.write_str("unhandled error")
+                                }
+                                """,
+                                "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
+                            )
+                        }
                         is VariantMatch.Modeled -> writable { rust("_inner.fmt(f)") }
                     }
                 }

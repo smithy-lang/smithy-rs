@@ -108,7 +108,16 @@ class ServiceErrorGenerator(
                     allErrors.forEach {
                         rust("Error::${symbolProvider.toSymbol(it).name}(inner) => inner.fmt(f),")
                     }
-                    rust("Error::Unhandled(_inner) => f.write_str(\"unhandled error\")")
+                    rustTemplate(
+                        """
+                        Error::Unhandled(_) => if let Some(code) = #{ProvideErrorMetadata}::code(self) {
+                            write!(f, "unhandled error ({code})")
+                        } else {
+                            f.write_str("unhandled error")
+                        }
+                        """,
+                        "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(codegenContext.runtimeConfig),
+                    )
                 }
             }
         }
@@ -222,10 +231,7 @@ class ServiceErrorGenerator(
                 rust("${sym.name}(#T),", sym)
             }
             docs("An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).")
-            rust(
-                "##[deprecated(note = \"Don't directly match on `Unhandled`. Instead, match on `_` and use " +
-                    "the `ProvideErrorMetadata` trait to retrieve information about the unhandled error.\")]",
-            )
+            renderUnhandledErrorDeprecation()
             rust("Unhandled(#T)", unhandledError(codegenContext.runtimeConfig))
         }
     }
@@ -246,8 +252,7 @@ fun unhandledError(rc: RuntimeConfig): RuntimeType = RuntimeType.forInlineFun(
         /// on the error type.
         ///
         /// This struct intentionally doesn't yield any useful information itself.
-        ##[deprecated(note = "Don't directly match on `Unhandled`. Instead, match on `_` and use \
-            the `ProvideErrorMetadata` trait to retrieve information about the unhandled error.")]
+        #{deprecation}
         ##[derive(Debug)]
         pub struct Unhandled {
             pub(crate) source: #{BoxError},
@@ -255,7 +260,19 @@ fun unhandledError(rc: RuntimeConfig): RuntimeType = RuntimeType.forInlineFun(
         }
         """,
         "BoxError" to RuntimeType.smithyRuntimeApi(rc).resolve("box_error::BoxError"),
+        "deprecation" to writable { renderUnhandledErrorDeprecation() },
         "ErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ErrorMetadata"),
         "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
     )
+}
+
+fun RustWriter.renderUnhandledErrorDeprecation() {
+    val message = """
+        Don't directly match on `Unhandled`. Instead, match using the catch all matcher (e.g., `_`),
+        give it a name like `err`, and use the `ProvideErrorMetadata` trait to retrieve the error
+        code and message. For example: `err => println!("code: {}, message: {}", err.code(), err.message())`
+    """.trimIndent()
+    // `.dq()` doesn't quite do what we want here since we actually want a Rust multi-line string
+    val messageEscaped = message.replace("\"", "\\\"").replace("\n", " \\\n")
+    rust("""##[deprecated(note = "$messageEscaped")]""")
 }

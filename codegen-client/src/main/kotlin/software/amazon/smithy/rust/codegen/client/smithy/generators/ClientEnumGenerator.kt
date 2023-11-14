@@ -83,8 +83,7 @@ data class InfallibleEnumType(
     override fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {
         docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
         rust(
-            """##[deprecated(note = "Don't directly match on `$UnknownVariant`. Instead, match on `_` and use \
-            the `${context.enumName}::as_str()` method to retrieve information about the unknown enum value.")]""",
+            """##[deprecated(note = "Don't directly match on `$UnknownVariant`. See the docs on this enum for the correct way to handle unknown variants.")]""",
         )
         rust("$UnknownVariant(#T)", unknownVariantValue(context))
     }
