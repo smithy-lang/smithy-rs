@@ -68,6 +68,35 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
+message = """Clients now require a `BehaviorMajorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
+
+```rust
+async fn example() {
+    // with aws-config
+    let conf = aws_config::from_env_with_version(aws_config::BehaviorMajorVersion::v2023_11_09());
+
+    // when creating a client
+    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_major_version(..).<other params>.build());
+}
+```"""
+references = ["smithy-rs#3151"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = """Clients now require a `BehaviorMajorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
+
+```rust
+async fn example() {
+    // when creating a client
+    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_major_version(..).<other params>.build());
+}
+```"""
+references = ["smithy-rs#3151"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[aws-sdk-rust]]
 message = "Add `ProvideErrorMetadata` impl for service `Error` type."
 references = ["aws-sdk-rust#780", "smithy-rs#3189"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }

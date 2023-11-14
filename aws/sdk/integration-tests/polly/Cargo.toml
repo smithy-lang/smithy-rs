@@ -13,7 +13,7 @@ publish = false
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
-aws-sdk-polly = { path = "../../build/aws-sdk/sdk/polly" }
+aws-sdk-polly = { path = "../../build/aws-sdk/sdk/polly", features = ["behavior-version-latest"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 bytes = "1.0.0"
 http = "0.2.0"

@@ -41,27 +41,29 @@ fun awsSdkIntegrationTest(
 ) =
     clientIntegrationTest(
         model,
-        IntegrationTestParams(
-            cargoCommand = "cargo test --features test-util",
-            runtimeConfig = AwsTestRuntimeConfig,
-            additionalSettings = ObjectNode.builder().withMember(
-                "customizationConfig",
-                ObjectNode.builder()
-                    .withMember(
-                        "awsSdk",
-                        ObjectNode.builder()
-                            .withMember("generateReadme", false)
-                            .withMember("integrationTestPath", "../sdk/integration-tests")
-                            .build(),
-                    ).build(),
-            )
-                .withMember(
-                    "codegen",
-                    ObjectNode.builder()
-                        .withMember("includeFluentClient", false)
-                        .withMember("includeEndpointUrlConfig", false)
-                        .build(),
-                ).build(),
-        ),
+        awsIntegrationTestParams(),
         test = test,
     )
+
+fun awsIntegrationTestParams() = IntegrationTestParams(
+    cargoCommand = "cargo test --features test-util behavior-version-latest",
+    runtimeConfig = AwsTestRuntimeConfig,
+    additionalSettings = ObjectNode.builder().withMember(
+        "customizationConfig",
+        ObjectNode.builder()
+            .withMember(
+                "awsSdk",
+                ObjectNode.builder()
+                    .withMember("generateReadme", false)
+                    .withMember("integrationTestPath", "../sdk/integration-tests")
+                    .build(),
+            ).build(),
+    )
+        .withMember(
+            "codegen",
+            ObjectNode.builder()
+                .withMember("includeFluentClient", false)
+                .withMember("includeEndpointUrlConfig", false)
+                .build(),
+        ).build(),
+)

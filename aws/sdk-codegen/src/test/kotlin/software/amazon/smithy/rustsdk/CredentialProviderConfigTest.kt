@@ -5,20 +5,14 @@
 
 package software.amazon.smithy.rustsdk
 
+import SdkCodegenIntegrationTest
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.validateConfigCustomizations
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 
 internal class CredentialProviderConfigTest {
-    @Test
-    fun `generates a valid config`() {
-        val codegenContext = awsTestCodegenContext()
-        validateConfigCustomizations(codegenContext, CredentialProviderConfig(codegenContext))
-    }
-
     @Test
     fun `configuring credentials provider at operation level should work`() {
         awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { ctx, rustCrate ->
