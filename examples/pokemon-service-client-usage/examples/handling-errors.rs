@@ -77,10 +77,6 @@ async fn main() {
                 GetStorageError::ValidationError(ve) => {
                     tracing::error!(error = %ve, "A required field has not been set.");
                 }
-                // An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).
-                GetStorageError::Unhandled(uh) => {
-                    tracing::error!(error = %uh, "An unhandled error has occurred.")
-                }
                 // The SdkError is marked as `#[non_exhaustive]`. Therefore, a catch-all pattern is required to handle
                 // potential future variants introduced in SdkError.
                 _ => {
