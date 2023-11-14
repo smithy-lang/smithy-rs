@@ -355,7 +355,7 @@ mod test {
             .headers_mut()
             .try_insert("a\nb", "a\nb")
             .expect_err("invalid header");
-        //let _ = req.headers_mut().insert("a\nb", "a\nb");
+        let _ = req.headers_mut().insert("a\nb", "a\nb");
     }
 
     #[test]
