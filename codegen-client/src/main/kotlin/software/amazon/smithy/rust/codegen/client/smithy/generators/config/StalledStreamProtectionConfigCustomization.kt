@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
@@ -19,7 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
-import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 class StalledStreamProtectionOperationCustomization(
     private val codegenContext: ClientCodegenContext,
@@ -28,16 +27,34 @@ class StalledStreamProtectionOperationCustomization(
 
     override fun section(section: OperationSection): Writable = writable {
         when (section) {
-            is OperationSection.AdditionalInterceptors -> {
-                if (hasBodyMember(section.operationShape)) {
-                    section.registerInterceptor(rc, this) {
+            is OperationSection.FeatureGatedComponents -> {
+                val model = codegenContext.model
+                val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
+                // Only bother mounting this interceptor when an operation's input and/or output
+                // has a blob shape member.
+                val inputHasBlobMember = section.operationShape.inputShape
+                    ?.let { inputShape -> model.expectShape(inputShape).members() }
+                    ?.any { it.isStreaming(model) } ?: false;
+                val outputHasBlobMember = section.operationShape.outputShape
+                    ?.let { outputShape -> model.expectShape(outputShape).members()
+                    .any { it.isStreaming(model) } } ?: false;
+
+                val kind = when (inputHasBlobMember to outputHasBlobMember) {
+                    true to true -> "RequestAndResponseBody"
+                    true to false -> "RequestBody"
+                    false to true -> "ResponseBody"
+                    else -> return@writable
+                }
+
+                if (inputHasBlobMember || outputHasBlobMember) {
+                    section.registerInterceptor("stalled-stream-protection", this) {
                         rustTemplate(
                             """
-                            #{StalledStreamProtectionInterceptor}::new()
+                            #{StalledStreamProtectionInterceptor}::new(#{Kind}::$kind)
                             """,
                             *preludeScope,
-                            "StalledStreamProtectionInterceptor" to RuntimeType.smithyRuntime(rc)
-                                .resolve("client::stalled_stream_protection::StalledStreamProtectionInterceptor"),
+                            "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),
+                            "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind")
                         )
                     }
                 }
@@ -45,10 +62,6 @@ class StalledStreamProtectionOperationCustomization(
 
             else -> { }
         }
-    }
-
-    private fun hasBodyMember(operationShape: OperationShape): Boolean {
-        PANIC("unimplemented")
     }
 }
 
@@ -117,7 +130,7 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
 
 class StalledStreamProtectionConfigReExportCustomization(codegenContext: ClientCodegenContext) {
     private val rc = codegenContext.runtimeConfig
-    private val feature = Feature("stalled-stream-protection", false, listOf("aws-smithy-types/stalled-stream-protection"))
+    private val feature = Feature("stalled-stream-protection", false, listOf("aws-smithy-types/stalled-stream-protection", "aws-smithy-runtime/stalled-stream-protection"))
 
     fun extras(rustCrate: RustCrate) {
         rustCrate.mergeFeature(feature)

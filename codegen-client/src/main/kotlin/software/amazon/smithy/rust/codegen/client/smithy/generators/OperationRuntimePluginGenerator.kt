@@ -50,11 +50,12 @@ class OperationRuntimePluginGenerator(
         operationStructName: String,
         customizations: List<OperationCustomization>,
     ) {
+        val layerName = operationShape.id.name.dq()
         writer.rustTemplate(
             """
             impl #{RuntimePlugin} for $operationStructName {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    let mut cfg = #{Layer}::new(${operationShape.id.name.dq()});
+                    let mut cfg = #{Layer}::new($layerName);
 
                     cfg.store_put(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
                     cfg.store_put(#{SharedResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
@@ -68,11 +69,14 @@ class OperationRuntimePluginGenerator(
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
-                    #{Cow}::Owned(
-                        #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
+                    ##[allow(unused_mut)]
+                    let mut rcb = #{RuntimeComponentsBuilder}::new($layerName)
                             #{interceptors}
-                            #{retry_classifiers}
-                    )
+                            #{retry_classifiers};
+
+                    #{feature_gated_components}
+
+                    #{Cow}::Owned(rcb)
                 }
             }
 
@@ -106,6 +110,12 @@ class OperationRuntimePluginGenerator(
                 writeCustomizations(
                     customizations,
                     OperationSection.RetryClassifiers(customizations, operationShape),
+                )
+            },
+            "feature_gated_components" to writable {
+                writeCustomizations(
+                    customizations,
+                    OperationSection.FeatureGatedComponents(customizations, operationShape),
                 )
             },
         )

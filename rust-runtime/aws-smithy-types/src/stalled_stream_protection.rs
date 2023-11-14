@@ -15,6 +15,9 @@ use std::time::Duration;
 
 const DEFAULT_GRACE_PERIOD: Duration = Duration::from_secs(5);
 
+/// Configuration for stalled stream protection.
+///
+/// When enabled, download streams that stall out will be cancelled.
 #[derive(Clone, Debug)]
 pub struct StalledStreamProtectionConfig {
     is_enabled: bool,
@@ -22,6 +25,7 @@ pub struct StalledStreamProtectionConfig {
 }
 
 impl StalledStreamProtectionConfig {
+    /// Create a new config that enables stalled stream protection.
     pub fn new_enabled() -> Builder {
         Builder {
             is_enabled: Some(true),
@@ -29,7 +33,7 @@ impl StalledStreamProtectionConfig {
         }
     }
 
-    /// Create a new config that disables stopped stream protection.
+    /// Create a new config that disables stalled stream protection.
     pub fn new_disabled() -> Self {
         Self {
             is_enabled: false,
@@ -37,7 +41,7 @@ impl StalledStreamProtectionConfig {
         }
     }
 
-    /// Return whether stopped stream protection is enabled.
+    /// Return whether stalled stream protection is enabled.
     pub fn is_enabled(&self) -> bool {
         self.is_enabled
     }
@@ -58,26 +62,31 @@ pub struct Builder {
 }
 
 impl Builder {
+    /// Set the grace period for stalled stream protection.
     pub fn grace_period(mut self, grace_period: Duration) -> Self {
         self.grace_period = Some(grace_period);
         self
     }
 
+    /// Set the grace period for stalled stream protection.
     pub fn set_grace_period(&mut self, grace_period: Option<Duration>) -> &mut Self {
         self.grace_period = grace_period;
         self
     }
 
+    /// Set whether stalled stream protection is enabled.
     pub fn is_enabled(mut self, is_enabled: bool) -> Self {
         self.is_enabled = Some(is_enabled);
         self
     }
 
+    /// Set whether stalled stream protection is enabled.
     pub fn set_is_enabled(&mut self, is_enabled: Option<bool>) -> &mut Self {
         self.is_enabled = is_enabled;
         self
     }
 
+    /// Build the config.
     pub fn build(self) -> StalledStreamProtectionConfig {
         StalledStreamProtectionConfig {
             is_enabled: self.is_enabled.unwrap_or_default(),

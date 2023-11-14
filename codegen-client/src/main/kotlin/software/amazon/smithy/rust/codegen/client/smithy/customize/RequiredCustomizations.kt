@@ -24,6 +24,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.StalledStreamProtectionConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.StalledStreamProtectionConfigReExportCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.StalledStreamProtectionOperationCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -53,7 +54,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
         baseCustomizations +
             MetadataCustomization(codegenContext, operation) +
             HttpChecksumRequiredGenerator(codegenContext, operation) +
-            RetryClassifierOperationCustomization(codegenContext, operation)
+            RetryClassifierOperationCustomization(codegenContext, operation) +
+            StalledStreamProtectionOperationCustomization(codegenContext)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,

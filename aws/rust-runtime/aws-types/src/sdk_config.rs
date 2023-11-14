@@ -567,7 +567,7 @@ impl Builder {
 impl Builder {
     /// Set the [`StalledStreamProtectionConfig`] to configure protection for stalled streams.
     ///
-    /// This configures stalled stream protection. When enabled, upload and download streams
+    /// This configures stalled stream protection. When enabled, download streams
     /// that stall (stream no data) for longer than a configured grace period will return an error.
     ///
     /// _Note:_ Stalled stream protection requires both a sleep implementation and a time source
@@ -598,7 +598,7 @@ impl Builder {
 
     /// Set the [`StalledStreamProtectionConfig`] to configure protection for stalled streams.
     ///
-    /// This configures stalled stream protection. When enabled, upload and download streams
+    /// This configures stalled stream protection. When enabled, download streams
     /// that stall (stream no data) for longer than a configured grace period will return an error.
     ///
     /// _Note:_ Stalled stream protection requires both a sleep implementation and a time source

@@ -563,7 +563,7 @@ mod loader {
         #[cfg(feature = "stalled-stream-protection")]
         /// Override [`the StoppedStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
-        /// This configures stopped stream protection. When enabled, upload and download streams
+        /// This configures stalled stream protection. When enabled, download streams
         /// that stop (stream no data) for longer than a configured grace period will return an error.
         ///
         /// _Note_: When an override is provided, the default implementation is replaced.

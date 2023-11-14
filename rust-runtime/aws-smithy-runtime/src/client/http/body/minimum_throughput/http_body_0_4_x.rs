@@ -25,10 +25,6 @@ where
         // Attempt to read the data from the inner body, then update the
         // throughput logs.
         let mut this = self.as_mut().project();
-        // Push a start log if we haven't already done so.
-        if this.throughput_logs.is_empty() {
-            this.throughput_logs.push((now, 0));
-        }
         let poll_res = match this.inner.poll_data(cx) {
             Poll::Ready(Some(Ok(bytes))) => {
                 this.throughput_logs.push((now, bytes.len() as u64));
@@ -38,17 +34,21 @@ where
             // If we've read all the data or an error occurred, then return that result.
             res => return res,
         };
+        // Push a start log if we haven't already done so.
+        if this.throughput_logs.is_empty() {
+            this.throughput_logs.push((now, 0));
+        }
 
         // Check the sleep future to see if it needs refreshing.
         let mut sleep_fut = this.sleep_fut.take().unwrap_or_else(|| {
             this.async_sleep
-                .sleep(this.minimum_throughput.per_time_elapsed())
+                .sleep(this.options.minimum_throughput().per_time_elapsed())
         });
         if let Poll::Ready(()) = pin!(&mut sleep_fut).poll(cx) {
             // Whenever the sleep future expires, we replace it.
             sleep_fut = this
                 .async_sleep
-                .sleep(this.minimum_throughput.per_time_elapsed());
+                .sleep(this.options.minimum_throughput().per_time_elapsed());
 
             // We also schedule a wake up for current task to ensure that
             // it gets polled at least one more time.
@@ -59,11 +59,11 @@ where
         // Calculate the current throughput and emit an error if it's too low.
         let actual_throughput = this.throughput_logs.calculate_throughput(now);
         let is_below_minimum_throughput = actual_throughput
-            .map(|t| t < self.minimum_throughput)
+            .map(|t| t < self.options.minimum_throughput())
             .unwrap_or_default();
         if is_below_minimum_throughput {
             Poll::Ready(Some(Err(Box::new(Error::ThroughputBelowMinimum {
-                expected: self.minimum_throughput,
+                expected: self.options.minimum_throughput(),
                 actual: actual_throughput.unwrap(),
             }))))
         } else {
@@ -84,6 +84,7 @@ where
 #[cfg(all(test, feature = "connector-hyper-0-14-x"))]
 mod test {
     use super::{super::Throughput, Error, MinimumThroughputBody};
+    use crate::client::http::body::minimum_throughput::options::MinimumThroughputBodyOptions;
     use aws_smithy_async::rt::sleep::AsyncSleep;
     use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep, ManualTimeSource};
     use aws_smithy_types::body::SdkBody;
@@ -129,7 +130,7 @@ mod test {
             time_source.clone(),
             async_sleep.clone(),
             NeverBody,
-            (1, Duration::from_secs(1)),
+            Default::default(),
         );
         time_source.advance(Duration::from_secs(1));
         let actual_err = body.data().await.expect("next chunk exists").unwrap_err();
@@ -164,7 +165,7 @@ mod test {
         Lazy::new(|| (1..=255).flat_map(|_| b"00000000").copied().collect());
 
     fn eight_byte_per_second_stream_with_minimum_throughput_timeout(
-        minimum_throughput: (u64, Duration),
+        minimum_throughput: Throughput,
     ) -> (
         impl Future<Output = Result<AggregatedBytes, aws_smithy_types::byte_stream::error::Error>>,
         ManualTimeSource,
@@ -187,18 +188,20 @@ mod test {
                 time_source,
                 async_sleep,
                 body,
-                minimum_throughput,
+                MinimumThroughputBodyOptions::builder()
+                    .minimum_throughput(minimum_throughput)
+                    .build(),
             ))
         });
 
         (body.collect(), time_source, async_sleep)
     }
 
-    async fn expect_error(minimum_throughput: (u64, Duration)) {
+    async fn expect_error(minimum_throughput: Throughput) {
         let (res, ..) =
             eight_byte_per_second_stream_with_minimum_throughput_timeout(minimum_throughput);
         let expected_err = Error::ThroughputBelowMinimum {
-            expected: minimum_throughput.into(),
+            expected: minimum_throughput,
             actual: Throughput::new(8.889, Duration::from_secs(1)),
         };
         match res.await {
@@ -219,11 +222,11 @@ mod test {
 
     #[tokio::test]
     async fn test_throughput_timeout_less_than() {
-        let minimum_throughput = (9, Duration::from_secs(1));
+        let minimum_throughput = Throughput::new_bytes_per_second(9.0);
         expect_error(minimum_throughput).await;
     }
 
-    async fn expect_success(minimum_throughput: (u64, Duration)) {
+    async fn expect_success(minimum_throughput: Throughput) {
         let (res, time_source, async_sleep) =
             eight_byte_per_second_stream_with_minimum_throughput_timeout(minimum_throughput);
         match res.await {
@@ -238,13 +241,13 @@ mod test {
 
     #[tokio::test]
     async fn test_throughput_timeout_equal_to() {
-        let minimum_throughput = (32, Duration::from_secs(4));
+        let minimum_throughput = Throughput::new(32.0, Duration::from_secs(4));
         expect_success(minimum_throughput).await;
     }
 
     #[tokio::test]
     async fn test_throughput_timeout_greater_than() {
-        let minimum_throughput = (20, Duration::from_secs(3));
+        let minimum_throughput = Throughput::new(20.0, Duration::from_secs(3));
         expect_success(minimum_throughput).await;
     }
 
@@ -279,11 +282,12 @@ mod test {
 
     #[tokio::test]
     async fn test_throughput_timeout_shrinking_sine_wave() {
-        // Minimum throughput per second will be approx. half of the BYTE_COUNT_UPPER_LIMIT.
-        let minimum_throughput = (
-            BYTE_COUNT_UPPER_LIMIT as u64 / 2 + 2,
-            Duration::from_secs(1),
-        );
+        let options = MinimumThroughputBodyOptions::builder()
+            // Minimum throughput per second will be approx. half of the BYTE_COUNT_UPPER_LIMIT.
+            .minimum_throughput(Throughput::new_bytes_per_second(
+                BYTE_COUNT_UPPER_LIMIT / 2.0 + 2.0,
+            ))
+            .build();
         let (time_source, async_sleep) = instant_time_and_sleep(UNIX_EPOCH);
         let time_clone = time_source.clone();
 
@@ -301,7 +305,7 @@ mod test {
                     time_source,
                     async_sleep,
                     body,
-                    minimum_throughput,
+                    options.clone(),
                 ))
             })
             .collect();
