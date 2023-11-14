@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -81,6 +82,10 @@ data class InfallibleEnumType(
 
     override fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {
         docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
+        rust(
+            """##[deprecated(note = "Don't directly match on `$UnknownVariant`. Instead, match on `_` and use \
+            the `${context.enumName}::as_str()` method to retrieve information about the unknown enum value.")]""",
+        )
         rust("$UnknownVariant(#T)", unknownVariantValue(context))
     }
 
@@ -93,10 +98,9 @@ data class InfallibleEnumType(
             docs(
                 """
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
-                the crate
+                the crate.
 
-                While this is not intended to be used directly, it is marked as `pub` because it is
-                part of the enums that are public interface.
+                This is not intended to be used directly.
                 """.trimIndent(),
             )
             context.enumMeta.render(this)
@@ -174,5 +178,11 @@ class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringSha
         codegenContext.model,
         codegenContext.symbolProvider,
         shape,
-        InfallibleEnumType(ClientRustModule.primitives),
+        InfallibleEnumType(
+            RustModule.new(
+                "sealed_enum_unknown",
+                visibility = Visibility.PUBCRATE,
+                parent = ClientRustModule.primitives,
+            ),
+        ),
     )
