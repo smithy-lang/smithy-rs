@@ -319,6 +319,7 @@ fun FileManifest.printGeneratedFiles() {
  * should generally be set to `false` to avoid invalidating the Cargo cache between
  * every unit test run.
  */
+@Deprecated("use `{client,server}IntegrationTest instead, which is simpler to use: https://github.com/smithy-lang/smithy-rs/issues/3193")
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
@@ -386,6 +387,7 @@ fun String.shouldParseAsRust() {
 /**
  * Compiles the contents of the given writer (including dependencies) and runs the tests
  */
+@Deprecated("use `{client,server}IntegrationTest instead, which is simpler to use: https://github.com/smithy-lang/smithy-rs/issues/3193")
 fun RustWriter.compileAndTest(
     @Language("Rust", prefix = "fn test() {", suffix = "}")
     main: String = "",
