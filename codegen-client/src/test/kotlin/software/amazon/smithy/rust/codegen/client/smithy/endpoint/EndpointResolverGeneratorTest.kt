@@ -55,7 +55,7 @@ class EndpointResolverGeneratorTest {
         // if (!suite.toString().contains("hostable")) {
         // return
         // }
-        clientIntegrationTest(suite, params = IntegrationTestParams(command = { it -> "cargo test".runCommand(it, mapOf("RUSTFLAGS" to "")) }))
+        clientIntegrationTest(suite)
     }
 
     /*
