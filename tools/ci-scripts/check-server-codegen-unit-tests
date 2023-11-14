@@ -6,5 +6,4 @@
 
 set -eux
 cd smithy-rs
-printenv
 ./gradlew codegen-server:test
