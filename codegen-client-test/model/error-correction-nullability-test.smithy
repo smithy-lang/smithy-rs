@@ -27,10 +27,6 @@ structure Error {
 
     @required
     message: String
-
-    code: String = "400"
-
-    context: String
 }
 
 @http(method: "POST", uri: "/")
