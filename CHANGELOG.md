@@ -1,4 +1,21 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 14th, 2023
+===================
+**New this release:**
+- :tada: (all, [smithy-rs#3173](https://github.com/awslabs/smithy-rs/issues/3173), [smithy-rs#3171](https://github.com/awslabs/smithy-rs/issues/3171)) Enable conversion from `BuildError` into `SdkError` & `<service>::Error`. This allows customers to write the following code:
+    ```rust
+    async fn do_a_thing(client: &Client) -> Result<SdkError<SomeOperationError>> {
+        client.run_operation().complex_field(ComplexField::builder()
+            .a("a")
+            .b("b")
+            .build()?
+        ).send().await?;
+    }
+    ```
+
+    Previously, `?` could not be used in this position.
+
+
 November 1st, 2023
 ==================
 **New this release:**
