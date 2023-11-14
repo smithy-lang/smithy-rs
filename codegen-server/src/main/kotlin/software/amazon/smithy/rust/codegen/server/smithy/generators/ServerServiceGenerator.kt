@@ -488,7 +488,16 @@ class ServerServiceGenerator(
             ///
             /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
-            pub struct $serviceName<S> {
+            pub struct $serviceName<
+                S = #{SmithyHttpServer}::routing::RoutingService<
+                    #{Router}<
+                        #{SmithyHttpServer}::routing::Route<
+                            #{SmithyHttpServer}::body::BoxBody
+                        >,
+                    >,
+                    #{Protocol},
+                >
+            > {
                 // This is the router wrapped by layers.
                 svc: S,
             }
