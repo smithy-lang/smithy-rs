@@ -131,12 +131,13 @@ class OperationErrorGenerator(
                         is VariantMatch.Unhandled -> writable {
                             rustTemplate(
                                 """
-                                if let Some(code) = #{ProvideErrorMetadata}::code(self) {
+                                if let #{Some}(code) = #{ProvideErrorMetadata}::code(self) {
                                     write!(f, "unhandled error ({code})")
                                 } else {
                                     f.write_str("unhandled error")
                                 }
                                 """,
+                                *preludeScope,
                                 "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
                             )
                         }

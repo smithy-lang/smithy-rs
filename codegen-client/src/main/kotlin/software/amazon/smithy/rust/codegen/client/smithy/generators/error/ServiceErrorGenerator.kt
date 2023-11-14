@@ -110,12 +110,13 @@ class ServiceErrorGenerator(
                     }
                     rustTemplate(
                         """
-                        Error::Unhandled(_) => if let Some(code) = #{ProvideErrorMetadata}::code(self) {
+                        Error::Unhandled(_) => if let #{Some}(code) = #{ProvideErrorMetadata}::code(self) {
                             write!(f, "unhandled error ({code})")
                         } else {
                             f.write_str("unhandled error")
                         }
                         """,
+                        *preludeScope,
                         "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(codegenContext.runtimeConfig),
                     )
                 }
