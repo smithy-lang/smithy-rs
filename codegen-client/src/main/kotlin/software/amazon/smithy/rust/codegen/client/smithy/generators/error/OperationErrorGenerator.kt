@@ -35,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.eventStreamErrors
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
-import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -75,22 +74,6 @@ class OperationErrorGenerator(
             visibility = Visibility.PUBLIC,
         )
 
-        // TODO(deprecated): Remove this temporary alias. This was added so that the compiler
-        // points customers in the right direction when they are upgrading. Unfortunately there's no
-        // way to provide better backwards compatibility on this change.
-        val kindDeprecationMessage = "Operation `*Error/*ErrorKind` types were combined into a single `*Error` enum. " +
-            "The `.kind` field on `*Error` no longer exists and isn't needed anymore (you can just match on the " +
-            "error directly since it's an enum now)."
-        writer.rust(
-            """
-            /// Do not use this.
-            ///
-            /// $kindDeprecationMessage
-            ##[deprecated(note = ${kindDeprecationMessage.dq()})]
-            pub type ${errorSymbol.name}Kind = ${errorSymbol.name};
-            """,
-        )
-
         writer.rust("/// Error type for the `${errorSymbol.name}` operation.")
         meta.render(writer)
         writer.rustBlock("enum ${errorSymbol.name}") {
@@ -108,7 +91,18 @@ class OperationErrorGenerator(
                 unhandledError(runtimeConfig),
             )
         }
-        writer.rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {
+
+        writer.renderImpl(errorSymbol, errors)
+        writer.renderImplStdError(errorSymbol, errors)
+        writer.renderImplDisplay(errorSymbol, errors)
+        writer.renderImplProvideErrorKind(errorSymbol, errors)
+        writer.renderImplProvideErrorMetadata(errorSymbol, errors)
+        writer.renderImplCreateUnhandledError(errorSymbol)
+        writer.writeCustomizations(customizations, ErrorSection.OperationErrorAdditionalTraitImpls(errorSymbol, errors))
+    }
+
+    private fun RustWriter.renderImplCreateUnhandledError(errorSymbol: Symbol) {
+        rustBlock("impl #T for ${errorSymbol.name}", createUnhandledError) {
             rustBlockTemplate(
                 """
                 fn create_unhandled_error(
@@ -132,27 +126,32 @@ class OperationErrorGenerator(
                 )
             }
         }
-        writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
+    }
+
+    private fun RustWriter.renderImplDisplay(errorSymbol: Symbol, errors: List<StructureShape>) {
+        rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result") {
                 delegateToVariants(errors) {
                     writable { rust("_inner.fmt(f)") }
                 }
             }
         }
+    }
 
+    private fun RustWriter.renderImplProvideErrorMetadata(errorSymbol: Symbol, errors: List<StructureShape>) {
         val errorMetadataTrait = RuntimeType.provideErrorMetadataTrait(runtimeConfig)
-        writer.rustBlock("impl #T for ${errorSymbol.name}", errorMetadataTrait) {
+        rustBlock("impl #T for ${errorSymbol.name}", errorMetadataTrait) {
             rustBlock("fn meta(&self) -> &#T", errorMetadata(runtimeConfig)) {
                 delegateToVariants(errors) {
                     writable { rust("#T::meta(_inner)", errorMetadataTrait) }
                 }
             }
         }
+    }
 
-        writer.writeCustomizations(customizations, ErrorSection.OperationErrorAdditionalTraitImpls(errorSymbol, errors))
-
+    private fun RustWriter.renderImplProvideErrorKind(errorSymbol: Symbol, errors: List<StructureShape>) {
         val retryErrorKindT = RuntimeType.retryErrorKind(symbolProvider.config.runtimeConfig)
-        writer.rustBlock(
+        rustBlock(
             "impl #T for ${errorSymbol.name}",
             RuntimeType.provideErrorKind(symbolProvider.config.runtimeConfig),
         ) {
@@ -182,9 +181,11 @@ class OperationErrorGenerator(
                 }
             }
         }
+    }
 
-        writer.rustBlock("impl ${errorSymbol.name}") {
-            writer.rustTemplate(
+    private fun RustWriter.renderImpl(errorSymbol: Symbol, errors: List<StructureShape>) {
+        rustBlock("impl ${errorSymbol.name}") {
+            rustTemplate(
                 """
                 /// Creates the `${errorSymbol.name}::Unhandled` variant from any error type.
                 pub fn unhandled(err: impl #{Into}<#{Box}<dyn #{StdError} + #{Send} + #{Sync} + 'static>>) -> Self {
@@ -201,13 +202,13 @@ class OperationErrorGenerator(
                 "StdError" to RuntimeType.StdError,
                 "Unhandled" to unhandledError(runtimeConfig),
             )
-            writer.docs(
+            docs(
                 """
                 Returns error metadata, which includes the error code, message,
                 request ID, and potentially additional information.
                 """,
             )
-            writer.rustBlock("pub fn meta(&self) -> &#T", errorMetadata) {
+            rustBlock("pub fn meta(&self) -> &#T", errorMetadata) {
                 rust("use #T;", RuntimeType.provideErrorMetadataTrait(runtimeConfig))
                 rustBlock("match self") {
                     errors.forEach { error ->
@@ -220,14 +221,16 @@ class OperationErrorGenerator(
             errors.forEach { error ->
                 val errorVariantSymbol = symbolProvider.toSymbol(error)
                 val fnName = errorVariantSymbol.name.toSnakeCase()
-                writer.rust("/// Returns `true` if the error kind is `${errorSymbol.name}::${errorVariantSymbol.name}`.")
-                writer.rustBlock("pub fn is_$fnName(&self) -> bool") {
+                rust("/// Returns `true` if the error kind is `${errorSymbol.name}::${errorVariantSymbol.name}`.")
+                rustBlock("pub fn is_$fnName(&self) -> bool") {
                     rust("matches!(self, Self::${errorVariantSymbol.name}(_))")
                 }
             }
         }
+    }
 
-        writer.rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
+    private fun RustWriter.renderImplStdError(errorSymbol: Symbol, errors: List<StructureShape>) {
+        rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
             rustBlockTemplate(
                 "fn source(&self) -> #{Option}<&(dyn #{StdError} + 'static)>",
                 *preludeScope,
