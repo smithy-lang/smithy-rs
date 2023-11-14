@@ -99,8 +99,7 @@ jobs:
       id: branch-push
       shell: bash
       env:
-        # TODO(GA): specify ${{ inputs.stable_semantic_version }}
-        SEMANTIC_VERSION: ${{ inputs.unstable_semantic_version }}
+        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
         DRY_RUN: ${{ inputs.dry_run }}
       run: |
         set -e
@@ -141,8 +140,7 @@ jobs:
       working-directory: upgrade-gradle-properties/smithy-rs
       shell: bash
       env:
-        # TODO(GA): specify ${{ inputs.stable_semantic_version }}
-        SEMANTIC_VERSION: ${{ inputs.unstable_semantic_version }}
+        SEMANTIC_VERSION: ${{ inputs.stable_semantic_version }}
         RELEASE_COMMIT_SHA: ${{ inputs.commit_sha }}
         RELEASE_BRANCH_NAME: ${{ needs.get-or-create-release-branch.outputs.release_branch }}
         DRY_RUN: ${{ inputs.dry_run }}
