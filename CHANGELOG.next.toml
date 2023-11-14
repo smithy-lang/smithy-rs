@@ -54,3 +54,15 @@ message = "Make certain types for EMR Serverless optional. Previously, they defa
 references = ["smithy-rs#3217"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "milesziemer"
+
+[[aws-sdk-rust]]
+message = "Add `Display` impl for `DateTime`."
+references = ["smithy-rs#3183"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "HakanVardarr"
+
+[[smithy-rs]]
+message = "Add `Display` impl for `DateTime`."
+references = ["smithy-rs#3183"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
+author = "HakanVardarr"
