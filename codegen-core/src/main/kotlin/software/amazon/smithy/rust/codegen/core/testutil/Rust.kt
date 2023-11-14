@@ -343,15 +343,15 @@ fun TestWriterDelegator.compileAndTest(
         // cargo fmt errors are useless, ignore
     }
 
-    baseDir.writeDotCargoConfigToml(listOf(
-        "--allow", "dead_code",
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
-        "--allow", "warnings",
-    ))
+    // Clean `RUSTFLAGS` because in CI we pass in `--deny warnings` and
+    // we still generate test code with warnings.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
+    val env = mapOf("RUSTFLAGS" to "")
+    baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
 
-    val testOutput = "cargo test".runCommand(baseDir)
+    val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
-        "cargo clippy --all-features".runCommand(baseDir)
+        "cargo clippy --all-features".runCommand(baseDir, env)
     }
     return testOutput
 }
