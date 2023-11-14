@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -24,9 +25,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
@@ -67,6 +68,7 @@ class ServiceErrorGenerator(
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.private("error_meta")) {
             renderDefinition()
+            renderImpl()
             renderImplDisplay()
             renderImplFromBuildError()
             renderImplProvideErrorMetadata()
@@ -91,7 +93,7 @@ class ServiceErrorGenerator(
                         allErrors.forEach {
                             rust("Error::${symbolProvider.toSymbol(it).name}(inner) => inner.source(),")
                         }
-                        rust("Error::Unhandled(inner) => inner.source()")
+                        rustTemplate("Error::Unhandled(inner) => #{Some}(&*inner.source)", *preludeScope)
                     }
                 }
             }
@@ -107,7 +109,7 @@ class ServiceErrorGenerator(
                     allErrors.forEach {
                         rust("Error::${symbolProvider.toSymbol(it).name}(inner) => inner.fmt(f),")
                     }
-                    rust("Error::Unhandled(inner) => inner.fmt(f)")
+                    rust("Error::Unhandled(_inner) => f.write_str(\"unhandled error\")")
                 }
             }
         }
@@ -118,11 +120,12 @@ class ServiceErrorGenerator(
             """
             impl From<#{BuildError}> for Error {
                 fn from(value: #{BuildError}) -> Self {
-                    Error::Unhandled(#{Unhandled}::builder().source(value).build())
+                    Error::Unhandled(#{Unhandled} { source: value.into(), meta: #{Default}::default() })
                 }
             }
 
             """,
+            *preludeScope,
             "BuildError" to codegenContext.runtimeConfig.operationBuildError(),
             "Unhandled" to unhandledError(codegenContext.runtimeConfig),
         )
@@ -146,10 +149,10 @@ class ServiceErrorGenerator(
                         rustTemplate(
                             """
                             _ => Error::Unhandled(
-                                #{Unhandled}::builder()
-                                    .meta(#{ProvideErrorMetadata}::meta(&err).clone())
-                                    .source(err)
-                                    .build()
+                                #{Unhandled} {
+                                    meta: #{ProvideErrorMetadata}::meta(&err).clone(),
+                                    source: err.into(),
+                                }
                             ),
                             """,
                             "Unhandled" to unhandledError(codegenContext.runtimeConfig),
@@ -187,7 +190,7 @@ class ServiceErrorGenerator(
                 fn meta(&self) -> &#{ErrorMetadata} {
                     match self {
                         #{matchers}
-                        Self::Unhandled(inner) => inner.meta(),
+                        Self::Unhandled(inner) => &inner.meta,
                     }
                 }
             }
@@ -220,7 +223,53 @@ class ServiceErrorGenerator(
                 rust("${sym.name}(#T),", sym)
             }
             docs("An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).")
+            rust(
+                "##[deprecated(note = \"Don't directly match on `Unhandled`. Instead, match on `_` and use " +
+                    "the `ProvideErrorMetadata` trait to retrieve information about the unhandled error.\")]",
+            )
             rust("Unhandled(#T)", unhandledError(codegenContext.runtimeConfig))
         }
     }
+
+    private fun RustWriter.renderImpl() {
+        rustBlock("impl Error") {
+            rust(
+                """
+                /// True if this error is the `Unhandled` variant.
+                pub fn is_unhandled(&self) -> bool {
+                    matches!(self, Self::Unhandled(_))
+                }
+                """,
+            )
+        }
+    }
+}
+
+fun unhandledError(rc: RuntimeConfig): RuntimeType = RuntimeType.forInlineFun(
+    "Unhandled",
+    // Place in a sealed module so that it can't be referenced at all
+    RustModule.pubCrate("sealed_unhandled", ClientRustModule.Error),
+) {
+    rustTemplate(
+        """
+        /// This struct is not intended to be used.
+        ///
+        /// This struct holds information about an unhandled error,
+        /// but that information should be obtained by using the
+        /// [`ProvideErrorMetadata`](#{ProvideErrorMetadata}) trait
+        /// on the error type.
+        ///
+        /// This struct intentionally doesn't yield any useful information itself.
+        ##[deprecated(note = "Don't directly match on `Unhandled`. Instead, match on `_` and use \
+            the `ProvideErrorMetadata` trait to retrieve information about the unhandled error.")]
+        ##[derive(Debug)]
+        pub struct Unhandled {
+            pub(crate) source: #{BoxError},
+            pub(crate) meta: #{ErrorMetadata},
+        }
+        """,
+        "BoxError" to RuntimeType.smithyRuntimeApi(rc).resolve("box_error::BoxError"),
+        "ErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ErrorMetadata"),
+        "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+    )
 }

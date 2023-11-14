@@ -425,7 +425,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun provideErrorMetadataTrait(runtimeConfig: RuntimeConfig) =
             smithyTypes(runtimeConfig).resolve("error::metadata::ProvideErrorMetadata")
 
-        fun unhandledError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::Unhandled")
         fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
         fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.awsQueryCompatibleErrors(runtimeConfig))

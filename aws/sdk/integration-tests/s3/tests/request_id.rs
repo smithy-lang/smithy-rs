@@ -91,7 +91,7 @@ async fn get_request_id_from_unmodeled_error() {
         .expect_err("status 500")
         .into_service_error();
     request.expect_request();
-    assert!(matches!(err, GetObjectError::Unhandled(_)));
+    assert!(err.is_unhandled());
     assert_eq!(Some("correct-request-id"), err.request_id());
     assert_eq!(Some("correct-request-id"), err.meta().request_id());
     assert_eq!(

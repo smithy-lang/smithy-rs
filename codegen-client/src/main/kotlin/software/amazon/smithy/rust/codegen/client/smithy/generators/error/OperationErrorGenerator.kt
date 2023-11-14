@@ -28,7 +28,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.errorMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.unhandledError
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -86,6 +85,8 @@ class OperationErrorGenerator(
             rust(
                 """
                 /// An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).
+                ##[deprecated(note = "Don't directly match on `Unhandled`. Instead, match on `_` and use \
+                    the `ProvideErrorMetadata` trait to retrieve information about the unhandled error.")]
                 Unhandled(#T),
                 """,
                 unhandledError(runtimeConfig),
@@ -114,15 +115,9 @@ class OperationErrorGenerator(
                 "StdError" to RuntimeType.StdError,
                 "ErrorMeta" to errorMetadata,
             ) {
-                rust(
-                    """
-                    Self::Unhandled({
-                        let mut builder = #T::builder().source(source);
-                        builder.set_meta(meta);
-                        builder.build()
-                    })
-                    """,
-                    unhandledError(runtimeConfig),
+                rustTemplate(
+                    """Self::Unhandled(#{Unhandled} { source, meta: meta.unwrap_or_default() })""",
+                    "Unhandled" to unhandledError(runtimeConfig),
                 )
             }
         }
@@ -131,8 +126,11 @@ class OperationErrorGenerator(
     private fun RustWriter.renderImplDisplay(errorSymbol: Symbol, errors: List<StructureShape>) {
         rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result") {
-                delegateToVariants(errors) {
-                    writable { rust("_inner.fmt(f)") }
+                delegateToVariants(errors) { variantMatch ->
+                    when (variantMatch) {
+                        is VariantMatch.Unhandled -> writable { rust("f.write_str(\"unhandled error\")") }
+                        is VariantMatch.Modeled -> writable { rust("_inner.fmt(f)") }
+                    }
                 }
             }
         }
@@ -142,8 +140,13 @@ class OperationErrorGenerator(
         val errorMetadataTrait = RuntimeType.provideErrorMetadataTrait(runtimeConfig)
         rustBlock("impl #T for ${errorSymbol.name}", errorMetadataTrait) {
             rustBlock("fn meta(&self) -> &#T", errorMetadata(runtimeConfig)) {
-                delegateToVariants(errors) {
-                    writable { rust("#T::meta(_inner)", errorMetadataTrait) }
+                delegateToVariants(errors) { variantMatch ->
+                    writable {
+                        when (variantMatch) {
+                            is VariantMatch.Unhandled -> rust("&_inner.meta")
+                            is VariantMatch.Modeled -> rust("#T::meta(_inner)", errorMetadataTrait)
+                        }
+                    }
                 }
             }
         }
@@ -189,16 +192,16 @@ class OperationErrorGenerator(
                 """
                 /// Creates the `${errorSymbol.name}::Unhandled` variant from any error type.
                 pub fn unhandled(err: impl #{Into}<#{Box}<dyn #{StdError} + #{Send} + #{Sync} + 'static>>) -> Self {
-                    Self::Unhandled(#{Unhandled}::builder().source(err).build())
+                    Self::Unhandled(#{Unhandled} { source: err.into(), meta: #{Default}::default() })
                 }
 
-                /// Creates the `${errorSymbol.name}::Unhandled` variant from a `#{error_metadata}`.
-                pub fn generic(err: #{error_metadata}) -> Self {
-                    Self::Unhandled(#{Unhandled}::builder().source(err.clone()).meta(err).build())
+                /// Creates the `${errorSymbol.name}::Unhandled` variant from an [`ErrorMetadata`](#{ErrorMetadata}).
+                pub fn generic(err: #{ErrorMetadata}) -> Self {
+                    Self::Unhandled(#{Unhandled} { source: err.clone().into(), meta: err })
                 }
                 """,
                 *preludeScope,
-                "error_metadata" to errorMetadata,
+                "ErrorMetadata" to errorMetadata,
                 "StdError" to RuntimeType.StdError,
                 "Unhandled" to unhandledError(runtimeConfig),
             )
@@ -209,13 +212,15 @@ class OperationErrorGenerator(
                 """,
             )
             rustBlock("pub fn meta(&self) -> &#T", errorMetadata) {
-                rust("use #T;", RuntimeType.provideErrorMetadataTrait(runtimeConfig))
                 rustBlock("match self") {
                     errors.forEach { error ->
                         val errorVariantSymbol = symbolProvider.toSymbol(error)
-                        rust("Self::${errorVariantSymbol.name}(e) => e.meta(),")
+                        rustTemplate(
+                            "Self::${errorVariantSymbol.name}(e) => #{ProvideErrorMetadata}::meta(e),",
+                            "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
+                        )
                     }
-                    rust("Self::Unhandled(e) => e.meta(),")
+                    rust("Self::Unhandled(e) => &e.meta,")
                 }
             }
             errors.forEach { error ->
@@ -226,6 +231,14 @@ class OperationErrorGenerator(
                     rust("matches!(self, Self::${errorVariantSymbol.name}(_))")
                 }
             }
+            rust(
+                """
+                /// True if this error is the `Unhandled` variant.
+                pub fn is_unhandled(&self) -> bool {
+                    matches!(self, Self::Unhandled(_))
+                }
+                """,
+            )
         }
     }
 
@@ -236,9 +249,14 @@ class OperationErrorGenerator(
                 *preludeScope,
                 "StdError" to RuntimeType.StdError,
             ) {
-                delegateToVariants(errors) {
-                    writable {
-                        rustTemplate("#{Some}(_inner)", *preludeScope)
+                delegateToVariants(errors) { variantMatch ->
+                    when (variantMatch) {
+                        is VariantMatch.Unhandled -> writable {
+                            rustTemplate("#{Some}(&*_inner.source)", *preludeScope)
+                        }
+                        is VariantMatch.Modeled -> writable {
+                            rustTemplate("#{Some}(_inner)", *preludeScope)
+                        }
                     }
                 }
             }
