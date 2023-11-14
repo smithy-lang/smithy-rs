@@ -74,7 +74,7 @@ jobs:
   # code to have already been generated in order to run.
   test-codegen:
     name: Test Codegen
-    runs-on: ubuntu-latest # ${{ matrix.test.runner }}
+    runs-on: ${{ matrix.test.runner }}
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
