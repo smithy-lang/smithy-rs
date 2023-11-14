@@ -68,7 +68,6 @@ class ServiceErrorGenerator(
     fun render(crate: RustCrate) {
         crate.withModule(RustModule.private("error_meta")) {
             renderDefinition()
-            renderImpl()
             renderImplDisplay()
             renderImplFromBuildError()
             renderImplProvideErrorMetadata()
@@ -228,19 +227,6 @@ class ServiceErrorGenerator(
                     "the `ProvideErrorMetadata` trait to retrieve information about the unhandled error.\")]",
             )
             rust("Unhandled(#T)", unhandledError(codegenContext.runtimeConfig))
-        }
-    }
-
-    private fun RustWriter.renderImpl() {
-        rustBlock("impl Error") {
-            rust(
-                """
-                /// True if this error is the `Unhandled` variant.
-                pub fn is_unhandled(&self) -> bool {
-                    matches!(self, Self::Unhandled(_))
-                }
-                """,
-            )
         }
     }
 }

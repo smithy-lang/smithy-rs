@@ -7,6 +7,7 @@
 
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Error;
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_runtime::client::http::test_util::capture_request;
 
@@ -58,6 +59,7 @@ async fn test_s3_signer_query_string_with_all_valid_chars() {
 // test must be run against an actual bucket so we `ignore` it unless the runner specifically requests it
 #[tokio::test]
 #[ignore]
+#[allow(deprecated)]
 async fn test_query_strings_are_correctly_encoded() {
     use aws_smithy_runtime_api::client::result::SdkError;
 
@@ -81,13 +83,14 @@ async fn test_query_strings_are_correctly_encoded() {
         if let Err(SdkError::ServiceError(context)) = res {
             let err = context.err();
             let msg = err.to_string();
-            if err.is_unhandled() && msg.contains("SignatureDoesNotMatch") {
+            let unhandled = matches!(err, ListObjectsV2Error::Unhandled(_));
+            if unhandled && msg.contains("SignatureDoesNotMatch") {
                 chars_that_break_signing.push(byte);
-            } else if err.is_unhandled() && msg.to_string().contains("InvalidUri") {
+            } else if unhandled && msg.to_string().contains("InvalidUri") {
                 chars_that_break_uri_parsing.push(byte);
-            } else if err.is_unhandled() && msg.to_string().contains("InvalidArgument") {
+            } else if unhandled && msg.to_string().contains("InvalidArgument") {
                 chars_that_are_invalid_arguments.push(byte);
-            } else if err.is_unhandled() && msg.to_string().contains("InvalidToken") {
+            } else if unhandled && msg.to_string().contains("InvalidToken") {
                 panic!("refresh your credentials and run this test again");
             } else {
                 todo!("unexpected error: {:?}", err);

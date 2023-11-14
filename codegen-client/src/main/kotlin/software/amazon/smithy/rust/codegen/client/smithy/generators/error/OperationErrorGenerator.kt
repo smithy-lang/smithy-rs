@@ -231,14 +231,6 @@ class OperationErrorGenerator(
                     rust("matches!(self, Self::${errorVariantSymbol.name}(_))")
                 }
             }
-            rust(
-                """
-                /// True if this error is the `Unhandled` variant.
-                pub fn is_unhandled(&self) -> bool {
-                    matches!(self, Self::Unhandled(_))
-                }
-                """,
-            )
         }
     }
 

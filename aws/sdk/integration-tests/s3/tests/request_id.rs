@@ -59,6 +59,7 @@ async fn get_request_id_from_modeled_error() {
 }
 
 #[tokio::test]
+#[allow(deprecated)]
 async fn get_request_id_from_unmodeled_error() {
     let (http_client, request) = capture_request(Some(
         http::Response::builder()
@@ -91,7 +92,7 @@ async fn get_request_id_from_unmodeled_error() {
         .expect_err("status 500")
         .into_service_error();
     request.expect_request();
-    assert!(err.is_unhandled());
+    assert!(matches!(err, GetObjectError::Unhandled(_)));
     assert_eq!(Some("correct-request-id"), err.request_id());
     assert_eq!(Some("correct-request-id"), err.meta().request_id());
     assert_eq!(
