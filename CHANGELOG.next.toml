@@ -82,3 +82,61 @@ message = "Remove deprecated error kind type aliases."
 references = ["smithy-rs#3189"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+Unhandled errors have been made opaque to ensure code is written in a future-proof manner. Where previously, you
+might have:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    GetStorageError::Unhandled(unhandled) if unhandled.code() == "SomeUnmodeledErrorCode" {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+It should now look as follows:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    err if err.code() == "SomeUnmodeledErrorCode" {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+The `Unhandled` variant should never be referenced directly.
+"""
+references = ["smithy-rs#3191"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Unhandled errors have been made opaque to ensure code is written in a future-proof manner. Where previously, you
+might have:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    GetStorageError::Unhandled(unhandled) if unhandled.code() == "SomeUnmodeledErrorCode" {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+It should now look as follows:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    err if err.code() == "SomeUnmodeledErrorCode" {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+The `Unhandled` variant should never be referenced directly.
+"""
+references = ["smithy-rs#3191"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
