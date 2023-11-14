@@ -73,6 +73,8 @@ To help customers migrate, we are including `from_env` hooks that set `behavior-
 
 Internally, `BehaviorMajorVersion` will become an additional field on `<client>::Config`. It is _not_ ever stored in the `ConfigBag` or in `RuntimePlugins`.
 
+When constructing the set of "default runtime plugins," the default runtime plugin parameters will be passed the `BehaviorMajorVersion`. This will select the correct runtime plugin. Logging will clearly indicate which plugin was selected.
+
 Design Alternatives Considered
 ------------------------------
 
@@ -86,4 +88,5 @@ Changes checklist
 - [x] Add BMV as a required runtime component
 - [x] Wire up setters throughout the stack
 - [x] Add tests of BMV (set via aws-config, cargo features & code params)
-- [ ] Remove `aws_config::from_env` deprecation stand-ins
+- [x] ~Remove `aws_config::from_env` deprecation stand-ins~ We decided to persist these deprecations
+- [x] Update generated usage examples
