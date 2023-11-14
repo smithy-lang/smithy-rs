@@ -105,9 +105,11 @@ class RequiredCustomizations : ClientCodegenDecorator {
 
                 pub use #{DisplayErrorContext};
                 pub use #{ProvideErrorMetadata};
+                pub use #{ErrorMetadata};
                 """,
                 "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
                 "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+                "ErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ErrorMetadata"),
                 "R" to RuntimeType.smithyRuntimeApiClient(rc).resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(rc),
                 // this can't use the auto-rexport because the builder generator is defined in codegen core

@@ -142,3 +142,27 @@ async fn example() {
 references = ["smithy-rs#3151"]
 author = "rcoh"
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[aws-sdk-rust]]
+message = "Add `ProvideErrorMetadata` impl for service `Error` type."
+references = ["aws-sdk-rust#780", "smithy-rs#3189"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Add `ProvideErrorMetadata` impl for service `Error` type."
+references = ["aws-sdk-rust#780", "smithy-rs#3189"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Remove deprecated error kind type aliases."
+references = ["smithy-rs#3189"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Remove deprecated error kind type aliases."
+references = ["smithy-rs#3189"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
