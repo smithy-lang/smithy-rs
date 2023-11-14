@@ -159,7 +159,13 @@ jobs:
           # to retry a release action execution that failed due to a transient issue.
           # In that case, we expect the commit to be releasable as-is, i.e. the runtime crate version in gradle.properties
           # should already be the expected one.
-          git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+          if [[ "${DRY_RUN}" == "true" ]]; then
+            # During dry-runs, "git push" without "--force" can fail if smithy-rs-release-x.y.z-preview is behind
+            # smithy-rs-release-x.y.z, but that does not matter much during dry-runs.
+            git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+          else
+            git push origin "HEAD:refs/heads/${RELEASE_BRANCH_NAME}"
+          fi
 
           echo "commit_sha=$(git rev-parse HEAD)" > $GITHUB_OUTPUT
         else
