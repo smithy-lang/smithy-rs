@@ -31,7 +31,7 @@ internal class ServerServiceGeneratorTest {
 
                         service.boxed()
                     }
-                    """
+                    """,
                 )
             }
         }
