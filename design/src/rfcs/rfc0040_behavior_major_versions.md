@@ -23,12 +23,6 @@ For new SDKs, a GA cutline presents difficult choices around timeline and featur
 
 Both of these use cases are addressed by Behavior Major Versions.
 
-<!-- The "Terminology" section is optional but is really useful for defining the technical terms you're using in the RFC -->
-Terminology
------------
-
-- **Some Term**: A definition for that term
-
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 The user experience if this RFC is implemented
 ----------------------------------------------
