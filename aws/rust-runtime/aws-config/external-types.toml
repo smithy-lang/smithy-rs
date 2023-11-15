@@ -32,6 +32,7 @@ allowed_external_types = [
    "aws_smithy_types::timeout::OperationTimeoutConfig",
    "aws_smithy_types::timeout::TimeoutConfig",
    "aws_smithy_types::timeout::TimeoutConfigBuilder",
+   "aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig",
    "aws_types::*",
    "http::response::Response",
    "http::uri::Uri",

@@ -5,10 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -20,49 +24,43 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
-class StalledStreamProtectionOperationCustomization(
-    private val codegenContext: ClientCodegenContext,
-) : OperationCustomization() {
-    private val rc = codegenContext.runtimeConfig
+class StalledStreamProtectionDecorator : ClientCodegenDecorator {
+    override val name: String = "StalledStreamProtection"
+    override val order: Byte = 0
 
-    override fun section(section: OperationSection): Writable = writable {
-        when (section) {
-            is OperationSection.FeatureGatedComponents -> {
-                val model = codegenContext.model
-                val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
-                // Only bother mounting this interceptor when an operation's input and/or output
-                // has a blob shape member.
-                val inputHasBlobMember = section.operationShape.inputShape
-                    ?.let { inputShape -> model.expectShape(inputShape).members() }
-                    ?.any { it.isStreaming(model) } ?: false
-                val outputHasBlobMember = section.operationShape.outputShape
-                    ?.let { outputShape ->
-                        model.expectShape(outputShape).members()
-                            .any { it.isStreaming(model) }
-                    } ?: false
+    override fun configCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
+    ): List<ConfigCustomization> {
+        return baseCustomizations + StalledStreamProtectionConfigCustomization(codegenContext)
+    }
 
-                val kind = when (inputHasBlobMember to outputHasBlobMember) {
-                    true to true -> "RequestAndResponseBody"
-                    true to false -> "RequestBody"
-                    false to true -> "ResponseBody"
-                    else -> return@writable
-                }
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> {
+        return baseCustomizations + StalledStreamProtectionOperationCustomization(codegenContext)
+    }
 
-                if (inputHasBlobMember || outputHasBlobMember) {
-                    section.registerInterceptor("stalled-stream-protection", this) {
-                        rustTemplate(
-                            """
-                            #{StalledStreamProtectionInterceptor}::new(#{Kind}::$kind)
-                            """,
-                            *preludeScope,
-                            "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),
-                            "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind"),
-                        )
-                    }
-                }
-            }
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> {
+        return baseCustomizations + StalledStreamProtectionRuntimePluginCustomization(codegenContext)
+    }
 
-            else -> { }
+    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+        val rc = codegenContext.runtimeConfig
+        val feature = Feature("stalled-stream-protection", false, listOf("aws-smithy-types/stalled-stream-protection", "aws-smithy-runtime/stalled-stream-protection"))
+        rustCrate.mergeFeature(feature)
+
+        rustCrate.withModule(ClientRustModule.config) {
+            Attribute.featureGate(feature.name).render(this)
+            rustTemplate(
+                "pub use #{StalledStreamProtectionConfig};",
+                "StalledStreamProtectionConfig" to RuntimeType.smithyTypes(rc).resolve("stalled_stream_protection::StalledStreamProtectionConfig"),
+            )
         }
     }
 }
@@ -130,19 +128,72 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
     }
 }
 
-class StalledStreamProtectionConfigReExportCustomization(codegenContext: ClientCodegenContext) {
+class StalledStreamProtectionOperationCustomization(
+    private val codegenContext: ClientCodegenContext,
+) : OperationCustomization() {
     private val rc = codegenContext.runtimeConfig
-    private val feature = Feature("stalled-stream-protection", false, listOf("aws-smithy-types/stalled-stream-protection", "aws-smithy-runtime/stalled-stream-protection"))
 
-    fun extras(rustCrate: RustCrate) {
-        rustCrate.mergeFeature(feature)
+    override fun section(section: OperationSection): Writable = writable {
+        when (section) {
+            is OperationSection.FeatureGatedComponents -> {
+                val model = codegenContext.model
+                val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
+                // Only bother mounting this interceptor when an operation's input and/or output
+                // has a blob shape member.
+                val inputHasBlobMember = section.operationShape.inputShape
+                    ?.let { inputShape -> model.expectShape(inputShape).members() }
+                    ?.any { it.isStreaming(model) } ?: false
+                val outputHasBlobMember = section.operationShape.outputShape
+                    ?.let { outputShape ->
+                        model.expectShape(outputShape).members()
+                            .any { it.isStreaming(model) }
+                    } ?: false
 
-        rustCrate.withModule(ClientRustModule.config) {
-            Attribute.featureGate(feature.name).render(this)
-            rustTemplate(
-                "pub use #{StalledStreamProtectionConfig};",
-                "StalledStreamProtectionConfig" to RuntimeType.smithyTypes(rc).resolve("stalled_stream_protection::StalledStreamProtectionConfig"),
-            )
+                val kind = when (inputHasBlobMember to outputHasBlobMember) {
+                    true to true -> "RequestAndResponseBody"
+                    true to false -> "RequestBody"
+                    false to true -> "ResponseBody"
+                    else -> return@writable
+                }
+
+                // We don't currently support stalled stream protection for input blobs.
+                if (/* inputHasBlobMember || */ outputHasBlobMember) {
+                    section.registerInterceptor("stalled-stream-protection", this) {
+                        rustTemplate(
+                            """
+                            #{StalledStreamProtectionInterceptor}::new(#{Kind}::$kind)
+                            """,
+                            *preludeScope,
+                            "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),
+                            "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind"),
+                        )
+                    }
+                }
+            }
+            else -> { }
+        }
+    }
+}
+
+class StalledStreamProtectionRuntimePluginCustomization(codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
+    private val rc = codegenContext.runtimeConfig
+
+    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
+        when (section) {
+            is ServiceRuntimePluginSection.AdditionalConfig -> {
+                Attribute.featureGate("stalled-stream-protection")
+                rustTemplate(
+                    """
+                    ${section.newLayerName}.store_put(
+                        #{StalledStreamProtectionConfig}::new_enabled().grace_period(#{Duration}::from_secs(5)).build()
+                    );
+                    """,
+                    "StalledStreamProtectionConfig" to RuntimeType.smithyTypes(rc).resolve("stalled_stream_protection::StalledStreamProtectionConfig"),
+                    "Duration" to RuntimeType.std.resolve("time::Duration"),
+                )
+            }
+
+            else -> emptySection
         }
     }
 }

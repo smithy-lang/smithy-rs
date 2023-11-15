@@ -121,7 +121,7 @@ async fn start_faulty_upload_server() -> (impl Future<Output = ()>, SocketAddr) 
 }
 
 #[tokio::test]
-async fn test_stalled_stream_protection_defaults_for_download() {
+async fn test_explicitly_configured_stalled_stream_protection_for_downloads() {
     // We spawn a faulty server that will close the connection after
     // writing half of the response body.
     let (server, server_addr) = start_faulty_download_server().await;
@@ -130,9 +130,79 @@ async fn test_stalled_stream_protection_defaults_for_download() {
     let conf = Config::builder()
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
-        .stalled_stream_protection_config(StalledStreamProtectionConfig::new_enabled().build())
+        .stalled_stream_protection_config(
+            StalledStreamProtectionConfig::new_enabled()
+                // Fail stalled streams immediately
+                .grace_period(Duration::from_secs(0))
+                .build(),
+        )
         .build();
     let client = Client::from_conf(conf);
+
+    let res = client
+        .get_object()
+        .bucket("a-test-bucket")
+        .key("stalled-stream-test.txt")
+        .send()
+        .await
+        .unwrap();
+
+    let err = res
+        .body
+        .collect()
+        .await
+        .expect_err("download stream stalled out");
+    let err = err.source().expect("inner error exists");
+    assert_eq!(
+        err.to_string(),
+        "minimum throughput was specified at 1 B/s, but throughput of 0 B/s was observed"
+    );
+}
+
+#[tokio::test]
+async fn test_stalled_stream_protection_for_downloads_can_be_disabled() {
+    // We spawn a faulty server that will close the connection after
+    // writing half of the response body.
+    let (server, server_addr) = start_faulty_download_server().await;
+    let _ = tokio::spawn(server);
+
+    let conf = Config::builder()
+        .region(Region::new("us-east-1"))
+        .endpoint_url(format!("http://{server_addr}"))
+        .stalled_stream_protection_config(StalledStreamProtectionConfig::new_disabled())
+        .build();
+    let client = Client::from_conf(conf);
+
+    let res = client
+        .get_object()
+        .bucket("a-test-bucket")
+        .key("stalled-stream-test.txt")
+        .send()
+        .await
+        .unwrap();
+
+    let timeout_duration = Duration::from_secs(2);
+    match tokio::time::timeout(timeout_duration, res.body.collect()).await {
+        Ok(_) => panic!("stalled stream protection kicked in but it shouldn't have"),
+        // If timeout elapses, then stalled stream protection didn't end the stream early.
+        Err(elapsed) => assert_eq!("deadline has elapsed".to_owned(), elapsed.to_string()),
+    }
+}
+
+#[tokio::test]
+async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
+    // We spawn a faulty server that will close the connection after
+    // writing half of the response body.
+    let (server, server_addr) = start_faulty_download_server().await;
+    let _ = tokio::spawn(server);
+
+    // Stalled stream protection should be enabled by default.
+    let sdk_config = aws_config::from_env()
+        .region(Region::new("us-east-1"))
+        .endpoint_url(format!("http://{server_addr}"))
+        .load()
+        .await;
+    let client = Client::new(&sdk_config);
 
     let res = client
         .get_object()

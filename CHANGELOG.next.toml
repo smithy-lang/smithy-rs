@@ -119,3 +119,41 @@ message = "Remove deprecated error kind type aliases."
 references = ["smithy-rs#3189"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+Add configurable stalled-stream protection for downloads.
+
+When making HTTP calls,
+it's possible for a connection to 'stall out' and emit no more data due to server-side issues.
+In the event this happens, it's desirable for the stream to error out as quickly as possible.
+While timeouts can protect you from this issue, they aren't adaptive to the amount of data
+being sent and so must be configured specifically for each use case. When enabled, stalled-stream
+protection will ensure that bad streams error out quickly, regardless of the amount of data being
+downloaded.
+
+Protection is enabled by default for all clients but can be configured or disabled.
+See [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.
+"""
+references = ["smithy-rs#3202"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Add configurable stalled-stream protection for downloads.
+
+When making HTTP calls,
+it's possible for a connection to 'stall out' and emit no more data due to server-side issues.
+In the event this happens, it's desirable for the stream to error out as quickly as possible.
+While timeouts can protect you from this issue, they aren't adaptive to the amount of data
+being sent and so must be configured specifically for each use case. When enabled, stalled-stream
+protection will ensure that bad streams error out quickly, regardless of the amount of data being
+downloaded.
+
+Protection is enabled by default for all clients but can be configured or disabled.
+See [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.
+"""
+references = ["smithy-rs#3202"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
+author = "Velfi"
