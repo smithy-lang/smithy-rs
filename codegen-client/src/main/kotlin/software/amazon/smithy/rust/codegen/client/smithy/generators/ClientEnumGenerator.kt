@@ -76,6 +76,27 @@ data class InfallibleEnumType(
         )
     }
 
+    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {
+        rustTemplate(
+            """
+            impl ${context.enumName} {
+                /// Parses the enum value while disallowing unknown variants.
+                ///
+                /// Unknown variants will result in an error.
+                pub fn try_parse(value: &str) -> #{Result}<Self, #{UnknownVariantError}> {
+                    match Self::from(value) {
+                        ##[allow(deprecated)]
+                        Self::Unknown(_) => #{Err}(#{UnknownVariantError}::new(value)),
+                        known => Ok(known),
+                    }
+                }
+            }
+            """,
+            *preludeScope,
+            "UnknownVariantError" to unknownVariantError(),
+        )
+    }
+
     override fun additionalDocs(context: EnumGeneratorContext): Writable = writable {
         renderForwardCompatibilityNote(context.enumName, context.sortedMembers, UnknownVariant, UnknownVariantValue)
     }
@@ -185,3 +206,27 @@ class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringSha
             ),
         ),
     )
+
+private fun unknownVariantError(): RuntimeType = RuntimeType.forInlineFun("UnknownVariantError", ClientRustModule.Error) {
+    rustTemplate(
+        """
+        /// The given enum value failed to parse since it is not a known value.
+        ##[derive(Debug)]
+        pub struct UnknownVariantError {
+            value: #{String},
+        }
+        impl UnknownVariantError {
+            pub(crate) fn new(value: impl #{Into}<#{String}>) -> Self {
+                Self { value: value.into() }
+            }
+        }
+        impl ::std::fmt::Display for UnknownVariantError {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> #{Result}<(), ::std::fmt::Error> {
+                write!(f, "unknown enum variant: '{}'", self.value)
+            }
+        }
+        impl ::std::error::Error for UnknownVariantError {}
+        """,
+        *preludeScope,
+    )
+}
