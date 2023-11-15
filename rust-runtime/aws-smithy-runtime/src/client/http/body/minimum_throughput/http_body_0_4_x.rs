@@ -56,19 +56,33 @@ where
         };
         this.sleep_fut.replace(sleep_fut);
 
-        // Calculate the current throughput and emit an error if it's too low.
+        // Calculate the current throughput and emit an error if it's too low and
+        // the grace period has elapsed.
         let actual_throughput = this.throughput_logs.calculate_throughput(now);
         let is_below_minimum_throughput = actual_throughput
-            .map(|t| t < self.options.minimum_throughput())
+            .map(|t| t < this.options.minimum_throughput())
             .unwrap_or_default();
         if is_below_minimum_throughput {
-            Poll::Ready(Some(Err(Box::new(Error::ThroughputBelowMinimum {
-                expected: self.options.minimum_throughput(),
-                actual: actual_throughput.unwrap(),
-            }))))
+            // Check the grace period future to see if it needs creating.
+            let mut grace_period_fut = this
+                .grace_period_fut
+                .take()
+                .unwrap_or_else(|| this.async_sleep.sleep(this.options.grace_period()));
+            if let Poll::Ready(()) = pin!(&mut grace_period_fut).poll(cx) {
+                // The grace period has ended!
+                return Poll::Ready(Some(Err(Box::new(Error::ThroughputBelowMinimum {
+                    expected: self.options.minimum_throughput(),
+                    actual: actual_throughput.unwrap(),
+                }))));
+            };
+            this.grace_period_fut.replace(grace_period_fut);
         } else {
-            poll_res
+            // Ensure we don't have an active grace period future if we're not
+            // currently below the minimum throughput.
+            let _ = this.grace_period_fut.take();
         }
+
+        poll_res
     }
 
     fn poll_trailers(
