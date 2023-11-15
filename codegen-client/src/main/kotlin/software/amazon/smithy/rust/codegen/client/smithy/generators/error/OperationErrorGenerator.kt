@@ -88,7 +88,7 @@ class OperationErrorGenerator(
                 #{deprecation}
                 Unhandled(#{Unhandled}),
                 """,
-                "deprecation" to writable { renderUnhandledErrorDeprecation() },
+                "deprecation" to writable { renderUnhandledErrorDeprecation(runtimeConfig, errorSymbol.name) },
                 "Unhandled" to unhandledError(runtimeConfig),
             )
         }

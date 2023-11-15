@@ -232,7 +232,7 @@ class ServiceErrorGenerator(
                 rust("${sym.name}(#T),", sym)
             }
             docs("An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).")
-            renderUnhandledErrorDeprecation()
+            renderUnhandledErrorDeprecation(codegenContext.runtimeConfig, "Error")
             rust("Unhandled(#T)", unhandledError(codegenContext.runtimeConfig))
         }
     }
@@ -261,19 +261,28 @@ fun unhandledError(rc: RuntimeConfig): RuntimeType = RuntimeType.forInlineFun(
         }
         """,
         "BoxError" to RuntimeType.smithyRuntimeApi(rc).resolve("box_error::BoxError"),
-        "deprecation" to writable { renderUnhandledErrorDeprecation() },
+        "deprecation" to writable { renderUnhandledErrorDeprecation(rc) },
         "ErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ErrorMetadata"),
         "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
     )
 }
 
-fun RustWriter.renderUnhandledErrorDeprecation() {
+fun RustWriter.renderUnhandledErrorDeprecation(rc: RuntimeConfig, errorName: String? = null) {
+    val link = if (errorName != null) {
+        "##impl-ProvideErrorMetadata-for-$errorName"
+    } else {
+        "#{ProvideErrorMetadata}"
+    }
     val message = """
-        Don't directly match on `Unhandled`. Instead, match using the catch all matcher (e.g., `_`),
-        give it a name like `err`, and use the `ProvideErrorMetadata` trait to retrieve the error
-        code and message. For example: `err => println!("code: {}, message: {}", err.code(), err.message())`
+        Matching `Unhandled` directly is not forwards compatible. Instead, match using a
+        variable wildcard pattern and check `.code()`:<br/>
+        &nbsp;&nbsp;&nbsp;`err if err.code() == Some("SpecificExceptionCode") => { /* handle the error */ }`<br/>
+        See [`ProvideErrorMetadata`]($link) for what information is available for the error.
     """.trimIndent()
     // `.dq()` doesn't quite do what we want here since we actually want a Rust multi-line string
-    val messageEscaped = message.replace("\"", "\\\"").replace("\n", " \\\n")
-    rust("""##[deprecated(note = "$messageEscaped")]""")
+    val messageEscaped = message.replace("\"", "\\\"").replace("\n", " \\\n").replace("<br/>", "\n")
+    rustTemplate(
+        """##[deprecated(note = "$messageEscaped")]""",
+        "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(rc),
+    )
 }
