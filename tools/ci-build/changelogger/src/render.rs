@@ -128,14 +128,27 @@ fn date_based_release_metadata(
     now: OffsetDateTime,
     manifest_name: impl Into<String>,
 ) -> ReleaseMetadata {
-    ReleaseMetadata {
-        title: date_title(&now),
-        tag: format!(
+    // Create consistent tags if anything is relying on this code to be consistent for past releases
+    let cutover = OffsetDateTime::from_unix_timestamp(1700065769).expect("valid ts");
+    let tag = if now > cutover {
+        format!(
+            "release-{year}-{month:02}-{day:02}-{hr:02}h",
+            year = now.date().year(),
+            month = u8::from(now.date().month()),
+            day = now.date().day(),
+            hr = now.hour()
+        )
+    } else {
+        format!(
             "release-{year}-{month:02}-{day:02}",
             year = now.date().year(),
             month = u8::from(now.date().month()),
-            day = now.date().day()
-        ),
+            day = now.date().day(),
+        )
+    };
+    ReleaseMetadata {
+        title: date_title(&now),
+        tag,
         manifest_name: manifest_name.into(),
     }
 }
@@ -613,6 +626,15 @@ Thank you for your contributions! ❤
         let result = date_based_release_metadata(now, "some-manifest.json");
         assert_eq!("March 3rd, 1973", result.title);
         assert_eq!("release-1973-03-03", result.tag);
+        assert_eq!("some-manifest.json", result.manifest_name);
+    }
+
+    #[test]
+    fn test_date_based_release_metadata_new_format() {
+        let now = OffsetDateTime::from_unix_timestamp(1700065832).unwrap();
+        let result = date_based_release_metadata(now, "some-manifest.json");
+        assert_eq!("November 15th, 2023", result.title);
+        assert_eq!("release-2023-11-15-16h", result.tag);
         assert_eq!("some-manifest.json", result.manifest_name);
     }
 
