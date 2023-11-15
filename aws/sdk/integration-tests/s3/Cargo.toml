@@ -16,11 +16,11 @@ test-util = []
 
 [dev-dependencies]
 async-std = "1.12.0"
-aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["stalled-stream-protection"] }
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["stalled-stream-protection", "behavior-version-latest"] }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
-aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "stalled-stream-protection"] }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "stalled-stream-protection", "behavior-version-latest"] }
 aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts" }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util", "rt-tokio"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
@@ -32,7 +32,7 @@ aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"
 fastrand = "2.0.1"
-futures-util = { version = "0.3.16" }
+futures-util = { version = "0.3.16", default-features = false, features = ["alloc"] }
 hdrhistogram = "7.5.2"
 http = "0.2.3"
 http-body = "0.4.5"

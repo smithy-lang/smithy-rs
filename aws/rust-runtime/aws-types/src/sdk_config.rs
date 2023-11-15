@@ -17,6 +17,7 @@ pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::behavior_version::BehaviorMajorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
@@ -66,6 +67,7 @@ pub struct SdkConfig {
     http_client: Option<SharedHttpClient>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
+    behavior_major_version: Option<BehaviorMajorVersion>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -89,6 +91,7 @@ pub struct Builder {
     http_client: Option<SharedHttpClient>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
+    behavior_major_version: Option<BehaviorMajorVersion>,
 }
 
 impl Builder {
@@ -542,6 +545,21 @@ impl Builder {
         self
     }
 
+    /// Sets the [`BehaviorMajorVersion`] for the [`SdkConfig`]
+    pub fn behavior_major_version(mut self, behavior_major_version: BehaviorMajorVersion) -> Self {
+        self.set_behavior_major_version(Some(behavior_major_version));
+        self
+    }
+
+    /// Sets the [`BehaviorMajorVersion`] for the [`SdkConfig`]
+    pub fn set_behavior_major_version(
+        &mut self,
+        behavior_major_version: Option<BehaviorMajorVersion>,
+    ) -> &mut Self {
+        self.behavior_major_version = behavior_major_version;
+        self
+    }
+
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
@@ -559,6 +577,7 @@ impl Builder {
             time_source: self.time_source,
             #[cfg(feature = "stalled-stream-protection")]
             stalled_stream_protection_config: self.stalled_stream_protection_config,
+            behavior_major_version: self.behavior_major_version,
         }
     }
 }
@@ -694,10 +713,15 @@ impl SdkConfig {
         self.use_dual_stack
     }
 
-    /// Configured stalled stream protection
     #[cfg(feature = "stalled-stream-protection")]
+    /// Configured stalled stream protection
     pub fn stalled_stream_protection_config(&self) -> Option<StalledStreamProtectionConfig> {
         self.stalled_stream_protection_config.clone()
+    }
+
+    /// Behavior major version configured for this client
+    pub fn behavior_major_version(&self) -> Option<BehaviorMajorVersion> {
+        self.behavior_major_version.clone()
     }
 
     /// Config builder
@@ -731,6 +755,7 @@ impl SdkConfig {
             use_dual_stack: self.use_dual_stack,
             #[cfg(feature = "stalled-stream-protection")]
             stalled_stream_protection_config: self.stalled_stream_protection_config,
+            behavior_major_version: self.behavior_major_version,
         }
     }
 }

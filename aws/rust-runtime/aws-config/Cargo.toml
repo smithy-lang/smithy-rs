@@ -9,6 +9,7 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
+behavior-version-latest = []
 client-hyper = ["aws-smithy-runtime/connector-hyper-0-14-x"]
 rustls = ["aws-smithy-runtime/tls-rustls", "client-hyper"]
 allow-compilation = [] # our tests use `cargo test --all-features` and native-tls breaks CI
@@ -71,6 +72,7 @@ serde_json = "1"
 # used for a usage example
 hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http2", "http1"] }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }
+
 
 [package.metadata.docs.rs]
 all-features = true

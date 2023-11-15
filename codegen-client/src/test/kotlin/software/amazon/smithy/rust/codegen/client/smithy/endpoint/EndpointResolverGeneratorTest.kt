@@ -11,8 +11,6 @@ import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.client.testutil.EndpointTestDiscovery
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
-import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 class EndpointResolverGeneratorTest {
     companion object {
@@ -55,7 +53,7 @@ class EndpointResolverGeneratorTest {
         // if (!suite.toString().contains("hostable")) {
         // return
         // }
-        clientIntegrationTest(suite, params = IntegrationTestParams(command = { it -> "cargo test".runCommand(it, mapOf("RUSTFLAGS" to "")) }))
+        clientIntegrationTest(suite)
     }
 
     /*
