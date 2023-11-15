@@ -30,7 +30,7 @@ The user experience if this RFC is implemented
 In the current version of the SDK, users can construct clients without indicating any sort of behavior major version.
 Once this RFC is implemented, there will be two ways to set a behavior major version:
 
-1. In code via `aws_config::from_env_with_version(BehaviorMajorVersion::latest())` and `<service>::Config::builder().behavior_major_version(...)`. This will also work for `config_override`.
+1. In code via `aws_config::from_env_with_version(BehaviorVersion::latest())` and `<service>::Config::builder().behavior_version(...)`. This will also work for `config_override`.
 2. By enabling `behavior-version-latest` in either `aws-config` (which brings back `from_env`) OR a specific generated SDK crate
 
 ```toml
@@ -41,16 +41,16 @@ aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "1", features = ["behavior-version-latest"] }
 ```
 
-If no `BehaviorMajorVersion` is set, the client will panic during construction.
+If no `BehaviorVersion` is set, the client will panic during construction.
 
-`BehaviorMajorVersion` is an opaque struct with initializers like `::latest()`, `::v2023_11_09()`. Downstream code can check the version by calling methods like `::supports_v1()`
+`BehaviorVersion` is an opaque struct with initializers like `::latest()`, `::v2023_11_09()`. Downstream code can check the version by calling methods like `::supports_v1()`
 
 When new BMV are added, the previous version constructor will be marked as `deprecated`. This serves as a mechanism to alert customers that a new BMV exists to allow them to upgrade.
 
 How to actually implement this RFC
 ----------------------------------
 
-In order to implement this feature, we need to create a `BehaviorMajorVersion` struct, add config options to `SdkConfig` and `aws-config`, and wire it throughout the stack.
+In order to implement this feature, we need to create a `BehaviorVersion` struct, add config options to `SdkConfig` and `aws-config`, and wire it throughout the stack.
 ```rust
 /// Behavior major-version of the client
 ///
@@ -58,16 +58,16 @@ In order to implement this feature, we need to create a `BehaviorMajorVersion` s
 /// compatible. For example, a change which introduces new default timeouts or a new retry-mode for
 /// all operations might be the ideal behavior but could break existing applications.
 #[derive(Debug, Clone)]
-pub struct BehaviorMajorVersion {
+pub struct BehaviorVersion {
     // currently there is only 1 MV so we don't actually need anything in here.
 }
 ```
 
 To help customers migrate, we are including `from_env` hooks that set `behavior-version-latest` that are _deprecated_. This allows customers to see that they are missing the required cargo feature and add it to remove the deprecation warning.
 
-Internally, `BehaviorMajorVersion` will become an additional field on `<client>::Config`. It is _not_ ever stored in the `ConfigBag` or in `RuntimePlugins`.
+Internally, `BehaviorVersion` will become an additional field on `<client>::Config`. It is _not_ ever stored in the `ConfigBag` or in `RuntimePlugins`.
 
-When constructing the set of "default runtime plugins," the default runtime plugin parameters will be passed the `BehaviorMajorVersion`. This will select the correct runtime plugin. Logging will clearly indicate which plugin was selected.
+When constructing the set of "default runtime plugins," the default runtime plugin parameters will be passed the `BehaviorVersion`. This will select the correct runtime plugin. Logging will clearly indicate which plugin was selected.
 
 Design Alternatives Considered
 ------------------------------
@@ -78,7 +78,7 @@ deemed too weak of a mechanism to ensure that customers aren't broken by unexpec
 Changes checklist
 -----------------
 
-- [x] Create `BehaviorMajorVersion` and the BMV runtime plugin
+- [x] Create `BehaviorVersion` and the BMV runtime plugin
 - [x] Add BMV as a required runtime component
 - [x] Wire up setters throughout the stack
 - [x] Add tests of BMV (set via aws-config, cargo features & code params)

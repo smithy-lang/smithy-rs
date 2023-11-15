@@ -26,7 +26,7 @@
 //!
 //! Load default SDK configuration:
 //! ```no_run
-//! use aws_config::BehaviorMajorVersion;
+//! use aws_config::BehaviorVersion;
 //! mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
@@ -34,7 +34,7 @@
 //! #   }
 //! # }
 //! # async fn docs() {
-//! let config = aws_config::load_from_env_with_version(BehaviorMajorVersion::v2023_11_09()).await;
+//! let config = aws_config::load_from_env_with_version(BehaviorVersion::v2023_11_09()).await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
 //! ```
@@ -87,7 +87,7 @@
 //! # fn custom_provider(base: &SdkConfig) -> impl ProvideCredentials {
 //! #   base.credentials_provider().unwrap().clone()
 //! # }
-//! let sdk_config = aws_config::load_from_env_with_version(aws_config::BehaviorMajorVersion::latest()).await;
+//! let sdk_config = aws_config::load_from_env_with_version(aws_config::BehaviorVersion::latest()).await;
 //! let custom_credentials_provider = custom_provider(&sdk_config);
 //! let dynamo_config = aws_sdk_dynamodb::config::Builder::from(&sdk_config)
 //!   .credentials_provider(custom_credentials_provider)
@@ -97,7 +97,7 @@
 //! ```
 
 pub use aws_smithy_http::endpoint;
-pub use aws_smithy_runtime_api::client::behavior_version::BehaviorMajorVersion;
+pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 // Re-export types from aws-types
 pub use aws_types::{
     app_name::{AppName, InvalidAppName},
@@ -142,7 +142,7 @@ pub mod web_identity_token;
 
 /// Create an environment loader for AWS Configuration
 ///
-/// This loader will always set [`BehaviorMajorVersion::latest`].
+/// This loader will always set [`BehaviorVersion::latest`].
 ///
 /// # Examples
 /// ```no_run
@@ -152,7 +152,7 @@ pub mod web_identity_token;
 /// ```
 #[cfg(feature = "behavior-version-latest")]
 pub fn from_env() -> ConfigLoader {
-    ConfigLoader::default().behavior_major_version(BehaviorMajorVersion::latest())
+    ConfigLoader::default().behavior_version(BehaviorVersion::latest())
 }
 
 /// Load configuration from the environment
@@ -161,7 +161,7 @@ pub fn from_env() -> ConfigLoader {
     note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`from_env_with_version`]. This function will be removed in the next release."
 )]
 pub fn from_env() -> ConfigLoader {
-    ConfigLoader::default().behavior_major_version(BehaviorMajorVersion::latest())
+    ConfigLoader::default().behavior_version(BehaviorVersion::latest())
 }
 
 /// Load configuration from the environment
@@ -170,7 +170,7 @@ pub fn from_env() -> ConfigLoader {
     note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`load_from_env_with_version`]. This function will be removed in the next release."
 )]
 pub async fn load_from_env() -> SdkConfig {
-    load_from_env_with_version(BehaviorMajorVersion::latest()).await
+    load_from_env_with_version(BehaviorVersion::latest()).await
 }
 
 /// Create an environment loader for AWS Configuration
@@ -178,15 +178,15 @@ pub async fn load_from_env() -> SdkConfig {
 /// # Examples
 /// ```no_run
 /// # async fn create_config() {
-/// use aws_config::BehaviorMajorVersion;
-/// let config = aws_config::from_env_with_version(BehaviorMajorVersion::v2023_11_09())
+/// use aws_config::BehaviorVersion;
+/// let config = aws_config::from_env_with_version(BehaviorVersion::v2023_11_09())
 ///     .region("us-east-1")
 ///     .load()
 ///     .await;
 /// # }
 /// ```
-pub fn from_env_with_version(version: BehaviorMajorVersion) -> ConfigLoader {
-    ConfigLoader::default().behavior_major_version(version)
+pub fn from_env_with_version(version: BehaviorVersion) -> ConfigLoader {
+    ConfigLoader::default().behavior_version(version)
 }
 
 /// Load a default configuration from the environment
@@ -199,8 +199,8 @@ pub async fn load_from_env() -> SdkConfig {
 
 /// Load a default configuration from the environment
 ///
-/// Convenience wrapper equivalent to `aws_config::from_env_with_version(BehaviorMajorVersion::latest()).load().await`
-pub async fn load_from_env_with_version(version: BehaviorMajorVersion) -> SdkConfig {
+/// Convenience wrapper equivalent to `aws_config::from_env_with_version(BehaviorVersion::latest()).load().await`
+pub async fn load_from_env_with_version(version: BehaviorVersion) -> SdkConfig {
     from_env_with_version(version).load().await
 }
 
@@ -214,7 +214,7 @@ mod loader {
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-    use aws_smithy_runtime_api::client::behavior_version::BehaviorMajorVersion;
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
     use aws_smithy_runtime_api::shared::IntoShared;
@@ -262,16 +262,13 @@ mod loader {
         time_source: Option<SharedTimeSource>,
         env: Option<Env>,
         fs: Option<Fs>,
-        behavior_major_version: Option<BehaviorMajorVersion>,
+        behavior_version: Option<BehaviorVersion>,
     }
 
     impl ConfigLoader {
-        /// Sets the [`BehaviorMajorVersion`] used to build [`SdkConfig`](aws_types::SdkConfig).
-        pub fn behavior_major_version(
-            mut self,
-            behavior_major_version: BehaviorMajorVersion,
-        ) -> Self {
-            self.behavior_major_version = Some(behavior_major_version);
+        /// Sets the [`BehaviorVersion`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        pub fn behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
+            self.behavior_version = Some(behavior_version);
             self
         }
 
@@ -752,7 +749,7 @@ mod loader {
                 .timeout_config(timeout_config)
                 .time_source(time_source);
 
-            builder.set_behavior_major_version(self.behavior_major_version);
+            builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
             builder.set_app_name(app_name);
             builder.set_identity_cache(self.identity_cache);
@@ -782,7 +779,7 @@ mod loader {
     mod test {
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::test_case::{no_traffic_client, InstantSleep};
-        use crate::BehaviorMajorVersion;
+        use crate::BehaviorVersion;
         use crate::{from_env_with_version, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
@@ -804,7 +801,7 @@ mod loader {
             ]);
             let fs =
                 Fs::from_slice(&[("test_config", "[profile custom]\nsdk-ua-app-id = correct")]);
-            let loader = from_env_with_version(BehaviorMajorVersion::latest())
+            let loader = from_env_with_version(BehaviorVersion::latest())
                 .sleep_impl(TokioSleep::new())
                 .env(env)
                 .fs(fs)
@@ -848,7 +845,7 @@ mod loader {
         }
 
         fn base_conf() -> ConfigLoader {
-            from_env_with_version(BehaviorMajorVersion::latest())
+            from_env_with_version(BehaviorVersion::latest())
                 .sleep_impl(InstantSleep)
                 .http_client(no_traffic_client())
         }
@@ -878,7 +875,7 @@ mod loader {
         #[cfg(feature = "rustls")]
         #[tokio::test]
         async fn disable_default_credentials() {
-            let config = from_env_with_version(BehaviorMajorVersion::latest())
+            let config = from_env_with_version(BehaviorVersion::latest())
                 .no_credentials()
                 .load()
                 .await;
@@ -894,7 +891,7 @@ mod loader {
                 movable.fetch_add(1, Ordering::Relaxed);
                 http::Response::new("ok!")
             });
-            let config = from_env_with_version(BehaviorMajorVersion::latest())
+            let config = from_env_with_version(BehaviorVersion::latest())
                 .fs(Fs::from_slice(&[]))
                 .env(Env::from_slice(&[]))
                 .http_client(http_client.clone())
