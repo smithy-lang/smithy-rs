@@ -636,7 +636,7 @@ mod loader {
         /// let config = aws_config::from_env()
         ///     .stalled_stream_protection_config(
         ///         StalledStreamProtectionConfig::new_enabled()
-        ///             .with_grace_period(Duration::from_secs(1))
+        ///             .grace_period(Duration::from_secs(1))
         ///             .build()
         ///     )
         ///     .load()

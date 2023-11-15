@@ -600,7 +600,7 @@ impl Builder {
     /// use aws_types::SdkConfig;
     /// pub use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
     ///
-    /// let stalled_stream_protection_config = StalledStreamProtectionConfig::enabled()
+    /// let stalled_stream_protection_config = StalledStreamProtectionConfig::new_enabled()
     ///     .grace_period(Duration::from_secs(1))
     ///     .build();
     /// let config = SdkConfig::builder()
@@ -632,7 +632,7 @@ impl Builder {
     /// pub use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
     ///
     /// fn set_stalled_stream_protection(builder: &mut Builder) {
-    ///     let stalled_stream_protection_config = StalledStreamProtectionConfig::enabled()
+    ///     let stalled_stream_protection_config = StalledStreamProtectionConfig::new_enabled()
     ///         .grace_period(Duration::from_secs(1))
     ///         .build();
     ///     builder.set_stalled_stream_protection_config(Some(stalled_stream_protection_config));
