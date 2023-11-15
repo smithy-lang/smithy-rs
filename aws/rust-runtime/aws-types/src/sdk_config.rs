@@ -23,7 +23,6 @@ pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
 use aws_smithy_runtime_api::shared::IntoShared;
 pub use aws_smithy_types::retry::RetryConfig;
-#[cfg(feature = "stalled-stream-protection")]
 pub use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
 
@@ -62,7 +61,6 @@ pub struct SdkConfig {
     sleep_impl: Option<SharedAsyncSleep>,
     time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
-    #[cfg(feature = "stalled-stream-protection")]
     stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
     http_client: Option<SharedHttpClient>,
     use_fips: Option<bool>,
@@ -86,7 +84,6 @@ pub struct Builder {
     sleep_impl: Option<SharedAsyncSleep>,
     time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
-    #[cfg(feature = "stalled-stream-protection")]
     stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
     http_client: Option<SharedHttpClient>,
     use_fips: Option<bool>,
@@ -575,14 +572,12 @@ impl Builder {
             use_fips: self.use_fips,
             use_dual_stack: self.use_dual_stack,
             time_source: self.time_source,
-            #[cfg(feature = "stalled-stream-protection")]
             stalled_stream_protection_config: self.stalled_stream_protection_config,
             behavior_major_version: self.behavior_major_version,
         }
     }
 }
 
-#[cfg(feature = "stalled-stream-protection")]
 impl Builder {
     /// Set the [`StalledStreamProtectionConfig`] to configure protection for stalled streams.
     ///
@@ -713,7 +708,6 @@ impl SdkConfig {
         self.use_dual_stack
     }
 
-    #[cfg(feature = "stalled-stream-protection")]
     /// Configured stalled stream protection
     pub fn stalled_stream_protection_config(&self) -> Option<StalledStreamProtectionConfig> {
         self.stalled_stream_protection_config.clone()
@@ -753,7 +747,6 @@ impl SdkConfig {
             http_client: self.http_client,
             use_fips: self.use_fips,
             use_dual_stack: self.use_dual_stack,
-            #[cfg(feature = "stalled-stream-protection")]
             stalled_stream_protection_config: self.stalled_stream_protection_config,
             behavior_major_version: self.behavior_major_version,
         }

@@ -10,7 +10,6 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 [features]
 # This feature is to be used only for doc comments
 examples = ["dep:hyper-rustls", "aws-smithy-runtime/client", "aws-smithy-runtime/connector-hyper-0-14-x", "aws-smithy-runtime/tls-rustls"]
-stalled-stream-protection = ["aws-smithy-types/stalled-stream-protection"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }

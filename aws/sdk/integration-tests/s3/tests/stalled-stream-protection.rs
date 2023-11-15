@@ -189,6 +189,7 @@ async fn test_stalled_stream_protection_for_downloads_can_be_disabled() {
     }
 }
 
+// This test will always take as long as whatever grace period is set by default.
 #[tokio::test]
 async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
     // We spawn a faulty server that will close the connection after
@@ -212,6 +213,7 @@ async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
         .await
         .unwrap();
 
+    let start = std::time::Instant::now();
     let err = res
         .body
         .collect()
@@ -222,6 +224,8 @@ async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
         err.to_string(),
         "minimum throughput was specified at 1 B/s, but throughput of 0 B/s was observed"
     );
+    // 1s check interval + 5s grace period
+    assert_eq!(start.elapsed().as_secs(), 6);
 }
 
 async fn start_faulty_download_server() -> (impl Future<Output = ()>, SocketAddr) {

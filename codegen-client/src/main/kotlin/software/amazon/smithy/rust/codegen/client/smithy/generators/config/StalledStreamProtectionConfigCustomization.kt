@@ -13,8 +13,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -52,11 +50,8 @@ class StalledStreamProtectionDecorator : ClientCodegenDecorator {
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
         val rc = codegenContext.runtimeConfig
-        val feature = Feature("stalled-stream-protection", false, listOf("aws-smithy-types/stalled-stream-protection", "aws-smithy-runtime/stalled-stream-protection"))
-        rustCrate.mergeFeature(feature)
 
         rustCrate.withModule(ClientRustModule.config) {
-            Attribute.featureGate(feature.name).render(this)
             rustTemplate(
                 "pub use #{StalledStreamProtectionConfig};",
                 "StalledStreamProtectionConfig" to RuntimeType.smithyTypes(rc).resolve("stalled_stream_protection::StalledStreamProtectionConfig"),
@@ -78,7 +73,6 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
             ServiceConfig.ConfigImpl -> writable {
-                Attribute.featureGate("stalled-stream-protection").render(this)
                 rustTemplate(
                     """
                     /// Return a reference to the stalled stream protection configuration contained in this config, if any.
@@ -90,7 +84,6 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
                 )
             }
             ServiceConfig.BuilderImpl -> writable {
-                Attribute.featureGate("stalled-stream-protection").render(this)
                 rustTemplate(
                     """
                     /// Set the [`StalledStreamProtectionConfig`](#{StalledStreamProtectionConfig})
@@ -106,7 +99,6 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
                     *codegenScope,
                 )
 
-                Attribute.featureGate("stalled-stream-protection").render(this)
                 rustTemplate(
                     """
                     /// Set the [`StalledStreamProtectionConfig`](#{StalledStreamProtectionConfig})
@@ -135,7 +127,7 @@ class StalledStreamProtectionOperationCustomization(
 
     override fun section(section: OperationSection): Writable = writable {
         when (section) {
-            is OperationSection.FeatureGatedComponents -> {
+            is OperationSection.AdditionalInterceptors -> {
                 val model = codegenContext.model
                 val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
                 // Only bother mounting this interceptor when an operation's input and/or output
@@ -158,7 +150,7 @@ class StalledStreamProtectionOperationCustomization(
 
                 // We don't currently support stalled stream protection for input blobs.
                 if (/* inputHasBlobMember || */ outputHasBlobMember) {
-                    section.registerInterceptor("stalled-stream-protection", this) {
+                    section.registerInterceptor(rc, this) {
                         rustTemplate(
                             """
                             #{StalledStreamProtectionInterceptor}::new(#{Kind}::$kind)
@@ -181,7 +173,6 @@ class StalledStreamProtectionRuntimePluginCustomization(codegenContext: ClientCo
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
             is ServiceRuntimePluginSection.AdditionalConfig -> {
-                Attribute.featureGate("stalled-stream-protection")
                 rustTemplate(
                     """
                     ${section.newLayerName}.store_put(

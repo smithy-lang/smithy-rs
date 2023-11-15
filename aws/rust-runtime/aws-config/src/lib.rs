@@ -219,15 +219,13 @@ mod loader {
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::retry::RetryConfig;
+    use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::docs_for;
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
-
-    #[cfg(feature = "stalled-stream-protection")]
-    use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
 
     #[derive(Default, Debug)]
     enum CredentialsProviderOption {
@@ -263,7 +261,6 @@ mod loader {
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
-        #[cfg(feature = "stalled-stream-protection")]
         stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
@@ -620,7 +617,6 @@ mod loader {
             self
         }
 
-        #[cfg(feature = "stalled-stream-protection")]
         /// Override [`the StoppedStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// This configures stalled stream protection. When enabled, download streams
@@ -797,7 +793,6 @@ mod loader {
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
-            #[cfg(feature = "stalled-stream-protection")]
             builder.set_stalled_stream_protection_config(self.stalled_stream_protection_config);
             builder.build()
         }

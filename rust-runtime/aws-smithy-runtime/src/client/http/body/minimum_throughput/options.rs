@@ -4,6 +4,7 @@
  */
 
 use super::Throughput;
+use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
 use std::time::Duration;
 
 /// A collection of options for configuring a [`MinimumThroughputBody`](super::MinimumThroughputBody).
@@ -149,18 +150,12 @@ impl MinimumThroughputBodyOptionsBuilder {
     }
 }
 
-#[cfg(feature = "stalled-stream-protection")]
-mod stalled_stream_protection {
-    use super::*;
-    use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
-
-    impl From<StalledStreamProtectionConfig> for MinimumThroughputBodyOptions {
-        fn from(value: StalledStreamProtectionConfig) -> Self {
-            MinimumThroughputBodyOptions {
-                grace_period: value.grace_period(),
-                minimum_throughput: DEFAULT_MINIMUM_THROUGHPUT,
-                check_interval: DEFAULT_CHECK_INTERVAL,
-            }
+impl From<StalledStreamProtectionConfig> for MinimumThroughputBodyOptions {
+    fn from(value: StalledStreamProtectionConfig) -> Self {
+        MinimumThroughputBodyOptions {
+            grace_period: value.grace_period(),
+            minimum_throughput: DEFAULT_MINIMUM_THROUGHPUT,
+            check_interval: DEFAULT_CHECK_INTERVAL,
         }
     }
 }
