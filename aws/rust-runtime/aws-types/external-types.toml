@@ -17,4 +17,5 @@ allowed_external_types = [
     "aws_smithy_types::error::metadata::Builder",
     "aws_smithy_types::retry::RetryConfig",
     "aws_smithy_types::timeout::TimeoutConfig",
+    "aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig",
 ]
