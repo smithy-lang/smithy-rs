@@ -1,5 +1,5 @@
 <!-- Give your RFC a descriptive name saying what it would accomplish or what feature it defines -->
-RFC: Behavior Major Versions
+RFC: Behavior Versions
 =============
 
 <!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
@@ -11,7 +11,7 @@ RFC: Behavior Major Versions
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 
 <!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
-This RFC describes "Behavior Major Versions," a mechanism to allow SDKs to ship breaking behavioral changes like a new retry strategy, while allowing customers who rely on extremely consistent behavior to evolve at their own pace.
+This RFC describes "Behavior Versions," a mechanism to allow SDKs to ship breaking behavioral changes like a new retry strategy, while allowing customers who rely on extremely consistent behavior to evolve at their own pace.
 
 By adding behavior major versions (BMV) to the Rust SDK, we will make it possible to ship new secure/recommended defaults to new customers without impacting legacy customers.
 
@@ -21,7 +21,7 @@ Both legacy and new SDKs have the need to alter their SDKs default. Historically
 
 For new SDKs, a GA cutline presents difficult choices around timeline and features that can’t be added later without altering behavior.
 
-Both of these use cases are addressed by Behavior Major Versions.
+Both of these use cases are addressed by Behavior Versions.
 
 <!-- Explain how users will use this new feature and, if necessary, how this compares to the current user experience -->
 The user experience if this RFC is implemented
