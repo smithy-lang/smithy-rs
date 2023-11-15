@@ -77,24 +77,27 @@ data class InfallibleEnumType(
     }
 
     override fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {
-        rustTemplate(
-            """
-            impl ${context.enumName} {
-                /// Parses the enum value while disallowing unknown variants.
-                ///
-                /// Unknown variants will result in an error.
-                pub fn try_parse(value: &str) -> #{Result}<Self, #{UnknownVariantError}> {
-                    match Self::from(value) {
-                        ##[allow(deprecated)]
-                        Self::Unknown(_) => #{Err}(#{UnknownVariantError}::new(value)),
-                        known => Ok(known),
+        // `try_parse` isn't needed for unnamed enums
+        if (context.enumTrait.hasNames()) {
+            rustTemplate(
+                """
+                impl ${context.enumName} {
+                    /// Parses the enum value while disallowing unknown variants.
+                    ///
+                    /// Unknown variants will result in an error.
+                    pub fn try_parse(value: &str) -> #{Result}<Self, #{UnknownVariantError}> {
+                        match Self::from(value) {
+                            ##[allow(deprecated)]
+                            Self::Unknown(_) => #{Err}(#{UnknownVariantError}::new(value)),
+                            known => Ok(known),
+                        }
                     }
                 }
-            }
-            """,
-            *preludeScope,
-            "UnknownVariantError" to unknownVariantError(),
-        )
+                """,
+                *preludeScope,
+                "UnknownVariantError" to unknownVariantError(),
+            )
+        }
     }
 
     override fun additionalDocs(context: EnumGeneratorContext): Writable = writable {
