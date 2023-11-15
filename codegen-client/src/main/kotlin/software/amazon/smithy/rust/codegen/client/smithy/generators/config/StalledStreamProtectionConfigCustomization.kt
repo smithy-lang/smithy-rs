@@ -34,10 +34,12 @@ class StalledStreamProtectionOperationCustomization(
                 // has a blob shape member.
                 val inputHasBlobMember = section.operationShape.inputShape
                     ?.let { inputShape -> model.expectShape(inputShape).members() }
-                    ?.any { it.isStreaming(model) } ?: false;
+                    ?.any { it.isStreaming(model) } ?: false
                 val outputHasBlobMember = section.operationShape.outputShape
-                    ?.let { outputShape -> model.expectShape(outputShape).members()
-                    .any { it.isStreaming(model) } } ?: false;
+                    ?.let { outputShape ->
+                        model.expectShape(outputShape).members()
+                            .any { it.isStreaming(model) }
+                    } ?: false
 
                 val kind = when (inputHasBlobMember to outputHasBlobMember) {
                     true to true -> "RequestAndResponseBody"
@@ -54,7 +56,7 @@ class StalledStreamProtectionOperationCustomization(
                             """,
                             *preludeScope,
                             "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),
-                            "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind")
+                            "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind"),
                         )
                     }
                 }
