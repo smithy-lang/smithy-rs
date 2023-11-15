@@ -88,7 +88,9 @@ impl Manifest {
     fn stability(&self) -> Result<PackageStability> {
         let value = self
             .metadata
-            .get("package.metadata.smithy-rs-release-tooling")
+            .get("package")
+            .and_then(|v| v.get("metadata"))
+            .and_then(|v| v.get("smithy-rs-release-tooling"))
             .and_then(|v| v.get("stable"));
         match value {
             None => Ok(PackageStability::Unstable),
@@ -519,5 +521,53 @@ mod tests {
         assert!(is_example_manifest(
             "aws-sdk-rust/examples/foo/bar/Cargo.toml"
         ));
+    }
+
+    #[test]
+    fn test_package_stability_from_manifest() {
+        fn verify_package_stability_for_manifest(
+            manifest: &[u8],
+            expected_stability: PackageStability,
+        ) {
+            let metadata = toml::from_slice(manifest).unwrap();
+            let manifest = Manifest {
+                path: "test".into(),
+                metadata,
+            };
+            assert_eq!(expected_stability, manifest.stability().unwrap());
+        }
+
+        let stable_manifest = br#"
+            [package]
+            name = "test"
+            version = "1.0.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = true
+        "#;
+        verify_package_stability_for_manifest(stable_manifest, PackageStability::Stable);
+
+        let explicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = false
+        "#;
+        verify_package_stability_for_manifest(
+            explicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
+
+        let implicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+        "#;
+        verify_package_stability_for_manifest(
+            implicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
     }
 }
