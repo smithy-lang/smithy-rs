@@ -140,7 +140,7 @@ pub mod sts;
 pub mod timeout;
 pub mod web_identity_token;
 
-/// Create an environment loader for AWS Configuration
+/// Create a config loader with the _latest_ defaults.
 ///
 /// This loader will always set [`BehaviorVersion::latest`].
 ///
@@ -155,19 +155,27 @@ pub fn from_env() -> ConfigLoader {
     ConfigLoader::default().behavior_version(BehaviorVersion::latest())
 }
 
-/// Load configuration from the environment
+/// Load default configuration with the _latest_ defaults.
+///
+/// Convenience wrapper equivalent to `aws_config::load_defaults(BehaviorVersion::latest()).await`
+#[cfg(feature = "behavior-version-latest")]
+pub async fn load_from_env() -> SdkConfig {
+    from_env().load().await
+}
+
+/// Create a config loader with the _latest_ defaults.
 #[cfg(not(feature = "behavior-version-latest"))]
 #[deprecated(
-    note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`defaults`]. This function will be removed in the next release."
+    note = "Use the [`defaults`] function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
 )]
 pub fn from_env() -> ConfigLoader {
     ConfigLoader::default().behavior_version(BehaviorVersion::latest())
 }
 
-/// Load configuration from the environment
+/// Load default configuration with the _latest_ defaults.
 #[cfg(not(feature = "behavior-version-latest"))]
 #[deprecated(
-    note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`load_defaults`]. This function will be removed in the next release."
+    note = "Use the [`load_defaults`] function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
 )]
 pub async fn load_from_env() -> SdkConfig {
     load_defaults(BehaviorVersion::latest()).await
@@ -191,15 +199,7 @@ pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
 
 /// Load a default configuration from the environment
 ///
-/// Convenience wrapper equivalent to `aws_config::from_env().load().await`
-#[cfg(feature = "behavior-version-latest")]
-pub async fn load_from_env() -> SdkConfig {
-    from_env().load().await
-}
-
-/// Load a default configuration from the environment
-///
-/// Convenience wrapper equivalent to `aws_config::defaults(BehaviorVersion::latest()).load().await`
+/// Convenience wrapper equivalent to `aws_config::defaults(behavior_version).load().await`
 pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
     defaults(version).load().await
 }
