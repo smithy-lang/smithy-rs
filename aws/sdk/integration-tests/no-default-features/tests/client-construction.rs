@@ -26,7 +26,7 @@ use std::time::Duration;
     expected = "Enable the `rustls` crate feature or configure a HTTP client to fix this."
 )]
 async fn test_clients_from_sdk_config() {
-    aws_config::load_from_env_with_version(BehaviorVersion::latest()).await;
+    aws_config::load_defaults(BehaviorVersion::latest()).await;
 }
 
 // This will fail due to lack of a connector when constructing the service client
@@ -154,7 +154,7 @@ async fn test_time_source_for_identity_cache() {
 #[tokio::test]
 async fn behavior_mv_from_aws_config() {
     let (http_client, req) = capture_request(None);
-    let cfg = aws_config::from_env_with_version(BehaviorVersion::v2023_11_09())
+    let cfg = aws_config::defaults(BehaviorVersion::v2023_11_09())
         .http_client(http_client)
         .retry_config(RetryConfig::disabled())
         .credentials_provider(Credentials::for_tests())

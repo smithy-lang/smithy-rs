@@ -118,7 +118,7 @@ mod tests {
     #[tokio::test]
     async fn profile_name_override() {
         let fs = Fs::from_slice(&[("test_config", "[profile custom]\nsdk_ua_app_id = correct")]);
-        let conf = crate::from_env_with_version(BehaviorVersion::latest())
+        let conf = crate::defaults(BehaviorVersion::latest())
             .sleep_impl(InstantSleep)
             .fs(fs)
             .http_client(no_traffic_client())

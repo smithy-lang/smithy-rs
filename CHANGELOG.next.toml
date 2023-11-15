@@ -73,7 +73,7 @@ message = """Clients now require a `BehaviorVersion` to be provided. For must cu
 ```rust
 async fn example() {
     // with aws-config
-    let conf = aws_config::from_env_with_version(aws_config::BehaviorVersion::v2023_11_09());
+    let conf = aws_config::defaults(aws_config::BehaviorVersion::v2023_11_09());
 
     // when creating a client
     let client = my_service::Client::from_conf(my_service::Config::builder().behavior_version(..).<other params>.build());

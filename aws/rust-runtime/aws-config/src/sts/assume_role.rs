@@ -221,7 +221,7 @@ impl AssumeRoleProviderBuilder {
     pub async fn build(self) -> AssumeRoleProvider {
         let mut conf = match self.sdk_config {
             Some(conf) => conf,
-            None => crate::load_from_env_with_version(crate::BehaviorVersion::latest()).await,
+            None => crate::load_defaults(crate::BehaviorVersion::latest()).await,
         };
         // ignore a identity cache set from SdkConfig
         conf = conf
@@ -264,7 +264,7 @@ impl AssumeRoleProviderBuilder {
     ) -> AssumeRoleProvider {
         let conf = match self.sdk_config {
             Some(conf) => conf,
-            None => crate::load_from_env_with_version(crate::BehaviorVersion::latest()).await,
+            None => crate::load_defaults(crate::BehaviorVersion::latest()).await,
         };
         let conf = conf
             .into_builder()
@@ -408,7 +408,7 @@ mod test {
                 .body(SdkBody::from(""))
                 .unwrap(),
         ));
-        let conf = crate::from_env_with_version(BehaviorVersion::latest())
+        let conf = crate::defaults(BehaviorVersion::latest())
             .env(Env::from_slice(&[
                 ("AWS_ACCESS_KEY_ID", "123-key"),
                 ("AWS_SECRET_ACCESS_KEY", "456"),

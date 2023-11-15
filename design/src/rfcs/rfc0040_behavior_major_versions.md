@@ -30,7 +30,7 @@ The user experience if this RFC is implemented
 In the current version of the SDK, users can construct clients without indicating any sort of behavior major version.
 Once this RFC is implemented, there will be two ways to set a behavior major version:
 
-1. In code via `aws_config::from_env_with_version(BehaviorVersion::latest())` and `<service>::Config::builder().behavior_version(...)`. This will also work for `config_override`.
+1. In code via `aws_config::defaults(BehaviorVersion::latest())` and `<service>::Config::builder().behavior_version(...)`. This will also work for `config_override`.
 2. By enabling `behavior-version-latest` in either `aws-config` (which brings back `from_env`) OR a specific generated SDK crate
 
 ```toml

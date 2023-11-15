@@ -34,7 +34,7 @@
 //! #   }
 //! # }
 //! # async fn docs() {
-//! let config = aws_config::load_from_env_with_version(BehaviorVersion::v2023_11_09()).await;
+//! let config = aws_config::load_defaults(BehaviorVersion::v2023_11_09()).await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
 //! ```
@@ -87,7 +87,7 @@
 //! # fn custom_provider(base: &SdkConfig) -> impl ProvideCredentials {
 //! #   base.credentials_provider().unwrap().clone()
 //! # }
-//! let sdk_config = aws_config::load_from_env_with_version(aws_config::BehaviorVersion::latest()).await;
+//! let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
 //! let custom_credentials_provider = custom_provider(&sdk_config);
 //! let dynamo_config = aws_sdk_dynamodb::config::Builder::from(&sdk_config)
 //!   .credentials_provider(custom_credentials_provider)
@@ -158,7 +158,7 @@ pub fn from_env() -> ConfigLoader {
 /// Load configuration from the environment
 #[cfg(not(feature = "behavior-version-latest"))]
 #[deprecated(
-    note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`from_env_with_version`]. This function will be removed in the next release."
+    note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`defaults`]. This function will be removed in the next release."
 )]
 pub fn from_env() -> ConfigLoader {
     ConfigLoader::default().behavior_version(BehaviorVersion::latest())
@@ -167,10 +167,10 @@ pub fn from_env() -> ConfigLoader {
 /// Load configuration from the environment
 #[cfg(not(feature = "behavior-version-latest"))]
 #[deprecated(
-    note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`load_from_env_with_version`]. This function will be removed in the next release."
+    note = "To enable the default behavior version, enable the `behavior-version-latest` feature. Alternatively, you can use [`load_defaults`]. This function will be removed in the next release."
 )]
 pub async fn load_from_env() -> SdkConfig {
-    load_from_env_with_version(BehaviorVersion::latest()).await
+    load_defaults(BehaviorVersion::latest()).await
 }
 
 /// Create an environment loader for AWS Configuration
@@ -179,13 +179,13 @@ pub async fn load_from_env() -> SdkConfig {
 /// ```no_run
 /// # async fn create_config() {
 /// use aws_config::BehaviorVersion;
-/// let config = aws_config::from_env_with_version(BehaviorVersion::v2023_11_09())
+/// let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
 ///     .region("us-east-1")
 ///     .load()
 ///     .await;
 /// # }
 /// ```
-pub fn from_env_with_version(version: BehaviorVersion) -> ConfigLoader {
+pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
     ConfigLoader::default().behavior_version(version)
 }
 
@@ -199,9 +199,9 @@ pub async fn load_from_env() -> SdkConfig {
 
 /// Load a default configuration from the environment
 ///
-/// Convenience wrapper equivalent to `aws_config::from_env_with_version(BehaviorVersion::latest()).load().await`
-pub async fn load_from_env_with_version(version: BehaviorVersion) -> SdkConfig {
-    from_env_with_version(version).load().await
+/// Convenience wrapper equivalent to `aws_config::defaults(BehaviorVersion::latest()).load().await`
+pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
+    defaults(version).load().await
 }
 
 mod loader {
@@ -628,7 +628,7 @@ mod loader {
         ///     .enable_http1()
         ///     .build();
         /// let provider_config = ProviderConfig::default().with_tcp_connector(custom_https_connector);
-        /// let shared_config = aws_config::from_env_with_version(BehaviorVersion::latest()).configure(provider_config).load().await;
+        /// let shared_config = aws_config::defaults(BehaviorVersion::latest()).configure(provider_config).load().await;
         /// # }
         /// ```
         #[deprecated(
@@ -780,7 +780,7 @@ mod loader {
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::test_case::{no_traffic_client, InstantSleep};
         use crate::BehaviorVersion;
-        use crate::{from_env_with_version, ConfigLoader};
+        use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
@@ -801,7 +801,7 @@ mod loader {
             ]);
             let fs =
                 Fs::from_slice(&[("test_config", "[profile custom]\nsdk-ua-app-id = correct")]);
-            let loader = from_env_with_version(BehaviorVersion::latest())
+            let loader = defaults(BehaviorVersion::latest())
                 .sleep_impl(TokioSleep::new())
                 .env(env)
                 .fs(fs)
@@ -845,7 +845,7 @@ mod loader {
         }
 
         fn base_conf() -> ConfigLoader {
-            from_env_with_version(BehaviorVersion::latest())
+            defaults(BehaviorVersion::latest())
                 .sleep_impl(InstantSleep)
                 .http_client(no_traffic_client())
         }
@@ -875,7 +875,7 @@ mod loader {
         #[cfg(feature = "rustls")]
         #[tokio::test]
         async fn disable_default_credentials() {
-            let config = from_env_with_version(BehaviorVersion::latest())
+            let config = defaults(BehaviorVersion::latest())
                 .no_credentials()
                 .load()
                 .await;
@@ -891,7 +891,7 @@ mod loader {
                 movable.fetch_add(1, Ordering::Relaxed);
                 http::Response::new("ok!")
             });
-            let config = from_env_with_version(BehaviorVersion::latest())
+            let config = defaults(BehaviorVersion::latest())
                 .fs(Fs::from_slice(&[]))
                 .env(Env::from_slice(&[]))
                 .http_client(http_client.clone())
