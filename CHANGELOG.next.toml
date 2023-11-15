@@ -127,7 +127,7 @@ might have:
 ```rust
 match service_error.err() {
     GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
-    GetStorageError::Unhandled(unhandled) if unhandled.code() == "SomeUnmodeledErrorCode" {
+    GetStorageError::Unhandled(unhandled) if unhandled.code() == Some("SomeUnmodeledErrorCode") {
         // unhandled error handling
     }
     _ => { /* ... */ }
@@ -137,7 +137,7 @@ It should now look as follows:
 ```rust
 match service_error.err() {
     GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
-    err if err.code() == "SomeUnmodeledErrorCode" {
+    err if err.code() == Some("SomeUnmodeledErrorCode") {
         // unhandled error handling
     }
     _ => { /* ... */ }
@@ -156,7 +156,7 @@ might have:
 ```rust
 match service_error.err() {
     GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
-    GetStorageError::Unhandled(unhandled) if unhandled.code() == "SomeUnmodeledErrorCode" {
+    GetStorageError::Unhandled(unhandled) if unhandled.code() == Some("SomeUnmodeledErrorCode") {
         // unhandled error handling
     }
     _ => { /* ... */ }
@@ -166,7 +166,7 @@ It should now look as follows:
 ```rust
 match service_error.err() {
     GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
-    err if err.code() == "SomeUnmodeledErrorCode" {
+    err if err.code() == Some("SomeUnmodeledErrorCode") {
         // unhandled error handling
     }
     _ => { /* ... */ }
