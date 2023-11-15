@@ -189,37 +189,38 @@ fun loadFromConfigBag(innerTypeName: String, newtype: RuntimeType): Writable = w
  * 2. convenience setter (non-optional)
  * 3. standard setter (&mut self)
  */
-fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext): ConfigCustomization = object : ConfigCustomization() {
-    override fun section(section: ServiceConfig): Writable {
-        return when (section) {
-            ServiceConfig.BuilderImpl -> writable {
-                docsOrFallback(param.setterDocs)
-                rust(
-                    """
-                    pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
-                        self.set_${param.name}(Some(${param.name}.into()));
-                        self
+fun standardConfigParam(param: ConfigParam, codegenContext: ClientCodegenContext): ConfigCustomization =
+    object : ConfigCustomization() {
+        override fun section(section: ServiceConfig): Writable {
+            return when (section) {
+                ServiceConfig.BuilderImpl -> writable {
+                    docsOrFallback(param.setterDocs)
+                    rust(
+                        """
+                        pub fn ${param.name}(mut self, ${param.name}: impl Into<#T>) -> Self {
+                            self.set_${param.name}(Some(${param.name}.into()));
+                            self
                     }""",
-                    param.type,
-                )
+                        param.type,
+                    )
 
-                docsOrFallback(param.setterDocs)
-                rustTemplate(
-                    """
-                    pub fn set_${param.name}(&mut self, ${param.name}: Option<#{T}>) -> &mut Self {
-                        self.config.store_or_unset(${param.name}.map(#{newtype}));
-                        self
-                    }
-                    """,
-                    "T" to param.type,
-                    "newtype" to param.newtype!!,
-                )
+                    docsOrFallback(param.setterDocs)
+                    rustTemplate(
+                        """
+                        pub fn set_${param.name}(&mut self, ${param.name}: Option<#{T}>) -> &mut Self {
+                            self.config.store_or_unset(${param.name}.map(#{newtype}));
+                            self
+                        }
+                        """,
+                        "T" to param.type,
+                        "newtype" to param.newtype!!,
+                    )
+                }
+
+                else -> emptySection
             }
-
-            else -> emptySection
         }
     }
-}
 
 fun ServiceShape.needsIdempotencyToken(model: Model): Boolean {
     val operationIndex = OperationIndex.of(model)
@@ -279,7 +280,68 @@ class ServiceConfigGenerator(
         "RuntimePlugin" to configReexport(RuntimeType.runtimePlugin(runtimeConfig)),
         "SharedRuntimePlugin" to configReexport(RuntimeType.sharedRuntimePlugin(runtimeConfig)),
         "runtime_plugin" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_plugin"),
+        "BehaviorMajorVersion" to configReexport(
+            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::behavior_version::BehaviorMajorVersion"),
+        ),
     )
+
+    private fun behaviorMv() = writable {
+        val docs = """
+            /// Sets the [`behavior major version`](crate::config::BehaviorMajorVersion).
+            ///
+            /// Over time, new best-practice behaviors are introduced. However, these behaviors might not be backwards
+            /// compatible. For example, a change which introduces new default timeouts or a new retry-mode for
+            /// all operations might be the ideal behavior but could break existing applications.
+            ///
+            /// ## Examples
+            ///
+            /// Set the behavior major version to `latest`. This is equivalent to enabling the `behavior-version-latest` cargo feature.
+            /// ```no_run
+            /// use $moduleUseName::config::BehaviorMajorVersion;
+            ///
+            /// let config = $moduleUseName::Config::builder()
+            ///     .behavior_major_version(BehaviorMajorVersion::latest())
+            ///     // ...
+            ///     .build();
+            /// let client = $moduleUseName::Client::from_conf(config);
+            /// ```
+            ///
+            /// Customizing behavior major version:
+            /// ```no_run
+            /// use $moduleUseName::config::BehaviorMajorVersion;
+            ///
+            /// let config = $moduleUseName::Config::builder()
+            ///     .behavior_major_version(BehaviorMajorVersion::v2023_11_09())
+            ///     // ...
+            ///     .build();
+            /// let client = $moduleUseName::Client::from_conf(config);
+            /// ```
+        """
+        rustTemplate(
+            """
+            $docs
+            pub fn behavior_major_version(mut self, behavior_major_version: crate::config::BehaviorMajorVersion) -> Self {
+                self.set_behavior_major_version(Some(behavior_major_version));
+                self
+            }
+
+            $docs
+            pub fn set_behavior_major_version(&mut self, behavior_major_version: Option<crate::config::BehaviorMajorVersion>) -> &mut Self {
+                self.behavior_major_version = behavior_major_version;
+                self
+            }
+
+            /// Convenience method to set the latest behavior major version
+            ///
+            /// This is equivalent to enabling the `behavior-version-latest` Cargo feature
+            pub fn behavior_major_version_latest(mut self) -> Self {
+                self.set_behavior_major_version(Some(crate::config::BehaviorMajorVersion::latest()));
+                self
+            }
+            """,
+            *codegenScope,
+        )
+    }
 
     fun render(writer: RustWriter) {
         writer.docs("Configuration for a $moduleUseName service client.\n")
@@ -297,6 +359,7 @@ class ServiceConfigGenerator(
                 cloneable: #{CloneableLayer},
                 pub(crate) runtime_components: #{RuntimeComponentsBuilder},
                 pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
+                behavior_major_version: #{Option}<#{BehaviorMajorVersion}>,
                 """,
                 *codegenScope,
             )
@@ -320,6 +383,7 @@ class ServiceConfigGenerator(
                         config: self.cloneable.clone(),
                         runtime_components: self.runtime_components.clone(),
                         runtime_plugins: self.runtime_plugins.clone(),
+                        behavior_major_version: self.behavior_major_version.clone(),
                     }
                 }
                 """,
@@ -337,6 +401,7 @@ class ServiceConfigGenerator(
                 pub(crate) config: #{CloneableLayer},
                 pub(crate) runtime_components: #{RuntimeComponentsBuilder},
                 pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
+                pub(crate) behavior_major_version: #{Option}<#{BehaviorMajorVersion}>,
                 """,
                 *codegenScope,
             )
@@ -354,6 +419,7 @@ class ServiceConfigGenerator(
                         config: #{Default}::default(),
                         runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
                         runtime_plugins: #{Default}::default(),
+                        behavior_major_version: #{Default}::default(),
                     }
                 }
                 """,
@@ -367,11 +433,18 @@ class ServiceConfigGenerator(
             customizations.forEach {
                 it.section(ServiceConfig.BuilderImpl)(this)
             }
+            behaviorMv()(this)
 
-            val visibility = if (enableUserConfigurableRuntimePlugins) { "pub" } else { "pub(crate)" }
+            val visibility = if (enableUserConfigurableRuntimePlugins) {
+                "pub"
+            } else {
+                "pub(crate)"
+            }
 
             docs("Adds a runtime plugin to the config.")
-            if (!enableUserConfigurableRuntimePlugins) { Attribute.AllowUnused.render(this) }
+            if (!enableUserConfigurableRuntimePlugins) {
+                Attribute.AllowUnused.render(this)
+            }
             rustTemplate(
                 """
                 $visibility fn runtime_plugin(mut self, plugin: impl #{RuntimePlugin} + 'static) -> Self {
@@ -382,7 +455,9 @@ class ServiceConfigGenerator(
                 *codegenScope,
             )
             docs("Adds a runtime plugin to the config.")
-            if (!enableUserConfigurableRuntimePlugins) { Attribute.AllowUnused.render(this) }
+            if (!enableUserConfigurableRuntimePlugins) {
+                Attribute.AllowUnused.render(this)
+            }
             rustTemplate(
                 """
                 $visibility fn push_runtime_plugin(&mut self, plugin: #{SharedRuntimePlugin}) -> &mut Self {
@@ -433,6 +508,7 @@ class ServiceConfigGenerator(
                         cloneable: layer,
                         runtime_components: self.runtime_components,
                         runtime_plugins: self.runtime_plugins,
+                        behavior_major_version: self.behavior_major_version,
                         """,
                         *codegenScope,
                     )
