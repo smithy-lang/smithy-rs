@@ -146,7 +146,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                                     val sym = codegenContext.symbolProvider.toSymbol(error)
                                     rust("Self::${sym.name}(e) => #T,", wrapped)
                                 }
-                                rust("Self::Unhandled(e) => e.$accessorFunctionName(),")
+                                rust("Self::Unhandled(e) => e.meta.$accessorFunctionName(),")
                             }
                         }
                     }

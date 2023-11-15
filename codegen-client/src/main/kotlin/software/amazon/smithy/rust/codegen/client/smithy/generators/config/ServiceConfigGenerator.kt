@@ -280,14 +280,14 @@ class ServiceConfigGenerator(
         "RuntimePlugin" to configReexport(RuntimeType.runtimePlugin(runtimeConfig)),
         "SharedRuntimePlugin" to configReexport(RuntimeType.sharedRuntimePlugin(runtimeConfig)),
         "runtime_plugin" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_plugin"),
-        "BehaviorMajorVersion" to configReexport(
-            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::behavior_version::BehaviorMajorVersion"),
+        "BehaviorVersion" to configReexport(
+            RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::behavior_version::BehaviorVersion"),
         ),
     )
 
     private fun behaviorMv() = writable {
         val docs = """
-            /// Sets the [`behavior major version`](crate::config::BehaviorMajorVersion).
+            /// Sets the [`behavior major version`](crate::config::BehaviorVersion).
             ///
             /// Over time, new best-practice behaviors are introduced. However, these behaviors might not be backwards
             /// compatible. For example, a change which introduces new default timeouts or a new retry-mode for
@@ -297,10 +297,10 @@ class ServiceConfigGenerator(
             ///
             /// Set the behavior major version to `latest`. This is equivalent to enabling the `behavior-version-latest` cargo feature.
             /// ```no_run
-            /// use $moduleUseName::config::BehaviorMajorVersion;
+            /// use $moduleUseName::config::BehaviorVersion;
             ///
             /// let config = $moduleUseName::Config::builder()
-            ///     .behavior_major_version(BehaviorMajorVersion::latest())
+            ///     .behavior_version(BehaviorVersion::latest())
             ///     // ...
             ///     .build();
             /// let client = $moduleUseName::Client::from_conf(config);
@@ -308,10 +308,10 @@ class ServiceConfigGenerator(
             ///
             /// Customizing behavior major version:
             /// ```no_run
-            /// use $moduleUseName::config::BehaviorMajorVersion;
+            /// use $moduleUseName::config::BehaviorVersion;
             ///
             /// let config = $moduleUseName::Config::builder()
-            ///     .behavior_major_version(BehaviorMajorVersion::v2023_11_09())
+            ///     .behavior_version(BehaviorVersion::v2023_11_09())
             ///     // ...
             ///     .build();
             /// let client = $moduleUseName::Client::from_conf(config);
@@ -320,22 +320,22 @@ class ServiceConfigGenerator(
         rustTemplate(
             """
             $docs
-            pub fn behavior_major_version(mut self, behavior_major_version: crate::config::BehaviorMajorVersion) -> Self {
-                self.set_behavior_major_version(Some(behavior_major_version));
+            pub fn behavior_version(mut self, behavior_version: crate::config::BehaviorVersion) -> Self {
+                self.set_behavior_version(Some(behavior_version));
                 self
             }
 
             $docs
-            pub fn set_behavior_major_version(&mut self, behavior_major_version: Option<crate::config::BehaviorMajorVersion>) -> &mut Self {
-                self.behavior_major_version = behavior_major_version;
+            pub fn set_behavior_version(&mut self, behavior_version: Option<crate::config::BehaviorVersion>) -> &mut Self {
+                self.behavior_version = behavior_version;
                 self
             }
 
             /// Convenience method to set the latest behavior major version
             ///
             /// This is equivalent to enabling the `behavior-version-latest` Cargo feature
-            pub fn behavior_major_version_latest(mut self) -> Self {
-                self.set_behavior_major_version(Some(crate::config::BehaviorMajorVersion::latest()));
+            pub fn behavior_version_latest(mut self) -> Self {
+                self.set_behavior_version(Some(crate::config::BehaviorVersion::latest()));
                 self
             }
             """,
@@ -359,7 +359,7 @@ class ServiceConfigGenerator(
                 cloneable: #{CloneableLayer},
                 pub(crate) runtime_components: #{RuntimeComponentsBuilder},
                 pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
-                behavior_major_version: #{Option}<#{BehaviorMajorVersion}>,
+                behavior_version: #{Option}<#{BehaviorVersion}>,
                 """,
                 *codegenScope,
             )
@@ -383,7 +383,7 @@ class ServiceConfigGenerator(
                         config: self.cloneable.clone(),
                         runtime_components: self.runtime_components.clone(),
                         runtime_plugins: self.runtime_plugins.clone(),
-                        behavior_major_version: self.behavior_major_version.clone(),
+                        behavior_version: self.behavior_version.clone(),
                     }
                 }
                 """,
@@ -401,7 +401,7 @@ class ServiceConfigGenerator(
                 pub(crate) config: #{CloneableLayer},
                 pub(crate) runtime_components: #{RuntimeComponentsBuilder},
                 pub(crate) runtime_plugins: #{Vec}<#{SharedRuntimePlugin}>,
-                pub(crate) behavior_major_version: #{Option}<#{BehaviorMajorVersion}>,
+                pub(crate) behavior_version: #{Option}<#{BehaviorVersion}>,
                 """,
                 *codegenScope,
             )
@@ -419,7 +419,7 @@ class ServiceConfigGenerator(
                         config: #{Default}::default(),
                         runtime_components: #{RuntimeComponentsBuilder}::new("service config"),
                         runtime_plugins: #{Default}::default(),
-                        behavior_major_version: #{Default}::default(),
+                        behavior_version: #{Default}::default(),
                     }
                 }
                 """,
@@ -508,7 +508,7 @@ class ServiceConfigGenerator(
                         cloneable: layer,
                         runtime_components: self.runtime_components,
                         runtime_plugins: self.runtime_plugins,
-                        behavior_major_version: self.behavior_major_version,
+                        behavior_version: self.behavior_version,
                         """,
                         *codegenScope,
                     )

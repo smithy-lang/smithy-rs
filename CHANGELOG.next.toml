@@ -68,15 +68,15 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = """Clients now require a `BehaviorMajorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
+message = """Clients now require a `BehaviorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
 
 ```rust
 async fn example() {
     // with aws-config
-    let conf = aws_config::from_env_with_version(aws_config::BehaviorMajorVersion::v2023_11_09());
+    let conf = aws_config::defaults(aws_config::BehaviorVersion::v2023_11_09());
 
     // when creating a client
-    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_major_version(..).<other params>.build());
+    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_version(..).<other params>.build());
 }
 ```"""
 references = ["smithy-rs#3151"]
@@ -84,12 +84,12 @@ author = "rcoh"
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 
 [[smithy-rs]]
-message = """Clients now require a `BehaviorMajorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
+message = """Clients now require a `BehaviorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
 
 ```rust
 async fn example() {
     // when creating a client
-    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_major_version(..).<other params>.build());
+    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_version(..).<other params>.build());
 }
 ```"""
 references = ["smithy-rs#3151"]
@@ -117,6 +117,64 @@ author = "jdisanti"
 [[smithy-rs]]
 message = "Remove deprecated error kind type aliases."
 references = ["smithy-rs#3189"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+Unhandled errors have been made opaque to ensure code is written in a future-proof manner. Where previously, you
+might have:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    GetStorageError::Unhandled(unhandled) if unhandled.code() == Some("SomeUnmodeledErrorCode") {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+It should now look as follows:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    err if err.code() == Some("SomeUnmodeledErrorCode") {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+The `Unhandled` variant should never be referenced directly.
+"""
+references = ["smithy-rs#3191"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = """
+Unhandled errors have been made opaque to ensure code is written in a future-proof manner. Where previously, you
+might have:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    GetStorageError::Unhandled(unhandled) if unhandled.code() == Some("SomeUnmodeledErrorCode") {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+It should now look as follows:
+```rust
+match service_error.err() {
+    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+    err if err.code() == Some("SomeUnmodeledErrorCode") {
+        // unhandled error handling
+    }
+    _ => { /* ... */ }
+}
+```
+The `Unhandled` variant should never be referenced directly.
+"""
+references = ["smithy-rs#3191"]
 meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 

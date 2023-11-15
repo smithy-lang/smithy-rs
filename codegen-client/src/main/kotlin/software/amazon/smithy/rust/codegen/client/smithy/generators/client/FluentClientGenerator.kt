@@ -124,7 +124,7 @@ class FluentClientGenerator(
                     ///
                     /// - Retries or timeouts are enabled without a `sleep_impl` configured.
                     /// - Identity caching is enabled without a `sleep_impl` and `time_source` configured.
-                    /// - No `behavior_major_version` is provided.
+                    /// - No `behavior_version` is provided.
                     ///
                     /// The panic message for each of these will have instructions on how to resolve them.
                     ##[track_caller]
@@ -469,7 +469,7 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
                 ##[allow(unused_mut)]
-                let mut behavior_major_version = config.behavior_major_version.clone();
+                let mut behavior_version = config.behavior_version.clone();
                 #{update_bmv}
 
                 let mut plugins = #{RuntimePlugins}::new()
@@ -477,7 +477,7 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                     .with_client_plugins(#{default_plugins}(
                         #{DefaultPluginParams}::new()
                             .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
-                            .with_behavior_major_version(behavior_major_version.expect(${behaviorVersionError.dq()}))
+                            .with_behavior_version(behavior_version.expect(${behaviorVersionError.dq()}))
                     ))
                     // user config
                     .with_client_plugin(
@@ -504,12 +504,12 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
             "update_bmv" to featureGatedBlock(BehaviorVersionLatest) {
                 rustTemplate(
                     """
-                    if behavior_major_version.is_none() {
-                        behavior_major_version = Some(#{BehaviorMajorVersion}::latest());
+                    if behavior_version.is_none() {
+                        behavior_version = Some(#{BehaviorVersion}::latest());
                     }
 
                     """,
-                    "BehaviorMajorVersion" to api.resolve("client::behavior_version::BehaviorMajorVersion"),
+                    "BehaviorVersion" to api.resolve("client::behavior_version::BehaviorVersion"),
                 )
             },
         )
