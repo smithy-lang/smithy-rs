@@ -166,7 +166,7 @@ pub async fn load_from_env() -> SdkConfig {
 /// Create a config loader with the _latest_ defaults.
 #[cfg(not(feature = "behavior-version-latest"))]
 #[deprecated(
-    note = "Use the [`defaults`] function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
+    note = "Use the `aws_config::defaults` function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
 )]
 pub fn from_env() -> ConfigLoader {
     ConfigLoader::default().behavior_version(BehaviorVersion::latest())
@@ -175,13 +175,13 @@ pub fn from_env() -> ConfigLoader {
 /// Load default configuration with the _latest_ defaults.
 #[cfg(not(feature = "behavior-version-latest"))]
 #[deprecated(
-    note = "Use the [`load_defaults`] function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
+    note = "Use the `aws_config::load_defaults` function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
 )]
 pub async fn load_from_env() -> SdkConfig {
     load_defaults(BehaviorVersion::latest()).await
 }
 
-/// Create an environment loader for AWS Configuration
+/// Create a config loader with the defaults for the given behavior version.
 ///
 /// # Examples
 /// ```no_run
@@ -197,7 +197,7 @@ pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
     ConfigLoader::default().behavior_version(version)
 }
 
-/// Load a default configuration from the environment
+/// Load default configuration with the given behavior version.
 ///
 /// Convenience wrapper equivalent to `aws_config::defaults(behavior_version).load().await`
 pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
