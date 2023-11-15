@@ -13,7 +13,7 @@ publish = false
 # eliminating the need to directly depend on the crates that provide them. In rare instances,
 # you may still need to include one of these crates as a dependency. Examples that require this
 # are specifically noted in comments above the corresponding dependency in this file.
-pokemon-service-client = { path = "../pokemon-service-client/" }
+pokemon-service-client = { path = "../pokemon-service-client/", features = ["behavior-version-latest"] }
 
 # Required for getting the operation name from the `Metadata`.
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }

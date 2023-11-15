@@ -36,6 +36,7 @@ internal class EndpointConfigCustomization(
         "SharedEndpointResolver" to epModule.resolve("SharedEndpointResolver"),
         "StaticUriEndpointResolver" to epRuntimeModule.resolve("StaticUriEndpointResolver"),
         "ServiceSpecificResolver" to codegenContext.serviceSpecificEndpointResolver(),
+        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
     )
 
     override fun section(section: ServiceConfig): Writable {
@@ -89,7 +90,7 @@ internal class EndpointConfigCustomization(
                                 ##[allow(deprecated)]
                                 self.set_endpoint_resolver(
                                     endpoint_url.map(|url| {
-                                        #{StaticUriEndpointResolver}::uri(url).into_shared()
+                                        #{IntoShared}::into_shared(#{StaticUriEndpointResolver}::uri(url))
                                     })
                                 );
                                 self

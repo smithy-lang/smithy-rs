@@ -129,7 +129,7 @@ class EndpointsDecoratorTest {
         val testDir = clientIntegrationTest(
             model,
             // Just run integration tests.
-            IntegrationTestParams(command = { "cargo test --test *".runCommand(it) }),
+            IntegrationTestParams(command = { "cargo test --all-features --test *".runCommand(it) }),
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()

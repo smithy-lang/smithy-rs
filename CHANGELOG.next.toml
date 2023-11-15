@@ -11,6 +11,14 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[smithy-rs]]
+message = """
+Fix rendering of @error structs when fields have default values
+"""
+references = ["smithy-rs#3182"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client"}
+author = "codypenta"
+
 [[aws-sdk-rust]]
 message = "Change `ByteStream::into_async_read` to return `AsyncBufRead`"
 references = ["smithy-rs#3164"]
@@ -54,62 +62,60 @@ meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "ysaito1001"
 
 [[aws-sdk-rust]]
-message = "Fix exclusively setting the credentials provider at operation config-override time. It's now possible to set the credentials when an operation is sent (via `.config_override()`), rather than at client-creation time."
-references = ["smithy-rs#3156", "aws-sdk-rust#901"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = """Enable conversion from `BuildError` into `SdkError` & `<service>::Error`. This allows customers to write the following code:
-```rust
-async fn do_a_thing(client: &Client) -> Result<SdkError<SomeOperationError>> {
-    client.run_operation().complex_field(ComplexField::builder()
-        .a("a")
-        .b("b")
-        .build()?
-    ).send().await?;
-}
-```
-
-Previously, `?` could not be used in this position.
-"""
-references = ["smithy-rs#3173", "smithy-rs#3171"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = """Enable conversion from `BuildError` into `SdkError` & `<service>::Error`. This allows customers to write the following code:
-```rust
-async fn create_table(dynamo_client: &Client) -> Result<(), SdkError<CreateTableError>> {
-    dynamo_client
-        .create_table()
-        .table_name("test")
-        .key_schema(
-            KeySchemaElement::builder()
-                .attribute_name("year")
-                .key_type(KeyType::Hash)
-                .build()?, // Previously, `?` could not be used here
-        )
-        .send()
-        .await?;
-    Ok(())
-}
-```
-
-Previously, `?` could not be used in this position.
-"""
-references = ["smithy-rs#3173", "smithy-rs#3171"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "ProvideCredentials and SharedCredentialsProvider are now re-exported."
-references = ["smithy-rs#3173", "smithy-rs#3155"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
 message = "The `RequestId` trait has moved from the aws-http crate into aws-types."
 references = ["smithy-rs#3160"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Clients now require a `BehaviorMajorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
+
+```rust
+async fn example() {
+    // with aws-config
+    let conf = aws_config::from_env_with_version(aws_config::BehaviorMajorVersion::v2023_11_09());
+
+    // when creating a client
+    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_major_version(..).<other params>.build());
+}
+```"""
+references = ["smithy-rs#3151"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[smithy-rs]]
+message = """Clients now require a `BehaviorMajorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
+
+```rust
+async fn example() {
+    // when creating a client
+    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_major_version(..).<other params>.build());
+}
+```"""
+references = ["smithy-rs#3151"]
+author = "rcoh"
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+
+[[aws-sdk-rust]]
+message = "Add `ProvideErrorMetadata` impl for service `Error` type."
+references = ["aws-sdk-rust#780", "smithy-rs#3189"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Add `ProvideErrorMetadata` impl for service `Error` type."
+references = ["aws-sdk-rust#780", "smithy-rs#3189"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Remove deprecated error kind type aliases."
+references = ["smithy-rs#3189"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Remove deprecated error kind type aliases."
+references = ["smithy-rs#3189"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
