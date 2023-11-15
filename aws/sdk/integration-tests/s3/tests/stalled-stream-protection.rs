@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_credential_types::Credentials;
 use aws_sdk_s3::config::{Region, StalledStreamProtectionConfig};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{Client, Config};
@@ -28,6 +29,7 @@ async fn test_stalled_stream_protection_defaults_for_upload() {
     let _ = tokio::spawn(server);
 
     let conf = Config::builder()
+        .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
         // .stalled_stream_protection_config(StalledStreamProtectionConfig::new_enabled().build())
@@ -128,6 +130,7 @@ async fn test_explicitly_configured_stalled_stream_protection_for_downloads() {
     let _ = tokio::spawn(server);
 
     let conf = Config::builder()
+        .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
         .stalled_stream_protection_config(
@@ -167,6 +170,7 @@ async fn test_stalled_stream_protection_for_downloads_can_be_disabled() {
     let _ = tokio::spawn(server);
 
     let conf = Config::builder()
+        .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
         .stalled_stream_protection_config(StalledStreamProtectionConfig::new_disabled())
@@ -199,6 +203,7 @@ async fn test_stalled_stream_protection_for_downloads_is_enabled_by_default() {
 
     // Stalled stream protection should be enabled by default.
     let sdk_config = aws_config::from_env()
+        .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
         .load()
