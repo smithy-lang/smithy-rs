@@ -40,10 +40,13 @@ fun codegenIntegrationTest(model: Model, params: IntegrationTestParams, invokePl
         params.runtimeConfig,
         params.overrideTestDir,
     )
+
+    testDir.writeDotCargoConfigToml(listOf("--deny", "warnings"))
+
     invokePlugin(ctx)
     ctx.fileManifest.printGeneratedFiles()
     val logger = Logger.getLogger("CodegenIntegrationTest")
-    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
+    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir)
     logger.fine(out.toString())
     return testDir
 }
