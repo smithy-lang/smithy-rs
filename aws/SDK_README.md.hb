@@ -21,7 +21,7 @@ This repo contains the AWS SDK for Rust and its [public roadmap](https://github.
 **Please Note**: The SDK is currently released as a developer preview, without support or assistance for use on production workloads. Any use in production is at your own risk.
 {{/if}}
 
-The SDK is code generated from [Smithy models](https://awslabs.github.io/smithy/) that represent each AWS service.
+The SDK is code generated from [Smithy models](https://smithy.io/2.0/index.html) that represent each AWS service.
 The code used to generate the SDK can be found in [smithy-rs](https://github.com/smithy-lang/smithy-rs).
 
 ## Getting Started with the SDK
@@ -71,8 +71,8 @@ In order to use the SDK, you must already have Rust and Cargo installed. If you 
 
 ## Using the SDK
 
-While we're working on the SDK, detailed usage instructions will be added to the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html).
-Please suggest additional sections for the guide by opening an issue and describing what you are trying to do.
+Detailed usage instructions are available in the [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html).
+Suggestions for additional sections or improvements for the guide are welcome. Please open an issue describing what you are trying to do.
 
 ## Getting Help
 * [Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/welcome.html)
@@ -87,7 +87,9 @@ Please suggest additional sections for the guide by opening an issue and describ
 
 The SDK uses **GitHub Issues** to track feature requests and issues with the SDK. In addition, we use **GitHub Projects** to provide users with a high level view of our roadmap and the features we're actively working on.
 
-You can provide feedback or report a bug  by submitting a **GitHub issue**. This is the preferred mechanism to give feedback so that other users can engage in the conversation, +1 issues, etc. Issues you open will be evaluated for our roadmap in the Developer Preview launch.
+You can provide feedback or report a bug  by submitting a **GitHub issue**.
+This is the preferred mechanism to give feedback so that other users can engage in the conversation, +1 issues, etc.
+Issues you open will be evaluated for our roadmap.
 
 ### Contributing
 
