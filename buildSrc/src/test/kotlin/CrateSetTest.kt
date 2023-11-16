@@ -41,9 +41,6 @@ class CrateSetTest {
         crateSet.forEach {
             val path = "$relativePathToRustRuntime/${it.name}/Cargo.toml"
             val contents = File(path).readText()
-            if (it.name == "aws-sigv4") {
-                print(contents)
-            }
             val isStable = try {
                 Toml().read(contents).getTable("package.metadata.smithy-rs-release-tooling")?.getBoolean("stable") ?: false
             } catch (e: java.lang.IllegalStateException) {
