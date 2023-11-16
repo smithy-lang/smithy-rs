@@ -108,8 +108,11 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
         includeLicense: Boolean,
         asComments: Boolean,
     ): Writable = writable {
+        val moduleVersion = codegenContext.settings.moduleVersion
+        check(moduleVersion.isNotEmpty() && moduleVersion[0].isDigit())
+
         val moduleName = codegenContext.settings.moduleName
-        val stableVersion = !codegenContext.settings.moduleVersion.startsWith("0.")
+        val stableVersion = !moduleVersion.startsWith("0.")
         val description = normalizeDescription(
             codegenContext.moduleName,
             codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
@@ -154,7 +157,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             ```toml
             [dependencies]
             aws-config = { version = "$awsConfigVersion", features = ["behavior-version-latest"] }
-            $moduleName = "${codegenContext.settings.moduleVersion}"
+            $moduleName = "$moduleVersion"
             tokio = { version = "1", features = ["full"] }
             ```
 
