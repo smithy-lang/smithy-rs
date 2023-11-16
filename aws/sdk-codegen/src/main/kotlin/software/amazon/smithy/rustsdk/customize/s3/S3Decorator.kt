@@ -88,6 +88,7 @@ class S3Decorator : ClientCodegenDecorator {
             )
             // enable optional auth for operations commonly used with public buckets
             .let(AddOptionalAuth()::transform)
+            .let(MakeS3BoolsAndNumbersOptional()::processModel)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
