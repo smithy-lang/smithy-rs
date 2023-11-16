@@ -20,7 +20,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
-import software.amazon.smithy.rust.codegen.core.util.isStreaming
 
 class StalledStreamProtectionDecorator : ClientCodegenDecorator {
     override val name: String = "StalledStreamProtection"
@@ -128,38 +127,18 @@ class StalledStreamProtectionOperationCustomization(
     override fun section(section: OperationSection): Writable = writable {
         when (section) {
             is OperationSection.AdditionalInterceptors -> {
-                val model = codegenContext.model
                 val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
-                // Only bother mounting this interceptor when an operation's input and/or output
-                // has a blob shape member.
-                val inputHasBlobMember = section.operationShape.inputShape
-                    ?.let { inputShape -> model.expectShape(inputShape).members() }
-                    ?.any { it.isStreaming(model) } ?: false
-                val outputHasBlobMember = section.operationShape.outputShape
-                    ?.let { outputShape ->
-                        model.expectShape(outputShape).members()
-                            .any { it.isStreaming(model) }
-                    } ?: false
-
-                val kind = when (inputHasBlobMember to outputHasBlobMember) {
-                    true to true -> "RequestAndResponseBody"
-                    true to false -> "RequestBody"
-                    false to true -> "ResponseBody"
-                    else -> return@writable
-                }
-
-                // We don't currently support stalled stream protection for input blobs.
-                if (/* inputHasBlobMember || */ outputHasBlobMember) {
-                    section.registerInterceptor(rc, this) {
-                        rustTemplate(
-                            """
-                            #{StalledStreamProtectionInterceptor}::new(#{Kind}::$kind)
-                            """,
-                            *preludeScope,
-                            "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),
-                            "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind"),
-                        )
-                    }
+                section.registerInterceptor(rc, this) {
+                    // Currently, only response bodies are protected/supported because
+                    // we can't count on hyper to poll a request body on wake.
+                    rustTemplate(
+                        """
+                        #{StalledStreamProtectionInterceptor}::new(#{Kind}::ResponseBody)
+                        """,
+                        *preludeScope,
+                        "StalledStreamProtectionInterceptor" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptor"),
+                        "Kind" to stalledStreamProtectionModule.resolve("StalledStreamProtectionInterceptorKind"),
+                    )
                 }
             }
             else -> { }
