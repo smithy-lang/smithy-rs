@@ -18,7 +18,7 @@ plugins { }
 
 allprojects {
     repositories {
-        /* mavenLocal() */
+        mavenLocal()
         mavenCentral()
         google()
     }
