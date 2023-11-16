@@ -10,9 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Fix broken serialization for SQS"
-references = ["smithy-rs#3210", "aws-sdk-rust#957"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "rcoh"
