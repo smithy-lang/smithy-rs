@@ -28,3 +28,9 @@ message = "The `AssumeRoleBuilder::policy_arns` now accepts strings instead of a
 references = ["smithy-rs#3205"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests."
+references = ["smithy-rs#3217"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "milesziemer"
