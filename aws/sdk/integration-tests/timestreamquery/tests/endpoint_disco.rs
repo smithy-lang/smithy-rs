@@ -75,7 +75,7 @@ async fn do_endpoint_discovery() {
                 "content-type",
                 "x-amz-target",
             ]),
-            MediaType::Json,
+            "application/json",
         )
         .await
         .unwrap();

@@ -7,7 +7,6 @@ allowed_external_types = [
     "tower_service::Service",
 
     # TODO(https://github.com/smithy-lang/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `test-util` feature
-    "aws_smithy_protocol_test::MediaType",
     "bytes::bytes::Bytes",
     "serde::ser::Serialize",
     "serde::de::Deserialize",

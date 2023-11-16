@@ -104,7 +104,7 @@ async fn three_retries_and_then_success() {
     let resp = resp.expect("valid e2e test");
     assert_eq!(resp.name(), Some("test-bucket"));
     http_client
-        .full_validate(MediaType::Xml)
+        .full_validate("application/xml")
         .await
         .expect("failed")
 }

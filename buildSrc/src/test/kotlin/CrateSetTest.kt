@@ -22,10 +22,10 @@ class CrateSetTest {
      * matches what `package.metadata.smithy-rs-release-tooling` says in the `Cargo.toml`
      * for the corresponding crate.
      */
-    private fun sutStabilityMatchesManifestStability(versionPropertyName: String, stabilityInManifest: Boolean) {
+    private fun sutStabilityMatchesManifestStability(versionPropertyName: String, stabilityInManifest: Boolean, crate: String) {
         when (stabilityInManifest) {
-            true -> assertEquals(STABLE_VERSION_PROP_NAME, versionPropertyName)
-            false -> assertEquals(UNSTABLE_VERSION_PROP_NAME, versionPropertyName)
+            true -> assertEquals(STABLE_VERSION_PROP_NAME, versionPropertyName, "Crate: $crate")
+            false -> assertEquals(UNSTABLE_VERSION_PROP_NAME, versionPropertyName, "Crate: $crate")
         }
     }
 
@@ -41,17 +41,16 @@ class CrateSetTest {
         crateSet.forEach {
             val path = "$relativePathToRustRuntime/${it.name}/Cargo.toml"
             val contents = File(path).readText()
-            val manifest = try {
-                Toml().read(contents)
-            } catch (e: java.lang.IllegalStateException) {
-                // Currently, `aws-sigv4` cannot be read as a `TOML` because of the following error:
-                // Invalid table definition on line 54: [target.'cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))'.dev-dependencies]]
-                logger.info("failed to read ${it.name} as TOML: $e")
-                Toml()
+            if (it.name == "aws-sigv4") {
+                print(contents)
             }
-            manifest.getTable("package.metadata.smithy-rs-release-tooling")?.entrySet()?.map { entry ->
-                sutStabilityMatchesManifestStability(it.versionPropertyName, entry.value as Boolean)
-            } ?: sutStabilityMatchesManifestStability(it.versionPropertyName, false)
+            val isStable = try {
+                Toml().read(contents).getTable("package.metadata.smithy-rs-release-tooling")?.getBoolean("stable") ?: false
+            } catch (e: java.lang.IllegalStateException) {
+                // sigv4 doesn't parse but it's stable now, hax hax hax
+                contents.trim().endsWith("[package.metadata.smithy-rs-release-tooling]\nstable = true")
+            }
+            sutStabilityMatchesManifestStability(it.versionPropertyName, isStable, it.name)
         }
     }
 

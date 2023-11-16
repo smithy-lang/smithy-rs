@@ -75,8 +75,9 @@ impl ReplayingClient {
     }
 
     /// Validate all headers and bodies
-    pub async fn full_validate(self, media_type: MediaType) -> Result<(), Box<dyn Error>> {
-        self.validate_body_and_headers(None, media_type).await
+    pub async fn full_validate(self, media_type: &str) -> Result<(), Box<dyn Error>> {
+        self.validate_body_and_headers(None, MediaType::from(media_type))
+            .await
     }
 
     /// Validate actual requests against expected requests
@@ -95,13 +96,13 @@ impl ReplayingClient {
     pub async fn validate_body_and_headers(
         self,
         checked_headers: Option<&[&str]>,
-        media_type: MediaType,
+        media_type: &str,
     ) -> Result<(), Box<dyn Error>> {
         self.validate_base(checked_headers, |b1, b2| {
             aws_smithy_protocol_test::validate_body(
                 b1,
                 std::str::from_utf8(b2).unwrap(),
-                media_type.clone(),
+                MediaType::from(media_type),
             )
             .map_err(|e| Box::new(e) as _)
         })
