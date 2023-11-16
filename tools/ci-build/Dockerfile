@@ -5,15 +5,15 @@
 
 # This is the base Docker build image used by CI
 
-ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
-ARG rust_stable_version=1.69.0
+ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
+ARG rust_stable_version=1.70.0
 ARG rust_nightly_version=nightly-2023-05-31
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
 
 FROM bare_base_image as musl_toolchain
-RUN yum -y install tar gzip gcc make
+RUN yum -y install --allowerasing tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
   && ls \
   && tar xvzf musl-1.2.3.tar.gz \
@@ -30,17 +30,19 @@ ENV RUSTUP_HOME=/opt/rustup \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0
 WORKDIR /root
-RUN yum -y install \
+RUN yum -y install --allowerasing \
         autoconf \
         automake \
         binutils \
         ca-certificates \
+        cmake \
         curl \
         gcc \
         gcc-c++ \
         git \
         make \
         openssl-devel \
+        perl \
         pkgconfig \
         tar \
         xz && \
@@ -131,9 +133,8 @@ ARG cargo_wasi_version=0.1.27
 RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.20.0
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
+ARG cargo_semver_checks_version=0.24.1
+RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook
 ARG cargo_mdbook_version=0.4.30
@@ -148,15 +149,18 @@ RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook-mermaid --l
 #
 # Final image
 #
+# `clang` needed by SDK examples for `libxlsxwriter-sys`
 FROM bare_base_image AS final_image
 ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
-    yum -y install \
+    yum -y install --allowerasing \
         bc \
         ca-certificates \
+        clang \
         gcc \
         git \
+        glibc-langpack-en \
         java-11-amazon-corretto-headless \
         make \
         openssl-devel \

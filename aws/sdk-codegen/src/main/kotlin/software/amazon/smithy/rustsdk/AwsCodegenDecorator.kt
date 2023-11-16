@@ -29,13 +29,11 @@ import software.amazon.smithy.rustsdk.endpoints.RequireEndpointRules
 val DECORATORS: List<ClientCodegenDecorator> = listOf(
     // General AWS Decorators
     listOf(
-        CredentialsCacheDecorator(),
         CredentialsProviderDecorator(),
         RegionDecorator(),
         RequireEndpointRules(),
         UserAgentDecorator(),
         SigV4AuthDecorator(),
-        SigV4SigningDecorator(),
         HttpRequestChecksumDecorator(),
         HttpResponseChecksumDecorator(),
         RetryClassifierDecorator(),
@@ -46,7 +44,6 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         ServiceConfigDecorator(),
         AwsPresigningDecorator(),
         AwsCrateDocsDecorator(),
-        HttpConnectorDecorator(),
         AwsEndpointsStdLib(),
         *PromotedBuiltInsDecorators,
         GenericSmithySdkConfigSettings(),

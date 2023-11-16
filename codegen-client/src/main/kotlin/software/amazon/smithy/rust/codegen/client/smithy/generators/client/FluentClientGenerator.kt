@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -35,13 +36,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -51,18 +50,16 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
-    private val reexportSmithyClientBuilder: Boolean = true,
-    private val generics: FluentClientGenerics,
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryClassifier: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig)
-        .resolve("retry::DefaultResponseRetryClassifier"),
 ) {
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
@@ -82,12 +79,11 @@ class FluentClientGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
-    private val smithyRuntimeMode = codegenContext.smithyRuntimeMode
 
     fun render(crate: RustCrate, customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList()) {
         renderFluentClient(crate)
 
-        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, generics, customizableOperationCustomizations)
+        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, customizableOperationCustomizations)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
@@ -95,158 +91,80 @@ class FluentClientGenerator(
         }
 
         customizableOperationGenerator.render(crate)
-        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            customizableOperationGenerator.renderForOrchestrator(crate)
-        }
     }
 
     private fun renderFluentClient(crate: RustCrate) {
         crate.withModule(ClientRustModule.client) {
-            if (reexportSmithyClientBuilder) {
-                rustTemplate(
-                    """
-                    ##[doc(inline)]
-                    pub use #{client}::Builder;
-                    """,
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                )
-            }
-            val clientScope = arrayOf(
+            rustTemplate(
+                """
+                ##[derive(Debug)]
+                pub(crate) struct Handle {
+                    pub(crate) conf: crate::Config,
+                    ##[allow(dead_code)] // unused when a service does not provide any operations
+                    pub(crate) runtime_plugins: #{RuntimePlugins},
+                }
+
+                #{client_docs:W}
+                ##[derive(#{Clone}, ::std::fmt::Debug)]
+                pub struct Client {
+                    handle: #{Arc}<Handle>,
+                }
+
+                impl Client {
+                    /// Creates a new client from the service [`Config`](crate::Config).
+                    ///
+                    /// ## Panics
+                    ///
+                    /// This method will panic in the following cases:
+                    ///
+                    /// - Retries or timeouts are enabled without a `sleep_impl` configured.
+                    /// - Identity caching is enabled without a `sleep_impl` and `time_source` configured.
+                    ///
+                    /// The panic message for each of these will have instructions on how to resolve them.
+                    pub fn from_conf(conf: crate::Config) -> Self {
+                        let handle = Handle {
+                            conf: conf.clone(),
+                            runtime_plugins: #{base_client_runtime_plugins}(conf),
+                        };
+                        if let Err(err) = Self::validate_config(&handle) {
+                            panic!("Invalid client configuration: {err}");
+                        }
+                        Self {
+                            handle: #{Arc}::new(handle)
+                        }
+                    }
+
+                    /// Returns the client's configuration.
+                    pub fn config(&self) -> &crate::Config {
+                        &self.handle.conf
+                    }
+
+                    fn validate_config(handle: &Handle) -> Result<(), #{BoxError}> {
+                        let mut cfg = #{ConfigBag}::base();
+                        handle.runtime_plugins
+                            .apply_client_configuration(&mut cfg)?
+                            .validate_base_client_config(&cfg)?;
+                        Ok(())
+                    }
+                }
+                """,
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
-                "client" to RuntimeType.smithyClient(runtimeConfig),
-                "client_docs" to writable
-                    {
-                        customizations.forEach {
-                            it.section(
-                                FluentClientSection.FluentClientDocs(
-                                    serviceShape,
-                                ),
-                            )(this)
-                        }
-                    },
-                "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
+                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                "client_docs" to writable {
+                    customizations.forEach {
+                        it.section(
+                            FluentClientSection.FluentClientDocs(
+                                serviceShape,
+                            ),
+                        )(this)
+                    }
+                },
+                "ConfigBag" to RuntimeType.configBag(runtimeConfig),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
-                // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
-                "generics_decl" to generics.decl,
-                "smithy_inst" to generics.smithyInst,
+                "tracing" to CargoDependency.Tracing.toType(),
             )
-            if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                rustTemplate(
-                    """
-                    ##[derive(Debug)]
-                    pub(crate) struct Handle#{generics_decl:W} {
-                        pub(crate) client: #{client}::Client#{smithy_inst:W},
-                        pub(crate) conf: crate::Config,
-                    }
-
-                    #{client_docs:W}
-                    ##[derive(::std::fmt::Debug)]
-                    pub struct Client#{generics_decl:W} {
-                        handle: #{Arc}<Handle${generics.inst}>
-                    }
-
-                    impl${generics.inst} #{Clone} for Client${generics.inst} {
-                        fn clone(&self) -> Self {
-                            Self { handle: self.handle.clone() }
-                        }
-                    }
-
-                    impl${generics.inst} From<#{client}::Client#{smithy_inst:W}> for Client${generics.inst} {
-                        fn from(client: #{client}::Client#{smithy_inst:W}) -> Self {
-                            Self::with_config(client, crate::Config::builder().build())
-                        }
-                    }
-
-                    impl${generics.inst} Client${generics.inst} {
-                        /// Creates a client with the given service configuration.
-                        pub fn with_config(client: #{client}::Client#{smithy_inst:W}, conf: crate::Config) -> Self {
-                            Self {
-                                handle: #{Arc}::new(Handle {
-                                    client,
-                                    conf,
-                                })
-                            }
-                        }
-
-                        /// Returns the client's configuration.
-                        pub fn conf(&self) -> &crate::Config {
-                            &self.handle.conf
-                        }
-                    }
-                    """,
-                    *clientScope,
-                )
-            } else {
-                rustTemplate(
-                    """
-                    ##[derive(Debug)]
-                    pub(crate) struct Handle {
-                        pub(crate) conf: crate::Config,
-                        pub(crate) runtime_plugins: #{RuntimePlugins},
-                    }
-
-                    #{client_docs:W}
-                    ##[derive(#{Clone}, ::std::fmt::Debug)]
-                    pub struct Client {
-                        handle: #{Arc}<Handle>,
-                    }
-
-                    impl Client {
-                        /// Creates a new client from the service [`Config`](crate::Config).
-                        ///
-                        /// ## Panics
-                        ///
-                        /// - This method will panic if the `conf` is missing an async sleep implementation. If you experience this panic, set
-                        ///     the `sleep_impl` on the Config passed into this function to fix it.
-                        /// - This method will panic if the `conf` is missing an HTTP connector. If you experience this panic, set the
-                        ///     `http_connector` on the Config passed into this function to fix it.
-                        pub fn from_conf(conf: crate::Config) -> Self {
-                            let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                            let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
-                            let sleep_impl = conf.sleep_impl();
-                            if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
-                                panic!("An async sleep implementation is required for retries or timeouts to work. \
-                                        Set the `sleep_impl` on the Config passed into this function to fix this panic.");
-                            }
-
-                            Self {
-                                handle: #{Arc}::new(
-                                    Handle {
-                                        conf: conf.clone(),
-                                        runtime_plugins: #{base_client_runtime_plugins}(conf),
-                                    }
-                                )
-                            }
-                        }
-
-                        /// Returns the client's configuration.
-                        pub fn config(&self) -> &crate::Config {
-                            &self.handle.conf
-                        }
-
-                        ##[doc(hidden)]
-                        // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                        // This is currently kept around so the tests still compile in both modes
-                        /// Creates a client with the given service configuration.
-                        pub fn with_config<C, M, R>(_client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
-                            Self::from_conf(conf)
-                        }
-
-                        ##[doc(hidden)]
-                        // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                        // This is currently kept around so the tests still compile in both modes
-                        /// Returns the client's configuration.
-                        pub fn conf(&self) -> &crate::Config {
-                            &self.handle.conf
-                        }
-                    }
-                    """,
-                    *clientScope,
-                    "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
-                )
-            }
         }
 
         operations.forEach { operation ->
@@ -256,11 +174,7 @@ class FluentClientGenerator(
 
             val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
-                rustBlockTemplate(
-                    "impl${generics.inst} super::Client${generics.inst} #{bounds:W}",
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                    "bounds" to generics.bounds,
-                ) {
+                rustBlock("impl super::Client") {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                     val maybePaginated = if (operation.isPaginated(model)) {
                         "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
@@ -306,7 +220,7 @@ class FluentClientGenerator(
 
                     rustTemplate(
                         """
-                        pub fn $fnName(&self) -> #{FluentBuilder}${generics.inst} {
+                        pub fn $fnName(&self) -> #{FluentBuilder} {
                             #{FluentBuilder}::new(self.handle.clone())
                         }
                         """,
@@ -331,34 +245,25 @@ class FluentClientGenerator(
             rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
-                pub async fn send_with${generics.inst}(
-                    self,
-                    client: &crate::Client${generics.inst}
-                ) -> #{Result}<
+                pub async fn send_with(self, client: &crate::Client) -> #{Result}<
                     #{OperationOutput},
                     #{SdkError}<
                         #{OperationError},
                         #{RawResponseType}
                     >
-                > #{send_bounds:W} #{boundsWithoutWhereClause:W} {
+                > {
                     let mut fluent_builder = client.$fnName();
                     fluent_builder.inner = self;
                     fluent_builder.send().await
                 }
                 """,
                 *preludeScope,
-                "RawResponseType" to if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                    RuntimeType.smithyHttp(runtimeConfig).resolve("operation::Response")
-                } else {
-                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse")
-                },
+                "RawResponseType" to
+                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-                "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
-                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
             )
         }
 
@@ -370,44 +275,60 @@ class FluentClientGenerator(
         deprecatedShape(operation)
         Attribute(derive(derives.toSet())).render(this)
         withBlockTemplate(
-            "pub struct $builderName#{generics:W} {",
+            "pub struct $builderName {",
             "}",
-            "generics" to generics.decl,
         ) {
             rustTemplate(
                 """
-                handle: #{Arc}<crate::client::Handle${generics.inst}>,
+                handle: #{Arc}<crate::client::Handle>,
                 inner: #{Inner},
                 """,
                 "Inner" to symbolProvider.symbolForBuilder(input),
                 "Arc" to RuntimeType.Arc,
-                "generics" to generics.decl,
             )
-            if (smithyRuntimeMode.generateOrchestrator) {
-                rustTemplate("config_override: #{Option}<crate::config::Builder>,", *preludeScope)
-            }
+            rustTemplate("config_override: #{Option}<crate::config::Builder>,", *preludeScope)
         }
 
-        rustBlockTemplate(
-            "impl${generics.inst} $builderName${generics.inst} #{bounds:W}",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-            "bounds" to generics.bounds,
-        ) {
+        rustTemplate(
+            """
+            impl
+                crate::client::customize::internal::CustomizableSend<
+                    #{OperationOutput},
+                    #{OperationError},
+                > for $builderName
+            {
+                fn send(
+                    self,
+                    config_override: crate::config::Builder,
+                ) -> crate::client::customize::internal::BoxFuture<
+                    crate::client::customize::internal::SendResult<
+                        #{OperationOutput},
+                        #{OperationError},
+                    >,
+                > {
+                    #{Box}::pin(async move { self.config_override(config_override).send().await })
+                }
+            }
+            """,
+            *preludeScope,
+            "OperationError" to errorType,
+            "OperationOutput" to outputType,
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        )
+
+        rustBlock("impl $builderName") {
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
-                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle${generics.inst}>) -> Self {",
+                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
                 "}",
                 "Arc" to RuntimeType.Arc,
-                "generics" to generics.decl,
             ) {
                 withBlockTemplate(
                     "Self {",
                     "}",
                 ) {
                     rustTemplate("handle, inner: #{Default}::default(),", *preludeScope)
-                    if (smithyRuntimeMode.generateOrchestrator) {
-                        rustTemplate("config_override: #{None},", *preludeScope)
-                    }
+                    rustTemplate("config_override: #{None},", *preludeScope)
                 }
             }
 
@@ -419,159 +340,78 @@ class FluentClientGenerator(
                 write("&self.inner")
             }
 
-            if (smithyRuntimeMode.generateMiddleware) {
-                val middlewareScope = arrayOf(
-                    *preludeScope,
-                    "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                        .resolve("CustomizableOperation"),
-                    "ClassifyRetry" to RuntimeType.classifyRetry(runtimeConfig),
-                    "Operation" to operationSymbol,
-                    "OperationError" to errorType,
-                    "OperationOutput" to outputType,
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                    "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-                    "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
-                    "customizable_op_type_params" to rustTypeParameters(
-                        symbolProvider.toSymbol(operation),
-                        retryClassifier,
-                        generics.toRustGenerics(),
-                    ),
-                )
-                if (smithyRuntimeMode.generateMiddleware) {
-                    rustTemplate(
-                        """
-                        /// Sends the request and returns the response.
-                        ///
-                        /// If an error occurs, an `SdkError` will be returned with additional details that
-                        /// can be matched against.
-                        ///
-                        /// By default, any retryable failures will be retried twice. Retry behavior
-                        /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
-                        /// set when configuring the client.
-                        pub async fn send(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}>>
-                        #{send_bounds:W} {
-                            let op = self.inner.build().map_err(#{SdkError}::construction_failure)?
-                                .make_operation(&self.handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure)?;
-                            self.handle.client.call(op).await
-                        }
-
-                        /// Consumes this builder, creating a customizable operation that can be modified before being
-                        /// sent. The operation's inner [http::Request] can be modified as well.
-                        pub async fn customize(self) -> #{Result}<
-                            #{CustomizableOperation}#{customizable_op_type_params:W},
-                            #{SdkError}<#{OperationError}>
-                        > #{send_bounds:W} {
-                            let handle = self.handle.clone();
-                            let operation = self.inner.build().map_err(#{SdkError}::construction_failure)?
-                                .make_operation(&handle.conf)
-                                .await
-                                .map_err(#{SdkError}::construction_failure)?;
-                            #{Ok}(#{CustomizableOperation} { handle, operation })
-                        }
-                        """,
-                        *middlewareScope,
-                    )
-                }
-            }
-
-            if (smithyRuntimeMode.generateOrchestrator) {
-                val orchestratorScope = arrayOf(
-                    *preludeScope,
-                    "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                        .resolve("orchestrator::CustomizableOperation"),
-                    "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        .resolve("client::orchestrator::HttpResponse"),
-                    "Operation" to operationSymbol,
-                    "OperationError" to errorType,
-                    "OperationOutput" to outputType,
-                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                    "SendResult" to ClientRustModule.Client.customize.toType()
-                        .resolve("internal::SendResult"),
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                )
-                if (smithyRuntimeMode.generateOrchestrator) {
-                    rustTemplate(
-                        """
-                        /// Sends the request and returns the response.
-                        ///
-                        /// If an error occurs, an `SdkError` will be returned with additional details that
-                        /// can be matched against.
-                        ///
-                        /// By default, any retryable failures will be retried twice. Retry behavior
-                        /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
-                        /// set when configuring the client.
-                        pub async fn send(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
-                            let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
-                            let runtime_plugins = #{Operation}::operation_runtime_plugins(
-                                self.handle.runtime_plugins.clone(),
-                                &self.handle.conf,
-                                self.config_override,
-                            );
-                            #{Operation}::orchestrate(&runtime_plugins, input).await
-                        }
-
-                        /// Consumes this builder, creating a customizable operation that can be modified before being
-                        /// sent.
-                        // TODO(enableNewSmithyRuntimeCleanup): Remove `async` and `Result` once we switch to orchestrator
-                        pub async fn customize(
-                            self,
-                        ) -> #{Result}<
-                            #{CustomizableOperation}<
-                                #{OperationOutput},
-                                #{OperationError},
-                            >,
-                            #{SdkError}<#{OperationError}>,
-                        >
-                        {
-                            #{Ok}(#{CustomizableOperation} {
-                                customizable_send: #{Box}::new(move |config_override| {
-                                    #{Box}::pin(async {
-                                        self.config_override(config_override)
-                                            .send()
-                                            .await
-                                    })
-                                }),
-                                config_override: None,
-                                interceptors: vec![],
-                                runtime_plugins: vec![],
-                            })
-                        }
-                        """,
-                        *orchestratorScope,
-                    )
+            val orchestratorScope = arrayOf(
+                *preludeScope,
+                "CustomizableOperation" to ClientRustModule.Client.customize.toType()
+                    .resolve("CustomizableOperation"),
+                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                    .resolve("client::orchestrator::HttpResponse"),
+                "Operation" to operationSymbol,
+                "OperationError" to errorType,
+                "OperationOutput" to outputType,
+                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                "SendResult" to ClientRustModule.Client.customize.toType()
+                    .resolve("internal::SendResult"),
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            )
+            rustTemplate(
+                """
+                /// Sends the request and returns the response.
+                ///
+                /// If an error occurs, an `SdkError` will be returned with additional details that
+                /// can be matched against.
+                ///
+                /// By default, any retryable failures will be retried twice. Retry behavior
+                /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
+                /// set when configuring the client.
+                pub async fn send(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
+                    let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
+                    let runtime_plugins = #{Operation}::operation_runtime_plugins(
+                        self.handle.runtime_plugins.clone(),
+                        &self.handle.conf,
+                        self.config_override,
+                    );
+                    #{Operation}::orchestrate(&runtime_plugins, input).await
                 }
 
-                rustTemplate(
-                    """
-                    pub(crate) fn config_override(
-                        mut self,
-                        config_override: impl Into<crate::config::Builder>,
-                    ) -> Self {
-                        self.set_config_override(Some(config_override.into()));
-                        self
-                    }
+                /// Consumes this builder, creating a customizable operation that can be modified before being sent.
+                pub fn customize(
+                    self,
+                ) -> #{CustomizableOperation}<#{OperationOutput}, #{OperationError}, Self> {
+                    #{CustomizableOperation}::new(self)
+                }
+                """,
+                *orchestratorScope,
+            )
 
-                    pub(crate) fn set_config_override(
-                        &mut self,
-                        config_override: Option<crate::config::Builder>,
-                    ) -> &mut Self {
-                        self.config_override = config_override;
-                        self
-                    }
-                    """,
-                )
-            }
+            rustTemplate(
+                """
+                pub(crate) fn config_override(
+                    mut self,
+                    config_override: impl Into<crate::config::Builder>,
+                ) -> Self {
+                    self.set_config_override(Some(config_override.into()));
+                    self
+                }
 
-            PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
+                pub(crate) fn set_config_override(
+                    &mut self,
+                    config_override: Option<crate::config::Builder>,
+                ) -> &mut Self {
+                    self.config_override = config_override;
+                    self
+                }
+                """,
+            )
+
+            PaginatorGenerator.paginatorType(codegenContext, operation)
                 ?.also { paginatorType ->
                     rustTemplate(
                         """
                         /// Create a paginator for this request
                         ///
-                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
-                        pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
+                        pub fn into_paginator(self) -> #{Paginator} {
                             #{Paginator}::new(self.handle, self.inner)
                         }
                         """,
@@ -607,8 +447,10 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
+        val api = RuntimeType.smithyRuntimeApi(rc)
+        val rt = RuntimeType.smithyRuntime(rc)
         rustTemplate(
             """
             pub(crate) fn base_client_runtime_plugins(
@@ -616,12 +458,20 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             ) -> #{RuntimePlugins} {
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+
                 let mut plugins = #{RuntimePlugins}::new()
+                    // defaults
+                    .with_client_plugins(#{default_plugins}(
+                        #{DefaultPluginParams}::new()
+                            .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
+                    ))
+                    // user config
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
                             .with_runtime_components(config.runtime_components.clone())
                     )
+                    // codegen config
                     .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
                     .with_client_plugin(#{NoAuthRuntimePlugin}::new());
                 for plugin in configured_plugins {
@@ -631,13 +481,14 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             }
             """,
             *preludeScope,
-            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-            "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-            "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
+            "default_plugins" to rt.resolve("client::defaults::default_plugins"),
+            "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+            "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
+            "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
         )
     }
+}
 
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
@@ -665,7 +516,7 @@ private fun generateOperationShapeDocs(
             else -> "(undocumented)"
         }
 
-        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink): $docs"
+        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink):<br>required: **${memberShape.isRequired}**<br>$docs<br>"
     }
 }
 
@@ -715,11 +566,18 @@ private fun OperationShape.fullyQualifiedFluentBuilder(
  *
  * _NOTE: This function generates the type names that appear under **"The fluent builder is configurable:"**_
  */
-private fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
+internal fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider): String {
     val memberName = symbolProvider.toMemberName(this)
-    val outerType = symbolProvider.toSymbol(this).rustType()
+    val outerType = symbolProvider.toSymbol(this).rustType().stripOuter<RustType.Option>()
+    // We generate Vec/HashMap helpers
+    val renderedType = when (outerType) {
+        is RustType.Vec -> listOf(outerType.member)
+        is RustType.HashMap -> listOf(outerType.key, outerType.member)
+        else -> listOf(outerType)
+    }
+    val args = renderedType.joinToString { it.asArgumentType(fullyQualified = false) }
 
-    return "$memberName(${outerType.stripOuter<RustType.Option>().asArgumentType(fullyQualified = false)})"
+    return "$memberName($args)"
 }
 
 /**

@@ -12,22 +12,32 @@ repository = "https://github.com/awslabs/smithy-rs"
 [features]
 client = ["aws-smithy-runtime-api/client"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
-test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber"]
+connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream"]
+tls-rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
+rt-tokio = ["tokio/rt"]
+
+# Features for testing
+test-util = ["aws-smithy-runtime-api/test-util", "dep:aws-smithy-protocol-test", "dep:tracing-subscriber", "dep:serde", "dep:serde_json"]
+wire-mock = ["test-util", "connector-hyper-0-14-x", "hyper-0-14?/server"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
-aws-smithy-client = { path = "../aws-smithy-client" }
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
 bytes = "1"
 fastrand = "2.0.0"
-http = "0.2.8"
-http-body = "0.4.5"
+http = { version = "0.2.8" }
+http-body-0-4 = { package = "http-body", version = "0.4.4" }
+hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }
+hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"], optional = true }
 once_cell = "1.18.0"
 pin-project-lite = "0.2.7"
 pin-utils = "0.1.0"
+rustls = { version = "0.21.8", optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 tokio = { version = "1.25", features = [] }
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.16", optional = true, features = ["fmt", "json"] }
@@ -37,7 +47,9 @@ approx = "0.5.1"
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
-tokio = { version = "1.25", features = ["macros", "rt", "test-util"] }
+futures-util = "0.3.28"
+pretty_assertions = "1.4.0"
+tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-test = "0.2.1"
 

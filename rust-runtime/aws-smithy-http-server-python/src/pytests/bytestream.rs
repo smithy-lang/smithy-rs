@@ -10,8 +10,8 @@ use futures_util::stream;
 use hyper::Body;
 use pyo3::{prelude::*, py_run};
 
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_http_server_python::types::ByteStream;
+use aws_smithy_types::body::SdkBody;
 
 #[pyo3_asyncio::tokio::test]
 fn consuming_stream_on_python_synchronously() -> PyResult<()> {
@@ -147,5 +147,5 @@ async def handler(bytestream):
 fn streaming_bytestream_from_vec(chunks: Vec<&'static str>) -> ByteStream {
     let stream = stream::iter(chunks.into_iter().map(Ok::<_, io::Error>));
     let body = Body::wrap_stream(stream);
-    ByteStream::new(SdkBody::from(body))
+    ByteStream::new(SdkBody::from_body_0_4(body))
 }

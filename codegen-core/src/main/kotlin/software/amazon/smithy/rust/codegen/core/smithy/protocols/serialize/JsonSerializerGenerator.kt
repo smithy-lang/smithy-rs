@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
@@ -169,7 +170,7 @@ class JsonSerializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope = arrayOf(
-        "String" to RuntimeType.String,
+        *preludeScope,
         "Error" to runtimeConfig.serializationError(),
         "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
         "JsonObjectWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonObjectWriter"),
@@ -240,13 +241,21 @@ class JsonSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unsetpayload") { fnName ->
+        ProtocolFunctions.crossOperationFn("rest_json_unset_struct_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
                     b"{}"[..].into()
                 }
                 """,
+                *codegenScope,
+            )
+        }
+
+    override fun unsetUnion(union: UnionShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("rest_json_unset_union_payload") { fnName ->
+            rustTemplate(
+                "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
                 *codegenScope,
             )
         }

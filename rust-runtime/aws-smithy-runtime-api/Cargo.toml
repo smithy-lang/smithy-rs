@@ -17,13 +17,16 @@ test-util = ["aws-smithy-types/test-util"]
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
-aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
-http = "0.2.3"
+http = "0.2.9"
+pin-project-lite = "0.2"
 tokio = { version = "1.25", features = ["sync"] }
 tracing = "0.1"
 zeroize = { version = "1", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.25", features = ["rt", "macros"] }
 
 [package.metadata.docs.rs]
 all-features = true

@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
 import java.nio.file.Path
+import java.util.logging.Logger
 
 /**
  * A helper class holding common data with defaults that is threaded through several functions, to make their
@@ -41,6 +42,8 @@ fun codegenIntegrationTest(model: Model, params: IntegrationTestParams, invokePl
     )
     invokePlugin(ctx)
     ctx.fileManifest.printGeneratedFiles()
-    params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test").runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
+    val logger = Logger.getLogger("CodegenIntegrationTest")
+    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir, environment = mapOf("RUSTFLAGS" to "-D warnings"))
+    logger.fine(out.toString())
     return testDir
 }

@@ -2,30 +2,10 @@
 name = "aws-sig-auth"
 version = "0.0.0-smithy-rs-head"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
-description = "SigV4 signing middleware for the AWS SDK."
+description = "This crate is no longer used by the AWS SDK and is deprecated."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-
-[features]
-sign-eventstream = ["aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
-
-[dependencies]
-aws-credential-types = { path = "../aws-credential-types" }
-aws-sigv4 = { path = "../aws-sigv4" }
-aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
-aws-types = { path = "../aws-types" }
-http = "0.2.2"
-tracing = "0.1"
-
-[dev-dependencies]
-aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
-aws-endpoint = { path = "../aws-endpoint" }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-tracing-test = "0.2.4"
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

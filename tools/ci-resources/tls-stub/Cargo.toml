@@ -1,0 +1,23 @@
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+[package]
+name = "stub"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+aws-config = {path = "../../../aws/sdk/build/aws-sdk/sdk/aws-config", features = ["client-hyper"] }
+aws-credential-types = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-credential-types", features = ["hardcoded-credentials"] }
+aws-sdk-sts = { path = "../../../aws/sdk/build/aws-sdk/sdk/sts" }
+aws-smithy-runtime = { path = "../../../aws/sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x"] }
+exitcode = "1"
+hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
+rustls = "0.21.8"
+rustls-native-certs = "0.6"
+rustls-pemfile = "1"
+tokio = { version = "1", features = ["full"] }
+x509-parser = "0.15"

@@ -111,7 +111,7 @@ object TestWorkspace {
                 // help rust select the right version when we run cargo test
                 // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
                 //  method as we do for runtime crate versions
-                "[toolchain]\nchannel = \"1.69.0\"\n",
+                "[toolchain]\nchannel = \"1.70.0\"\n",
             )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
@@ -294,7 +294,7 @@ class TestWriterDelegator(
 }
 
 /**
- * Generate a newtest module
+ * Generate a new test module
  *
  * This should only be used in test code—the generated module name will be something like `tests_123`
  */
@@ -343,7 +343,7 @@ fun TestWriterDelegator.compileAndTest(
     val env = mapOf("RUSTFLAGS" to "-A dead_code")
     val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
-        "cargo clippy".runCommand(baseDir, env)
+        "cargo clippy --all-features".runCommand(baseDir, env)
     }
     return testOutput
 }

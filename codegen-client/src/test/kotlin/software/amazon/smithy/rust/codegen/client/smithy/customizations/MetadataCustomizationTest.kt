@@ -6,13 +6,11 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
@@ -35,17 +33,14 @@ class MetadataCustomizationTest {
 
     @Test
     fun `extract metadata via customizable operation`() {
-        clientIntegrationTest(
-            model,
-            params = IntegrationTestParams(additionalSettings = TestCodegenSettings.orchestratorMode()),
-        ) { clientCodegenContext, rustCrate ->
+        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
             val codegenScope = arrayOf(
                 *preludeScope,
                 "BeforeTransmitInterceptorContextMut" to RuntimeType.beforeTransmitInterceptorContextMut(runtimeConfig),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "ConfigBag" to RuntimeType.configBag(runtimeConfig),
-                "Interceptor" to RuntimeType.interceptor(runtimeConfig),
+                "Intercept" to RuntimeType.intercept(runtimeConfig),
                 "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
                 "capture_request" to RuntimeType.captureRequest(runtimeConfig),
                 "RuntimeComponents" to RuntimeType.smithyRuntimeApi(runtimeConfig)
@@ -62,7 +57,7 @@ class MetadataCustomizationTest {
                             ::std::sync::Mutex<#{Option}<::std::sync::mpsc::Sender<(String, String)>>>,
                         );
 
-                        impl #{Interceptor} for ExtractMetadataInterceptor {
+                        impl #{Intercept} for ExtractMetadataInterceptor {
                             fn name(&self) -> &'static str {
                                 "ExtractMetadataInterceptor"
                             }
@@ -86,17 +81,15 @@ class MetadataCustomizationTest {
 
                         let (tx, rx) = ::std::sync::mpsc::channel();
 
-                        let (conn, _captured_request) = #{capture_request}(#{None});
+                        let (http_client, _captured_request) = #{capture_request}(#{None});
                         let client_config = crate::config::Config::builder()
-                            .endpoint_resolver("http://localhost:1234/")
-                            .http_connector(conn)
+                            .endpoint_url("http://localhost:1234/")
+                            .http_client(http_client)
                             .build();
                         let client = crate::client::Client::from_conf(client_config);
                         let _ = client
                             .say_hello()
                             .customize()
-                            .await
-                            .expect("operation should be customizable")
                             .interceptor(ExtractMetadataInterceptor(::std::sync::Mutex::new(#{Some}(tx))))
                             .send()
                             .await;

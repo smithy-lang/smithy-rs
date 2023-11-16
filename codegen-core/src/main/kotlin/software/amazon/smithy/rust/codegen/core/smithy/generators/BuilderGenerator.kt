@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
@@ -21,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlockTemplat
 import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
+import software.amazon.smithy.rust.codegen.core.rustlang.map
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -29,7 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.Default
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -38,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -46,6 +47,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
@@ -73,13 +75,42 @@ sealed class BuilderSection(name: String) : Section(name) {
 /** Customizations for BuilderGenerator */
 abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
+fun RuntimeConfig.operationBuildError() = RuntimeType.smithyTypes(this).resolve("error::operation::BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.smithyTypes(this).resolve("error::operation::SerializationError")
+
+fun MemberShape.enforceRequired(
+    field: Writable,
+    codegenContext: CodegenContext,
+    produceOption: Boolean = true,
+): Writable {
+    if (!this.isRequired) {
+        return field
+    }
+    val shape = this
+    val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
+    val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
+    val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
+        codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
+    )
+    val unwrapped = when (codegenContext.model.expectShape(this.target)) {
+        is StringShape -> writable {
+            rustTemplate(
+                "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
+                "field" to field,
+            )
+        }
+
+        else -> field
+    }.map { base -> rustTemplate("#{base}.ok_or_else(||#{error})?", "base" to base, "error" to error) }
+    return unwrapped.letIf(produceOption) { w -> w.map { rust("Some(#T)", it) } }
+}
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
+
     fun missingField(field: String, details: String) = writable {
         rust("#T::missing_field(${field.dq()}, ${details.dq()})", runtimeConfig.operationBuildError())
     }
+
     fun invalidField(field: String, details: String) = invalidField(field) { rust(details.dq()) }
     fun invalidField(field: String, details: Writable) = writable {
         rustTemplate(
@@ -155,6 +186,14 @@ class BuilderGenerator(
             false -> implBlockWriter.format(outputSymbol)
         }
         implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
+        val trulyRequiredMembers = members.filter { trulyRequired(it) }
+        if (trulyRequiredMembers.isNotEmpty()) {
+            implBlockWriter.docs("This method will fail if any of the following fields are not set:")
+            trulyRequiredMembers.forEach {
+                val memberName = symbolProvider.toMemberName(it)
+                implBlockWriter.docs("- [`$memberName`](#T::$memberName)", symbolProvider.symbolForBuilder(shape))
+            }
+        }
         implBlockWriter.rustBlockTemplate("pub fn build(self) -> $returnType", *preludeScope) {
             conditionalBlockTemplate("#{Ok}(", ")", conditional = fallibleBuilder, *preludeScope) {
                 // If a wrapper is specified, use the `::new` associated function to construct the wrapper
@@ -164,7 +203,8 @@ class BuilderGenerator(
     }
 
     private fun RustWriter.missingRequiredField(field: String) {
-        val detailedMessage = "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
+        val detailedMessage =
+            "$field was not specified but it is required when building ${symbolProvider.toSymbol(shape).name}"
         OperationBuildError(runtimeConfig).missingField(field, detailedMessage)(this)
     }
 
@@ -184,6 +224,9 @@ class BuilderGenerator(
         val input = coreType.asArgument("input")
 
         writer.documentShape(member, model)
+        if (member.isRequired) {
+            writer.docs("This field is required.")
+        }
         writer.deprecatedShape(member)
         writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             rustTemplate("self.$memberName = #{Some}(${input.value});", *preludeScope)
@@ -337,6 +380,10 @@ class BuilderGenerator(
         }
     }
 
+    private fun trulyRequired(member: MemberShape) = symbolProvider.toSymbol(member).let {
+        !it.isOptional() && !it.canUseDefault()
+    }
+
     /**
      * The core builder of the inner type. If the structure requires a fallible builder, this may use `?` to return
      * errors.
@@ -353,15 +400,22 @@ class BuilderGenerator(
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val default = memberSymbol.defaultValue()
                 withBlock("$memberName: self.$memberName", ",") {
-                    // Write the modifier
-                    when {
-                        !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
-                        !memberSymbol.isOptional() -> withBlock(
-                            ".ok_or_else(||",
-                            ")?",
-                        ) { missingRequiredField(memberName) }
+                    val generator = DefaultValueGenerator(runtimeConfig, symbolProvider, model)
+                    val default = generator.defaultValue(member)
+                    if (!memberSymbol.isOptional()) {
+                        if (default != null) {
+                            if (default.isRustDefault) {
+                                rust(".unwrap_or_default()")
+                            } else {
+                                rust(".unwrap_or_else(#T)", default.expr)
+                            }
+                        } else {
+                            withBlock(
+                                ".ok_or_else(||",
+                                ")?",
+                            ) { missingRequiredField(memberName) }
+                        }
                     }
                 }
             }

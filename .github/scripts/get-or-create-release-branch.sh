@@ -14,15 +14,15 @@ set -eux
 # is the beginning of a new release series.
 
 if [ -z "$SEMANTIC_VERSION" ]; then
-    echo "'SEMANTIC_VERSION' must be populated."
-    exit 1
+  echo "'SEMANTIC_VERSION' must be populated."
+  exit 1
 fi
 
 if [ -z "$1" ]; then
-    echo "You need to specify the path of the file where you want to collect the output"
-    exit 1
+  echo "You need to specify the path of the file where you want to collect the output"
+  exit 1
 else
-    output_file="$1"
+  output_file="$1"
 fi
 
 # Split on the dots
@@ -31,41 +31,50 @@ major=${version_array[0]}
 minor=${version_array[1]}
 patch=${version_array[2]}
 if [[ "${major}" == "" || "${minor}" == "" || "${patch}" == "" ]]; then
-    echo "'${SEMANTIC_VERSION}' is not a valid semver tag"
-    exit 1
+  echo "'${SEMANTIC_VERSION}' is not a valid semver tag"
+  exit 1
 fi
 if [[ $major == 0 ]]; then
-    branch_name="smithy-rs-release-${major}.${minor}.x"
-    if [[ $patch == 0 ]]; then
-        echo "new_release_series=true" >"${output_file}"
-    fi
+  branch_name="smithy-rs-release-${major}.${minor}.x"
+  if [[ $patch == 0 ]]; then
+    echo "new_release_series=true" >"${output_file}"
+  fi
 else
-    branch_name="smithy-rs-release-${major}.x.y"
-    if [[ $minor == 0 && $patch == 0 ]]; then
-        echo "new_release_series=true" >"${output_file}"
-    fi
+  branch_name="smithy-rs-release-${major}.x.y"
+  if [[ $minor == 0 && $patch == 0 ]]; then
+    echo "new_release_series=true" >"${output_file}"
+  fi
 fi
 
 if [[ "${DRY_RUN}" == "true" ]]; then
-    branch_name="${branch_name}-preview"
+  branch_name="${branch_name}-preview"
 fi
 echo "release_branch=${branch_name}" >"${output_file}"
 
-if [[ "${DRY_RUN}" == "true" ]]; then
-    git push --force origin "HEAD:refs/heads/${branch_name}"
-else
-    commit_sha=$(git rev-parse --short HEAD)
-    if ! git ls-remote --exit-code --heads origin "${branch_name}"; then
-        # The release branch does not exist.
-        # We need to make sure that the commit SHA that we are releasing is on `main`.
-        git fetch origin main
-        if git branch --contains "${commit_sha}" | grep main; then
-            # We can then create the release branch and set the current commit as its tip
-            git checkout -b "${branch_name}"
-            git push origin "${branch_name}"
-        else
-            echo "You must choose a commit from main to create a new release branch!"
-            exit 1
-        fi
+commit_sha=$(git rev-parse --short HEAD)
+# the git repo is in a weird state because **main has never been checked out**!
+# This prevents the `git branch --contains` from working because there is no _local_ ref for main
+git checkout main
+git checkout "${commit_sha}"
+if ! git ls-remote --exit-code --heads origin "${branch_name}"; then
+  # The release branch does not exist.
+  # We need to make sure that the commit SHA that we are releasing is on `main`.
+  git fetch origin main
+  echo "Branches: "
+  git branch --contains "${commit_sha}"
+  git show origin/main | head -n 1
+  if git branch --contains "${commit_sha}" | grep main; then
+    # We can then create the release branch and set the current commit as its tip
+    if [[ "${DRY_RUN}" == "true" ]]; then
+      git push --force origin "HEAD:refs/heads/${branch_name}"
+    else
+      git checkout -b "${branch_name}"
+      git push origin "${branch_name}"
     fi
+  else
+    echo "You must choose a commit from main to create a new release branch!"
+    exit 1
+  fi
+else
+  echo "Patch release ${branch_name} already exists"
 fi

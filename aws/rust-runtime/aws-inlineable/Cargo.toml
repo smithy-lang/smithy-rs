@@ -13,40 +13,29 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-aws-endpoint = { path = "../aws-endpoint" }
 aws-http = { path = "../aws-http" }
 aws-runtime = { path = "../aws-runtime" }
 aws-sigv4 = { path = "../aws-sigv4" }
-aws-sig-auth = { path = "../aws-sig-auth" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-smithy-http-tower = { path = "../../../rust-runtime/aws-smithy-http-tower" }
-aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
-aws-types = { path = "../aws-types" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x"] }
 bytes = "1"
-bytes-utils = "0.1.1"
 hex = "0.4.3"
 http = "0.2.9"
 http-body = "0.4.5"
-md-5 = "0.10.1"
-ring = "0.16"
-tokio = { version = "1.23.1", features = ["full"] }
-tokio-stream = "0.1.5"
-tower = { version = "0.4", default-features = false }
+ring = "0.17.5"
+tokio = "1.23.1"
 tracing = "0.1"
 
 [dev-dependencies]
-aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client", features = ["test-util"] }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
 tempfile = "3.6.0"
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
+tokio = { version = "1.23.1", features = ["macros", "rt", "io-util"] }
 
 [package.metadata.docs.rs]
 all-features = true

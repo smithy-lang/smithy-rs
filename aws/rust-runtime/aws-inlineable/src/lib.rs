@@ -22,14 +22,8 @@
 /// Interceptors for API Gateway
 pub mod apigateway_interceptors;
 
-/// Stub credentials provider for use when no credentials provider is used.
-pub mod no_credentials;
-
 /// Support types required for adding presigning to an operation in a generated service.
 pub mod presigning;
-
-/// Presigning tower service
-pub mod presigning_service;
 
 /// Presigning interceptors
 pub mod presigning_interceptors;
@@ -37,27 +31,14 @@ pub mod presigning_interceptors;
 /// Special logic for extracting request IDs from S3's responses.
 pub mod s3_request_id;
 
-/// Glacier-specific checksumming behavior
-pub mod glacier_checksums;
-
 /// Glacier-specific behavior
 pub mod glacier_interceptors;
-
-/// Default middleware stack for AWS services
-pub mod middleware;
-
-/// Strip prefixes from IDs returned by Route53 operations when those IDs are used to construct requests
-pub mod route53_resource_id_preprocessor_middleware;
 
 /// Strip prefixes from IDs returned by Route53 operations when those IDs are used to construct requests
 pub mod route53_resource_id_preprocessor;
 
 pub mod http_request_checksum;
 pub mod http_response_checksum;
-
-// TODO(enableNewSmithyRuntimeCleanup): Delete this module
-/// Convert a streaming `SdkBody` into an aws-chunked streaming body with checksum trailers
-pub mod http_body_checksum_middleware;
 
 #[allow(dead_code)]
 pub mod endpoint_discovery;

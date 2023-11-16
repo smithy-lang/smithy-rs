@@ -8,10 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
@@ -69,7 +69,7 @@ class EndpointsDecoratorTest {
                 documentation: "string docs",
                 type: "string"
             },
-            aBoolParam: {
+            ABoolParam: {
                 documentation: "bool docs",
                 type: "boolean"
             }
@@ -110,8 +110,10 @@ class EndpointsDecoratorTest {
             input: TestOperationInput
         }
 
+        @input
         structure TestOperationInput {
             @contextParam(name: "Bucket")
+            @required
             bucket: String,
             nested: NestedStructure
         }
@@ -119,57 +121,7 @@ class EndpointsDecoratorTest {
         structure NestedStructure {
             field: String
         }
-    """.asSmithyModel()
-
-    // TODO(enableNewSmithyRuntimeCleanup): Delete this test (replaced by the second @Test below)
-    @Test
-    fun `set an endpoint in the property bag`() {
-        val testDir = clientIntegrationTest(
-            model,
-            // Just run integration tests.
-            TestCodegenSettings.middlewareModeTestParams
-                .copy(command = { "cargo test --test *".runWithWarnings(it) }),
-        ) { clientCodegenContext, rustCrate ->
-            rustCrate.integrationTest("endpoint_params_test") {
-                val moduleName = clientCodegenContext.moduleUseName()
-                Attribute.TokioTest.render(this)
-                rust(
-                    """
-                    async fn endpoint_params_are_set() {
-                            let conf = $moduleName::Config::builder().a_string_param("hello").a_bool_param(false).build();
-                            let operation = $moduleName::operation::test_operation::TestOperationInput::builder()
-                                .bucket("bucket-name").build().expect("input is valid")
-                                .make_operation(&conf).await.expect("valid operation");
-                            use $moduleName::endpoint::{Params};
-                            use aws_smithy_http::endpoint::Result;
-                            let props = operation.properties();
-                            let endpoint_result = dbg!(props.get::<Result>().expect("endpoint result in the bag"));
-                            let endpoint_params = props.get::<Params>().expect("endpoint params in the bag");
-                            let endpoint = endpoint_result.as_ref().expect("endpoint resolved properly");
-                            assert_eq!(
-                                endpoint_params,
-                                &Params::builder()
-                                    .bucket("bucket-name".to_string())
-                                    .built_in_with_default("some-default")
-                                    .bool_built_in_with_default(true)
-                                    .a_bool_param(false)
-                                    .a_string_param("hello".to_string())
-                                    .region("us-east-2".to_string())
-                                    .build().unwrap()
-                            );
-
-                            assert_eq!(endpoint.url(), "https://www.us-east-2.example.com");
-                    }
-                    """,
-                )
-            }
-        }
-        // the model has an intentionally failing test—ensure it fails
-        val failure = shouldThrow<CommandError> { "cargo test".runWithWarnings(testDir) }
-        failure.output shouldContain "endpoint::test::test_1"
-        failure.output shouldContain "https://failingtest.com"
-        "cargo clippy".runWithWarnings(testDir)
-    }
+    """.asSmithyModel(disableValidation = true)
 
     @Test
     fun `resolve endpoint`() {
@@ -181,11 +133,11 @@ class EndpointsDecoratorTest {
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()
                 Attribute.TokioTest.render(this)
-                rust(
+                rustTemplate(
                     """
                     async fn endpoint_params_are_set() {
-                        use aws_smithy_async::rt::sleep::TokioSleep;
-                        use aws_smithy_client::never::NeverConnector;
+                        use #{NeverClient};
+                        use #{TokioSleep};
                         use aws_smithy_runtime_api::box_error::BoxError;
                         use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
                         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -198,14 +150,14 @@ class EndpointsDecoratorTest {
                         use std::time::Duration;
                         use $moduleName::{
                             config::endpoint::Params, config::interceptors::BeforeTransmitInterceptorContextRef,
-                            config::Interceptor, config::SharedAsyncSleep, Client, Config,
+                            config::Intercept, config::SharedAsyncSleep, Client, Config,
                         };
 
                         ##[derive(Clone, Debug, Default)]
                         struct TestInterceptor {
                             called: Arc<AtomicBool>,
                         }
-                        impl Interceptor for TestInterceptor {
+                        impl Intercept for TestInterceptor {
                             fn name(&self) -> &'static str {
                                 "TestInterceptor"
                             }
@@ -243,7 +195,7 @@ class EndpointsDecoratorTest {
 
                         let interceptor = TestInterceptor::default();
                         let config = Config::builder()
-                            .http_connector(NeverConnector::new())
+                            .http_client(NeverClient::new())
                             .interceptor(interceptor.clone())
                             .timeout_config(
                                 TimeoutConfig::builder()
@@ -261,8 +213,16 @@ class EndpointsDecoratorTest {
                             interceptor.called.load(Ordering::Relaxed),
                             "the interceptor should have been called"
                         );
+
+                        // bucket_name is unset and marked as required on the model, so we'll refuse to construct this request
+                        let err = client.test_operation().send().await.expect_err("param missing");
+                        assert_eq!(format!("{}", err), "failed to construct request");
                     }
                     """,
+                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
+                        .toType().resolve("client::http::test_util::NeverClient"),
+                    "TokioSleep" to CargoDependency.smithyAsync(clientCodegenContext.runtimeConfig)
+                        .withFeature("rt-tokio").toType().resolve("rt::sleep::TokioSleep"),
                 )
             }
         }

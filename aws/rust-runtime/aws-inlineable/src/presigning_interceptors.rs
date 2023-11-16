@@ -7,7 +7,7 @@
 
 use crate::presigning::PresigningConfig;
 use crate::serialization_settings::HeaderSerializationSettings;
-use aws_runtime::auth::sigv4::{HttpSignatureType, SigV4OperationSigningConfig};
+use aws_runtime::auth::{HttpSignatureType, SigV4OperationSigningConfig};
 use aws_runtime::invocation_id::InvocationIdInterceptor;
 use aws_runtime::request_info::RequestInfoInterceptor;
 use aws_runtime::user_agent::UserAgentInterceptor;
@@ -19,7 +19,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::{
-    disable_interceptor, Interceptor, SharedInterceptor,
+    disable_interceptor, Intercept, SharedInterceptor,
 };
 use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_components::{
@@ -46,7 +46,7 @@ impl SigV4PresigningInterceptor {
     }
 }
 
-impl Interceptor for SigV4PresigningInterceptor {
+impl Intercept for SigV4PresigningInterceptor {
     fn name(&self) -> &'static str {
         "SigV4PresigningInterceptor"
     }
@@ -118,7 +118,10 @@ impl RuntimePlugin for SigV4PresigningRuntimePlugin {
         Some(layer.freeze())
     }
 
-    fn runtime_components(&self) -> Cow<'_, RuntimeComponentsBuilder> {
+    fn runtime_components(
+        &self,
+        _: &RuntimeComponentsBuilder,
+    ) -> Cow<'_, RuntimeComponentsBuilder> {
         Cow::Borrowed(&self.runtime_components)
     }
 }

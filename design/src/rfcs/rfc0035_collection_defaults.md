@@ -3,7 +3,7 @@ RFC: Collection Defaults
 =============
 
 <!-- RFCs start with the "RFC" status and are then either "Implemented" or "Rejected".  -->
-> Status: RFC
+> Status: Implemented
 >
 > Applies to: client
 
@@ -12,14 +12,14 @@ For a summarized list of proposed changes, see the [Changes Checklist](#changes-
 
 <!-- Insert a short paragraph explaining, at a high level, what this RFC is for -->
 This RFC proposes a **breaking change** to how generated clients automatically provide default values for collections. Currently the SDK generated fields for `List` generate optional values:
-```rust
+```rust,ignore
     /// <p> Container for elements related to a particular part.
     pub fn parts(&self) -> Option<&[crate::types::Part]> {
         self.parts.as_deref()
     }
 ```
 This is _almost never_ what users want and leads to code noise when using collections:
-```rust
+```rust,ignore
 async fn get_builds() {
     let project = codebuild
         .list_builds_for_project()
@@ -50,7 +50,7 @@ In the current version of the SDK, users must call `.unwrap_or_default()` freque
 Once this RFC is implemented, users will be able to use these accessors directly. In the rare case where users need to
 distinguish be `None` and `[]`, we will direct users towards `model.<field>.is_some()`.
 
-```rust
+```rust,ignore
 async fn get_builds() {
     let project = codebuild
         .list_builds_for_project()
@@ -78,5 +78,5 @@ No, many existing APIs don't have the default trait.
 Changes checklist
 -----------------
 Estimated total work: 2 days
-- [ ] Update accessor method generation to auto flatten lists
-- [ ] Update docs for accessors to guide users to `.field.is_some()` if they MUST determine if the field was set.
+- [x] Update accessor method generation to auto flatten lists
+- [x] Update docs for accessors to guide users to `.field.is_some()` if they MUST determine if the field was set.

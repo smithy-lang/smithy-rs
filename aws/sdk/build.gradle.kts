@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import aws.sdk.AwsExamplesLayout
 import aws.sdk.AwsServices
 import aws.sdk.Membership
 import aws.sdk.discoverServices
@@ -20,7 +19,7 @@ plugins {
 }
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    smithyBuildConfigs = files(buildDir.resolve("smithy-build.json"))
+    smithyBuildConfigs = files(layout.buildDirectory.file("smithy-build.json"))
     allowUnknownTraits = true
 }
 
@@ -61,7 +60,7 @@ val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, prop
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
-fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "orchestrator"
+fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
@@ -105,8 +104,8 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableNewSmithyRuntime": "${getSmithyRuntimeMode()}",
-                            "enableUserConfigurableRuntimePlugins": false
+                            "enableUserConfigurableRuntimePlugins": false,
+                            "nullabilityCheckMode": "${getNullabilityCheckMode()}"
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -145,7 +144,7 @@ tasks.register("generateSmithyBuild") {
     inputs.property("servicelist", awsServices.services.toString())
     inputs.property("eventStreamAllowList", eventStreamAllowList)
     inputs.dir(projectDir.resolve("aws-models"))
-    outputs.file(buildDir.resolve("smithy-build.json"))
+    outputs.file(layout.buildDirectory.file("smithy-build.json"))
 
     doFirst {
         buildDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
@@ -187,7 +186,7 @@ tasks.register("relocateServices") {
             }
         }
     }
-    inputs.dir("$buildDir/smithyprojections/sdk/")
+    inputs.dir(layout.buildDirectory.dir("smithyprojections/sdk/"))
     outputs.dir(sdkOutputDir)
 }
 
@@ -246,22 +245,12 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
 
     toolPath = sdkVersionerToolPath
     binaryName = "sdk-versioner"
-    arguments = when (AwsExamplesLayout.detect(project)) {
-        AwsExamplesLayout.Flat -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", "../../sdk",
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-        AwsExamplesLayout.Workspaces -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", sdkOutputDir.absolutePath,
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-    }
+    arguments = listOf(
+        "use-path-and-version-dependencies",
+        "--sdk-path", sdkOutputDir.absolutePath,
+        "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
+        outputDir.resolve("examples").absolutePath,
+    )
 
     outputs.dir(outputDir)
     dependsOn("relocateExamples", "generateVersionManifest")
@@ -338,7 +327,7 @@ tasks.register("generateCargoWorkspace") {
     doFirst {
         outputDir.mkdirs()
         outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
-        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.resolve("clippy.toml"))
+        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.resolve("clippy.toml"), overwrite = true)
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
     if (awsServices.examples.isNotEmpty()) {
@@ -417,7 +406,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
         "--examples-revision",
         properties.get("aws.sdk.examples.revision") ?: "missing",
     ).apply {
-        val previousReleaseManifestPath = getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
+        getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
             add(manifestPath)
         }
@@ -425,7 +414,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
 }
 
 tasks["smithyBuildJar"].apply {
-    inputs.file(buildDir.resolve("smithy-build.json"))
+    inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
@@ -466,5 +455,5 @@ tasks.register<Delete>("deleteSdk") {
 }
 tasks["clean"].dependsOn("deleteSdk")
 tasks["clean"].doFirst {
-    delete(buildDir.resolve("smithy-build.json"))
+    delete(layout.buildDirectory.file("smithy-build.json"))
 }

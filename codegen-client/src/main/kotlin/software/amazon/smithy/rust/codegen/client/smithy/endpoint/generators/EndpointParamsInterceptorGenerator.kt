@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.enforceRequired
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -53,7 +54,7 @@ class EndpointParamsInterceptorGenerator(
             "EndpointResolverParams" to runtimeApi.resolve("client::endpoint::EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
-            "Interceptor" to RuntimeType.interceptor(rc),
+            "Intercept" to RuntimeType.intercept(rc),
             "InterceptorContext" to RuntimeType.interceptorContext(rc),
             "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
             "Input" to interceptors.resolve("context::Input"),
@@ -73,7 +74,7 @@ class EndpointParamsInterceptorGenerator(
             ##[derive(Debug)]
             struct $interceptorName;
 
-            impl #{Interceptor} for $interceptorName {
+            impl #{Intercept} for $interceptorName {
                 fn name(&self) -> &'static str {
                     ${interceptorName.dq()}
                 }
@@ -110,12 +111,7 @@ class EndpointParamsInterceptorGenerator(
         val builtInParams = params.toList().filter { it.isBuiltIn }
         // first load builtins and their defaults
         builtInParams.forEach { param ->
-            val config = if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                "cfg"
-            } else {
-                "_config"
-            }
-            endpointTypesGenerator.builtInFor(param, config)?.also { defaultValue ->
+            endpointTypesGenerator.builtInFor(param, "cfg")?.also { defaultValue ->
                 rust(".set_${param.name.rustName()}(#W)", defaultValue)
             }
         }
@@ -139,8 +135,10 @@ class EndpointParamsInterceptorGenerator(
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) ->
             val memberName = codegenContext.symbolProvider.toMemberName(memberShape)
-            rust(
-                ".${EndpointParamsGenerator.setterName(param.name)}(_input.$memberName.clone())",
+            val member = memberShape.enforceRequired(writable("_input.$memberName.clone()"), codegenContext)
+
+            rustTemplate(
+                ".${EndpointParamsGenerator.setterName(param.name)}(#{member})", "member" to member,
             )
         }
     }
@@ -173,7 +171,6 @@ class EndpointParamsInterceptorGenerator(
                 endpointTraitBindings.render(
                     this,
                     "_input",
-                    codegenContext.smithyRuntimeMode,
                 )
             }
             rust("cfg.interceptor_state().store_put(endpoint_prefix);")

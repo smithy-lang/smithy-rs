@@ -29,7 +29,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.69.0
+  rust_version: 1.70.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -84,9 +84,6 @@ jobs:
         test:
         - action: check-aws-sdk-adhoc-tests
           runner: ubuntu-latest
-        # TODO(enableNewSmithyRuntimeCleanup): Remove `check-aws-sdk-middleware-impl` when cleaning up middleware
-        - action: check-aws-sdk-middleware-impl
-          runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-unit-tests
@@ -189,6 +186,9 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
+      # To fix OpenSSL not found on Windows: https://github.com/sfackler/rust-openssl/issues/1542
+    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: vcpkg install openssl:x64-windows-static-md
     - name: Run tests
       shell: bash
       run: |

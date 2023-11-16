@@ -27,13 +27,14 @@ use serde::Deserialize;
 use smithy_rs_tool_common::git::{find_git_repository_root, Git, GitCLI};
 use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::release_tag::ReleaseTag;
-use tracing::info;
+use tracing::{error, info};
 
 use crate::build_bundle::BuildBundleArgs;
 
 use aws_sdk_cloudwatch as cloudwatch;
 use aws_sdk_lambda as lambda;
 use aws_sdk_s3 as s3;
+use std::collections::HashMap;
 
 lazy_static::lazy_static! {
     // Occasionally, a breaking change introduced in smithy-rs will cause the canary to fail
@@ -101,6 +102,10 @@ pub struct RunArgs {
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_test_s3_bucket_name: Option<String>,
 
+    /// The name of the S3 bucket for the canary Lambda to interact with
+    #[clap(long, required_unless_present = "cdk-output")]
+    lambda_test_s3_mrap_bucket_arn: Option<String>,
+
     /// The ARN of the role that the Lambda will execute as
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_execution_role_arn: Option<String>,
@@ -115,6 +120,7 @@ struct Options {
     expected_speech_text_by_transcribe: Option<String>,
     lambda_code_s3_bucket_name: String,
     lambda_test_s3_bucket_name: String,
+    lambda_test_s3_mrap_bucket_arn: String,
     lambda_execution_role_arn: String,
 }
 
@@ -127,6 +133,8 @@ impl Options {
                 lambda_code_s3_bucket_name: String,
                 #[serde(rename = "canarytestbucketname")]
                 lambda_test_s3_bucket_name: String,
+                #[serde(rename = "canarytestmrapbucketarn")]
+                lambda_test_s3_mrap_bucket_arn: String,
                 #[serde(rename = "lambdaexecutionrolearn")]
                 lambda_execution_role_arn: String,
             }
@@ -148,6 +156,7 @@ impl Options {
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
                 lambda_code_s3_bucket_name: value.inner.lambda_code_s3_bucket_name,
                 lambda_test_s3_bucket_name: value.inner.lambda_test_s3_bucket_name,
+                lambda_test_s3_mrap_bucket_arn: value.inner.lambda_test_s3_mrap_bucket_arn,
                 lambda_execution_role_arn: value.inner.lambda_execution_role_arn,
             })
         } else {
@@ -159,6 +168,9 @@ impl Options {
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
                 lambda_code_s3_bucket_name: run_opt.lambda_code_s3_bucket_name.expect("required"),
                 lambda_test_s3_bucket_name: run_opt.lambda_test_s3_bucket_name.expect("required"),
+                lambda_test_s3_mrap_bucket_arn: run_opt
+                    .lambda_test_s3_mrap_bucket_arn
+                    .expect("required"),
                 lambda_execution_role_arn: run_opt.lambda_execution_role_arn.expect("required"),
             })
         }
@@ -170,6 +182,9 @@ pub async fn run(opt: RunArgs) -> Result<()> {
     let start_time = SystemTime::now();
     let config = aws_config::load_from_env().await;
     let result = run_canary(&options, &config).await;
+    if let Err(err) = &result {
+        error!("Canary invocation failed: {err:?}",);
+    }
 
     let mut metrics = vec![
         (
@@ -261,6 +276,7 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
         options.expected_speech_text_by_transcribe.as_ref(),
         &options.lambda_code_s3_bucket_name,
         &options.lambda_test_s3_bucket_name,
+        &options.lambda_test_s3_mrap_bucket_arn,
     )
     .await
     .context(here!())?;
@@ -328,6 +344,7 @@ async fn upload_bundle(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn create_lambda_fn(
     lambda_client: lambda::Client,
     bundle_name: &str,
@@ -336,6 +353,7 @@ async fn create_lambda_fn(
     expected_speech_text_by_transcribe: Option<&String>,
     code_s3_bucket: &str,
     test_s3_bucket: &str,
+    test_s3_mrap_bucket_arn: &str,
 ) -> Result<()> {
     use lambda::types::*;
 
@@ -344,6 +362,7 @@ async fn create_lambda_fn(
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
             .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
+            .variables("CANARY_S3_MRAP_BUCKET_ARN", test_s3_mrap_bucket_arn)
             .variables(
                 "CANARY_EXPECTED_TRANSCRIBE_RESULT",
                 expected_speech_text_by_transcribe,
@@ -351,7 +370,8 @@ async fn create_lambda_fn(
         None => Environment::builder()
             .variables("RUST_BACKTRACE", "1")
             .variables("RUST_LOG", "info")
-            .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket),
+            .variables("CANARY_S3_BUCKET_NAME", test_s3_bucket)
+            .variables("CANARY_S3_MRAP_BUCKET_ARN", test_s3_mrap_bucket_arn),
     };
 
     lambda_client
@@ -422,6 +442,36 @@ async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Resu
                 .unwrap_or("<no error given>")
         );
     }
+    if let Some(payload) = response.payload {
+        // Example payload:
+        // {
+        //  "failures": {
+        //    "ec2_paginator": "service error\n\nCaused by:\n    0: unhandled error\n    1: unhandled error\n    2: Error { code: \"UnauthorizedOperation\", message: \"You are not authorized to perform this operation.\", aws_request_id: \"0adcd3f5-73f3-45a2-bd2e-09e4172b65f1\" }",
+        //    "transcribe_canary": "Transcription from Transcribe doesn't look right:\nExpected: `Good day to you transcribe. This is Polly talking to you from the Rust ST K.`\nActual:   `Good day to you transcribe. This is Polly talking to you from the Rust S. D. K.`\n"
+        //  },
+        //  "result": "failure"
+        //}
+        #[derive(serde::Deserialize)]
+        struct Payload {
+            failures: Option<HashMap<String, String>>,
+            result: String,
+        }
+        let payload: Payload = serde_json::from_slice(payload.as_ref())?;
+        if payload.result == "failure"
+            || !payload
+                .failures
+                .as_ref()
+                .map(|m| m.is_empty())
+                .unwrap_or(true)
+        {
+            if let Some(failures) = &payload.failures {
+                for (service, message) in failures {
+                    error!("{service} failed:\n{message}\n");
+                }
+            }
+            bail!("The canary failed.");
+        }
+    }
     Ok(())
 }
 
@@ -453,7 +503,8 @@ mod tests {
                 cdk_output: Some("../cdk-outputs.json".into()),
                 lambda_code_s3_bucket_name: None,
                 lambda_test_s3_bucket_name: None,
-                lambda_execution_role_arn: None
+                lambda_execution_role_arn: None,
+                lambda_test_s3_mrap_bucket_arn: None
             },
             RunArgs::try_parse_from([
                 "run",
@@ -482,6 +533,8 @@ mod tests {
             "bucket-for-test",
             "--lambda-execution-role-arn",
             "arn:aws:lambda::role/exe-role",
+            "--lambda-test-s3-mrap-bucket-arn",
+            "arn:aws:s3::000000000000:accesspoint/example.mrap",
         ])
         .unwrap();
         assert_eq!(
@@ -494,6 +547,8 @@ mod tests {
                 lambda_code_s3_bucket_name: "bucket-for-code".to_owned(),
                 lambda_test_s3_bucket_name: "bucket-for-test".to_owned(),
                 lambda_execution_role_arn: "arn:aws:lambda::role/exe-role".to_owned(),
+                lambda_test_s3_mrap_bucket_arn: "arn:aws:s3::000000000000:accesspoint/example.mrap"
+                    .to_owned(),
             },
             Options::load_from(run_args).unwrap(),
         );

@@ -235,3 +235,27 @@ apply HeadObject @httpRequestTests([
         }
     }
 ])
+
+apply GetObject @httpRequestTests([
+    {
+        id: "GetObjectIfModifiedSince",
+        documentation: "https://github.com/awslabs/aws-sdk-rust/issues/818",
+
+        method: "GET",
+        protocol: "aws.protocols#restXml",
+        uri: "/object.txt",
+        headers: { "if-modified-since": "Fri, 16 Jul 2021 16:20:53 GMT" }
+        params: {
+            Bucket: "test-bucket",
+            Key: "object.txt"
+            IfModifiedSince: 1626452453.123,
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
+        }
+    }
+])

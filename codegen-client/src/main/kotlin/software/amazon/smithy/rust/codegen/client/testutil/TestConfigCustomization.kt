@@ -30,76 +30,34 @@ fun stubConfigCustomization(name: String, codegenContext: ClientCodegenContext):
     return object : ConfigCustomization() {
         override fun section(section: ServiceConfig): Writable = writable {
             when (section) {
-                ServiceConfig.ConfigStruct -> {
-                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                        rust("_$name: u64,")
-                    }
-                }
                 ServiceConfig.ConfigImpl -> {
-                    if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                        rustTemplate(
-                            """
-                            ##[allow(missing_docs)]
-                            pub fn $name(&self) -> u64 {
-                                self.config.load::<#{T}>().map(|u| u.0).unwrap()
-                            }
-                            """,
-                            "T" to configParamNewtype(
-                                "_$name".toPascalCase(), RuntimeType.U64.toSymbol(),
-                                codegenContext.runtimeConfig,
-                            ),
-                        )
-                    } else {
-                        rust(
-                            """
-                            ##[allow(missing_docs)]
-                            pub fn $name(&self) -> u64 {
-                                self._$name
-                            }
-                            """,
-                        )
-                    }
-                }
-                ServiceConfig.BuilderStruct -> {
-                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                        rust("_$name: Option<u64>,")
-                    }
+                    rustTemplate(
+                        """
+                        ##[allow(missing_docs)]
+                        pub fn $name(&self) -> u64 {
+                            self.config.load::<#{T}>().map(|u| u.0).unwrap()
+                        }
+                        """,
+                        "T" to configParamNewtype(
+                            "_$name".toPascalCase(), RuntimeType.U64.toSymbol(),
+                            codegenContext.runtimeConfig,
+                        ),
+                    )
                 }
                 ServiceConfig.BuilderImpl -> {
-                    if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                        rustTemplate(
-                            """
-                            /// docs!
-                            pub fn $name(mut self, $name: u64) -> Self {
-                                self.config.store_put(#{T}($name));
-                                self
-                            }
-                            """,
-                            "T" to configParamNewtype(
-                                "_$name".toPascalCase(), RuntimeType.U64.toSymbol(),
-                                codegenContext.runtimeConfig,
-                            ),
-                        )
-                    } else {
-                        rust(
-                            """
-                            /// docs!
-                            pub fn $name(mut self, $name: u64) -> Self {
-                                self._$name = Some($name);
-                                self
-                            }
-                            """,
-                        )
-                    }
-                }
-                ServiceConfig.BuilderBuild -> {
-                    if (codegenContext.smithyRuntimeMode.generateMiddleware) {
-                        rust(
-                            """
-                            _$name: self._$name.unwrap_or(123),
-                            """,
-                        )
-                    }
+                    rustTemplate(
+                        """
+                        /// docs!
+                        pub fn $name(mut self, $name: u64) -> Self {
+                            self.config.store_put(#{T}($name));
+                            self
+                        }
+                        """,
+                        "T" to configParamNewtype(
+                            "_$name".toPascalCase(), RuntimeType.U64.toSymbol(),
+                            codegenContext.runtimeConfig,
+                        ),
+                    )
                 }
                 else -> emptySection
             }

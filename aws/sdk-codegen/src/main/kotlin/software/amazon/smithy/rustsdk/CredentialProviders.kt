@@ -9,11 +9,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.TestUtilFeature
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.supportedAuthSchemes
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.featureGateBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -23,7 +25,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class CredentialsProviderDecorator : ClientCodegenDecorator {
     override val name: String = "CredentialsProvider"
@@ -33,9 +34,7 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            it + listOf(CredentialsIdentityResolverRegistration(codegenContext))
-        }
+        baseCustomizations + listOf(CredentialsIdentityResolverRegistration(codegenContext))
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -67,23 +66,31 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
  * Add a `.credentials_provider` field and builder to the `Config` for a given service
  */
 class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
-    private val smithyRuntimeMode = codegenContext.smithyRuntimeMode
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         *preludeScope,
         "Credentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials"),
-        "ProvideCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider::ProvideCredentials"),
-        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("provider::SharedCredentialsProvider"),
+        "ProvideCredentials" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+            .resolve("provider::ProvideCredentials"),
+        "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+            .resolve("provider::SharedCredentialsProvider"),
         "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
     )
 
     override fun section(section: ServiceConfig) = writable {
         when (section) {
-            ServiceConfig.BuilderStruct -> {
-                if (smithyRuntimeMode.generateMiddleware) {
-                    rustTemplate("credentials_provider: #{Option}<#{SharedCredentialsProvider}>,", *codegenScope)
-                }
+            ServiceConfig.ConfigImpl -> {
+                rustTemplate(
+                    """
+                    /// Returns the credentials provider for this service
+                    pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
+                        self.config.load::<#{SharedCredentialsProvider}>().cloned()
+                    }
+                    """,
+                    *codegenScope,
+                )
             }
+
             ServiceConfig.BuilderImpl -> {
                 rustTemplate(
                     """
@@ -96,29 +103,16 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
                     *codegenScope,
                 )
 
-                if (smithyRuntimeMode.generateOrchestrator) {
-                    rustTemplate(
-                        """
-                        /// Sets the credentials provider for this service
-                        pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
-                            self.config.store_or_unset(credentials_provider);
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                } else {
-                    rustTemplate(
-                        """
-                        /// Sets the credentials provider for this service
-                        pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
-                            self.credentials_provider = credentials_provider;
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                rustTemplate(
+                    """
+                    /// Sets the credentials provider for this service
+                    pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
+                        self.config.store_or_unset(credentials_provider);
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
             }
 
             is ServiceConfig.DefaultForTests -> rustTemplate(
@@ -132,36 +126,37 @@ class CredentialProviderConfig(codegenContext: ClientCodegenContext) : ConfigCus
 }
 
 class CredentialsIdentityResolverRegistration(
-    codegenContext: ClientCodegenContext,
+    private val codegenContext: ClientCodegenContext,
 ) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
             is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                rustBlockTemplate("if let Some(credentials_cache) = ${section.serviceConfigName}.credentials_cache()") {
+                rustBlockTemplate("if let Some(creds_provider) = ${section.serviceConfigName}.credentials_provider()") {
+                    val codegenScope = arrayOf(
+                        "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::identity::SharedIdentityResolver"),
+                        "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                            .resolve("auth::sigv4a::SCHEME_ID"),
+                        "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
+                            .resolve("auth::sigv4::SCHEME_ID"),
+                    )
+
+                    if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                        featureGateBlock("sigv4a") {
+                            section.registerIdentityResolver(this) {
+                                rustTemplate("#{SIGV4A_SCHEME_ID}, creds_provider.clone()", *codegenScope)
+                            }
+                        }
+                    }
                     section.registerIdentityResolver(this) {
-                        rustTemplate(
-                            """
-                            #{SIGV4_SCHEME_ID},
-                            #{SharedIdentityResolver}::new(
-                                #{CredentialsIdentityResolver}::new(credentials_cache),
-                            ),
-                            """,
-                            "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                                .resolve("auth::sigv4::SCHEME_ID"),
-                            "CredentialsIdentityResolver" to AwsRuntimeType.awsRuntime(runtimeConfig)
-                                .resolve("identity::credentials::CredentialsIdentityResolver"),
-                            "SharedIdentityResolver" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                                .resolve("client::identity::SharedIdentityResolver"),
-                        )
+                        rustTemplate("#{SIGV4_SCHEME_ID}, creds_provider,", *codegenScope)
                     }
                 }
             }
+
             else -> {}
         }
     }
 }
-
-fun defaultProvider() =
-    RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("no_credentials")).resolve("NoCredentials")

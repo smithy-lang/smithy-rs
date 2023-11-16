@@ -9,14 +9,14 @@ repository = "https://github.com/awslabs/smithy-rs"
 
 [features]
 # This feature is to be used only for doc comments
-examples = ["dep:hyper-rustls", "aws-smithy-client/client-hyper", "aws-smithy-client/rustls"]
+examples = ["dep:hyper-rustls", "aws-smithy-runtime/client", "aws-smithy-runtime/connector-hyper-0-14-x", "aws-smithy-runtime/tls-rustls"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-smithy-client = { path = "../../../rust-runtime/aws-smithy-client" }
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", optional = true }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 tracing = "0.1"
 http = "0.2.6"
 # cargo does not support optional test dependencies, so to completely disable rustls
@@ -25,9 +25,10 @@ http = "0.2.6"
 hyper-rustls = { version = "0.24", optional = true, features = ["rustls-native-certs", "http2", "webpki-roots"] }
 
 [dev-dependencies]
-futures-util = { version = "0.3.16", default-features = false }
 http = "0.2.4"
+tempfile = "3"
 tracing-test = "0.2.4"
+tokio = { version = "1", features = ["rt", "macros"] }
 
 [build-dependencies]
 rustc_version = "0.4.0"

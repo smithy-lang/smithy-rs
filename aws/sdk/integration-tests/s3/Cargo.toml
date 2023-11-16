@@ -10,30 +10,34 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["test-util"]
+test-util = []
+
 [dev-dependencies]
 async-std = "1.12.0"
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
-aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util"] }
 aws-sdk-sts = { path = "../../build/aws-sdk/sdk/sts" }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util", "rt-tokio"] }
-aws-smithy-client = { path = "../../build/aws-sdk/sdk/aws-smithy-client", features = ["test-util", "wiremock"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util", "wire-mock"] }
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1"
 bytes-utils = "0.1.2"
-fastrand = "2.0.0"
+fastrand = "2.0.1"
 futures-util = { version = "0.3.16", default-features = false }
 hdrhistogram = "7.5.2"
 http = "0.2.3"
 http-body = "0.4.5"
-hyper = "0.14.26"
+hyper = { version = "0.14.26", features = ["stream"] }
+once_cell = "1.18.0"
 pretty_assertions = "1.3"
 serde_json = "1"
 smol = "1.2"
