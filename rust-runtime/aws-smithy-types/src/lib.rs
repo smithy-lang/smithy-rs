@@ -45,5 +45,3 @@ pub use document::Document;
 )]
 pub use error::ErrorMetadata as Error;
 pub use number::Number;
-
-pub mod stalled_stream_protection;

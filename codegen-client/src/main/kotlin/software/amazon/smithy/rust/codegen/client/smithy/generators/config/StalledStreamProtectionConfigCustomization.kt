@@ -7,18 +7,15 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.config
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 
 class StalledStreamProtectionDecorator : ClientCodegenDecorator {
@@ -39,24 +36,6 @@ class StalledStreamProtectionDecorator : ClientCodegenDecorator {
     ): List<OperationCustomization> {
         return baseCustomizations + StalledStreamProtectionOperationCustomization(codegenContext)
     }
-
-    override fun serviceRuntimePluginCustomizations(
-        codegenContext: ClientCodegenContext,
-        baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> {
-        return baseCustomizations + StalledStreamProtectionRuntimePluginCustomization(codegenContext)
-    }
-
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val rc = codegenContext.runtimeConfig
-
-        rustCrate.withModule(ClientRustModule.config) {
-            rustTemplate(
-                "pub use #{StalledStreamProtectionConfig};",
-                "StalledStreamProtectionConfig" to RuntimeType.smithyTypes(rc).resolve("stalled_stream_protection::StalledStreamProtectionConfig"),
-            )
-        }
-    }
 }
 
 /**
@@ -66,7 +45,7 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
     private val rc = codegenContext.runtimeConfig
     private val codegenScope = arrayOf(
         *preludeScope,
-        "StalledStreamProtectionConfig" to RuntimeType.smithyTypes(rc).resolve("stalled_stream_protection::StalledStreamProtectionConfig"),
+        "StalledStreamProtectionConfig" to configReexport(RuntimeType.smithyRuntimeApi(rc).resolve("client::stalled_stream_protection::StalledStreamProtectionConfig")),
     )
 
     override fun section(section: ServiceConfig): Writable {
@@ -89,9 +68,9 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
                     /// to configure protection for stalled streams.
                     pub fn stalled_stream_protection(
                         mut self,
-                        stalled_stream_protection_config: impl #{Into}<#{StalledStreamProtectionConfig}>
+                        stalled_stream_protection_config: #{StalledStreamProtectionConfig}
                     ) -> Self {
-                        self.set_stalled_stream_protection(#{Some}(stalled_stream_protection_config.into()));
+                        self.set_stalled_stream_protection(#{Some}(stalled_stream_protection_config));
                         self
                     }
                     """,
@@ -120,7 +99,7 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
 }
 
 class StalledStreamProtectionOperationCustomization(
-    private val codegenContext: ClientCodegenContext,
+    codegenContext: ClientCodegenContext,
 ) : OperationCustomization() {
     private val rc = codegenContext.runtimeConfig
 
@@ -142,28 +121,6 @@ class StalledStreamProtectionOperationCustomization(
                 }
             }
             else -> { }
-        }
-    }
-}
-
-class StalledStreamProtectionRuntimePluginCustomization(codegenContext: ClientCodegenContext) : ServiceRuntimePluginCustomization() {
-    private val rc = codegenContext.runtimeConfig
-
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        when (section) {
-            is ServiceRuntimePluginSection.AdditionalConfig -> {
-                rustTemplate(
-                    """
-                    ${section.newLayerName}.store_put(
-                        #{StalledStreamProtectionConfig}::new_enabled().grace_period(#{Duration}::from_secs(5)).build()
-                    );
-                    """,
-                    "StalledStreamProtectionConfig" to RuntimeType.smithyTypes(rc).resolve("stalled_stream_protection::StalledStreamProtectionConfig"),
-                    "Duration" to RuntimeType.std.resolve("time::Duration"),
-                )
-            }
-
-            else -> emptySection
         }
     }
 }

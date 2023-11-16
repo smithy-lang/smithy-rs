@@ -10,7 +10,7 @@
 //! When enabled, upload and download streams that stall (stream no data) for
 //! longer than a configured grace period will return an error.
 
-use crate::config_bag::{Storable, StoreReplace};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::time::Duration;
 
 const DEFAULT_GRACE_PERIOD: Duration = Duration::from_secs(5);

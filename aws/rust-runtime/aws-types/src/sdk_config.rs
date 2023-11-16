@@ -21,9 +21,9 @@ use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_runtime_api::shared::IntoShared;
 pub use aws_smithy_types::retry::RetryConfig;
-pub use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
 
 #[doc(hidden)]
@@ -590,7 +590,7 @@ impl Builder {
     /// ```rust
     /// use std::time::Duration;
     /// use aws_types::SdkConfig;
-    /// pub use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
+    /// pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
     ///
     /// let stalled_stream_protection_config = StalledStreamProtectionConfig::new_enabled()
     ///     .grace_period(Duration::from_secs(1))
@@ -624,7 +624,7 @@ impl Builder {
     /// ```rust
     /// use std::time::Duration;
     /// use aws_types::sdk_config::{SdkConfig, Builder};
-    /// pub use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
+    /// pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
     ///
     /// fn set_stalled_stream_protection(builder: &mut Builder) {
     ///     let stalled_stream_protection_config = StalledStreamProtectionConfig::new_enabled()

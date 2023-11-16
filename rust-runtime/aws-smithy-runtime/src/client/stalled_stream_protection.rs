@@ -12,9 +12,9 @@ use aws_smithy_runtime_api::client::interceptors::context::{
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
 use std::mem;
 
 /// Adds stalled stream protection when sending requests and/or receiving responses.

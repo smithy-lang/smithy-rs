@@ -135,6 +135,7 @@ pub mod retry;
 mod sensitive_command;
 #[cfg(feature = "sso")]
 pub mod sso;
+pub mod stalled_stream_protection;
 pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
@@ -217,9 +218,9 @@ mod loader {
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+    use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::retry::RetryConfig;
-    use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
     use aws_types::app_name::AppName;
     use aws_types::docs_for;
@@ -614,7 +615,7 @@ mod loader {
             self
         }
 
-        /// Override the [`StoppedStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// This configures stalled stream protection. When enabled, download streams
         /// that stop (stream no data) for longer than a configured grace period will return an error.
@@ -627,7 +628,7 @@ mod loader {
         /// # Examples
         /// ```no_run
         /// # async fn create_config() {
-        /// use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
+        /// use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
         /// use std::time::Duration;
         /// let config = aws_config::from_env()
         ///     .stalled_stream_protection(

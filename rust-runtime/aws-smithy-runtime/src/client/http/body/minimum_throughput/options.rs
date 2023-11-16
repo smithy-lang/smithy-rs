@@ -4,7 +4,7 @@
  */
 
 use super::Throughput;
-use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
+use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use std::time::Duration;
 
 /// A collection of options for configuring a [`MinimumThroughputBody`](super::MinimumThroughputBody).
