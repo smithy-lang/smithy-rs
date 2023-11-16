@@ -16,36 +16,59 @@ object CrateSet {
      * stable = true
      */
 
-    val AWS_SDK_RUNTIME = listOf(
-        Crate("aws-config", STABLE_VERSION_PROP_NAME),
-        Crate("aws-credential-types", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-endpoint", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-http", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-hyper", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-runtime", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-runtime-api", STABLE_VERSION_PROP_NAME),
-        Crate("aws-sig-auth", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-sigv4", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-types", STABLE_VERSION_PROP_NAME),
+    val StableCrates = setOf(
+        // AWS crates
+        "aws-config",
+        "aws-credential-types",
+        "aws-runtime",
+        "aws-runtime-api",
+        "aws-sigv4",
+        "aws-types",
+
+        // smithy crates
+        "aws-smithy-async",
+        "aws-smithy-runtime-api",
+        "aws-smithy-runtime",
+        "aws-smithy-types",
     )
 
+    val version = { name: String ->
+        when {
+            StableCrates.contains(name) -> STABLE_VERSION_PROP_NAME
+            else -> UNSTABLE_VERSION_PROP_NAME
+        }
+    }
+
+    val AWS_SDK_RUNTIME = listOf(
+        "aws-config",
+        "aws-credential-types",
+        "aws-endpoint",
+        "aws-http",
+        "aws-hyper",
+        "aws-runtime",
+        "aws-runtime-api",
+        "aws-sig-auth",
+        "aws-sigv4",
+        "aws-types",
+    ).map { Crate(it, version(it)) }
+
     val SMITHY_RUNTIME_COMMON = listOf(
-        Crate("aws-smithy-async", STABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-checksums", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-client", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-eventstream", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-http", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-http-auth", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-http-tower", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-json", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-protocol-test", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-query", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-runtime", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-runtime-api", STABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-types", STABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-types-convert", UNSTABLE_VERSION_PROP_NAME),
-        Crate("aws-smithy-xml", UNSTABLE_VERSION_PROP_NAME),
-    )
+        "aws-smithy-async",
+        "aws-smithy-checksums",
+        "aws-smithy-client",
+        "aws-smithy-eventstream",
+        "aws-smithy-http",
+        "aws-smithy-http-auth",
+        "aws-smithy-http-tower",
+        "aws-smithy-json",
+        "aws-smithy-protocol-test",
+        "aws-smithy-query",
+        "aws-smithy-runtime",
+        "aws-smithy-runtime-api",
+        "aws-smithy-types",
+        "aws-smithy-types-convert",
+        "aws-smithy-xml",
+    ).map { Crate(it, version(it)) }
 
     val AWS_SDK_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON
 

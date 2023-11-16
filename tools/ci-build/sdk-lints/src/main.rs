@@ -6,7 +6,10 @@
 use crate::changelog::ChangelogNext;
 use crate::copyright::CopyrightHeader;
 use crate::lint::{Check, Fix, Lint, LintError, Mode};
-use crate::lint_cargo_toml::{CrateAuthor, CrateLicense, DocsRs};
+use crate::lint_cargo_toml::{
+    CrateAuthor, CrateLicense, DocsRs, SdkExternalLintsExposesStableCrates,
+    StableCratesExposeStableCrates,
+};
 use crate::readmes::{ReadmesExist, ReadmesHaveFooters};
 use crate::todos::TodosHaveContext;
 use anyhow::{bail, Context, Result};
@@ -135,6 +138,8 @@ fn main() -> Result<()> {
             if todos || all {
                 errs.extend(TodosHaveContext.check_all()?);
             }
+            errs.extend(StableCratesExposeStableCrates::new()?.check_all()?);
+            errs.extend(SdkExternalLintsExposesStableCrates::new()?.check_all()?);
             ok(errs)?
         }
         Args::Fix {
