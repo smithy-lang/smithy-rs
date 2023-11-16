@@ -18,7 +18,7 @@ service QueryCompatService {
     id: "BasicQueryCompatTest"
     protocol: awsJson1_0,
     method: "POST",
-    uri: "https://foo.com",
+    uri: "/",
     body: "{\"message\":\"hello!\"}",
     bodyMedaType: "application/json",
     params: {
