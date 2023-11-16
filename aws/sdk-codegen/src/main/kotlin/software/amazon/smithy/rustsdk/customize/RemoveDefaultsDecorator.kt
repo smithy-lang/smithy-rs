@@ -23,6 +23,7 @@ class RemoveDefaultsDecorator : ClientCodegenDecorator {
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
     // Service shape id -> Shape id of each root shape to remove the default from.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3220): Remove this customization after model updates.
     private val removeDefaults = mapOf(
         "com.amazonaws.emrserverless#AwsToledoWebService".shapeId() to setOf(
             // Service expects this to have a min value > 0

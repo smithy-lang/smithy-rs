@@ -34,3 +34,9 @@ message = "Make certain types for EMR Serverless optional. Previously, they defa
 references = ["smithy-rs#3217"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "milesziemer"
+
+[[aws-sdk-rust]]
+message = "Fix optional types in S3. Many types in S3 were modeled as non-optional but this causes serialization issues."
+references = ["smithy-rs#3213"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
