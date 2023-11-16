@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -111,19 +110,6 @@ sealed class OperationSection(name: String) : Section(name) {
     ) : OperationSection("RetryClassifiers") {
         fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
             writer.rustTemplate(".with_retry_classifier(#{classifier})", "classifier" to classifier)
-        }
-    }
-
-    data class FeatureGatedComponents(
-        override val customizations: List<OperationCustomization>,
-        val operationShape: OperationShape,
-    ) : OperationSection("FeatureGatedComponents") {
-        fun registerInterceptor(featureName: String, writer: RustWriter, interceptor: Writable) {
-            Attribute.featureGate(featureName).render(writer)
-            writer.rustTemplate(
-                "rcb.push_interceptor(#{interceptor});",
-                "interceptor" to interceptor,
-            )
         }
     }
 }

@@ -619,6 +619,9 @@ mod loader {
         /// This configures stalled stream protection. When enabled, download streams
         /// that stop (stream no data) for longer than a configured grace period will return an error.
         ///
+        /// By default, streams that transmit less than one byte per-second for five seconds will
+        /// be cancelled.
+        ///
         /// _Note_: When an override is provided, the default implementation is replaced.
         ///
         /// # Examples
@@ -627,7 +630,7 @@ mod loader {
         /// use aws_smithy_types::stalled_stream_protection::StalledStreamProtectionConfig;
         /// use std::time::Duration;
         /// let config = aws_config::from_env()
-        ///     .stalled_stream_protection_config(
+        ///     .stalled_stream_protection(
         ///         StalledStreamProtectionConfig::new_enabled()
         ///             .grace_period(Duration::from_secs(1))
         ///             .build()
@@ -636,7 +639,7 @@ mod loader {
         ///     .await;
         /// # }
         /// ```
-        pub fn stalled_stream_protection_config(
+        pub fn stalled_stream_protection(
             mut self,
             stalled_stream_protection_config: StalledStreamProtectionConfig,
         ) -> Self {
@@ -790,7 +793,7 @@ mod loader {
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
-            builder.set_stalled_stream_protection_config(self.stalled_stream_protection_config);
+            builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
             builder.build()
         }
     }

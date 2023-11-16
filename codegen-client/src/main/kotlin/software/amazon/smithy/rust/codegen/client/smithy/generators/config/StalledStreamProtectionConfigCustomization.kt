@@ -61,7 +61,7 @@ class StalledStreamProtectionDecorator : ClientCodegenDecorator {
 }
 
 /**
- * Add a `stalled_stream_protection_config` field to Service config.
+ * Add a `stalled_stream_protection` field to Service config.
  */
 class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenContext) : NamedCustomization<ServiceConfig>() {
     private val rc = codegenContext.runtimeConfig
@@ -76,7 +76,7 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
                 rustTemplate(
                     """
                     /// Return a reference to the stalled stream protection configuration contained in this config, if any.
-                    pub fn stalled_stream_protection_config(&self) -> #{Option}<&#{StalledStreamProtectionConfig}> {
+                    pub fn stalled_stream_protection(&self) -> #{Option}<&#{StalledStreamProtectionConfig}> {
                         self.config.load::<#{StalledStreamProtectionConfig}>()
                     }
                     """,
@@ -88,11 +88,11 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
                     """
                     /// Set the [`StalledStreamProtectionConfig`](#{StalledStreamProtectionConfig})
                     /// to configure protection for stalled streams.
-                    pub fn stalled_stream_protection_config(
+                    pub fn stalled_stream_protection(
                         mut self,
                         stalled_stream_protection_config: impl #{Into}<#{StalledStreamProtectionConfig}>
                     ) -> Self {
-                        self.set_stalled_stream_protection_config(#{Some}(stalled_stream_protection_config.into()));
+                        self.set_stalled_stream_protection(#{Some}(stalled_stream_protection_config.into()));
                         self
                     }
                     """,
@@ -103,7 +103,7 @@ class StalledStreamProtectionConfigCustomization(codegenContext: ClientCodegenCo
                     """
                     /// Set the [`StalledStreamProtectionConfig`](#{StalledStreamProtectionConfig})
                     /// to configure protection for stalled streams.
-                    pub fn set_stalled_stream_protection_config(
+                    pub fn set_stalled_stream_protection(
                         &mut self,
                         stalled_stream_protection_config: #{Option}<#{StalledStreamProtectionConfig}>
                     ) -> &mut Self {

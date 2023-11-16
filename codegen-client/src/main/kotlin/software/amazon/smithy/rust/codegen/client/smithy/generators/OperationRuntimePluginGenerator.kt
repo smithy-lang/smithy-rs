@@ -74,8 +74,6 @@ class OperationRuntimePluginGenerator(
                             #{interceptors}
                             #{retry_classifiers};
 
-                    #{feature_gated_components}
-
                     #{Cow}::Owned(rcb)
                 }
             }
@@ -110,12 +108,6 @@ class OperationRuntimePluginGenerator(
                 writeCustomizations(
                     customizations,
                     OperationSection.RetryClassifiers(customizations, operationShape),
-                )
-            },
-            "feature_gated_components" to writable {
-                writeCustomizations(
-                    customizations,
-                    OperationSection.FeatureGatedComponents(customizations, operationShape),
                 )
             },
         )

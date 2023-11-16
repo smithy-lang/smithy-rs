@@ -596,14 +596,14 @@ impl Builder {
     ///     .grace_period(Duration::from_secs(1))
     ///     .build();
     /// let config = SdkConfig::builder()
-    ///     .stalled_stream_protection_config(stalled_stream_protection_config)
+    ///     .stalled_stream_protection(stalled_stream_protection_config)
     ///     .build();
     /// ```
-    pub fn stalled_stream_protection_config(
+    pub fn stalled_stream_protection(
         mut self,
         stalled_stream_protection_config: StalledStreamProtectionConfig,
     ) -> Self {
-        self.set_stalled_stream_protection_config(Some(stalled_stream_protection_config));
+        self.set_stalled_stream_protection(Some(stalled_stream_protection_config));
         self
     }
 
@@ -611,6 +611,9 @@ impl Builder {
     ///
     /// This configures stalled stream protection. When enabled, download streams
     /// that stall (stream no data) for longer than a configured grace period will return an error.
+    ///
+    /// By default, streams that transmit less than one byte per-second for five seconds will
+    /// be cancelled.
     ///
     /// _Note:_ Stalled stream protection requires both a sleep implementation and a time source
     /// in order to work. When enabling stalled stream protection, make sure to set
@@ -627,14 +630,14 @@ impl Builder {
     ///     let stalled_stream_protection_config = StalledStreamProtectionConfig::new_enabled()
     ///         .grace_period(Duration::from_secs(1))
     ///         .build();
-    ///     builder.set_stalled_stream_protection_config(Some(stalled_stream_protection_config));
+    ///     builder.set_stalled_stream_protection(Some(stalled_stream_protection_config));
     /// }
     ///
     /// let mut builder = SdkConfig::builder();
     /// set_stalled_stream_protection(&mut builder);
     /// let config = builder.build();
     /// ```
-    pub fn set_stalled_stream_protection_config(
+    pub fn set_stalled_stream_protection(
         &mut self,
         stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
     ) -> &mut Self {
@@ -706,7 +709,7 @@ impl SdkConfig {
     }
 
     /// Configured stalled stream protection
-    pub fn stalled_stream_protection_config(&self) -> Option<StalledStreamProtectionConfig> {
+    pub fn stalled_stream_protection(&self) -> Option<StalledStreamProtectionConfig> {
         self.stalled_stream_protection_config.clone()
     }
 

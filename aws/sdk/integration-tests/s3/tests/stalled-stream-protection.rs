@@ -32,7 +32,7 @@ async fn test_stalled_stream_protection_defaults_for_upload() {
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
-        // .stalled_stream_protection_config(StalledStreamProtectionConfig::new_enabled().build())
+        // .stalled_stream_protection(StalledStreamProtectionConfig::new_enabled().build())
         .build();
     let client = Client::from_conf(conf);
 
@@ -133,7 +133,7 @@ async fn test_explicitly_configured_stalled_stream_protection_for_downloads() {
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
-        .stalled_stream_protection_config(
+        .stalled_stream_protection(
             StalledStreamProtectionConfig::new_enabled()
                 // Fail stalled streams immediately
                 .grace_period(Duration::from_secs(0))
@@ -173,7 +173,7 @@ async fn test_stalled_stream_protection_for_downloads_can_be_disabled() {
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .endpoint_url(format!("http://{server_addr}"))
-        .stalled_stream_protection_config(StalledStreamProtectionConfig::new_disabled())
+        .stalled_stream_protection(StalledStreamProtectionConfig::new_disabled())
         .build();
     let client = Client::from_conf(conf);
 
