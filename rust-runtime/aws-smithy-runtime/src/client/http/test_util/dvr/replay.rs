@@ -76,8 +76,7 @@ impl ReplayingClient {
 
     /// Validate all headers and bodies
     pub async fn full_validate(self, media_type: &str) -> Result<(), Box<dyn Error>> {
-        self.validate_body_and_headers(None, MediaType::from(media_type))
-            .await
+        self.validate_body_and_headers(None, media_type).await
     }
 
     /// Validate actual requests against expected requests
