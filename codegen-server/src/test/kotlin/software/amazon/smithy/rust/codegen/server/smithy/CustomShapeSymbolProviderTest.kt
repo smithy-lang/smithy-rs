@@ -41,9 +41,11 @@ class CustomShapeSymbolProviderTest {
         .build()
     private val model = ModelTransformer.create()
         .mapShapes(baseModel) {
-            if (it is MemberShape)
+            if (it is MemberShape) {
                 it.toBuilder().addTrait(SyntheticCustomShapeTrait(ShapeId.from("some#id"), symbol)).build()
-            else it
+            } else {
+                it
+            }
         }
     private val symbolProvider = serverTestSymbolProvider(baseModel, serviceShape)
         .let { CustomShapeSymbolProvider(it) }
