@@ -328,6 +328,23 @@ class ProtocolTestGeneratorTest {
     }
 
     @Test
+    fun `test invalid path`() {
+        val err = assertThrows<CommandError> {
+            testService(
+                """
+                .uri("/incorrect-path?required&Hi=Hello%20there")
+                .header("X-Greeting", "Hi")
+                .method("POST")
+                """,
+            )
+        }
+
+        // Verify the test actually ran
+        err.message shouldContain "say_hello_request ... FAILED"
+        err.message shouldContain "path was incorrect"
+    }
+
+    @Test
     fun `invalid header`() {
         val err = assertThrows<CommandError> {
             testService(
