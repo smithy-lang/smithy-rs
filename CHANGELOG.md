@@ -1,4 +1,51 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 15th, 2023
+===================
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#3138](https://github.com/smithy-lang/smithy-rs/issues/3138), [smithy-rs#3148](https://github.com/smithy-lang/smithy-rs/issues/3148)) [Upgrade guidance for HTTP Request/Response changes](https://github.com/awslabs/smithy-rs/discussions/3154). HTTP request types moved, and a new HTTP response type was added.
+- :warning: (all, [smithy-rs#3139](https://github.com/smithy-lang/smithy-rs/issues/3139)) `Message`, `Header`, `HeaderValue`, and `StrBytes` have been moved to `aws-smithy-types` from `aws-smithy-eventstream`. `Message::read_from` and `Message::write_to` remain in `aws-smithy-eventstream` but they are converted to free functions with the names `read_message_from` and `write_message_to` respectively.
+- :warning: (client, [smithy-rs#3100](https://github.com/smithy-lang/smithy-rs/issues/3100), [smithy-rs#3114](https://github.com/smithy-lang/smithy-rs/issues/3114)) An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).
+- :warning: (all, [smithy-rs#3151](https://github.com/smithy-lang/smithy-rs/issues/3151)) Clients now require a `BehaviorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.
+
+    ```rust
+    async fn example() {
+        // when creating a client
+        let client = my_service::Client::from_conf(my_service::Config::builder().behavior_version(..).<other params>.build());
+    }
+    ```
+- :warning: (client, [smithy-rs#3189](https://github.com/smithy-lang/smithy-rs/issues/3189)) Remove deprecated error kind type aliases.
+- :warning: (client, [smithy-rs#3191](https://github.com/smithy-lang/smithy-rs/issues/3191)) Unhandled errors have been made opaque to ensure code is written in a future-proof manner. Where previously, you
+    might have:
+    ```rust
+    match service_error.err() {
+        GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+        GetStorageError::Unhandled(unhandled) if unhandled.code() == Some("SomeUnmodeledErrorCode") {
+            // unhandled error handling
+        }
+        _ => { /* ... */ }
+    }
+    ```
+    It should now look as follows:
+    ```rust
+    match service_error.err() {
+        GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }
+        err if err.code() == Some("SomeUnmodeledErrorCode") {
+            // unhandled error handling
+        }
+        _ => { /* ... */ }
+    }
+    ```
+    The `Unhandled` variant should never be referenced directly.
+
+**New this release:**
+- :tada: (client, [aws-sdk-rust#780](https://github.com/awslabs/aws-sdk-rust/issues/780), [smithy-rs#3189](https://github.com/smithy-lang/smithy-rs/issues/3189)) Add `ProvideErrorMetadata` impl for service `Error` type.
+- :bug: (client, [smithy-rs#3182](https://github.com/smithy-lang/smithy-rs/issues/3182), @codypenta) Fix rendering of @error structs when fields have default values
+
+**Contributors**
+Thank you for your contributions! ❤
+- @codypenta ([smithy-rs#3182](https://github.com/smithy-lang/smithy-rs/issues/3182))
+
+
 November 1st, 2023
 ==================
 **New this release:**
