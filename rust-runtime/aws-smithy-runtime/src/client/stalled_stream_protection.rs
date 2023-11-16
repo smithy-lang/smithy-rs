@@ -68,7 +68,7 @@ impl Intercept for StalledStreamProtectionInterceptor {
                 if cfg.is_enabled() {
                     let (async_sleep, time_source) =
                         get_runtime_component_deps(runtime_components)?;
-                    tracing::info!("adding stalled stream protection to request body");
+                    tracing::trace!("adding stalled stream protection to request body");
                     add_stalled_stream_protection_to_body(
                         context.request_mut().body_mut(),
                         cfg,

@@ -614,7 +614,7 @@ mod loader {
             self
         }
 
-        /// Override [`the StoppedStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the [`StoppedStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// This configures stalled stream protection. When enabled, download streams
         /// that stop (stream no data) for longer than a configured grace period will return an error.
