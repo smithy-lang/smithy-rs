@@ -103,12 +103,13 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             else -> rawTemplate(text + "\n", *args)
         }
 
-    private fun docText(
+    internal fun docText(
         includeHeader: Boolean,
         includeLicense: Boolean,
         asComments: Boolean,
     ): Writable = writable {
         val moduleName = codegenContext.settings.moduleName
+        val stableVersion = !codegenContext.settings.moduleVersion.startsWith("0.")
         val description = normalizeDescription(
             codegenContext.moduleName,
             codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
@@ -119,14 +120,18 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
         if (includeHeader) {
             template(asComments, escape("# $moduleName\n"))
         }
+
+        // TODO(PostGA): Remove warning banner conditionals.
         // NOTE: when you change this, you must also change SDK_README.md.hb
-        template(
-            asComments,
-            """
-            **Please Note: The SDK is currently released as a developer preview, without support or assistance for use
-            on production workloads. Any use in production is at your own risk.**${"\n"}
-            """.trimIndent(),
-        )
+        if (!stableVersion) {
+            template(
+                asComments,
+                """
+                **Please Note: The SDK is currently released as a developer preview, without support or assistance for use
+                on production workloads. Any use in production is at your own risk.**${"\n"}
+                """.trimIndent(),
+            )
+        }
 
         if (description.isNotBlank()) {
             template(asComments, escape("$description\n"))
