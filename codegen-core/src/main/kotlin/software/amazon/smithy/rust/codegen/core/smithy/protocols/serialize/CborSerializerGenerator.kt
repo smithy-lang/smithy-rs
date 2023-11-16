@@ -200,6 +200,11 @@ class CborSerializerGenerator(
             )
         }
 
+    override fun unsetUnion(union: UnionShape): RuntimeType {
+        // TODO
+        TODO("Not yet implemented")
+    }
+
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
         // Don't generate an operation JSON serializer if there is no JSON body.
         val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
