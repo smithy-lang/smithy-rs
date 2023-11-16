@@ -4,7 +4,6 @@
  */
 
 use aws_sdk_s3::{Client, Config};
-use aws_smithy_protocol_test::MediaType;
 use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 

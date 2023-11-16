@@ -247,7 +247,7 @@ impl StableCratesExposeStableCrates {
     pub(crate) fn new() -> Result<Self> {
         let mut stable_crates = all_cargo_tomls()?
             .flat_map(crate_is_stable)
-            .map(|c| c.replace("-", "_"))
+            .map(|c| c.replace('-', "_"))
             .collect::<HashSet<_>>();
         for crte in [
             "tokio",
@@ -257,7 +257,7 @@ impl StableCratesExposeStableCrates {
             "http-body",
             "aws-smithy-eventstream",
         ] {
-            stable_crates.insert(crte.replace("-", "_"));
+            stable_crates.insert(crte.replace('-', "_"));
         }
 
         Ok(Self { stable_crates })
