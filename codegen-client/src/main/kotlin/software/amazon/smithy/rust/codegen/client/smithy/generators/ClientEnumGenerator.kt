@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -75,12 +76,39 @@ data class InfallibleEnumType(
         )
     }
 
+    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {
+        // `try_parse` isn't needed for unnamed enums
+        if (context.enumTrait.hasNames()) {
+            rustTemplate(
+                """
+                impl ${context.enumName} {
+                    /// Parses the enum value while disallowing unknown variants.
+                    ///
+                    /// Unknown variants will result in an error.
+                    pub fn try_parse(value: &str) -> #{Result}<Self, #{UnknownVariantError}> {
+                        match Self::from(value) {
+                            ##[allow(deprecated)]
+                            Self::Unknown(_) => #{Err}(#{UnknownVariantError}::new(value)),
+                            known => Ok(known),
+                        }
+                    }
+                }
+                """,
+                *preludeScope,
+                "UnknownVariantError" to unknownVariantError(),
+            )
+        }
+    }
+
     override fun additionalDocs(context: EnumGeneratorContext): Writable = writable {
         renderForwardCompatibilityNote(context.enumName, context.sortedMembers, UnknownVariant, UnknownVariantValue)
     }
 
     override fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {
         docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
+        rust(
+            """##[deprecated(note = "Don't directly match on `$UnknownVariant`. See the docs on this enum for the correct way to handle unknown variants.")]""",
+        )
         rust("$UnknownVariant(#T)", unknownVariantValue(context))
     }
 
@@ -93,10 +121,9 @@ data class InfallibleEnumType(
             docs(
                 """
                 Opaque struct used as inner data for the `Unknown` variant defined in enums in
-                the crate
+                the crate.
 
-                While this is not intended to be used directly, it is marked as `pub` because it is
-                part of the enums that are public interface.
+                This is not intended to be used directly.
                 """.trimIndent(),
             )
             context.enumMeta.render(this)
@@ -174,5 +201,35 @@ class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringSha
         codegenContext.model,
         codegenContext.symbolProvider,
         shape,
-        InfallibleEnumType(ClientRustModule.primitives),
+        InfallibleEnumType(
+            RustModule.new(
+                "sealed_enum_unknown",
+                visibility = Visibility.PUBCRATE,
+                parent = ClientRustModule.primitives,
+            ),
+        ),
     )
+
+private fun unknownVariantError(): RuntimeType = RuntimeType.forInlineFun("UnknownVariantError", ClientRustModule.Error) {
+    rustTemplate(
+        """
+        /// The given enum value failed to parse since it is not a known value.
+        ##[derive(Debug)]
+        pub struct UnknownVariantError {
+            value: #{String},
+        }
+        impl UnknownVariantError {
+            pub(crate) fn new(value: impl #{Into}<#{String}>) -> Self {
+                Self { value: value.into() }
+            }
+        }
+        impl ::std::fmt::Display for UnknownVariantError {
+            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> #{Result}<(), ::std::fmt::Error> {
+                write!(f, "unknown enum variant: '{}'", self.value)
+            }
+        }
+        impl ::std::error::Error for UnknownVariantError {}
+        """,
+        *preludeScope,
+    )
+}

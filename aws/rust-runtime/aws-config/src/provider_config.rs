@@ -196,7 +196,8 @@ impl ProviderConfig {
             .region(self.region())
             .time_source(self.time_source())
             .use_fips(self.use_fips().unwrap_or_default())
-            .use_dual_stack(self.use_dual_stack().unwrap_or_default());
+            .use_dual_stack(self.use_dual_stack().unwrap_or_default())
+            .behavior_version(crate::BehaviorVersion::latest());
         builder.set_http_client(self.http_client.clone());
         builder.set_sleep_impl(self.sleep_impl.clone());
         builder.build()
@@ -348,7 +349,7 @@ impl ProviderConfig {
 
     /// Deprecated. Don't use.
     #[deprecated(
-        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
+        note = "HTTP connector configuration changed. See https://github.com/smithy-lang/smithy-rs/discussions/3022 for upgrade guidance."
     )]
     pub fn with_tcp_connector(self, http_client: impl HttpClient + 'static) -> Self {
         self.with_http_client(http_client)

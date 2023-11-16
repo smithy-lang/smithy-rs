@@ -102,7 +102,7 @@ class ServerBuilderConstraintViolations(
      */
     fun forMember(member: MemberShape): ConstraintViolation? {
         check(members.contains(member))
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
         return if (symbolProvider.toSymbol(member).isOptional() || member.hasNonNullDefault()) {
             null
         } else {
@@ -110,7 +110,7 @@ class ServerBuilderConstraintViolations(
         }
     }
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) This impl does not take into account the `sensitive` trait.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) This impl does not take into account the `sensitive` trait.
     //   When constraint violation error messages are adjusted to match protocol tests, we should ensure it's honored.
     private fun renderImplDisplayConstraintViolation(writer: RustWriter) {
         writer.rustBlock("impl #T for ConstraintViolation", RuntimeType.Display) {
@@ -210,7 +210,7 @@ data class ConstraintViolation(val forMember: MemberShape, val kind: ConstraintV
         val structureSymbol = symbolProvider.toSymbol(model.expectShape(forMember.container))
         return when (kind) {
             ConstraintViolationKind.MISSING_MEMBER -> "`$memberName` was not provided but it is required when building `${structureSymbol.name}`"
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Nest errors. Adjust message following protocol tests.
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Nest errors. Adjust message following protocol tests.
             ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "constraint violation occurred building member `$memberName` when building `${structureSymbol.name}`"
         }
     }

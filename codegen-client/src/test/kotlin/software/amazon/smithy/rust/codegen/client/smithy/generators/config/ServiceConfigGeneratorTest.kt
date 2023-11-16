@@ -10,16 +10,15 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.withEnableUserConfigurableRuntimePlugins
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
-import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
+import software.amazon.smithy.rust.codegen.core.testutil.BasicTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
@@ -125,45 +124,50 @@ internal class ServiceConfigGeneratorTest {
             }
         }
 
-        val model = "namespace empty".asSmithyModel()
-        val codegenContext = testClientCodegenContext(model)
-            .withEnableUserConfigurableRuntimePlugins(true)
-        val sut = ServiceConfigGenerator(codegenContext, listOf(ServiceCustomizer(codegenContext)))
-        val symbolProvider = codegenContext.symbolProvider
-        val project = TestWorkspace.testProject(symbolProvider)
-        project.withModule(ClientRustModule.config) {
-            sut.render(this)
-            unitTest(
-                "set_config_fields",
-                """
-                let builder = Config::builder().config_field(99);
-                let config = builder.build();
-                assert_eq!(config.config_field(), 99);
-                """,
-            )
-
-            unitTest(
-                "set_runtime_plugin",
-                """
-                use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-                use aws_smithy_types::config_bag::FrozenLayer;
-
-                #[derive(Debug)]
-                struct TestRuntimePlugin;
-
-                impl RuntimePlugin for TestRuntimePlugin {
-                    fn config(&self) -> Option<FrozenLayer> {
-                        todo!("ExampleRuntimePlugin.config")
-                    }
-                }
-
-                let config = Config::builder()
-                    .runtime_plugin(TestRuntimePlugin)
-                    .build();
-                assert_eq!(config.runtime_plugins.len(), 1);
-                """,
-            )
+        val serviceDecorator = object : ClientCodegenDecorator {
+            override val name: String = "Add service plugin"
+            override val order: Byte = 0
+            override fun configCustomizations(
+                codegenContext: ClientCodegenContext,
+                baseCustomizations: List<ConfigCustomization>,
+            ): List<ConfigCustomization> {
+                return baseCustomizations + ServiceCustomizer(codegenContext)
+            }
         }
-        project.compileAndTest()
+
+        clientIntegrationTest(BasicTestModels.AwsJson10TestModel, additionalDecorators = listOf(serviceDecorator)) { ctx, rustCrate ->
+            rustCrate.withModule(ClientRustModule.config) {
+                unitTest(
+                    "set_config_fields",
+                    """
+                    let builder = Config::builder().config_field(99);
+                    let config = builder.build();
+                    assert_eq!(config.config_field(), 99);
+                    """,
+                )
+
+                unitTest(
+                    "set_runtime_plugin",
+                    """
+                    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+                    use aws_smithy_types::config_bag::FrozenLayer;
+
+                    #[derive(Debug)]
+                    struct TestRuntimePlugin;
+
+                    impl RuntimePlugin for TestRuntimePlugin {
+                        fn config(&self) -> Option<FrozenLayer> {
+                            todo!("ExampleRuntimePlugin.config")
+                        }
+                    }
+
+                    let config = Config::builder()
+                        .runtime_plugin(TestRuntimePlugin)
+                        .build();
+                    assert_eq!(config.runtime_plugins.len(), 1);
+                    """,
+                )
+            }
+        }
     }
 }

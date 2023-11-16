@@ -218,7 +218,7 @@ class PythonApplicationGenerator(
                 }
                 rustTemplate(
                     """
-                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/awslabs/smithy-rs/issues"));
+                    let mut service = #{tower}::util::BoxCloneService::new(builder.build().expect("one or more operations do not have a registered handler; this is a bug in the Python code generator, please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"));
 
                     {
                         use #{tower}::Layer;

@@ -18,15 +18,13 @@ class ClientRuntimeTypesReExportGenerator(
 ) {
     fun render() {
         val rc = codegenContext.runtimeConfig
-        val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(rc)
 
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
                 """
                 pub use #{ConfigBag};
-                pub use #{Intercept};
                 pub use #{RuntimeComponents};
-                pub use #{SharedInterceptor};
                 pub use #{IdentityCache};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
@@ -35,19 +33,6 @@ class ClientRuntimeTypesReExportGenerator(
                 "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
                 "IdentityCache" to RuntimeType.smithyRuntime(rc).resolve("client::identity::IdentityCache"),
             )
-
-            if (codegenContext.enableUserConfigurableRuntimePlugins) {
-                rustTemplate(
-                    """
-                    pub use #{runtime_plugin}::{RuntimePlugin, SharedRuntimePlugin};
-                    pub use #{config_bag}::FrozenLayer;
-                    pub use #{RuntimeComponentsBuilder};
-                    """,
-                    "runtime_plugin" to RuntimeType.smithyRuntimeApi(rc).resolve("client::runtime_plugin"),
-                    "config_bag" to RuntimeType.smithyTypes(rc).resolve("config_bag"),
-                    "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
-                )
-            }
         }
         rustCrate.withModule(ClientRustModule.Config.endpoint) {
             rustTemplate(

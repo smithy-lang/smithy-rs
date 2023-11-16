@@ -10,7 +10,7 @@ allowed_external_types = [
     # only allowed in from impl for presigned request
     "http::request::Request",
 
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
+    # TODO(https://github.com/smithy-lang/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
     "aws_smithy_eventstream::*",
 
     # Consider moving making this crate 1.0

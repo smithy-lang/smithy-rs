@@ -36,7 +36,7 @@ private fun RuntimeConfig.awsInlineableHttpResponseChecksum() = RuntimeType.forI
         CargoDependency.Tracing,
         CargoDependency.smithyChecksums(this),
         CargoDependency.smithyHttp(this),
-        CargoDependency.smithyRuntimeApi(this),
+        CargoDependency.smithyRuntimeApiClient(this),
         CargoDependency.smithyTypes(this),
     ),
 )
@@ -89,7 +89,7 @@ class HttpResponseChecksumCustomization(
                     // CRC32, CRC32C, SHA256, SHA1 -> "crc32", "crc32c", "sha256", "sha1"
                     val responseAlgorithms = checksumTrait.responseAlgorithms
                         .map { algorithm -> algorithm.lowercase() }.joinToString(", ") { algorithm -> "\"$algorithm\"" }
-                    val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                    val runtimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
                     rustTemplate(
                         """
                         #{ResponseChecksumInterceptor}::new(

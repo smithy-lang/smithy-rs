@@ -12,8 +12,8 @@
 | double | `f64` |
 | [bigInteger](#big-numbers) | `BigInteger` (Not implemented yet) |
 | [bigDecimal](#big-numbers) | `BigDecimal` (Not implemented yet) |
-| [timestamp](#timestamps)  | [`DateTime`](https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/date_time/mod.rs) |
-| [document](#documents) | [`Document`](https://github.com/awslabs/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52) |
+| [timestamp](#timestamps)  | [`DateTime`](https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-types/src/date_time/mod.rs) |
+| [document](#documents) | [`Document`](https://github.com/smithy-lang/smithy-rs/blob/v0.14/rust-runtime/aws-smithy-types/src/lib.rs#L38-L52) |
 
 ### Big Numbers
 Rust currently has no standard library or universally accepted large-number crate. Until one is stabilized, a string representation is a reasonable compromise:
@@ -25,7 +25,7 @@ pub struct BigDecimal(String);
 
 This will enable us to add helpers over time as requested. Users will also be able to define their own conversions into their preferred large-number libraries.
 
-As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked [here](https://github.com/awslabs/smithy-rs/issues/312).
+As of 5/23/2021 BigInteger / BigDecimal are not included in AWS models. Implementation is tracked [here](https://github.com/smithy-lang/smithy-rs/issues/312).
 ### Timestamps
 [chrono](https://github.com/chronotope/chrono) is the current de facto library for datetime in Rust, but it is pre-1.0. DateTimes are represented by an SDK defined structure modeled on `std::time::Duration` from the Rust standard library.
 

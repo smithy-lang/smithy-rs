@@ -46,7 +46,7 @@ class IdempotencyTokenGenerator(
                 InlineDependency.forRustFile(
                     RustModule.pubCrate("client_idempotency_token", parent = ClientRustModule.root),
                     "/inlineable/src/client_idempotency_token.rs",
-                    CargoDependency.smithyRuntimeApi(runtimeConfig),
+                    CargoDependency.smithyRuntimeApiClient(runtimeConfig),
                     CargoDependency.smithyTypes(runtimeConfig),
                     InlineDependency.idempotencyToken(runtimeConfig),
                 ).toType().resolve("IdempotencyTokenRuntimePlugin"),

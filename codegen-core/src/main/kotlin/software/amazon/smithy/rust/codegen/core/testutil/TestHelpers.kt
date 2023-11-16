@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.smithy.BaseSymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
@@ -138,7 +139,11 @@ fun testRustSettings(
 )
 
 private const val SmithyVersion = "1.0"
-fun String.asSmithyModel(sourceLocation: String? = null, smithyVersion: String = SmithyVersion, disableValidation: Boolean = false): Model {
+fun String.asSmithyModel(
+    sourceLocation: String? = null,
+    smithyVersion: String = SmithyVersion,
+    disableValidation: Boolean = false,
+): Model {
     val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
     val assembler = Model.assembler().discoverModels().addUnparsedModel(sourceLocation ?: "test.smithy", processed)
     if (disableValidation) {
@@ -206,5 +211,12 @@ fun StructureShape.renderWithModelBuilder(
     }
     rustCrate.withModule(symbolProvider.moduleForBuilder(struct)) {
         BuilderGenerator(model, symbolProvider, struct, emptyList()).render(this)
+    }
+}
+
+fun RustCrate.unitTest(name: String? = null, test: Writable) {
+    lib {
+        val testName = name ?: safeName("test")
+        unitTest(testName, block = test)
     }
 }

@@ -38,7 +38,7 @@ object AwsRuntimeType {
                 "presigning_interceptors",
                 visibility = Visibility.PUBCRATE,
                 AwsCargoDependency.awsSigv4(runtimeConfig),
-                CargoDependency.smithyRuntimeApi(runtimeConfig),
+                CargoDependency.smithyRuntimeApiClient(runtimeConfig),
             ),
         )
 

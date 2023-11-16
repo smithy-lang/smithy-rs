@@ -449,8 +449,23 @@ fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
 
 /** Write a `#[cfg(feature = "...")]` block for the given feature */
 fun RustWriter.featureGateBlock(feature: String, block: Writable) {
-    rustBlock("##[cfg(feature = ${feature.dq()})]") {
-        block()
+    featureGatedBlock(feature, block)(this)
+}
+
+/** Write a `#[cfg(feature = "...")]` block for the given feature */
+fun featureGatedBlock(feature: String, block: Writable): Writable {
+    return writable {
+        rustBlock("##[cfg(feature = ${feature.dq()})]") {
+            block()
+        }
+    }
+}
+
+fun featureGatedBlock(feature: Feature, block: Writable): Writable {
+    return writable {
+        rustBlock("##[cfg(feature = ${feature.name.dq()})]") {
+            block()
+        }
     }
 }
 

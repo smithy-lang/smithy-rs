@@ -5,12 +5,11 @@ authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@a
 description = "HTTP specific AWS SDK behaviors."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
-aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x"] }
 aws-types = { path = "../aws-types" }
 bytes = "1.1"
 http = "0.2.3"

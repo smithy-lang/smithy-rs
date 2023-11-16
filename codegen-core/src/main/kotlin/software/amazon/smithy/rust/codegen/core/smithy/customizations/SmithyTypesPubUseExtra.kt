@@ -29,7 +29,7 @@ private fun hasStreamingOperations(model: Model): Boolean {
     }
 }
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/2111): Fix this logic to consider collection/map shapes
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/2111): Fix this logic to consider collection/map shapes
 private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) -> Boolean): Boolean =
     model.structureShapes.any { structure ->
         structure.members().any { member -> predicate(model.expectShape(member.target)) }

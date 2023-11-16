@@ -1,40 +1,40 @@
-*                                                   @awslabs/rust-sdk-owners
+*                                                   @smithy-lang/aws-sdk-rust
 
 # Server
-/codegen-server-test/                               @awslabs/smithy-rs-server
-/codegen-server/                                    @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-http-server/               @awslabs/smithy-rs-server
+/codegen-server-test/                               @smithy-lang/smithy-rs-server
+/codegen-server/                                    @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-http-server/               @smithy-lang/smithy-rs-server
 
 # Python Server
-/codegen-server-test/python/                        @awslabs/smithy-rs-python-server @awslabs/smithy-rs-server
-/codegen-server/python/                             @awslabs/smithy-rs-python-server @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-http-server-python/        @awslabs/smithy-rs-python-server @awslabs/smithy-rs-server
+/codegen-server-test/python/                        @smithy-lang/smithy-rs-server
+/codegen-server/python/                             @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-http-server-python/        @smithy-lang/smithy-rs-server
 
 # Typescript Server
-/codegen-server-test/typescript/                    @awslabs/smithy-rs-typescript-server @awslabs/smithy-rs-server
-/codegen-server/typescript/                         @awslabs/smithy-rs-typescript-server @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-http-server-typescript/    @awslabs/smithy-rs-typescript-server @awslabs/smithy-rs-server
+/codegen-server-test/typescript/                    @smithy-lang/smithy-rs-server
+/codegen-server/typescript/                         @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-http-server-typescript/    @smithy-lang/smithy-rs-server
 
 # Shared ownership
-/.github/                                           @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/CHANGELOG.md                                       @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/CHANGELOG.next.toml                                @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/README.md                                          @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/build.gradle.kts                                   @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/buildSrc/                                          @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/codegen-core/                                      @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/design/                                            @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/examples/                                          @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/gradle.properties                                  @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/tools/                                             @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-async/                     @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-eventstream/               @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-http/                      @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-json/                      @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-protocol-test/             @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-types/                     @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-types-convert/             @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/aws-smithy-xml/                       @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/inlineable/                           @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/build.gradle.kts                      @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
-/rust-runtime/Cargo.toml                            @awslabs/rust-sdk-owners @awslabs/smithy-rs-server
+/.github/                                           @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/CHANGELOG.md                                       @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/CHANGELOG.next.toml                                @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/README.md                                          @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/build.gradle.kts                                   @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/buildSrc/                                          @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/codegen-core/                                      @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/design/                                            @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/examples/                                          @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/gradle.properties                                  @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/tools/                                             @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-async/                     @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-eventstream/               @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-http/                      @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-json/                      @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-protocol-test/             @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-types/                     @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-types-convert/             @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-xml/                       @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/inlineable/                           @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/build.gradle.kts                      @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server
+/rust-runtime/Cargo.toml                            @smithy-lang/aws-sdk-rust @smithy-lang/smithy-rs-server

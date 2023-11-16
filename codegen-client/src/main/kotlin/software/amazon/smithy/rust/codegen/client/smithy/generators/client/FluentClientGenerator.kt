@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -31,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.featureGatedBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
@@ -57,10 +59,12 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
+private val BehaviorVersionLatest = Feature("behavior-version-latest", false, listOf())
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
+
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
             RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
@@ -94,6 +98,7 @@ class FluentClientGenerator(
     }
 
     private fun renderFluentClient(crate: RustCrate) {
+        crate.mergeFeature(BehaviorVersionLatest)
         crate.withModule(ClientRustModule.client) {
             rustTemplate(
                 """
@@ -119,8 +124,10 @@ class FluentClientGenerator(
                     ///
                     /// - Retries or timeouts are enabled without a `sleep_impl` configured.
                     /// - Identity caching is enabled without a `sleep_impl` and `time_source` configured.
+                    /// - No `behavior_version` is provided.
                     ///
                     /// The panic message for each of these will have instructions on how to resolve them.
+                    ##[track_caller]
                     pub fn from_conf(conf: crate::Config) -> Self {
                         let handle = Handle {
                             conf: conf.clone(),
@@ -259,7 +266,7 @@ class FluentClientGenerator(
                 """,
                 *preludeScope,
                 "RawResponseType" to
-                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
@@ -344,7 +351,7 @@ class FluentClientGenerator(
                 *preludeScope,
                 "CustomizableOperation" to ClientRustModule.Client.customize.toType()
                     .resolve("CustomizableOperation"),
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
@@ -449,8 +456,11 @@ class FluentClientGenerator(
 
 private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
-        val api = RuntimeType.smithyRuntimeApi(rc)
+        val api = RuntimeType.smithyRuntimeApiClient(rc)
         val rt = RuntimeType.smithyRuntime(rc)
+        val behaviorVersionError = "Invalid client configuration: A behavior major version must be set when sending a " +
+            "request or constructing a client. You must set it during client construction or by enabling the " +
+            "`${BehaviorVersionLatest.name}` cargo feature."
         rustTemplate(
             """
             pub(crate) fn base_client_runtime_plugins(
@@ -458,12 +468,16 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
             ) -> #{RuntimePlugins} {
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+                ##[allow(unused_mut)]
+                let mut behavior_version = config.behavior_version.clone();
+                #{update_bmv}
 
                 let mut plugins = #{RuntimePlugins}::new()
                     // defaults
                     .with_client_plugins(#{default_plugins}(
                         #{DefaultPluginParams}::new()
                             .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
+                            .with_behavior_version(behavior_version.expect(${behaviorVersionError.dq()}))
                     ))
                     // user config
                     .with_client_plugin(
@@ -474,6 +488,7 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
                     // codegen config
                     .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
                     .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+
                 for plugin in configured_plugins {
                     plugins = plugins.with_client_plugin(plugin);
                 }
@@ -486,6 +501,17 @@ private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): Ru
             "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
             "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
             "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "update_bmv" to featureGatedBlock(BehaviorVersionLatest) {
+                rustTemplate(
+                    """
+                    if behavior_version.is_none() {
+                        behavior_version = Some(#{BehaviorVersion}::latest());
+                    }
+
+                    """,
+                    "BehaviorVersion" to api.resolve("client::behavior_version::BehaviorVersion"),
+                )
+            },
         )
     }
 }

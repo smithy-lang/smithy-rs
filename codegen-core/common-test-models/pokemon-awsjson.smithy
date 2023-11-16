@@ -1,6 +1,6 @@
 $version: "1.0"
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/2215)
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/2215)
 // This is a temporary model to test AwsJson 1.0 with @streaming.
 // This model will be removed when protocol tests support @streaming.
 

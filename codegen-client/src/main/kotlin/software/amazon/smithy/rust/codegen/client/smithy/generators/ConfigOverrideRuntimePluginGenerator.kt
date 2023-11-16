@@ -19,7 +19,7 @@ class ConfigOverrideRuntimePluginGenerator(
 ) {
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *RuntimeType.preludeScope,

@@ -2,20 +2,19 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-/// Copyright © 2023, Amazon, LLC.
-///
-/// This example demonstrates how to handle service generated errors.
-///
-/// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
-/// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
-/// file for instructions on how to launch the service locally.
-///
-/// The example can be run using `cargo run --example handling-errors`.
-///
+
+//! This example demonstrates how to handle service generated errors.
+//!
+//! The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
+//! Refer to the [README.md](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
+//! file for instructions on how to launch the service locally.
+//!
+//! The example can be run using `cargo run --example handling-errors`.
+
+use pokemon_service_client::error::DisplayErrorContext;
+use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client::{error::SdkError, operation::get_storage::GetStorageError};
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
-
-use pokemon_service_client::Client as PokemonClient;
 
 /// Creates a new `smithy-rs` client that is configured to communicate with a locally running Pokémon service on TCP port 13734.
 ///
@@ -46,7 +45,7 @@ async fn main() {
 
     // The following example sends an incorrect passcode to the operation `get_storage`,
     // which will return
-    // [StorageAccessNotAuthorized](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy#L48)
+    // [StorageAccessNotAuthorized](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy#L48)
     let response_result = client
         .get_storage()
         .user("ash")
@@ -77,14 +76,10 @@ async fn main() {
                 GetStorageError::ValidationError(ve) => {
                     tracing::error!(error = %ve, "A required field has not been set.");
                 }
-                // An unexpected error occurred (e.g., invalid JSON returned by the service or an unknown error code).
-                GetStorageError::Unhandled(uh) => {
-                    tracing::error!(error = %uh, "An unhandled error has occurred.")
-                }
                 // The SdkError is marked as `#[non_exhaustive]`. Therefore, a catch-all pattern is required to handle
                 // potential future variants introduced in SdkError.
                 _ => {
-                    tracing::error!(error = %se.err(), "Some other error has occurred on the server")
+                    tracing::error!(error = %DisplayErrorContext(se.err()), "Some other error has occurred on the server")
                 }
             }
         }

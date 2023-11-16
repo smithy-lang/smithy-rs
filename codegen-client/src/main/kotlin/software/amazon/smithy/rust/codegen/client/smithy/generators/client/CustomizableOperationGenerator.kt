@@ -34,9 +34,9 @@ class CustomizableOperationGenerator(
                 .resolve("CustomizableOperation"),
             "CustomizableSend" to ClientRustModule.Client.customize.toType()
                 .resolve("internal::CustomizableSend"),
-            "HttpRequest" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            "HttpRequest" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                 .resolve("client::orchestrator::HttpRequest"),
-            "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                 .resolve("client::orchestrator::HttpResponse"),
             "Intercept" to RuntimeType.intercept(runtimeConfig),
             "MapRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
@@ -50,7 +50,7 @@ class CustomizableOperationGenerator(
                 .resolve("internal::SendResult"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            "SharedInterceptor" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                 .resolve("client::interceptors::SharedInterceptor"),
         )
 
@@ -206,7 +206,7 @@ class CustomizableOperationGenerator(
                 }
                 """,
                 *preludeScope,
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )

@@ -148,7 +148,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
             ```toml
             [dependencies]
-            aws-config = "$awsConfigVersion"
+            aws-config = { version = "$awsConfigVersion", features = ["behavior-version-latest"] }
             $moduleName = "${codegenContext.settings.moduleVersion}"
             tokio = { version = "1", features = ["full"] }
             ```

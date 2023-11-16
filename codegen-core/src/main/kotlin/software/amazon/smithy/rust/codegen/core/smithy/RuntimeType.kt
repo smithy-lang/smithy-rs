@@ -324,6 +324,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyQuery(runtimeConfig: RuntimeConfig) = CargoDependency.smithyQuery(runtimeConfig).toType()
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntime(runtimeConfig).toType()
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntimeApi(runtimeConfig).toType()
+        fun smithyRuntimeApiClient(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType()
         fun smithyTypes(runtimeConfig: RuntimeConfig) = CargoDependency.smithyTypes(runtimeConfig).toType()
         fun smithyXml(runtimeConfig: RuntimeConfig) = CargoDependency.smithyXml(runtimeConfig).toType()
         private fun smithyProtocolTest(runtimeConfig: RuntimeConfig) =
@@ -340,61 +341,64 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
             smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag")
 
         fun runtimeComponents(runtimeConfig: RuntimeConfig) =
-            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_components::RuntimeComponents")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_components::RuntimeComponents")
 
         fun runtimeComponentsBuilder(runtimeConfig: RuntimeConfig) =
-            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_components::RuntimeComponentsBuilder")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_components::RuntimeComponentsBuilder")
 
         fun runtimePlugins(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugins")
 
         fun runtimePlugin(runtimeConfig: RuntimeConfig) =
-            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_plugin::RuntimePlugin")
 
         fun sharedRuntimePlugin(runtimeConfig: RuntimeConfig) =
-            smithyRuntimeApi(runtimeConfig).resolve("client::runtime_plugin::SharedRuntimePlugin")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::runtime_plugin::SharedRuntimePlugin")
 
         fun boxError(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApi(runtimeConfig).resolve("box_error::BoxError")
 
         fun sdkError(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::result::SdkError")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::result::SdkError")
 
         fun intercept(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::Intercept")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::Intercept")
 
         fun interceptorContext(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::InterceptorContext")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::InterceptorContext")
 
         fun sharedInterceptor(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::SharedInterceptor")
 
         fun afterDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::AfterDeserializationInterceptorContextRef")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::AfterDeserializationInterceptorContextRef")
 
         fun beforeSerializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextRef")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextRef")
 
         fun beforeSerializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextMut")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::BeforeSerializationInterceptorContextMut")
 
         fun beforeDeserializationInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextRef")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextRef")
 
         fun beforeDeserializationInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextMut")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::BeforeDeserializationInterceptorContextMut")
 
         fun beforeTransmitInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextRef")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextRef")
 
         fun beforeTransmitInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextMut")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::BeforeTransmitInterceptorContextMut")
 
         fun finalizerInterceptorContextRef(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextRef")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextRef")
 
         fun finalizerInterceptorContextMut(runtimeConfig: RuntimeConfig): RuntimeType =
-            smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextMut")
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::FinalizerInterceptorContextMut")
+
+        fun headers(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApi(runtimeConfig).resolve("http::Headers")
 
         fun blob(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("Blob")
         fun byteStream(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("byte_stream::ByteStream")
@@ -421,7 +425,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun provideErrorMetadataTrait(runtimeConfig: RuntimeConfig) =
             smithyTypes(runtimeConfig).resolve("error::metadata::ProvideErrorMetadata")
 
-        fun unhandledError(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("error::Unhandled")
         fun jsonErrors(runtimeConfig: RuntimeConfig) = forInlineDependency(InlineDependency.jsonErrors(runtimeConfig))
         fun awsQueryCompatibleErrors(runtimeConfig: RuntimeConfig) =
             forInlineDependency(InlineDependency.awsQueryCompatibleErrors(runtimeConfig))

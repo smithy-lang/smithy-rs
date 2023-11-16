@@ -77,7 +77,7 @@ open class ConstrainedShapeSymbolProvider(
     override fun toSymbol(shape: Shape): Symbol {
         return when (shape) {
             is MemberShape -> {
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Member shapes can have constraint traits
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Member shapes can have constraint traits
                 //  (constraint trait precedence).
                 val target = model.expectShape(shape.target)
                 val targetSymbol = this.toSymbol(target)
