@@ -37,6 +37,7 @@ fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = 
 
 fun awsSdkIntegrationTest(
     model: Model,
+    params: IntegrationTestParams = awsIntegrationTestParams(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) =
     clientIntegrationTest(

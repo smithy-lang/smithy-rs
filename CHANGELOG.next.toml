@@ -11,32 +11,8 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[smithy-rs]]
-message = "SignableRequest::apply_to_request in aws_sigv4 has been renamed `apply_to_request_http0x`"
-references = ["smithy-rs#3205"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "imds::client::Builder::endpoint has been updated to accept a string instead of a URI. The method now returns a result instead."
-references = ["smithy-rs#3205"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "The `AssumeRoleBuilder::policy_arns` now accepts strings instead of an STS specific type"
-references = ["smithy-rs#3205"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "rcoh"
-
 [[aws-sdk-rust]]
 message = "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests."
 references = ["smithy-rs#3217"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "milesziemer"
-
-[[aws-sdk-rust]]
-message = "Fix optional types in S3. Many types in S3 were modeled as non-optional but this causes serialization issues."
-references = ["smithy-rs#3213"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "rcoh"
