@@ -26,7 +26,7 @@ pub struct StalledStreamProtectionConfig {
 
 impl StalledStreamProtectionConfig {
     /// Create a new config that enables stalled stream protection.
-    pub fn new_enabled() -> Builder {
+    pub fn enabled() -> Builder {
         Builder {
             is_enabled: Some(true),
             grace_period: None,
@@ -34,7 +34,7 @@ impl StalledStreamProtectionConfig {
     }
 
     /// Create a new config that disables stalled stream protection.
-    pub fn new_disabled() -> Self {
+    pub fn disabled() -> Self {
         Self {
             is_enabled: false,
             grace_period: DEFAULT_GRACE_PERIOD,

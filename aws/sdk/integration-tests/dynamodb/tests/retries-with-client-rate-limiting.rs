@@ -67,7 +67,7 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
 
     let http_client = StaticReplayClient::new(events);
     let config = aws_sdk_dynamodb::Config::builder()
-        .stalled_stream_protection(StalledStreamProtectionConfig::new_disabled())
+        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .retry_config(
@@ -123,7 +123,7 @@ async fn test_adaptive_retries_with_throttling_errors() {
 
     let http_client = StaticReplayClient::new(events);
     let config = aws_sdk_dynamodb::Config::builder()
-        .stalled_stream_protection(StalledStreamProtectionConfig::new_disabled())
+        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
         .retry_config(

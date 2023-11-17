@@ -631,7 +631,7 @@ mod loader {
         /// use std::time::Duration;
         /// let config = aws_config::from_env()
         ///     .stalled_stream_protection(
-        ///         StalledStreamProtectionConfig::new_enabled()
+        ///         StalledStreamProtectionConfig::enabled()
         ///             .grace_period(Duration::from_secs(1))
         ///             .build()
         ///     )

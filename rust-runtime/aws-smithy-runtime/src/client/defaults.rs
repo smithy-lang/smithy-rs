@@ -182,7 +182,7 @@ pub fn default_stalled_stream_protection_config_plugin() -> Option<SharedRuntime
         )
         .with_config(layer("default_stalled_stream_protection_config", |layer| {
             layer.store_put(
-                StalledStreamProtectionConfig::new_enabled()
+                StalledStreamProtectionConfig::enabled()
                     .grace_period(Duration::from_secs(5))
                     .build(),
             );
