@@ -438,7 +438,6 @@ impl<E, R> SdkError<E, R> {
     }
 
     /// Maps the service error type in `SdkError::ServiceError`
-    #[doc(hidden)]
     pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
         match self {
             SdkError::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {

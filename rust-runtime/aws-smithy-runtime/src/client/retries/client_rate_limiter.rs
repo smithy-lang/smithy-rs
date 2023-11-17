@@ -14,7 +14,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tracing::debug;
 
-#[doc(hidden)]
+/// Represents a partition for the rate limiter, e.g. an endpoint, a region
 #[non_exhaustive]
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct ClientRateLimiterPartition {
@@ -22,6 +22,7 @@ pub struct ClientRateLimiterPartition {
 }
 
 impl ClientRateLimiterPartition {
+    /// Creates a `ClientRateLimiterPartition` from the given [`RetryPartition`]
     pub fn new(retry_partition: RetryPartition) -> Self {
         Self { retry_partition }
     }

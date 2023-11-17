@@ -222,7 +222,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the Serialization phase.
-    #[doc(hidden)]
     pub fn enter_serialization_phase(&mut self) {
         debug!("entering \'serialization\' phase");
         debug_assert!(
@@ -233,7 +232,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the BeforeTransmit phase.
-    #[doc(hidden)]
     pub fn enter_before_transmit_phase(&mut self) {
         debug!("entering \'before transmit\' phase");
         debug_assert!(
@@ -253,7 +251,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the Transmit phase.
-    #[doc(hidden)]
     pub fn enter_transmit_phase(&mut self) {
         debug!("entering \'transmit\' phase");
         debug_assert!(
@@ -264,7 +261,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the BeforeDeserialization phase.
-    #[doc(hidden)]
     pub fn enter_before_deserialization_phase(&mut self) {
         debug!("entering \'before deserialization\' phase");
         debug_assert!(
@@ -283,7 +279,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the Deserialization phase.
-    #[doc(hidden)]
     pub fn enter_deserialization_phase(&mut self) {
         debug!("entering \'deserialization\' phase");
         debug_assert!(
@@ -294,7 +289,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the AfterDeserialization phase.
-    #[doc(hidden)]
     pub fn enter_after_deserialization_phase(&mut self) {
         debug!("entering \'after deserialization\' phase");
         debug_assert!(
@@ -309,7 +303,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Set the request checkpoint. This should only be called once, right before entering the retry loop.
-    #[doc(hidden)]
     pub fn save_checkpoint(&mut self) {
         trace!("saving request checkpoint...");
         self.request_checkpoint = self.request().and_then(|r| r.try_clone());
@@ -320,7 +313,6 @@ impl<I, O, E> InterceptorContext<I, O, E> {
     }
 
     /// Returns false if rewinding isn't possible
-    #[doc(hidden)]
     pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> RewindResult {
         // If request_checkpoint was never set, but we've already made one attempt,
         // then this is not a retryable request
@@ -351,7 +343,6 @@ where
     E: Debug,
 {
     /// Decomposes the context into its constituent parts.
-    #[doc(hidden)]
     #[allow(clippy::type_complexity)]
     pub fn into_parts(
         self,
@@ -370,7 +361,6 @@ where
     }
 
     /// Convert this context into the final operation result that is returned in client's the public API.
-    #[doc(hidden)]
     pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
         let Self {
             output_or_error,
@@ -399,8 +389,8 @@ where
 }
 
 /// The result of attempting to rewind a request.
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[doc(hidden)]
 pub enum RewindResult {
     /// The request couldn't be rewound because it wasn't cloneable.
     Impossible,
