@@ -689,6 +689,7 @@ mod tests {
             .unwrap();
         let (cache, _) = test_cache(BUFFER_TIME_NO_JITTER, Vec::new());
 
+        #[allow(clippy::disallowed_methods)]
         let far_future = SystemTime::now() + Duration::from_secs(10_000);
 
         // Resolver A and B both return an identical identity type with different tokens with an expiration
