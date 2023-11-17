@@ -65,7 +65,6 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             self.config.load::<#{TimeoutConfig}>()
                         }
 
-                        ##[doc(hidden)]
                         /// Returns a reference to the retry partition contained in this config, if any.
                         ///
                         /// WARNING: This method is unstable and may be removed at any time. Do not rely on this
@@ -248,7 +247,6 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         *codegenScope,
                     )
 
-                    Attribute.DocHidden.render(this)
                     rustTemplate(
                         """
                         /// Set the partition for retry-related state. When clients share a retry partition, they will
@@ -262,7 +260,6 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         *codegenScope,
                     )
 
-                    Attribute.DocHidden.render(this)
                     rustTemplate(
                         """
                         /// Set the partition for retry-related state. When clients share a retry partition, they will
