@@ -59,8 +59,7 @@ where
 }
 
 /// Applies the extended request ID to a generic error builder
-#[doc(hidden)]
-pub fn apply_extended_request_id(
+pub(crate) fn apply_extended_request_id(
     builder: ErrorMetadataBuilder,
     headers: &Headers,
 ) -> ErrorMetadataBuilder {

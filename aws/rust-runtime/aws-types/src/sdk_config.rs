@@ -26,9 +26,9 @@ use aws_smithy_runtime_api::shared::IntoShared;
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
 
-#[doc(hidden)]
 /// Unified docstrings to keep crates in sync. Not intended for public use
 pub mod unified_docs {
+    /// A macro that generates docs for selected fields of `SdkConfig`.
     #[macro_export]
     macro_rules! docs_for {
         (use_fips) => {
@@ -667,7 +667,6 @@ impl SdkConfig {
         self.timeout_config.as_ref()
     }
 
-    #[doc(hidden)]
     /// Configured sleep implementation
     pub fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
         self.sleep_impl.clone()

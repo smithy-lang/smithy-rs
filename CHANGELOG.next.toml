@@ -104,3 +104,15 @@ message = "Add `Display` impl for `DateTime`."
 references = ["smithy-rs#3183"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 author = "HakanVardarr"
+
+[[smithy-rs]]
+message = "Types/functions that were previously `#[doc(hidden)]` in `aws-smithy-async`, `aws-smithy-runtime-api`, `aws-smithy-runtime`, `aws-smithy-types`, and the SDK crates are now visible. For those that are not intended to be used directly, they are called out in their docs as such."
+references = ["smithy-rs#3226"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Types/functions that were previously `#[doc(hidden)]` in `aws-config`, `aws-inlineable`, `aws-types`, and the SDK crates are now visible. For those that are not intended to be used directly, they are called out in their docs as such."
+references = ["smithy-rs#3226"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"

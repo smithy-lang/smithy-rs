@@ -27,7 +27,6 @@ pub trait ProvideErrorMetadata {
 }
 
 /// Empty error metadata
-#[doc(hidden)]
 pub const EMPTY_ERROR_METADATA: ErrorMetadata = ErrorMetadata {
     code: None,
     message: None,
