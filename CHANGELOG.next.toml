@@ -54,3 +54,15 @@ message = "Make certain types for EMR Serverless optional. Previously, they defa
 references = ["smithy-rs#3217"]
 meta = { "breaking" = true, "tada" = false, "bug" = true }
 author = "milesziemer"
+
+[[smithy-rs]]
+message = "Prevent multiplication overflow in backoff computation"
+references = ["smithy-rs#3229", "aws-sdk-rust#960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, target = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Prevent multiplication overflow in backoff computation"
+references = ["smithy-rs#3229", "aws-sdk-rust#960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
