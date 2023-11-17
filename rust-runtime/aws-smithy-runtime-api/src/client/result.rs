@@ -492,7 +492,7 @@ impl<E, R> ProvideErrorMetadata for SdkError<E, R>
 where
     E: ProvideErrorMetadata,
 {
-    fn meta(&self) -> &aws_smithy_types::Error {
+    fn meta(&self) -> &aws_smithy_types::error::ErrorMetadata {
         match self {
             SdkError::ConstructionFailure(_) => &EMPTY_ERROR_METADATA,
             SdkError::TimeoutError(_) => &EMPTY_ERROR_METADATA,
