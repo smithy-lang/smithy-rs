@@ -85,6 +85,7 @@ class PythonServerEventStreamWrapperGenerator(
             "MarshallMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::MarshallMessage"),
             "SignMessage" to RuntimeType.smithyEventStream(runtimeConfig).resolve("frame::SignMessage"),
             "MessageStreamAdapter" to RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamAdapter"),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
     fun render(writer: RustWriter) {
@@ -227,7 +228,7 @@ class PythonServerEventStreamWrapperGenerator(
                         match next {
                             Ok(Some(data)) => Ok(#{PyO3}::Python::with_gil(|py| #{PyO3}::IntoPy::into_py(data, py))),
                             Ok(None) => Err(#{PyO3}::exceptions::PyStopAsyncIteration::new_err("stream exhausted")),
-                            Err(#{SmithyHttp}::result::SdkError::ServiceError(service_err)) => Err(service_err.into_err().into()),
+                            Err(#{SdkError}::ServiceError(service_err)) => Err(service_err.into_err().into()),
                             Err(err) => Err(#{PyO3}::exceptions::PyRuntimeError::new_err(err.to_string())),
                         }
                     })?;
