@@ -228,7 +228,6 @@ macro_rules! apply_plugins {
 }
 
 /// Used internally in the orchestrator implementation and in the generated code. Not intended to be used elsewhere.
-#[doc(hidden)]
 #[derive(Default, Clone, Debug)]
 pub struct RuntimePlugins {
     client_plugins: Vec<SharedRuntimePlugin>,

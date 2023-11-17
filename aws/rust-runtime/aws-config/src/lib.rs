@@ -355,14 +355,6 @@ mod loader {
             self
         }
 
-        /// Deprecated. Don't use.
-        #[deprecated(
-            note = "HTTP connector configuration changed. See https://github.com/smithy-lang/smithy-rs/discussions/3022 for upgrade guidance."
-        )]
-        pub fn http_connector(self, http_client: impl HttpClient + 'static) -> Self {
-            self.http_client(http_client)
-        }
-
         /// Override the [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) for this [`ConfigLoader`].
         ///
         /// The HTTP client will be used for both AWS services and credentials providers.
@@ -396,14 +388,6 @@ mod loader {
         /// ```
         pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
             self.http_client = Some(http_client.into_shared());
-            self
-        }
-
-        /// The credentials cache has been replaced. Use the identity_cache() method instead. See its rustdoc for an example.
-        #[deprecated(
-            note = "The credentials cache has been replaced. Use the identity_cache() method instead for equivalent functionality. See its rustdoc for an example."
-        )]
-        pub fn credentials_cache(self) -> Self {
             self
         }
 
@@ -644,33 +628,6 @@ mod loader {
             stalled_stream_protection_config: StalledStreamProtectionConfig,
         ) -> Self {
             self.stalled_stream_protection_config = Some(stalled_stream_protection_config);
-            self
-        }
-
-        /// Set configuration for all sub-loaders (credentials, region etc.)
-        ///
-        /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
-        /// the HTTPs connector used by providers or to stub in an in memory `Env` or `Fs` for testing.
-        ///
-        /// # Examples
-        /// ```no_run
-        /// # #[cfg(feature = "hyper-client")]
-        /// # async fn create_config() {
-        /// use aws_config::provider_config::ProviderConfig;
-        /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        ///     .with_webpki_roots()
-        ///     .https_only()
-        ///     .enable_http1()
-        ///     .build();
-        /// let provider_config = ProviderConfig::default().with_tcp_connector(custom_https_connector);
-        /// let shared_config = aws_config::defaults(BehaviorVersion::latest()).configure(provider_config).load().await;
-        /// # }
-        /// ```
-        #[deprecated(
-            note = "Use setters on this builder instead. configure is very hard to use correctly."
-        )]
-        pub fn configure(mut self, provider_config: ProviderConfig) -> Self {
-            self.provider_config = Some(provider_config);
             self
         }
 
