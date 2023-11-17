@@ -250,7 +250,7 @@ impl<B> Request<B> {
 
     /// Adds an extension to the request extensions
     pub fn add_extension<T: Send + Sync + Clone + 'static>(&mut self, extension: T) {
-        self.extensions_02x.insert(extension.clone());
+        self.extensions_02x.insert(extension);
     }
 }
 
@@ -305,7 +305,7 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
         Ok(Self {
             body,
             uri: parts.uri.into(),
-            method: parts.method.clone(),
+            method: parts.method,
             extensions_02x: http::Extensions::new(),
             headers,
         })
