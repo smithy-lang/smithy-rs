@@ -116,3 +116,9 @@ message = "Types/functions that were previously `#[doc(hidden)]` in `aws-config`
 references = ["smithy-rs#3226"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "ysaito1001"
+
+[[smithy-rs]]
+message = "Conversions for HTTP request in aws-smithy-runtime-api are now feature gated behind the `http-02x` feature"
+references = ["smithy-rs#3236"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
