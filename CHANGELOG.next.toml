@@ -11,26 +11,58 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = """
+Add configurable stalled-stream protection for downloads.
+
+When making HTTP calls,
+it's possible for a connection to 'stall out' and emit no more data due to server-side issues.
+In the event this happens, it's desirable for the stream to error out as quickly as possible.
+While timeouts can protect you from this issue, they aren't adaptive to the amount of data
+being sent and so must be configured specifically for each use case. When enabled, stalled-stream
+protection will ensure that bad streams error out quickly, regardless of the amount of data being
+downloaded.
+
+Protection is enabled by default for all clients but can be configured or disabled.
+See [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.
+"""
+references = ["smithy-rs#3202"]
+meta = { "breaking" = true, "tada" = true, "bug" = false }
+author = "Velfi"
+
 [[smithy-rs]]
-message = "SignableRequest::apply_to_request in aws_sigv4 has been renamed `apply_to_request_http0x`"
-references = ["smithy-rs#3205"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+message = """
+Add configurable stalled-stream protection for downloads.
+
+When making HTTP calls,
+it's possible for a connection to 'stall out' and emit no more data due to server-side issues.
+In the event this happens, it's desirable for the stream to error out as quickly as possible.
+While timeouts can protect you from this issue, they aren't adaptive to the amount of data
+being sent and so must be configured specifically for each use case. When enabled, stalled-stream
+protection will ensure that bad streams error out quickly, regardless of the amount of data being
+downloaded.
+
+Protection is enabled by default for all clients but can be configured or disabled.
+See [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.
+"""
+references = ["smithy-rs#3202"]
+meta = { "breaking" = true, "tada" = true, "bug" = false, "target" = "client" }
+author = "Velfi"
+
+[[aws-sdk-rust]]
+message = "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests."
+references = ["smithy-rs#3217"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "milesziemer"
+
+[[smithy-rs]]
+message = "Prevent multiplication overflow in backoff computation"
+references = ["smithy-rs#3229", "aws-sdk-rust#960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, target = "client" }
 author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "imds::client::Builder::endpoint has been updated to accept a string instead of a URI. The method now returns a result instead."
-references = ["smithy-rs#3205"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "The `AssumeRoleBuilder::policy_arns` now accepts strings instead of an STS specific type"
-references = ["smithy-rs#3205"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Fix optional types in S3. Many types in S3 were modeled as non-optional but this causes serialization issues."
-references = ["smithy-rs#3213"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
+message = "Prevent multiplication overflow in backoff computation"
+references = ["smithy-rs#3229", "aws-sdk-rust#960"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"

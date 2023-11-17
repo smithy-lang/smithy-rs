@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 16th, 2023
+===================
+**Breaking Changes:**
+- :warning: (client, [smithy-rs#3205](https://github.com/smithy-lang/smithy-rs/issues/3205)) SignableRequest::apply_to_request in aws_sigv4 has been renamed `apply_to_request_http0x`
+
+
 November 15th, 2023
 ===================
 **Breaking Changes:**
