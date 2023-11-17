@@ -5,10 +5,9 @@
 
 //! Http Response Types
 
-use crate::http::{HeaderValue, Headers, HttpError};
+use crate::http::{Headers, HttpError};
 use aws_smithy_types::body::SdkBody;
 use http as http0;
-use http0::{Extensions, HeaderMap};
 use std::fmt;
 
 /// HTTP response status code
@@ -74,7 +73,7 @@ pub struct Response<B = SdkBody> {
     status: StatusCode,
     headers: Headers,
     body: B,
-    extensions: Extensions,
+    extensions: http0::Extensions,
 }
 
 impl<B> Response<B> {
@@ -91,7 +90,7 @@ impl<B> Response<B> {
             )
             .body(self.body)
             .expect("known valid");
-        let mut headers = HeaderMap::new();
+        let mut headers = http0::HeaderMap::new();
         headers.extend(
             self.headers
                 .headers
@@ -176,6 +175,8 @@ impl<B> TryFrom<http0::Response<B>> for Response<B> {
     type Error = HttpError;
 
     fn try_from(value: http0::Response<B>) -> Result<Self, Self::Error> {
+        use crate::http::headers::HeaderValue;
+        use http0::HeaderMap;
         if let Some(e) = value
             .headers()
             .values()

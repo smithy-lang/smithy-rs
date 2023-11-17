@@ -10,7 +10,7 @@ use crate::http::HttpError;
 use aws_smithy_types::body::SdkBody;
 use http as http0;
 use http0::uri::PathAndQuery;
-use http0::{Extensions, HeaderMap, Method};
+use http0::{Extensions, Method};
 use std::borrow::Cow;
 
 /// Parts struct useful for structural decomposition that the [`Request`] type can be converted into.
@@ -164,7 +164,7 @@ impl<B> Request<B> {
             .method(self.method)
             .body(self.body)
             .expect("known valid");
-        let mut headers = HeaderMap::new();
+        let mut headers = http0::HeaderMap::new();
         headers.reserve(self.headers.headers.len());
         headers.extend(
             self.headers
@@ -289,7 +289,7 @@ impl<B> Request<B> {
     /// Adds an extension to the request extensions
     pub fn add_extension<T: Send + Sync + Clone + 'static>(&mut self, extension: T) {
         self.extensions_02x.insert(extension.clone());
-        self.extensions_1x.insert(extension.clone());
+        self.extensions_1x.insert(extension);
     }
 }
 

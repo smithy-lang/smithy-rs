@@ -282,6 +282,7 @@ mod header_value {
             Ok(Self { _private: value })
         }
 
+        #[allow(dead_code)]
         pub(crate) fn into_http02x(self) -> http0::HeaderValue {
             self._private
         }
