@@ -61,7 +61,7 @@ fn make_context(msrv: &str, versions_manifest: &VersionsManifest) -> serde_json:
     // TODO(PostGA): Remove warning banner conditionals
     context.as_object_mut().unwrap().insert(
         "warning_banner".into(),
-        serde_json::Value::Bool(!stable_release(&versions_manifest)),
+        serde_json::Value::Bool(!stable_release(versions_manifest)),
     );
 
     for (crate_name, metadata) in &versions_manifest.crates {
