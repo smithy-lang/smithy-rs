@@ -113,7 +113,6 @@ class HttpAuthDecoratorTest {
                         IdentityFuture, ResolveIdentity, SharedIdentityResolver,
                     };
                     use aws_smithy_runtime_api::box_error::BoxError;
-                    use aws_smithy_runtime_api::client::auth::Signer;
                     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                     use aws_smithy_runtime_api::client::runtime_components::{
                         GetIdentityResolver, RuntimeComponentsBuilder,
@@ -164,7 +163,7 @@ class HttpAuthDecoratorTest {
                     #[derive(Debug)]
                     struct CustomIdentity(String);
 
-                    impl Signer for CustomSigner {
+                    impl Sign for CustomSigner {
                         fn sign_http_request(
                             &self,
                             request: &mut HttpRequest,

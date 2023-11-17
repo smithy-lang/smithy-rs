@@ -35,7 +35,7 @@ object RemoveDefaults {
         }
 
         return ModelTransformer.create().mapShapes(removedRootDefaultsModel) { shape ->
-            shape.letIf(shouldRemoveMemberDefault(shape, removedRootDefaults)) {
+            shape.letIf(shouldRemoveMemberDefault(shape, removedRootDefaults, removeDefaultsFrom)) {
                 logger.info("Removing default trait from member $shape")
                 removeDefault(shape)
             }
@@ -46,8 +46,15 @@ object RemoveDefaults {
         return shape !is MemberShape && removeDefaultsFrom.contains(shape.id) && shape.hasTrait<DefaultTrait>()
     }
 
-    private fun shouldRemoveMemberDefault(shape: Shape, removeDefaultsFrom: Set<ShapeId>): Boolean {
-        return shape is MemberShape && removeDefaultsFrom.contains(shape.target) && shape.hasTrait<DefaultTrait>()
+    private fun shouldRemoveMemberDefault(
+        shape: Shape,
+        removedRootDefaults: Set<ShapeId>,
+        removeDefaultsFrom: Set<ShapeId>,
+    ): Boolean {
+        return shape is MemberShape &&
+            // Check the original set of shapes to remove for this shape id, to remove members that were in that set.
+            (removedRootDefaults.contains(shape.target) || removeDefaultsFrom.contains(shape.id)) &&
+            shape.hasTrait<DefaultTrait>()
     }
 
     private fun removeDefault(shape: Shape): Shape {
