@@ -10,7 +10,7 @@ publish = false
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
-aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["client", "http-02x"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-sdk-ec2 = { path = "../../build/aws-sdk/sdk/ec2", features = ["behavior-version-latest"] }
 tokio = { version = "1.23.1", features = ["full"]}
