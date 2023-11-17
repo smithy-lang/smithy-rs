@@ -164,6 +164,7 @@ fun generatePluginContext(
     model: Model,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
     addModuleToEventStreamAllowList: Boolean = false,
+    moduleVersion: String = "1.0.0",
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
     overrideTestDir: File? = null,
@@ -174,7 +175,7 @@ fun generatePluginContext(
     val manifest = FileManifest.create(testPath)
     var settingsBuilder = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
-        .withMember("moduleVersion", Node.from("1.0.0"))
+        .withMember("moduleVersion", Node.from(moduleVersion))
         .withMember("moduleDescription", Node.from("test"))
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
         .letIf(service != null) { it.withMember("service", service) }
