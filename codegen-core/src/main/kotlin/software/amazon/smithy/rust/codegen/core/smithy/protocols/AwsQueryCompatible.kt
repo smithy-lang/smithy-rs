@@ -92,4 +92,7 @@ class AwsQueryCompatible(
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         awsJson.parseEventStreamErrorMetadata(operationShape)
+
+    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 }

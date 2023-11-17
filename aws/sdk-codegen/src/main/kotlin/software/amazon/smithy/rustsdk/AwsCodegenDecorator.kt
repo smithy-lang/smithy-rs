@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.DocsRsMe
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.CombinedClientCodegenDecorator
 import software.amazon.smithy.rustsdk.customize.DisabledAuthDecorator
+import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.applyDecorators
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
@@ -53,6 +54,7 @@ val DECORATORS: List<ClientCodegenDecorator> = listOf(
         RecursionDetectionDecorator(),
         InvocationIdDecorator(),
         RetryInformationHeaderDecorator(),
+        RemoveDefaultsDecorator(),
     ),
 
     // Service specific decorators
