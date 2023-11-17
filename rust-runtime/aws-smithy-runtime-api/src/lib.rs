@@ -33,7 +33,4 @@ pub mod client;
 
 pub mod http;
 
-/// Builder macros. Not intended to be used outside of the aws-smithy-runtime crates.
-pub mod macros;
-
 pub mod shared;
