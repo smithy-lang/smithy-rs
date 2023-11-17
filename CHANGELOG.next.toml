@@ -92,3 +92,15 @@ the [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discuss
 references = ["smithy-rs#3222"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Add `Display` impl for `DateTime`."
+references = ["smithy-rs#3183"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "HakanVardarr"
+
+[[smithy-rs]]
+message = "Add `Display` impl for `DateTime`."
+references = ["smithy-rs#3183"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
+author = "HakanVardarr"
