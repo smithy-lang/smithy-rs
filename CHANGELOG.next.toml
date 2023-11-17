@@ -34,3 +34,23 @@ message = "Fix optional types in S3. Many types in S3 were modeled as non-option
 references = ["smithy-rs#3213"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = """
+Types/functions that were deprecated in previous releases were removed. Unfortunately, some of these deprecations
+were ignored by the Rust compiler (we found out later that `#[deprecated]` on `pub use` doesn't work). See
+the [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discussions/3223) for more details.
+"""
+references = ["smithy-rs#3222"]
+meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """
+Types/functions that were deprecated in previous releases were removed. Unfortunately, some of these deprecations
+were ignored by the Rust compiler (we found out later that `#[deprecated]` on `pub use` doesn't work). See
+the [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discussions/3223) for more details.
+"""
+references = ["smithy-rs#3222"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "jdisanti"
