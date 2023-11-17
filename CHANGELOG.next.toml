@@ -11,6 +11,13 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[smithy-rs]]
+message = "Reexport http::Uri from aws-config"
+references = ["smithy-rs#3232"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "pacak"
+
+
 [[aws-sdk-rust]]
 message = """
 Add configurable stalled-stream protection for downloads.
