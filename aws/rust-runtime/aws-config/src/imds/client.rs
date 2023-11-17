@@ -37,7 +37,7 @@ use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::os_shim_internal::Env;
-use http::Uri;
+pub use http::Uri;
 use std::borrow::Cow;
 use std::error::Error as _;
 use std::fmt;
