@@ -467,7 +467,7 @@ impl fmt::Display for RewindResult {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(all(test, feature = "test-util", feature = "http-02x"))]
 mod tests {
     use super::*;
     use aws_smithy_types::body::SdkBody;

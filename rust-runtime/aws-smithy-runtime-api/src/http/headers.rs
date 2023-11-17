@@ -156,6 +156,7 @@ impl Headers {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl TryFrom<HeaderMap> for Headers {
     type Error = HttpError;
 
@@ -283,6 +284,11 @@ mod header_value {
 
         pub(crate) fn into_http02x(self) -> http0::HeaderValue {
             self._private
+        }
+
+        #[allow(dead_code)]
+        pub(crate) fn into_http1x(self) -> http1::HeaderValue {
+            http1::HeaderValue::from_bytes(self._private.as_bytes()).expect("proven valid")
         }
     }
 

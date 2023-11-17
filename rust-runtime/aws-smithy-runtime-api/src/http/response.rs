@@ -49,6 +49,7 @@ impl TryFrom<u16> for StatusCode {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl From<http0::StatusCode> for StatusCode {
     fn from(value: http0::StatusCode) -> Self {
         Self(value.as_u16())
@@ -81,6 +82,7 @@ impl<B> Response<B> {
     ///
     /// Depending on the internal storage type, this operation may be free or it may have an internal
     /// cost.
+    #[cfg(feature = "http-02x")]
     pub fn try_into_http02x(self) -> Result<http0::Response<B>, HttpError> {
         let mut res = http::Response::builder()
             .status(
@@ -169,6 +171,7 @@ impl Response<SdkBody> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<B> TryFrom<http0::Response<B>> for Response<B> {
     type Error = HttpError;
 
@@ -201,7 +204,7 @@ impl<B> TryFrom<http0::Response<B>> for Response<B> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "http-02x"))]
 mod test {
     use super::*;
     use aws_smithy_types::body::SdkBody;
