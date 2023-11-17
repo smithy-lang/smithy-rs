@@ -20,12 +20,14 @@ internal class RemoveDefaultsTest {
     fun `defaults should be removed`() {
         val removeDefaults = setOf(
             "test#Bar".shapeId(),
+            "test#Foo\$baz".shapeId(),
         )
         val baseModel = """
             namespace test
 
             structure Foo {
                 bar: Bar = 0
+                baz: Integer = 0
             }
 
             @default(0)
@@ -33,8 +35,10 @@ internal class RemoveDefaultsTest {
 
         """.asSmithyModel(smithyVersion = "2.0")
         val model = RemoveDefaults.processModel(baseModel, removeDefaults)
-        val member = model.lookup<MemberShape>("test#Foo\$bar")
-        member.hasTrait<DefaultTrait>() shouldBe false
+        val barMember = model.lookup<MemberShape>("test#Foo\$bar")
+        barMember.hasTrait<DefaultTrait>() shouldBe false
+        val bazMember = model.lookup<MemberShape>("test#Foo\$baz")
+        bazMember.hasTrait<DefaultTrait>() shouldBe false
         val root = model.lookup<IntegerShape>("test#Bar")
         root.hasTrait<DefaultTrait>() shouldBe false
     }
