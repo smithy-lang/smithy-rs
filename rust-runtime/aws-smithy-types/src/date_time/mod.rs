@@ -332,12 +332,8 @@ impl Ord for DateTime {
 
 impl Display for DateTime {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let date = self.fmt(Format::DateTime);
-        if let Ok(date) = date {
-            write!(f, "{}", date)
-        } else {
-            return Err(fmt::Error);
-        }
+        let date = self.fmt(Format::DateTime).map_err(|_| fmt::Error)?;
+        write!(f, "{}", date)
     }
 }
 /// Failure to convert a `DateTime` to or from another type.
