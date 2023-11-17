@@ -31,7 +31,6 @@ pub struct Request<B = SdkBody> {
     uri: Uri,
     method: Method,
     extensions_02x: Extensions,
-    extensions_1x: http1::Extensions,
     headers: Headers,
 }
 
@@ -143,15 +142,6 @@ impl<B> TryInto<http0::Request<B>> for Request<B> {
     }
 }
 
-#[cfg(feature = "http-1x")]
-impl<B> TryInto<http1::Request<B>> for Request<B> {
-    type Error = HttpError;
-
-    fn try_into(self) -> Result<http1::Request<B>, Self::Error> {
-        self.try_into_http_1x()
-    }
-}
-
 impl<B> Request<B> {
     /// Converts this request into an http 0.x request.
     ///
@@ -177,32 +167,6 @@ impl<B> Request<B> {
         Ok(req)
     }
 
-    /// Converts this request into an http 1.x request.
-    ///
-    /// Depending on the internal storage type, this operation may be free or it may have an internal
-    /// cost.
-    #[cfg(feature = "http-1x")]
-    pub fn try_into_http_1x(self) -> Result<http1::Request<B>, HttpError> {
-        let mut req = http1::Request::builder()
-            .uri(self.uri.as_string)
-            .method(self.method.as_str())
-            .body(self.body)
-            .expect("known valid");
-        let mut headers = http1::HeaderMap::new();
-        headers.reserve(self.headers.headers.len());
-        headers.extend(self.headers.headers.into_iter().map(|(k, v)| {
-            (
-                k.map(|n| {
-                    http1::HeaderName::from_bytes(n.as_str().as_bytes()).expect("proven valid")
-                }),
-                v.into_http1x(),
-            )
-        }));
-        *req.headers_mut() = headers;
-        *req.extensions_mut() = self.extensions_1x;
-        Ok(req)
-    }
-
     /// Update the body of this request to be a new body.
     pub fn map<U>(self, f: impl Fn(B) -> U) -> Request<U> {
         Request {
@@ -210,7 +174,6 @@ impl<B> Request<B> {
             uri: self.uri,
             method: self.method,
             extensions_02x: self.extensions_02x,
-            extensions_1x: self.extensions_1x,
             headers: self.headers,
         }
     }
@@ -222,7 +185,6 @@ impl<B> Request<B> {
             uri: Uri::from_http0x_uri(http0::Uri::from_static("/")),
             method: Method::GET,
             extensions_02x: Default::default(),
-            extensions_1x: Default::default(),
             headers: Default::default(),
         }
     }
@@ -289,7 +251,6 @@ impl<B> Request<B> {
     /// Adds an extension to the request extensions
     pub fn add_extension<T: Send + Sync + Clone + 'static>(&mut self, extension: T) {
         self.extensions_02x.insert(extension.clone());
-        self.extensions_1x.insert(extension);
     }
 }
 
@@ -306,7 +267,6 @@ impl Request<SdkBody> {
             uri: self.uri.clone(),
             method: self.method.clone(),
             extensions_02x: Extensions::new(),
-            extensions_1x: http1::Extensions::new(),
             headers: self.headers.clone(),
         })
     }
@@ -336,17 +296,17 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
     fn try_from(value: http::Request<B>) -> Result<Self, Self::Error> {
         let (parts, body) = value.into_parts();
         let headers = Headers::try_from(parts.headers)?;
-        if !parts.extensions.is_empty() {
+        // we need to do this eventually.
+        /*if !parts.extensions.is_empty() {
             return Err(HttpError::new(
                 "Cannot convert non-empty extensions. Clear extensions before converting",
             ));
-        }
+        }*/
         Ok(Self {
             body,
             uri: parts.uri.into(),
             method: parts.method.clone(),
             extensions_02x: http::Extensions::new(),
-            extensions_1x: http1::Extensions::new(),
             headers,
         })
     }
