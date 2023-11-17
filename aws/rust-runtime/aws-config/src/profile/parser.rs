@@ -237,6 +237,7 @@ impl From<ProfileParseError> for ProfileFileLoadError {
     }
 }
 
+/// An error encountered while reading the AWS config file
 #[derive(Debug, Clone)]
 pub struct CouldNotReadProfileFile {
     pub(crate) path: PathBuf,
