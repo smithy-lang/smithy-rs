@@ -5,11 +5,7 @@
 
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::http::{Headers, Response};
-use aws_smithy_types::error::metadata::{
-    Builder as ErrorMetadataBuilder, ErrorMetadata, ProvideErrorMetadata,
-};
-#[allow(deprecated)]
-use aws_smithy_types::error::Unhandled;
+use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
 
 const EXTENDED_REQUEST_ID: &str = "s3_extended_request_id";
 
@@ -34,13 +30,6 @@ impl<E> RequestIdExt for SdkError<E, Response> {
 impl RequestIdExt for ErrorMetadata {
     fn extended_request_id(&self) -> Option<&str> {
         self.extra(EXTENDED_REQUEST_ID)
-    }
-}
-
-#[allow(deprecated)]
-impl RequestIdExt for Unhandled {
-    fn extended_request_id(&self) -> Option<&str> {
-        self.meta().extended_request_id()
     }
 }
 
@@ -92,7 +81,7 @@ mod test {
     fn handle_missing_header() {
         let resp =
             Response::try_from(http::Response::builder().status(400).body("").unwrap()).unwrap();
-        let mut builder = aws_smithy_types::Error::builder().message("123");
+        let mut builder = ErrorMetadata::builder().message("123");
         builder = apply_extended_request_id(builder, resp.headers());
         assert_eq!(builder.build().extended_request_id(), None);
     }
