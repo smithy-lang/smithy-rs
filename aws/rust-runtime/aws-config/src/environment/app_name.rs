@@ -21,14 +21,6 @@ impl EnvironmentVariableAppNameProvider {
         Self { env: Env::real() }
     }
 
-    #[doc(hidden)]
-    /// Create an region provider from a given `Env`
-    ///
-    /// This method is used for tests that need to override environment variables.
-    pub fn new_with_env(env: Env) -> Self {
-        Self { env }
-    }
-
     /// Attempts to create an `AppName` from the `AWS_SDK_UA_APP_ID` environment variable.
     pub fn app_name(&self) -> Option<AppName> {
         if let Ok(name) = self.env.get("AWS_SDK_UA_APP_ID") {

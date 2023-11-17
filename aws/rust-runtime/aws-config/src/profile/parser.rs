@@ -237,7 +237,6 @@ impl From<ProfileParseError> for ProfileFileLoadError {
     }
 }
 
-#[doc(hidden)]
 #[derive(Debug, Clone)]
 pub struct CouldNotReadProfileFile {
     pub(crate) path: PathBuf,

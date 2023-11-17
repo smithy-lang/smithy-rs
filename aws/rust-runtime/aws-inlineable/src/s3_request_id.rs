@@ -70,7 +70,6 @@ where
 }
 
 /// Applies the extended request ID to a generic error builder
-#[doc(hidden)]
 pub fn apply_extended_request_id(
     builder: ErrorMetadataBuilder,
     headers: &Headers,
