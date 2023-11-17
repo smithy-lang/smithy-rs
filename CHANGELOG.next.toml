@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests."
+references = ["smithy-rs#3217"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "milesziemer"
