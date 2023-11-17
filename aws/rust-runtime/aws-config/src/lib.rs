@@ -134,6 +134,7 @@ pub mod retry;
 mod sensitive_command;
 #[cfg(feature = "sso")]
 pub mod sso;
+pub mod stalled_stream_protection;
 pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
@@ -216,6 +217,7 @@ mod loader {
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+    use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
@@ -259,6 +261,7 @@ mod loader {
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
+        stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
         behavior_version: Option<BehaviorVersion>,
@@ -595,6 +598,39 @@ mod loader {
             self
         }
 
+        /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
+        /// This configures stalled stream protection. When enabled, download streams
+        /// that stop (stream no data) for longer than a configured grace period will return an error.
+        ///
+        /// By default, streams that transmit less than one byte per-second for five seconds will
+        /// be cancelled.
+        ///
+        /// _Note_: When an override is provided, the default implementation is replaced.
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # async fn create_config() {
+        /// use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
+        /// use std::time::Duration;
+        /// let config = aws_config::from_env()
+        ///     .stalled_stream_protection(
+        ///         StalledStreamProtectionConfig::enabled()
+        ///             .grace_period(Duration::from_secs(1))
+        ///             .build()
+        ///     )
+        ///     .load()
+        ///     .await;
+        /// # }
+        /// ```
+        pub fn stalled_stream_protection(
+            mut self,
+            stalled_stream_protection_config: StalledStreamProtectionConfig,
+        ) -> Self {
+            self.stalled_stream_protection_config = Some(stalled_stream_protection_config);
+            self
+        }
+
         /// Load the default configuration chain
         ///
         /// If fields have been overridden during builder construction, the override values will be used.
@@ -714,6 +750,7 @@ mod loader {
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
+            builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
             builder.build()
         }
     }
