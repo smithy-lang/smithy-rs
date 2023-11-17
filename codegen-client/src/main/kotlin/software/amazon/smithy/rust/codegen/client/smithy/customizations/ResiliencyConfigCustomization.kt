@@ -10,7 +10,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
