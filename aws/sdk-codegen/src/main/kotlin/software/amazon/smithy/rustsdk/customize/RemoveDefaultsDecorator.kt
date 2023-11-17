@@ -25,6 +25,32 @@ class RemoveDefaultsDecorator : ClientCodegenDecorator {
     // Service shape id -> Shape id of each root shape to remove the default from.
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/3220): Remove this customization after model updates.
     private val removeDefaults = mapOf(
+        "com.amazonaws.amplifyuibuilder#AmplifyUIBuilder".shapeId() to setOf(
+            "com.amazonaws.amplifyuibuilder#ListComponentsLimit".shapeId(),
+            "com.amazonaws.amplifyuibuilder#ListFormsLimit".shapeId(),
+            "com.amazonaws.amplifyuibuilder#ListThemesLimit".shapeId(),
+        ),
+        "com.amazonaws.drs#ElasticDisasterRecoveryService".shapeId() to setOf(
+            "com.amazonaws.drs#Validity".shapeId(),
+            "com.amazonaws.drs#CostOptimizationConfiguration\$burstBalanceThreshold".shapeId(),
+            "com.amazonaws.drs#CostOptimizationConfiguration\$burstBalanceDeltaThreshold".shapeId(),
+            "com.amazonaws.drs#ListStagingAccountsRequest\$maxResults".shapeId(),
+            "com.amazonaws.drs#StrictlyPositiveInteger".shapeId(),
+            "com.amazonaws.drs#MaxResultsType".shapeId(),
+            "com.amazonaws.drs#MaxResultsReplicatingSourceServers".shapeId(),
+            "com.amazonaws.drs#LaunchActionOrder".shapeId(),
+        ),
+        "com.amazonaws.evidently#Evidently".shapeId() to setOf(
+            "com.amazonaws.evidently#ResultsPeriod".shapeId(),
+        ),
+        "com.amazonaws.location#LocationService".shapeId() to setOf(
+            "com.amazonaws.location#ListPlaceIndexesRequest\$MaxResults".shapeId(),
+            "com.amazonaws.location#SearchPlaceIndexForSuggestionsRequest\$MaxResults".shapeId(),
+            "com.amazonaws.location#PlaceIndexSearchResultLimit".shapeId(),
+        ),
+        "com.amazonaws.paymentcryptographydata#PaymentCryptographyDataPlane".shapeId() to setOf(
+            "com.amazonaws.paymentcryptographydata#IntegerRangeBetween4And12".shapeId(),
+        ),
         "com.amazonaws.emrserverless#AwsToledoWebService".shapeId() to setOf(
             // Service expects this to have a min value > 0
             "com.amazonaws.emrserverless#WorkerCounts".shapeId(),
