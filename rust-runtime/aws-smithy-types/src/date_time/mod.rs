@@ -13,7 +13,6 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::fmt;
-use std::fmt::Display;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -330,12 +329,6 @@ impl Ord for DateTime {
     }
 }
 
-impl Display for DateTime {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let date = self.fmt(Format::DateTime).map_err(|_| fmt::Error)?;
-        write!(f, "{}", date)
-    }
-}
 /// Failure to convert a `DateTime` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -378,21 +371,6 @@ mod test {
     use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
-
-    #[test]
-    fn test_display_date_time() {
-        let date_time = DateTime::from_secs(1576540098);
-        assert_eq!(format!("{}", date_time), "2019-12-16T23:48:18Z");
-
-        let date_time = DateTime::from_fractional_secs(1576540098, 0.52);
-        assert_eq!(format!("{}", date_time), "2019-12-16T23:48:18.52Z");
-
-        let date_time = DateTime::from_secs(1699942527);
-        assert_eq!(format!("{}", date_time), "2023-11-14T06:15:27Z");
-
-        let date_time = DateTime::from_secs(16995123);
-        assert_eq!(format!("{}", date_time), "1970-07-16T16:52:03Z");
-    }
 
     #[test]
     fn test_fmt() {
