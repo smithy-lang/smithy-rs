@@ -14,6 +14,7 @@ allowed_external_types = [
     "aws_smithy_eventstream::*",
 
     "aws_smithy_runtime::client::identity::cache::IdentityCache",
+    "aws_smithy_runtime::client::retries::RetryPartition",
 
     "aws_runtime::invocation_id::SharedInvocationIdGenerator",
     "aws_runtime::invocation_id::InvocationIdGenerator",
