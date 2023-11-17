@@ -28,7 +28,13 @@ message = "The `AssumeRoleBuilder::policy_arns` now accepts strings instead of a
 references = ["smithy-rs#3205"]
 meta = { "breaking" = true, "tada" = false, "bug" = false }
 author = "rcoh"
- 
+
+[[aws-sdk-rust]]
+message = "Fix optional types in S3. Many types in S3 were modeled as non-optional but this causes serialization issues."
+references = ["smithy-rs#3213"]
+meta = { "breaking" = true, "tada" = false, "bug" = false }
+author = "rcoh"
+
 [[aws-sdk-rust]]
 message = """
 Add configurable stalled-stream protection for downloads.

@@ -41,12 +41,37 @@ on:
         default: true
 
 jobs:
+  check-actor-for-prod-run:
+    name: Check actor for prod run
+    if: inputs.dry_run == false
+    runs-on: ubuntu-latest
+    env:
+      ACTOR: ${{ github.actor }}
+    steps:
+    - name: Check actor for prod run
+      run: |
+        set -e
+
+        if [ "${ACTOR}" != "aws-sdk-rust-ci" ]; then
+          echo "Error: The current actor is '${ACTOR}' but only 'aws-sdk-rust-ci' is allowed to run a prod release workflow."
+          exit 1
+        fi
+
+        echo "The current actor is 'aws-sdk-rust-ci', continuing with the workflow."
+
   # We'll need to build a base image to work against if:
   # - a release was kicked off before the image build step triggered by a push to the release branch/main completed
   # - a dry-run release was kicked off against a feature branch to test automation changes
   # This job will be a no-op if an image had already been built.
   acquire-base-image:
     name: Acquire Base Image
+    needs:
+    - check-actor-for-prod-run
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: |
+      always() &&
+      (needs.check-actor-for-prod-run.result == 'success' || needs.check-actor-for-prod-run.result == 'skipped')
     runs-on: smithy_ubuntu-latest_16-core
     steps:
     - uses: actions/checkout@v3
