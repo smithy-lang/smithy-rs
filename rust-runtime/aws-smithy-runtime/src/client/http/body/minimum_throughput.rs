@@ -12,6 +12,7 @@ pub mod http_body_0_4_x;
 
 /// Options for a [`MinimumThroughputBody`].
 pub mod options;
+pub use throughput::Throughput;
 mod throughput;
 
 use aws_smithy_async::rt::sleep::Sleep;
@@ -22,7 +23,7 @@ use aws_smithy_runtime_api::shared::IntoShared;
 use options::MinimumThroughputBodyOptions;
 use std::fmt;
 use std::time::SystemTime;
-use throughput::{Throughput, ThroughputLogs};
+use throughput::ThroughputLogs;
 
 pin_project_lite::pin_project! {
     /// A body-wrapping type that ensures data is being streamed faster than some lower limit.

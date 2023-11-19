@@ -104,10 +104,15 @@ impl From<(u64, Duration)> for Throughput {
     }
 }
 
+// Note(rcoh): I experimented with an optimization to track total bytes processed and shortcut
+// the sum computation, however, this made no difference after I replaced the `fold()` with `sum()`
+// instead. I suspect it would show up in a direct benchmark of `ThroughputLogs` but it doesn't seem
+// to matter when used in `MinimumThroughputBody` so I removed it in favor of simplicity.
 #[derive(Clone)]
 pub(super) struct ThroughputLogs {
     max_length: usize,
     inner: VecDeque<(SystemTime, u64)>,
+    bytes_processed: u64,
 }
 
 impl ThroughputLogs {
@@ -115,17 +120,23 @@ impl ThroughputLogs {
         Self {
             inner: VecDeque::with_capacity(max_length),
             max_length,
+            bytes_processed: 0,
         }
     }
 
     pub(super) fn push(&mut self, throughput: (SystemTime, u64)) {
         // When the number of logs exceeds the max length, toss the oldest log.
         if self.inner.len() == self.max_length {
-            self.inner.pop_front();
+            self.bytes_processed -= self.inner.pop_front().map(|(_, sz)| sz).unwrap_or_default();
         }
 
         debug_assert!(self.inner.capacity() > self.inner.len());
+        self.bytes_processed += throughput.1;
         self.inner.push_back(throughput);
+    }
+
+    fn buffer_full(&self) -> bool {
+        self.inner.len() == self.max_length
     }
 
     pub(super) fn calculate_throughput(
@@ -143,23 +154,35 @@ impl ThroughputLogs {
             .duration_since(self.inner.get(0)?.0)
             .ok()?;
         // during a "healthy" request we'll only have a few milliseconds of logs (shorter than the check window)
-        if total_length < time_window && self.inner.len() != self.max_length {
-            return None;
+        if total_length < time_window {
+            // if we haven't hit our requested time window & the buffer still isn't full, then
+            // return `None` — this is the "startup grace period"
+            return if !self.buffer_full() {
+                None
+            } else {
+                // Otherwise, if the entire buffer fits in the timewindow, we can the shortcut to
+                // avoid recomputing all the data
+                Some(Throughput {
+                    bytes_read: self.bytes_processed as f64,
+                    per_time_elapsed: total_length,
+                })
+            };
         }
         let minimum_ts = now - time_window;
         let first_item = self.inner.iter().find(|(ts, _)| *ts >= minimum_ts)?.0;
 
         let time_elapsed = now.duration_since(first_item).unwrap_or_default();
 
-        let total_bytes_logged =
-            self.inner
-                .iter()
-                .rev()
-                .take_while(|(ts, _)| *ts > minimum_ts)
-                .fold(0, |acc, (_, bytes_read)| acc + bytes_read) as f64;
+        let total_bytes_logged = self
+            .inner
+            .iter()
+            .rev()
+            .take_while(|(ts, _)| *ts > minimum_ts)
+            .map(|t| t.1)
+            .sum::<u64>();
 
         Some(Throughput {
-            bytes_read: total_bytes_logged,
+            bytes_read: total_bytes_logged as f64,
             per_time_elapsed: time_elapsed,
         })
     }

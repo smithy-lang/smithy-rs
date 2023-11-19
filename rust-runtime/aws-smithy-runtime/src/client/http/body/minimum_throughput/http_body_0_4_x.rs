@@ -21,6 +21,8 @@ where
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        // this code is called quite frequently in production—one every millisecond or so when downloading
+        // a stream. However, SystemTime::now is on the order of nanoseconds
         let now = self.time_source.now();
         // Attempt to read the data from the inner body, then update the
         // throughput logs.
