@@ -59,10 +59,6 @@ impl Throughput {
         }
     }
 
-    pub(super) fn per_time_elapsed(&self) -> Duration {
-        self.per_time_elapsed
-    }
-
     pub(super) fn bytes_per_second(&self) -> f64 {
         let per_time_elapsed_secs = self.per_time_elapsed.as_secs_f64();
         if per_time_elapsed_secs == 0.0 {
@@ -111,62 +107,61 @@ impl From<(u64, Duration)> for Throughput {
 #[derive(Clone)]
 pub(super) struct ThroughputLogs {
     max_length: usize,
-    min_elapsed_time: Duration,
     inner: VecDeque<(SystemTime, u64)>,
 }
 
 impl ThroughputLogs {
-    pub(super) fn new(max_length: usize, min_elapsed_time: Duration) -> Self {
+    pub(super) fn new(max_length: usize) -> Self {
         Self {
-            inner: VecDeque::new(),
-            min_elapsed_time,
+            inner: VecDeque::with_capacity(max_length),
             max_length,
         }
     }
 
-    pub(super) fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
     pub(super) fn push(&mut self, throughput: (SystemTime, u64)) {
-        self.inner.push_back(throughput);
-
         // When the number of logs exceeds the max length, toss the oldest log.
-        if self.inner.len() > self.max_length {
+        if self.inner.len() == self.max_length {
             self.inner.pop_front();
         }
+
+        debug_assert!(self.inner.capacity() > self.inner.len());
+        self.inner.push_back(throughput);
     }
 
-    pub(super) fn front(&self) -> Option<&(SystemTime, u64)> {
-        self.inner.front()
-    }
-
-    pub(super) fn calculate_throughput(&self, now: SystemTime) -> Option<Throughput> {
-        match self.front() {
-            Some((front_t, _)) => {
-                // Ensure that enough time has passed between the first and last logs.
-                // If not, we can't calculate throughput so we return `None`.
-                // In the case that `now` is earlier than the first log time, we also return `None`.
-                let time_elapsed = now.duration_since(*front_t).unwrap_or_default();
-                if time_elapsed < self.min_elapsed_time {
-                    return None;
-                }
-
-                // Floating back never contains bytes, so we don't care that
-                // it's missed in this calculation.
-                let total_bytes_logged = self
-                    .inner
-                    .iter()
-                    .fold(0, |acc, (_, bytes_read)| acc + bytes_read)
-                    as f64;
-
-                Some(Throughput {
-                    bytes_read: total_bytes_logged,
-                    per_time_elapsed: time_elapsed,
-                })
-            }
-            _ => None,
+    pub(super) fn calculate_throughput(
+        &self,
+        now: SystemTime,
+        time_window: Duration,
+    ) -> Option<Throughput> {
+        // There are a lot of pathological cases that are 0 throughput. These cases largely shouldn't
+        // happen, because the check interval MUST be less than the check window
+        let total_length = self
+            .inner
+            .iter()
+            .last()?
+            .0
+            .duration_since(self.inner.get(0)?.0)
+            .ok()?;
+        // during a "healthy" request we'll only have a few milliseconds of logs (shorter than the check window)
+        if total_length < time_window && self.inner.len() != self.max_length {
+            return None;
         }
+        let minimum_ts = now - time_window;
+        let first_item = self.inner.iter().find(|(ts, _)| *ts >= minimum_ts)?.0;
+
+        let time_elapsed = now.duration_since(first_item).unwrap_or_default();
+
+        let total_bytes_logged =
+            self.inner
+                .iter()
+                .rev()
+                .take_while(|(ts, _)| *ts > minimum_ts)
+                .fold(0, |acc, (_, bytes_read)| acc + bytes_read) as f64;
+
+        Some(Throughput {
+            bytes_read: total_bytes_logged,
+            per_time_elapsed: time_elapsed,
+        })
     }
 }
 
@@ -190,7 +185,7 @@ mod test {
         tick_duration: Duration,
         rate: u64,
     ) -> (ThroughputLogs, SystemTime) {
-        let mut throughput_logs = ThroughputLogs::new(length as usize, Duration::from_secs(1));
+        let mut throughput_logs = ThroughputLogs::new(length as usize);
         for i in 1..=length {
             throughput_logs.push((UNIX_EPOCH + (tick_duration * i), rate));
         }
@@ -199,48 +194,78 @@ mod test {
         (throughput_logs, UNIX_EPOCH + (tick_duration * length))
     }
 
+    const EPSILON: f64 = 0.001;
+    macro_rules! assert_delta {
+        ($x:expr, $y:expr, $d:expr) => {
+            if !(($x as f64) - $y < $d || $y - ($x as f64) < $d) {
+                panic!();
+            }
+        };
+    }
+
     #[test]
     fn test_throughput_log_calculate_throughput_1() {
         let (throughput_logs, now) = build_throughput_log(1000, Duration::from_secs(1), 1);
 
-        let throughput = throughput_logs.calculate_throughput(now).unwrap();
-        // Floats being what they are
-        assert_eq!(1.001001001001001, throughput.bytes_per_second());
+        for dur in [10, 100, 100] {
+            let throughput = throughput_logs
+                .calculate_throughput(now, Duration::from_secs(dur))
+                .unwrap();
+            assert_eq!(1.0, throughput.bytes_per_second());
+        }
+        let throughput = throughput_logs
+            .calculate_throughput(now, Duration::from_secs_f64(101.5))
+            .unwrap();
+        assert_delta!(1, throughput.bytes_per_second(), EPSILON);
     }
 
     #[test]
     fn test_throughput_log_calculate_throughput_2() {
         let (throughput_logs, now) = build_throughput_log(1000, Duration::from_secs(5), 5);
 
-        let throughput = throughput_logs.calculate_throughput(now).unwrap();
-        // Floats being what they are
-        assert_eq!(1.001001001001001, throughput.bytes_per_second());
+        let throughput = throughput_logs
+            .calculate_throughput(now, Duration::from_secs(1000))
+            .unwrap();
+        assert_eq!(1.0, throughput.bytes_per_second());
     }
 
     #[test]
     fn test_throughput_log_calculate_throughput_3() {
         let (throughput_logs, now) = build_throughput_log(1000, Duration::from_millis(200), 1024);
 
-        let throughput = throughput_logs.calculate_throughput(now).unwrap();
+        let throughput = throughput_logs
+            .calculate_throughput(now, Duration::from_secs(5))
+            .unwrap();
         let expected_throughput = 1024.0 * 5.0;
-        // Floats being what they are
-        assert_eq!(
-            expected_throughput + 5.125125125125,
-            throughput.bytes_per_second()
-        );
+        assert_eq!(expected_throughput, throughput.bytes_per_second());
     }
 
     #[test]
     fn test_throughput_log_calculate_throughput_4() {
         let (throughput_logs, now) = build_throughput_log(1000, Duration::from_millis(100), 12);
 
-        let throughput = throughput_logs.calculate_throughput(now).unwrap();
+        let throughput = throughput_logs
+            .calculate_throughput(now, Duration::from_secs(1))
+            .unwrap();
         let expected_throughput = 12.0 * 10.0;
 
-        // Floats being what they are
-        assert_eq!(
-            expected_throughput + 0.12012012012012,
-            throughput.bytes_per_second()
-        );
+        assert_eq!(expected_throughput, throughput.bytes_per_second());
+    }
+
+    #[test]
+    fn test_throughput_followed_by_0() {
+        let tick = Duration::from_millis(100);
+        let (mut throughput_logs, now) = build_throughput_log(1000, tick, 12);
+        let throughput = throughput_logs
+            .calculate_throughput(now, Duration::from_secs(1))
+            .unwrap();
+        let expected_throughput = 12.0 * 10.0;
+
+        assert_eq!(expected_throughput, throughput.bytes_per_second());
+        throughput_logs.push((now + tick, 0));
+        let throughput = throughput_logs
+            .calculate_throughput(now + tick, Duration::from_secs(1))
+            .unwrap();
+        assert_eq!(108.0, throughput.bytes_per_second());
     }
 }
