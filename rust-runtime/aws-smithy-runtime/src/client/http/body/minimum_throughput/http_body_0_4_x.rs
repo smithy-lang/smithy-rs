@@ -115,7 +115,7 @@ where
 }
 
 // These tests use `hyper::body::Body::wrap_stream`
-#[cfg(all(test, feature = "connector-hyper-0-14-x"))]
+#[cfg(all(test, feature = "connector-hyper-0-14-x", feature = "test-util"))]
 mod test {
     use super::{super::Throughput, Error, MinimumThroughputBody};
     use crate::client::http::body::minimum_throughput::options::MinimumThroughputBodyOptions;
