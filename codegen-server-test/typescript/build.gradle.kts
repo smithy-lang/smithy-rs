@@ -16,6 +16,7 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
+val buildDir = layout.buildDirectory.get().asFile
 
 val pluginName = "rust-server-codegen-typescript"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-typescript/"
@@ -38,12 +39,10 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels ->
-    listOf(
-        CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
-        CodegenTest("com.aws.example.ts#PokemonService", "pokemon-service-server-sdk"),
-    )
-}
+val allCodegenTests = listOf(
+    CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("../../codegen-core/common-test-models/simple.smithy")),
+    CodegenTest("com.aws.example.ts#PokemonService", "pokemon-service-server-sdk"),
+)
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

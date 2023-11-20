@@ -23,7 +23,7 @@ val smithyVersion: String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jsoup:jsoup:1.14.3")
+    implementation("org.jsoup:jsoup:1.15.3")
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -55,8 +55,8 @@ fun gitCommitHash(): String {
 val generateSmithyRuntimeCrateVersion by tasks.registering {
     // generate the version of the runtime to use as a resource.
     // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/core"
-    val versionFile = file("$resourcesDir/runtime-crate-version.txt")
+    val resourcesDir = layout.buildDirectory.dir("resources/main/software/amazon/smithy/rust/codegen/core")
+    val versionFile = resourcesDir.get().file("runtime-crate-version.txt")
     outputs.file(versionFile)
     val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
     inputs.property("crateVersion", crateVersion)
@@ -64,7 +64,7 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
     val version = "$crateVersion\n${gitCommitHash()}"
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
-        versionFile.writeText(version)
+        versionFile.asFile.writeText(version)
     }
 }
 
@@ -125,7 +125,7 @@ if (isTestingEnabled.toBoolean()) {
         reports {
             xml.required.set(false)
             csv.required.set(false)
-            html.outputLocation.set(file("$buildDir/reports/jacoco"))
+            html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
         }
     }
 
@@ -140,5 +140,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

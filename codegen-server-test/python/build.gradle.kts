@@ -16,6 +16,7 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
+val buildDir = layout.buildDirectory.get().asFile
 
 val pluginName = "rust-server-codegen-python"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"

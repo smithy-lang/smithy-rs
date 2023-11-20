@@ -20,7 +20,7 @@ val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/sdk-adhoc-test/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+    outputDirectory = layout.buildDirectory.dir("$workingDirUnderBuildDir").get().asFile
 }
 
 buildscript {
