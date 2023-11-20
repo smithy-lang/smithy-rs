@@ -65,6 +65,7 @@ jobs:
       with:
         repository: awsdocs/aws-doc-sdk-examples
         path: aws-doc-sdk-examples
+        ref: rust-launch
     - name: Run ${{ matrix.actions.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
