@@ -34,6 +34,7 @@ fn make_block(sz: usize) -> Bytes {
 async fn stalled_stream_performance() {
     // 1GB
     let data_size = 1_000_000_000;
+    // observed block size during actual HTTP requests
     let block_size = 16384;
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let make_service = make_service_fn(move |_connection: &AddrStream| async move {
@@ -43,7 +44,7 @@ async fn stalled_stream_performance() {
                 tokio::task::spawn(async move {
                     for _i in 0..(data_size / block_size) {
                         sender
-                            .send_data(make_block(16384))
+                            .send_data(make_block(block_size))
                             .await
                             .expect("failed to write data");
                     }

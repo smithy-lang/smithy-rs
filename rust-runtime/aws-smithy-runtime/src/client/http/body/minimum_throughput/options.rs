@@ -20,7 +20,8 @@ pub struct MinimumThroughputBodyOptions {
     /// a timer is started. If the timer expires before throughput rises above the minimum,
     /// an error is emitted.
     ///
-    /// It is recommended to set this to a small value to avoid issues during stream-startup.
+    /// It is recommended to set this to a small value (e.g. 200ms) to avoid issues during
+    /// stream-startup.
     grace_period: Duration,
 
     /// The interval at which the throughput is checked.
