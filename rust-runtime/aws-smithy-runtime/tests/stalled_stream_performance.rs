@@ -5,10 +5,8 @@
 
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_async::time::{SystemTimeSource, TimeSource};
-use aws_smithy_runtime::client::http::body::minimum_throughput::options::MinimumThroughputBodyOptions;
-use aws_smithy_runtime::client::http::body::minimum_throughput::{
-    MinimumThroughputBody, Throughput,
-};
+use aws_smithy_runtime::client::http::body::minimum_throughput::MinimumThroughputBody;
+use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
 use bytes::{BufMut, Bytes, BytesMut};
@@ -25,9 +23,10 @@ fn make_block(sz: usize) -> Bytes {
     b.freeze()
 }
 
-// TODO(postGa): convert this to an actual benchmark
+// TODO(postGA): convert this to an actual benchmark
 // This test evaluates streaming 1GB of data over the loopback with and without the body wrapper
 // enabled. After optimizations, the body wrapper seems to make minimal differences
+// NOTE: make sure you run this test in release mode to get a sensible result
 #[tokio::test]
 #[ignore]
 async fn stalled_stream_performance() {
@@ -89,10 +88,8 @@ async fn make_request(address: &str, wrap_body: bool) -> Duration {
         body = body.map_preserve_contents(|body| {
             let time_source = SystemTimeSource::new();
             let sleep = TokioSleep::new();
-            let opts = MinimumThroughputBodyOptions::builder()
-                .minimum_throughput(Throughput::new(0.0, Duration::from_secs(1)))
-                .build();
-            let mtb = MinimumThroughputBody::new(time_source, sleep, body, opts);
+            let opts = StalledStreamProtectionConfig::enabled().build();
+            let mtb = MinimumThroughputBody::new(time_source, sleep, body, opts.into());
             SdkBody::from_body_0_4(mtb)
         });
     }

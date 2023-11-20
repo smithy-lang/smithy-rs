@@ -237,7 +237,7 @@ mod test {
             eight_byte_per_second_stream_with_minimum_throughput_timeout(minimum_throughput);
         let expected_err = Error::ThroughputBelowMinimum {
             expected: minimum_throughput,
-            actual: Throughput::new(8_f64, Duration::from_secs(1)),
+            actual: Throughput::new(8, Duration::from_secs(1)),
         };
         match res.await {
             Ok(_) => {
@@ -257,7 +257,7 @@ mod test {
 
     #[tokio::test]
     async fn test_throughput_timeout_less_than() {
-        let minimum_throughput = Throughput::new_bytes_per_second(9.0);
+        let minimum_throughput = Throughput::new_bytes_per_second(9);
         expect_error(minimum_throughput).await;
     }
 
@@ -278,18 +278,18 @@ mod test {
     async fn test_throughput_timeout_equal_to() {
         let (_guard, _) = capture_test_logs();
         // a tiny bit less. To capture 0-throughput properly, we need to allow 0 to be 0
-        let minimum_throughput = Throughput::new(31.0, Duration::from_secs(4));
+        let minimum_throughput = Throughput::new(31, Duration::from_secs(4));
         expect_success(minimum_throughput).await;
     }
 
     #[tokio::test]
     async fn test_throughput_timeout_greater_than() {
-        let minimum_throughput = Throughput::new(20.0, Duration::from_secs(3));
+        let minimum_throughput = Throughput::new(20, Duration::from_secs(3));
         expect_success(minimum_throughput).await;
     }
 
     // A multiplier for the sine wave amplitude; Chosen arbitrarily.
-    const BYTE_COUNT_UPPER_LIMIT: f64 = 1000.0;
+    const BYTE_COUNT_UPPER_LIMIT: u64 = 1000;
 
     /// emits 1000B/S for 5 seconds then suddenly stops
     fn sudden_stop(
@@ -307,7 +307,7 @@ mod test {
                 } else {
                     let mut bytes = BytesMut::new();
                     let bytes_per_segment =
-                        BYTE_COUNT_UPPER_LIMIT / (1f64 / sleep_dur.as_secs_f64());
+                        (BYTE_COUNT_UPPER_LIMIT as f64) * sleep_dur.as_secs_f64();
                     for _ in 0..bytes_per_segment as usize {
                         bytes.put_u8(0)
                     }
@@ -320,12 +320,12 @@ mod test {
 
     #[tokio::test]
     async fn test_stalled_stream_detection() {
-        test_suddenly_stopping_stream(0.0, Duration::from_secs(6)).await
+        test_suddenly_stopping_stream(0, Duration::from_secs(6)).await
     }
 
     #[tokio::test]
     async fn test_slow_stream_detection() {
-        test_suddenly_stopping_stream(BYTE_COUNT_UPPER_LIMIT / 2.0, Duration::from_secs_f64(5.50))
+        test_suddenly_stopping_stream(BYTE_COUNT_UPPER_LIMIT / 2, Duration::from_secs_f64(5.50))
             .await
     }
 
@@ -355,7 +355,7 @@ mod test {
         );
     }
 
-    async fn test_suddenly_stopping_stream(throughput_limit: f64, time_until_timeout: Duration) {
+    async fn test_suddenly_stopping_stream(throughput_limit: u64, time_until_timeout: Duration) {
         let (_guard, _) = capture_test_logs();
         let options = MinimumThroughputBodyOptions::builder()
             // Minimum throughput per second will be approx. half of the BYTE_COUNT_UPPER_LIMIT.

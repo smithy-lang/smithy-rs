@@ -7,23 +7,16 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
+/// Throughput representation for use when configuring [`MinimumThroughputBody`]
 #[derive(Debug, Clone, Copy)]
 pub struct Throughput {
-    pub(super) bytes_read: f64,
+    pub(super) bytes_read: u64,
     pub(super) per_time_elapsed: Duration,
 }
 
 impl Throughput {
     /// Create a new throughput with the given bytes read and time elapsed.
-    pub fn new(bytes_read: f64, per_time_elapsed: Duration) -> Self {
-        debug_assert!(
-            !bytes_read.is_nan(),
-            "cannot create a throughput if bytes_read == NaN"
-        );
-        debug_assert!(
-            bytes_read.is_finite(),
-            "cannot create a throughput if bytes_read == Inf"
-        );
+    pub fn new(bytes_read: u64, per_time_elapsed: Duration) -> Self {
         debug_assert!(
             !per_time_elapsed.is_zero(),
             "cannot create a throughput if per_time_elapsed == 0"
@@ -36,7 +29,7 @@ impl Throughput {
     }
 
     /// Create a new throughput in bytes per second.
-    pub fn new_bytes_per_second(bytes: f64) -> Self {
+    pub fn new_bytes_per_second(bytes: u64) -> Self {
         Self {
             bytes_read: bytes,
             per_time_elapsed: Duration::from_secs(1),
@@ -44,17 +37,17 @@ impl Throughput {
     }
 
     /// Create a new throughput in kilobytes per second.
-    pub fn new_kilobytes_per_second(kilobytes: f64) -> Self {
+    pub fn new_kilobytes_per_second(kilobytes: u64) -> Self {
         Self {
-            bytes_read: kilobytes * 1000.0,
+            bytes_read: kilobytes * 1000,
             per_time_elapsed: Duration::from_secs(1),
         }
     }
 
     /// Create a new throughput in megabytes per second.
-    pub fn new_megabytes_per_second(megabytes: f64) -> Self {
+    pub fn new_megabytes_per_second(megabytes: u64) -> Self {
         Self {
-            bytes_read: megabytes * 1000.0 * 1000.0,
+            bytes_read: megabytes * 1000 * 1000,
             per_time_elapsed: Duration::from_secs(1),
         }
     }
@@ -65,7 +58,7 @@ impl Throughput {
             return 0.0; // Avoid dividing by zero.
         };
 
-        self.bytes_read / per_time_elapsed_secs
+        self.bytes_read as f64 / per_time_elapsed_secs
     }
 }
 
@@ -98,16 +91,12 @@ impl fmt::Display for Throughput {
 impl From<(u64, Duration)> for Throughput {
     fn from(value: (u64, Duration)) -> Self {
         Self {
-            bytes_read: value.0 as f64,
+            bytes_read: value.0,
             per_time_elapsed: value.1,
         }
     }
 }
 
-// Note(rcoh): I experimented with an optimization to track total bytes processed and shortcut
-// the sum computation, however, this made no difference after I replaced the `fold()` with `sum()`
-// instead. I suspect it would show up in a direct benchmark of `ThroughputLogs` but it doesn't seem
-// to matter when used in `MinimumThroughputBody` so I removed it in favor of simplicity.
 #[derive(Clone)]
 pub(super) struct ThroughputLogs {
     max_length: usize,
@@ -163,7 +152,7 @@ impl ThroughputLogs {
                 // Otherwise, if the entire buffer fits in the timewindow, we can the shortcut to
                 // avoid recomputing all the data
                 Some(Throughput {
-                    bytes_read: self.bytes_processed as f64,
+                    bytes_read: self.bytes_processed,
                     per_time_elapsed: total_length,
                 })
             };
@@ -182,7 +171,7 @@ impl ThroughputLogs {
             .sum::<u64>();
 
         Some(Throughput {
-            bytes_read: total_bytes_logged as f64,
+            bytes_read: total_bytes_logged,
             per_time_elapsed: time_elapsed,
         })
     }
@@ -195,9 +184,9 @@ mod test {
 
     #[test]
     fn test_throughput_eq() {
-        let t1 = Throughput::new(1.0, Duration::from_secs(1));
-        let t2 = Throughput::new(25.0, Duration::from_secs(25));
-        let t3 = Throughput::new(100.0, Duration::from_secs(100));
+        let t1 = Throughput::new(1, Duration::from_secs(1));
+        let t2 = Throughput::new(25, Duration::from_secs(25));
+        let t3 = Throughput::new(100, Duration::from_secs(100));
 
         assert_eq!(t1, t2);
         assert_eq!(t2, t3);

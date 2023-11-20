@@ -95,7 +95,7 @@ pub struct MinimumThroughputBodyOptionsBuilder {
 const DEFAULT_CHECK_INTERVAL: Duration = Duration::from_millis(500);
 const DEFAULT_GRACE_PERIOD: Duration = Duration::from_secs(0);
 const DEFAULT_MINIMUM_THROUGHPUT: Throughput = Throughput {
-    bytes_read: 1.0,
+    bytes_read: 1,
     per_time_elapsed: Duration::from_secs(1),
 };
 
