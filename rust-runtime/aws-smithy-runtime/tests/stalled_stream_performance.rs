@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![cfg(feature = "client")]
+
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_async::time::{SystemTimeSource, TimeSource};
 use aws_smithy_runtime::client::http::body::minimum_throughput::MinimumThroughputBody;

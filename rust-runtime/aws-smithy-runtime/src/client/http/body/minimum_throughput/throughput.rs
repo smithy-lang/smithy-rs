@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::time::{Duration, SystemTime};
 
-/// Throughput representation for use when configuring [`MinimumThroughputBody`]
+/// Throughput representation for use when configuring [`super::MinimumThroughputBody`]
 #[derive(Debug, Clone, Copy)]
 pub struct Throughput {
     pub(super) bytes_read: u64,
