@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![cfg(feature = "client")]
+#![cfg(all(feature = "client", feature = "test-util"))]
 
 use aws_smithy_async::rt::sleep::TokioSleep;
 use aws_smithy_async::time::{SystemTimeSource, TimeSource};
