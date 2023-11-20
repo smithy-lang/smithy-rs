@@ -1,4 +1,34 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 17th, 2023
+===================
+**Breaking Changes:**
+- :warning::tada: (client, [smithy-rs#3202](https://github.com/smithy-lang/smithy-rs/issues/3202)) Add configurable stalled-stream protection for downloads.
+
+    When making HTTP calls,
+    it's possible for a connection to 'stall out' and emit no more data due to server-side issues.
+    In the event this happens, it's desirable for the stream to error out as quickly as possible.
+    While timeouts can protect you from this issue, they aren't adaptive to the amount of data
+    being sent and so must be configured specifically for each use case. When enabled, stalled-stream
+    protection will ensure that bad streams error out quickly, regardless of the amount of data being
+    downloaded.
+
+    Protection is enabled by default for all clients but can be configured or disabled.
+    See [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.
+- :warning: (client, [smithy-rs#3222](https://github.com/smithy-lang/smithy-rs/issues/3222)) Types/functions that were deprecated in previous releases were removed. Unfortunately, some of these deprecations
+    were ignored by the Rust compiler (we found out later that `#[deprecated]` on `pub use` doesn't work). See
+    the [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discussions/3223) for more details.
+- :warning: (all, [smithy-rs#3236](https://github.com/smithy-lang/smithy-rs/issues/3236)) Conversions for HTTP request in aws-smithy-runtime-api are now feature gated behind the `http-02x` feature
+
+**New this release:**
+- :tada: (all, [smithy-rs#3183](https://github.com/smithy-lang/smithy-rs/issues/3183), @HakanVardarr) Add `Display` impl for `DateTime`.
+- :bug: (client, [smithy-rs#3229](https://github.com/smithy-lang/smithy-rs/issues/3229), [aws-sdk-rust#960](https://github.com/awslabs/aws-sdk-rust/issues/960)) Prevent multiplication overflow in backoff computation
+- (client, [smithy-rs#3226](https://github.com/smithy-lang/smithy-rs/issues/3226)) Types/functions that were previously `#[doc(hidden)]` in `aws-smithy-async`, `aws-smithy-runtime-api`, `aws-smithy-runtime`, `aws-smithy-types`, and the SDK crates are now visible. For those that are not intended to be used directly, they are called out in their docs as such.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @HakanVardarr ([smithy-rs#3183](https://github.com/smithy-lang/smithy-rs/issues/3183))
+
+
 November 16th, 2023
 ===================
 **Breaking Changes:**
