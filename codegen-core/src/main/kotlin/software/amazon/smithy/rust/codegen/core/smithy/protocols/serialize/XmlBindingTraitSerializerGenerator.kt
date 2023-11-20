@@ -73,7 +73,6 @@ class XmlBindingTraitSerializerGenerator(
 
     private val xmlIndex = XmlNameIndex.of(model)
     private val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
-    private val util = SerializerUtil(model)
 
     sealed class Ctx {
         abstract val input: String
@@ -517,15 +516,8 @@ class XmlBindingTraitSerializerGenerator(
                 inner(Ctx.updateInput(ctx, tmp))
             }
         } else {
-            with(util) {
-                val valueExpression = if (ctx.input.startsWith("&")) {
-                    ValueExpression.Reference(ctx.input)
-                } else {
-                    ValueExpression.Value(ctx.input)
-                }
-                ignoreZeroValues(member, valueExpression) {
-                    inner(ctx)
-                }
+            rustBlock("") {
+                inner(ctx)
             }
         }
     }

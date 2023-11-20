@@ -31,6 +31,14 @@ impl AsRef<[u8]> for Blob {
     }
 }
 
+impl Default for Blob {
+    fn default() -> Self {
+        Blob {
+            inner: Vec::new()
+        }
+    }
+}
+
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod serde_serialize {
     use super::*;

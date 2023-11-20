@@ -178,7 +178,6 @@ class JsonSerializerGenerator(
         "JsonValueWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonValueWriter"),
         "ByteSlab" to RuntimeType.ByteSlab,
     )
-    private val serializerUtil = SerializerUtil(model)
 
     /**
      * Reusable structure serializer implementation that can be used to generate serializing code for
@@ -378,10 +377,8 @@ class JsonSerializerGenerator(
                 )
             }
 
-            with(serializerUtil) {
-                ignoreZeroValues(context.shape, context.valueExpression) {
-                    serializeMemberValue(context, targetShape)
-                }
+            rustBlock("") {
+                serializeMemberValue(context, targetShape)
             }
         }
     }

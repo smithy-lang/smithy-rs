@@ -38,6 +38,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.ClientOptionalTrait
 import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
@@ -269,7 +270,9 @@ open class SymbolVisitor(
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
         val defaultValue = shape.getMemberTrait(model, DefaultTrait::class.java).orNull()?.let { trait ->
-            if (target.isDocumentShape || target.isTimestampShape) {
+            if (shape.hasTrait<ClientOptionalTrait>()) {
+                Default.NoDefault
+            } else if (target.isDocumentShape || target.isTimestampShape) {
                 Default.NonZeroDefault(trait.toNode())
             } else {
                 when (val value = trait.toNode()) {
