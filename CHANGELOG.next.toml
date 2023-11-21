@@ -10,9 +10,3 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
-
-[[aws-sdk-rust]]
-message = "Make properties of S3Control PublicAccessBlockConfiguration optional. Previously, they defaulted to false, but this created invalid requests."
-references = ["smithy-rs#3246"]
-meta = { "breaking" = true, "tada" = false, "bug" = true }
-author = "milesziemer"

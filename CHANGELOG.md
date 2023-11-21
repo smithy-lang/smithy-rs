@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 21st, 2023
+===================
+
 November 17th, 2023
 ===================
 **Breaking Changes:**
