@@ -42,6 +42,7 @@ pub struct UpgradeRuntimeCratesVersionArgs {
 pub async fn subcommand_upgrade_runtime_crates_version(
     args: &UpgradeRuntimeCratesVersionArgs,
 ) -> Result<(), anyhow::Error> {
+    check_crate_ver_against_stability(&args.version, PackageStability::Unstable)?;
     let upgraded_unstable_version = semver::Version::parse(args.version.as_str())
         .with_context(|| format!("{} is not a valid semver version", &args.version))?;
     let fs = Fs::Real;
@@ -57,9 +58,8 @@ pub async fn subcommand_upgrade_runtime_crates_version(
             &args.gradle_properties_path
         )
     })?;
-    // TODO(GA): Error out if args.stable_version starts with "0."
-    //  https://github.com/smithy-lang/smithy-rs/pull/3082#discussion_r1378637315
     let updated_gradle_properties = if let Some(stable_version) = &args.stable_version {
+        check_crate_ver_against_stability(stable_version, PackageStability::Stable)?;
         let upgraded_stable_version = semver::Version::parse(stable_version.as_str())
             .with_context(|| format!("{} is not a valid semver version", &stable_version))?;
         update_gradle_properties(
@@ -125,9 +125,26 @@ async fn update_gradle_properties_file(
     Ok(())
 }
 
+fn check_crate_ver_against_stability(
+    crate_ver: &str,
+    package_stability: PackageStability,
+) -> Result<(), anyhow::Error> {
+    match package_stability {
+        PackageStability::Stable if crate_ver.starts_with("0.") => Err(anyhow::Error::msg(
+            format!("{} is an invalid stable crate version", &crate_ver),
+        )),
+        PackageStability::Unstable if !crate_ver.starts_with("0.") => Err(anyhow::Error::msg(
+            format!("{} is an invalid unstable crate version", &crate_ver),
+        )),
+        _ => Ok(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::subcommand::upgrade_runtime_crates_version::update_gradle_properties;
+    use crate::subcommand::upgrade_runtime_crates_version::{
+        check_crate_ver_against_stability, update_gradle_properties,
+    };
     use smithy_rs_tool_common::package::PackageStability;
 
     #[test]
@@ -188,5 +205,16 @@ mod tests {
             update_gradle_properties(gradle_properties, &version, PackageStability::Unstable);
         assert!(result.is_err());
         assert!(format!("{:?}", result).contains("downgrade"));
+    }
+
+    #[test]
+    fn test_check_crate_ver_against_stability() {
+        assert!(check_crate_ver_against_stability("0.60.0", PackageStability::Stable).is_err());
+        assert!(check_crate_ver_against_stability("1.0.0", PackageStability::Stable).is_ok());
+        assert!(check_crate_ver_against_stability("2.0.0", PackageStability::Stable).is_ok());
+
+        assert!(check_crate_ver_against_stability("0.60.0", PackageStability::Unstable).is_ok());
+        assert!(check_crate_ver_against_stability("1.0.0", PackageStability::Unstable).is_err());
+        assert!(check_crate_ver_against_stability("2.0.0", PackageStability::Unstable).is_err());
     }
 }
