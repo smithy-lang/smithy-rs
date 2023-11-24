@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.module
@@ -84,6 +85,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val isBuilderFallible = hasFallibleBuilder(shape, symbolProvider)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false, validationExceptionConversionGenerator)
+    private val lifetime = shape.lifetimeDeclaration(symbolProvider)
 
     private val codegenScope = arrayOf(
         "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
@@ -152,7 +154,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
                 self.build_enforcing_required_and_enum_traits()
             }
             """,
-            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol, lifetime),
         )
         renderBuildEnforcingRequiredAndEnumTraitsFn(implBlockWriter)
     }
@@ -160,7 +162,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private fun renderBuildEnforcingRequiredAndEnumTraitsFn(implBlockWriter: RustWriter) {
         implBlockWriter.rustBlockTemplate(
             "fn build_enforcing_required_and_enum_traits(self) -> #{ReturnType:W}",
-            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol, lifetime),
         ) {
             conditionalBlock("Ok(", ")", conditional = isBuilderFallible) {
                 coreBuilder(this)
@@ -199,7 +201,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     fun renderConvenienceMethod(implBlock: RustWriter) {
         implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
-        implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
+        implBlock.rustBlock("pub fn builder() -> #T $lifetime", builderSymbol) {
             write("#T::default()", builderSymbol)
         }
     }
@@ -237,10 +239,10 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{TryFrom}<Builder> for #{Structure} {
+            impl #{TryFrom}<Builder $lifetime> for #{Structure}$lifetime {
                 type Error = ConstraintViolation;
 
-                fn try_from(builder: Builder) -> Result<Self, Self::Error> {
+                fn try_from(builder: Builder $lifetime) -> Result<Self, Self::Error> {
                     builder.build()
                 }
             }
@@ -252,8 +254,8 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private fun renderFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{From}<Builder> for #{Structure} {
-                fn from(builder: Builder) -> Self {
+            impl #{From}<Builder $lifetime> for #{Structure}$lifetime {
+                fn from(builder: Builder $lifetime) -> Self {
                     builder.build()
                 }
             }

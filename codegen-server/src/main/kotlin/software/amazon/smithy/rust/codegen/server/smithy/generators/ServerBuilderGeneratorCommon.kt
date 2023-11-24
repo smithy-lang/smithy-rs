@@ -57,11 +57,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasPublicConstrainedWra
 /**
  * Returns a writable to render the return type of the server builders' `build()` method.
  */
-fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol) = writable {
+fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol, lifetime: String) = writable {
     if (isBuilderFallible) {
-        rust("Result<#T, ConstraintViolation>", structureSymbol)
+        rust("Result<#T $lifetime, ConstraintViolation>", structureSymbol)
     } else {
-        rust("#T", structureSymbol)
+        rust("#T $lifetime", structureSymbol)
     }
 }
 
