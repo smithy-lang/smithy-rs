@@ -93,12 +93,9 @@ open class StructureGenerator(
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
     private fun renderDebugImpl() {
+        val lifetime = shape.lifetimeDeclaration(symbolProvider)
         writer.rustBlock(
-            "impl ${shape.lifetimeDeclaration(symbolProvider)} #T for $name ${
-                shape.lifetimeDeclaration(
-                    symbolProvider,
-                )
-            }",
+            "impl ${shape.lifetimeDeclaration(symbolProvider)} #T for $name $lifetime",
             RuntimeType.Debug,
         ) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {

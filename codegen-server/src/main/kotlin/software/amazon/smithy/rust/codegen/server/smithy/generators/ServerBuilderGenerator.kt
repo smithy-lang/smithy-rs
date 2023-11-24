@@ -198,7 +198,7 @@ class ServerBuilderGenerator(
             it == RuntimeType.Debug || it == RuntimeType.Clone
         } + RuntimeType.Default
         Attribute(derive(builderDerives)).render(writer)
-        writer.rustBlock("${visibility.toRustQualifier()} struct Builder $lifetime") {
+        writer.rustBlock("${visibility.toRustQualifier()} struct Builder$lifetime") {
             members.forEach { renderBuilderMember(this, it) }
         }
 
