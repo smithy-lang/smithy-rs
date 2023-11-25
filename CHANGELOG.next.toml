@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Allow `--` to be used in bucket names for S3"
+references = ["smithy-rs#3253"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
