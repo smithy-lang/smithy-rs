@@ -79,4 +79,6 @@ object CrateSet {
     )
 
     val ENTIRE_SMITHY_RUNTIME = (AWS_SDK_SMITHY_RUNTIME + SERVER_SMITHY_RUNTIME).toSortedSet(compareBy { it.name })
+
+    val ALL_CRATES = AWS_SDK_RUNTIME + ENTIRE_SMITHY_RUNTIME
 }

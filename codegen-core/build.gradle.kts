@@ -52,19 +52,49 @@ fun gitCommitHash(): String {
     }
 }
 
+fun kv(key: String, value: String) = """"$key": "$value""""
+
 val generateSmithyRuntimeCrateVersion by tasks.registering {
     // generate the version of the runtime to use as a resource.
     // this keeps us from having to manually change version numbers in multiple places
     val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/core"
     val versionFile = file("$resourcesDir/runtime-crate-version.txt")
     outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
-    inputs.property("crateVersion", crateVersion)
+    val stableCrateVersion = project.properties["smithy.rs.runtime.crate.stable.version"].toString()
+    val unstableCrateVersion = project.properties["smithy.rs.runtime.crate.unstable.version"].toString()
+    inputs.property("crateVersion", stableCrateVersion)
     // version format must be in sync with `software.amazon.smithy.rust.codegen.core.Version`
-    val version = "$crateVersion\n${gitCommitHash()}"
+    val version = StringBuilder().append("{")
+    version.append(kv("githash", gitCommitHash())).append(",")
+    version.append(kv("stableVersion", stableCrateVersion)).append(",")
+    version.append(kv("unstableVersion", unstableCrateVersion)).append(",")
+    // hack for internal build
+    val smithyStableCrates = listOf(
+        // AWS crates
+        "aws-config",
+        "aws-credential-types",
+        "aws-runtime",
+        "aws-runtime-api",
+        "aws-sigv4",
+        "aws-types",
+
+        // smithy crates
+        "aws-smithy-async",
+        "aws-smithy-runtime-api",
+        "aws-smithy-runtime",
+        "aws-smithy-types",
+    )
+
+    val runtimeCrates =
+        smithyStableCrates.joinToString(separator = ",", prefix = "{", postfix = "}") { crate ->
+            kv(crate, stableCrateVersion)
+        }
+
+    version.append(""""runtimeCrates": $runtimeCrates""").append("}")
+
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
-        versionFile.writeText(version)
+        versionFile.writeText(version.toString())
     }
 }
 
