@@ -79,3 +79,15 @@ message = "Expose local socket address from ConnectionMetadata."
 references = ["aws-sdk-rust#990"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "declanvk"
+
+[[smithy-rs]]
+message = "All generated docs now include docsrs labels when features are required"
+references = ["smithy-rs#3121", "smithy-rs#3295"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "All generated docs now include docsrs labels when features are required"
+references = ["smithy-rs#3121", "smithy-rs#3295"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
