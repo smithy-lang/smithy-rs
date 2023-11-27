@@ -262,17 +262,20 @@ impl DefaultPluginParams {
         self.behavior_version = Some(version);
         self
     }
+
+    fn behavior_version(&self) -> BehaviorVersion {
+        self.behavior_version
+            .clone()
+            .unwrap_or(BehaviorVersion::latest())
+    }
 }
 
 /// All default plugins.
 pub fn default_plugins(
     params: DefaultPluginParams,
 ) -> impl IntoIterator<Item = SharedRuntimePlugin> {
-    let http_client_plugin = match params
-        .behavior_version
-        .unwrap_or(BehaviorVersion::latest())
-        .is_at_least_2023_11_27()
-    {
+    // v2023_11_27 introduced lazy HTTP clients
+    let http_client_plugin = match params.behavior_version() >= BehaviorVersion::v2023_11_27() {
         true => default_http_client_plugin_lazy(),
         false => default_http_client_plugin(),
     };

@@ -43,7 +43,7 @@ mod default_connector {
     // don't need to repeatedly incur that cost.
     pub(crate) static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
         hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| std::thread::spawn(default_tls).join().unwrap());
+    > = once_cell::sync::Lazy::new(default_tls);
 
     fn default_tls() -> HttpsConnector<HttpConnector> {
         use hyper_rustls::ConfigBuilderExt;
@@ -130,7 +130,7 @@ pub fn default_client_lazy() -> Option<SharedHttpClient> {
     #[cfg(feature = "tls-rustls")]
     {
         tracing::trace!("creating a new default hyper 0.14.x client");
-        Some(HyperClientBuilder::new().build_https())
+        Some(HyperClientBuilder::new().build_https_lazy())
     }
     #[cfg(not(feature = "tls-rustls"))]
     {
@@ -511,11 +511,11 @@ where
                 let start = components.time_source().map(|ts| ts.now());
                 let tcp_connector = (self.tcp_connector_fn)();
                 let end = components.time_source().map(|ts| ts.now());
-                let delta = match (start, end) {
-                    (Some(start), Some(end)) => end.duration_since(start).ok(),
-                    _ => None,
-                };
-                tracing::debug!("new TCP connector created in {:?}", delta);
+                if let (Some(start), Some(end)) = (start, end) {
+                    if let Ok(elapsed) = end.duration_since(start) {
+                        tracing::debug!("new TCP connector created in {:?}", elapsed);
+                    }
+                }
                 let connector = SharedHttpConnector::new(builder.build(tcp_connector));
                 cache.insert(key.clone(), connector);
             }
@@ -560,13 +560,17 @@ impl HyperClientBuilder {
         self
     }
 
-    /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    /// Create a hyper client with the default rustls HTTPS implementation.
+    ///
+    /// This client will immediately load trusted certificates.
     #[cfg(feature = "tls-rustls")]
     pub fn build_https(self) -> SharedHttpClient {
         self.build(default_connector::https())
     }
 
-    /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    /// Create a lazy hyper client with the default rustls HTTPS implementation.
+    ///
+    /// This client won't load trusted certificates until the first request is made.
     #[cfg(feature = "tls-rustls")]
     pub fn build_https_lazy(self) -> SharedHttpClient {
         self.build_with_fn(default_connector::https)
@@ -982,18 +986,15 @@ mod timeout_middleware {
 mod test {
     use super::*;
     use crate::client::http::test_util::NeverTcpConnector;
-    use aws_smithy_async::assert_elapsed;
     use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http::Uri;
     use hyper_0_14::client::connect::{Connected, Connection};
-    use once_cell::sync::Lazy;
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
     use std::task::{Context, Poll};
-    use std::time::SystemTime;
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
     #[tokio::test]
@@ -1027,7 +1028,10 @@ mod test {
         ];
 
         // Kick off thousands of parallel tasks that will try to create a connector
-        let components = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(SystemTimeSource::new()))
+            .build()
+            .unwrap();
         let mut handles = Vec::new();
         for setting in &settings {
             for _ in 0..1000 {
@@ -1047,29 +1051,6 @@ mod test {
 
         // Verify only 4 connectors were created amidst the chaos
         assert_eq!(4, creation_count.load(Ordering::Relaxed));
-    }
-
-    #[tokio::test]
-    #[cfg(feature = "tls-rustls")]
-    async fn dont_preload_connector() {
-        let _client = HyperClientBuilder::default().build_https();
-        assert!(Lazy::get(&default_connector::HTTPS_NATIVE_ROOTS).is_none());
-    }
-
-    #[tokio::test]
-    #[cfg(feature = "tls-rustls")]
-    async fn connector_loading_time() {
-        let client = HyperClientBuilder::default().build_https();
-        let now = SystemTime::now();
-        let conn = client.http_connector(
-            &HttpConnectorSettings::default(),
-            &RuntimeComponentsBuilder::for_tests()
-                .with_time_source(Some(SystemTimeSource::new()))
-                .build()
-                .unwrap(),
-        );
-        let dur = now.elapsed().unwrap();
-        assert_eq!(dur, Duration::from_millis(300));
     }
 
     #[tokio::test]

@@ -45,7 +45,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.smithyRuntimeApiClient
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
@@ -159,7 +158,6 @@ class FluentClientGenerator(
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
                 "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
-                "HttpClient" to smithyRuntimeApiClient(runtimeConfig).resolve("client::http::HttpClient"),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "client_docs" to writable {
                     customizations.forEach {

@@ -15,7 +15,7 @@ use aws_types::SdkConfig;
 use std::time::Duration;
 use tokio::time::Instant;
 
-/// Use a 5 second operation timeout on SdkConfig and a 0ms connect timeout on the service config
+/// Use a 5 second operation timeout on SdkConfig and a 0ms operation timeout on the service config
 #[tokio::test]
 async fn timeouts_can_be_set_by_service() {
     let (_guard, _) = capture_test_logs();
@@ -52,10 +52,8 @@ async fn timeouts_can_be_set_by_service() {
         .await
         .expect_err("unroutable IP should timeout");
     match err {
-        SdkError::TimeoutError(_err) =>
-            /* ok */
-            {}
-        // if the connect timeout is not respected, this times out after 1 second because of the operation timeout with `SdkError::Timeout`
+        SdkError::TimeoutError(_err) => { /* ok */ }
+        // if the connect timeout is not respected, this times out after 5 seconds because of the operation timeout with `SdkError::Timeout`
         _other => panic!("unexpected error: {:?}", _other),
     }
     // there should be a 0ms timeout, we gotta set some stuff up. Just want to make sure
