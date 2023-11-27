@@ -12,7 +12,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 [features]
 client = ["aws-smithy-runtime-api/client"]
 http-auth = ["aws-smithy-runtime-api/http-auth"]
-connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream"]
+connector-hyper-0-14-x = ["dep:hyper-0-14", "hyper-0-14?/client", "hyper-0-14?/http2", "hyper-0-14?/http1", "hyper-0-14?/tcp", "hyper-0-14?/stream", "dep:h2"]
 tls-rustls = ["dep:hyper-rustls", "dep:rustls", "connector-hyper-0-14-x"]
 rt-tokio = ["tokio/rt"]
 
@@ -28,6 +28,7 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
 bytes = "1"
 fastrand = "2.0.0"
+h2 = { version = "0.3", default-features = false, optional = true }
 http = { version = "0.2.8" }
 http-body-0-4 = { package = "http-body", version = "0.4.4" }
 hyper-0-14 = { package = "hyper", version = "0.14.26", default-features = false, optional = true }

@@ -11,6 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[smithy-rs]]
+message = "Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)"
+references = ["aws-sdk-rust#738", "aws-sdk-rust#858"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)"
+references = ["aws-sdk-rust#738", "aws-sdk-rust#858"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
 [[aws-sdk-rust]]
 message = "Make some properties for IoT types optional. Previously, they defaulted to false, but that isn't how the service actual works."
 references = ["smithy-rs#3256"]
