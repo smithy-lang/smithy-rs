@@ -36,38 +36,42 @@ use tokio::io::{AsyncRead, AsyncWrite};
 mod default_connector {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
+    use hyper_0_14::client::HttpConnector;
+    use hyper_rustls::HttpsConnector;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
-    static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
+    pub(crate) static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
         hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| {
+    > = once_cell::sync::Lazy::new(|| std::thread::spawn(default_tls).join().unwrap());
+
+    fn default_tls() -> HttpsConnector<HttpConnector> {
         use hyper_rustls::ConfigBuilderExt;
         hyper_rustls::HttpsConnectorBuilder::new()
-        .with_tls_config(
-            rustls::ClientConfig::builder()
-                .with_cipher_suites(&[
-                    // TLS1.3 suites
-                    rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
-                    // TLS1.2 suites
-                    rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-                ])
-                .with_safe_default_kx_groups()
-                .with_safe_default_protocol_versions()
-                .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
-                .with_native_roots()
-                .with_no_client_auth()
-        )
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .build()
-    });
+               .with_tls_config(
+                rustls::ClientConfig::builder()
+                    .with_cipher_suites(&[
+                        // TLS1.3 suites
+                        rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
+                        // TLS1.2 suites
+                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+                    ])
+                    .with_safe_default_kx_groups()
+                    .with_safe_default_protocol_versions()
+                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
+                    .with_native_roots()
+                    .with_no_client_auth()
+            )
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build()
+    }
 
     pub(super) fn base(
         settings: &HttpConnectorSettings,
@@ -109,6 +113,20 @@ pub fn default_connector(
 
 /// Creates a hyper-backed HTTPS client from defaults depending on what cargo features are activated.
 pub fn default_client() -> Option<SharedHttpClient> {
+    #[cfg(feature = "tls-rustls")]
+    {
+        tracing::trace!("creating a new default hyper 0.14.x client");
+        Some(HyperClientBuilder::new().build_https())
+    }
+    #[cfg(not(feature = "tls-rustls"))]
+    {
+        tracing::trace!("no default connector available");
+        None
+    }
+}
+
+/// Creates a hyper-backed HTTPS client from defaults depending on what cargo features are activated.
+pub fn default_client_lazy() -> Option<SharedHttpClient> {
     #[cfg(feature = "tls-rustls")]
     {
         tracing::trace!("creating a new default hyper 0.14.x client");
@@ -490,7 +508,14 @@ where
                     .connector_settings(settings.clone());
                 builder.set_sleep_impl(components.sleep_impl());
 
+                let start = components.time_source().map(|ts| ts.now());
                 let tcp_connector = (self.tcp_connector_fn)();
+                let end = components.time_source().map(|ts| ts.now());
+                let delta = match (start, end) {
+                    (Some(start), Some(end)) => end.duration_since(start).ok(),
+                    _ => None,
+                };
+                tracing::debug!("new TCP connector created in {:?}", delta);
                 let connector = SharedHttpConnector::new(builder.build(tcp_connector));
                 cache.insert(key.clone(), connector);
             }
@@ -541,6 +566,12 @@ impl HyperClientBuilder {
         self.build(default_connector::https())
     }
 
+    /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    #[cfg(feature = "tls-rustls")]
+    pub fn build_https_lazy(self) -> SharedHttpClient {
+        self.build_with_fn(default_connector::https)
+    }
+
     /// Create a [`SharedHttpClient`] from this builder and a given connector.
     ///
     #[cfg_attr(
@@ -562,7 +593,6 @@ impl HyperClientBuilder {
         })
     }
 
-    #[cfg(all(test, feature = "test-util"))]
     fn build_with_fn<C, F>(self, tcp_connector_fn: F) -> SharedHttpClient
     where
         F: Fn() -> C + Send + Sync + 'static,
@@ -952,14 +982,18 @@ mod timeout_middleware {
 mod test {
     use super::*;
     use crate::client::http::test_util::NeverTcpConnector;
+    use aws_smithy_async::assert_elapsed;
+    use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http::Uri;
     use hyper_0_14::client::connect::{Connected, Connection};
+    use once_cell::sync::Lazy;
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::Arc;
     use std::task::{Context, Poll};
+    use std::time::SystemTime;
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
     #[tokio::test]
@@ -1013,6 +1047,29 @@ mod test {
 
         // Verify only 4 connectors were created amidst the chaos
         assert_eq!(4, creation_count.load(Ordering::Relaxed));
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "tls-rustls")]
+    async fn dont_preload_connector() {
+        let _client = HyperClientBuilder::default().build_https();
+        assert!(Lazy::get(&default_connector::HTTPS_NATIVE_ROOTS).is_none());
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "tls-rustls")]
+    async fn connector_loading_time() {
+        let client = HyperClientBuilder::default().build_https();
+        let now = SystemTime::now();
+        let conn = client.http_connector(
+            &HttpConnectorSettings::default(),
+            &RuntimeComponentsBuilder::for_tests()
+                .with_time_source(Some(SystemTimeSource::new()))
+                .build()
+                .unwrap(),
+        );
+        let dur = now.elapsed().unwrap();
+        assert_eq!(dur, Duration::from_millis(300));
     }
 
     #[tokio::test]

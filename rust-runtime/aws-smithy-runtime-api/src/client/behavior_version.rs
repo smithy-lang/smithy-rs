@@ -11,7 +11,15 @@
 /// compatible. For example, a change which introduces new default timeouts or a new retry-mode for
 /// all operations might be the ideal behavior but could break existing applications.
 #[derive(Debug, Clone)]
-pub struct BehaviorVersion {}
+pub struct BehaviorVersion {
+    version: Version,
+}
+
+#[derive(PartialOrd, Ord, PartialEq, Eq)]
+enum Version {
+    V2023_11_09,
+    V2023_11_27,
+}
 
 impl BehaviorVersion {
     /// This method will always return the latest major version.
@@ -25,13 +33,22 @@ impl BehaviorVersion {
     ///
     /// The latest version is currently [`BehaviorVersion::v2023_11_09`]
     pub fn latest() -> Self {
-        Self {}
+        Self {
+            version: Version::V2023_11_27,
+        }
     }
 
     /// This method returns the behavior configuration for November 9th, 2023
     ///
     /// When a new behavior major version is released, this method will be deprecated.
+    #[deprecated(note = "v2023_11_27 has been released")]
     pub fn v2023_11_09() -> Self {
-        Self {}
+        Self {
+            version: Version::V2023_11_09,
+        }
+    }
+
+    pub fn is_at_least_2023_11_27(&self) -> bool {
+        self.version >= Version::V2023_11_27
     }
 }

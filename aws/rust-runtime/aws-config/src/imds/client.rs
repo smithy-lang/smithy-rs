@@ -990,12 +990,18 @@ pub(crate) mod test {
         use crate::imds::client::ImdsError;
         use aws_smithy_types::error::display::DisplayErrorContext;
         use std::time::SystemTime;
+        let (_guard, _) = capture_test_logs();
 
         let client = Client::builder()
             // 240.* can never be resolved
             .endpoint("http://240.0.0.0")
             .expect("valid uri")
             .build();
+        // preload the connector so that doesn't impact timing
+        let _resp = client
+            .get("/latest/metadata")
+            .await
+            .expect_err("240.0.0.0 will never resolve");
         let now = SystemTime::now();
         let resp = client
             .get("/latest/metadata")
