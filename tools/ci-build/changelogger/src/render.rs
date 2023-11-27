@@ -295,7 +295,7 @@ fn update_changelogs(
             tag_name: release_metadata.tag.clone(),
             name: release_metadata.title.clone(),
             body: release_notes.clone(),
-            // GA as of release-2023-11-21
+            // stable as of release-2023-11-21
             prerelease: false,
         };
         std::fs::write(
