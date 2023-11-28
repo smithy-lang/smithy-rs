@@ -17,7 +17,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 /// Determine the AWS partition metadata for a given region
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct PartitionResolver {
     partitions: Vec<PartitionMetadata>,
 }
@@ -151,7 +151,7 @@ impl PartitionResolver {
 
 type Str = Cow<'static, str>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct PartitionMetadata {
     id: Str,
     region_regex: Regex,
@@ -204,7 +204,7 @@ impl PartitionMetadata {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub(crate) struct PartitionOutput {
     name: Str,
     dns_suffix: Str,
@@ -213,7 +213,7 @@ pub(crate) struct PartitionOutput {
     supports_dual_stack: bool,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct PartitionOutputOverride {
     name: Option<Str>,
     dns_suffix: Option<Str>,

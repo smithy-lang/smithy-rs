@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointStdLib
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -71,13 +72,25 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
             CargoDependency.Regex,
         ).toType()
             .resolve("PartitionResolver"),
+        "Lazy" to CargoDependency.OnceCell.toType().resolve("sync::Lazy"),
     )
 
     override fun structFieldInit() = writable {
         val json = Node.printJson(partitionsDotJson).dq()
         rustTemplate(
-            """partition_resolver: #{PartitionResolver}::new_from_json(b$json).expect("valid JSON")""",
+            """partition_resolver: #{DEFAULT_PARTITION_RESOLVER}.clone()""",
             *codegenScope,
+            "DEFAULT_PARTITION_RESOLVER" to RuntimeType.forInlineFun("DEFAULT_PARTITION_RESOLVER", EndpointStdLib) {
+                rustTemplate(
+                    """
+                    // Loading the partition JSON is expensive since it involves many regex compilations,
+                    // so cache the result so that it only need to be paid for the first constructed client.
+                    pub(crate) static DEFAULT_PARTITION_RESOLVER: #{Lazy}<#{PartitionResolver}> =
+                        #{Lazy}::new(|| #{PartitionResolver}::new_from_json(b$json).expect("valid JSON"));
+                    """,
+                    *codegenScope,
+                )
+            },
         )
     }
 
