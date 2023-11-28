@@ -12,7 +12,7 @@
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 use crate::endpoint_lib::partition::deser::deserialize_partitions;
 use aws_smithy_json::deserialize::error::DeserializeError;
-use regex::Regex;
+use regex_lite::Regex;
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -251,7 +251,7 @@ mod deser {
         expect_bool_or_null, expect_start_object, expect_string_or_null, skip_value,
     };
     use aws_smithy_json::deserialize::{error::DeserializeError, json_token_iter, Token};
-    use regex::Regex;
+    use regex_lite::Regex;
     use std::borrow::Cow;
     use std::collections::HashMap;
 
@@ -455,7 +455,7 @@ mod test {
     use crate::endpoint_lib::partition::{
         Partition, PartitionMetadata, PartitionOutput, PartitionOutputOverride, PartitionResolver,
     };
-    use regex::Regex;
+    use regex_lite::Regex;
     use std::collections::HashMap;
 
     fn resolve<'a>(resolver: &'a PartitionResolver, region: &str) -> Partition<'a> {
