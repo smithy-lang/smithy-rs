@@ -25,7 +25,7 @@ data class Version(
             val stableVersion = node.expectStringMember("stableVersion").value
             val unstableVersion = node.expectStringMember("unstableVersion").value
             return Version(
-                "$githash-$stableVersion",
+                "$stableVersion-$githash",
                 stableCrateVersion = stableVersion,
                 unstableCrateVersion = unstableVersion,
                 node.expectObjectMember("runtimeCrates").members.map {

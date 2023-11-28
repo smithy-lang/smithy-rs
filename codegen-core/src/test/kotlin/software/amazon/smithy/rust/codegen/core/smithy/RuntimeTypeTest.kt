@@ -37,14 +37,12 @@ class RuntimeTypesTest {
     @Test
     fun `runtimeCrateLocation provides dependency location`() {
         val crateLoc = RuntimeCrateLocation("/foo", CrateVersionMap(mapOf("aws-smithy-runtime-api" to "999.999")))
-        crateLoc.crateLocation("aws-smithy-runtime") shouldBe Local("/foo", Version.stableCrateVersion())
+        crateLoc.crateLocation("aws-smithy-runtime") shouldBe Local("/foo", null)
         crateLoc.crateLocation("aws-smithy-runtime-api") shouldBe Local("/foo", "999.999")
         crateLoc.crateLocation("aws-smithy-http") shouldBe Local("/foo", Version.crateVersion("aws-smithy-http"))
     }
 
     companion object {
-        @JvmStatic
-        private val defaultVersion = defaultRuntimeCrateVersion()
 
         @JvmStatic
         fun runtimeConfigProvider() = listOf(

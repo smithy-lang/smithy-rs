@@ -36,12 +36,12 @@ class VersionTest {
         @JvmStatic
         fun versionProvider() = listOf(
             Arguments.of(
-                """{ "stableVersion": "0.47.0", "githash": "0198d26096eb1af510ce24766c921ffc5e4c191e" }""",
-                "0.47.0-0198d26096eb1af510ce24766c921ffc5e4c191e",
-                "0.47.0",
+                """{ "stableVersion": "1.0.1", "unstableVersion": "0.60.1","githash": "0198d26096eb1af510ce24766c921ffc5e4c191e", "runtimeCrates": {} }""",
+                "1.0.1-0198d26096eb1af510ce24766c921ffc5e4c191e",
+                "1.0.1",
             ),
             Arguments.of(
-                """{ "stableVersion": "release-2022-08-04", "githash": "db48039065bec890ef387385773b37154b555b14" }""",
+                """{ "unstableVersion": "0.60.1", "stableVersion": "release-2022-08-04", "githash": "db48039065bec890ef387385773b37154b555b14", "runtimeCrates": {} }""",
                 "release-2022-08-04-db48039065bec890ef387385773b37154b555b14",
                 "release-2022-08-04",
             ),
