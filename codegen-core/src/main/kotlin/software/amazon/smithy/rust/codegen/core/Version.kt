@@ -41,6 +41,9 @@ data class Version(
         fun stableCrateVersion(): String =
             fromDefaultResource().stableCrateVersion
 
+        fun unstableCrateVersion(): String =
+            fromDefaultResource().unstableCrateVersion
+
         fun crateVersion(crate: String): String {
             val version = fromDefaultResource()
             return version.crates[crate] ?: version.unstableCrateVersion

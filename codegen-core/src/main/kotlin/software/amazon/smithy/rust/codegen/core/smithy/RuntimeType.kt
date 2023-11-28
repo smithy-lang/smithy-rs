@@ -47,7 +47,7 @@ fun RuntimeCrateLocation.crateLocation(crateName: String): DependencyLocation {
     return when (this.path) {
         // CratesIo needs an exact version. However, for local runtime crates we do not
         // provide a detected version unless the user explicitly sets one via the `versions` map.
-        null -> CratesIo(version ?: throw CodegenException("a version must be specified for $crateName"))
+        null -> CratesIo(version)
         else -> Local(this.path)
     }
 }

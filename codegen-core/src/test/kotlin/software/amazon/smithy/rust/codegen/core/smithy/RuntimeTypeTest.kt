@@ -12,6 +12,7 @@ import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.rust.codegen.core.Version
+import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.Local
 import java.util.Optional
 
@@ -38,8 +39,13 @@ class RuntimeTypesTest {
     fun `runtimeCrateLocation provides dependency location`() {
         val crateLoc = RuntimeCrateLocation("/foo", CrateVersionMap(mapOf("aws-smithy-runtime-api" to "999.999")))
         crateLoc.crateLocation("aws-smithy-runtime") shouldBe Local("/foo", null)
-        crateLoc.crateLocation("aws-smithy-runtime-api") shouldBe Local("/foo", "999.999")
-        crateLoc.crateLocation("aws-smithy-http") shouldBe Local("/foo", Version.crateVersion("aws-smithy-http"))
+        crateLoc.crateLocation("aws-smithy-runtime-api") shouldBe Local("/foo", null)
+        crateLoc.crateLocation("aws-smithy-http") shouldBe Local("/foo", null)
+
+        val crateLocVersioned = RuntimeCrateLocation(null, CrateVersionMap(mapOf("aws-smithy-runtime-api" to "999.999")))
+        crateLocVersioned.crateLocation("aws-smithy-runtime") shouldBe CratesIo(Version.stableCrateVersion())
+        crateLocVersioned.crateLocation("aws-smithy-runtime-api") shouldBe CratesIo("999.999")
+        crateLocVersioned.crateLocation("aws-smithy-http") shouldBe CratesIo(Version.unstableCrateVersion())
     }
 
     companion object {
