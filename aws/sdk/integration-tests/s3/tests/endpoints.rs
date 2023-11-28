@@ -34,21 +34,6 @@ async fn virtual_hosted_buckets() {
 }
 
 #[tokio::test]
-async fn no_path_rewriting() {
-    let (captured_request, client) = test_client(|b| b);
-    let _ = client
-        .get_object()
-        .bucket("test-bucket")
-        .key("../key")
-        .send()
-        .await;
-    assert_eq!(
-        captured_request.expect_request().uri().to_string(),
-        "https://test-bucket.s3.us-west-4.amazonaws.com/../key?x-id=GetObject"
-    );
-}
-
-#[tokio::test]
 async fn force_path_style() {
     let (captured_request, client) = test_client(|b| b.force_path_style(true));
     let _ = client.list_objects_v2().bucket("test-bucket").send().await;

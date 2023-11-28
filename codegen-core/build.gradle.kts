@@ -52,9 +52,8 @@ fun gitCommitHash(): String {
     }
 }
 
-fun kv(key: String, value: String) = """"$key": "$value""""
-
 val generateSmithyRuntimeCrateVersion by tasks.registering {
+    fun kv(key: String, value: String) = "\"$key\": \"$value\""
     // generate the version of the runtime to use as a resource.
     // this keeps us from having to manually change version numbers in multiple places
     val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/core"
