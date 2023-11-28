@@ -319,7 +319,7 @@ Old entry contents
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
   "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n",
-  "prerelease": true
+  "prerelease": false
 }"#,
         release_manifest
     );
@@ -415,7 +415,7 @@ Old entry contents
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
   "body": "**New this release:**\n- :bug: ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567), @test-dev) Some other change\n\n**Service Features:**\n- `aws-sdk-ec2` (0.12.0): Some API change\n\n**Contributors**\nThank you for your contributions! ❤\n- @test-dev ([aws-sdk-rust#234](https://github.com/awslabs/aws-sdk-rust/issues/234), [smithy-rs#567](https://github.com/smithy-lang/smithy-rs/issues/567))\n\n",
-  "prerelease": true
+  "prerelease": false
 }"#,
         release_manifest
     );
@@ -698,7 +698,7 @@ Old entry contents
   "tagName": "release-1970-01-01",
   "name": "January 1st, 1970",
   "body": "**New this release:**\n- (all, [smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234), @another-dev) Another change\n\n**Contributors**\nThank you for your contributions! ❤\n- @another-dev ([smithy-rs#1234](https://github.com/smithy-lang/smithy-rs/issues/1234))\n\n**Crate Versions**\n<details>\n<summary>Click to expand to view crate versions...</summary>\n\n|Crate|Version|\n|-|-|\n|aws-config|0.54.1|\n|aws-sdk-accessanalyzer|0.24.0|\n|aws-smithy-async|0.54.1|\n</details>\n\n",
-  "prerelease": true
+  "prerelease": false
 }"#,
         release_manifest
     );

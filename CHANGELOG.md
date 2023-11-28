@@ -1,4 +1,16 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 27th, 2023
+===================
+**New this release:**
+- (client, [aws-sdk-rust#738](https://github.com/awslabs/aws-sdk-rust/issues/738), [aws-sdk-rust#858](https://github.com/awslabs/aws-sdk-rust/issues/858)) Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)
+
+
+November 26th, 2023
+===================
+
+November 25th, 2023
+===================
+
 November 21st, 2023
 ===================
 **Internal changes only with this release**
