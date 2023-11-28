@@ -41,7 +41,11 @@ def main(skip_generation=False):
     ]
     for path in list(os.listdir())[:10]:
         eprint(f'checking {path}...', end='')
-        if path not in deny_list and get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
+        if path in deny_list:
+            eprint(f"skipping {path} because it is in 'deny_list'")
+        elif get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') != 0:
+            eprint(f'skipping {path} because it does not exist in base')
+        else:
             get_cmd_output('cargo generate-lockfile', quiet=True)
             (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
             pkgid = parse_package_id(out)
@@ -61,8 +65,6 @@ def main(skip_generation=False):
                 if out:
                     eprint(out)
                 eprint(err)
-        else:
-            eprint(f'skipping {path} because it does not exist in base')
     if failures:
         eprint('One or more crates failed semver checks!')
         eprint("\n".join(failures))
