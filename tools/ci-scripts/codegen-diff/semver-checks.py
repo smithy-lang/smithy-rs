@@ -51,7 +51,7 @@ def main(skip_generation=False):
                                     f'--manifest-path {path}/Cargo.toml '
                                     '-v '
                                     f'-p {pkgid} '
-                                    f'--release-type minor', check=False, quiet=True)
+                                    f'--release-type minor', check=False)
             if status == 0:
                 eprint(f"status: '{status}', out: '{out}', err: '{err}'")
             else:
