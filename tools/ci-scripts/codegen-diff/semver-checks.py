@@ -38,7 +38,8 @@ def main(skip_generation=False):
         # add crate names here to exclude them from the semver checks
     ]
     for path in list(os.listdir())[:10]:
-        eprint(f'checking {path}...', end='')
+        cwd = os.getcwd()
+        eprint(f'checking {cwd}/{path}...', end='')
         if path not in deny_list and get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
             get_cmd_output('cargo generate-lockfile', quiet=True)
             (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
@@ -52,7 +53,7 @@ def main(skip_generation=False):
                                     f'-p {pkgid} '
                                     f'--release-type minor', check=False, quiet=True)
             if status == 0:
-                eprint('ok!')
+                eprint(f"status: '{status}', out: '{out}', err: '{err}'")
             else:
                 failures.append(f"{out}{err}")
                 eprint('failed!')
