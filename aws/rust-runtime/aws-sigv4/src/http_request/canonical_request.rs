@@ -442,8 +442,6 @@ fn trim_all(text: &str) -> Cow<'_, str> {
         // S3 ONLY trims spaces so we use trim_matches to trim spaces only
         Cow::Owned(
             text.chars()
-                // Skip leading spaces
-                .skip_while(|c| *c == ' ')
                 // Filter out consecutive spaces
                 .zip(text.chars().skip(1).chain(std::iter::once('!')))
                 .filter(|(a, b)| *a != ' ' || *b != ' ')
@@ -452,15 +450,6 @@ fn trim_all(text: &str) -> Cow<'_, str> {
         )
     }
 }
-
-/// Removes excess spaces before and after a given byte string by returning a subset of those bytes.
-/// Will return an empty slice if a string is composed entirely of whitespace.
-//fn trim_spaces_from_byte_string(bytes: &str) -> &str {
-//    let starting_index = bytes.iter().position(|b| *b != b' ').unwrap_or(0);
-//    let ending_offset = bytes.iter().rev().position(|b| *b != b' ').unwrap_or(0);
-//    let ending_index = bytes.len() - ending_offset;
-//    &bytes[starting_index..ending_index]
-//}
 
 /// Works just like [trim_all] but acts on HeaderValues instead of bytes.
 /// Will ensure that the underlying bytes are valid UTF-8.
