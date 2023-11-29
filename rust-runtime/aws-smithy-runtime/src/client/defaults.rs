@@ -63,22 +63,6 @@ pub fn default_http_client_plugin() -> Option<SharedRuntimePlugin> {
     })
 }
 
-/// Runtime plugin that provides a default connector.
-///
-/// This connector is lazily created on first-user
-pub fn default_http_client_plugin_lazy() -> Option<SharedRuntimePlugin> {
-    let _default: Option<SharedHttpClient> = None;
-    #[cfg(feature = "connector-hyper-0-14-x")]
-    let _default = crate::client::http::hyper_014::default_client_lazy();
-
-    _default.map(|default| {
-        default_plugin("default_http_client_plugin", |components| {
-            components.with_http_client(Some(default))
-        })
-        .into_shared()
-    })
-}
-
 /// Runtime plugin that provides a default async sleep implementation.
 pub fn default_sleep_impl_plugin() -> Option<SharedRuntimePlugin> {
     default_async_sleep().map(|default| {
@@ -262,26 +246,14 @@ impl DefaultPluginParams {
         self.behavior_version = Some(version);
         self
     }
-
-    fn behavior_version(&self) -> BehaviorVersion {
-        self.behavior_version
-            .clone()
-            .unwrap_or(BehaviorVersion::latest())
-    }
 }
 
 /// All default plugins.
 pub fn default_plugins(
     params: DefaultPluginParams,
 ) -> impl IntoIterator<Item = SharedRuntimePlugin> {
-    // v2023_11_27 introduced lazy HTTP clients
-    let http_client_plugin = match params.behavior_version() >= BehaviorVersion::v2023_11_27() {
-        true => default_http_client_plugin_lazy(),
-        false => default_http_client_plugin(),
-    };
-
     [
-        http_client_plugin,
+        default_http_client_plugin(),
         default_identity_cache_plugin(),
         default_retry_config_plugin(
             params

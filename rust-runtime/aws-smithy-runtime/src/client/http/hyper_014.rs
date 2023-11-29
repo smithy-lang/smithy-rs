@@ -15,9 +15,12 @@ use aws_smithy_runtime_api::client::http::{
 };
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
+};
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
 use h2::Reason;
@@ -117,20 +120,6 @@ pub fn default_client() -> Option<SharedHttpClient> {
     {
         tracing::trace!("creating a new default hyper 0.14.x client");
         Some(HyperClientBuilder::new().build_https())
-    }
-    #[cfg(not(feature = "tls-rustls"))]
-    {
-        tracing::trace!("no default connector available");
-        None
-    }
-}
-
-/// Creates a hyper-backed HTTPS client from defaults depending on what cargo features are activated.
-pub fn default_client_lazy() -> Option<SharedHttpClient> {
-    #[cfg(feature = "tls-rustls")]
-    {
-        tracing::trace!("creating a new default hyper 0.14.x client");
-        Some(HyperClientBuilder::new().build_https_lazy())
     }
     #[cfg(not(feature = "tls-rustls"))]
     {
@@ -492,6 +481,20 @@ where
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
 {
+    fn validate_base_client_config(
+        &self,
+        _: &RuntimeComponentsBuilder,
+        _: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        // Initialize the TCP connector at this point so that native certs load
+        // at client initialization time instead of upon first request. We do it
+        // here rather than at construction so that it won't run if this is not
+        // the selected HTTP client for the base config (for example, if this was
+        // the default HTTP client, and it was overridden by a later plugin).
+        let _ = (self.tcp_connector_fn)();
+        Ok(())
+    }
+
     fn http_connector(
         &self,
         settings: &HttpConnectorSettings,
@@ -565,14 +568,6 @@ impl HyperClientBuilder {
     /// This client will immediately load trusted certificates.
     #[cfg(feature = "tls-rustls")]
     pub fn build_https(self) -> SharedHttpClient {
-        self.build(default_connector::https())
-    }
-
-    /// Create a lazy hyper client with the default rustls HTTPS implementation.
-    ///
-    /// This client won't load trusted certificates until the first request is made.
-    #[cfg(feature = "tls-rustls")]
-    pub fn build_https_lazy(self) -> SharedHttpClient {
         self.build_with_fn(default_connector::https)
     }
 
@@ -590,11 +585,7 @@ impl HyperClientBuilder {
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
     {
-        SharedHttpClient::new(HyperClient {
-            connector_cache: RwLock::new(HashMap::new()),
-            client_builder: self.client_builder.unwrap_or_default(),
-            tcp_connector_fn: move || tcp_connector.clone(),
-        })
+        self.build_with_fn(move || tcp_connector.clone())
     }
 
     fn build_with_fn<C, F>(self, tcp_connector_fn: F) -> SharedHttpClient
