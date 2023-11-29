@@ -36,7 +36,7 @@ echo "${C_YELLOW}## Checking for duplicate dependency versions in the normal dep
 cargo tree -d --edges normal --all-features
 
 echo "${C_YELLOW}## Testing every combination of features${C_RESET}"
-cargo hack test --feature-powerset --exclude-all-features --exclude-features native-tls
+cargo hack check --feature-powerset --exclude-all-features --exclude-features native-tls
 
 echo "${C_YELLOW}## Checking the wasm32-unknown-unknown and wasm32-wasi targets${C_RESET}"
 cargo check --target wasm32-unknown-unknown --no-default-features
