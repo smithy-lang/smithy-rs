@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.crateLocation
 
 fun RuntimeConfig.awsRuntimeCrate(name: String, features: Set<String> = setOf()): CargoDependency =
-    CargoDependency(name, awsRoot().crateLocation(null), features = features)
+    CargoDependency(name, awsRoot().crateLocation(name), features = features)
 
 object AwsCargoDependency {
     fun awsConfig(runtimeConfig: RuntimeConfig) = runtimeConfig.awsRuntimeCrate("aws-config")
