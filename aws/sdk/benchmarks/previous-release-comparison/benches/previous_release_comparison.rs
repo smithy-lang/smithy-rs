@@ -66,6 +66,7 @@ fn bench(c: &mut Criterion) {
     let main_client = {
         let http_client = test_client!(main);
         let config = aws_sdk_s3::Config::builder()
+            .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
             .credentials_provider(aws_sdk_s3::config::Credentials::for_tests())
             .region(aws_sdk_s3::config::Region::new("us-east-1"))
             .http_client(http_client)
@@ -75,6 +76,7 @@ fn bench(c: &mut Criterion) {
     let previous_client = {
         let http_client = test_client!(previous);
         let config = previous_s3::Config::builder()
+            .behavior_version(previous_s3::config::BehaviorVersion::latest())
             .credentials_provider(previous_s3::config::Credentials::for_tests())
             .region(previous_s3::config::Region::new("us-east-1"))
             .http_client(http_client)
