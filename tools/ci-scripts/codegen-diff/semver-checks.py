@@ -36,8 +36,6 @@ def main(skip_generation=False):
     failures = []
     deny_list = [
         # add crate names here to exclude them from the semver checks
-        # TODO(https://github.com/smithy-lang/smithy-rs/issues/3265)
-        'aws-config'
     ]
     for path in list(os.listdir())[:10]:
         eprint(f'checking {path}...', end='')
