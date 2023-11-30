@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "`config::Builder::set_credentials_provider` now overrides credentials providers previously set."
+references = ["aws-sdk-rust#973", "smithy-rs#3276"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "`config::Config::credentials_provider" has been broken since `release-2023-11-15` and is now marked as `deprecated` explicitly."
+references = ["aws-sdk-rust#973", "smithy-rs#3276"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
