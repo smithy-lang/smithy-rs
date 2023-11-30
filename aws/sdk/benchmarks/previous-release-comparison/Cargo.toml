@@ -12,8 +12,8 @@ aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
 criterion = { version = "0.5", features = ["async_tokio"] }
 http = "0.2.3"
-previous-s3 = { version = "0.35", package = "aws-sdk-s3", features = ["test-util"] }
-previous-runtime = { version = "0.57.1", package = "aws-smithy-runtime", features = ["test-util"] }
+previous-s3 = { version = "1", package = "aws-sdk-s3", features = ["test-util"] }
+previous-runtime = { version = "1", package = "aws-smithy-runtime", features = ["test-util"] }
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 
 [profile.release]

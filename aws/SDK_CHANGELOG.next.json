@@ -6,163 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Change `ByteStream::into_async_read` to return `AsyncBufRead`",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "utkarshgupta137",
-      "references": [
-        "smithy-rs#3164"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "[Upgrade guidance for HTTP Request/Response changes](https://github.com/awslabs/aws-sdk-rust/discussions/950). HTTP request types moved, and a new HTTP response type was added.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3138",
-        "smithy-rs#3148"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3100",
-        "smithy-rs#3114"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "The `RequestId` trait has moved from the aws-http crate into aws-types.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3160"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "Clients now require a `BehaviorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.\n\n```rust\nasync fn example() {\n    // with aws-config\n    let conf = aws_config::defaults(aws_config::BehaviorVersion::v2023_11_09());\n\n    // when creating a client\n    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_version(..).<other params>.build());\n}\n```",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3151"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "Add `ProvideErrorMetadata` impl for service `Error` type.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jdisanti",
-      "references": [
-        "aws-sdk-rust#780",
-        "smithy-rs#3189"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "Remove deprecated error kind type aliases.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3189"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "Unhandled errors have been made opaque to ensure code is written in a future-proof manner. Where previously, you\nmight have:\n```rust\nmatch service_error.err() {\n    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }\n    GetStorageError::Unhandled(unhandled) if unhandled.code() == Some(\"SomeUnmodeledErrorCode\") {\n        // unhandled error handling\n    }\n    _ => { /* ... */ }\n}\n```\nIt should now look as follows:\n```rust\nmatch service_error.err() {\n    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }\n    err if err.code() == Some(\"SomeUnmodeledErrorCode\") {\n        // unhandled error handling\n    }\n    _ => { /* ... */ }\n}\n```\nThe `Unhandled` variant should never be referenced directly.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3191"
-      ],
-      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
-      "age": 4
-    },
-    {
-      "message": "imds::client::Builder::endpoint has been updated to accept a string instead of a URI. The method now returns a result instead.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3205"
-      ],
-      "since-commit": "681bf77733a242e01458e87381a0700616c918da",
-      "age": 3
-    },
-    {
-      "message": "The `AssumeRoleBuilder::policy_arns` now accepts strings instead of an STS specific type",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3205"
-      ],
-      "since-commit": "681bf77733a242e01458e87381a0700616c918da",
-      "age": 3
-    },
-    {
-      "message": "Fix optional types in S3. Many types in S3 were modeled as non-optional but this causes serialization issues.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3213"
-      ],
-      "since-commit": "681bf77733a242e01458e87381a0700616c918da",
-      "age": 3
-    },
-    {
       "message": "Add configurable stalled-stream protection for downloads.\n\nWhen making HTTP calls,\nit's possible for a connection to 'stall out' and emit no more data due to server-side issues.\nIn the event this happens, it's desirable for the stream to error out as quickly as possible.\nWhile timeouts can protect you from this issue, they aren't adaptive to the amount of data\nbeing sent and so must be configured specifically for each use case. When enabled, stalled-stream\nprotection will ensure that bad streams error out quickly, regardless of the amount of data being\ndownloaded.\n\nProtection is enabled by default for all clients but can be configured or disabled.\nSee [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.\n",
       "meta": {
         "bug": false,
@@ -174,7 +17,7 @@
         "smithy-rs#3202"
       ],
       "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests.",
@@ -188,7 +31,7 @@
         "smithy-rs#3217"
       ],
       "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Prevent multiplication overflow in backoff computation",
@@ -203,7 +46,7 @@
         "aws-sdk-rust#960"
       ],
       "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Make some types for various services optional. Previously, they defaulted to 0, but this created invalid requests.",
@@ -217,7 +60,7 @@
         "smithy-rs#3228"
       ],
       "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Types/functions that were deprecated in previous releases were removed. Unfortunately, some of these deprecations\nwere ignored by the Rust compiler (we found out later that `#[deprecated]` on `pub use` doesn't work). See\nthe [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discussions/3223) for more details.\n",
@@ -231,7 +74,7 @@
         "smithy-rs#3222"
       ],
       "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Add `Display` impl for `DateTime`.",
@@ -245,7 +88,7 @@
         "smithy-rs#3183"
       ],
       "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Types/functions that were previously `#[doc(hidden)]` in `aws-config`, `aws-inlineable`, `aws-types`, and the SDK crates are now visible. For those that are not intended to be used directly, they are called out in their docs as such.",
@@ -259,7 +102,7 @@
         "smithy-rs#3226"
       ],
       "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 2
+      "age": 5
     },
     {
       "message": "Make properties of S3Control PublicAccessBlockConfiguration optional. Previously, they defaulted to false, but this created invalid requests.",
@@ -273,6 +116,49 @@
         "smithy-rs#3246"
       ],
       "since-commit": "e155c3048b9989fe406ef575d461ea01dfaf294c",
+      "age": 4
+    },
+    {
+      "message": "Allow `--` to be used in bucket names for S3",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3253"
+      ],
+      "since-commit": "48e3c95a3f10eebd5a637f8e7670c4232cdabbe4",
+      "age": 3
+    },
+    {
+      "message": "Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "aws-sdk-rust#738",
+        "aws-sdk-rust#858"
+      ],
+      "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
+      "age": 1
+    },
+    {
+      "message": "Make some properties for IoT types optional. Previously, they defaulted to false, but that isn't how the service actual works.",
+      "meta": {
+        "bug": true,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "milesziemer",
+      "references": [
+        "smithy-rs#3256"
+      ],
+      "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
       "age": 1
     }
   ],
