@@ -82,6 +82,7 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                 rustTemplate(
                     """
                     /// Returns the credentials provider for this service
+                    ##[deprecated(note = "Broken since release-2023-11-15 as it always returns a `None`, do not use it")]
                     pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
                         self.config.load::<#{SharedCredentialsProvider}>().cloned()
                     }
@@ -111,6 +112,7 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                 ) {
                     rustBlockTemplate(
                         """
+                        let mut identity_resolvers = #{Vec}::with_capacity(2);
                         if let Some(credentials_provider) = credentials_provider
                         """,
                         *codegenScope,
@@ -118,17 +120,20 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                         if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
                             featureGateBlock("sigv4a") {
                                 rustTemplate(
-                                    "self.runtime_components.push_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
+                                    "identity_resolvers.push((#{SIGV4A_SCHEME_ID}, credentials_provider.clone()));",
                                     *codegenScope,
                                 )
                             }
                         }
                         rustTemplate(
-                            "self.runtime_components.push_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
+                            "identity_resolvers.push((#{SIGV4_SCHEME_ID}, credentials_provider));",
                             *codegenScope,
                         )
                     }
-                    rust("self")
+                    rust("""
+                        self.runtime_components.set_identity_resolvers(identity_resolvers.into_iter());
+                        self
+                    """)
                 }
             }
 

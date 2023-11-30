@@ -593,6 +593,22 @@ impl RuntimeComponentsBuilder {
         self
     }
 
+    /// Directly sets the identity resolvers and clears out any that were previously pushed.
+    pub fn set_identity_resolvers(
+        &mut self,
+        identity_resolvers: impl Iterator<Item = (AuthSchemeId, impl ResolveIdentity + 'static)>,
+    ) -> &mut Self {
+        self.identity_resolvers.clear();
+        self.identity_resolvers
+            .extend(identity_resolvers.map(|(scheme_id, identity_resolver)| {
+                Tracked::new(
+                    self.builder_name,
+                    ConfiguredIdentityResolver::new(scheme_id, identity_resolver.into_shared()),
+                )
+            }));
+        self
+    }
+
     /// Returns the interceptors.
     pub fn interceptors(&self) -> impl Iterator<Item = SharedInterceptor> + '_ {
         self.interceptors.iter().map(|s| s.value.clone())
