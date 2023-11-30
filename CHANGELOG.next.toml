@@ -12,6 +12,18 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
+references = ["smithy-rs#3262"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
+references = ["smithy-rs#3262"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
 message = """Client creation now takes microseconds instead of milliseconds.
 Previously, it would take 2-3 milliseconds for each client instantiation due to time spent compiling regexes.
 For applications that used several clients, this would increase start-up time in cases where it really matters,
