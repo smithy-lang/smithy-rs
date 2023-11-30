@@ -40,8 +40,9 @@ internal class ServiceConfigGeneratorTest {
                         name = "aws_auth",
                         docs = "Docs",
                         params = listOf(
-                            Binding("auth_spec", RuntimeType.String),
-                            Binding("authorizer", RuntimeType.U64),
+                            Binding.Concrete("auth_spec", RuntimeType.String),
+                            Binding.Concrete("authorizer", RuntimeType.U64),
+                            Binding.Generic("generic_list", RuntimeType("::std::vec::Vec<T>"), listOf("T")),
                         ),
                         errorType = RuntimeType.std.resolve("io::Error"),
                         initializer = Initializer(
@@ -51,8 +52,8 @@ internal class ServiceConfigGeneratorTest {
                                     if authorizer != 69 {
                                         return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
                                     }
-
-                                    if auth_spec.len() != 69 {
+                                    
+                                    if auth_spec.len() != 69 && generic_list.len() != 69 {
                                         return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
                                     }
                                     let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
@@ -63,13 +64,13 @@ internal class ServiceConfigGeneratorTest {
                             },
                             layerBindings = emptyList(),
                             httpPluginBindings = listOf(
-                                Binding(
+                                Binding.Concrete(
                                     "authn_plugin",
                                     smithyHttpServer.resolve("plugin::IdentityPlugin"),
                                 ),
                             ),
                             modelPluginBindings = listOf(
-                                Binding(
+                                Binding.Concrete(
                                     "authz_plugin",
                                     smithyHttpServer.resolve("plugin::IdentityPlugin"),
                                 ),
@@ -101,7 +102,7 @@ internal class ServiceConfigGeneratorTest {
                             // One model plugin has been applied.
                             PluginStack<IdentityPlugin, IdentityPlugin>,
                         > = SimpleServiceConfig::builder()
-                            .aws_auth("a".repeat(69).to_owned(), 69)
+                            .aws_auth("a".repeat(69).to_owned(), 69, vec![69])
                             .expect("failed to configure aws_auth")
                             .build()
                             .unwrap();
@@ -113,7 +114,7 @@ internal class ServiceConfigGeneratorTest {
                     rust(
                         """
                         let actual_err = SimpleServiceConfig::builder()
-                            .aws_auth("a".to_owned(), 69)
+                            .aws_auth("a".to_owned(), 69, vec![69])
                             .unwrap_err();
                         let expected = std::io::Error::new(std::io::ErrorKind::Other, "failure 2").to_string();
                         assert_eq!(actual_err.to_string(), expected);
@@ -125,7 +126,7 @@ internal class ServiceConfigGeneratorTest {
                     rust(
                         """
                         let actual_err = SimpleServiceConfig::builder()
-                            .aws_auth("a".repeat(69).to_owned(), 6969)
+                            .aws_auth("a".repeat(69).to_owned(), 6969, vec!["69"])
                             .unwrap_err();
                         let expected = std::io::Error::new(std::io::ErrorKind::Other, "failure 1").to_string();
                         assert_eq!(actual_err.to_string(), expected);
@@ -147,7 +148,7 @@ internal class ServiceConfigGeneratorTest {
     }
 
     @Test
-    fun `it should inject an method that applies three non-required layers`() {
+    fun `it should inject a method that applies three non-required layers`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
         val decorator = object : ServerCodegenDecorator {
@@ -179,9 +180,9 @@ internal class ServiceConfigGeneratorTest {
                                 )
                             },
                             layerBindings = listOf(
-                                Binding("layer1", identityLayer),
-                                Binding("layer2", identityLayer),
-                                Binding("layer3", identityLayer),
+                                Binding.Concrete("layer1", identityLayer),
+                                Binding.Concrete("layer2", identityLayer),
+                                Binding.Concrete("layer3", identityLayer),
                             ),
                             httpPluginBindings = emptyList(),
                             modelPluginBindings = emptyList(),

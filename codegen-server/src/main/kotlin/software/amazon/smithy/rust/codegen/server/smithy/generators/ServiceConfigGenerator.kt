@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTypeParameters
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -33,7 +34,7 @@ data class ConfigMethod(
     val docs: String,
     /** The parameters of the method. **/
     val params: List<Binding>,
-    /** In case the method is fallible, the error type it returns. **/
+    /** In case the method is fallible, the concrete error type it returns. **/
     val errorType: RuntimeType?,
     /** The code block inside the method. **/
     val initializer: Initializer,
@@ -104,15 +105,42 @@ data class Initializer(
  * }
  *
  * has two variable bindings. The `bar` name is bound to a `String` variable and the `baz` name is bound to a
- * `u64` variable.
+ * `u64` variable. Both are bindings that use concrete types. Types can also be generic:
+ *
+ * ```rust
+ * fn foo<T>(bar: T) { }
  * ```
  */
-data class Binding(
-    /** The name of the variable. */
-    val name: String,
-    /** The type of the variable. */
-    val ty: RuntimeType,
-)
+sealed class Binding {
+    data class Generic(
+        /** The name of the variable. The name of the type parameter will be the PascalCased variable name. */
+        val name: String,
+        /** The type of the variable. */
+        val ty: RuntimeType,
+        /**
+         * The generic type parameters contained in `ty`. For example, if `ty` renders to `Vec<T>` with `T` being a
+         * generic type parameter, then `genericTys` should be a singleton list containing `"T"`.
+         * */
+        val genericTys: List<String>
+    ): Binding()
+
+    data class Concrete(
+        /** The name of the variable. */
+        val name: String,
+        /** The type of the variable. */
+        val ty: RuntimeType,
+    ): Binding()
+
+    fun name() = when (this) {
+        is Concrete -> this.name
+        is Generic -> this.name
+    }
+
+    fun ty() = when (this) {
+        is Concrete -> this.ty
+        is Generic -> this.ty
+    }
+}
 
 class ServiceConfigGenerator(
     codegenContext: ServerCodegenContext,
@@ -317,8 +345,10 @@ class ServiceConfigGenerator(
     private fun injectedMethods() = configMethods.map {
         writable {
             val paramBindings = it.params.map { binding ->
-                writable { rustTemplate("${binding.name}: #{BindingTy},", "BindingTy" to binding.ty) }
+                writable { rustTemplate("${binding.name()}: #{BindingTy},", "BindingTy" to binding.ty()) }
             }.join("\n")
+            val paramBindingsGenericTys = it.params.filterIsInstance<Binding.Generic>().flatMap { it.genericTys }
+            val paramBindingsGenericsWritable = rustTypeParameters(*paramBindingsGenericTys.toTypedArray())
 
             // This produces a nested type like: "S<B, S<A, T>>", where
             // - "S" denotes a "stack type" with two generic type parameters: the first is the "inner" part of the stack
@@ -332,7 +362,7 @@ class ServiceConfigGenerator(
                         rustTemplate(
                             "#{StackType}<#{Ty}, #{Acc:W}>",
                             "StackType" to stackType,
-                            "Ty" to next.ty,
+                            "Ty" to next.ty(),
                             "Acc" to acc,
                         )
                     }
@@ -376,7 +406,7 @@ class ServiceConfigGenerator(
             docs(it.docs)
             rustBlockTemplate(
                 """
-                pub fn ${it.name}(
+                pub fn ${it.name}#{ParamBindingsGenericsWritable}(
                     ##[allow(unused_mut)]
                     mut self,
                     #{ParamBindings:W}
@@ -384,6 +414,7 @@ class ServiceConfigGenerator(
                 """,
                 "ReturnTy" to returnTy,
                 "ParamBindings" to paramBindings,
+                "ParamBindingsGenericsWritable" to paramBindingsGenericsWritable,
             ) {
                 rustTemplate("#{InitializerCode:W}", "InitializerCode" to it.initializer.code)
 
@@ -396,9 +427,9 @@ class ServiceConfigGenerator(
                 }
                 conditionalBlock("Ok(", ")", conditional = it.errorType != null) {
                     val registrations = (
-                        it.initializer.layerBindings.map { ".layer(${it.name})" } +
-                            it.initializer.httpPluginBindings.map { ".http_plugin(${it.name})" } +
-                            it.initializer.modelPluginBindings.map { ".model_plugin(${it.name})" }
+                        it.initializer.layerBindings.map { ".layer(${it.name()})" } +
+                            it.initializer.httpPluginBindings.map { ".http_plugin(${it.name()})" } +
+                            it.initializer.modelPluginBindings.map { ".model_plugin(${it.name()})" }
                         ).joinToString("")
                     rust("self$registrations")
                 }
