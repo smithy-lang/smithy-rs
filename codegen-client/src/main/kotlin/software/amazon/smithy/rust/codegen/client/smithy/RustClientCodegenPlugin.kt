@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCusto
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointParamsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.StalledStreamProtectionDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.ClientDecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.NonExhaustive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWordSymbolProvider
@@ -68,6 +69,7 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 HttpConnectorConfigDecorator(),
                 SensitiveOutputDecorator(),
                 IdempotencyTokenDecorator(),
+                StalledStreamProtectionDecorator(),
                 *decorator,
             )
 

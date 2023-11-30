@@ -319,7 +319,7 @@ impl Builder {
     /// This will panic if any of the required fields are not given.
     pub async fn build(mut self) -> SsoTokenProvider {
         if self.sdk_config.is_none() {
-            self.sdk_config = Some(crate::load_from_env().await);
+            self.sdk_config = Some(crate::load_defaults(crate::BehaviorVersion::latest()).await);
         }
         self.build_with(Env::real(), Fs::real())
     }
@@ -427,6 +427,7 @@ mod tests {
                 .sleep_impl(SharedAsyncSleep::new(sleep_impl))
                 // disable retry to simplify testing
                 .retry_config(RetryConfig::disabled())
+                .behavior_version(crate::BehaviorVersion::latest())
                 .build();
             Self {
                 time_source,

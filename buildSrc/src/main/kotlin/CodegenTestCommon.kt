@@ -90,9 +90,11 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
         allTests
     }
     require(ret.isNotEmpty()) {
-        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map {
-            it.module
-        }}`)"
+        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${
+            allTests.map {
+                it.module
+            }
+        }`)"
     }
     return ret
 }
@@ -121,9 +123,11 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         AllCargoCommands
     }
     require(ret.isNotEmpty()) {
-        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map {
-            it.toString
-        }}`)"
+        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${
+            AllCargoCommands.map {
+                it.toString
+            }
+        }`)"
     }
     return ret
 }
@@ -137,6 +141,7 @@ fun Project.registerGenerateSmithyBuildTask(
     this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
+        // NOTE: This is not working.
         allCodegenTests.flatMap { it.imports }.forEach { inputs.file(project.projectDir.resolve(it)) }
 
         doFirst {

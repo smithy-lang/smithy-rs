@@ -49,12 +49,16 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
 futures-util = "0.3.28"
 pretty_assertions = "1.4.0"
-tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util"] }
+tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-test = "0.2.1"
+hyper_0_14 = { package = "hyper", version = "0.14.27",features = ["client", "server", "tcp", "http1", "http2"] }
 
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[package.metadata.smithy-rs-release-tooling]
+stable = true

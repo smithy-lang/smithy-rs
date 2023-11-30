@@ -12,7 +12,7 @@ publish = false
 
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-sdk-timestreamquery = { path = "../../build/aws-sdk/sdk/timestreamquery" }
+aws-sdk-timestreamquery = { path = "../../build/aws-sdk/sdk/timestreamquery", features = ["behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }

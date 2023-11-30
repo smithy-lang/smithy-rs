@@ -32,6 +32,7 @@ import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
@@ -41,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.EventStreamNormalizer
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -243,7 +245,10 @@ open class ServerCodegenVisitor(
                 logger.log(logMessage.level, logMessage.message)
             }
             if (validationResult.shouldAbort) {
-                throw CodegenException("Unsupported constraints feature used; see error messages above for resolution", validationResult)
+                throw CodegenException(
+                    "Unsupported constraints feature used; see error messages above for resolution",
+                    validationResult,
+                )
             }
         }
 
@@ -328,7 +333,8 @@ open class ServerCodegenVisitor(
             serverBuilderGenerator.render(rustCrate, writer)
 
             if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
-                writer.implBlock(codegenContext.symbolProvider.toSymbol(shape)) {
+                val lifetimes = shape.lifetimeDeclaration(codegenContext.symbolProvider)
+                writer.rustBlock("impl $lifetimes ${codegenContext.symbolProvider.toSymbol(shape).name} $lifetimes") {
                     serverBuilderGenerator.renderConvenienceMethod(this)
                 }
             }
@@ -372,7 +378,11 @@ open class ServerCodegenVisitor(
 
         if (renderUnconstrainedList) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for collection shape $shape")
-            rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.UnconstrainedModule, shape, codegenContext) {
+            rustCrate.withModuleOrWithStructureBuilderModule(
+                ServerRustModule.UnconstrainedModule,
+                shape,
+                codegenContext,
+            ) {
                 UnconstrainedCollectionGenerator(
                     codegenContext,
                     rustCrate.createInlineModuleCreator(),
@@ -382,7 +392,11 @@ open class ServerCodegenVisitor(
 
             if (!isDirectlyConstrained) {
                 logger.info("[rust-server-codegen] Generating a constrained type for collection shape $shape")
-                rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.ConstrainedModule, shape, codegenContext) {
+                rustCrate.withModuleOrWithStructureBuilderModule(
+                    ServerRustModule.ConstrainedModule,
+                    shape,
+                    codegenContext,
+                ) {
                     PubCrateConstrainedCollectionGenerator(
                         codegenContext,
                         rustCrate.createInlineModuleCreator(),
@@ -427,7 +441,11 @@ open class ServerCodegenVisitor(
 
         if (renderUnconstrainedMap) {
             logger.info("[rust-server-codegen] Generating an unconstrained type for map $shape")
-            rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.UnconstrainedModule, shape, codegenContext) {
+            rustCrate.withModuleOrWithStructureBuilderModule(
+                ServerRustModule.UnconstrainedModule,
+                shape,
+                codegenContext,
+            ) {
                 UnconstrainedMapGenerator(
                     codegenContext,
                     rustCrate.createInlineModuleCreator(),
@@ -437,7 +455,11 @@ open class ServerCodegenVisitor(
 
             if (!isDirectlyConstrained) {
                 logger.info("[rust-server-codegen] Generating a constrained type for map $shape")
-                rustCrate.withModuleOrWithStructureBuilderModule(ServerRustModule.ConstrainedModule, shape, codegenContext) {
+                rustCrate.withModuleOrWithStructureBuilderModule(
+                    ServerRustModule.ConstrainedModule,
+                    shape,
+                    codegenContext,
+                ) {
                     PubCrateConstrainedMapGenerator(
                         codegenContext,
                         rustCrate.createInlineModuleCreator(),
@@ -575,7 +597,9 @@ open class ServerCodegenVisitor(
      */
     open fun protocolTests() {
         rustCrate.withModule(ServerRustModule.Operation) {
-            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), protocolGenerator).render(this)
+            ServerProtocolTestGenerator(codegenContext, protocolGeneratorFactory.support(), protocolGenerator).render(
+                this,
+            )
         }
     }
 

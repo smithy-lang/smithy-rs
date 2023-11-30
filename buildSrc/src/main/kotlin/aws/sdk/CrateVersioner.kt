@@ -24,7 +24,7 @@ object CrateVersioner {
                 IndependentCrateVersioner(
                     VersionsManifest.fromFile(versionsManifestPath),
                     ModelMetadata.fromFile(modelMetadataPath),
-                    devPreview = true,
+                    devPreview = false,
                     smithyRsVersion = getSmithyRsVersion(rootProject),
                 )
             }

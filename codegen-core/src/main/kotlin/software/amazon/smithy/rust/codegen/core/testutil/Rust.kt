@@ -164,6 +164,7 @@ fun generatePluginContext(
     model: Model,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
     addModuleToEventStreamAllowList: Boolean = false,
+    moduleVersion: String = "1.0.0",
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
     overrideTestDir: File? = null,
@@ -174,7 +175,7 @@ fun generatePluginContext(
     val manifest = FileManifest.create(testPath)
     var settingsBuilder = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
-        .withMember("moduleVersion", Node.from("1.0.0"))
+        .withMember("moduleVersion", Node.from(moduleVersion))
         .withMember("moduleDescription", Node.from("test"))
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
         .letIf(service != null) { it.withMember("service", service) }
@@ -344,13 +345,13 @@ fun TestWriterDelegator.compileAndTest(
         // cargo fmt errors are useless, ignore
     }
 
-    baseDir.writeDotCargoConfigToml(listOf(
-        "--allow", "dead_code",
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
-        "--allow", "warnings",
-    ))
+    // Clean `RUSTFLAGS` because in CI we pass in `--deny warnings` and
+    // we still generate test code with warnings.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
+    val env = mapOf("RUSTFLAGS" to "")
+    baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
 
-    val testOutput = "cargo test".runCommand(baseDir)
+    val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
         "cargo clippy --all-features".runCommand(baseDir)
     }

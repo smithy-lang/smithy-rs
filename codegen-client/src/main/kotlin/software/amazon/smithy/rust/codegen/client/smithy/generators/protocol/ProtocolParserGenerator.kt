@@ -27,6 +27,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
@@ -163,7 +164,8 @@ class ProtocolParserGenerator(
                                 val errorMessageMember = errorShape.errorMessageMember()
                                 // If the message member is optional and wasn't set, we set a generic error message.
                                 if (errorMessageMember != null) {
-                                    if (errorMessageMember.isOptional) {
+                                    val symbol = symbolProvider.toSymbol(errorMessageMember)
+                                    if (symbol.isOptional()) {
                                         rust(
                                             """
                                             if tmp.message.is_none() {

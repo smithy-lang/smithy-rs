@@ -11,6 +11,7 @@
     rustdoc::missing_crate_level_docs,
     unreachable_pub
 )]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 //! `aws-config` provides implementations of region and credential resolution.
 //!
@@ -25,14 +26,15 @@
 //!
 //! Load default SDK configuration:
 //! ```no_run
-//! # mod aws_sdk_dynamodb {
+//! use aws_config::BehaviorVersion;
+//! mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
 //! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
-//! let config = aws_config::load_from_env().await;
+//! let config = aws_config::load_defaults(BehaviorVersion::v2023_11_09()).await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
 //! ```
@@ -48,6 +50,7 @@
 //! # async fn docs() {
 //! # use aws_config::meta::region::RegionProviderChain;
 //! let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+//! // Note: requires the `behavior-version-latest` feature enabled
 //! let config = aws_config::from_env().region(region_provider).load().await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
@@ -84,7 +87,7 @@
 //! # fn custom_provider(base: &SdkConfig) -> impl ProvideCredentials {
 //! #   base.credentials_provider().unwrap().clone()
 //! # }
-//! let sdk_config = aws_config::load_from_env().await;
+//! let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
 //! let custom_credentials_provider = custom_provider(&sdk_config);
 //! let dynamo_config = aws_sdk_dynamodb::config::Builder::from(&sdk_config)
 //!   .credentials_provider(custom_credentials_provider)
@@ -93,10 +96,11 @@
 //! # }
 //! ```
 
-pub use aws_smithy_http::endpoint;
+pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 // Re-export types from aws-types
 pub use aws_types::{
     app_name::{AppName, InvalidAppName},
+    region::Region,
     SdkConfig,
 };
 /// Load default sources for all configuration with override support
@@ -130,29 +134,74 @@ pub mod retry;
 mod sensitive_command;
 #[cfg(feature = "sso")]
 pub mod sso;
+pub mod stalled_stream_protection;
 pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
 pub mod web_identity_token;
 
-/// Create an environment loader for AWS Configuration
+/// Create a config loader with the _latest_ defaults.
+///
+/// This loader will always set [`BehaviorVersion::latest`].
 ///
 /// # Examples
 /// ```no_run
 /// # async fn create_config() {
-/// use aws_types::region::Region;
 /// let config = aws_config::from_env().region("us-east-1").load().await;
 /// # }
 /// ```
+#[cfg(feature = "behavior-version-latest")]
 pub fn from_env() -> ConfigLoader {
-    ConfigLoader::default()
+    ConfigLoader::default().behavior_version(BehaviorVersion::latest())
 }
 
-/// Load a default configuration from the environment
+/// Load default configuration with the _latest_ defaults.
 ///
-/// Convenience wrapper equivalent to `aws_config::from_env().load().await`
-pub async fn load_from_env() -> aws_types::SdkConfig {
+/// Convenience wrapper equivalent to `aws_config::load_defaults(BehaviorVersion::latest()).await`
+#[cfg(feature = "behavior-version-latest")]
+pub async fn load_from_env() -> SdkConfig {
     from_env().load().await
+}
+
+/// Create a config loader with the _latest_ defaults.
+#[cfg(not(feature = "behavior-version-latest"))]
+#[deprecated(
+    note = "Use the `aws_config::defaults` function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
+)]
+pub fn from_env() -> ConfigLoader {
+    ConfigLoader::default().behavior_version(BehaviorVersion::latest())
+}
+
+/// Load default configuration with the _latest_ defaults.
+#[cfg(not(feature = "behavior-version-latest"))]
+#[deprecated(
+    note = "Use the `aws_config::load_defaults` function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
+)]
+pub async fn load_from_env() -> SdkConfig {
+    load_defaults(BehaviorVersion::latest()).await
+}
+
+/// Create a config loader with the defaults for the given behavior version.
+///
+/// # Examples
+/// ```no_run
+/// # async fn create_config() {
+/// use aws_config::BehaviorVersion;
+/// let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
+///     .region("us-east-1")
+///     .load()
+///     .await;
+/// # }
+/// ```
+pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
+    ConfigLoader::default().behavior_version(version)
+}
+
+/// Load default configuration with the given behavior version.
+///
+/// Convenience wrapper equivalent to `aws_config::defaults(behavior_version).load().await`
+pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
+    defaults(version).load().await
 }
 
 mod loader {
@@ -165,8 +214,10 @@ mod loader {
     use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+    use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
@@ -210,11 +261,19 @@ mod loader {
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
+        stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
+        behavior_version: Option<BehaviorVersion>,
     }
 
     impl ConfigLoader {
+        /// Sets the [`BehaviorVersion`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        pub fn behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
+            self.behavior_version = Some(behavior_version);
+            self
+        }
+
         /// Override the region used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
@@ -296,14 +355,6 @@ mod loader {
             self
         }
 
-        /// Deprecated. Don't use.
-        #[deprecated(
-            note = "HTTP connector configuration changed. See https://github.com/smithy-lang/smithy-rs/discussions/3022 for upgrade guidance."
-        )]
-        pub fn http_connector(self, http_client: impl HttpClient + 'static) -> Self {
-            self.http_client(http_client)
-        }
-
         /// Override the [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) for this [`ConfigLoader`].
         ///
         /// The HTTP client will be used for both AWS services and credentials providers.
@@ -337,14 +388,6 @@ mod loader {
         /// ```
         pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
             self.http_client = Some(http_client.into_shared());
-            self
-        }
-
-        /// The credentials cache has been replaced. Use the identity_cache() method instead. See its rustdoc for an example.
-        #[deprecated(
-            note = "The credentials cache has been replaced. Use the identity_cache() method instead for equivalent functionality. See its rustdoc for an example."
-        )]
-        pub fn credentials_cache(self) -> Self {
             self
         }
 
@@ -555,30 +598,36 @@ mod loader {
             self
         }
 
-        /// Set configuration for all sub-loaders (credentials, region etc.)
+        /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
-        /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
-        /// the HTTPs connector used by providers or to stub in an in memory `Env` or `Fs` for testing.
+        /// This configures stalled stream protection. When enabled, download streams
+        /// that stop (stream no data) for longer than a configured grace period will return an error.
+        ///
+        /// By default, streams that transmit less than one byte per-second for five seconds will
+        /// be cancelled.
+        ///
+        /// _Note_: When an override is provided, the default implementation is replaced.
         ///
         /// # Examples
         /// ```no_run
-        /// # #[cfg(feature = "hyper-client")]
         /// # async fn create_config() {
-        /// use aws_config::provider_config::ProviderConfig;
-        /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        ///     .with_webpki_roots()
-        ///     .https_only()
-        ///     .enable_http1()
-        ///     .build();
-        /// let provider_config = ProviderConfig::default().with_tcp_connector(custom_https_connector);
-        /// let shared_config = aws_config::from_env().configure(provider_config).load().await;
+        /// use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
+        /// use std::time::Duration;
+        /// let config = aws_config::from_env()
+        ///     .stalled_stream_protection(
+        ///         StalledStreamProtectionConfig::enabled()
+        ///             .grace_period(Duration::from_secs(1))
+        ///             .build()
+        ///     )
+        ///     .load()
+        ///     .await;
         /// # }
         /// ```
-        #[deprecated(
-            note = "Use setters on this builder instead. configure is very hard to use correctly."
-        )]
-        pub fn configure(mut self, provider_config: ProviderConfig) -> Self {
-            self.provider_config = Some(provider_config);
+        pub fn stalled_stream_protection(
+            mut self,
+            stalled_stream_protection_config: StalledStreamProtectionConfig,
+        ) -> Self {
+            self.stalled_stream_protection_config = Some(stalled_stream_protection_config);
             self
         }
 
@@ -692,6 +741,7 @@ mod loader {
                 .timeout_config(timeout_config)
                 .time_source(time_source);
 
+            builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
             builder.set_app_name(app_name);
             builder.set_identity_cache(self.identity_cache);
@@ -700,6 +750,7 @@ mod loader {
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
+            builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
             builder.build()
         }
     }
@@ -721,7 +772,8 @@ mod loader {
     mod test {
         use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
         use crate::test_case::{no_traffic_client, InstantSleep};
-        use crate::{from_env, ConfigLoader};
+        use crate::BehaviorVersion;
+        use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
         use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
@@ -742,7 +794,7 @@ mod loader {
             ]);
             let fs =
                 Fs::from_slice(&[("test_config", "[profile custom]\nsdk-ua-app-id = correct")]);
-            let loader = from_env()
+            let loader = defaults(BehaviorVersion::latest())
                 .sleep_impl(TokioSleep::new())
                 .env(env)
                 .fs(fs)
@@ -786,7 +838,7 @@ mod loader {
         }
 
         fn base_conf() -> ConfigLoader {
-            from_env()
+            defaults(BehaviorVersion::latest())
                 .sleep_impl(InstantSleep)
                 .http_client(no_traffic_client())
         }
@@ -816,7 +868,10 @@ mod loader {
         #[cfg(feature = "rustls")]
         #[tokio::test]
         async fn disable_default_credentials() {
-            let config = from_env().no_credentials().load().await;
+            let config = defaults(BehaviorVersion::latest())
+                .no_credentials()
+                .load()
+                .await;
             assert!(config.identity_cache().is_none());
             assert!(config.credentials_provider().is_none());
         }
@@ -829,7 +884,7 @@ mod loader {
                 movable.fetch_add(1, Ordering::Relaxed);
                 http::Response::new("ok!")
             });
-            let config = from_env()
+            let config = defaults(BehaviorVersion::latest())
                 .fs(Fs::from_slice(&[]))
                 .env(Env::from_slice(&[]))
                 .http_client(http_client.clone())

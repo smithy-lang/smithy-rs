@@ -6,93 +6,21 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Avoid extending IMDS credentials' expiry unconditionally, which may incorrectly extend it beyond what is originally defined; If returned credentials are not stale, use them as they are.",
+      "message": "Change `ByteStream::into_async_read` to return `AsyncBufRead`",
       "meta": {
         "bug": true,
         "breaking": false,
         "tada": false
       },
-      "author": "ysaito1001",
+      "author": "utkarshgupta137",
       "references": [
-        "smithy-rs#2687",
-        "smithy-rs#2694"
+        "smithy-rs#3164"
       ],
-      "since-commit": "3b5fc51a41700c88270145e38fa708eca72dc414",
-      "age": 5
-    },
-    {
-      "message": "Automatically exclude X-Ray trace ID headers and authorization headers from SigV4 canonical request calculations.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "relevantsam",
-      "references": [
-        "smithy-rs#2815"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
       "age": 4
     },
     {
-      "message": "Add accessors to Builders",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "davidsouther",
-      "references": [
-        "smithy-rs#2791"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "Remove native-tls and add a migration guide.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "82marbag",
-      "references": [
-        "smithy-rs#2675"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "Fix error message when `credentials-sso` feature is not enabled on `aws-config`. NOTE: if you use `no-default-features`, you will need to manually able `credentials-sso` after 0.55.*",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2722",
-        "aws-sdk-rust#703"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "`SsoCredentialsProvider`, `AssumeRoleProvider`, and `WebIdentityTokenCredentialsProvider` now use `NoCredentialsCache` internally when fetching credentials using an STS client. This avoids double-caching when these providers are wrapped by `LazyCredentialsCache` when a service client is created.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2720"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "For event stream operations such as S3 SelectObjectContent or Transcribe StartStreamTranscription, the `EventStreamSender` in the input now requires the passed in `Stream` impl to implement `Sync`.",
+      "message": "[Upgrade guidance for HTTP Request/Response changes](https://github.com/awslabs/aws-sdk-rust/discussions/950). HTTP request types moved, and a new HTTP response type was added.",
       "meta": {
         "bug": false,
         "breaking": true,
@@ -100,59 +28,14 @@
       },
       "author": "jdisanti",
       "references": [
-        "smithy-rs#2673"
+        "smithy-rs#3138",
+        "smithy-rs#3148"
       ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
       "age": 4
     },
     {
-      "message": "The `SigningInstructions` in the `aws-sigv4` module are now public. This allows them to be named in a function signature.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "cholcombe973",
-      "references": [
-        "smithy-rs#2730"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "Time is now controlled by the `TimeSource` trait. This facilitates testing as well as use cases like WASM where `SystemTime::now()` is not supported.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2728",
-        "smithy-rs#2262",
-        "aws-sdk-rust#2087"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "The SDK has added support for timestreamwrite and timestreamquery. Support for these services is considered experimental at this time. In order to use these services, you MUST call `.with_endpoint_discovery_enabled()` on the `Client` after construction.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2707",
-        "aws-sdk-rust#114",
-        "smithy-rs#2846"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "A newtype wrapper `SharedAsyncSleep` has been introduced and occurrences of `Arc<dyn AsyncSleep>` that appear in public APIs have been replaced with it.",
+      "message": "An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).\n",
       "meta": {
         "bug": false,
         "breaking": true,
@@ -160,301 +43,127 @@
       },
       "author": "ysaito1001",
       "references": [
-        "smithy-rs#2742"
+        "smithy-rs#3100",
+        "smithy-rs#3114"
       ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
       "age": 4
     },
     {
-      "message": "Update MSRV to Rust 1.69.0",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#2893"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "Implement unstable serde support for the `Number`, `Blob`, `Document`, `DateTime` primitives",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "thomas-k-cameron",
-      "references": [
-        "smithy-rs#2647",
-        "smithy-rs#2645",
-        "smithy-rs#2646",
-        "smithy-rs#2616"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "Add a `send_with` function on `-Input` types for sending requests without fluent builders",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "thomas-k-cameron",
-      "references": [
-        "smithy-rs#2652"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "The naming `make_token` for fields and the API of `IdempotencyTokenProvider` in service configs and their builders has now been updated to `idempotency_token_provider`.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2783"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "The implementation `From<http::header::value::InvalidHeaderValue>` for `aws_http::user_agent::UserAgentStageError` has been removed.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2845"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "The AppName property can now be set with `sdk_ua_app_id` in profile files. The old field, `sdk-ua-app-id`, is maintained for backwards compatibility.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2724"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "**Behavior change**: Credential providers now share the HTTP connector used by the SDK. If you want to keep a separate connector for clients, use `<service>::ConfigBuilder::http_connector` when constructing the client.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "aws-sdk-rust#579",
-        "aws-sdk-rust#338"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "The `doc(hidden)` `time_source` in `aws-credential-types` was removed. Use `aws_smithy_async::time` instead.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2877"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "The `doc(hidden)` `with_env` in `ProviderConfig` was removed.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2877"
-      ],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
-      "age": 4
-    },
-    {
-      "message": "The underlying architecture of the SDK clients has been overhauled. This shouldn't require any changes for most projects, but will affect projects that customize the SDK middleware. More details are available in the [upgrade guide](https://github.com/awslabs/aws-sdk-rust/discussions/853) if you are effected by these changes.",
+      "message": "The `RequestId` trait has moved from the aws-http crate into aws-types.",
       "meta": {
         "bug": false,
         "breaking": true,
         "tada": false
       },
       "author": "jdisanti",
-      "references": [],
-      "since-commit": "6eaacaa96684f662b7d355eea94a526c0b465e7f",
+      "references": [
+        "smithy-rs#3160"
+      ],
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
       "age": 4
     },
     {
-      "message": "`RuntimeComponents` are now re-exported so that implementing a custom interceptor doens't require directly depending on `aws-smithy-runtime-api`.",
+      "message": "Clients now require a `BehaviorVersion` to be provided. For must customers, `latest` is the best choice. This will be enabled automatically if you enable the `behavior-version-latest` cargo feature on `aws-config` or on an SDK crate. For customers that wish to pin to a specific behavior major version, it can be set in `aws-config` or when constructing the service client.\n\n```rust\nasync fn example() {\n    // with aws-config\n    let conf = aws_config::defaults(aws_config::BehaviorVersion::v2023_11_09());\n\n    // when creating a client\n    let client = my_service::Client::from_conf(my_service::Config::builder().behavior_version(..).<other params>.build());\n}\n```",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3151"
+      ],
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
+      "age": 4
+    },
+    {
+      "message": "Add `ProvideErrorMetadata` impl for service `Error` type.",
       "meta": {
         "bug": false,
         "breaking": false,
+        "tada": true
+      },
+      "author": "jdisanti",
+      "references": [
+        "aws-sdk-rust#780",
+        "smithy-rs#3189"
+      ],
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
+      "age": 4
+    },
+    {
+      "message": "Remove deprecated error kind type aliases.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
         "tada": false
       },
       "author": "jdisanti",
       "references": [
-        "smithy-rs#2904",
-        "aws-sdk-rust#862"
+        "smithy-rs#3189"
       ],
-      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
+      "age": 4
+    },
+    {
+      "message": "Unhandled errors have been made opaque to ensure code is written in a future-proof manner. Where previously, you\nmight have:\n```rust\nmatch service_error.err() {\n    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }\n    GetStorageError::Unhandled(unhandled) if unhandled.code() == Some(\"SomeUnmodeledErrorCode\") {\n        // unhandled error handling\n    }\n    _ => { /* ... */ }\n}\n```\nIt should now look as follows:\n```rust\nmatch service_error.err() {\n    GetStorageError::StorageAccessNotAuthorized(_) => { /* ... */ }\n    err if err.code() == Some(\"SomeUnmodeledErrorCode\") {\n        // unhandled error handling\n    }\n    _ => { /* ... */ }\n}\n```\nThe `Unhandled` variant should never be referenced directly.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#3191"
+      ],
+      "since-commit": "f78ee50d9b28c1d2337ca6236e592dfc243ae1c9",
+      "age": 4
+    },
+    {
+      "message": "imds::client::Builder::endpoint has been updated to accept a string instead of a URI. The method now returns a result instead.",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3205"
+      ],
+      "since-commit": "681bf77733a242e01458e87381a0700616c918da",
       "age": 3
     },
     {
-      "message": "Fix requests to S3 with `no_credentials` set.",
+      "message": "The `AssumeRoleBuilder::policy_arns` now accepts strings instead of an STS specific type",
       "meta": {
-        "bug": true,
-        "breaking": false,
+        "bug": false,
+        "breaking": true,
         "tada": false
       },
-      "author": "jdisanti",
+      "author": "rcoh",
       "references": [
-        "smithy-rs#2907",
-        "aws-sdk-rust#864"
+        "smithy-rs#3205"
       ],
-      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
+      "since-commit": "681bf77733a242e01458e87381a0700616c918da",
       "age": 3
     },
     {
-      "message": "Fixed re-exported `SdkError` type. The previous release had the wrong type for `SdkError`, which caused projects to fail to compile when upgrading.",
+      "message": "Fix optional types in S3. Many types in S3 were modeled as non-optional but this causes serialization issues.",
       "meta": {
-        "bug": true,
+        "bug": false,
         "breaking": true,
         "tada": false
       },
-      "author": "jdisanti",
+      "author": "rcoh",
       "references": [
-        "smithy-rs#2931",
-        "aws-sdk-rust#875"
+        "smithy-rs#3213"
       ],
-      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
+      "since-commit": "681bf77733a242e01458e87381a0700616c918da",
       "age": 3
     },
     {
-      "message": "Logging via `#[instrument]` in the `aws_smithy_runtime::client::orchestrator` module is now emitted at the `DEBUG` level to reduce the amount of logging when emitted at the `INFO` level.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2934",
-        "aws-sdk-rust#872"
-      ],
-      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
-      "age": 3
-    },
-    {
-      "message": "Fix `SDK::Endpoint` built-in for `@endpointRuleSet`.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#2935"
-      ],
-      "since-commit": "3d7587def9a26afc8e7b306f92c755a980ac9504",
-      "age": 3
-    },
-    {
-      "message": "(Behavior Break!) The SSO credentials provider is no longer enabled by default in `aws-config`, and so SSO profile config will no longer work out of box. The `credentials-sso` feature in `aws-config` was removed from the default features, and renamed to `sso`. If you need credentials from SSO, then enable the `sso` feature in `aws-config`.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#2917"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "The `SsoCredentialsProvider` now supports token refresh and is compatible with the token cache file paths the latest AWS CLI uses.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#2917",
-        "aws-sdk-rust#703",
-        "aws-sdk-rust#699"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "HTTP connector configuration has changed significantly. See the [upgrade guidance](https://github.com/smithy-lang/smithy-rs/discussions/3022) for details.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3011"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Several breaking changes were made to the aws-sigv4 API to remove the direct HTTP dependency:\n- The `take_parameters` and `take_headers` APIs were removed from `SigningInstructions`. Use `into_parts()` instead\n- The arguments of `SignableRequest::new` were changed to accept string types instead of types from the HTTP crate\n- `SigningInstructions::apply_to_request` was gated beyond an `http0-compat` feature flag for backwards compatibility. This API MAY be removed in a future release.\n- Several public accessors were removed from `SigningInstructions`.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2921"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "In sigV4-related code, rename 'signing service' to 'signing name'. This aligns with the terminology used by the endpoint resolver.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#2911"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Struct members modeled as required are no longer wrapped in `Option`s [when possible](https://smithy.io/2.0/spec/aggregate-types.html#structure-member-optionality). For upgrade guidance and more info, see [here](https://github.com/smithy-lang/smithy-rs/discussions/2929).",
+      "message": "Add configurable stalled-stream protection for downloads.\n\nWhen making HTTP calls,\nit's possible for a connection to 'stall out' and emit no more data due to server-side issues.\nIn the event this happens, it's desirable for the stream to error out as quickly as possible.\nWhile timeouts can protect you from this issue, they aren't adaptive to the amount of data\nbeing sent and so must be configured specifically for each use case. When enabled, stalled-stream\nprotection will ensure that bad streams error out quickly, regardless of the amount of data being\ndownloaded.\n\nProtection is enabled by default for all clients but can be configured or disabled.\nSee [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.\n",
       "meta": {
         "bug": false,
         "breaking": true,
@@ -462,42 +171,27 @@
       },
       "author": "Velfi",
       "references": [
-        "smithy-rs#2916",
-        "aws-sdk-rust#536"
+        "smithy-rs#3202"
       ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
+      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
       "age": 2
     },
     {
-      "message": "All versions of SigningParams have been updated to contain an [`Identity`](https://docs.rs/aws-smithy-runtime-api/latest/aws_smithy_runtime_api/client/identity/struct.Identity.html)\nas opposed to AWS credentials in `&str` form. [Read more](https://github.com/awslabs/aws-sdk-rust/discussions/868).\n",
+      "message": "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests.",
       "meta": {
-        "bug": false,
+        "bug": true,
         "breaking": true,
         "tada": false
       },
-      "author": "Velfi",
+      "author": "milesziemer",
       "references": [
-        "smithy-rs#2913"
+        "smithy-rs#3217"
       ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
+      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
       "age": 2
     },
     {
-      "message": "Update MSRV to Rust 1.70.0",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#2948"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Correctly identify HTTP 200 responses from S3 with `<Error>` as the root Element as errors. **Note**: This a behavior change and will change the error type returned by the SDK in some cases.",
+      "message": "Prevent multiplication overflow in backoff computation",
       "meta": {
         "bug": true,
         "breaking": false,
@@ -505,298 +199,81 @@
       },
       "author": "rcoh",
       "references": [
-        "smithy-rs#2958",
-        "aws-sdk-rust#873"
+        "smithy-rs#3229",
+        "aws-sdk-rust#960"
       ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
+      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
       "age": 2
     },
     {
-      "message": "Allow `no_credentials` to be used with all S3 operations.",
+      "message": "Make some types for various services optional. Previously, they defaulted to 0, but this created invalid requests.",
       "meta": {
         "bug": true,
-        "breaking": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "milesziemer",
+      "references": [
+        "smithy-rs#3228"
+      ],
+      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
+      "age": 2
+    },
+    {
+      "message": "Types/functions that were deprecated in previous releases were removed. Unfortunately, some of these deprecations\nwere ignored by the Rust compiler (we found out later that `#[deprecated]` on `pub use` doesn't work). See\nthe [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discussions/3223) for more details.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
         "tada": false
       },
       "author": "jdisanti",
       "references": [
-        "smithy-rs#2955",
-        "aws-sdk-rust#878"
+        "smithy-rs#3222"
       ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
+      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
       "age": 2
     },
     {
-      "message": "`CustomizableOperation`, created as a result of calling the `.customize` method on a fluent builder, ceased to be `Send` and `Sync` in the previous releases. It is now `Send` and `Sync` again.",
+      "message": "Add `Display` impl for `DateTime`.",
       "meta": {
-        "bug": true,
+        "bug": false,
         "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2944",
-        "smithy-rs#2951"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Make `bucket` required for request construction for S3. When `bucket` is not set, a **different** operation than intended can be triggered.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#1668",
-        "aws-sdk-rust#873",
-        "smithy-rs#2964"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Remove `once_cell` from public API.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2973"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Fix regression with redacting sensitive HTTP response bodies.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2926",
-        "smithy-rs#2972"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Structure members with the type `Option<Vec<T>>` now produce an accessor with the type `&[T]` instead of `Option<&[T]>`. To determine if the field was actually set use `.<field_name>.is_some()`.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2995"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "The `futures_core::stream::Stream` trait has been removed from public API. It should not affect usual SDK use cases. If your code uses paginators, you do not need to use the `Stream` trait or its exntension traits, but only the `next`, `try_next`, `collect`, and `try_collect` methods are supported on `PaginationStream`. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner. Finally, `fn_stream` has been moved to be a child module of `pagination_stream`.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2978"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Add support for Sigv4A request signing. Sigv4a signing will be used automatically when appropriate for a given operation. Currently, it's used for S3 and EventBridge.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
         "tada": true
       },
-      "author": "Velfi",
+      "author": "HakanVardarr",
       "references": [
-        "smithy-rs#1797"
+        "smithy-rs#3183"
       ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
+      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
       "age": 2
     },
     {
-      "message": "The `futures_core::stream::Stream` trait has been removed from [`ByteStream`](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html). The methods mentioned in the [doc](https://docs.rs/aws-smithy-http/latest/aws_smithy_http/byte_stream/struct.ByteStream.html#getting-data-out-of-a-bytestream) will continue to be supported. Other stream operations that were previously available through the trait or its extension traits can be added later in a backward compatible manner.",
+      "message": "Types/functions that were previously `#[doc(hidden)]` in `aws-config`, `aws-inlineable`, `aws-types`, and the SDK crates are now visible. For those that are not intended to be used directly, they are called out in their docs as such.",
       "meta": {
         "bug": false,
-        "breaking": true,
+        "breaking": false,
         "tada": false
       },
       "author": "ysaito1001",
       "references": [
-        "smithy-rs#2983"
+        "smithy-rs#3226"
       ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
+      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
       "age": 2
     },
     {
-      "message": "The IMDS Client builder's `build()` method is no longer async.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#2997"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "The API for [`AssumeRoleProvider`](https://docs.rs/aws-config/latest/aws_config/sts/struct.AssumeRoleProvider.html) has been updated to derive configuration from [`SdkConfig`](https://docs.rs/aws-config/latest/aws_config/struct.SdkConfig.html) instead of `ProviderConfig`.\n\nFor more information, see the [Change Log Discussion](https://github.com/awslabs/aws-sdk-rust/discussions/906)",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3014"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "STS and SSO-based credential providers will now respect both `use_fips` and `use_dual_stack` when those settings are configured in a user's environment or profile.",
+      "message": "Make properties of S3Control PublicAccessBlockConfiguration optional. Previously, they defaulted to false, but this created invalid requests.",
       "meta": {
         "bug": true,
         "breaking": true,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "aws-sdk-rust#882",
-        "smithy-rs#3007"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Retry classifiers are now configurable at the service and operation levels. Users may also define their own custom retry classifiers.\n\nFor more information, see the [guide](https://github.com/smithy-lang/smithy-rs/discussions/3050).\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#2417",
-        "smithy-rs#3018"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "The future return types on traits `EndpointResolver` and `IdentityResolver` changed to new-types `EndpointFuture` and `IdentityFuture` respectively.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
         "tada": false
       },
-      "author": "jdisanti",
+      "author": "milesziemer",
       "references": [
-        "smithy-rs#3055"
+        "smithy-rs#3246"
       ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Lifetimes have been added to `EndpointResolver` and `IdentityResolver` traits.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3061"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "Several traits have been renamed from noun form to verb form to be more idiomatic:\n- `EndpointResolver` -> `ResolveEndpoint`\n- `Interceptor` -> `Intercept`\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3065"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "[`PresignedRequest`](https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/presigning/struct.PresignedRequest.html) now returns standard-library types instead of types from the `http` crate. `to_http_request` has been renamed `to_http_02x_request`.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3059"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "A bug was fixed where the credentials-process provider was executing the subprocess in the worker thread, potentially stalling the runtime.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3052"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "The `credentials-process` feature was added to `aws-config`. If you currently use `no-default-features` for `aws-config`, you MUST enable this feature to use the [`CredentialProcessProvider`](https://docs.rs/aws-config/latest/aws_config/credential_process/struct.CredentialProcessProvider.html) provider directly or via `~/.aws/config`.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3052"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
-    },
-    {
-      "message": "**This change has [detailed upgrade guidance](https://github.com/awslabs/aws-sdk-rust/discussions/923).** <br><br>The AWS credentials cache has been replaced with a more generic identity cache.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3077"
-      ],
-      "since-commit": "b56d34847591494a15b8fabcce55f730400ebea9",
-      "age": 2
+      "since-commit": "e155c3048b9989fe406ef575d461ea01dfaf294c",
+      "age": 1
     }
   ],
   "aws-sdk-model": []

@@ -233,6 +233,7 @@ class DefaultProtocolTestGenerator(
         checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
         checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
         checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
+
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -247,6 +248,22 @@ class DefaultProtocolTestGenerator(
             }
             if (!httpRequestTestCase.vendorParams.isEmpty) {
                 logger.warning("Test case provided vendorParams but these were ignored")
+            }
+
+            rustTemplate(
+                """
+                let uri: #{Uri} = http_request.uri().parse().expect("invalid URI sent");
+                #{AssertEq}(http_request.method(), ${method.dq()}, "method was incorrect");
+                #{AssertEq}(uri.path(), ${uri.dq()}, "path was incorrect");
+                """,
+                *codegenScope,
+            )
+
+            resolvedHost.orNull()?.also { host ->
+                rustTemplate(
+                    """#{AssertEq}(uri.host().expect("host should be set"), ${host.dq()});""",
+                    *codegenScope,
+                )
             }
         }
     }

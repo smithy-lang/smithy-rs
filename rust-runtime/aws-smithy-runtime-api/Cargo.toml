@@ -14,6 +14,7 @@ default = []
 client = []
 http-auth = ["dep:zeroize"]
 test-util = ["aws-smithy-types/test-util"]
+http-02x = []
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }

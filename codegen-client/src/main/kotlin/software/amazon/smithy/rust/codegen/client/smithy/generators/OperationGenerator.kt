@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientHttpBou
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -77,10 +78,9 @@ open class OperationGenerator(
         )
         Attribute(derive(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         Attribute.NonExhaustive.render(operationWriter)
-        Attribute.DocHidden.render(operationWriter)
         operationWriter.rust("pub struct $operationName;")
         operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
-            Attribute.DocHidden.render(operationWriter)
+            docs("Creates a new `$operationName`")
             rustBlock("pub fn new() -> Self") {
                 rust("Self")
             }

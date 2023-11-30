@@ -23,6 +23,7 @@ import kotlin.io.path.writeText
 data class IntegrationTestParams(
     val addModuleToEventStreamAllowList: Boolean = false,
     val service: String? = null,
+    val moduleVersion: String = "1.0.0",
     val runtimeConfig: RuntimeConfig? = null,
     val additionalSettings: ObjectNode = ObjectNode.builder().build(),
     val overrideTestDir: File? = null,
@@ -38,6 +39,7 @@ fun codegenIntegrationTest(model: Model, params: IntegrationTestParams, invokePl
         model,
         params.additionalSettings,
         params.addModuleToEventStreamAllowList,
+        params.moduleVersion,
         params.service,
         params.runtimeConfig,
         params.overrideTestDir,

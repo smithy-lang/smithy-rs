@@ -13,7 +13,7 @@ publish = false
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
-aws-sdk-glacier = { path = "../../build/aws-sdk/sdk/glacier" }
+aws-sdk-glacier = { path = "../../build/aws-sdk/sdk/glacier", features = ["behavior-version-latest"] }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test"}
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 bytes = "1.0.0"

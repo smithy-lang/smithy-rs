@@ -3,16 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::anchor::replace_anchor;
-use crate::lint::LintError;
-use crate::{all_cargo_tomls, Check, Fix, Lint};
+use std::collections::HashSet;
+use std::fs::read_to_string;
+use std::ops::Deref;
+use std::path::{Path, PathBuf};
+
 use anyhow::{Context, Result};
 use cargo_toml::{Manifest, Package};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
-use std::fs::read_to_string;
-use std::ops::Deref;
-use std::path::{Path, PathBuf};
+
+use crate::anchor::replace_anchor;
+use crate::lint::LintError;
+use crate::{all_cargo_tomls, repo_root, Check, Fix, Lint};
 
 macro_rules! return_errors {
     ($errs: expr) => {
@@ -223,4 +226,171 @@ fn fix_docs_rs(contents: &str) -> Result<String> {
         DEFAULT_DOCS_RS_SECTION,
     )?;
     Ok(new)
+}
+
+#[derive(Deserialize)]
+struct SmithyRsMetadata {
+    #[serde(rename = "smithy-rs-release-tooling")]
+    smithy_rs_release_tooling: ToolingMetadata,
+}
+
+#[derive(Deserialize)]
+struct ToolingMetadata {
+    stable: bool,
+}
+
+pub(crate) struct StableCratesExposeStableCrates {
+    stable_crates: HashSet<String>,
+}
+
+impl StableCratesExposeStableCrates {
+    pub(crate) fn new() -> Result<Self> {
+        let mut stable_crates = all_cargo_tomls()?
+            .flat_map(crate_is_stable)
+            .map(|c| c.replace('-', "_"))
+            .collect::<HashSet<_>>();
+        for crte in [
+            "tokio",
+            "hyper",
+            "http",
+            "bytes",
+            "http-body",
+            "aws-smithy-eventstream",
+        ] {
+            stable_crates.insert(crte.replace('-', "_"));
+        }
+
+        Ok(Self { stable_crates })
+    }
+}
+impl Lint for StableCratesExposeStableCrates {
+    fn name(&self) -> &str {
+        "StableCratesExposeStableCrates"
+    }
+
+    fn files_to_check(&self) -> Result<Vec<PathBuf>> {
+        Ok(all_cargo_tomls()?.collect())
+    }
+}
+
+pub(crate) struct SdkExternalLintsExposesStableCrates {
+    checker: StableCratesExposeStableCrates,
+}
+
+impl SdkExternalLintsExposesStableCrates {
+    pub(crate) fn new() -> Result<Self> {
+        Ok(Self {
+            checker: StableCratesExposeStableCrates::new()?,
+        })
+    }
+}
+
+impl Lint for SdkExternalLintsExposesStableCrates {
+    fn name(&self) -> &str {
+        "sdk-external-types exposes stable types"
+    }
+
+    fn files_to_check(&self) -> Result<Vec<PathBuf>> {
+        Ok(vec![repo_root().join("aws/sdk/sdk-external-types.toml")])
+    }
+}
+
+impl Check for SdkExternalLintsExposesStableCrates {
+    fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
+        Ok(self
+            .checker
+            .check_external_types(path)?
+            .iter()
+            .filter(|it| it != &"aws_smithy_http") // currently exposed for transcribe streaming
+            .map(|crte| {
+                LintError::new(format!(
+                    "the list of allowed SDK external types contained unstable crate {crte}"
+                ))
+            })
+            .collect())
+    }
+}
+
+impl Check for StableCratesExposeStableCrates {
+    fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
+        let parsed = match package(path.as_ref()) {
+            // if the package doesn't parse, someone else figured that out
+            Err(_) => return Ok(vec![]),
+            // if there is something wrong, someone figured that out too
+            Ok(Err(_errs)) => return Ok(vec![]),
+            Ok(Ok(pkg)) => pkg,
+        };
+        self.check_stable_crates_only_expose_stable_crates(parsed, path)
+    }
+}
+
+#[derive(Deserialize)]
+struct ExternalTypes {
+    allowed_external_types: Vec<String>,
+}
+
+impl StableCratesExposeStableCrates {
+    /// returns a list of unstable types exposed by this list
+    fn check_external_types(&self, external_types: impl AsRef<Path>) -> Result<Vec<String>> {
+        let external_types =
+            toml::from_str::<ExternalTypes>(&read_to_string(external_types.as_ref())?)
+                .context("invalid external types format")?;
+        let mut errs = vec![];
+        for tpe in external_types.allowed_external_types {
+            let referenced_crate = tpe.split_once("::").map(|(pkg, _r)| pkg).unwrap_or(&tpe);
+            if !self.stable_crates.contains(referenced_crate) {
+                errs.push(referenced_crate.to_string())
+            }
+        }
+        Ok(errs)
+    }
+    fn check_stable_crates_only_expose_stable_crates(
+        &self,
+        package: Package<SmithyRsMetadata>,
+        path: impl AsRef<Path>,
+    ) -> Result<Vec<LintError>> {
+        // [package.metadata.smithy-rs-release-tooling]
+        if package
+            .metadata
+            .map(|meta| meta.smithy_rs_release_tooling.stable)
+            == Some(true)
+        {
+            let name = package.name;
+            Ok(self
+                .check_external_types(path.as_ref().parent().unwrap().join("external-types.toml"))?
+                .iter()
+                // TODO(tooling): When tooling allows, specify this at the crate level. These
+                // are gated in test-util
+                .filter(|tpe| {
+                    !(name == "aws-smithy-runtime"
+                        && ["tower_service", "serde"].contains(&tpe.as_str()))
+                })
+                .map(|crte| {
+                    LintError::new(format!(
+                        "stable crate {name} exposed {crte} which is unstable"
+                    ))
+                })
+                .collect::<Vec<_>>())
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
+/// if the crate is stable, returns the name of the crate
+fn crate_is_stable(path: impl AsRef<Path>) -> Option<String> {
+    let parsed: Package<SmithyRsMetadata> = match package(path.as_ref()) {
+        // if the package doesn't parse, someone else figured that out
+        Err(_) => return None,
+        // if there is something wrong, someone figured that out too
+        Ok(Err(_errs)) => return None,
+        Ok(Ok(pkg)) => pkg,
+    };
+    match parsed
+        .metadata
+        .map(|meta| meta.smithy_rs_release_tooling.stable)
+    {
+        Some(true) => Some(parsed.name),
+        _ => None,
+    }
 }
