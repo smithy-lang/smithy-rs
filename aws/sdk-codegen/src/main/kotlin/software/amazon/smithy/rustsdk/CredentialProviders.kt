@@ -130,10 +130,12 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                             *codegenScope,
                         )
                     }
-                    rust("""
+                    rust(
+                        """
                         self.runtime_components.set_identity_resolvers(identity_resolvers.into_iter());
                         self
-                    """)
+                    """,
+                    )
                 }
             }
 
