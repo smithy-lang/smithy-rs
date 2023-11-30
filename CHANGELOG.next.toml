@@ -12,7 +12,7 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "`config::Builder::set_credentials_provider` now overrides credentials providers previously set."
+message = "Fix `config::Builder::set_credentials_provider` to override credentials providers previously set."
 references = ["aws-sdk-rust#973", "smithy-rs#3276"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
