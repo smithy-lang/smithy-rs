@@ -10,3 +10,13 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """Client creation now takes microseconds instead of milliseconds.
+Previously, it would take 2-3 milliseconds for each client instantiation due to time spent compiling regexes.
+For applications that used several clients, this would increase start-up time in cases where it really matters,
+such as for AWS Lambda cold starts. This time was improved by both changing regex implementation and caching the
+result of the compilation."""
+references = ["aws-sdk-rust#975", "smithy-rs#3269"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
