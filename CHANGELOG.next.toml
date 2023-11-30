@@ -32,3 +32,20 @@ result of the compilation."""
 references = ["aws-sdk-rust#975", "smithy-rs#3269"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Add `test_credentials` to `ConfigLoader` in `aws_config`. This allows the following pattern during tests:
+
+```rust
+async fn main() {
+    let conf = aws_config::defaults(BehaviorVersion::latest())
+        .test_credentials()
+        .await;
+}
+```
+
+This is designed for unit tests and using local mocks like DynamoDB Local and LocalStack with the SDK.
+"""
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+references = ["smithy-rs#3279", "aws-sdk-rust#971"]
