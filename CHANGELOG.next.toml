@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
+references = ["smithy-rs#3262"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
+references = ["smithy-rs#3262"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
