@@ -565,7 +565,8 @@ impl HyperClientBuilder {
 
     /// Create a hyper client with the default rustls HTTPS implementation.
     ///
-    /// This client will immediately load trusted certificates.
+    /// The trusted certificates will be loaded later when this becomes the selected
+    /// HTTP client for a Smithy client.
     #[cfg(feature = "tls-rustls")]
     pub fn build_https(self) -> SharedHttpClient {
         self.build_with_fn(default_connector::https)
