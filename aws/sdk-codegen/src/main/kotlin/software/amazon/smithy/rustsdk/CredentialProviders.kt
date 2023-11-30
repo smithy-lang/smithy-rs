@@ -82,7 +82,7 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                 rustTemplate(
                     """
                     /// Returns the credentials provider for this service
-                    ##[deprecated(note = "Broken since release-2023-11-15 as it always returns a `None`, do not use it")]
+                    ##[deprecated(note = "This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.")]
                     pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
                         self.config.load::<#{SharedCredentialsProvider}>().cloned()
                     }
