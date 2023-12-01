@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 1st, 2023
+==================
+**New this release:**
+- (client, [smithy-rs#3278](https://github.com/smithy-lang/smithy-rs/issues/3278)) `RuntimeComponentsBuilder::push_identity_resolver` is now deprecated since it does not replace the existing identity resolver of a given auth scheme ID. Use `RuntimeComponentsBuilder::set_identity_resolver` instead.
+
+
 November 27th, 2023
 ===================
 **New this release:**
