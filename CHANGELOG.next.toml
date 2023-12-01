@@ -32,3 +32,15 @@ result of the compilation."""
 references = ["aws-sdk-rust#975", "smithy-rs#3269"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Improve the error messages for when auth fails to select an auth scheme for a request."
+references = ["aws-sdk-rust#979", "smithy-rs#3277"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Improve the error messages for when auth fails to select an auth scheme for a request."
+references = ["smithy-rs#3277"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
