@@ -112,7 +112,6 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                 ) {
                     rustBlockTemplate(
                         """
-                        let mut identity_resolvers = #{Vec}::with_capacity(2);
                         if let Some(credentials_provider) = credentials_provider
                         """,
                         *codegenScope,
@@ -120,22 +119,17 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                         if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
                             featureGateBlock("sigv4a") {
                                 rustTemplate(
-                                    "identity_resolvers.push((#{SIGV4A_SCHEME_ID}, credentials_provider.clone()));",
+                                    "self.runtime_components.set_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
                                     *codegenScope,
                                 )
                             }
                         }
                         rustTemplate(
-                            "identity_resolvers.push((#{SIGV4_SCHEME_ID}, credentials_provider));",
+                            "self.runtime_components.set_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
                             *codegenScope,
                         )
                     }
-                    rust(
-                        """
-                        self.runtime_components.set_identity_resolvers(identity_resolvers.into_iter());
-                        self
-                    """,
-                    )
+                    rust("self")
                 }
             }
 
