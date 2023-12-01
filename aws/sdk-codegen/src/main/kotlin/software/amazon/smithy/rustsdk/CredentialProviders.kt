@@ -84,7 +84,7 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                     /// This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.
                     ##[deprecated(note = "This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.")]
                     pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
-                        self.config.load::<#{SharedCredentialsProvider}>().cloned()
+                        #{None}
                     }
                     """,
                     *codegenScope,
