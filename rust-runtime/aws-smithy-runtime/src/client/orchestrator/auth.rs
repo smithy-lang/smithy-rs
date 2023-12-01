@@ -21,42 +21,36 @@ use std::fmt;
 use tracing::trace;
 
 #[derive(Debug)]
-enum AuthOrchestrationError {
-    NoMatchingAuthScheme(ExploredList),
-    MissingEndpointConfig,
-    BadAuthSchemeEndpointConfig(Cow<'static, str>),
-}
+struct NoMatchingAuthSchemeError(ExploredList);
 
-impl fmt::Display for AuthOrchestrationError {
+impl fmt::Display for NoMatchingAuthSchemeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::NoMatchingAuthScheme(explored) => {
-                // Use the information we have about the auth options that were explored to construct
-                // as helpful of an error message as possible.
-                if explored.items().count() == 0 {
-                    return f.write_str(
-                        "no auth options are available. This is a bug. Please file an issue.",
-                    );
-                }
-                if explored
-                    .items()
-                    .all(|explored| matches!(explored.result, ExploreResult::NoAuthScheme))
-                {
-                    return f.write_str(
-                        "no auth schemes are registered. This is a bug. Please file an issue.",
-                    );
-                }
+        let explored = &self.0;
 
-                let mut try_add_identity = false;
-                let mut likely_bug = false;
-                f.write_str("failed to select an auth scheme to sign the request with.")?;
-                for item in explored.items() {
-                    write!(
-                        f,
-                        " \"{}\" wasn't an option because ",
-                        item.scheme_id.as_str()
-                    )?;
-                    f.write_str(match item.result {
+        // Use the information we have about the auth options that were explored to construct
+        // as helpful of an error message as possible.
+        if explored.items().count() == 0 {
+            return f
+                .write_str("no auth options are available. This is a bug. Please file an issue.");
+        }
+        if explored
+            .items()
+            .all(|explored| matches!(explored.result, ExploreResult::NoAuthScheme))
+        {
+            return f
+                .write_str("no auth schemes are registered. This is a bug. Please file an issue.");
+        }
+
+        let mut try_add_identity = false;
+        let mut likely_bug = false;
+        f.write_str("failed to select an auth scheme to sign the request with.")?;
+        for item in explored.items() {
+            write!(
+                f,
+                " \"{}\" wasn't an option because ",
+                item.scheme_id.as_str()
+            )?;
+            f.write_str(match item.result {
                         ExploreResult::NoAuthScheme => {
                             likely_bug = true;
                             "no auth scheme was registered for it."
@@ -71,18 +65,31 @@ impl fmt::Display for AuthOrchestrationError {
                         },
                         ExploreResult::NotExplored => unreachable!(),
                     })?;
-                }
-                if try_add_identity {
-                    f.write_str(" Be sure to set an identity, such as credentials, auth token, or other identity type that is required for this service.")?;
-                } else if likely_bug {
-                    f.write_str(" This is likely a bug.")?;
-                }
-                if explored.truncated {
-                    f.write_str(" Note: there were other auth schemes that were evaluated that weren't listed here.")?;
-                }
+        }
+        if try_add_identity {
+            f.write_str(" Be sure to set an identity, such as credentials, auth token, or other identity type that is required for this service.")?;
+        } else if likely_bug {
+            f.write_str(" This is likely a bug.")?;
+        }
+        if explored.truncated {
+            f.write_str(" Note: there were other auth schemes that were evaluated that weren't listed here.")?;
+        }
 
-                Ok(())
-            }
+        Ok(())
+    }
+}
+
+impl StdError for NoMatchingAuthSchemeError {}
+
+#[derive(Debug)]
+enum AuthOrchestrationError {
+    MissingEndpointConfig,
+    BadAuthSchemeEndpointConfig(Cow<'static, str>),
+}
+
+impl fmt::Display for AuthOrchestrationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
             // This error is never bubbled up
             Self::MissingEndpointConfig => f.write_str("missing endpoint config"),
             Self::BadAuthSchemeEndpointConfig(message) => f.write_str(message),
@@ -164,7 +171,7 @@ pub(super) async fn orchestrate_auth(
         }
     }
 
-    Err(AuthOrchestrationError::NoMatchingAuthScheme(explored).into())
+    Err(NoMatchingAuthSchemeError(explored).into())
 }
 
 fn extract_endpoint_auth_scheme_config(
@@ -600,7 +607,7 @@ mod tests {
 
     #[test]
     fn friendly_error_messages() {
-        let err = AuthOrchestrationError::NoMatchingAuthScheme(ExploredList::default());
+        let err = NoMatchingAuthSchemeError(ExploredList::default());
         assert_eq!(
             "no auth options are available. This is a bug. Please file an issue.",
             err.to_string()
@@ -615,7 +622,7 @@ mod tests {
             AuthSchemeId::new("SigV4a"),
             ExploreResult::NoIdentityResolver,
         );
-        let err = AuthOrchestrationError::NoMatchingAuthScheme(list);
+        let err = NoMatchingAuthSchemeError(list);
         assert_eq!(
             "failed to select an auth scheme to sign the request with. \
             \"SigV4\" wasn't an option because there was no identity resolver for it. \
@@ -635,7 +642,7 @@ mod tests {
             AuthSchemeId::new("SigV4a"),
             ExploreResult::MissingEndpointConfig,
         );
-        let err = AuthOrchestrationError::NoMatchingAuthScheme(list);
+        let err = NoMatchingAuthSchemeError(list);
         assert_eq!(
             "failed to select an auth scheme to sign the request with. \
             \"SigV4\" wasn't an option because there was no identity resolver for it. \
@@ -652,7 +659,7 @@ mod tests {
             AuthSchemeId::new("SigV4a"),
             ExploreResult::MissingEndpointConfig,
         );
-        let err = AuthOrchestrationError::NoMatchingAuthScheme(list);
+        let err = NoMatchingAuthSchemeError(list);
         assert_eq!(
             "failed to select an auth scheme to sign the request with. \
             \"SigV4a\" wasn't an option because it has auth config in its endpoint config, \
@@ -669,7 +676,7 @@ mod tests {
                 ExploreResult::MissingEndpointConfig,
             );
         }
-        let err = AuthOrchestrationError::NoMatchingAuthScheme(list).to_string();
+        let err = NoMatchingAuthSchemeError(list).to_string();
         if !err.contains(
             "Note: there were other auth schemes that were evaluated that weren't listed here",
         ) {
