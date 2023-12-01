@@ -6,6 +6,7 @@
 use aws_sdk_dynamodb::config::Region;
 use aws_sdk_dynamodb::error::DisplayErrorContext;
 use aws_sdk_dynamodb::{Client, Config};
+use aws_smithy_runtime::assert_str_contains;
 use aws_smithy_runtime::client::http::test_util::capture_request;
 
 #[tokio::test]
@@ -24,9 +25,8 @@ async fn auth_scheme_error() {
         .send()
         .await
         .expect_err("there is no credential provider, so this must fail");
-    let err = DisplayErrorContext(&err).to_string();
-    let expected = "\"sigv4\" wasn't an option because there was no identity resolver for it. Be sure to set an identity";
-    if !err.contains(expected) {
-        panic!("expected '{}'\nto contain '{}'", err, expected);
-    }
+    assert_str_contains!(
+        DisplayErrorContext(&err).to_string(),
+        "\"sigv4\" wasn't a valid option because there was no identity resolver for it. Be sure to set an identity"
+    );
 }
