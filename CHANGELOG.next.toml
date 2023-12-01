@@ -46,6 +46,6 @@ async fn main() {
 
 This is designed for unit tests and using local mocks like DynamoDB Local and LocalStack with the SDK.
 """
-meta = { "breaking" = false, "tada" = false, "bug" = false }
+meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "rcoh"
 references = ["smithy-rs#3279", "aws-sdk-rust#971"]
