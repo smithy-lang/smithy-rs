@@ -22,13 +22,19 @@ meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = "Fix `config::Builder::set_credentials_provider` to override credentials providers previously set."
+message = "Fix `config::Builder::set_credentials_provider` to override a credentials provider previously set."
 references = ["aws-sdk-rust#973", "smithy-rs#3276"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
 
 [[aws-sdk-rust]]
 message = "`config::Config::credentials_provider` has been broken since `release-2023-11-15` and is now marked as `deprecated` explicitly."
-references = ["aws-sdk-rust#973", "smithy-rs#3276"]
+references = ["smithy-rs#3251", "smithy-rs#3276"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "ysaito1001"
+
+[[smithy-rs]]
+message = "`RuntimeComponentsBuilder::push_identity_resolver` is now deprecated since it does not replace the existing identity resolver of a given auth scheme ID. Use `RuntimeComponentsBuilder::set_identity_resolver` instead."
+references = ["smithy-rs#3276"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "ysaito1001"
