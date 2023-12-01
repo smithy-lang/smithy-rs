@@ -30,15 +30,19 @@ impl fmt::Display for NoMatchingAuthSchemeError {
         // Use the information we have about the auth options that were explored to construct
         // as helpful of an error message as possible.
         if explored.items().count() == 0 {
-            return f
-                .write_str("no auth options are available. This is a bug. Please file an issue.");
+            return f.write_str(
+                "no auth options are available. This can happen if there's \
+                    a problem with the service model, or if there is a codegen bug.",
+            );
         }
         if explored
             .items()
             .all(|explored| matches!(explored.result, ExploreResult::NoAuthScheme))
         {
-            return f
-                .write_str("no auth schemes are registered. This is a bug. Please file an issue.");
+            return f.write_str(
+                "no auth schemes are registered. This can happen if there's \
+                    a problem with the service model, or if there is a codegen bug.",
+            );
         }
 
         let mut try_add_identity = false;
@@ -47,24 +51,28 @@ impl fmt::Display for NoMatchingAuthSchemeError {
         for item in explored.items() {
             write!(
                 f,
-                " \"{}\" wasn't an option because ",
+                " \"{}\" wasn't a valid option because ",
                 item.scheme_id.as_str()
             )?;
             f.write_str(match item.result {
-                        ExploreResult::NoAuthScheme => {
-                            likely_bug = true;
-                            "no auth scheme was registered for it."
-                        },
-                        ExploreResult::NoIdentityResolver => {
-                            try_add_identity = true;
-                            "there was no identity resolver for it."
-                        }
-                        ExploreResult::MissingEndpointConfig => {
-                            likely_bug = true;
-                            "it has auth config in its endpoint config, but this scheme wasn't listed in that endpoint config."
-                        },
-                        ExploreResult::NotExplored => unreachable!(),
-                    })?;
+                ExploreResult::NoAuthScheme => {
+                    likely_bug = true;
+                    "no auth scheme was registered for it."
+                }
+                ExploreResult::NoIdentityResolver => {
+                    try_add_identity = true;
+                    "there was no identity resolver for it."
+                }
+                ExploreResult::MissingEndpointConfig => {
+                    likely_bug = true;
+                    "there is auth config in the endpoint config, but this scheme wasn't listed in it \
+                    (see https://github.com/smithy-lang/smithy-rs/discussions/3281 for more details)."
+                }
+                ExploreResult::NotExplored => {
+                    debug_assert!(false, "this should be unreachable");
+                    "<unknown>"
+                }
+            })?;
         }
         if try_add_identity {
             f.write_str(" Be sure to set an identity, such as credentials, auth token, or other identity type that is required for this service.")?;
@@ -609,7 +617,8 @@ mod tests {
     fn friendly_error_messages() {
         let err = NoMatchingAuthSchemeError(ExploredList::default());
         assert_eq!(
-            "no auth options are available. This is a bug. Please file an issue.",
+            "no auth options are available. This can happen if there's a problem with \
+            the service model, or if there is a codegen bug.",
             err.to_string()
         );
 
@@ -625,8 +634,8 @@ mod tests {
         let err = NoMatchingAuthSchemeError(list);
         assert_eq!(
             "failed to select an auth scheme to sign the request with. \
-            \"SigV4\" wasn't an option because there was no identity resolver for it. \
-            \"SigV4a\" wasn't an option because there was no identity resolver for it. \
+            \"SigV4\" wasn't a valid option because there was no identity resolver for it. \
+            \"SigV4a\" wasn't a valid option because there was no identity resolver for it. \
             Be sure to set an identity, such as credentials, auth token, or other identity \
             type that is required for this service.",
             err.to_string()
@@ -645,9 +654,10 @@ mod tests {
         let err = NoMatchingAuthSchemeError(list);
         assert_eq!(
             "failed to select an auth scheme to sign the request with. \
-            \"SigV4\" wasn't an option because there was no identity resolver for it. \
-            \"SigV4a\" wasn't an option because it has auth config in its endpoint config, \
-            but this scheme wasn't listed in that endpoint config. \
+            \"SigV4\" wasn't a valid option because there was no identity resolver for it. \
+            \"SigV4a\" wasn't a valid option because there is auth config in the endpoint \
+            config, but this scheme wasn't listed in it (see \
+            https://github.com/smithy-lang/smithy-rs/discussions/3281 for more details). \
             Be sure to set an identity, such as credentials, auth token, or other identity \
             type that is required for this service.",
             err.to_string()
@@ -662,8 +672,9 @@ mod tests {
         let err = NoMatchingAuthSchemeError(list);
         assert_eq!(
             "failed to select an auth scheme to sign the request with. \
-            \"SigV4a\" wasn't an option because it has auth config in its endpoint config, \
-            but this scheme wasn't listed in that endpoint config. \
+            \"SigV4a\" wasn't a valid option because there is auth config in the endpoint \
+            config, but this scheme wasn't listed in it (see \
+            https://github.com/smithy-lang/smithy-rs/discussions/3281 for more details). \
             This is likely a bug.",
             err.to_string()
         );
