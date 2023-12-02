@@ -12,15 +12,17 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 behavior-version-latest = []
 client-hyper = ["aws-smithy-runtime/connector-hyper-0-14-x"]
 rustls = ["aws-smithy-runtime/tls-rustls", "client-hyper"]
-allow-compilation = [] # our tests use `cargo test --all-features` and native-tls breaks CI
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 credentials-process = ["tokio/process"]
 
 default = ["client-hyper", "rustls", "rt-tokio", "credentials-process", "sso"]
 
+# deprecated: this feature does nothing
+allow-compilation = []
+
 [dependencies]
-aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types" }
+aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
@@ -52,7 +54,6 @@ zeroize = { version = "1", optional = true }
 aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-features = false, optional = true }
 
 [dev-dependencies]
-aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x", "test-util"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
 futures-util = { version = "0.3.16", default-features = false }

@@ -35,8 +35,18 @@ cargo "+${RUST_NIGHTLY_VERSION:-nightly}" check-external-types --all-features --
 echo "${C_YELLOW}## Checking for duplicate dependency versions in the normal dependency graph with all features enabled${C_RESET}"
 cargo tree -d --edges normal --all-features
 
-echo "${C_YELLOW}## Testing every combination of features${C_RESET}"
-cargo hack test --feature-powerset --exclude-all-features --exclude-features native-tls
+# the crate has `allow-compilation` which needs to be deprecated
+
+echo "${C_YELLOW}## Checking every combination of features${C_RESET}"
+cargo hack check --feature-powerset --exclude-all-features --exclude-features allow-compilation
+
+echo "${C_YELLOW}## Testing each feature in isolation${C_RESET}"
+# these features are missed by the following check because they are grouped
+cargo hack test --each-feature --include-features rt-tokio,client-hyper,rustls --exclude-no-default-features
+
+# This check will check other individual features and no-default-features
+# grouping these features because they don't interact
+cargo hack test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls
 
 echo "${C_YELLOW}## Checking the wasm32-unknown-unknown and wasm32-wasi targets${C_RESET}"
 cargo check --target wasm32-unknown-unknown --no-default-features
