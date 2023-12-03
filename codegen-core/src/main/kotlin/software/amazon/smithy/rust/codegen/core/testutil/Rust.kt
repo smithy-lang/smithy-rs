@@ -441,9 +441,9 @@ fun TestWriterDelegator.compileAndTest(
     val env = mapOf("RUSTFLAGS" to "")
     baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
 
-    val testOutput = testCommand.runCommand(baseDir, env)
+    val testOutput = "cargo test".runCommand(baseDir, env)
 
-  if (runClippy) {
+    if (runClippy) {
         Commands.CargoClippy.runCommand(baseDir, env)
     }
     return testOutput

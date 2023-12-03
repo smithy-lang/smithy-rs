@@ -7,12 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customize
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
-import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
 
 /**
  * Decorator that adds the `serde-serialize` and `serde-deserialize` features.
@@ -22,11 +17,8 @@ class SerdeDecorator : ClientCodegenDecorator {
     override val order: Byte = -1
 
     override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        // !IMPORTANT!
-        // When serde features are stablized (when --cfg aws_sdk_unstable is no longer necessary), you must remove aws-smithy-compiler-warning!
-        // aws-smithy-compiler-warning crate is there to print warning message during compilation
         fun feature(featureName: String): Feature {
-            return Feature(featureName, false, listOf("aws-smithy-types/$featureName", "aws-smithy-compiler-warning/$featureName"))
+            return Feature(featureName, false, listOf("aws-smithy-types/$featureName"))
         }
         rustCrate.mergeFeature(feature("serde-serialize"))
         rustCrate.mergeFeature(feature("serde-deserialize"))
@@ -35,7 +27,7 @@ class SerdeDecorator : ClientCodegenDecorator {
     // I initially tried to implement with LibRsCustomization, but it didn't work somehow.
     companion object {
         const val SerdeInfoText = """
-            
+
             ## How to enable `Serialize` and `Deserialize`
 
             This data type implements `Serialize` and `Deserialize` traits from the popular serde crate,

@@ -60,7 +60,6 @@ class ServiceGenerator(
         rustCrate.lib {
             Attribute.DocInline.render(this)
             write("pub use config::Config;")
-            write("aws_smithy_compiler_warning::compiletime_sdk_error_warning();")
         }
 
         ClientRuntimeTypesReExportGenerator(codegenContext, rustCrate).render()

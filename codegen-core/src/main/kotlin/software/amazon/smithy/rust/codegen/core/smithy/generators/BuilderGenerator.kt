@@ -88,7 +88,7 @@ fun MemberShape.enforceRequired(
     }
     val shape = this
     val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
-    val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
+    val field2 = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
     val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
         codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
     )
@@ -96,11 +96,11 @@ fun MemberShape.enforceRequired(
         is StringShape -> writable {
             rustTemplate(
                 "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
-                "field" to field,
+                "field" to field2,
             )
         }
 
-        else -> field
+        else -> field2
     }.map { base -> rustTemplate("#{base}.ok_or_else(||#{error})?", "base" to base, "error" to error) }
     return unwrapped.letIf(produceOption) { w -> w.map { rust("Some(#T)", it) } }
 }
