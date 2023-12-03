@@ -10,22 +10,15 @@ allowed_external_types = [
     # only allowed in from impl for presigned request
     "http::request::Request",
 
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
+    # TODO(https://github.com/smithy-lang/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
     "aws_smithy_eventstream::*",
 
-    # Consider moving making this crate 1.0
     "aws_smithy_runtime::client::identity::cache::IdentityCache",
+    "aws_smithy_runtime::client::retries::RetryPartition",
 
-    ### All below this line need to be fixed:
-    # The following are not OK
-    "aws_http::request_id::RequestId", # move to aws-types
-    # `set_invocation_id_generator` — consider make pub(crate) or moving trait to AwsTypes
     "aws_runtime::invocation_id::SharedInvocationIdGenerator",
     "aws_runtime::invocation_id::InvocationIdGenerator",
 
-    # Pending fix in open PRs:
-    "aws_smithy_http::result::*",
-
-    # Pending future fix
-    "aws_smithy_http::event_stream::*",
+    # Only exposed in transcribestreaming. This crate will be major version bumped if we MV aws_smithy_http
+    "aws_smithy_http::event_stream::sender::EventStreamSender",
 ]

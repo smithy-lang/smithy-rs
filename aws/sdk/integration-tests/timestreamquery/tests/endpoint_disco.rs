@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime::client::http::test_util::dvr::{MediaType, ReplayingClient};
+use aws_smithy_runtime::client::http::test_util::dvr::ReplayingClient;
 
 #[tokio::test]
 async fn do_endpoint_discovery() {
     use aws_credential_types::provider::SharedCredentialsProvider;
     use aws_sdk_timestreamquery as query;
-    use aws_sdk_timestreamquery::config::Credentials;
+    use aws_sdk_timestreamquery::config::{Credentials, StalledStreamProtectionConfig};
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_async::test_util::controlled_time_and_sleep;
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
@@ -31,6 +31,7 @@ async fn do_endpoint_discovery() {
         .credentials_provider(SharedCredentialsProvider::new(
             Credentials::for_tests_with_session_token(),
         ))
+        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .time_source(SharedTimeSource::new(ts.clone()))
         .build();
     let conf = query::config::Builder::from(&config)
@@ -75,7 +76,7 @@ async fn do_endpoint_discovery() {
                 "content-type",
                 "x-amz-target",
             ]),
-            MediaType::Json,
+            "application/json",
         )
         .await
         .unwrap();

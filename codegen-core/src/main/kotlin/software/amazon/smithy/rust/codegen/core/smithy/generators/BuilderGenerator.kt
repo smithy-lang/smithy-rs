@@ -51,7 +51,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`.
 
 /** BuilderGenerator customization sections */
@@ -244,7 +244,7 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String,
     ) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
         //  a non `Option`al target type: in all other cases the client generates `Option`al types.
         val inputType = outerType.asOptional()
@@ -266,7 +266,7 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String,
     ) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
         //  a non `Option`al target type: in all other cases the client generates `Option`al types.
         val inputType = outerType.asOptional()

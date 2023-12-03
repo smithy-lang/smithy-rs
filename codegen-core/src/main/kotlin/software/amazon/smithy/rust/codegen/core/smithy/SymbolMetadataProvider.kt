@@ -103,7 +103,7 @@ class BaseSymbolMetadataProvider(
             is UnionShape, is CollectionShape, is MapShape -> RustMetadata(visibility = Visibility.PUBLIC)
 
             // This covers strings with the enum trait for now, and can be removed once we're fully on EnumShape
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1700): Remove this `is StringShape` match arm
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1700): Remove this `is StringShape` match arm
             is StringShape -> RustMetadata(visibility = Visibility.PUBLIC)
 
             else -> TODO("Unrecognized container type: $container")

@@ -34,7 +34,7 @@ class RequestSerializerGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenScope by lazy {
-        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
         val interceptorContext = runtimeApi.resolve("client::interceptors::context")
         arrayOf(
             *preludeScope,

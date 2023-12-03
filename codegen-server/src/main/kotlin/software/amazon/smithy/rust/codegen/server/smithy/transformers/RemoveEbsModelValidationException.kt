@@ -24,10 +24,10 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
  * [AttachValidationExceptionToConstrainedOperationInputsInAllowList], ensures that it is replaced by
  * `smithy.framework#ValidationException`.
  *
- * [0]: https://github.com/awslabs/smithy-rs/blob/274adf155042cde49251a0e6b8842d6f56cd5b6d/codegen-core/common-test-models/ebs.json#L1270-L1288
- * [1]: https://github.com/awslabs/smithy-rs/pull/1199#discussion_r809424783
+ * [0]: https://github.com/smithy-lang/smithy-rs/blob/274adf155042cde49251a0e6b8842d6f56cd5b6d/codegen-core/common-test-models/ebs.json#L1270-L1288
+ * [1]: https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809424783
  *
- * TODO(https://github.com/awslabs/smithy-rs/issues/1401): This transformer will go away once we implement
+ * TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): This transformer will go away once we implement
  *  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
  */
 object RemoveEbsModelValidationException {

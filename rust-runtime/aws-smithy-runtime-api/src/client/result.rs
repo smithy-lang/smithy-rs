@@ -7,6 +7,7 @@
 
 use crate::client::connection::ConnectionMetadata;
 use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
+use aws_smithy_types::error::operation::BuildError;
 use aws_smithy_types::error::ErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
 use std::error::Error;
@@ -437,7 +438,6 @@ impl<E, R> SdkError<E, R> {
     }
 
     /// Maps the service error type in `SdkError::ServiceError`
-    #[doc(hidden)]
     pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
         match self {
             SdkError::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
@@ -482,11 +482,17 @@ where
     }
 }
 
+impl<E, R> From<BuildError> for SdkError<E, R> {
+    fn from(value: BuildError) -> Self {
+        SdkError::ConstructionFailure(ConstructionFailure::builder().source(value).build())
+    }
+}
+
 impl<E, R> ProvideErrorMetadata for SdkError<E, R>
 where
     E: ProvideErrorMetadata,
 {
-    fn meta(&self) -> &aws_smithy_types::Error {
+    fn meta(&self) -> &aws_smithy_types::error::ErrorMetadata {
         match self {
             SdkError::ConstructionFailure(_) => &EMPTY_ERROR_METADATA,
             SdkError::TimeoutError(_) => &EMPTY_ERROR_METADATA,

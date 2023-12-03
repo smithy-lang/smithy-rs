@@ -79,7 +79,7 @@ pub trait Handler<T, Input> {
 
 Its purpose is to provide an even interface over closures of the form `FnOnce({Operation}Input) -> impl Future<Output = {Operation}Output>` and `FnOnce({Operation}Input, State) -> impl Future<Output = {Operation}Output>`. It's this abstraction which allows the customers to supply both `async fn handler(input: {Operation}Input) -> {Operation}Output` and `async fn handler(input: {Operation}Input, state: Extension<S>) -> {Operation}Output` to the service builder.
 
-We generate `Handler` implementations for said closures in [ServerOperationHandlerGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt):
+We generate `Handler` implementations for said closures in [ServerOperationHandlerGenerator.kt](https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationHandlerGenerator.kt):
 
 ```rust,ignore
 impl<Fun, Fut> Handler<(), Operation0Input> for Fun
@@ -116,7 +116,7 @@ where
 }
 ```
 
-Creating `{Operation}Input` from a `http::Request` and `http::Response` from a `{Operation}Output` involves protocol aware serialization/deserialization, for example, it can involve the [HTTP binding traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html). The [RuntimeError](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5) enumerates error cases such as serialization/deserialization failures, `extensions().get::<T>()` failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the `RuntimeError` to `http::Response`. The reader should make note of the influence of the model on the different sections of this procedure.
+Creating `{Operation}Input` from a `http::Request` and `http::Response` from a `{Operation}Output` involves protocol aware serialization/deserialization, for example, it can involve the [HTTP binding traits](https://awslabs.github.io/smithy/1.0/spec/core/http-traits.html). The [RuntimeError](https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/runtime_error.rs#L53-L5) enumerates error cases such as serialization/deserialization failures, `extensions().get::<T>()` failures, etc. We omit error handling in the snippet above, but, in full, it also involves protocol aware conversions from the `RuntimeError` to `http::Response`. The reader should make note of the influence of the model on the different sections of this procedure.
 
 The `request.extensions().get::<T>()` present in the `Fun: FnOnce(Operation0Input, Extension<S>) -> Fut` implementation is the current approach to injecting state into handlers. The customer is required to apply a [AddExtensionLayer](https://docs.rs/tower-http/latest/tower_http/add_extension/struct.AddExtensionLayer.html) to the output of the service builder so that, when the request reaches the handler, the `extensions().get::<T>()` will succeed.
 
@@ -147,7 +147,7 @@ where
 
 ### Builder
 
-The service builder we provide to the customer is the `OperationRegistryBuilder`, generated from [ServerOperationRegistryGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt).
+The service builder we provide to the customer is the `OperationRegistryBuilder`, generated from [ServerOperationRegistryGenerator.kt](https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/generators/ServerOperationRegistryGenerator.kt).
 
 Currently, the reference model would generate the following `OperationRegistryBuilder` and `OperationRegistry`:
 
@@ -221,7 +221,7 @@ where
 
 ### Router
 
-The [aws_smithy_http::routing::Router](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60) provides the protocol aware routing of requests to their target , it exists as
+The [aws_smithy_http::routing::Router](https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L58-L60) provides the protocol aware routing of requests to their target , it exists as
 
 ```rust,ignore
 pub struct Route {
@@ -739,7 +739,7 @@ Recall the form of the `Service::call` method, given in [Router](#router), which
 Two downsides of modelling `Router` in this way are:
 
 - `Router` is larger and has more branches than a protocol specific implementation.
-- If a third-party wanted to extend `smithy-rs` to additional protocols `Routes` would have to be extended. A synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/awslabs/smithy-rs/issues/1606) issue.
+- If a third-party wanted to extend `smithy-rs` to additional protocols `Routes` would have to be extended. A synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/smithy-lang/smithy-rs/issues/1606) issue.
 
 After taking the [Switch `From<OperationRegistry> for Router` to an `OperationRegistry::build` method](#switch-fromoperationregistry-for-router-to-an-operationregistrybuild-method) transform, code generation is free to switch between return types based on the model. This allows for a scenario where a `@restJson1` causes the service builder to output a specific `RestJson1Router`.
 
@@ -747,17 +747,17 @@ After taking the [Switch `From<OperationRegistry> for Router` to an `OperationRe
 
 Currently, protocol specific routing errors are either:
 
-- Converted to `RuntimeError`s and then `http::Response` (see [unknown_operation](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118)).
-- Converted directly to a `http::Response` (see [method_not_allowed](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127)). This is an outlier to the common pattern.
+- Converted to `RuntimeError`s and then `http::Response` (see [unknown_operation](https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L106-L118)).
+- Converted directly to a `http::Response` (see [method_not_allowed](https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/rust-runtime/aws-smithy-http-server/src/routing/mod.rs#L121-L127)). This is an outlier to the common pattern.
 
-The `from_request` functions yield protocol specific errors which are converted to `RequestRejection`s then `RuntimeError`s (see [ServerHttpBoundProtocolGenerator.kt](https://github.com/awslabs/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210)).
+The `from_request` functions yield protocol specific errors which are converted to `RequestRejection`s then `RuntimeError`s (see [ServerHttpBoundProtocolGenerator.kt](https://github.com/smithy-lang/smithy-rs/blob/458eeb63b95e6e1e26de0858457adbc0b39cbe4e/codegen-server/src/main/kotlin/software/amazon/smithy/rust/codegen/server/smithy/protocols/ServerHttpBoundProtocolGenerator.kt#L194-L210)).
 
 In these scenarios protocol specific errors are converted into `RuntimeError` before being converted to a `http::Response` via `into_response` method.
 
 Two downsides of this are:
 
 - `RuntimeError` enumerates all possible errors across all existing protocols, so is larger than modelling the errors for a specific protocol.
-- If a third-party wanted to extend `smithy-rs` to additional protocols with differing failure modes `RuntimeError` would have to be extended. As in [Protocol specific Errors](#protocol-specific-errors), a synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/awslabs/smithy-rs/issues/1606) issue.
+- If a third-party wanted to extend `smithy-rs` to additional protocols with differing failure modes `RuntimeError` would have to be extended. As in [Protocol specific Errors](#protocol-specific-errors), a synopsis of this obstruction is presented in [Should we generate the `Router` type](https://github.com/smithy-lang/smithy-rs/issues/1606) issue.
 
 Switching from using `RuntimeError` to protocol specific errors which satisfy a common interface, `IntoResponse`, would resolve these problem.
 
@@ -857,11 +857,11 @@ A toy implementation of the combined proposal is presented in [this PR](https://
 ## Changes Checklist
 
 - [x] Add protocol specific routers to `rust-runtime/aws-smithy-http-server`.
-  - <https://github.com/awslabs/smithy-rs/pull/1666>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1666>
 - [x] Add middleware primitives and error types to `rust-runtime/aws-smithy-http-server`.
-  - <https://github.com/awslabs/smithy-rs/pull/1679>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1679>
 - [x] Add code generation which outputs new service builder.
-  - <https://github.com/awslabs/smithy-rs/pull/1693>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1693>
 - [x] Deprecate `OperationRegistryBuilder`, `OperationRegistry` and `Router`.
-  - <https://github.com/awslabs/smithy-rs/pull/1886>
-  - <https://github.com/awslabs/smithy-rs/pull/2161>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1886>
+  - <https://github.com/smithy-lang/smithy-rs/pull/2161>

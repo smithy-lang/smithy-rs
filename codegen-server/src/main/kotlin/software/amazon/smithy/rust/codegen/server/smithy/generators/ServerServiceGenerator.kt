@@ -324,7 +324,7 @@ class ServerServiceGenerator(
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
-                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
+                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";
 
                     #{PatternInitializations:W}
 
@@ -488,17 +488,26 @@ class ServerServiceGenerator(
             ///
             /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
-            pub struct $serviceName<S> {
+            pub struct $serviceName<
+                S = #{SmithyHttpServer}::routing::RoutingService<
+                    #{Router}<
+                        #{SmithyHttpServer}::routing::Route<
+                            #{SmithyHttpServer}::body::BoxBody
+                        >,
+                    >,
+                    #{Protocol},
+                >
+            > {
                 // This is the router wrapped by layers.
                 svc: S,
             }
-            
+
             impl $serviceName<()> {
                 /// Constructs a builder for [`$serviceName`].
-                /// You must specify a configuration object holding any plugins and layers that should be applied 
+                /// You must specify a configuration object holding any plugins and layers that should be applied
                 /// to the operations in this service.
                 pub fn builder<
-                    Body, 
+                    Body,
                     L,
                     HttpPl: #{SmithyHttpServer}::plugin::HttpMarker,
                     ModelPl: #{SmithyHttpServer}::plugin::ModelMarker,
@@ -512,7 +521,7 @@ class ServerServiceGenerator(
                         model_plugin: config.model_plugins,
                     }
                 }
-            
+
                 /// Constructs a builder for [`$serviceName`].
                 /// You must specify what plugins should be applied to the operations in this service.
                 ///
@@ -523,14 +532,14 @@ class ServerServiceGenerator(
                 /// multiple plugins.
                 ##[deprecated(
                     since = "0.57.0",
-                    note = "please use the `builder` constructor and register plugins on the `${serviceName}Config` object instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
+                    note = "please use the `builder` constructor and register plugins on the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
                 )]
                 pub fn builder_with_plugins<
-                    Body, 
-                    HttpPl: #{SmithyHttpServer}::plugin::HttpMarker, 
+                    Body,
+                    HttpPl: #{SmithyHttpServer}::plugin::HttpMarker,
                     ModelPl: #{SmithyHttpServer}::plugin::ModelMarker
                 >(
-                    http_plugin: HttpPl, 
+                    http_plugin: HttpPl,
                     model_plugin: ModelPl
                 ) -> $builderName<Body, #{Tower}::layer::util::Identity, HttpPl, ModelPl> {
                     $builderName {
@@ -546,12 +555,12 @@ class ServerServiceGenerator(
                 /// Use [`$serviceName::builder_with_plugins`] if you need to specify plugins.
                 ##[deprecated(
                     since = "0.57.0",
-                    note = "please use the `builder` constructor instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
+                    note = "please use the `builder` constructor instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
                 )]
                 pub fn builder_without_plugins<Body>() -> $builderName<
-                    Body, 
+                    Body,
                     #{Tower}::layer::util::Identity,
-                    #{SmithyHttpServer}::plugin::IdentityPlugin, 
+                    #{SmithyHttpServer}::plugin::IdentityPlugin,
                     #{SmithyHttpServer}::plugin::IdentityPlugin
                 > {
                     Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin, #{SmithyHttpServer}::plugin::IdentityPlugin)
@@ -570,7 +579,7 @@ class ServerServiceGenerator(
                     #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
                 }
             }
-            
+
             impl<S>
                 $serviceName<
                     #{SmithyHttpServer}::routing::RoutingService<
@@ -582,7 +591,7 @@ class ServerServiceGenerator(
                 /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
                 ##[deprecated(
                     since = "0.57.0",
-                    note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/awslabs/smithy-rs/discussions/3096"
+                    note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
                 )]
                 pub fn layer<L>(
                     self,
@@ -749,8 +758,8 @@ class ServerServiceGenerator(
         for ((_, value) in operationStructNames) {
             rustTemplate(
                 """
-                impl<L> #{SmithyHttpServer}::service::ContainsOperation<crate::operation_shape::$value> 
-                    for $serviceName<L> 
+                impl<L> #{SmithyHttpServer}::service::ContainsOperation<crate::operation_shape::$value>
+                    for $serviceName<L>
                 {
                     const VALUE: Operation = Operation::$value;
                 }

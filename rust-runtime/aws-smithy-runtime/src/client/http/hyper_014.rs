@@ -4,6 +4,7 @@
  */
 
 use crate::client::http::connection_poisoning::CaptureSmithyConnection;
+use crate::client::http::hyper_014::timeout_middleware::HttpTimeoutError;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -12,13 +13,17 @@ use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
 };
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
+};
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
+use h2::Reason;
 use http::{Extensions, Uri};
 use hyper_0_14::client::connect::{capture_connection, CaptureConnection, Connection, HttpInfo};
 use hyper_0_14::service::Service;
@@ -34,38 +39,42 @@ use tokio::io::{AsyncRead, AsyncWrite};
 mod default_connector {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
+    use hyper_0_14::client::HttpConnector;
+    use hyper_rustls::HttpsConnector;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
-    static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
+    pub(crate) static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
         hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| {
+    > = once_cell::sync::Lazy::new(default_tls);
+
+    fn default_tls() -> HttpsConnector<HttpConnector> {
         use hyper_rustls::ConfigBuilderExt;
         hyper_rustls::HttpsConnectorBuilder::new()
-        .with_tls_config(
-            rustls::ClientConfig::builder()
-                .with_cipher_suites(&[
-                    // TLS1.3 suites
-                    rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
-                    // TLS1.2 suites
-                    rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-                ])
-                .with_safe_default_kx_groups()
-                .with_safe_default_protocol_versions()
-                .expect("Error with the TLS configuration. Please file a bug report under https://github.com/awslabs/smithy-rs/issues.")
-                .with_native_roots()
-                .with_no_client_auth()
-        )
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .build()
-    });
+               .with_tls_config(
+                rustls::ClientConfig::builder()
+                    .with_cipher_suites(&[
+                        // TLS1.3 suites
+                        rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
+                        // TLS1.2 suites
+                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+                    ])
+                    .with_safe_default_kx_groups()
+                    .with_safe_default_protocol_versions()
+                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
+                    .with_native_roots()
+                    .with_no_client_auth()
+            )
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build()
+    }
 
     pub(super) fn base(
         settings: &HttpConnectorSettings,
@@ -345,9 +354,12 @@ where
     C::Error: Into<BoxError>,
 {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
-        let mut request = request
-            .into_http02x()
-            .expect("TODO(httpRefactor): no panics");
+        let mut request = match request.try_into_http02x() {
+            Ok(request) => request,
+            Err(err) => {
+                return HttpConnectorFuture::ready(Err(ConnectorError::other(err.into(), None)));
+            }
+        };
         let capture_connection = capture_connection(&mut request);
         if let Some(capture_smithy_connection) =
             request.extensions().get::<CaptureSmithyConnection>()
@@ -358,10 +370,14 @@ where
         let mut client = self.client.clone();
         let fut = client.call(request);
         HttpConnectorFuture::new(async move {
-            Ok(fut
+            let response = fut
                 .await
                 .map_err(downcast_error)?
-                .map(SdkBody::from_body_0_4))
+                .map(SdkBody::from_body_0_4);
+            match HttpResponse::try_from(response) {
+                Ok(response) => Ok(response),
+                Err(err) => Err(ConnectorError::other(err.into(), None)),
+            }
         })
     }
 }
@@ -390,21 +406,29 @@ fn downcast_error(err: BoxError) -> ConnectorError {
 
 /// Convert a [`hyper_0_14::Error`] into a [`ConnectorError`]
 fn to_connector_error(err: hyper_0_14::Error) -> ConnectorError {
-    if err.is_timeout() || find_source::<timeout_middleware::HttpTimeoutError>(&err).is_some() {
-        ConnectorError::timeout(err.into())
-    } else if err.is_user() {
-        ConnectorError::user(err.into())
-    } else if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some()
-    {
-        ConnectorError::io(err.into())
+    if err.is_timeout() || find_source::<HttpTimeoutError>(&err).is_some() {
+        return ConnectorError::timeout(err.into());
+    }
+    if err.is_user() {
+        return ConnectorError::user(err.into());
+    }
+    if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some() {
+        return ConnectorError::io(err.into());
     }
     // We sometimes receive this from S3: hyper::Error(IncompleteMessage)
-    else if err.is_incomplete_message() {
-        ConnectorError::other(err.into(), Some(ErrorKind::TransientError))
-    } else {
-        tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
-        ConnectorError::other(err.into(), None)
+    if err.is_incomplete_message() {
+        return ConnectorError::other(err.into(), Some(ErrorKind::TransientError));
     }
+    if let Some(h2_err) = find_source::<h2::Error>(&err) {
+        if h2_err.is_go_away()
+            || (h2_err.is_reset() && h2_err.reason() == Some(Reason::REFUSED_STREAM))
+        {
+            return ConnectorError::io(err.into());
+        }
+    }
+
+    tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
+    ConnectorError::other(err.into(), None)
 }
 
 fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option<&'a E> {
@@ -457,6 +481,20 @@ where
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
 {
+    fn validate_base_client_config(
+        &self,
+        _: &RuntimeComponentsBuilder,
+        _: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        // Initialize the TCP connector at this point so that native certs load
+        // at client initialization time instead of upon first request. We do it
+        // here rather than at construction so that it won't run if this is not
+        // the selected HTTP client for the base config (for example, if this was
+        // the default HTTP client, and it was overridden by a later plugin).
+        let _ = (self.tcp_connector_fn)();
+        Ok(())
+    }
+
     fn http_connector(
         &self,
         settings: &HttpConnectorSettings,
@@ -473,7 +511,14 @@ where
                     .connector_settings(settings.clone());
                 builder.set_sleep_impl(components.sleep_impl());
 
+                let start = components.time_source().map(|ts| ts.now());
                 let tcp_connector = (self.tcp_connector_fn)();
+                let end = components.time_source().map(|ts| ts.now());
+                if let (Some(start), Some(end)) = (start, end) {
+                    if let Ok(elapsed) = end.duration_since(start) {
+                        tracing::debug!("new TCP connector created in {:?}", elapsed);
+                    }
+                }
                 let connector = SharedHttpConnector::new(builder.build(tcp_connector));
                 cache.insert(key.clone(), connector);
             }
@@ -518,10 +563,13 @@ impl HyperClientBuilder {
         self
     }
 
-    /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    /// Create a hyper client with the default rustls HTTPS implementation.
+    ///
+    /// The trusted certificates will be loaded later when this becomes the selected
+    /// HTTP client for a Smithy client.
     #[cfg(feature = "tls-rustls")]
     pub fn build_https(self) -> SharedHttpClient {
-        self.build(default_connector::https())
+        self.build_with_fn(default_connector::https)
     }
 
     /// Create a [`SharedHttpClient`] from this builder and a given connector.
@@ -538,14 +586,9 @@ impl HyperClientBuilder {
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
     {
-        SharedHttpClient::new(HyperClient {
-            connector_cache: RwLock::new(HashMap::new()),
-            client_builder: self.client_builder.unwrap_or_default(),
-            tcp_connector_fn: move || tcp_connector.clone(),
-        })
+        self.build_with_fn(move || tcp_connector.clone())
     }
 
-    #[cfg(all(test, feature = "test-util"))]
     fn build_with_fn<C, F>(self, tcp_connector_fn: F) -> SharedHttpClient
     where
         F: Fn() -> C + Send + Sync + 'static,
@@ -935,6 +978,7 @@ mod timeout_middleware {
 mod test {
     use super::*;
     use crate::client::http::test_util::NeverTcpConnector;
+    use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http::Uri;
     use hyper_0_14::client::connect::{Connected, Connection};
@@ -976,7 +1020,10 @@ mod test {
         ];
 
         // Kick off thousands of parallel tasks that will try to create a connector
-        let components = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(SystemTimeSource::new()))
+            .build()
+            .unwrap();
         let mut handles = Vec::new();
         for setting in &settings {
             for _ in 0..1000 {

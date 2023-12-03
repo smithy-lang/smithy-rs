@@ -51,10 +51,6 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             writer.rust("runtime_components.set_endpoint_resolver(Some(#T));", resolver)
         }
 
-        fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
-            writer.rust("runtime_components.push_identity_resolver(#T);", identityResolver)
-        }
-
         fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
             writer.rust("runtime_components.push_retry_classifier(#T);", classifier)
         }
@@ -69,7 +65,7 @@ class ServiceRuntimePluginGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *preludeScope,

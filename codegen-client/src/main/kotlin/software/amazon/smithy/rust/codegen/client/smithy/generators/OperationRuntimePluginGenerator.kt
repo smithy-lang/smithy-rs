@@ -22,7 +22,7 @@ class OperationRuntimePluginGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *preludeScope,
@@ -50,11 +50,12 @@ class OperationRuntimePluginGenerator(
         operationStructName: String,
         customizations: List<OperationCustomization>,
     ) {
+        val layerName = operationShape.id.name.dq()
         writer.rustTemplate(
             """
             impl #{RuntimePlugin} for $operationStructName {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    let mut cfg = #{Layer}::new(${operationShape.id.name.dq()});
+                    let mut cfg = #{Layer}::new($layerName);
 
                     cfg.store_put(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
                     cfg.store_put(#{SharedResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
@@ -68,11 +69,12 @@ class OperationRuntimePluginGenerator(
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
-                    #{Cow}::Owned(
-                        #{RuntimeComponentsBuilder}::new(${operationShape.id.name.dq()})
+                    ##[allow(unused_mut)]
+                    let mut rcb = #{RuntimeComponentsBuilder}::new($layerName)
                             #{interceptors}
-                            #{retry_classifiers}
-                    )
+                            #{retry_classifiers};
+
+                    #{Cow}::Owned(rcb)
                 }
             }
 

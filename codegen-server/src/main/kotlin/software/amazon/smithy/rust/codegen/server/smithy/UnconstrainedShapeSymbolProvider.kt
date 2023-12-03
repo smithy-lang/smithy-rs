@@ -171,7 +171,7 @@ class UnconstrainedShapeSymbolProvider(
                 } else {
                     base.toSymbol(shape)
                 }
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
             }
 

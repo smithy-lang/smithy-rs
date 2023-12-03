@@ -233,6 +233,7 @@ class DefaultProtocolTestGenerator(
         checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
         checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
         checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
+
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -247,6 +248,22 @@ class DefaultProtocolTestGenerator(
             }
             if (!httpRequestTestCase.vendorParams.isEmpty) {
                 logger.warning("Test case provided vendorParams but these were ignored")
+            }
+
+            rustTemplate(
+                """
+                let uri: #{Uri} = http_request.uri().parse().expect("invalid URI sent");
+                #{AssertEq}(http_request.method(), ${method.dq()}, "method was incorrect");
+                #{AssertEq}(uri.path(), ${uri.dq()}, "path was incorrect");
+                """,
+                *codegenScope,
+            )
+
+            resolvedHost.orNull()?.also { host ->
+                rustTemplate(
+                    """#{AssertEq}(uri.host().expect("host should be set"), ${host.dq()});""",
+                    *codegenScope,
+                )
             }
         }
     }
@@ -277,7 +294,11 @@ class DefaultProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let mut http_response = #T::new()", RT.HttpResponseBuilder)
+        rustTemplate(
+            "let mut http_response = #{Response}::try_from(#{HttpResponseBuilder}::new()",
+            "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
+            "HttpResponseBuilder" to RT.HttpResponseBuilder,
+        )
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -285,7 +306,8 @@ class DefaultProtocolTestGenerator(
             """
             .status(${testCase.code})
             .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
-            .unwrap();
+            .unwrap()
+            ).unwrap();
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
@@ -307,10 +329,10 @@ class DefaultProtocolTestGenerator(
             });
             """,
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-            "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc)
+            "SharedResponseDeserializer" to RT.smithyRuntimeApiClient(rc)
                 .resolve("client::ser_de::SharedResponseDeserializer"),
             "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-            "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
+            "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
         )
@@ -530,7 +552,7 @@ class DefaultProtocolTestGenerator(
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
         private val DisableTests = setOf<String>(
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2891): Implement support for `@requestCompression`
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/2891): Implement support for `@requestCompression`
             "SDKAppendedGzipAfterProvidedEncoding_restJson1",
             "SDKAppendedGzipAfterProvidedEncoding_restXml",
             "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_0",

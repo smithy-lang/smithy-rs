@@ -30,11 +30,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
 private class Types(runtimeConfig: RuntimeConfig) {
-    private val smithyHttp = RuntimeType.smithyHttp(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
 
     val awsTypes = AwsRuntimeType.awsTypes(runtimeConfig)
-    val connectorError = smithyHttp.resolve("result::ConnectorError")
     val retryConfig = smithyTypes.resolve("retry::RetryConfig")
     val timeoutConfig = smithyTypes.resolve("timeout::TimeoutConfig")
 }
@@ -102,7 +100,6 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
 private class AwsFluentClientExtensions(private val codegenContext: ClientCodegenContext, private val types: Types) {
     private val codegenScope = arrayOf(
         "Arc" to RuntimeType.Arc,
-        "ConnectorError" to types.connectorError,
         "RetryConfig" to types.retryConfig,
         "TimeoutConfig" to types.timeoutConfig,
         "aws_types" to types.awsTypes,
@@ -120,6 +117,8 @@ private class AwsFluentClientExtensions(private val codegenContext: ClientCodege
                 ///     the `sleep_impl` on the Config passed into this function to fix it.
                 /// - This method will panic if the `sdk_config` is missing an HTTP connector. If you experience this panic, set the
                 ///     `http_connector` on the Config passed into this function to fix it.
+                /// - This method will panic if no `BehaviorVersion` is provided. If you experience this panic, set `behavior_version` on the Config or enable the `behavior-version-latest` Cargo feature.
+                ##[track_caller]
                 pub fn new(sdk_config: &#{aws_types}::sdk_config::SdkConfig) -> Self {
                     Self::from_conf(sdk_config.into())
                 }

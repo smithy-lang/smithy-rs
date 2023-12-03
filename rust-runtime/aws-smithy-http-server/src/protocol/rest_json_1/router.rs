@@ -23,7 +23,7 @@ impl IntoResponse<RestJson1> for Error {
                     UNKNOWN_OPERATION_EXCEPTION.to_string(),
                 ))
                 .body(crate::body::to_boxed("{}"))
-                .expect("invalid HTTP response for REST JSON 1 routing error; please file a bug report under https://github.com/awslabs/smithy-rs/issues"),
+                .expect("invalid HTTP response for REST JSON 1 routing error; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
             Error::MethodNotAllowed => method_disallowed(),
         }
     }

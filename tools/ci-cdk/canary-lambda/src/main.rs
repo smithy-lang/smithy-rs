@@ -76,6 +76,7 @@ struct LambdaMain {
 }
 
 impl LambdaMain {
+    #[allow(deprecated)]
     async fn new() -> Self {
         Self {
             sdk_config: aws_config::load_from_env().await,

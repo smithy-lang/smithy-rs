@@ -35,8 +35,8 @@ class AwsServices(
     val allModules: Set<String> by lazy {
         (
             services.map(AwsService::module).map { "sdk/$it" } +
-                CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
-                CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" }
+                CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/${it.name}" } +
+                CrateSet.AWS_SDK_RUNTIME.map { "sdk/${it.name}" }
             // Root tests should not be included since they can't be part of the root Cargo workspace
             // in order to test differences in Cargo features. Examples should not be included either
             // because each example itself is a workspace.

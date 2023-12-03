@@ -2,7 +2,7 @@
 
 The following document provides a brief survey of the various positions middleware can be inserted in Smithy Rust.
 
-We use the [Pokémon service](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) as a reference model throughout.
+We use the [Pokémon service](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) as a reference model throughout.
 
 ```smithy
 /// A Pokémon species forms the basis for at least one Pokémon.

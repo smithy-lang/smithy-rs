@@ -12,37 +12,40 @@
 # author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "Fix aws-sdk-rust#930 (PutSnapshotBlock)"
-references = ["smithy-rs#3126", "aws-sdk-rust#930"]
+message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
+references = ["smithy-rs#3262"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "rcoh"
-
-[[smithy-rs]]
-message = "The HTTP `Request`, `Response`, `Headers`, and `HeaderValue` types have been moved from `aws_smithy_runtime_api::client::http::*` into `aws_smithy_runtime_api::http`"
-references = ["smithy-rs#3138"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
 
 [[smithy-rs]]
-message = """
-`Message`, `Header`, `HeaderValue`, and `StrBytes` have been moved to `aws-smithy-types` from `aws-smithy-eventstream`. `Message::read_from` and `Message::write_to` remain in `aws-smithy-eventstream` but they are converted to free functions with the names `read_message_from` and `write_message_to` respectively.
-"""
-references = ["smithy-rs#3139"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "all"}
-author = "ysaito1001"
-
-[[smithy-rs]]
-message = """
-An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).
-"""
-references = ["smithy-rs#3100", "smithy-rs#3114"]
-meta = { "breaking" = true, "tada" = false, "bug" = false, "target" = "client" }
-author = "ysaito1001"
+message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
+references = ["smithy-rs#3262"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "jdisanti"
 
 [[aws-sdk-rust]]
-message = """
-An operation output that supports receiving events from stream now provides a new-type wrapping `aws_smithy_http::event_stream::receiver::Receiver`. The new-type supports the `.recv()` method whose signature is the same as [`aws_smithy_http::event_stream::receiver::Receiver::recv`](https://docs.rs/aws-smithy-http/0.57.0/aws_smithy_http/event_stream/struct.Receiver.html#method.recv).
+message = """Client creation now takes microseconds instead of milliseconds.
+Previously, it would take 2-3 milliseconds for each client instantiation due to time spent compiling regexes.
+For applications that used several clients, this would increase start-up time in cases where it really matters,
+such as for AWS Lambda cold starts. This time was improved by both changing regex implementation and caching the
+result of the compilation."""
+references = ["aws-sdk-rust#975", "smithy-rs#3269"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = """Add `test_credentials` to `ConfigLoader` in `aws_config`. This allows the following pattern during tests:
+
+```rust
+async fn main() {
+    let conf = aws_config::defaults(BehaviorVersion::latest())
+        .test_credentials()
+        .await;
+}
+```
+
+This is designed for unit tests and using local mocks like DynamoDB Local and LocalStack with the SDK.
 """
-references = ["smithy-rs#3100", "smithy-rs#3114"]
-meta = { "breaking" = true, "tada" = false, "bug" = false }
-author = "ysaito1001"
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+references = ["smithy-rs#3279", "aws-sdk-rust#971"]

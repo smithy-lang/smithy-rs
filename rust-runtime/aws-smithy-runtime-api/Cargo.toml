@@ -5,7 +5,7 @@ authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessl
 description = "Smithy runtime types."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -14,6 +14,7 @@ default = []
 client = []
 http-auth = ["dep:zeroize"]
 test-util = ["aws-smithy-types/test-util"]
+http-02x = []
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
@@ -26,6 +27,7 @@ tracing = "0.1"
 zeroize = { version = "1", optional = true }
 
 [dev-dependencies]
+proptest = "1"
 tokio = { version = "1.25", features = ["rt", "macros"] }
 
 [package.metadata.docs.rs]
@@ -33,3 +35,9 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+# make sure to keep crate stability in sync with the second element of the following tuple in
+# buildSrc/src/main/kotlin/CrateSet.kt:
+#  Crate("aws-smithy-runtime-api", STABLE_VERSION_PROP_NAME),
+[package.metadata.smithy-rs-release-tooling]
+stable = true

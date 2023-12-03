@@ -8,13 +8,21 @@ authors = [
 description = "Types for smithy-rs codegen."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 byte-stream-poll-next = []
 http-body-0-4-x = ["dep:http-body-0-4"]
 hyper-0-14-x = ["dep:hyper-0-14"]
-rt-tokio = ["dep:http-body-0-4", "dep:tokio-util", "dep:tokio", "tokio?/rt", "tokio?/fs", "tokio?/io-util", "tokio-util?/io"]
+rt-tokio = [
+    "dep:http-body-0-4",
+    "dep:tokio-util",
+    "dep:tokio",
+    "tokio?/rt",
+    "tokio?/fs",
+    "tokio?/io-util",
+    "tokio-util?/io",
+]
 test-util = []
 serde-serialize = []
 serde-deserialize = []
@@ -62,6 +70,12 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+# make sure to keep crate stability in sync with the second element of the following tuple in
+# buildSrc/src/main/kotlin/CrateSet.kt:
+#  Crate("aws-smithy-types", STABLE_VERSION_PROP_NAME),
+[package.metadata.smithy-rs-release-tooling]
+stable = true
 
 [[bench]]
 name = "base64"

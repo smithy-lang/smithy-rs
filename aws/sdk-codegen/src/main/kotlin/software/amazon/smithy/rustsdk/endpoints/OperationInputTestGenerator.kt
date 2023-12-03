@@ -109,7 +109,7 @@ fun usesDeprecatedBuiltIns(testOperationInput: EndpointTestOperationInput): Bool
  * ```
  *
  * Eventually, we need to pull this test into generic smithy. However, this relies on generic smithy clients
- * supporting middleware and being instantiable from config (https://github.com/awslabs/smithy-rs/issues/2194)
+ * supporting middleware and being instantiable from config (https://github.com/smithy-lang/smithy-rs/issues/2194)
  *
  * Doing this in AWS codegen allows us to actually integration test generated clients.
  */

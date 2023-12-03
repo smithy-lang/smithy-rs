@@ -42,7 +42,7 @@ class PatternTraitEscapedSpecialCharsValidator : AbstractValidator() {
             """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern($replacement)`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
             """.trimIndent()
         return error(shape, pattern, message)
     }

@@ -78,6 +78,11 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
 
                     ${section.serviceConfigBuilder}.set_http_client(${section.sdkConfig}.http_client());
                     ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
+                    ${section.serviceConfigBuilder}.set_behavior_version(${section.sdkConfig}.behavior_version());
+                    // setting `None` here removes the default
+                    if let Some(config) = ${section.sdkConfig}.stalled_stream_protection() {
+                        ${section.serviceConfigBuilder}.set_stalled_stream_protection(Some(config));
+                    }
 
                     if let Some(cache) = ${section.sdkConfig}.identity_cache() {
                         ${section.serviceConfigBuilder}.set_identity_cache(cache);

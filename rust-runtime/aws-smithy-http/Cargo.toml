@@ -8,7 +8,7 @@ authors = [
 description = "Smithy HTTP logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 event-stream = ["aws-smithy-eventstream"]
@@ -16,7 +16,7 @@ rt-tokio = ["aws-smithy-types/rt-tokio"]
 
 [dependencies]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 bytes = "1"
 bytes-utils = "0.1"

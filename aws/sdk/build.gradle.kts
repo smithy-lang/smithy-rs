@@ -76,8 +76,8 @@ fun eventStreamAllowList(): Set<String> {
 }
 
 fun generateSmithyBuild(services: AwsServices): String {
-    val awsConfigVersion = properties.get("smithy.rs.runtime.crate.version")
-        ?: throw IllegalStateException("missing smithy.rs.runtime.crate.version for aws-config version")
+    val awsConfigVersion = properties.get(CrateSet.STABLE_VERSION_PROP_NAME)
+        ?: throw IllegalStateException("missing ${CrateSet.STABLE_VERSION_PROP_NAME} for aws-config version")
     val debugMode = properties.get("debugMode").toBoolean()
     val serviceProjections = services.services.map { service ->
         val files = service.modelFiles().map { extraFile ->
@@ -270,10 +270,10 @@ fun rewritePathDependency(line: String): String {
 tasks.register<Copy>("copyAllRuntimes") {
     dependsOn("smithyBuildJar")
     from("$rootDir/aws/rust-runtime") {
-        CrateSet.AWS_SDK_RUNTIME.forEach { include("$it/**") }
+        CrateSet.AWS_SDK_RUNTIME.forEach { include("${it.name}/**") }
     }
     from("$rootDir/rust-runtime") {
-        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { include("$it/**") }
+        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { include("${it.name}/**") }
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
@@ -285,9 +285,9 @@ tasks.register("relocateAwsRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        CrateSet.AWS_SDK_RUNTIME.forEach { moduleName ->
-            patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteRuntimeCrateVersion(properties, line.let(::rewritePathDependency))
+        CrateSet.AWS_SDK_RUNTIME.forEach { module ->
+            patchFile(sdkOutputDir.resolve("${module.name}/Cargo.toml")) { line ->
+                rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line.let(::rewritePathDependency))
             }
         }
     }
@@ -296,9 +296,9 @@ tasks.register("relocateRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { moduleName ->
-            patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteRuntimeCrateVersion(properties, line)
+        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { module ->
+            patchFile(sdkOutputDir.resolve("${module.name}/Cargo.toml")) { line ->
+                rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line)
             }
         }
     }

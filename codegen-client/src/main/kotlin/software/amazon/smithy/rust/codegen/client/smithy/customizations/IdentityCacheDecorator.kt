@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -18,11 +19,11 @@ class IdentityCacheConfigCustomization(codegenContext: ClientCodegenContext) : C
     private val moduleUseName = codegenContext.moduleUseName()
 
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val api = RuntimeType.smithyRuntimeApi(rc)
+        val api = RuntimeType.smithyRuntimeApiClient(rc)
         arrayOf(
             *preludeScope,
-            "ResolveCachedIdentity" to api.resolve("client::identity::ResolveCachedIdentity"),
-            "SharedIdentityCache" to api.resolve("client::identity::SharedIdentityCache"),
+            "ResolveCachedIdentity" to configReexport(api.resolve("client::identity::ResolveCachedIdentity")),
+            "SharedIdentityCache" to configReexport(api.resolve("client::identity::SharedIdentityCache")),
         )
     }
 
@@ -88,6 +89,7 @@ class IdentityCacheConfigCustomization(codegenContext: ClientCodegenContext) : C
                     *codegenScope,
                 )
             }
+
             is ServiceConfig.ConfigImpl -> {
                 rustTemplate(
                     """
@@ -99,7 +101,8 @@ class IdentityCacheConfigCustomization(codegenContext: ClientCodegenContext) : C
                     *codegenScope,
                 )
             }
-            else -> { }
+
+            else -> {}
         }
     }
 }

@@ -39,7 +39,7 @@ mod test {
     use crate::idempotency_token;
     use crate::idempotency_token::{uuid_v4, IdempotencyTokenProvider};
     use proptest::prelude::*;
-    use regex::Regex;
+    use regex_lite::Regex;
 
     #[test]
     fn test_uuid() {

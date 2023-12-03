@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
@@ -127,7 +128,6 @@ class HttpBindingGenerator(
     private val index = HttpBindingIndex.of(model)
     private val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
-    private val dateTime = RuntimeType.dateTime(runtimeConfig).toSymbol().rustType()
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     /**
@@ -146,13 +146,14 @@ class HttpBindingGenerator(
         check(binding.location == HttpLocation.HEADER)
         val outputT = symbolProvider.toSymbol(binding.member).makeOptional()
         return protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "header") { fnName ->
-            rustBlock(
-                "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
-                RuntimeType.Http,
-                outputT,
-                headerUtil,
+            rustBlockTemplate(
+                "pub(crate) fn $fnName(header_map: &#{Headers}) -> #{Result}<#{Output}, #{header_util}::ParseError>",
+                *preludeScope,
+                "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+                "Output" to outputT,
+                "header_util" to headerUtil,
             ) {
-                rust("let headers = header_map.get_all(${binding.locationName.dq()}).iter();")
+                rust("let headers = header_map.get_all(${binding.locationName.dq()});")
                 deserializeFromHeader(model.expectShape(binding.member.target), binding.member)
             }
         }
@@ -164,30 +165,33 @@ class HttpBindingGenerator(
         val target = model.expectShape(binding.member.target)
         check(target is MapShape)
         val inner = protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "inner") { fnName ->
-            rustBlock(
-                "pub fn $fnName(headers: #T::header::ValueIter<http::HeaderValue>) -> std::result::Result<Option<#T>, #T::ParseError>",
-                RuntimeType.Http,
-                symbolProvider.toSymbol(model.expectShape(target.value.target)),
-                headerUtil,
+            rustBlockTemplate(
+                "pub fn $fnName<'a>(headers: impl #{Iterator}<Item = &'a str>) -> std::result::Result<Option<#{Value}>, #{header_util}::ParseError>",
+                *preludeScope,
+                "Value" to symbolProvider.toSymbol(model.expectShape(target.value.target)),
+                "header_util" to headerUtil,
             ) {
                 deserializeFromHeader(model.expectShape(target.value.target), binding.member)
             }
         }
         val returnTypeSymbol = outputSymbol.mapRustType { it.asOptional() }
         return protocolFunctions.deserializeFn(binding.member, fnNameSuffix = "prefix_header") { fnName ->
-            rustBlock(
-                "pub(crate) fn $fnName(header_map: &#T::HeaderMap) -> std::result::Result<#T, #T::ParseError>",
-                RuntimeType.Http,
-                returnTypeSymbol,
-                headerUtil,
+            rustBlockTemplate(
+                "pub(crate) fn $fnName(header_map: &#{Headers}) -> std::result::Result<#{Value}, #{header_util}::ParseError>",
+                "Headers" to RuntimeType.headers(runtimeConfig),
+                "Value" to returnTypeSymbol,
+                "header_util" to headerUtil,
             ) {
                 rust(
                     """
-                    let headers = #T::headers_for_prefix(header_map, ${binding.locationName.dq()});
+                    let headers = #T::headers_for_prefix(
+                        header_map.iter().map(|(k, _)| k),
+                        ${binding.locationName.dq()}
+                    );
                     let out: std::result::Result<_, _> = headers.map(|(key, header_name)| {
                         let values = header_map.get_all(header_name);
-                        #T(values.iter()).map(|v| (key.to_string(), v.expect(
-                            "we have checked there is at least one value for this header name; please file a bug report under https://github.com/awslabs/smithy-rs/issues"
+                        #T(values).map(|v| (key.to_string(), v.expect(
+                            "we have checked there is at least one value for this header name; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"
                         )))
                     }).collect();
                     """,
