@@ -34,8 +34,8 @@ public object RenderSerdeAttribute {
     }
 
     public fun addSerdeWithoutShapeModel(writer: RustWriter) {
-        Attribute("").serdeSerialize().render(writer)
-        Attribute("").serdeDeserialize().render(writer)
+        Attribute("").SerdeSerialize().render(writer)
+        Attribute("").SerdeDeserialize().render(writer)
     }
 
     public fun addSerde(writer: RustWriter, shape: Shape, model: Model) {
@@ -55,7 +55,7 @@ public object RenderSerdeAttribute {
         if (isApplicable(shape, model)) {
             // we need this for skip serde to work
             Attribute.AllowUnusedImports.render(writer)
-            Attribute("").serdeSerializeOrDeserialize().render(writer)
+            Attribute("").SerdeSerializeOrDeserialize().render(writer)
             writer.raw("use serde;")
         }
     }
