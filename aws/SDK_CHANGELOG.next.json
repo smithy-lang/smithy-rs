@@ -6,105 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add configurable stalled-stream protection for downloads.\n\nWhen making HTTP calls,\nit's possible for a connection to 'stall out' and emit no more data due to server-side issues.\nIn the event this happens, it's desirable for the stream to error out as quickly as possible.\nWhile timeouts can protect you from this issue, they aren't adaptive to the amount of data\nbeing sent and so must be configured specifically for each use case. When enabled, stalled-stream\nprotection will ensure that bad streams error out quickly, regardless of the amount of data being\ndownloaded.\n\nProtection is enabled by default for all clients but can be configured or disabled.\nSee [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#3202"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests.",
-      "meta": {
-        "bug": true,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "milesziemer",
-      "references": [
-        "smithy-rs#3217"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Prevent multiplication overflow in backoff computation",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3229",
-        "aws-sdk-rust#960"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Make some types for various services optional. Previously, they defaulted to 0, but this created invalid requests.",
-      "meta": {
-        "bug": true,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "milesziemer",
-      "references": [
-        "smithy-rs#3228"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Types/functions that were deprecated in previous releases were removed. Unfortunately, some of these deprecations\nwere ignored by the Rust compiler (we found out later that `#[deprecated]` on `pub use` doesn't work). See\nthe [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discussions/3223) for more details.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3222"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Add `Display` impl for `DateTime`.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "HakanVardarr",
-      "references": [
-        "smithy-rs#3183"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Types/functions that were previously `#[doc(hidden)]` in `aws-config`, `aws-inlineable`, `aws-types`, and the SDK crates are now visible. For those that are not intended to be used directly, they are called out in their docs as such.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3226"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
       "message": "Make properties of S3Control PublicAccessBlockConfiguration optional. Previously, they defaulted to false, but this created invalid requests.",
       "meta": {
         "bug": true,
@@ -116,7 +17,7 @@
         "smithy-rs#3246"
       ],
       "since-commit": "e155c3048b9989fe406ef575d461ea01dfaf294c",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Allow `--` to be used in bucket names for S3",
@@ -130,7 +31,7 @@
         "smithy-rs#3253"
       ],
       "since-commit": "48e3c95a3f10eebd5a637f8e7670c4232cdabbe4",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)",
@@ -145,7 +46,7 @@
         "aws-sdk-rust#858"
       ],
       "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Make some properties for IoT types optional. Previously, they defaulted to false, but that isn't how the service actual works.",
@@ -159,6 +60,36 @@
         "smithy-rs#3256"
       ],
       "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
+      "age": 2
+    },
+    {
+      "message": "Fix `config::Builder::set_credentials_provider` to override a credentials provider previously set.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "aws-sdk-rust#973",
+        "smithy-rs#3278"
+      ],
+      "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
+      "age": 1
+    },
+    {
+      "message": "`config::Config::credentials_provider` has been broken since `release-2023-11-15` and is now marked as `deprecated` explicitly.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#3251",
+        "smithy-rs#3278"
+      ],
+      "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
       "age": 1
     }
   ],

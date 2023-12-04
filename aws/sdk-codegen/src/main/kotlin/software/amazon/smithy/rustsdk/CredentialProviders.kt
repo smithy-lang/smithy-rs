@@ -81,9 +81,10 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
             ServiceConfig.ConfigImpl -> {
                 rustTemplate(
                     """
-                    /// Returns the credentials provider for this service
+                    /// This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.
+                    ##[deprecated(note = "This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.")]
                     pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
-                        self.config.load::<#{SharedCredentialsProvider}>().cloned()
+                        #{None}
                     }
                     """,
                     *codegenScope,
@@ -118,13 +119,13 @@ class CredentialProviderConfig(private val codegenContext: ClientCodegenContext)
                         if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
                             featureGateBlock("sigv4a") {
                                 rustTemplate(
-                                    "self.runtime_components.push_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
+                                    "self.runtime_components.set_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
                                     *codegenScope,
                                 )
                             }
                         }
                         rustTemplate(
-                            "self.runtime_components.push_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
+                            "self.runtime_components.set_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
                             *codegenScope,
                         )
                     }
