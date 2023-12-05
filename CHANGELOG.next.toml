@@ -61,3 +61,15 @@ message = "Improve the error messages for when auth fails to select an auth sche
 references = ["smithy-rs#3277"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
+references = ["aws-sdk-rust#986", "smithy-rs#3282"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
+references = ["smithy-rs#3282"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
