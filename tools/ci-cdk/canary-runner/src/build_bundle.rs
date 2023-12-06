@@ -215,7 +215,7 @@ fn name_hashed_bundle(
     // Lambda function names can't have periods in them
     let rust_version = rust_version.map(|s| s.replace('.', ""));
     let rust_version = rust_version.as_deref().unwrap_or("unknown");
-    let sdk_release_tag = sdk_release_tag.map(|s| s.to_string().replace('-', ""));
+    let sdk_release_tag = sdk_release_tag.map(|s| s.to_string().replace('-', "").replace('.', ""));
     let sdk_release_tag = sdk_release_tag.as_deref().unwrap_or("untagged");
     Ok(format!(
         "canary-{sdk_release_tag}-{rust_version}-{bin_hash}.zip"
