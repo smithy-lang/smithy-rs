@@ -45,11 +45,6 @@ impl ConnectionMetadata {
         ConnectionMetadataBuilder::new()
     }
 
-    /// Get the remote address for this connection, if one is set.
-    pub fn remote_addr(&self) -> Option<SocketAddr> {
-        self.remote_addr
-    }
-
     /// Get the local address for this connection, if one is set.
     pub fn local_addr(&self) -> Option<SocketAddr> {
         self.local_addr
