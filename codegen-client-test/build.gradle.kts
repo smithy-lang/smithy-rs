@@ -119,7 +119,7 @@ val allCodegenTests = listOf(
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
-project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
@@ -127,7 +127,7 @@ tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

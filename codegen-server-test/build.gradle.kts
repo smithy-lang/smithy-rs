@@ -98,13 +98,13 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
-project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

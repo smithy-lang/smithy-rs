@@ -16,12 +16,13 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
+val buildDir = layout.buildDirectory.get().asFile
 
 val pluginName = "rust-server-codegen-python"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+    outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
 }
 
 buildscript {
@@ -111,7 +112,7 @@ tasks.register("stubs") {
 
     doLast {
         allCodegenTests.forEach { test ->
-            val crateDir = "$buildDir/$workingDirUnderBuildDir/${test.module}/$pluginName"
+            val crateDir = layout.buildDirectory.dir("$workingDirUnderBuildDir/${test.module}/$pluginName").get().asFile.path
             val moduleName = test.module.replace("-", "_")
             exec {
                 commandLine("bash", "$crateDir/stubgen.sh", moduleName, "$crateDir/Cargo.toml", "$crateDir/python/$moduleName")

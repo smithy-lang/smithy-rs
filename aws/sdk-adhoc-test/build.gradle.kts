@@ -20,7 +20,7 @@ val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/sdk-adhoc-test/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+    outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
 }
 
 buildscript {
@@ -80,13 +80,13 @@ val allCodegenTests = listOf(
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
-project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

@@ -322,7 +322,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
     private fun Element.normalizeList(indent: Int = 1) {
         // First, replace nested lists
-        for (child in children().filter { it.tagName() == "li" }) {
+        for (child in children().filter { tag -> tag.tagName() == "li" }) {
             for (itemChild in child.children()) {
                 if (itemChild.isList()) {
                     itemChild.normalizeList(indent + 1)
