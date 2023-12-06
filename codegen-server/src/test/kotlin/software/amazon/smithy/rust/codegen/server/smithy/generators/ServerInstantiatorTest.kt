@@ -5,19 +5,28 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
@@ -78,11 +87,13 @@ class ServerInstantiatorTest {
             int: Integer
         }
 
+        integer MyInteger
+
         structure NestedStruct {
             @required
             str: String,
             @required
-            num: Integer
+            num: MyInteger
         }
 
         structure MyStructRequired {
@@ -136,7 +147,7 @@ class ServerInstantiatorTest {
         val inner = model.lookup<StructureShape>("com.test#Inner")
         val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
         val union = model.lookup<UnionShape>("com.test#NestedUnion")
-        val sut = serverInstantiator(codegenContext)
+        val sut = ServerInstantiator(codegenContext)
         val data = Node.parse("{}")
 
         val project = TestWorkspace.testProject()
@@ -191,7 +202,7 @@ class ServerInstantiatorTest {
     @Test
     fun `generate named enums`() {
         val shape = model.lookup<StringShape>("com.test#NamedEnum")
-        val sut = serverInstantiator(codegenContext)
+        val sut = ServerInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
@@ -214,7 +225,7 @@ class ServerInstantiatorTest {
     @Test
     fun `generate unnamed enums`() {
         val shape = model.lookup<StringShape>("com.test#UnnamedEnum")
-        val sut = serverInstantiator(codegenContext)
+        val sut = ServerInstantiator(codegenContext)
         val data = Node.parse("t2.nano".dq())
 
         val project = TestWorkspace.testProject()
@@ -232,5 +243,101 @@ class ServerInstantiatorTest {
             }
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `use direct instantiation and not the builder`() {
+        val shape = model.lookup<StructureShape>("com.test#MyStruct")
+        val sut = ServerInstantiator(codegenContext)
+        val data = Node.parse("""{ "foo": "hello", "bar": 1, "baz": 42, "ts": 0, "byteValue": 0 }""")
+
+        val writer = RustWriter.forModule(ServerRustModule.Model.name)
+        sut.render(writer, shape, data)
+        writer.toString() shouldNotContain "builder()"
+    }
+
+    @Test
+    fun `uses writable for shapes`() {
+        val nestedStruct = model.lookup<StructureShape>("com.test#NestedStruct")
+        val inner = model.lookup<StructureShape>("com.test#Inner")
+
+        val project = TestWorkspace.testProject(model)
+        nestedStruct.renderWithModelBuilder(model, symbolProvider, project)
+        inner.renderWithModelBuilder(model, symbolProvider, project)
+        project.moduleFor(nestedStruct) {
+            val nestedUnion = model.lookup<UnionShape>("com.test#NestedUnion")
+            UnionGenerator(model, symbolProvider, this, nestedUnion).render()
+
+            unitTest("writable_for_shapes") {
+                val sut = ServerInstantiator(
+                    codegenContext,
+                    customWritable = object : Instantiator.CustomWritable {
+                        override fun generate(shape: Shape): Writable? =
+                            if (model.lookup<MemberShape>("com.test#NestedStruct\$num") == shape) {
+                                writable("40 + 2")
+                            } else {
+                                null
+                            }
+                    },
+                )
+                val data = Node.parse("""{ "str": "hello", "num": 1 }""")
+                withBlock("let result = ", ";") {
+                    sut.render(this, model.lookup("com.test#NestedStruct"), data as ObjectNode)
+                }
+                rust(
+                    """
+                    assert_eq!(result.num, 42);
+                    assert_eq!(result.str, "hello");
+                    """,
+                )
+            }
+
+            unitTest("writable_for_nested_inner_members") {
+                val map = model.lookup<MemberShape>("com.test#Inner\$map")
+                val sut = ServerInstantiator(
+                    codegenContext,
+                    customWritable = object : Instantiator.CustomWritable {
+                        private var n: Int = 0
+                        override fun generate(shape: Shape): Writable? =
+                            if (shape != map) {
+                                null
+                            } else if (n != 2) {
+                                n += 1
+                                null
+                            } else {
+                                n += 1
+                                writable("None")
+                            }
+                    },
+                )
+                val data = Node.parse(
+                    """
+                    {
+                        "map": {
+                            "k1": {
+                                "map": {
+                                    "k2": {
+                                        "map": {
+                                            "never": {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    """,
+                )
+
+                withBlock("let result = ", ";") {
+                    sut.render(this, inner, data as ObjectNode)
+                }
+                rust(
+                    """
+                    assert_eq!(result.map().unwrap().get("k1").unwrap().map().unwrap().get("k2").unwrap().map(), None);
+                    """,
+                )
+            }
+        }
+        project.compileAndTest(runClippy = true)
     }
 }

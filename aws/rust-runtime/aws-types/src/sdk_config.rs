@@ -13,20 +13,22 @@ use crate::app_name::AppName;
 use crate::docs_for;
 use crate::region::Region;
 
-pub use aws_credential_types::cache::CredentialsCache;
 pub use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 pub use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 pub use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::HttpClient;
 pub use aws_smithy_runtime_api::client::http::SharedHttpClient;
+use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_runtime_api::shared::IntoShared;
 pub use aws_smithy_types::retry::RetryConfig;
 pub use aws_smithy_types::timeout::TimeoutConfig;
 
-#[doc(hidden)]
 /// Unified docstrings to keep crates in sync. Not intended for public use
 pub mod unified_docs {
+    /// A macro that generates docs for selected fields of `SdkConfig`.
     #[macro_export]
     macro_rules! docs_for {
         (use_fips) => {
@@ -51,7 +53,7 @@ these services, this setting has no effect"
 #[derive(Debug, Clone)]
 pub struct SdkConfig {
     app_name: Option<AppName>,
-    credentials_cache: Option<CredentialsCache>,
+    identity_cache: Option<SharedIdentityCache>,
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_url: Option<String>,
@@ -59,9 +61,11 @@ pub struct SdkConfig {
     sleep_impl: Option<SharedAsyncSleep>,
     time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
+    stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
     http_client: Option<SharedHttpClient>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
+    behavior_version: Option<BehaviorVersion>,
 }
 
 /// Builder for AWS Shared Configuration
@@ -72,7 +76,7 @@ pub struct SdkConfig {
 #[derive(Debug, Default)]
 pub struct Builder {
     app_name: Option<AppName>,
-    credentials_cache: Option<CredentialsCache>,
+    identity_cache: Option<SharedIdentityCache>,
     credentials_provider: Option<SharedCredentialsProvider>,
     region: Option<Region>,
     endpoint_url: Option<String>,
@@ -80,9 +84,11 @@ pub struct Builder {
     sleep_impl: Option<SharedAsyncSleep>,
     time_source: Option<SharedTimeSource>,
     timeout_config: Option<TimeoutConfig>,
+    stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
     http_client: Option<SharedHttpClient>,
     use_fips: Option<bool>,
     use_dual_stack: Option<bool>,
+    behavior_version: Option<BehaviorVersion>,
 }
 
 impl Builder {
@@ -296,40 +302,64 @@ impl Builder {
         self
     }
 
-    /// Set the [`CredentialsCache`] for the builder
+    /// Set the identity cache for caching credentials and SSO tokens.
+    ///
+    /// The default identity cache will wait until the first request that requires authentication
+    /// to load an identity. Once the identity is loaded, it is cached until shortly before it
+    /// expires.
     ///
     /// # Examples
+    /// Disabling identity caching:
     /// ```rust
-    /// use aws_credential_types::cache::CredentialsCache;
-    /// use aws_types::SdkConfig;
+    /// # use aws_types::SdkConfig;
+    /// use aws_smithy_runtime::client::identity::IdentityCache;
     /// let config = SdkConfig::builder()
-    ///     .credentials_cache(CredentialsCache::lazy())
+    ///     .identity_cache(IdentityCache::no_cache())
     ///     .build();
     /// ```
-    pub fn credentials_cache(mut self, cache: CredentialsCache) -> Self {
-        self.set_credentials_cache(Some(cache));
+    /// Changing settings on the default cache implementation:
+    /// ```rust
+    /// # use aws_types::SdkConfig;
+    /// use aws_smithy_runtime::client::identity::IdentityCache;
+    /// use std::time::Duration;
+    ///
+    /// let config = SdkConfig::builder()
+    ///     .identity_cache(
+    ///         IdentityCache::lazy()
+    ///             .load_timeout(Duration::from_secs(10))
+    ///             .build()
+    ///     )
+    ///     .build();
+    /// ```
+    pub fn identity_cache(mut self, cache: impl ResolveCachedIdentity + 'static) -> Self {
+        self.set_identity_cache(Some(cache.into_shared()));
         self
     }
 
-    /// Set the [`CredentialsCache`] for the builder
+    /// Set the identity cache for caching credentials and SSO tokens.
+    ///
+    /// The default identity cache will wait until the first request that requires authentication
+    /// to load an identity. Once the identity is loaded, it is cached until shortly before it
+    /// expires.
     ///
     /// # Examples
     /// ```rust
-    /// use aws_credential_types::cache::CredentialsCache;
-    /// use aws_types::SdkConfig;
-    /// fn override_credentials_cache() -> bool {
+    /// # use aws_types::SdkConfig;
+    /// use aws_smithy_runtime::client::identity::IdentityCache;
+    ///
+    /// fn override_identity_cache() -> bool {
     ///   // ...
     ///   # true
     /// }
     ///
     /// let mut builder = SdkConfig::builder();
-    /// if override_credentials_cache() {
-    ///     builder.set_credentials_cache(Some(CredentialsCache::lazy()));
+    /// if override_identity_cache() {
+    ///     builder.set_identity_cache(Some(IdentityCache::lazy().build()));
     /// }
     /// let config = builder.build();
     /// ```
-    pub fn set_credentials_cache(&mut self, cache: Option<CredentialsCache>) -> &mut Self {
-        self.credentials_cache = cache;
+    pub fn set_identity_cache(&mut self, cache: Option<SharedIdentityCache>) -> &mut Self {
+        self.identity_cache = cache;
         self
     }
 
@@ -512,11 +542,23 @@ impl Builder {
         self
     }
 
+    /// Sets the [`BehaviorVersion`] for the [`SdkConfig`]
+    pub fn behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
+        self.set_behavior_version(Some(behavior_version));
+        self
+    }
+
+    /// Sets the [`BehaviorVersion`] for the [`SdkConfig`]
+    pub fn set_behavior_version(&mut self, behavior_version: Option<BehaviorVersion>) -> &mut Self {
+        self.behavior_version = behavior_version;
+        self
+    }
+
     /// Build a [`SdkConfig`](SdkConfig) from this builder
     pub fn build(self) -> SdkConfig {
         SdkConfig {
             app_name: self.app_name,
-            credentials_cache: self.credentials_cache,
+            identity_cache: self.identity_cache,
             credentials_provider: self.credentials_provider,
             region: self.region,
             endpoint_url: self.endpoint_url,
@@ -527,7 +569,80 @@ impl Builder {
             use_fips: self.use_fips,
             use_dual_stack: self.use_dual_stack,
             time_source: self.time_source,
+            behavior_version: self.behavior_version,
+            stalled_stream_protection_config: self.stalled_stream_protection_config,
         }
+    }
+}
+
+impl Builder {
+    /// Set the [`StalledStreamProtectionConfig`] to configure protection for stalled streams.
+    ///
+    /// This configures stalled stream protection. When enabled, download streams
+    /// that stall (stream no data) for longer than a configured grace period will return an error.
+    ///
+    /// _Note:_ Stalled stream protection requires both a sleep implementation and a time source
+    /// in order to work. When enabling stalled stream protection, make sure to set
+    /// - A sleep impl with [Self::sleep_impl] or [Self::set_sleep_impl].
+    /// - A time source with [Self::time_source] or [Self::set_time_source].
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// use aws_types::SdkConfig;
+    /// pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
+    ///
+    /// let stalled_stream_protection_config = StalledStreamProtectionConfig::enabled()
+    ///     .grace_period(Duration::from_secs(1))
+    ///     .build();
+    /// let config = SdkConfig::builder()
+    ///     .stalled_stream_protection(stalled_stream_protection_config)
+    ///     .build();
+    /// ```
+    pub fn stalled_stream_protection(
+        mut self,
+        stalled_stream_protection_config: StalledStreamProtectionConfig,
+    ) -> Self {
+        self.set_stalled_stream_protection(Some(stalled_stream_protection_config));
+        self
+    }
+
+    /// Set the [`StalledStreamProtectionConfig`] to configure protection for stalled streams.
+    ///
+    /// This configures stalled stream protection. When enabled, download streams
+    /// that stall (stream no data) for longer than a configured grace period will return an error.
+    ///
+    /// By default, streams that transmit less than one byte per-second for five seconds will
+    /// be cancelled.
+    ///
+    /// _Note:_ Stalled stream protection requires both a sleep implementation and a time source
+    /// in order to work. When enabling stalled stream protection, make sure to set
+    /// - A sleep impl with [Self::sleep_impl] or [Self::set_sleep_impl].
+    /// - A time source with [Self::time_source] or [Self::set_time_source].
+    ///
+    /// # Examples
+    /// ```rust
+    /// use std::time::Duration;
+    /// use aws_types::sdk_config::{SdkConfig, Builder};
+    /// pub use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
+    ///
+    /// fn set_stalled_stream_protection(builder: &mut Builder) {
+    ///     let stalled_stream_protection_config = StalledStreamProtectionConfig::enabled()
+    ///         .grace_period(Duration::from_secs(1))
+    ///         .build();
+    ///     builder.set_stalled_stream_protection(Some(stalled_stream_protection_config));
+    /// }
+    ///
+    /// let mut builder = SdkConfig::builder();
+    /// set_stalled_stream_protection(&mut builder);
+    /// let config = builder.build();
+    /// ```
+    pub fn set_stalled_stream_protection(
+        &mut self,
+        stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
+    ) -> &mut Self {
+        self.stalled_stream_protection_config = stalled_stream_protection_config;
+        self
     }
 }
 
@@ -552,15 +667,14 @@ impl SdkConfig {
         self.timeout_config.as_ref()
     }
 
-    #[doc(hidden)]
     /// Configured sleep implementation
     pub fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
         self.sleep_impl.clone()
     }
 
-    /// Configured credentials cache
-    pub fn credentials_cache(&self) -> Option<&CredentialsCache> {
-        self.credentials_cache.as_ref()
+    /// Configured identity cache
+    pub fn identity_cache(&self) -> Option<SharedIdentityCache> {
+        self.identity_cache.clone()
     }
 
     /// Configured credentials provider
@@ -593,6 +707,16 @@ impl SdkConfig {
         self.use_dual_stack
     }
 
+    /// Configured stalled stream protection
+    pub fn stalled_stream_protection(&self) -> Option<StalledStreamProtectionConfig> {
+        self.stalled_stream_protection_config.clone()
+    }
+
+    /// Behavior major version configured for this client
+    pub fn behavior_version(&self) -> Option<BehaviorVersion> {
+        self.behavior_version.clone()
+    }
+
     /// Config builder
     ///
     /// _Important:_ Using the `aws-config` crate to configure the SDK is preferred to invoking this
@@ -611,7 +735,7 @@ impl SdkConfig {
     pub fn into_builder(self) -> Builder {
         Builder {
             app_name: self.app_name,
-            credentials_cache: self.credentials_cache,
+            identity_cache: self.identity_cache,
             credentials_provider: self.credentials_provider,
             region: self.region,
             endpoint_url: self.endpoint_url,
@@ -622,6 +746,8 @@ impl SdkConfig {
             http_client: self.http_client,
             use_fips: self.use_fips,
             use_dual_stack: self.use_dual_stack,
+            behavior_version: self.behavior_version,
+            stalled_stream_protection_config: self.stalled_stream_protection_config,
         }
     }
 }

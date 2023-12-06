@@ -82,5 +82,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

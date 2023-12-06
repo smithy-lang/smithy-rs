@@ -73,7 +73,11 @@ val allCodegenTests = listOf(
     ClientTest("aws.protocoltests.restxml#RestXml", "rest_xml", addMessageToErrors = false),
     ClientTest("aws.protocoltests.query#AwsQuery", "aws_query", addMessageToErrors = false),
     ClientTest("aws.protocoltests.ec2#AwsEc2", "ec2_query", addMessageToErrors = false),
-    ClientTest("aws.protocoltests.restxml.xmlns#RestXmlWithNamespace", "rest_xml_namespace", addMessageToErrors = false),
+    ClientTest(
+        "aws.protocoltests.restxml.xmlns#RestXmlWithNamespace",
+        "rest_xml_namespace",
+        addMessageToErrors = false,
+    ),
     ClientTest("aws.protocoltests.restxml#RestXmlExtras", "rest_xml_extras", addMessageToErrors = false),
     ClientTest(
         "aws.protocoltests.restxmlunwrapped#RestXmlExtrasUnwrappedErrors",
@@ -108,11 +112,14 @@ val allCodegenTests = listOf(
         "pokemon-service-awsjson-client",
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
+    ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
 ).map(ClientTest::toCodegenTest)
+// use this line to run just one test
+// .filter { it.module == "query-compat-test" }
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
-project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
@@ -120,7 +127,7 @@ tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

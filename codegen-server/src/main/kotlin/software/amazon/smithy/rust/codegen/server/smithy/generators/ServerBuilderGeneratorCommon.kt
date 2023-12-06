@@ -57,11 +57,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasPublicConstrainedWra
 /**
  * Returns a writable to render the return type of the server builders' `build()` method.
  */
-fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol) = writable {
+fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol, lifetime: String) = writable {
     if (isBuilderFallible) {
-        rust("Result<#T, ConstraintViolation>", structureSymbol)
+        rust("Result<#T $lifetime, ConstraintViolation>", structureSymbol)
     } else {
-        rust("#T", structureSymbol)
+        rust("#T $lifetime", structureSymbol)
     }
 }
 
@@ -84,7 +84,7 @@ fun generateFallbackCodeToDefaultValue(
     if (member.isStreaming(model)) {
         writer.rust(".unwrap_or_default()")
     } else if (targetShape.hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2134): Instead of panicking here, which will ungracefully
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2134): Instead of panicking here, which will ungracefully
         //  shut down the service, perform the `try_into()` check _once_ at service startup time, perhaps
         //  storing the result in a `OnceCell` that could be reused.
         writer.rustTemplate(
@@ -92,7 +92,7 @@ fun generateFallbackCodeToDefaultValue(
             .unwrap_or_else(||
                 #{DefaultValue:W}
                     .try_into()
-                    .expect("this check should have failed at generation time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+                    .expect("this check should have failed at generation time; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
             )
             """,
             "DefaultValue" to defaultValue,
@@ -125,7 +125,7 @@ fun defaultValue(
     val types = ServerCargoDependency.smithyTypes(runtimeConfig).toType()
     // Define the exception once for DRYness.
     val unsupportedDefaultValueException =
-        CodegenException("Default value $node for member shape ${member.id} is unsupported or cannot exist; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+        CodegenException("Default value $node for member shape ${member.id} is unsupported or cannot exist; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     when (val target = model.expectShape(member.target)) {
         is EnumShape, is IntEnumShape -> {
             val value = when (target) {
@@ -169,7 +169,7 @@ fun defaultValue(
                 rustTemplate(
                     """
                     #{SmithyTypes}::DateTime::from_str("$value", #{SmithyTypes}::date_time::Format::DateTime)
-                            .expect("default value `$value` cannot be parsed into a valid date time; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+                            .expect("default value `$value` cannot be parsed into a valid date time; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                     """,
                     "SmithyTypes" to types,
                 )

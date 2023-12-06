@@ -47,8 +47,8 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             writer.rust("runtime_components.push_auth_scheme(#T);", authScheme)
         }
 
-        fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
-            writer.rust("runtime_components.push_identity_resolver(#T);", identityResolver)
+        fun registerEndpointResolver(writer: RustWriter, resolver: Writable) {
+            writer.rust("runtime_components.set_endpoint_resolver(Some(#T));", resolver)
         }
 
         fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
@@ -65,7 +65,7 @@ class ServiceRuntimePluginGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *preludeScope,
@@ -77,6 +77,7 @@ class ServiceRuntimePluginGenerator(
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
             "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
+            "Order" to runtimeApi.resolve("client::runtime_plugin::Order"),
         )
     }
 
@@ -107,6 +108,10 @@ class ServiceRuntimePluginGenerator(
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
                     self.config.clone()
+                }
+
+                fn order(&self) -> #{Order} {
+                    #{Order}::Defaults
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {

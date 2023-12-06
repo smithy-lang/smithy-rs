@@ -90,7 +90,7 @@ if (isTestingEnabled.toBoolean()) {
         reports {
             xml.required.set(false)
             csv.required.set(false)
-            html.outputLocation.set(file("$buildDir/reports/jacoco"))
+            html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
         }
     }
 
@@ -105,5 +105,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

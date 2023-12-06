@@ -6,14 +6,14 @@
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3control::config::{Credentials, Region};
 use aws_sdk_s3control::{Client, Config};
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+use aws_smithy_types::body::SdkBody;
 
 #[tokio::test]
 async fn test_signer() {
     let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
         http::Request::builder()
-            .header("authorization",
+        .header("authorization",
                     "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-east-1/s3/aws4_request, \
                     SignedHeaders=host;x-amz-account-id;x-amz-content-sha256;x-amz-date;x-amz-user-agent, \
                     Signature=0102a74cb220f8445c4efada17660572ff813e07b524032ec831e8c2514be903")

@@ -8,15 +8,15 @@
 //! Interceptor for handling Smithy `@httpChecksum` response checksumming
 
 use aws_smithy_checksums::ChecksumAlgorithm;
-use aws_smithy_http::body::{BoxBody, SdkBody};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextRef, Input,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
-use http::HeaderValue;
 use std::{fmt, mem};
 
 #[derive(Debug)]
@@ -119,11 +119,11 @@ pub(crate) fn wrap_body_with_checksum_validator(
     use aws_smithy_checksums::body::validate;
 
     body.map(move |body| {
-        SdkBody::from_dyn(BoxBody::new(validate::ChecksumBody::new(
+        SdkBody::from_body_0_4(validate::ChecksumBody::new(
             body,
             checksum_algorithm.into_impl(),
             precalculated_checksum.clone(),
-        )))
+        ))
     })
 }
 
@@ -131,7 +131,7 @@ pub(crate) fn wrap_body_with_checksum_validator(
 /// If no checksum header is set, return `None`. If multiple checksum headers are set, the one that
 /// is fastest to compute will be chosen.
 pub(crate) fn check_headers_for_precalculated_checksum(
-    headers: &http::HeaderMap<HeaderValue>,
+    headers: &Headers,
     response_algorithms: &[&str],
 ) -> Option<(ChecksumAlgorithm, bytes::Bytes)> {
     let checksum_algorithms_to_check =
@@ -154,13 +154,9 @@ pub(crate) fn check_headers_for_precalculated_checksum(
         let checksum_algorithm: ChecksumAlgorithm = checksum_algorithm.parse().expect(
             "CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER only contains valid checksum algorithm names",
         );
-        if let Some(precalculated_checksum) =
+        if let Some(base64_encoded_precalculated_checksum) =
             headers.get(checksum_algorithm.into_impl().header_name())
         {
-            let base64_encoded_precalculated_checksum = precalculated_checksum
-                .to_str()
-                .expect("base64 uses ASCII characters");
-
             // S3 needs special handling for checksums of objects uploaded with `MultiPartUpload`.
             if is_part_level_checksum(base64_encoded_precalculated_checksum) {
                 tracing::warn!(
@@ -219,8 +215,8 @@ fn is_part_level_checksum(checksum: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{is_part_level_checksum, wrap_body_with_checksum_validator};
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::byte_stream::ByteStream;
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::byte_stream::ByteStream;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use bytes::Bytes;
 

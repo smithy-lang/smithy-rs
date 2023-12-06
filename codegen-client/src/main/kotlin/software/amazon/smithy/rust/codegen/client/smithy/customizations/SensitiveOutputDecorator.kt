@@ -39,7 +39,7 @@ private class SensitiveOutputCustomization(
                 """
                 ${section.newLayerName}.store_put(#{SensitiveOutput});
                 """,
-                "SensitiveOutput" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                "SensitiveOutput" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
                     .resolve("client::orchestrator::SensitiveOutput"),
             )
         }

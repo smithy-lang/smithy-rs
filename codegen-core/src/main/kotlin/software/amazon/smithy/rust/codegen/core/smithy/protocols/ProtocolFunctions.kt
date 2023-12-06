@@ -18,6 +18,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
@@ -139,10 +143,13 @@ internal fun RustSymbolProvider.shapeModuleName(serviceShape: ServiceShape?, sha
 
 /** Creates a unique name for a ser/de function. */
 fun RustSymbolProvider.shapeFunctionName(serviceShape: ServiceShape?, shape: Shape): String {
+    val extras = "".letIf(shape.hasTrait<SyntheticOutputTrait>()) {
+        it + "_output"
+    }.letIf(shape.hasTrait<SyntheticInputTrait>()) { it + "_input" }
     val containerName = when (shape) {
         is MemberShape -> model.expectShape(shape.container).contextName(serviceShape).toSnakeCase()
         else -> shape.contextName(serviceShape).toSnakeCase()
-    }
+    } + extras
     return when (shape) {
         is MemberShape -> shape.memberName.toSnakeCase()
         is DocumentShape -> "document"

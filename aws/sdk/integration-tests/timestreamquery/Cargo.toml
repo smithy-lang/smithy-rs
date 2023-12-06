@@ -5,14 +5,14 @@ version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-sdk-timestreamquery = { path = "../../build/aws-sdk/sdk/timestreamquery" }
+aws-sdk-timestreamquery = { path = "../../build/aws-sdk/sdk/timestreamquery", features = ["behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
 aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }

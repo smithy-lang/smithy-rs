@@ -9,24 +9,24 @@ are to allow this crate to be compilable and testable in isolation, no client co
 edition = "2021"
 license = "Apache-2.0"
 publish = false
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
 aws-http = { path = "../aws-http" }
 aws-runtime = { path = "../aws-runtime" }
 aws-sigv4 = { path = "../aws-sigv4" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
-aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x"] }
 bytes = "1"
 hex = "0.4.3"
 http = "0.2.9"
 http-body = "0.4.5"
-ring = "0.16"
+ring = "0.17.5"
 tokio = "1.23.1"
 tracing = "0.1"
 

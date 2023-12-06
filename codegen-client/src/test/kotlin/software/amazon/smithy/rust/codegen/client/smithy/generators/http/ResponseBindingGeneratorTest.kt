@@ -11,6 +11,8 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
@@ -21,7 +23,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
-import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -95,21 +96,28 @@ class ResponseBindingGeneratorTest {
         val testProject = TestWorkspace.testProject(symbolProvider)
         testProject.renderOperation()
         testProject.withModule(symbolProvider.moduleForShape(outputShape)) {
-            unitTest(
-                "http_header_deser",
+            rustTemplate(
                 """
-                use crate::protocol_serde::shape_put_object_output::*;
-                let resp = http::Response::builder()
-                    .header("X-Ints", "1,2,3")
-                    .header("X-Ints", "4,5,6")
-                    .header("X-MediaType", "c21pdGh5LXJz")
-                    .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT")
-                    .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT")
-                    .body(()).expect("valid request");
-                assert_eq!(de_int_list_header(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
-                assert_eq!(de_media_type_header(resp.headers()).expect("valid").unwrap(), "smithy-rs");
-                assert_eq!(de_date_header_list_header(resp.headers()).unwrap().unwrap().len(), 3);
+                ##[test]
+                fn http_header_deser() {
+                    use crate::protocol_serde::shape_put_object_output::*;
+                    let resp = #{Response}::try_from(
+                        #{http}::Response::builder()
+                            .header("X-Ints", "1,2,3")
+                            .header("X-Ints", "4,5,6")
+                            .header("X-MediaType", "c21pdGh5LXJz")
+                            .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT")
+                            .header("X-Dates", "Mon, 16 Dec 2019 23:48:18 GMT,Tue, 17 Dec 2019 23:48:18 GMT")
+                            .body(())
+                            .expect("valid request")
+                    ).unwrap();
+                    assert_eq!(de_int_list_header(resp.headers()).unwrap(), Some(vec![1,2,3,4,5,6]));
+                    assert_eq!(de_media_type_header(resp.headers()).expect("valid").unwrap(), "smithy-rs");
+                    assert_eq!(de_date_header_list_header(resp.headers()).unwrap().unwrap().len(), 3);
+                }
                 """,
+                "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
+                "http" to RuntimeType.Http,
             )
         }
         testProject.compileAndTest()

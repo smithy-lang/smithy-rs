@@ -8,6 +8,7 @@
 use crate::box_error::BoxError;
 use crate::client::identity::{Identity, SharedIdentityResolver};
 use crate::client::orchestrator::HttpRequest;
+use crate::client::runtime_components::sealed::ValidateConfig;
 use crate::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
 use crate::impl_shared_conversions;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
@@ -79,9 +80,6 @@ impl AuthSchemeOptionResolverParams {
 impl Storable for AuthSchemeOptionResolverParams {
     type Storer = StoreReplace<Self>;
 }
-
-#[deprecated(note = "Renamed to ResolveAuthSchemeOptions.")]
-pub use ResolveAuthSchemeOptions as AuthSchemeOptionResolver;
 
 /// Resolver for auth scheme options.
 ///
@@ -187,10 +185,9 @@ impl AuthScheme for SharedAuthScheme {
     }
 }
 
-impl_shared_conversions!(convert SharedAuthScheme from AuthScheme using SharedAuthScheme::new);
+impl ValidateConfig for SharedAuthScheme {}
 
-#[deprecated(note = "Renamed to Sign.")]
-pub use Sign as Signer;
+impl_shared_conversions!(convert SharedAuthScheme from AuthScheme using SharedAuthScheme::new);
 
 /// Signing implementation for an auth scheme.
 pub trait Sign: Send + Sync + fmt::Debug {

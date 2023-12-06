@@ -80,7 +80,7 @@ class LibRsGenerator(
                         writeTo(this)
                     }
 
-                    // TODO(https://github.com/awslabs/smithy-rs/issues/69): Generate a basic example for all crates (eg. select first operation and render an example of usage)
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/69): Generate a basic example for all crates (eg. select first operation and render an example of usage)
                     settings.examplesUri?.also { uri ->
                         containerDocs("Examples can be found [here]($uri).")
                     }

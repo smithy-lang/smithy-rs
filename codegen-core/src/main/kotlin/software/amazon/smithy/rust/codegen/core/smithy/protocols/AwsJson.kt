@@ -50,11 +50,11 @@ class AwsJsonHttpBindingResolver(
 
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2237): support non-streaming members too
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): support non-streaming members too
         if (members.size > 1 && members.any { it.isStreaming(model) }) {
             throw CodegenException(
                 "We only support one payload member if that payload contains a streaming member." +
-                    "Tracking issue to relax this constraint: https://github.com/awslabs/smithy-rs/issues/2237",
+                    "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/2237",
             )
         }
 
@@ -127,7 +127,7 @@ open class AwsJson(
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
+        "Headers" to RuntimeType.headers(runtimeConfig),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
@@ -157,7 +157,7 @@ open class AwsJson(
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
@@ -171,7 +171,7 @@ open class AwsJson(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate
-                    #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
+                    #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,
                 *errorScope,

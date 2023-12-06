@@ -8,10 +8,14 @@ package software.amazon.smithy.rust.codegen.core.util
 import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
+import java.util.logging.Logger
 
 data class CommandError(val output: String) : Exception("Command Error\n$output")
 
 fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = mapOf(), timeout: Long = 3600): String {
+    val logger = Logger.getLogger("RunCommand")
+    logger.fine("Invoking comment $this in `$workdir` with env $environment")
+    val start = System.currentTimeMillis()
     val parts = this.split("\\s".toRegex())
     val builder = ProcessBuilder(*parts.toTypedArray())
         .redirectOutput(ProcessBuilder.Redirect.PIPE)
@@ -38,5 +42,8 @@ fun String.runCommand(workdir: Path? = null, environment: Map<String, String> = 
         throw CommandError("$this was not a valid command.\n  Hint: is everything installed?\n$err")
     } catch (other: Exception) {
         throw CommandError("Unexpected exception thrown when executing subprocess:\n$other")
+    } finally {
+        val end = System.currentTimeMillis()
+        logger.fine("command duration: ${end - start}ms")
     }
 }

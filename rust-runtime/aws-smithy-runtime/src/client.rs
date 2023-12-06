@@ -6,6 +6,8 @@
 /// Smithy auth scheme implementations.
 pub mod auth;
 
+pub mod defaults;
+
 pub mod dns;
 
 /// Built-in Smithy HTTP clients and connectors.
@@ -39,3 +41,6 @@ pub mod identity;
 
 /// Interceptors for Smithy clients.
 pub mod interceptors;
+
+/// Stalled stream protection for clients
+pub mod stalled_stream_protection;

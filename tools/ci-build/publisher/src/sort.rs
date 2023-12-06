@@ -12,9 +12,9 @@ use std::collections::{BTreeMap, BTreeSet};
 /// Determines the dependency order of the given packages.
 pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
     let mut order = Vec::new();
-    let mut packages: BTreeMap<String, Package> = packages
+    let mut packages: BTreeMap<PackageHandle, Package> = packages
         .into_iter()
-        .map(|p| (p.handle.name.clone(), p))
+        .map(|p| (p.handle.clone(), p))
         .collect();
     let mut visited = BTreeSet::new();
 
@@ -22,7 +22,7 @@ pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
     to_visit.sort_by(|a, b| a.local_dependencies.len().cmp(&b.local_dependencies.len()));
 
     // Depth-first search topological sort
-    while let Some(package) = to_visit.iter().find(|e| !visited.contains(&e.handle.name)) {
+    while let Some(package) = to_visit.iter().find(|e| !visited.contains(&e.handle)) {
         dependency_order_visit(
             &package.handle,
             &packages,
@@ -34,28 +34,27 @@ pub fn dependency_order(packages: Vec<Package>) -> Result<Vec<Package>> {
 
     Ok(order
         .into_iter()
-        .map(&mut |handle: PackageHandle| packages.remove(&handle.name).unwrap())
+        .map(&mut |handle: PackageHandle| packages.remove(&handle).unwrap())
         .collect())
 }
 
 fn dependency_order_visit(
     package_handle: &PackageHandle,
-    packages: &BTreeMap<String, Package>,
-    stack: &mut BTreeSet<String>,
-    visited: &mut BTreeSet<String>,
+    packages: &BTreeMap<PackageHandle, Package>,
+    stack: &mut BTreeSet<PackageHandle>,
+    visited: &mut BTreeSet<PackageHandle>,
     result: &mut Vec<PackageHandle>,
 ) -> Result<()> {
-    let crate_name = &package_handle.name;
-    if visited.contains(crate_name) {
+    if visited.contains(package_handle) {
         return Ok(());
     }
-    if stack.contains(crate_name) {
+    if stack.contains(package_handle) {
         tracing::error!(stack = ?stack, handle = ?package_handle, "dependency cycle!");
         bail!("dependency cycle detected");
     }
-    stack.insert(crate_name.clone());
+    stack.insert(package_handle.clone());
     let local_dependencies = &packages
-        .get(crate_name)
+        .get(package_handle)
         .ok_or_else(|| {
             dbg!(packages);
             anyhow!("packages to publish doesn't contain {:?}", package_handle)
@@ -64,8 +63,8 @@ fn dependency_order_visit(
     for dependency in local_dependencies {
         dependency_order_visit(dependency, packages, stack, visited, result)?;
     }
-    stack.remove(crate_name);
-    visited.insert(crate_name.clone());
+    stack.remove(package_handle);
+    visited.insert(package_handle.clone());
     result.push(package_handle.clone());
     Ok(())
 }

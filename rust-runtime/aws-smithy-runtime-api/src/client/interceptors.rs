@@ -15,6 +15,7 @@ use crate::client::interceptors::context::{
     BeforeTransmitInterceptorContextRef, FinalizerInterceptorContextMut,
     FinalizerInterceptorContextRef,
 };
+use crate::client::runtime_components::sealed::ValidateConfig;
 use crate::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use std::fmt;
@@ -53,9 +54,6 @@ macro_rules! interceptor_trait_fn {
         }
     };
 }
-
-#[deprecated(note = "Renamed to Intercept.")]
-pub use Intercept as Interceptor;
 
 /// An interceptor allows injecting code into the SDK ’s request execution pipeline.
 ///
@@ -620,6 +618,8 @@ impl SharedInterceptor {
         (self.check_enabled)(conf)
     }
 }
+
+impl ValidateConfig for SharedInterceptor {}
 
 impl Intercept for SharedInterceptor {
     fn name(&self) -> &'static str {

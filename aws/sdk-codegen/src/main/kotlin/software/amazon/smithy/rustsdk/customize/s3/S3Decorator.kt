@@ -88,6 +88,7 @@ class S3Decorator : ClientCodegenDecorator {
             )
             // enable optional auth for operations commonly used with public buckets
             .let(AddOptionalAuth()::transform)
+            .let(MakeS3BoolsAndNumbersOptional()::processModel)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
@@ -184,8 +185,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadata" to RuntimeType.errorMetadata(runtimeConfig),
         "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.HttpHeaderMap,
-        "Response" to RuntimeType.HttpResponse,
+        "Headers" to RuntimeType.headers(runtimeConfig),
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
     )
@@ -193,7 +193,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
         return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> #{Result}<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(

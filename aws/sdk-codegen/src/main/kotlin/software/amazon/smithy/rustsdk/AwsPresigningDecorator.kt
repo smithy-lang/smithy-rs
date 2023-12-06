@@ -149,7 +149,7 @@ class AwsPresignedFluentBuilderMethod(
                     *codegenScope,
                     "OpError" to section.operationErrorType,
                     "RawResponseType" to
-                        RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+                        RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
                 ) {
                     renderPresignedMethodBody(section)
                 }
@@ -185,13 +185,13 @@ class AwsPresignedFluentBuilderMethod(
                     })
                 })?;
             let request = context.take_request().expect("request set before transmit");
-            Ok(#{PresignedRequest}::new(request))
+            #{PresignedRequest}::new(request).map_err(#{SdkError}::construction_failure)
             """,
             *codegenScope,
             "Operation" to codegenContext.symbolProvider.toSymbol(section.operationShape),
             "OperationError" to section.operationErrorType,
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-            "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors")
+            "SharedInterceptor" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors")
                 .resolve("SharedInterceptor"),
             "SigV4PresigningRuntimePlugin" to AwsRuntimeType.presigningInterceptor(runtimeConfig)
                 .resolve("SigV4PresigningRuntimePlugin"),
@@ -217,7 +217,7 @@ class AwsPresignedFluentBuilderMethod(
                         "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
                         "Layer" to smithyTypes.resolve("config_bag::Layer"),
                         "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
-                        "SharedRequestSerializer" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+                        "SharedRequestSerializer" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
                             .resolve("client::ser_de::SharedRequestSerializer"),
                     )
                 }

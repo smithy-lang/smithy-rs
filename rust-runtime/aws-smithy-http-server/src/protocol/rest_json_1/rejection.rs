@@ -48,6 +48,7 @@
 //! Consult `crate::protocol::$protocolName::rejection` for rejection types for other protocols.
 
 use crate::rejection::MissingContentTypeReason;
+use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
@@ -67,7 +68,7 @@ pub enum ResponseRejection {
     /// `httpHeader` or `httpPrefixHeaders`.
     /// Used when failing to serialize an `httpPayload`-bound struct into an HTTP response body.
     #[error("error building HTTP response: {0}")]
-    Build(#[from] aws_smithy_http::operation::error::BuildError),
+    Build(#[from] aws_smithy_types::error::operation::BuildError),
 
     /// Used when failing to serialize a struct into a `String` for the JSON-encoded HTTP response
     /// body.
@@ -76,7 +77,7 @@ pub enum ResponseRejection {
     /// supplied timestamp is outside of the valid range when formatting using RFC-3339, i.e. a
     /// date outside the `0001-01-01T00:00:00.000Z`-`9999-12-31T23:59:59.999Z` range is supplied.
     #[error("error serializing JSON-encoded body: {0}")]
-    Serialization(#[from] aws_smithy_http::operation::error::SerializationError),
+    Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
 
     /// Used when consuming an [`http::response::Builder`] into the constructed [`http::Response`]
     /// when calling [`http::response::Builder::body`].
@@ -116,7 +117,7 @@ pub enum RequestRejection {
 
     /// Used when checking the `Content-Type` header.
     /// This is bubbled up in the generated SDK when calling
-    /// [`crate::protocol::content_type_header_classifier`] in `from_request`.
+    /// [`crate::protocol::content_type_header_classifier_smithy`] in `from_request`.
     #[error("expected `Content-Type` header not found: {0}")]
     MissingContentType(#[from] MissingContentTypeReason),
 
@@ -163,6 +164,10 @@ pub enum RequestRejection {
     // This rejection is constructed directly in the code-generated SDK instead of in this crate.
     #[error("request does not adhere to modeled constraints: {0}")]
     ConstraintViolation(String),
+
+    /// Typically happens when the request has headers that are not valid UTF-8.
+    #[error("failed to convert request: {0}")]
+    HttpConversion(#[from] HttpError),
 }
 
 // Consider a conversion between `T` and `U` followed by a bubbling up of the conversion error

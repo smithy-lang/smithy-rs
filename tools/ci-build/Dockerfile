@@ -74,11 +74,11 @@ COPY . tools/ci-build
 # when `checkout_smithy_rs_tools` is set to true, this commit will be checked out
 ARG smithy_rs_commit_hash=main
 # If the `checkout_smithy_rs_tools` arg is set to true, then the Dockerfile will acquire the tools
-# source code by checking out awslabs/smithy-rs/main rather than copying them from the local directory.
+# source code by checking out smithy-lang/smithy-rs/main rather than copying them from the local directory.
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
-        git clone https://github.com/awslabs/smithy-rs.git; \
+        git clone https://github.com/smithy-lang/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
@@ -133,7 +133,7 @@ ARG cargo_wasi_version=0.1.27
 RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.24.0
+ARG cargo_semver_checks_version=0.24.1
 RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook

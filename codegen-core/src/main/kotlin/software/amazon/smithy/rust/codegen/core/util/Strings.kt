@@ -19,13 +19,16 @@ fun String.doubleQuote(): String =
 fun String.dq(): String = this.doubleQuote()
 
 private val completeWords: List<String> = listOf("ipv4", "ipv6", "sigv4", "mib", "gib", "kib", "ttl")
+
 private fun String.splitOnWordBoundaries(): List<String> {
     val out = mutableListOf<String>()
     // These are whole words but cased differently, e.g. `IPv4`, `MiB`, `GiB`, `TtL`
     var currentWord = ""
 
+    var completeWordInProgress = true
     // emit the current word and update from the next character
     val emit = { next: Char ->
+        completeWordInProgress = true
         if (currentWord.isNotEmpty()) {
             out += currentWord.lowercase()
         }
@@ -37,13 +40,17 @@ private fun String.splitOnWordBoundaries(): List<String> {
     }
     val allLowerCase = this.lowercase() == this
     this.forEachIndexed { index, nextCharacter ->
-        val peek = this.getOrNull(index + 1)
-        val doublePeek = this.getOrNull(index + 2)
-        val completeWordInProgress = completeWords.any {
-            (currentWord + this.substring(index)).lowercase().startsWith(
-                it,
-            )
-        } && !completeWords.contains(currentWord.lowercase())
+        val computeWordInProgress = {
+            val result = completeWordInProgress && currentWord.isNotEmpty() && completeWords.any {
+                it.startsWith(currentWord, ignoreCase = true) && (currentWord + this.substring(index)).startsWith(
+                    it,
+                    ignoreCase = true,
+                ) && !it.equals(currentWord, ignoreCase = true)
+            }
+
+            completeWordInProgress = result
+            result
+        }
         when {
             // [C] in these docs indicates the value of nextCharacter
             // A[_]B
@@ -53,15 +60,15 @@ private fun String.splitOnWordBoundaries(): List<String> {
             currentWord.isEmpty() -> currentWord += nextCharacter.toString()
 
             // Abc[D]ef or Ab2[D]ef
-            !completeWordInProgress && loweredFollowedByUpper(currentWord, nextCharacter) -> emit(nextCharacter)
+            !computeWordInProgress() && loweredFollowedByUpper(currentWord, nextCharacter) -> emit(nextCharacter)
 
             // s3[k]ey
-            !completeWordInProgress && allLowerCase && digitFollowedByLower(currentWord, nextCharacter) -> emit(
+            !computeWordInProgress() && allLowerCase && digitFollowedByLower(currentWord, nextCharacter) -> emit(
                 nextCharacter,
             )
 
             // DB[P]roxy, or `IAM[U]ser` but not AC[L]s
-            endOfAcronym(currentWord, nextCharacter, peek, doublePeek) -> emit(nextCharacter)
+            endOfAcronym(currentWord, nextCharacter, this.getOrNull(index + 1), this.getOrNull(index + 2)) -> emit(nextCharacter)
 
             // If we haven't found a word boundary, push it and keep going
             else -> currentWord += nextCharacter.toString()
@@ -118,6 +125,6 @@ fun String.toSnakeCase(): String {
 }
 
 fun String.toPascalCase(): String {
-    // TODO(https://github.com/awslabs/smithy-rs/issues/3047): consider using our updated toSnakeCase (but need to audit diff)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3047): consider using our updated toSnakeCase (but need to audit diff)
     return CaseUtils.toSnakeCase(this).let { CaseUtils.toPascalCase(it) }
 }

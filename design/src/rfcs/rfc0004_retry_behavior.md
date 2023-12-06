@@ -174,7 +174,7 @@ Changes checklist
 -----------------
 
 - [x] Create new Kotlin decorator `RetryConfigDecorator`
-  - Based on [RegionDecorator.kt](https://github.com/awslabs/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt)
+  - Based on [RegionDecorator.kt](https://github.com/smithy-lang/smithy-rs/blob/main/aws/sdk-codegen/src/main/kotlin/software/amazon/smithy/rustsdk/RegionDecorator.kt)
   - This decorator will live in the `codegen` project because it has relevance outside the SDK
 - [x] **Breaking changes:**
   - [x] Rename `aws_smithy_client::retry::Config` to `StandardRetryConfig`

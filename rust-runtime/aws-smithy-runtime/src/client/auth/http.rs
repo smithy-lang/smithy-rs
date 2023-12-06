@@ -95,8 +95,8 @@ impl Sign for ApiKeySigner {
                 request
                     .headers_mut()
                     .try_append(
-                        self.name.clone(),
-                        format!("{} {}", self.scheme, api_key.token(),),
+                        self.name.to_ascii_lowercase(),
+                        format!("{} {}", self.scheme, api_key.token()),
                     )
                     .map_err(|_| {
                         "API key contains characters that can't be included in a HTTP header"
@@ -284,9 +284,9 @@ impl Sign for DigestAuthSigner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime_api::client::identity::http::Login;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use aws_smithy_types::body::SdkBody;
 
     #[test]
     fn test_api_key_signing_headers() {
@@ -387,6 +387,34 @@ mod tests {
         let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
         let identity = Identity::new(Token::new("some-token", None), None);
         let mut request = http::Request::builder()
+            .body(SdkBody::empty())
+            .unwrap()
+            .try_into()
+            .unwrap();
+        signer
+            .sign_http_request(
+                &mut request,
+                &identity,
+                AuthSchemeEndpointConfig::empty(),
+                &runtime_components,
+                &config_bag,
+            )
+            .expect("success");
+        assert_eq!(
+            "Bearer some-token",
+            request.headers().get("Authorization").unwrap()
+        );
+    }
+
+    #[test]
+    fn test_bearer_auth_overwrite_existing_header() {
+        let signer = BearerAuthSigner;
+
+        let config_bag = ConfigBag::base();
+        let runtime_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let identity = Identity::new(Token::new("some-token", None), None);
+        let mut request = http::Request::builder()
+            .header("Authorization", "wrong")
             .body(SdkBody::empty())
             .unwrap()
             .try_into()

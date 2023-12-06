@@ -46,4 +46,7 @@
 - [RFC-0034: The Orchestrator Architecture](./rfc0034_smithy_orchestrator.md)
 - [RFC-0035: Sensible Defaults for Collection Values](./rfc0035_collection_defaults.md)
 - [RFC-0036: Enabling HTTP crate upgrades in the future](./rfc0036_http_dep_elimination.md)
-- [RFC-0037: The HTTP wrapper type](./rfc0037_http_wrapper_type.md)
+- [RFC-0037: The HTTP wrapper type](./rfc0037_http_wrapper.md)
+- [RFC-0038: Retry Classifier Customization](./rfc0038_retry_classifier_customization.md)
+- [RFC-0039: Forward Compatible Errors](./rfc0039_forward_compatible_errors.md)
+- [RFC-0040: Behavior Versions](./rfc0040_behavior_versions.md)

@@ -25,7 +25,7 @@ export class PullRequestCdnStack extends Stack {
 
         this.smithyRsOidcRole = new GitHubOidcRole(this, "smithy-rs", {
             name: "smithy-rs-pull-request",
-            githubOrg: "awslabs",
+            githubOrg: "smithy-lang",
             githubRepo: "smithy-rs",
             oidcProvider: props.githubActionsOidcProvider,
         });

@@ -53,7 +53,7 @@ class ServerBuilderDefaultValuesTest {
         "Float" to "0.5",
         "Double" to "0.55",
         "Timestamp" to "1985-04-12T23:20:50.52Z".dq(),
-        // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/awslabs/smithy-rs/issues/312)
+        // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/smithy-lang/smithy-rs/issues/312)
         "StringList" to "[]",
         "IntegerMap" to "{}",
         "Language" to "en".dq(),
@@ -77,7 +77,7 @@ class ServerBuilderDefaultValuesTest {
         "Float" to "0.6",
         "Double" to "0.66",
         "Timestamp" to "2022-11-25T17:30:50.00Z".dq(),
-        // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/awslabs/smithy-rs/issues/312)
+        // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/smithy-lang/smithy-rs/issues/312)
         "StringList" to "[]",
         "IntegerMap" to "{}",
         "Language" to "fr".dq(),

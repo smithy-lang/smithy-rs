@@ -38,7 +38,7 @@ pub enum Error {
 
 // This constant determines when the `TinyMap` implementation switches from being a `Vec` to a
 // `HashMap`. This is chosen to be 15 as a result of the discussion around
-// https://github.com/awslabs/smithy-rs/pull/1429#issuecomment-1147516546
+// https://github.com/smithy-lang/smithy-rs/pull/1429#issuecomment-1147516546
 const ROUTE_CUTOFF: usize = 15;
 
 /// A [`Router`] supporting [`AWS JSON 1.0`] and [`AWS JSON 1.1`] protocols.

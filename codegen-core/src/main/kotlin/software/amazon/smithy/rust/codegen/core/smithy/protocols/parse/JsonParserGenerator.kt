@@ -551,13 +551,18 @@ class JsonParserGenerator(
                         objectKeyLoop(hasMembers = shape.members().isNotEmpty()) {
                             rustTemplate(
                                 """
+                                let key = key.to_unescaped()?;
+                                if key == "__type" {
+                                    #{skip_value}(tokens)?;
+                                    continue
+                                }
                                 if variant.is_some() {
                                     return Err(#{Error}::custom("encountered mixed variants in union"));
                                 }
                                 """,
                                 *codegenScope,
                             )
-                            withBlock("variant = match key.to_unescaped()?.as_ref() {", "};") {
+                            withBlock("variant = match key.as_ref() {", "};") {
                                 for (member in shape.members()) {
                                     val variantName = symbolProvider.toMemberName(member)
                                     rustBlock("${jsonName(member).dq()} =>") {

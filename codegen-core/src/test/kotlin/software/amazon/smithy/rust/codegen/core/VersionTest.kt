@@ -21,7 +21,7 @@ class VersionTest {
     ) {
         val version = Version.parse(content)
         version.fullVersion shouldBe fullVersion
-        version.crateVersion shouldBe crateVersion
+        version.stableCrateVersion shouldBe crateVersion
     }
 
     @ParameterizedTest()
@@ -36,29 +36,14 @@ class VersionTest {
         @JvmStatic
         fun versionProvider() = listOf(
             Arguments.of(
-                "0.47.0\n0198d26096eb1af510ce24766c921ffc5e4c191e",
-                "0.47.0-0198d26096eb1af510ce24766c921ffc5e4c191e",
-                "0.47.0",
+                """{ "stableVersion": "1.0.1", "unstableVersion": "0.60.1","githash": "0198d26096eb1af510ce24766c921ffc5e4c191e", "runtimeCrates": {} }""",
+                "1.0.1-0198d26096eb1af510ce24766c921ffc5e4c191e",
+                "1.0.1",
             ),
             Arguments.of(
-                "release-2022-08-04\ndb48039065bec890ef387385773b37154b555b14",
+                """{ "unstableVersion": "0.60.1", "stableVersion": "release-2022-08-04", "githash": "db48039065bec890ef387385773b37154b555b14", "runtimeCrates": {} }""",
                 "release-2022-08-04-db48039065bec890ef387385773b37154b555b14",
                 "release-2022-08-04",
-            ),
-            Arguments.of(
-                "0.30.0-alpha\na1dbbe2947de3c8bbbef9446eb442e298f83f200",
-                "0.30.0-alpha-a1dbbe2947de3c8bbbef9446eb442e298f83f200",
-                "0.30.0-alpha",
-            ),
-            Arguments.of(
-                "0.6-rc1.cargo\nc281800a185b34600b05f8b501a0322074184123",
-                "0.6-rc1.cargo-c281800a185b34600b05f8b501a0322074184123",
-                "0.6-rc1.cargo",
-            ),
-            Arguments.of(
-                "0.27.0-alpha.1\n643f2ee",
-                "0.27.0-alpha.1-643f2ee",
-                "0.27.0-alpha.1",
             ),
         )
 

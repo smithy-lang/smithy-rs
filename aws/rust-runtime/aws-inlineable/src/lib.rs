@@ -22,9 +22,6 @@
 /// Interceptors for API Gateway
 pub mod apigateway_interceptors;
 
-/// Stub credentials provider for use when no credentials provider is used.
-pub mod no_credentials;
-
 /// Support types required for adding presigning to an operation in a generated service.
 pub mod presigning;
 
@@ -32,6 +29,7 @@ pub mod presigning;
 pub mod presigning_interceptors;
 
 /// Special logic for extracting request IDs from S3's responses.
+#[allow(dead_code)]
 pub mod s3_request_id;
 
 /// Glacier-specific behavior

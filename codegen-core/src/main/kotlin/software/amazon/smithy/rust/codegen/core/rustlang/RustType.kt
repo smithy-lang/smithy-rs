@@ -56,29 +56,29 @@ sealed class RustType {
      *
      * When formatted, the converted type will appear as such:
      *
-     * | Type                                               | Formatted                                                           |
-     * | -------------------------------------------------- | ------------------------------------------------------------------- |
-     * | RustType.Unit                                      | ()                                                                  |
-     * | RustType.Bool                                      | bool                                                                |
-     * | RustType.Float(32)                                 | f32                                                                 |
-     * | RustType.Float(64)                                 | f64                                                                 |
-     * | RustType.Integer(8)                                | i8                                                                  |
-     * | RustType.Integer(16)                               | i16                                                                 |
-     * | RustType.Integer(32)                               | i32                                                                 |
-     * | RustType.Integer(64)                               | i64                                                                 |
-     * | RustType.String                                    | std::string::String                                                 |
-     * | RustType.Vec(RustType.String)                      | std::vec::Vec<std::string::String>                                  |
-     * | RustType.Slice(RustType.String)                    | [std::string::String]                                               |
-     * | RustType.HashMap(RustType.String, RustType.String) | std::collections::HashMap<std::string::String, std::string::String> |
-     * | RustType.HashSet(RustType.String)                  | std::vec::Vec<std::string::String>                                  |
-     * | RustType.Reference("&", RustType.String)           | &std::string::String                                                |
-     * | RustType.Reference("&mut", RustType.String)        | &mut std::string::String                                            |
-     * | RustType.Reference("&'static", RustType.String)    | &'static std::string::String                                        |
-     * | RustType.Option(RustType.String)                   | std::option::Option<std::string::String>                            |
-     * | RustType.Box(RustType.String)                      | std::boxed::Box<std::string::String>                                |
-     * | RustType.Opaque("SoCool", "zelda_is")              | zelda_is::SoCool                                                    |
-     * | RustType.Opaque("SoCool")                          | SoCool                                                              |
-     * | RustType.Dyn(RustType.Opaque("Foo", "foo"))        | dyn foo::Foo                                                        |
+     * | Type                                               | Formatted                                                            |
+     * | -------------------------------------------------- | -------------------------------------------------------------------  |
+     * | RustType.Unit                                      | ()                                                                   |
+     * | RustType.Bool                                      | bool                                                                 |
+     * | RustType.Float(32)                                 | f32                                                                  |
+     * | RustType.Float(64)                                 | f64                                                                  |
+     * | RustType.Integer(8)                                | i8                                                                   |
+     * | RustType.Integer(16)                               | i16                                                                  |
+     * | RustType.Integer(32)                               | i32                                                                  |
+     * | RustType.Integer(64)                               | i64                                                                  |
+     * | RustType.String                                    | std::string::String                                                  |
+     * | RustType.Vec(RustType.String)                      | std::vec::Vec::<std::string::String>                                 |
+     * | RustType.Slice(RustType.String)                    | [std::string::String]                                                |
+     * | RustType.HashMap(RustType.String, RustType.String) | std::collections::HashMap::<std::string::String, std::string::String>|
+     * | RustType.HashSet(RustType.String)                  | std::vec::Vec::<std::string::String>                                 |
+     * | RustType.Reference("&", RustType.String)           | &std::string::String                                                 |
+     * | RustType.Reference("&mut", RustType.String)        | &mut std::string::String                                             |
+     * | RustType.Reference("&'static", RustType.String)    | &'static std::string::String                                         |
+     * | RustType.Option(RustType.String)                   | std::option::Option<std::string::String>                             |
+     * | RustType.Box(RustType.String)                      | std::boxed::Box<std::string::String>                                 |
+     * | RustType.Opaque("SoCool", "zelda_is")              | zelda_is::SoCool                                                     |
+     * | RustType.Opaque("SoCool")                          | SoCool                                                               |
+     * | RustType.Dyn(RustType.Opaque("Foo", "foo"))        | dyn foo::Foo                                                         |
      */
     val writable = writable { rustInlineTemplate("#{this}", "this" to this@RustType) }
 
@@ -244,10 +244,10 @@ fun RustType.render(fullyQualified: Boolean = true): String {
         is RustType.Float -> this.name
         is RustType.Integer -> this.name
         is RustType.String -> this.name
-        is RustType.Vec -> "${this.name}<${this.member.render(fullyQualified)}>"
+        is RustType.Vec -> "${this.name}::<${this.member.render(fullyQualified)}>"
         is RustType.Slice -> "[${this.member.render(fullyQualified)}]"
-        is RustType.HashMap -> "${this.name}<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
-        is RustType.HashSet -> "${this.name}<${this.member.render(fullyQualified)}>"
+        is RustType.HashMap -> "${this.name}::<${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}>"
+        is RustType.HashSet -> "${this.name}::<${this.member.render(fullyQualified)}>"
         is RustType.Reference -> {
             if (this.lifetime == "&") {
                 "&${this.member.render(fullyQualified)}"
@@ -282,6 +282,13 @@ fun <T : RustType> RustType.contains(t: T): Boolean = when (this) {
 inline fun <reified T : RustType.Container> RustType.stripOuter(): RustType = when (this) {
     is T -> this.member
     else -> this
+}
+
+/** Extracts the inner Reference type */
+fun RustType.innerReference(): RustType? = when (this) {
+    is RustType.Reference -> this
+    is RustType.Container -> this.member.innerReference()
+    else -> null
 }
 
 /** Wraps a type in Option if it isn't already */
@@ -478,7 +485,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
 
     // These were supposed to be a part of companion object but we decided to move it out to here to avoid NPE
     // You can find the discussion here.
-    // https://github.com/awslabs/smithy-rs/discussions/2248
+    // https://github.com/smithy-lang/smithy-rs/discussions/2248
     public fun SerdeSerialize(): Attribute {
         return Attribute(cfgAttr(all(writable("aws_sdk_unstable"), feature("serde-serialize")), derive(RuntimeType.SerdeSerialize)))
     }
@@ -524,7 +531,6 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
 
         val Test = Attribute("test")
         val TokioTest = Attribute(RuntimeType.Tokio.resolve("test").writable)
-        val TracedTest = Attribute(RuntimeType.TracingTest.resolve("traced_test").writable)
         val AwsSdkUnstableAttribute = Attribute(cfg("aws_sdk_unstable"))
 
         /**
