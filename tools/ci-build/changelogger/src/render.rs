@@ -295,8 +295,8 @@ fn update_changelogs(
             tag_name: release_metadata.tag.clone(),
             name: release_metadata.title.clone(),
             body: release_notes.clone(),
-            // All releases are pre-releases for now
-            prerelease: true,
+            // stable as of release-2023-11-21
+            prerelease: false,
         };
         std::fs::write(
             output_path.join(&release_metadata.manifest_name),

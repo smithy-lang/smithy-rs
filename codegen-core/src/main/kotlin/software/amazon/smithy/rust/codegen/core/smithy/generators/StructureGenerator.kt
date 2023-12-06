@@ -89,31 +89,15 @@ open class StructureGenerator(
     }
 
     /**
-     * Search for lifetimes used by the members of the struct and generate a declaration.
-     * e.g. `<'a, 'b>`
-     */
-    private fun lifetimeDeclaration(): String {
-        val lifetimes = members
-            .map { symbolProvider.toSymbol(it).rustType().innerReference() }
-            .mapNotNull {
-                when (it) {
-                    is RustType.Reference -> it.lifetime
-                    else -> null
-                }
-            }.toSet().sorted()
-        return if (lifetimes.isNotEmpty()) {
-            "<${lifetimes.joinToString { "'$it" }}>"
-        } else {
-            ""
-        }
-    }
-
-    /**
      * Render a custom debug implementation
      * When [SensitiveTrait] support is required, render a custom debug implementation to redact sensitive data
      */
     private fun renderDebugImpl() {
-        writer.rustBlock("impl ${lifetimeDeclaration()} #T for $name ${lifetimeDeclaration()}", RuntimeType.Debug) {
+        val lifetime = shape.lifetimeDeclaration(symbolProvider)
+        writer.rustBlock(
+            "impl ${shape.lifetimeDeclaration(symbolProvider)} #T for $name $lifetime",
+            RuntimeType.Debug,
+        ) {
             writer.rustBlock("fn fmt(&self, f: &mut #1T::Formatter<'_>) -> #1T::Result", RuntimeType.stdFmt) {
                 rust("""let mut formatter = f.debug_struct(${name.dq()});""")
                 members.forEach { member ->
@@ -134,8 +118,13 @@ open class StructureGenerator(
         if (accessorMembers.isEmpty()) {
             return
         }
-        val lifetimes = lifetimeDeclaration()
-        writer.rustBlock("impl $lifetimes $name $lifetimes") {
+        writer.rustBlock(
+            "impl ${shape.lifetimeDeclaration(symbolProvider)} $name ${
+                shape.lifetimeDeclaration(
+                    symbolProvider,
+                )
+            }",
+        ) {
             // Render field accessor methods
             forEachMember(accessorMembers) { member, memberName, memberSymbol ->
                 val memberType = memberSymbol.rustType()
@@ -146,6 +135,7 @@ open class StructureGenerator(
                         unwrapOrDefault = true
                         memberType.stripOuter<RustType.Option>().asDeref().asRef()
                     }
+
                     memberType.isCopy() -> memberType
                     memberType is RustType.Option && memberType.member.isDeref() -> memberType.asDeref()
                     memberType.isDeref() -> memberType.asDeref().asRef()
@@ -188,7 +178,7 @@ open class StructureGenerator(
         writer.deprecatedShape(shape)
         containerMeta.render(writer)
 
-        writer.rustBlock("struct $name ${lifetimeDeclaration()}") {
+        writer.rustBlock("struct $name ${shape.lifetimeDeclaration(symbolProvider)}") {
             writer.forEachMember(members) { member, memberName, memberSymbol ->
                 renderStructureMember(writer, member, memberName, memberSymbol)
             }
@@ -221,5 +211,21 @@ open class StructureGenerator(
             note = memberSymbol.renamedFrom()
                 ?.let { oldName -> "This member has been renamed from `$oldName`." },
         )
+    }
+}
+
+/**
+ * Search for lifetimes used by the members of the struct and generate a declaration.
+ * e.g. `<'a, 'b>`
+ */
+fun StructureShape.lifetimeDeclaration(symbolProvider: RustSymbolProvider): String {
+    val lifetimes = this.members()
+        .mapNotNull { symbolProvider.toSymbol(it).rustType().innerReference()?.let { it as RustType.Reference } }
+        .mapNotNull { it.lifetime }
+        .toSet().sorted()
+    return if (lifetimes.isNotEmpty()) {
+        "<${lifetimes.joinToString { "'$it" }}>"
+    } else {
+        ""
     }
 }

@@ -34,7 +34,7 @@
 //! you absolutely require your middleware to run after deserialization, or to act on particular
 //! fields of your deserialized operation's input/output/errors.
 //!
-//! [the book]: https://awslabs.github.io/smithy-rs/design/server/anatomy.html
+//! [the book]: https://smithy-lang.github.io/smithy-rs/design/server/anatomy.html
 //!
 //! # Filtered application of a HTTP [`Layer`](tower::Layer)
 //!

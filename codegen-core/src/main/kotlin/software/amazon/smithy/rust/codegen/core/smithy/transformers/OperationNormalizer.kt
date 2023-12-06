@@ -62,7 +62,7 @@ object OperationNormalizer {
         check(
             shapeConflict == null,
         ) {
-            "shape $shapeConflict conflicted with an existing shape in the model (${model.getShape(shapeConflict!!.id)}. This is a bug."
+            "shape $shapeConflict conflicted with an existing shape in the model (${model.expectShape(shapeConflict!!.id)}). This is a bug."
         }
         val modelWithOperationInputs = model.toBuilder().addShapes(newShapes).build()
         return transformer.mapShapes(modelWithOperationInputs) {
