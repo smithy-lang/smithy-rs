@@ -25,6 +25,7 @@ impl ConnectionMetadata {
         (self.poison_fn)()
     }
 
+    /// Create a new [`ConnectionMetadata`].
     pub fn new(
         is_proxied: bool,
         remote_addr: Option<SocketAddr>,
