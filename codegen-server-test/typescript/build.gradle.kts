@@ -39,10 +39,12 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
-val allCodegenTests = listOf(
-    CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("../../codegen-core/common-test-models/simple.smithy")),
-    CodegenTest("com.aws.example.ts#PokemonService", "pokemon-service-server-sdk"),
-)
+val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels ->
+    listOf(
+        CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
+        CodegenTest("com.aws.example.ts#PokemonService", "pokemon-service-server-sdk"),
+    )
+}
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
