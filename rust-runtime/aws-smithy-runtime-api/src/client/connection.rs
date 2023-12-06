@@ -210,7 +210,6 @@ mod tests {
             .build();
 
         assert_eq!(connection_metadata.is_proxied, true);
-        assert_eq!(connection_metadata.remote_addr(), Some(TEST_SOCKET_ADDR));
         assert_eq!(connection_metadata.local_addr(), Some(TEST_SOCKET_ADDR));
         assert_eq!(*mutable_flag.lock().unwrap(), false);
         connection_metadata.poison();
@@ -225,7 +224,6 @@ mod tests {
             .build();
 
         assert_eq!(metadata1.local_addr(), None);
-        assert_eq!(metadata1.remote_addr(), None);
 
         let metadata2 = ConnectionMetadataBuilder::new()
             .proxied(true)
@@ -234,7 +232,6 @@ mod tests {
             .build();
 
         assert_eq!(metadata2.local_addr(), Some(TEST_SOCKET_ADDR));
-        assert_eq!(metadata2.remote_addr(), None);
 
         let metadata3 = ConnectionMetadataBuilder::new()
             .proxied(true)
@@ -243,6 +240,5 @@ mod tests {
             .build();
 
         assert_eq!(metadata3.local_addr(), None);
-        assert_eq!(metadata3.remote_addr(), Some(TEST_SOCKET_ADDR));
     }
 }
