@@ -25,21 +25,16 @@ impl ConnectionMetadata {
         (self.poison_fn)()
     }
 
-    /// Create a new [`ConnectionMetadata`].
-    #[deprecated(
-        since = "1.1.0",
-        note = "`ConnectionMetadata::new` is deprecated in favour of `ConnectionMetadata::builder`."
-    )]
     pub fn new(
         is_proxied: bool,
         remote_addr: Option<SocketAddr>,
+        local_addr: Option<SocketAddr>,
         poison: impl Fn() + Send + Sync + 'static,
     ) -> Self {
         Self {
             is_proxied,
             remote_addr,
-            // need to use builder to set this field
-            local_addr: None,
+            local_addr,
             poison_fn: Arc::new(poison),
         }
     }
