@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+use aws_smithy_runtime::client::http::connection_poisoning::CaptureSmithyConnection;
 /// This example demonstrates how an interceptor can be written to trace what is being
 /// serialized / deserialized on the wire.
 ///
@@ -59,7 +60,7 @@ impl Intercept for WireFormatInterceptor {
         &self,
         context: &BeforeDeserializationInterceptorContextRef<'_>,
         _runtime_components: &RuntimeComponents,
-        _cfg: &mut ConfigBag,
+        cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         // Get the response type from the context.
         let response = context.response();
@@ -68,6 +69,18 @@ impl Intercept for WireFormatInterceptor {
             tracing::info!(?response, "Response received:");
         } else {
             tracing::error!(?response);
+        }
+
+        // Print the connection information
+        let captured_connection = cfg.load::<CaptureSmithyConnection>().cloned();
+        if let Some(captured_connection) = captured_connection.and_then(|conn| conn.get()) {
+            tracing::info!(
+                remote_addr = ?captured_connection.remote_addr(),
+                local_addr = ?captured_connection.local_addr(),
+                "Captured connection info"
+            );
+        } else {
+            tracing::warn!("Connection info is missing!");
         }
 
         Ok(())

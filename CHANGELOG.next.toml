@@ -73,3 +73,9 @@ message = "Fix documentation and examples on HyperConnector and HyperClientBuild
 references = ["smithy-rs#3282"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = "Expose local socket address from ConnectionMetadata."
+references = ["aws-sdk-rust#990"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "declanvk"
