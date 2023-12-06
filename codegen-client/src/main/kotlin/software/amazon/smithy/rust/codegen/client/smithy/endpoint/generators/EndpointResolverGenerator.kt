@@ -19,8 +19,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
@@ -34,7 +34,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -138,7 +137,7 @@ internal class EndpointResolverGenerator(
         "ResolveEndpointError" to types.resolveEndpointError,
         "EndpointError" to types.resolveEndpointError,
         "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
-        "DiagnosticCollector" to endpointsLib("diagnostic").toType().resolve("DiagnosticCollector"),
+        "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
     )
 
     private val allowLintsForResolver = listOf(

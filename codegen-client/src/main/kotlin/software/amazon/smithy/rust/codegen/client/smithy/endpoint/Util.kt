@@ -20,10 +20,12 @@ import software.amazon.smithy.rulesengine.traits.ContextParamTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointStdLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
+import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -43,16 +45,33 @@ fun Identifier.rustName(): String {
 }
 
 /**
- * Endpoints standard library file
+ * Endpoints standard library
  */
-internal fun endpointsLib(name: String, vararg additionalDependency: RustDependency) = InlineDependency.forRustFile(
-    RustModule.pubCrate(
-        name,
-        parent = EndpointStdLib,
-    ),
-    "/inlineable/src/endpoint_lib/$name.rs",
-    *additionalDependency,
-)
+object EndpointsLib {
+    val DiagnosticCollector = endpointsLib("diagnostic").toType().resolve("DiagnosticCollector")
+    fun PartitionResolver(runtimeConfig: RuntimeConfig) =
+        endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
+            .resolve("PartitionResolver")
+
+    val substring = endpointsLib("substring").toType().resolve("substring")
+    val isValidHostLabel = endpointsLib("host").toType().resolve("is_valid_host_label")
+    val parseUrl = endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url).toType().resolve("parse_url")
+    val uriEncode = endpointsLib("uri_encode", CargoDependency.PercentEncoding).toType().resolve("uri_encode")
+
+    val awsParseArn = endpointsLib("arn").toType().resolve("parse_arn")
+    val awsIsVirtualHostableS3Bucket =
+        endpointsLib("s3", endpointsLib("host"), CargoDependency.OnceCell, CargoDependency.RegexLite).toType()
+            .resolve("is_virtual_hostable_s3_bucket")
+
+    private fun endpointsLib(name: String, vararg additionalDependency: RustDependency) = InlineDependency.forRustFile(
+        RustModule.pubCrate(
+            name,
+            parent = EndpointStdLib,
+        ),
+        "/inlineable/src/endpoint_lib/$name.rs",
+        *additionalDependency,
+    )
+}
 
 class Types(runtimeConfig: RuntimeConfig) {
     private val smithyTypesEndpointModule = RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
