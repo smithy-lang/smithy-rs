@@ -19,13 +19,12 @@ class ConfigOverrideRuntimePluginGenerator(
 ) {
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *RuntimeType.preludeScope,
             "Cow" to RuntimeType.Cow,
             "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
-            "ConfigBagAccessors" to runtimeApi.resolve("client::config_bag_accessors::ConfigBagAccessors"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
@@ -49,6 +48,7 @@ class ConfigOverrideRuntimePluginGenerator(
             }
 
             impl ConfigOverrideRuntimePlugin {
+                ##[allow(dead_code)] // unused when a service does not provide any operations
                 pub(crate) fn new(
                     config_override: Builder,
                     initial_config: #{FrozenLayer},
@@ -56,6 +56,7 @@ class ConfigOverrideRuntimePluginGenerator(
                 ) -> Self {
                     let mut layer = config_override.config;
                     let mut components = config_override.runtime_components;
+                    ##[allow(unused_mut)]
                     let mut resolver = #{Resolver}::overrid(initial_config, initial_components, &mut layer, &mut components);
 
                     #{config}
@@ -74,7 +75,7 @@ class ConfigOverrideRuntimePluginGenerator(
                     Some(self.config.clone())
                 }
 
-                fn runtime_components(&self) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
                     #{Cow}::Borrowed(&self.components)
                 }
             }

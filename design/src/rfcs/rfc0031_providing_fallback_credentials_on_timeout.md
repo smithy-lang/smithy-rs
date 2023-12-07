@@ -1,6 +1,6 @@
 RFC: Providing fallback credentials on external timeout
 =======================================================
-> Status: Implemented in [smithy-rs#2246](https://github.com/awslabs/smithy-rs/pull/2246)
+> Status: Implemented in [smithy-rs#2246](https://github.com/smithy-lang/smithy-rs/pull/2246)
 >
 > Applies to: client
 

@@ -20,7 +20,7 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         val exception = shouldThrow<ValidatedResultException> {
             """
             namespace test
-    
+
             @pattern("\t")
             string MyString
             """.asSmithyModel(smithyVersion = "2")
@@ -32,7 +32,7 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         events[0].message shouldBe """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern("\\t")`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
         """.trimIndent()
     }
 
@@ -41,7 +41,7 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         val exception = shouldThrow<ValidatedResultException> {
             """
             namespace test
-    
+
             @pattern("[.\n\\r]+")
             string MyString
             """.asSmithyModel(smithyVersion = "2")
@@ -53,7 +53,7 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         events[0].message shouldBe """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern("[.\\n\\r]+")`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
         """.trimIndent()
     }
 
@@ -62,16 +62,16 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         val exception = shouldThrow<ValidatedResultException> {
             """
             namespace test
-    
+
             @pattern("\b")
             string MyString
-            
+
             @pattern("^\n$")
             string MyString2
-            
+
             @pattern("^[\n]+$")
             string MyString3
-            
+
             @pattern("^[\r\t]$")
             string MyString4
             """.asSmithyModel(smithyVersion = "2")
@@ -85,10 +85,10 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
         val exception = shouldThrow<ValidatedResultException> {
             """
             namespace test
-    
+
             @pattern("\t")
             string MyString
-            
+
             structure MyStructure {
                 @pattern("\b")
                 field: String
@@ -109,10 +109,10 @@ class PatternTraitEscapedSpecialCharsValidatorTest {
 
         @pattern("\\t")
         string MyString
-        
+
         @pattern("[.\\n\\r]+")
         string MyString2
-        
+
         @pattern("\\b\\f\\n\\r\\t")
         string MyString3
 

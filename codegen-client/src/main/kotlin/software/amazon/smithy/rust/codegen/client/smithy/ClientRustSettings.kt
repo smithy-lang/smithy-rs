@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.CODEGEN_SETTINGS
@@ -72,43 +73,6 @@ data class ClientRustSettings(
     }
 }
 
-// TODO(enableNewSmithyRuntimeCleanup): Remove this mode after switching to the orchestrator
-enum class SmithyRuntimeMode {
-    Middleware,
-    BothDefaultMiddleware,
-    BothDefaultOrchestrator,
-    Orchestrator,
-    ;
-
-    val exclusivelyGenerateMiddleware: Boolean get() = generateMiddleware && !generateOrchestrator
-
-    val generateMiddleware: Boolean get() = when (this) {
-        Middleware, BothDefaultMiddleware, BothDefaultOrchestrator -> true
-        else -> false
-    }
-
-    val generateOrchestrator: Boolean get() = when (this) {
-        Orchestrator, BothDefaultMiddleware, BothDefaultOrchestrator -> true
-        else -> false
-    }
-
-    val defaultToMiddleware: Boolean get() = when (this) {
-        Middleware, BothDefaultMiddleware -> true
-        else -> false
-    }
-    val defaultToOrchestrator: Boolean get() = !defaultToMiddleware
-
-    companion object {
-        fun fromString(value: String): SmithyRuntimeMode = when (value) {
-            "middleware" -> Middleware
-            "orchestrator" -> Orchestrator
-            "both_default_middleware" -> BothDefaultMiddleware
-            "both_default_orchestrator" -> BothDefaultOrchestrator
-            else -> throw IllegalArgumentException("unknown runtime mode: $value")
-        }
-    }
-}
-
 /**
  * [renameExceptions]: Rename `Exception` to `Error` in the generated SDK
  * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to `false`
@@ -118,42 +82,54 @@ enum class SmithyRuntimeMode {
 data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = defaultFormatTimeoutSeconds,
     override val debugMode: Boolean = defaultDebugMode,
+    override val flattenCollectionAccessors: Boolean = defaultFlattenAccessors,
+    val nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
     val renameExceptions: Boolean = defaultRenameExceptions,
     val includeFluentClient: Boolean = defaultIncludeFluentClient,
     val addMessageToErrors: Boolean = defaultAddMessageToErrors,
     // TODO(EventStream): [CLEANUP] Remove this property when turning on Event Stream for all services
     val eventStreamAllowList: Set<String> = defaultEventStreamAllowList,
-    // TODO(SmithyRuntime): Remove this once we commit to switch to aws-smithy-runtime and aws-smithy-runtime-api
-    val enableNewSmithyRuntime: SmithyRuntimeMode = defaultEnableNewSmithyRuntime,
+    /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
+    val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
+    val enableUserConfigurableRuntimePlugins: Boolean = defaultEnableUserConfigurableRuntimePlugins,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode,
+    formatTimeoutSeconds, debugMode, defaultFlattenAccessors,
 ) {
     companion object {
         private const val defaultRenameExceptions = true
         private const val defaultIncludeFluentClient = true
         private const val defaultAddMessageToErrors = true
         private val defaultEventStreamAllowList: Set<String> = emptySet()
-        private val defaultEnableNewSmithyRuntime = SmithyRuntimeMode.Middleware
+        private const val defaultIncludeEndpointUrlConfig = true
+        private const val defaultEnableUserConfigurableRuntimePlugins = true
+        private const val defaultNullabilityCheckMode = "CLIENT"
+
+        // Note: only clients default to true, servers default to false
+        private const val defaultFlattenAccessors = true
 
         fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
             if (node.isPresent) {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenAccessors),
                     debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList")
-                        .map { array -> array.toList().mapNotNull { node -> node.asStringNode().orNull()?.value } }
-                        .orNull()?.toSet() ?: defaultEventStreamAllowList,
+                    eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList").map { array ->
+                        array.toList().mapNotNull { node ->
+                            node.asStringNode().orNull()?.value
+                        }
+                    }.orNull()?.toSet() ?: defaultEventStreamAllowList,
                     renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
                     includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
                     addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                    enableNewSmithyRuntime = SmithyRuntimeMode.fromString(
-                        node.get().getStringMemberOrDefault("enableNewSmithyRuntime", "middleware"),
-                    ),
+                    includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
+                    enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
+                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", defaultNullabilityCheckMode)),
                 )
             } else {
                 ClientCodegenConfig(
                     formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
                     debugMode = coreCodegenConfig.debugMode,
+                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(defaultNullabilityCheckMode),
                 )
             }
     }

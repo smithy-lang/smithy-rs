@@ -11,8 +11,6 @@ use crate::plugin::{IdentityPlugin, Plugin, PluginStack};
 use super::{HttpMarker, LayerPlugin};
 
 /// A wrapper struct for composing HTTP plugins.
-/// It can be used as input for the `builder_with_plugins` method on the generated service struct
-/// (e.g. `PokemonService::builder_with_plugins`).
 ///
 /// ## Applying plugins in a sequence
 ///

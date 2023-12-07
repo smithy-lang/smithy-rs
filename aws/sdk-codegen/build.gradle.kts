@@ -23,29 +23,15 @@ val smithyVersion: String by project
 dependencies {
     implementation(project(":codegen-core"))
     implementation(project(":codegen-client"))
-    implementation("org.jsoup:jsoup:1.14.3")
+    implementation("org.jsoup:jsoup:1.15.3")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
-}
-
-val generateAwsRuntimeCrateVersion by tasks.registering {
-    // generate the version of the runtime to use as a resource.
-    // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rustsdk"
-    val versionFile = file("$resourcesDir/sdk-crate-version.txt")
-    outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"]?.toString()!!
-    inputs.property("crateVersion", crateVersion)
-    sourceSets.main.get().output.dir(resourcesDir)
-    doLast {
-        versionFile.writeText(crateVersion)
-    }
+    implementation("software.amazon.smithy:smithy-aws-endpoints:$smithyVersion")
 }
 
 tasks.compileKotlin {
     kotlinOptions.jvmTarget = "1.8"
-    dependsOn(generateAwsRuntimeCrateVersion)
 }
 
 // Reusable license copySpec
@@ -100,7 +86,7 @@ if (isTestingEnabled.toBoolean()) {
         reports {
             xml.required.set(false)
             csv.required.set(false)
-            html.outputLocation.set(file("$buildDir/reports/jacoco"))
+            html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
         }
     }
 
@@ -115,5 +101,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

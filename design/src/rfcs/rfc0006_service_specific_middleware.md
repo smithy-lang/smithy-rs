@@ -1,7 +1,7 @@
 RFC: Service-specific middleware
 ================================
 
-> Status: [Implemented](https://github.com/awslabs/smithy-rs/pull/959)
+> Status: [Implemented](https://github.com/smithy-lang/smithy-rs/pull/959)
 
 For a summarized list of proposed changes, see the [Changes Checklist](#changes-checklist) section.
 

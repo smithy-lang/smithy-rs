@@ -8,7 +8,7 @@ use smithy.test#httpRequestTests
 apply NotFound @httpResponseTests([
     {
         id: "HeadObjectEmptyBody",
-        documentation: "This test case validates https://github.com/awslabs/smithy-rs/issues/456",
+        documentation: "This test case validates https://github.com/smithy-lang/smithy-rs/issues/456",
         params: {
         },
         bodyMediaType: "application/xml",
@@ -225,6 +225,30 @@ apply HeadObject @httpRequestTests([
         params: {
             Bucket: "test-bucket",
             Key: "<> `?🐱",
+        },
+        vendorParams: {
+            "endpointParams": {
+                "builtInParams": {
+                    "AWS::Region": "us-east-1"
+                }
+            }
+        }
+    }
+])
+
+apply GetObject @httpRequestTests([
+    {
+        id: "GetObjectIfModifiedSince",
+        documentation: "https://github.com/awslabs/aws-sdk-rust/issues/818",
+
+        method: "GET",
+        protocol: "aws.protocols#restXml",
+        uri: "/object.txt",
+        headers: { "if-modified-since": "Fri, 16 Jul 2021 16:20:53 GMT" }
+        params: {
+            Bucket: "test-bucket",
+            Key: "object.txt"
+            IfModifiedSince: 1626452453.123,
         },
         vendorParams: {
             "endpointParams": {

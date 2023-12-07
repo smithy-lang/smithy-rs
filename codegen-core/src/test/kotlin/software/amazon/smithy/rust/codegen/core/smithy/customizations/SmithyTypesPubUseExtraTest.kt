@@ -7,9 +7,12 @@ package software.amazon.smithy.rust.codegen.core.smithy.customizations
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGeneratorTest.Companion.model
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 
 class SmithyTypesPubUseExtraTest {
@@ -43,61 +46,81 @@ class SmithyTypesPubUseExtraTest {
         """.asSmithyModel()
     }
 
-    private fun typesWithEmptyModel() = typesWithMember()
-    private fun typesWithMember(
+    private val rustCrate: RustCrate
+    private val codegenContext: CodegenContext = testCodegenContext(model)
+
+    init {
+        val (context, _) = generatePluginContext(
+            model,
+            runtimeConfig = codegenContext.runtimeConfig,
+        )
+        rustCrate = RustCrate(
+            context.fileManifest,
+            codegenContext.symbolProvider,
+            codegenContext.settings.codegenConfig,
+            codegenContext.expectModuleDocProvider(),
+        )
+    }
+
+    private fun reexportsWithEmptyModel() = reexportsWithMember()
+    private fun reexportsWithMember(
         inputMember: String = "",
         outputMember: String = "",
         unionMember: String = "",
         additionalShape: String = "",
-    ) = pubUseTypes(testCodegenContext(model), modelWithMember(inputMember, outputMember, unionMember, additionalShape))
+    ) = RustWriter.root().let { writer ->
+        pubUseSmithyPrimitives(
+            codegenContext,
+            modelWithMember(inputMember, outputMember, unionMember, additionalShape),
+            rustCrate,
+        )(writer)
+        writer.toString()
+    }
 
-    private fun assertDoesntHaveTypes(types: List<RuntimeType>, expectedTypes: List<String>) =
-        expectedTypes.forEach { assertDoesntHaveType(types, it) }
+    private fun assertDoesntHaveReexports(reexports: String, expectedTypes: List<String>) =
+        expectedTypes.forEach { assertDoesntHaveReexports(reexports, it) }
 
-    private fun assertDoesntHaveType(types: List<RuntimeType>, type: String) {
-        if (types.any { t -> t.fullyQualifiedName() == type }) {
+    private fun assertDoesntHaveReexports(reexports: String, type: String) {
+        if (reexports.contains(type)) {
             throw AssertionError("Expected $type to NOT be re-exported, but it was.")
         }
     }
 
-    private fun assertHasTypes(types: List<RuntimeType>, expectedTypes: List<String>) =
-        expectedTypes.forEach { assertHasType(types, it) }
+    private fun assertHasReexports(reexports: String, expectedTypes: List<String>) =
+        expectedTypes.forEach { assertHasReexport(reexports, it) }
 
-    private fun assertHasType(types: List<RuntimeType>, type: String) {
-        if (types.none { t -> t.fullyQualifiedName() == type }) {
-            throw AssertionError(
-                "Expected $type to be re-exported. Re-exported types: " +
-                    types.joinToString { it.fullyQualifiedName() },
-            )
+    private fun assertHasReexport(reexports: String, type: String) {
+        if (!reexports.contains(type)) {
+            throw AssertionError("Expected $type to be re-exported. Re-exported types:\n$reexports")
         }
     }
 
     @Test
     fun `it re-exports Blob when a model uses blobs`() {
-        assertDoesntHaveType(typesWithEmptyModel(), "::aws_smithy_types::Blob")
-        assertHasType(typesWithMember(inputMember = "foo: Blob"), "::aws_smithy_types::Blob")
-        assertHasType(typesWithMember(outputMember = "foo: Blob"), "::aws_smithy_types::Blob")
-        assertHasType(
-            typesWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
+        this.assertDoesntHaveReexports(reexportsWithEmptyModel(), "::aws_smithy_types::Blob")
+        assertHasReexport(reexportsWithMember(inputMember = "foo: Blob"), "::aws_smithy_types::Blob")
+        assertHasReexport(reexportsWithMember(outputMember = "foo: Blob"), "::aws_smithy_types::Blob")
+        assertHasReexport(
+            reexportsWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
             "::aws_smithy_types::Blob",
         )
-        assertHasType(
-            typesWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
+        assertHasReexport(
+            reexportsWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Blob"),
             "::aws_smithy_types::Blob",
         )
     }
 
     @Test
     fun `it re-exports DateTime when a model uses timestamps`() {
-        assertDoesntHaveType(typesWithEmptyModel(), "aws_smithy_types::DateTime")
-        assertHasType(typesWithMember(inputMember = "foo: Timestamp"), "::aws_smithy_types::DateTime")
-        assertHasType(typesWithMember(outputMember = "foo: Timestamp"), "::aws_smithy_types::DateTime")
-        assertHasType(
-            typesWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
+        this.assertDoesntHaveReexports(reexportsWithEmptyModel(), "aws_smithy_types::DateTime")
+        assertHasReexport(reexportsWithMember(inputMember = "foo: Timestamp"), "::aws_smithy_types::DateTime")
+        assertHasReexport(reexportsWithMember(outputMember = "foo: Timestamp"), "::aws_smithy_types::DateTime")
+        assertHasReexport(
+            reexportsWithMember(inputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
             "::aws_smithy_types::DateTime",
         )
-        assertHasType(
-            typesWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
+        assertHasReexport(
+            reexportsWithMember(outputMember = "foo: SomeUnion", unionMember = "foo: Timestamp"),
             "::aws_smithy_types::DateTime",
         )
     }
@@ -105,23 +128,23 @@ class SmithyTypesPubUseExtraTest {
     @Test
     fun `it re-exports ByteStream and AggregatedBytes when a model has streaming`() {
         val streamingTypes =
-            listOf("::aws_smithy_http::byte_stream::ByteStream", "::aws_smithy_http::byte_stream::AggregatedBytes")
+            listOf("::aws_smithy_types::byte_stream::ByteStream", "::aws_smithy_types::byte_stream::AggregatedBytes")
         val streamingShape = "@streaming blob Streaming"
 
-        assertDoesntHaveTypes(typesWithEmptyModel(), streamingTypes)
-        assertHasTypes(typesWithMember(additionalShape = streamingShape, inputMember = "m: Streaming"), streamingTypes)
-        assertHasTypes(typesWithMember(additionalShape = streamingShape, outputMember = "m: Streaming"), streamingTypes)
+        this.assertDoesntHaveReexports(reexportsWithEmptyModel(), streamingTypes)
+        assertHasReexports(reexportsWithMember(additionalShape = streamingShape, inputMember = "m: Streaming"), streamingTypes)
+        assertHasReexports(reexportsWithMember(additionalShape = streamingShape, outputMember = "m: Streaming"), streamingTypes)
 
         // Event streams don't re-export the normal streaming types
-        assertDoesntHaveTypes(
-            typesWithMember(
+        this.assertDoesntHaveReexports(
+            reexportsWithMember(
                 additionalShape = "@streaming union EventStream { foo: SomeStruct }",
                 inputMember = "m: EventStream",
             ),
             streamingTypes,
         )
-        assertDoesntHaveTypes(
-            typesWithMember(
+        this.assertDoesntHaveReexports(
+            reexportsWithMember(
                 additionalShape = "@streaming union EventStream { foo: SomeStruct }",
                 outputMember = "m: EventStream",
             ),

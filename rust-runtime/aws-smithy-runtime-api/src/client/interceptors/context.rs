@@ -28,7 +28,7 @@
 //! Use the [`ConfigBag`] instead.
 
 use crate::client::orchestrator::{HttpRequest, HttpResponse, OrchestratorError};
-use aws_smithy_http::result::SdkError;
+use crate::client::result::SdkError;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::type_erasure::{TypeErasedBox, TypeErasedError};
 use phase::Phase;
@@ -36,9 +36,66 @@ use std::fmt::Debug;
 use std::{fmt, mem};
 use tracing::{debug, error, trace};
 
-pub type Input = TypeErasedBox;
-pub type Output = TypeErasedBox;
-pub type Error = TypeErasedError;
+macro_rules! new_type_box {
+    ($name:ident, $doc:literal) => {
+        new_type_box!($name, TypeErasedBox, $doc, Send, Sync, fmt::Debug,);
+    };
+    ($name:ident, $underlying:ident, $doc:literal, $($additional_bound:path,)*) => {
+        #[doc = $doc]
+        #[derive(Debug)]
+        pub struct $name($underlying);
+
+        impl $name {
+            #[doc = concat!("Creates a new `", stringify!($name), "` with the provided concrete input value.")]
+            pub fn erase<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(input: T) -> Self {
+                Self($underlying::new(input))
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast_ref<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(&self) -> Option<&T> {
+                self.0.downcast_ref()
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast_mut<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(&mut self) -> Option<&mut T> {
+                self.0.downcast_mut()
+            }
+
+            #[doc = concat!("Downcasts to the concrete input value.")]
+            pub fn downcast<T: $($additional_bound +)* Send + Sync + fmt::Debug + 'static>(self) -> Result<T, Self> {
+                self.0.downcast::<T>().map(|v| *v).map_err(Self)
+            }
+
+            #[doc = concat!("Returns a `", stringify!($name), "` with a fake/test value with the expectation that it won't be downcast in the test.")]
+            #[cfg(feature = "test-util")]
+            pub fn doesnt_matter() -> Self {
+                Self($underlying::doesnt_matter())
+            }
+        }
+    };
+}
+
+new_type_box!(Input, "Type-erased operation input.");
+new_type_box!(Output, "Type-erased operation output.");
+new_type_box!(
+    Error,
+    TypeErasedError,
+    "Type-erased operation error.",
+    std::error::Error,
+);
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        self.0.source()
+    }
+}
+
+/// Type-erased result for an operation.
 pub type OutputOrError = Result<Output, OrchestratorError<Error>>;
 
 type Request = HttpRequest;
@@ -88,107 +145,113 @@ impl InterceptorContext<Input, Output, Error> {
     }
 }
 
-impl<I, O, E: Debug> InterceptorContext<I, O, E> {
-    /// Decomposes the context into its constituent parts.
-    #[doc(hidden)]
-    #[allow(clippy::type_complexity)]
-    pub fn into_parts(
-        self,
-    ) -> (
-        Option<I>,
-        Option<Result<O, OrchestratorError<E>>>,
-        Option<Request>,
-        Option<Response>,
-    ) {
-        (
-            self.input,
-            self.output_or_error,
-            self.request,
-            self.response,
-        )
-    }
-
-    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
-        let Self {
-            output_or_error,
-            response,
-            phase,
-            ..
-        } = self;
-        output_or_error
-            .expect("output_or_error must always be set before finalize is called.")
-            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
-    }
-
+impl<I, O, E> InterceptorContext<I, O, E> {
     /// Retrieve the input for the operation being invoked.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn input(&self) -> Option<&I> {
         self.input.as_ref()
     }
 
     /// Retrieve the input for the operation being invoked.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn input_mut(&mut self) -> Option<&mut I> {
         self.input.as_mut()
     }
 
     /// Takes ownership of the input.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn take_input(&mut self) -> Option<I> {
         self.input.take()
     }
 
     /// Set the request for the operation being invoked.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn set_request(&mut self, request: Request) {
         self.request = Some(request);
     }
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn request(&self) -> Option<&Request> {
         self.request.as_ref()
     }
 
     /// Retrieve the transmittable request for the operation being invoked.
     /// This will only be available once request marshalling has completed.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn request_mut(&mut self) -> Option<&mut Request> {
         self.request.as_mut()
     }
 
     /// Takes ownership of the request.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn take_request(&mut self) -> Option<Request> {
         self.request.take()
     }
 
     /// Set the response for the operation being invoked.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn set_response(&mut self, response: Response) {
         self.response = Some(response);
     }
 
     /// Returns the response.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn response(&self) -> Option<&Response> {
         self.response.as_ref()
     }
 
     /// Returns a mutable reference to the response.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn response_mut(&mut self) -> Option<&mut Response> {
         self.response.as_mut()
     }
 
     /// Set the output or error for the operation being invoked.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn set_output_or_error(&mut self, output: Result<O, OrchestratorError<E>>) {
         self.output_or_error = Some(output);
     }
 
     /// Returns the deserialized output or error.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn output_or_error(&self) -> Option<Result<&O, &OrchestratorError<E>>> {
         self.output_or_error.as_ref().map(Result::as_ref)
     }
 
     /// Returns the mutable reference to the deserialized output or error.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn output_or_error_mut(&mut self) -> Option<&mut Result<O, OrchestratorError<E>>> {
         self.output_or_error.as_mut()
     }
 
+    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
+    ///
+    /// Note: This method is intended for internal use only.
+    pub fn is_failed(&self) -> bool {
+        self.output_or_error
+            .as_ref()
+            .map(Result::is_err)
+            .unwrap_or_default()
+    }
+
     /// Advance to the Serialization phase.
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn enter_serialization_phase(&mut self) {
         debug!("entering \'serialization\' phase");
         debug_assert!(
@@ -199,7 +262,8 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the BeforeTransmit phase.
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn enter_before_transmit_phase(&mut self) {
         debug!("entering \'before transmit\' phase");
         debug_assert!(
@@ -214,12 +278,13 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
             self.request.is_some(),
             "request must be set before calling enter_before_transmit_phase"
         );
-        self.request_checkpoint = try_clone(self.request().expect("checked above"));
+        self.request_checkpoint = self.request().expect("checked above").try_clone();
         self.phase = Phase::BeforeTransmit;
     }
 
     /// Advance to the Transmit phase.
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn enter_transmit_phase(&mut self) {
         debug!("entering \'transmit\' phase");
         debug_assert!(
@@ -230,7 +295,8 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the BeforeDeserialization phase.
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn enter_before_deserialization_phase(&mut self) {
         debug!("entering \'before deserialization\' phase");
         debug_assert!(
@@ -249,7 +315,8 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the Deserialization phase.
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn enter_deserialization_phase(&mut self) {
         debug!("entering \'deserialization\' phase");
         debug_assert!(
@@ -260,7 +327,8 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     }
 
     /// Advance to the AfterDeserialization phase.
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn enter_after_deserialization_phase(&mut self) {
         debug!("entering \'after deserialization\' phase");
         debug_assert!(
@@ -275,10 +343,11 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     }
 
     /// Set the request checkpoint. This should only be called once, right before entering the retry loop.
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn save_checkpoint(&mut self) {
         trace!("saving request checkpoint...");
-        self.request_checkpoint = self.request().and_then(try_clone);
+        self.request_checkpoint = self.request().and_then(|r| r.try_clone());
         match self.request_checkpoint.as_ref() {
             Some(_) => trace!("successfully saved request checkpoint"),
             None => trace!("failed to save request checkpoint: request body could not be cloned"),
@@ -286,36 +355,76 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
     }
 
     /// Returns false if rewinding isn't possible
-    #[doc(hidden)]
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn rewind(&mut self, _cfg: &mut ConfigBag) -> RewindResult {
         // If request_checkpoint was never set, but we've already made one attempt,
         // then this is not a retryable request
-        if self.request_checkpoint.is_none() && self.tainted {
-            return RewindResult::Impossible;
-        }
-
-        if !self.tainted {
-            // The first call to rewind() happens before the request is ever touched, so we don't need
-            // to clone it then. However, the request must be marked as tainted so that subsequent calls
-            // to rewind() properly reload the saved request checkpoint.
-            self.tainted = true;
-            return RewindResult::Unnecessary;
-        }
+        let request_checkpoint = match (self.request_checkpoint.as_ref(), self.tainted) {
+            (None, true) => return RewindResult::Impossible,
+            (_, false) => {
+                self.tainted = true;
+                return RewindResult::Unnecessary;
+            }
+            (Some(req), _) => req.try_clone(),
+        };
 
         // Otherwise, rewind to the saved request checkpoint
         self.phase = Phase::BeforeTransmit;
-        self.request = try_clone(self.request_checkpoint.as_ref().expect("checked above"));
+        self.request = request_checkpoint;
         assert!(
             self.request.is_some(),
-            "if the request wasn't cloneable, then we should have already return from this method."
+            "if the request wasn't cloneable, then we should have already returned from this method."
         );
         self.response = None;
         self.output_or_error = None;
         RewindResult::Occurred
     }
+}
+
+impl<I, O, E> InterceptorContext<I, O, E>
+where
+    E: Debug,
+{
+    /// Decomposes the context into its constituent parts.
+    ///
+    /// Note: This method is intended for internal use only.
+    #[allow(clippy::type_complexity)]
+    pub fn into_parts(
+        self,
+    ) -> (
+        Option<I>,
+        Option<Result<O, OrchestratorError<E>>>,
+        Option<Request>,
+        Option<Response>,
+    ) {
+        (
+            self.input,
+            self.output_or_error,
+            self.request,
+            self.response,
+        )
+    }
+
+    /// Convert this context into the final operation result that is returned in client's the public API.
+    ///
+    /// Note: This method is intended for internal use only.
+    pub fn finalize(self) -> Result<O, SdkError<E, HttpResponse>> {
+        let Self {
+            output_or_error,
+            response,
+            phase,
+            ..
+        } = self;
+        output_or_error
+            .expect("output_or_error must always be set before finalize is called.")
+            .map_err(|error| OrchestratorError::into_sdk_error(error, &phase, response))
+    }
 
     /// Mark this context as failed due to errors during the operation. Any errors already contained
     /// by the context will be replaced by the given error.
+    ///
+    /// Note: This method is intended for internal use only.
     pub fn fail(&mut self, error: OrchestratorError<E>) {
         if !self.is_failed() {
             trace!(
@@ -327,19 +436,13 @@ impl<I, O, E: Debug> InterceptorContext<I, O, E> {
             error!("orchestrator context received an error but one was already present; Throwing away previous error: {:?}", existing_err);
         }
     }
-
-    /// Return `true` if this context's `output_or_error` is an error. Otherwise, return `false`.
-    pub fn is_failed(&self) -> bool {
-        self.output_or_error
-            .as_ref()
-            .map(Result::is_err)
-            .unwrap_or_default()
-    }
 }
 
 /// The result of attempting to rewind a request.
+///
+/// Note: This is intended for internal use only.
+#[non_exhaustive]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[doc(hidden)]
 pub enum RewindResult {
     /// The request couldn't be rewound because it wasn't cloneable.
     Impossible,
@@ -364,47 +467,25 @@ impl fmt::Display for RewindResult {
     }
 }
 
-fn try_clone(request: &HttpRequest) -> Option<HttpRequest> {
-    let cloned_body = request.body().try_clone()?;
-    let mut cloned_request = ::http::Request::builder()
-        .uri(request.uri().clone())
-        .method(request.method());
-    *cloned_request
-        .headers_mut()
-        .expect("builder has not been modified, headers must be valid") = request.headers().clone();
-    Some(
-        cloned_request
-            .body(cloned_body)
-            .expect("a clone of a valid request should be a valid request"),
-    )
-}
-
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util", feature = "http-02x"))]
 mod tests {
     use super::*;
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_types::type_erasure::TypedBox;
+    use aws_smithy_types::body::SdkBody;
     use http::header::{AUTHORIZATION, CONTENT_LENGTH};
     use http::{HeaderValue, Uri};
 
     #[test]
     fn test_success_transitions() {
-        let input = TypedBox::new("input".to_string()).erase();
-        let output = TypedBox::new("output".to_string()).erase();
+        let input = Input::doesnt_matter();
+        let output = Output::erase("output".to_string());
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!(
-            "input",
-            context
-                .input()
-                .and_then(|i| i.downcast_ref::<String>())
-                .unwrap()
-        );
+        assert!(context.input().is_some());
         context.input_mut();
 
         context.enter_serialization_phase();
         let _ = context.take_input();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(HttpRequest::empty());
 
         context.enter_before_transmit_phase();
         context.request();
@@ -412,7 +493,13 @@ mod tests {
 
         context.enter_transmit_phase();
         let _ = context.take_request();
-        context.set_response(http::Response::builder().body(SdkBody::empty()).unwrap());
+        context.set_response(
+            http::Response::builder()
+                .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
 
         context.enter_before_deserialization_phase();
         context.response();
@@ -435,29 +522,13 @@ mod tests {
 
     #[test]
     fn test_rewind_for_retry() {
-        use std::fmt;
-        #[derive(Debug)]
-        struct Error;
-        impl fmt::Display for Error {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("don't care")
-            }
-        }
-        impl std::error::Error for Error {}
-
         let mut cfg = ConfigBag::base();
-        let input = TypedBox::new("input".to_string()).erase();
-        let output = TypedBox::new("output".to_string()).erase();
-        let error = TypedBox::new(Error).erase_error();
+        let input = Input::doesnt_matter();
+        let output = Output::erase("output".to_string());
+        let error = Error::doesnt_matter();
 
         let mut context = InterceptorContext::new(input);
-        assert_eq!(
-            "input",
-            context
-                .input()
-                .and_then(|i| i.downcast_ref::<String>())
-                .unwrap()
-        );
+        assert!(context.input().is_some());
 
         context.enter_serialization_phase();
         let _ = context.take_input();
@@ -465,6 +536,8 @@ mod tests {
             http::Request::builder()
                 .header("test", "the-original-un-mutated-request")
                 .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
                 .unwrap(),
         );
         context.enter_before_transmit_phase();
@@ -483,7 +556,13 @@ mod tests {
             "request-modified-after-signing",
             request.headers().get("test").unwrap()
         );
-        context.set_response(http::Response::builder().body(SdkBody::empty()).unwrap());
+        context.set_response(
+            http::Response::builder()
+                .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
 
         context.enter_before_deserialization_phase();
         context.enter_deserialization_phase();
@@ -499,7 +578,13 @@ mod tests {
 
         context.enter_transmit_phase();
         let _ = context.take_request();
-        context.set_response(http::Response::builder().body(SdkBody::empty()).unwrap());
+        context.set_response(
+            http::Response::builder()
+                .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
 
         context.enter_before_deserialization_phase();
         context.enter_deserialization_phase();
@@ -513,14 +598,16 @@ mod tests {
 
     #[test]
     fn try_clone_clones_all_data() {
-        let request = ::http::Request::builder()
+        let request: HttpRequest = http::Request::builder()
             .uri(Uri::from_static("https://www.amazon.com"))
             .method("POST")
             .header(CONTENT_LENGTH, 456)
             .header(AUTHORIZATION, "Token: hello")
             .body(SdkBody::from("hello world!"))
-            .expect("valid request");
-        let cloned = try_clone(&request).expect("request is cloneable");
+            .expect("valid request")
+            .try_into()
+            .unwrap();
+        let cloned = request.try_clone().expect("request is cloneable");
 
         assert_eq!(&Uri::from_static("https://www.amazon.com"), cloned.uri());
         assert_eq!("POST", cloned.method());

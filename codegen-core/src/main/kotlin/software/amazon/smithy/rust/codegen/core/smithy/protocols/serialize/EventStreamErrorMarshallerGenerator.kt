@@ -44,6 +44,7 @@ class EventStreamErrorMarshallerGenerator(
     payloadContentType: String,
 ) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
 
     private val operationErrorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
         RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
@@ -54,9 +55,9 @@ class EventStreamErrorMarshallerGenerator(
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
     private val codegenScope = arrayOf(
         "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
-        "Message" to smithyEventStream.resolve("frame::Message"),
-        "Header" to smithyEventStream.resolve("frame::Header"),
-        "HeaderValue" to smithyEventStream.resolve("frame::HeaderValue"),
+        "Message" to smithyTypes.resolve("event_stream::Message"),
+        "Header" to smithyTypes.resolve("event_stream::Header"),
+        "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
         "Error" to smithyEventStream.resolve("error::Error"),
     )
 

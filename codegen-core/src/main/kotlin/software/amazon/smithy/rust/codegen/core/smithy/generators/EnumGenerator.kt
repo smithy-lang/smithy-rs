@@ -88,7 +88,7 @@ class EnumMemberModel(
          *
          * Ordinarily, the symbol provider would determine this name, but the enum trait doesn't allow for this.
          *
-         * TODO(https://github.com/awslabs/smithy-rs/issues/1700): Remove this function when refactoring to EnumShape.
+         * TODO(https://github.com/smithy-lang/smithy-rs/issues/1700): Remove this function when refactoring to EnumShape.
          */
         @Deprecated("This function will go away when we handle EnumShape instead of EnumTrait")
         fun toEnumVariantName(
@@ -232,6 +232,20 @@ open class EnumGenerator(
             },
         )
 
+        // Add an infallible FromStr implementation for uniformity
+        rustTemplate(
+            """
+            impl ::std::str::FromStr for ${context.enumName} {
+                type Err = ::std::convert::Infallible;
+
+                fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
+                    #{Ok}(${context.enumName}::from(s))
+                }
+            }
+            """,
+            *preludeScope,
+        )
+
         rustTemplate(
             """
             impl<T> #{From}<T> for ${context.enumName} where T: #{AsRef}<str> {
@@ -239,6 +253,7 @@ open class EnumGenerator(
                     ${context.enumName}(s.as_ref().to_owned())
                 }
             }
+
             """,
             *preludeScope,
         )

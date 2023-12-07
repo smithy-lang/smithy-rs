@@ -28,13 +28,11 @@ concurrency:
 
 env:
   java_version: 11
-  rust_version: 1.68.2
   rust_toolchain_components: clippy,rustfmt
   apt_dependencies: libssl-dev gnuplot jq
-
 jobs:
   generate-diff:
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     name: Generate diff and upload to S3
     env:
       AWS_REGION: us-west-2
@@ -69,7 +67,7 @@ jobs:
         fi
 
   generate-doc-preview:
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     name: Generate rustdoc preview and upload to S3
     env:
       AWS_REGION: us-west-2
@@ -100,14 +98,14 @@ jobs:
         java-version: ${{ env.java_version }}
     - uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: ${{ env.rust_version }}
+        toolchain: nightly
     - name: Generate doc preview
       id: generate-preview
       # Only generate three of the smallest services since the doc build can be very large. STS and SSO must be
       # included since aws-config depends on them. Transcribe Streaming and DynamoDB (paginators/waiters) were chosen
       # below to stay small while still representing most features. Combined, they are about ~20MB at time of writing.
       run: |
-        ./gradlew -Paws.services=+sts,+sso,+transcribestreaming,+dynamodb :aws:sdk:assemble
+        ./gradlew -Paws.services=+sts,+sso,+ssooidc,+transcribestreaming,+dynamodb :aws:sdk:assemble
 
         # Copy the Server runtime crate(s) in
         cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python rust-runtime/aws-smithy-http-server-typescript aws/sdk/build/aws-sdk/sdk
@@ -120,7 +118,8 @@ jobs:
         # Add server runtime crates to the workspace
         sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python","sdk\/aws-smithy-http-server-typescript",/' Cargo.toml
 
-        cargo doc --no-deps --all-features
+        RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --all-features --no-deps
+
         popd
         ./tools/ci-scripts/generate-doc-preview-index.sh ${{ inputs.base_revision }}
 

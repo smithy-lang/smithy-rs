@@ -5,18 +5,16 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
+import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.testutil.TestCodegenSettings
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
+import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class FluentClientGeneratorTest {
     val model = """
@@ -34,12 +32,42 @@ class FluentClientGeneratorTest {
         structure TestInput {
            foo: String,
            byteValue: Byte,
+           listValue: StringList,
+           mapValue: ListMap,
+           doubleListValue: DoubleList
+        }
+
+        list StringList {
+            member: String
+        }
+
+        list DoubleList {
+            member: StringList
+        }
+
+        map ListMap {
+            key: String,
+            value: StringList
         }
     """.asSmithyModel()
 
     @Test
+    fun `generate correct input docs`() {
+        val expectations = mapOf(
+            "listValue" to "list_value(impl Into<String>)",
+            "doubleListValue" to "double_list_value(Vec::<String>)",
+            "mapValue" to "map_value(impl Into<String>, Vec::<String>)",
+            "byteValue" to "byte_value(i8)",
+        )
+        expectations.forEach { (name, expect) ->
+            val member = model.lookup<MemberShape>("com.example#TestInput\$$name")
+            member.asFluentBuilderInputDoc(testSymbolProvider(model)) shouldBe expect
+        }
+    }
+
+    @Test
     fun `send() future implements Send`() {
-        val test: (ClientCodegenContext, RustCrate) -> Unit = { codegenContext, rustCrate ->
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.integrationTest("send_future_is_send") {
                 val moduleName = codegenContext.moduleUseName()
                 rustTemplate(
@@ -48,59 +76,35 @@ class FluentClientGeneratorTest {
 
                     ##[test]
                     fn test() {
-                        let connector = #{TestConnection}::<#{SdkBody}>::new(Vec::new());
                         let config = $moduleName::Config::builder()
-                            .endpoint_resolver("http://localhost:1234")
-                            #{set_http_connector}
+                            .endpoint_url("http://localhost:1234")
+                            .http_client(#{NeverClient}::new())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
                         check_send(client.say_hello().send());
                     }
                     """,
-                    "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                        .toDevDependency()
-                        .withFeature("test-util").toType()
-                        .resolve("test_connection::TestConnection"),
-                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-                    "set_http_connector" to writable {
-                        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                            rust(".http_connector(connector.clone())")
-                        }
-                    },
+                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::NeverClient"),
                 )
             }
         }
-        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams, test = test)
-        clientIntegrationTest(
-            model,
-            TestCodegenSettings.orchestratorModeTestParams,
-            test = test,
-        )
     }
 
     @Test
     fun `generate inner builders`() {
-        val test: (ClientCodegenContext, RustCrate) -> Unit = { codegenContext, rustCrate ->
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.integrationTest("inner_builder") {
                 val moduleName = codegenContext.moduleUseName()
                 rustTemplate(
                     """
                     ##[test]
                     fn test() {
-                        let connector = #{TestConnection}::<#{SdkBody}>::new(Vec::new());
                         let config = $moduleName::Config::builder()
-                            .endpoint_resolver("http://localhost:1234")
-                            #{set_http_connector}
+                            .endpoint_url("http://localhost:1234")
+                            .http_client(#{NeverClient}::new())
                             .build();
-                        let smithy_client = aws_smithy_client::Builder::new()
-                            .connector(connector.clone())
-                            .middleware_fn(|r| r)
-                            .build_dyn();
-                        let client = $moduleName::Client::with_config(smithy_client, config);
+                        let client = $moduleName::Client::from_conf(config);
 
                         let say_hello_fluent_builder = client.say_hello().byte_value(4).foo("hello!");
                         assert_eq!(*say_hello_fluent_builder.get_foo(), Some("hello!".to_string()));
@@ -108,24 +112,25 @@ class FluentClientGeneratorTest {
                         assert_eq!(*input.get_byte_value(), Some(4));
                     }
                     """,
-                    "TestConnection" to CargoDependency.smithyClient(codegenContext.runtimeConfig)
-                        .toDevDependency()
-                        .withFeature("test-util").toType()
-                        .resolve("test_connection::TestConnection"),
-                    "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-                    "set_http_connector" to writable {
-                        if (codegenContext.smithyRuntimeMode.generateOrchestrator) {
-                            rust(".http_connector(connector.clone())")
-                        }
-                    },
+                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                        .resolve("client::http::test_util::NeverClient"),
                 )
             }
         }
-        clientIntegrationTest(model, TestCodegenSettings.middlewareModeTestParams, test = test)
-        clientIntegrationTest(
-            model,
-            TestCodegenSettings.orchestratorModeTestParams,
-            test = test,
-        )
+    }
+
+    @Test
+    fun `dead-code warning should not be issued when a service has no operations`() {
+        val model = """
+            namespace com.example
+            use aws.protocols#awsJson1_0
+
+            @awsJson1_0
+            service HelloService {
+                version: "1"
+            }
+        """.asSmithyModel()
+
+        clientIntegrationTest(model)
     }
 }

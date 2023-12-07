@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy
 
 import software.amazon.smithy.build.PluginContext
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
@@ -48,7 +47,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveSha
 import software.amazon.smithy.rust.codegen.core.util.CommandError
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.runCommand
@@ -78,10 +76,11 @@ class ClientCodegenVisitor(
         val rustSymbolProviderConfig = RustSymbolProviderConfig(
             runtimeConfig = settings.runtimeConfig,
             renameExceptions = settings.codegenConfig.renameExceptions,
-            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_ZERO_VALUE_V1,
+            nullabilityCheckMode = settings.codegenConfig.nullabilityCheckMode,
             moduleProvider = ClientModuleProvider,
             nameBuilderFor = { symbol -> "${symbol.name}Builder" },
         )
+
         val baseModel = baselineTransform(context.model)
         val untransformedService = settings.getService(baseModel)
         val (protocol, generator) = ClientProtocolLoader(
@@ -224,6 +223,7 @@ class ClientCodegenVisitor(
                         this,
                         shape,
                         codegenDecorator.structureCustomizations(codegenContext, emptyList()),
+                        structSettings = codegenContext.structSettings(),
                     ).render()
 
                     implBlock(symbolProvider.toSymbol(shape)) {
@@ -247,6 +247,7 @@ class ClientCodegenVisitor(
                     shape,
                     errorTrait,
                     codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
+                    codegenContext.structSettings(),
                 )
                 errorGenerator::renderStruct to errorGenerator::renderBuilder
             }
@@ -303,25 +304,22 @@ class ClientCodegenVisitor(
      */
     override fun operationShape(operationShape: OperationShape) {
         rustCrate.useShapeWriter(operationShape) operationWriter@{
-            rustCrate.useShapeWriter(operationShape.inputShape(codegenContext.model)) inputWriter@{
-                // Render the operation shape & serializers input `input.rs`
-                operationGenerator.renderOperation(
-                    this@operationWriter,
-                    this@inputWriter,
-                    operationShape,
-                    codegenDecorator,
-                )
+            // Render the operation shape
+            operationGenerator.renderOperation(
+                this@operationWriter,
+                operationShape,
+                codegenDecorator,
+            )
 
-                // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
-                codegenDecorator.protocolTestGenerator(
+            // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
+            codegenDecorator.protocolTestGenerator(
+                codegenContext,
+                DefaultProtocolTestGenerator(
                     codegenContext,
-                    DefaultProtocolTestGenerator(
-                        codegenContext,
-                        protocolGeneratorFactory.support(),
-                        operationShape,
-                    ),
-                ).render(this@operationWriter)
-            }
+                    protocolGeneratorFactory.support(),
+                    operationShape,
+                ),
+            ).render(this@operationWriter)
 
             rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {
                 OperationErrorGenerator(

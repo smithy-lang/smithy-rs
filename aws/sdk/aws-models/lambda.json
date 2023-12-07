@@ -288,7 +288,6 @@
                                     ]
                                 }
                             ],
-                            "type": "tree",
                             "rules": [
                                 {
                                     "conditions": [
@@ -306,9 +305,187 @@
                                     "type": "error"
                                 },
                                 {
+                                    "conditions": [
+                                        {
+                                            "fn": "booleanEquals",
+                                            "argv": [
+                                                {
+                                                    "ref": "UseDualStack"
+                                                },
+                                                true
+                                            ]
+                                        }
+                                    ],
+                                    "error": "Invalid Configuration: Dualstack and custom endpoint are not supported",
+                                    "type": "error"
+                                },
+                                {
                                     "conditions": [],
-                                    "type": "tree",
+                                    "endpoint": {
+                                        "url": {
+                                            "ref": "Endpoint"
+                                        },
+                                        "properties": {},
+                                        "headers": {}
+                                    },
+                                    "type": "endpoint"
+                                }
+                            ],
+                            "type": "tree"
+                        },
+                        {
+                            "conditions": [
+                                {
+                                    "fn": "isSet",
+                                    "argv": [
+                                        {
+                                            "ref": "Region"
+                                        }
+                                    ]
+                                }
+                            ],
+                            "rules": [
+                                {
+                                    "conditions": [
+                                        {
+                                            "fn": "aws.partition",
+                                            "argv": [
+                                                {
+                                                    "ref": "Region"
+                                                }
+                                            ],
+                                            "assign": "PartitionResult"
+                                        }
+                                    ],
                                     "rules": [
+                                        {
+                                            "conditions": [
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        {
+                                                            "ref": "UseFIPS"
+                                                        },
+                                                        true
+                                                    ]
+                                                },
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        {
+                                                            "ref": "UseDualStack"
+                                                        },
+                                                        true
+                                                    ]
+                                                }
+                                            ],
+                                            "rules": [
+                                                {
+                                                    "conditions": [
+                                                        {
+                                                            "fn": "booleanEquals",
+                                                            "argv": [
+                                                                true,
+                                                                {
+                                                                    "fn": "getAttr",
+                                                                    "argv": [
+                                                                        {
+                                                                            "ref": "PartitionResult"
+                                                                        },
+                                                                        "supportsFIPS"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        },
+                                                        {
+                                                            "fn": "booleanEquals",
+                                                            "argv": [
+                                                                true,
+                                                                {
+                                                                    "fn": "getAttr",
+                                                                    "argv": [
+                                                                        {
+                                                                            "ref": "PartitionResult"
+                                                                        },
+                                                                        "supportsDualStack"
+                                                                    ]
+                                                                }
+                                                            ]
+                                                        }
+                                                    ],
+                                                    "rules": [
+                                                        {
+                                                            "conditions": [],
+                                                            "endpoint": {
+                                                                "url": "https://lambda-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
+                                                                "properties": {},
+                                                                "headers": {}
+                                                            },
+                                                            "type": "endpoint"
+                                                        }
+                                                    ],
+                                                    "type": "tree"
+                                                },
+                                                {
+                                                    "conditions": [],
+                                                    "error": "FIPS and DualStack are enabled, but this partition does not support one or both",
+                                                    "type": "error"
+                                                }
+                                            ],
+                                            "type": "tree"
+                                        },
+                                        {
+                                            "conditions": [
+                                                {
+                                                    "fn": "booleanEquals",
+                                                    "argv": [
+                                                        {
+                                                            "ref": "UseFIPS"
+                                                        },
+                                                        true
+                                                    ]
+                                                }
+                                            ],
+                                            "rules": [
+                                                {
+                                                    "conditions": [
+                                                        {
+                                                            "fn": "booleanEquals",
+                                                            "argv": [
+                                                                {
+                                                                    "fn": "getAttr",
+                                                                    "argv": [
+                                                                        {
+                                                                            "ref": "PartitionResult"
+                                                                        },
+                                                                        "supportsFIPS"
+                                                                    ]
+                                                                },
+                                                                true
+                                                            ]
+                                                        }
+                                                    ],
+                                                    "rules": [
+                                                        {
+                                                            "conditions": [],
+                                                            "endpoint": {
+                                                                "url": "https://lambda-fips.{Region}.{PartitionResult#dnsSuffix}",
+                                                                "properties": {},
+                                                                "headers": {}
+                                                            },
+                                                            "type": "endpoint"
+                                                        }
+                                                    ],
+                                                    "type": "tree"
+                                                },
+                                                {
+                                                    "conditions": [],
+                                                    "error": "FIPS is enabled but this partition does not support FIPS",
+                                                    "type": "error"
+                                                }
+                                            ],
+                                            "type": "tree"
+                                        },
                                         {
                                             "conditions": [
                                                 {
@@ -321,278 +498,65 @@
                                                     ]
                                                 }
                                             ],
-                                            "error": "Invalid Configuration: Dualstack and custom endpoint are not supported",
-                                            "type": "error"
-                                        },
-                                        {
-                                            "conditions": [],
-                                            "endpoint": {
-                                                "url": {
-                                                    "ref": "Endpoint"
-                                                },
-                                                "properties": {},
-                                                "headers": {}
-                                            },
-                                            "type": "endpoint"
-                                        }
-                                    ]
-                                }
-                            ]
-                        },
-                        {
-                            "conditions": [],
-                            "type": "tree",
-                            "rules": [
-                                {
-                                    "conditions": [
-                                        {
-                                            "fn": "isSet",
-                                            "argv": [
-                                                {
-                                                    "ref": "Region"
-                                                }
-                                            ]
-                                        }
-                                    ],
-                                    "type": "tree",
-                                    "rules": [
-                                        {
-                                            "conditions": [
-                                                {
-                                                    "fn": "aws.partition",
-                                                    "argv": [
-                                                        {
-                                                            "ref": "Region"
-                                                        }
-                                                    ],
-                                                    "assign": "PartitionResult"
-                                                }
-                                            ],
-                                            "type": "tree",
                                             "rules": [
                                                 {
                                                     "conditions": [
                                                         {
                                                             "fn": "booleanEquals",
                                                             "argv": [
+                                                                true,
                                                                 {
-                                                                    "ref": "UseFIPS"
-                                                                },
-                                                                true
-                                                            ]
-                                                        },
-                                                        {
-                                                            "fn": "booleanEquals",
-                                                            "argv": [
-                                                                {
-                                                                    "ref": "UseDualStack"
-                                                                },
-                                                                true
+                                                                    "fn": "getAttr",
+                                                                    "argv": [
+                                                                        {
+                                                                            "ref": "PartitionResult"
+                                                                        },
+                                                                        "supportsDualStack"
+                                                                    ]
+                                                                }
                                                             ]
                                                         }
                                                     ],
-                                                    "type": "tree",
-                                                    "rules": [
-                                                        {
-                                                            "conditions": [
-                                                                {
-                                                                    "fn": "booleanEquals",
-                                                                    "argv": [
-                                                                        true,
-                                                                        {
-                                                                            "fn": "getAttr",
-                                                                            "argv": [
-                                                                                {
-                                                                                    "ref": "PartitionResult"
-                                                                                },
-                                                                                "supportsFIPS"
-                                                                            ]
-                                                                        }
-                                                                    ]
-                                                                },
-                                                                {
-                                                                    "fn": "booleanEquals",
-                                                                    "argv": [
-                                                                        true,
-                                                                        {
-                                                                            "fn": "getAttr",
-                                                                            "argv": [
-                                                                                {
-                                                                                    "ref": "PartitionResult"
-                                                                                },
-                                                                                "supportsDualStack"
-                                                                            ]
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ],
-                                                            "type": "tree",
-                                                            "rules": [
-                                                                {
-                                                                    "conditions": [],
-                                                                    "type": "tree",
-                                                                    "rules": [
-                                                                        {
-                                                                            "conditions": [],
-                                                                            "endpoint": {
-                                                                                "url": "https://lambda-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                                                                                "properties": {},
-                                                                                "headers": {}
-                                                                            },
-                                                                            "type": "endpoint"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "conditions": [],
-                                                            "error": "FIPS and DualStack are enabled, but this partition does not support one or both",
-                                                            "type": "error"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "conditions": [
-                                                        {
-                                                            "fn": "booleanEquals",
-                                                            "argv": [
-                                                                {
-                                                                    "ref": "UseFIPS"
-                                                                },
-                                                                true
-                                                            ]
-                                                        }
-                                                    ],
-                                                    "type": "tree",
-                                                    "rules": [
-                                                        {
-                                                            "conditions": [
-                                                                {
-                                                                    "fn": "booleanEquals",
-                                                                    "argv": [
-                                                                        true,
-                                                                        {
-                                                                            "fn": "getAttr",
-                                                                            "argv": [
-                                                                                {
-                                                                                    "ref": "PartitionResult"
-                                                                                },
-                                                                                "supportsFIPS"
-                                                                            ]
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ],
-                                                            "type": "tree",
-                                                            "rules": [
-                                                                {
-                                                                    "conditions": [],
-                                                                    "type": "tree",
-                                                                    "rules": [
-                                                                        {
-                                                                            "conditions": [],
-                                                                            "endpoint": {
-                                                                                "url": "https://lambda-fips.{Region}.{PartitionResult#dnsSuffix}",
-                                                                                "properties": {},
-                                                                                "headers": {}
-                                                                            },
-                                                                            "type": "endpoint"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "conditions": [],
-                                                            "error": "FIPS is enabled but this partition does not support FIPS",
-                                                            "type": "error"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "conditions": [
-                                                        {
-                                                            "fn": "booleanEquals",
-                                                            "argv": [
-                                                                {
-                                                                    "ref": "UseDualStack"
-                                                                },
-                                                                true
-                                                            ]
-                                                        }
-                                                    ],
-                                                    "type": "tree",
-                                                    "rules": [
-                                                        {
-                                                            "conditions": [
-                                                                {
-                                                                    "fn": "booleanEquals",
-                                                                    "argv": [
-                                                                        true,
-                                                                        {
-                                                                            "fn": "getAttr",
-                                                                            "argv": [
-                                                                                {
-                                                                                    "ref": "PartitionResult"
-                                                                                },
-                                                                                "supportsDualStack"
-                                                                            ]
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ],
-                                                            "type": "tree",
-                                                            "rules": [
-                                                                {
-                                                                    "conditions": [],
-                                                                    "type": "tree",
-                                                                    "rules": [
-                                                                        {
-                                                                            "conditions": [],
-                                                                            "endpoint": {
-                                                                                "url": "https://lambda.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                                                                                "properties": {},
-                                                                                "headers": {}
-                                                                            },
-                                                                            "type": "endpoint"
-                                                                        }
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        },
-                                                        {
-                                                            "conditions": [],
-                                                            "error": "DualStack is enabled but this partition does not support DualStack",
-                                                            "type": "error"
-                                                        }
-                                                    ]
-                                                },
-                                                {
-                                                    "conditions": [],
-                                                    "type": "tree",
                                                     "rules": [
                                                         {
                                                             "conditions": [],
                                                             "endpoint": {
-                                                                "url": "https://lambda.{Region}.{PartitionResult#dnsSuffix}",
+                                                                "url": "https://lambda.{Region}.{PartitionResult#dualStackDnsSuffix}",
                                                                 "properties": {},
                                                                 "headers": {}
                                                             },
                                                             "type": "endpoint"
                                                         }
-                                                    ]
+                                                    ],
+                                                    "type": "tree"
+                                                },
+                                                {
+                                                    "conditions": [],
+                                                    "error": "DualStack is enabled but this partition does not support DualStack",
+                                                    "type": "error"
                                                 }
-                                            ]
+                                            ],
+                                            "type": "tree"
+                                        },
+                                        {
+                                            "conditions": [],
+                                            "endpoint": {
+                                                "url": "https://lambda.{Region}.{PartitionResult#dnsSuffix}",
+                                                "properties": {},
+                                                "headers": {}
+                                            },
+                                            "type": "endpoint"
                                         }
-                                    ]
-                                },
-                                {
-                                    "conditions": [],
-                                    "error": "Invalid Configuration: Missing Region",
-                                    "type": "error"
+                                    ],
+                                    "type": "tree"
                                 }
-                            ]
+                            ],
+                            "type": "tree"
+                        },
+                        {
+                            "conditions": [],
+                            "error": "Invalid Configuration: Missing Region",
+                            "type": "error"
                         }
                     ]
                 },
@@ -1686,7 +1650,7 @@
                 "VersionNumber": {
                     "target": "com.amazonaws.lambda#LayerVersionNumber",
                     "traits": {
-                        "smithy.api#default": 0,
+                        "smithy.api#default": null,
                         "smithy.api#documentation": "<p>The version number.</p>",
                         "smithy.api#httpLabel": {},
                         "smithy.api#required": {}
@@ -2567,13 +2531,13 @@
                 "StartingPosition": {
                     "target": "com.amazonaws.lambda#EventSourcePosition",
                     "traits": {
-                        "smithy.api#documentation": "<p>The position in a stream from which to start reading. Required for Amazon Kinesis, Amazon\n      DynamoDB, and Amazon MSK Streams sources. <code>AT_TIMESTAMP</code> is supported only for\n      Amazon Kinesis streams and Amazon DocumentDB.</p>"
+                        "smithy.api#documentation": "<p>The position in a stream from which to start reading. Required for Amazon Kinesis and\n      Amazon DynamoDB Stream event sources. <code>AT_TIMESTAMP</code> is supported only for\n      Amazon Kinesis streams, Amazon DocumentDB, Amazon MSK, and self-managed Apache Kafka.</p>"
                     }
                 },
                 "StartingPositionTimestamp": {
                     "target": "com.amazonaws.lambda#Date",
                     "traits": {
-                        "smithy.api#documentation": "<p>With <code>StartingPosition</code> set to <code>AT_TIMESTAMP</code>, the time from which to start\n      reading.</p>"
+                        "smithy.api#documentation": "<p>With <code>StartingPosition</code> set to <code>AT_TIMESTAMP</code>, the time from which to start\n      reading. <code>StartingPositionTimestamp</code> cannot be in the future.</p>"
                     }
                 },
                 "DestinationConfig": {
@@ -3134,6 +3098,9 @@
                     "target": "com.amazonaws.lambda#InvalidParameterValueException"
                 },
                 {
+                    "target": "com.amazonaws.lambda#ResourceConflictException"
+                },
+                {
                     "target": "com.amazonaws.lambda#ResourceInUseException"
                 },
                 {
@@ -3197,7 +3164,7 @@
                 }
             ],
             "traits": {
-                "smithy.api#documentation": "<p>Deletes a Lambda function. To delete a specific function version, use the <code>Qualifier</code> parameter.\n      Otherwise, all versions and aliases are deleted.</p>\n         <p>To delete Lambda event source mappings that invoke a function, use <a>DeleteEventSourceMapping</a>. For Amazon Web Services and resources that invoke your function\n      directly, delete the trigger in the service where you originally configured it.</p>",
+                "smithy.api#documentation": "<p>Deletes a Lambda function. To delete a specific function version, use the <code>Qualifier</code> parameter.\n      Otherwise, all versions and aliases are deleted. This doesn't require the user to have explicit\n      permissions for <a>DeleteAlias</a>.</p>\n         <p>To delete Lambda event source mappings that invoke a function, use <a>DeleteEventSourceMapping</a>. For Amazon Web Services and resources that invoke your function\n      directly, delete the trigger in the service where you originally configured it.</p>",
                 "smithy.api#http": {
                     "method": "DELETE",
                     "uri": "/2015-03-31/functions/{FunctionName}",
@@ -3481,7 +3448,7 @@
                 "VersionNumber": {
                     "target": "com.amazonaws.lambda#LayerVersionNumber",
                     "traits": {
-                        "smithy.api#default": 0,
+                        "smithy.api#default": null,
                         "smithy.api#documentation": "<p>The version number.</p>",
                         "smithy.api#httpLabel": {},
                         "smithy.api#required": {}
@@ -3912,13 +3879,13 @@
                 "StartingPosition": {
                     "target": "com.amazonaws.lambda#EventSourcePosition",
                     "traits": {
-                        "smithy.api#documentation": "<p>The position in a stream from which to start reading. Required for Amazon Kinesis, Amazon DynamoDB, and Amazon MSK stream sources. <code>AT_TIMESTAMP</code> is supported only for Amazon Kinesis\n      streams and Amazon DocumentDB.</p>"
+                        "smithy.api#documentation": "<p>The position in a stream from which to start reading. Required for Amazon Kinesis and\n      Amazon DynamoDB Stream event sources. <code>AT_TIMESTAMP</code> is supported only for\n      Amazon Kinesis streams, Amazon DocumentDB, Amazon MSK, and self-managed Apache Kafka.</p>"
                     }
                 },
                 "StartingPositionTimestamp": {
                     "target": "com.amazonaws.lambda#Date",
                     "traits": {
-                        "smithy.api#documentation": "<p>With <code>StartingPosition</code> set to <code>AT_TIMESTAMP</code>, the time from which to start\n      reading.</p>"
+                        "smithy.api#documentation": "<p>With <code>StartingPosition</code> set to <code>AT_TIMESTAMP</code>, the time from which to start\n      reading. <code>StartingPositionTimestamp</code> cannot be in the future.</p>"
                     }
                 },
                 "BatchSize": {
@@ -5663,7 +5630,7 @@
                 "VersionNumber": {
                     "target": "com.amazonaws.lambda#LayerVersionNumber",
                     "traits": {
-                        "smithy.api#default": 0,
+                        "smithy.api#default": null,
                         "smithy.api#documentation": "<p>The version number.</p>",
                         "smithy.api#httpLabel": {},
                         "smithy.api#required": {}
@@ -5708,7 +5675,7 @@
                 "VersionNumber": {
                     "target": "com.amazonaws.lambda#LayerVersionNumber",
                     "traits": {
-                        "smithy.api#default": 0,
+                        "smithy.api#default": null,
                         "smithy.api#documentation": "<p>The version number.</p>",
                         "smithy.api#httpLabel": {},
                         "smithy.api#required": {}
@@ -6451,6 +6418,9 @@
                     "target": "com.amazonaws.lambda#KMSNotFoundException"
                 },
                 {
+                    "target": "com.amazonaws.lambda#RecursiveInvocationException"
+                },
+                {
                     "target": "com.amazonaws.lambda#RequestTooLargeException"
                 },
                 {
@@ -6665,6 +6635,9 @@
                 },
                 {
                     "target": "com.amazonaws.lambda#KMSNotFoundException"
+                },
+                {
+                    "target": "com.amazonaws.lambda#RecursiveInvocationException"
                 },
                 {
                     "target": "com.amazonaws.lambda#RequestTooLargeException"
@@ -8573,6 +8546,9 @@
                 }
             }
         },
+        "com.amazonaws.lambda#NullableBoolean": {
+            "type": "boolean"
+        },
         "com.amazonaws.lambda#OnFailure": {
             "type": "structure",
             "members": {
@@ -9485,6 +9461,28 @@
                 }
             }
         },
+        "com.amazonaws.lambda#RecursiveInvocationException": {
+            "type": "structure",
+            "members": {
+                "Type": {
+                    "target": "com.amazonaws.lambda#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The exception type.</p>"
+                    }
+                },
+                "Message": {
+                    "target": "com.amazonaws.lambda#String",
+                    "traits": {
+                        "smithy.api#documentation": "<p>The exception message.</p>"
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "<p>Lambda has detected your function being invoked in a recursive loop with other Amazon Web Services resources and stopped your function's invocation.</p>",
+                "smithy.api#error": "client",
+                "smithy.api#httpError": 400
+            }
+        },
         "com.amazonaws.lambda#RemoveLayerVersionPermission": {
             "type": "operation",
             "input": {
@@ -9533,7 +9531,7 @@
                 "VersionNumber": {
                     "target": "com.amazonaws.lambda#LayerVersionNumber",
                     "traits": {
-                        "smithy.api#default": 0,
+                        "smithy.api#default": null,
                         "smithy.api#documentation": "<p>The version number.</p>",
                         "smithy.api#httpLabel": {},
                         "smithy.api#required": {}
@@ -9948,6 +9946,12 @@
                     "traits": {
                         "smithy.api#enumValue": "ruby3.2"
                     }
+                },
+                "python311": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#enumValue": "python3.11"
+                    }
                 }
             }
         },
@@ -10131,7 +10135,7 @@
                 }
             },
             "traits": {
-                "smithy.api#documentation": "<p>The function's Lambda SnapStart setting. Set <code>ApplyOn</code> to <code>PublishedVersions</code> to create a\n      snapshot of the initialized execution environment when you publish a function version.</p>\n         <p>SnapStart is supported with the <code>java11</code> runtime. For more information, see\n        <a href=\"https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html\">Improving startup performance with Lambda\n        SnapStart</a>.</p>"
+                "smithy.api#documentation": "<p>The function's <a href=\"https://docs.aws.amazon.com/lambda/latest/dg/snapstart.html\">Lambda SnapStart</a> setting. Set <code>ApplyOn</code> to <code>PublishedVersions</code> to create a\n      snapshot of the initialized execution environment when you publish a function version.</p>"
             }
         },
         "com.amazonaws.lambda#SnapStartApplyOn": {
@@ -11734,6 +11738,12 @@
                     "traits": {
                         "smithy.api#documentation": "<p>A list of VPC security group IDs.</p>"
                     }
+                },
+                "Ipv6AllowedForDualStack": {
+                    "target": "com.amazonaws.lambda#NullableBoolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Allows outbound IPv6 traffic on VPC functions that are connected to dual-stack subnets.</p>"
+                    }
                 }
             },
             "traits": {
@@ -11759,6 +11769,12 @@
                     "target": "com.amazonaws.lambda#VpcId",
                     "traits": {
                         "smithy.api#documentation": "<p>The ID of the VPC.</p>"
+                    }
+                },
+                "Ipv6AllowedForDualStack": {
+                    "target": "com.amazonaws.lambda#NullableBoolean",
+                    "traits": {
+                        "smithy.api#documentation": "<p>Allows outbound IPv6 traffic on VPC functions that are connected to dual-stack subnets.</p>"
                     }
                 }
             },

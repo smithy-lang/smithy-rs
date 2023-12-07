@@ -22,6 +22,7 @@ object ServerCargoDependency {
     val Nom: CargoDependency = CargoDependency("nom", CratesIo("7"))
     val OnceCell: CargoDependency = CargoDependency("once_cell", CratesIo("1.13"))
     val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2"))
+    val ThisError: CargoDependency = CargoDependency("thiserror", CratesIo("1.0"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))

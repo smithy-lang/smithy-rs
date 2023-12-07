@@ -38,7 +38,7 @@ Lastly, we emphasize that this RFC does NOT aim to serialize the entire response
 Users have requested `serde` traits to be implemented on data types implemented in rust SDK.
 We have created this RFC with the following use cases in mind.
 1. [[request]: Serialize/Deserialize of models for Lambda events #269](https://github.com/awslabs/aws-sdk-rust/issues/269)
-2. [Tests](https://awslabs.github.io/smithy-rs/design/faq.html#why-dont-the-sdk-service-crates-implement-serdeserialize-or-serdedeserialize-for-any-types) as suggested in the design FAQ.
+2. [Tests](https://smithy-lang.github.io/smithy-rs/design/faq.html#why-dont-the-sdk-service-crates-implement-serdeserialize-or-serdedeserialize-for-any-types) as suggested in the design FAQ.
 3. Building tools
 
 # Feature Gate
