@@ -25,15 +25,13 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
         get() =
             awsSdk?.getStringMember("defaultConfigPath")?.orNull()?.value.let { Paths.get(it) }
 
-    /** Path to the `sdk-endpoints.json` configuration */
-    val endpointsConfigPath: Path?
-        get() =
-            awsSdk?.getStringMember("endpointsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
-
     /** Path to the `default-partitions.json` configuration */
     val partitionsConfigPath: Path?
         get() =
             awsSdk?.getStringMember("partitionsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
+
+    val productionSdkBuild: Boolean
+        get() = awsSdk?.getBooleanMember("productionSdkBuild")?.orNull()?.value ?: false
 
     /** Path to AWS SDK integration tests */
     val integrationTestPath: String
