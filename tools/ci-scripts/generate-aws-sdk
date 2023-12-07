@@ -23,12 +23,7 @@ fi
 
 echo -e "${C_YELLOW}Taking examples from 'awsdocs/aws-doc-sdk-examples'...${C_RESET}"
 examples_revision=$(cd aws-doc-sdk-examples; git rev-parse HEAD)
-# TODO(removeSdkExamplesDevPreview): One release after `rust_dev_preview` is renamed to `rust`, this check can be cleaned up
-if [[ -d "aws-doc-sdk-examples/rust" ]]; then
-  mv aws-doc-sdk-examples/rust smithy-rs/aws/sdk/examples
-else
-  mv aws-doc-sdk-examples/rust_dev_preview smithy-rs/aws/sdk/examples
-fi
+mv aws-doc-sdk-examples/rustv1 smithy-rs/aws/sdk/examples
 rm -rf smithy-rs/aws/sdk/examples/.cargo
 
 echo -e "${C_YELLOW}Creating empty model metadata file since we don't have model update information...${C_RESET}"
