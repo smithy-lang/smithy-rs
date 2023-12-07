@@ -33,7 +33,7 @@ impl ShellOperation for GetOwners {
 
         let mut result = Vec::new();
         let (stdout, _) = output_text(&output);
-        let line_re = Regex::new(r#"^([\w\d\-_:]+)\s+\([\w\d\s\-_]+\)$"#).unwrap();
+        let line_re = Regex::new(r"^([\w\d\-_:]+)\s+\([\w\d\s\-_]+\)$").unwrap();
         for line in stdout.lines() {
             if let Some(captures) = line_re.captures(line) {
                 let user_id = captures.get(1).unwrap().as_str();
