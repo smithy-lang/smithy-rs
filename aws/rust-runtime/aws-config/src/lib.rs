@@ -18,9 +18,8 @@
 //! These implementations can be used either via the default chain implementation
 //! [`from_env`]/[`ConfigLoader`] or ad-hoc individual credential and region providers.
 //!
-//! [`ConfigLoader`](ConfigLoader) can combine different configuration sources into an AWS shared-config:
-//! [`SdkConfig`](aws_types::SdkConfig). [`SdkConfig`](aws_types::SdkConfig) can be used configure
-//! an AWS service client.
+//! [`ConfigLoader`] can combine different configuration sources into an AWS shared-config:
+//! [`SdkConfig`]. `SdkConfig` can be used configure an AWS service client.
 //!
 //! # Examples
 //!
@@ -239,7 +238,7 @@ mod loader {
         Set(SharedCredentialsProvider),
     }
 
-    /// Load a cross-service [`SdkConfig`](aws_types::SdkConfig) from the environment
+    /// Load a cross-service [`SdkConfig`] from the environment
     ///
     /// This builder supports overriding individual components of the generated config. Overriding a component
     /// will skip the standard resolution chain from **for that component**. For example,
@@ -269,13 +268,13 @@ mod loader {
     }
 
     impl ConfigLoader {
-        /// Sets the [`BehaviorVersion`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Sets the [`BehaviorVersion`] used to build [`SdkConfig`].
         pub fn behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
             self.behavior_version = Some(behavior_version);
             self
         }
 
-        /// Override the region used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the region used to build [`SdkConfig`].
         ///
         /// # Examples
         /// ```no_run
@@ -291,7 +290,7 @@ mod loader {
             self
         }
 
-        /// Override the retry_config used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the retry_config used to build [`SdkConfig`].
         ///
         /// # Examples
         /// ```no_run
@@ -309,7 +308,7 @@ mod loader {
             self
         }
 
-        /// Override the timeout config used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the timeout config used to build [`SdkConfig`].
         ///
         /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
         /// provider chain are configured separately.
@@ -356,7 +355,7 @@ mod loader {
             self
         }
 
-        /// Override the [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) for this [`ConfigLoader`].
+        /// Override the [`HttpClient`] for this [`ConfigLoader`].
         ///
         /// The HTTP client will be used for both AWS services and credentials providers.
         ///
@@ -392,7 +391,7 @@ mod loader {
             self
         }
 
-        /// Override the identity cache used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the identity cache used to build [`SdkConfig`].
         ///
         /// The identity cache caches AWS credentials and SSO tokens. By default, a lazy cache is used
         /// that will load credentials upon first request, cache them, and then reload them during
@@ -426,7 +425,7 @@ mod loader {
             self
         }
 
-        /// Override the credentials provider used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the credentials provider used to build [`SdkConfig`].
         ///
         /// # Examples
         ///
@@ -484,7 +483,7 @@ mod loader {
             self.credentials_provider(Credentials::for_tests())
         }
 
-        /// Override the name of the app used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the name of the app used to build [`SdkConfig`].
         ///
         /// This _optional_ name is used to identify the application in the user agent that
         /// gets sent along with requests.
@@ -608,7 +607,7 @@ mod loader {
             self
         }
 
-        /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`].
         ///
         /// This configures stalled stream protection. When enabled, download streams
         /// that stop (stream no data) for longer than a configured grace period will return an error.
@@ -649,7 +648,7 @@ mod loader {
         ///
         /// NOTE: When an override is provided, the default implementation is **not** used as a fallback.
         /// This means that if you provide a region provider that does not return a region, no region will
-        /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
+        /// be set in the resulting [`SdkConfig`].
         pub async fn load(self) -> SdkConfig {
             let time_source = self.time_source.unwrap_or_default();
 
