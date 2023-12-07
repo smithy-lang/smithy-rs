@@ -51,7 +51,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                     let result = $generator::new().unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     match expect_error(result.unwrap()) {
-                        TestStreamError::Unhandled(err) => {
+                        err @ TestStreamError::Unhandled(_) => {
                             let message = format!("{}", crate::error::DisplayErrorContext(&err));
                             let expected = "message: \"unmodeled error\"";
                             assert!(message.contains(expected), "Expected '{message}' to contain '{expected}'");

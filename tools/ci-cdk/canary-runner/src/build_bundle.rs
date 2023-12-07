@@ -215,7 +215,7 @@ fn name_hashed_bundle(
     // Lambda function names can't have periods in them
     let rust_version = rust_version.map(|s| s.replace('.', ""));
     let rust_version = rust_version.as_deref().unwrap_or("unknown");
-    let sdk_release_tag = sdk_release_tag.map(|s| s.to_string().replace('-', ""));
+    let sdk_release_tag = sdk_release_tag.map(|s| s.to_string().replace(['-', '.'], ""));
     let sdk_release_tag = sdk_release_tag.as_deref().unwrap_or("untagged");
     Ok(format!(
         "canary-{sdk_release_tag}-{rust_version}-{bin_hash}.zip"
@@ -546,6 +546,15 @@ default = ["latest"]
                 "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
                 Some("1.62.1"),
                 Some(&ReleaseTag::from_str("release-2022-12-16").unwrap()),
+            )
+            .unwrap(),
+        );
+        check(
+            "canary-release202212162-1621-7ae6085d2105d5d1e13b10f8.zip",
+            &name_hashed_bundle(
+                "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
+                Some("1.62.1"),
+                Some(&ReleaseTag::from_str("release-2022-12-16.2").unwrap()),
             )
             .unwrap(),
         );

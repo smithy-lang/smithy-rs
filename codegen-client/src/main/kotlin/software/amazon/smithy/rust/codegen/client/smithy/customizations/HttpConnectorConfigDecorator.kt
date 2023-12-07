@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
@@ -32,13 +33,13 @@ private class HttpConnectorConfigCustomization(
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "Connection" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::Connection"),
-        "HttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::HttpClient"),
-        "IntoShared" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared"),
-        "Resolver" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::config_override::Resolver"),
-        "SharedAsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::SharedAsyncSleep"),
-        "SharedHttpClient" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::http::SharedHttpClient"),
-        "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
+        "HttpClient" to configReexport(
+            RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::http::HttpClient"),
+        ),
+        "IntoShared" to configReexport(RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("shared::IntoShared")),
+        "SharedHttpClient" to configReexport(
+            RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::http::SharedHttpClient"),
+        ),
     )
 
     override fun section(section: ServiceConfig): Writable {
@@ -46,14 +47,6 @@ private class HttpConnectorConfigCustomization(
             is ServiceConfig.ConfigImpl -> writable {
                 rustTemplate(
                     """
-                    /// Deprecated. Don't use.
-                    ##[deprecated(
-                        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
-                    )]
-                    pub fn http_connector(&self) -> Option<#{SharedHttpClient}> {
-                        self.runtime_components.http_client()
-                    }
-
                     /// Return the [`SharedHttpClient`](#{SharedHttpClient}) to use when making requests, if any.
                     pub fn http_client(&self) -> Option<#{SharedHttpClient}> {
                         self.runtime_components.http_client()
@@ -66,22 +59,6 @@ private class HttpConnectorConfigCustomization(
             ServiceConfig.BuilderImpl -> writable {
                 rustTemplate(
                     """
-                    /// Deprecated. Don't use.
-                    ##[deprecated(
-                        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
-                    )]
-                    pub fn http_connector(self, http_client: impl #{HttpClient} + 'static) -> Self {
-                        self.http_client(http_client)
-                    }
-
-                    /// Deprecated. Don't use.
-                    ##[deprecated(
-                        note = "HTTP connector configuration changed. See https://github.com/awslabs/smithy-rs/discussions/3022 for upgrade guidance."
-                    )]
-                    pub fn set_http_connector(&mut self, http_client: Option<#{SharedHttpClient}>) -> &mut Self {
-                        self.set_http_client(http_client)
-                    }
-
                     /// Sets the HTTP client to use when making requests.
                     ///
                     /// ## Examples

@@ -6,7 +6,8 @@
 
 set -eux
 
-SEMANTIC_VERSION="${1}"
+STABLE_SEMANTIC_VERSION="${1}"
+UNSTABLE_SEMANTIC_VERSION="${2}"
 SMITHY_RS_DIR="$(pwd)/smithy-rs"
 ARTIFACTS_DIR="$(pwd)/artifacts/upgrade-gradle-properties"
 mkdir -p "${ARTIFACTS_DIR}"
@@ -14,7 +15,7 @@ mkdir -p "${ARTIFACTS_DIR}"
 pushd "${SMITHY_RS_DIR}"
 echo "gradle.properties BEFORE the upgrade"
 cat gradle.properties
-publisher upgrade-runtime-crates-version --version "${SEMANTIC_VERSION}"
+publisher upgrade-runtime-crates-version --stable-version "${STABLE_SEMANTIC_VERSION}" --version "${UNSTABLE_SEMANTIC_VERSION}"
 echo "gradle.properties AFTER the upgrade"
 cat gradle.properties
 git status

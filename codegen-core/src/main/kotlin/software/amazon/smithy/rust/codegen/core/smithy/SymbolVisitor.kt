@@ -226,11 +226,11 @@ open class SymbolVisitor(
     }
 
     override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {
-        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
+        TODO("Not yet implemented: https://github.com/smithy-lang/smithy-rs/issues/312")
     }
 
     override fun bigDecimalShape(shape: BigDecimalShape?): Symbol {
-        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
+        TODO("Not yet implemented: https://github.com/smithy-lang/smithy-rs/issues/312")
     }
 
     override fun operationShape(shape: OperationShape): Symbol {

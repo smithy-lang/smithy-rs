@@ -24,7 +24,7 @@ object CrateVersioner {
                 IndependentCrateVersioner(
                     VersionsManifest.fromFile(versionsManifestPath),
                     ModelMetadata.fromFile(modelMetadataPath),
-                    devPreview = true,
+                    devPreview = false,
                     smithyRsVersion = getSmithyRsVersion(rootProject),
                 )
             }
@@ -39,7 +39,7 @@ interface VersionCrate {
 
 class SynchronizedCrateVersioner(
     properties: PropertyRetriever,
-    private val sdkVersion: String = properties.get("smithy.rs.runtime.crate.version")
+    private val sdkVersion: String = properties.get(CrateSet.STABLE_VERSION_PROP_NAME)
         ?: throw Exception("SDK runtime crate version missing"),
 ) : VersionCrate {
     init {

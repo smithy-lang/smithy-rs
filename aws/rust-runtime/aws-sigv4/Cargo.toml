@@ -6,14 +6,14 @@ description = "SigV4 signer for HTTP requests and Event Stream messages."
 edition = "2021"
 exclude = ["aws-sig-v4-test-suite/*"]
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 default = ["sign-http"]
 http0-compat = ["dep:http"]
 sign-http = ["dep:http", "dep:percent-encoding", "dep:form_urlencoded"]
 sign-eventstream = ["dep:aws-smithy-eventstream"]
-sigv4a = ["dep:p256", "dep:num-bigint", "dep:zeroize", "dep:ring"]
+sigv4a = ["dep:p256", "dep:crypto-bigint", "dep:subtle", "dep:zeroize", "dep:ring"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
@@ -30,9 +30,10 @@ num-bigint = { version = "0.4", optional = true }
 once_cell = "1.8"
 p256 = { version = "0.11", features = ["ecdsa"], optional = true }
 percent-encoding = { version = "2.1", optional = true }
-regex = "1.5"
 ring = { version = "0.17.5", optional = true }
 sha2 = "0.10"
+crypto-bigint = { version = "0.5.4", optional = true }
+subtle = { version = "2.5.0", optional = true }
 time = "0.3.5"
 tracing = "0.1"
 zeroize = { version = "^1", optional = true }
@@ -69,3 +70,6 @@ all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[package.metadata.smithy-rs-release-tooling]
+stable = true

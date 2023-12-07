@@ -7,9 +7,9 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -25,7 +25,9 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "AsyncSleep" to sleepModule.resolve("AsyncSleep"),
+        "AsyncSleep" to configReexport(sleepModule.resolve("AsyncSleep")),
+        "SharedAsyncSleep" to configReexport(sleepModule.resolve("SharedAsyncSleep")),
+        "Sleep" to configReexport(sleepModule.resolve("Sleep")),
         "ClientRateLimiter" to retries.resolve("ClientRateLimiter"),
         "ClientRateLimiterPartition" to retries.resolve("ClientRateLimiterPartition"),
         "debug" to RuntimeType.Tracing.resolve("debug"),
@@ -33,11 +35,10 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
         "RetryConfig" to retryConfig.resolve("RetryConfig"),
         "RetryMode" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryMode"),
         "RetryPartition" to retries.resolve("RetryPartition"),
-        "SharedAsyncSleep" to sleepModule.resolve("SharedAsyncSleep"),
-        "SharedRetryStrategy" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::retries::SharedRetryStrategy"),
-        "SharedTimeSource" to RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource"),
-        "Sleep" to sleepModule.resolve("Sleep"),
-        "StandardRetryStrategy" to retries.resolve("strategy::StandardRetryStrategy"),
+        "SharedAsyncSleep" to configReexport(sleepModule.resolve("SharedAsyncSleep")),
+        "SharedRetryStrategy" to configReexport(RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::retries::SharedRetryStrategy")),
+        "SharedTimeSource" to configReexport(RuntimeType.smithyAsync(runtimeConfig).resolve("time::SharedTimeSource")),
+        "StandardRetryStrategy" to configReexport(retries.resolve("strategy::StandardRetryStrategy")),
         "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
         "TimeoutConfig" to timeoutModule.resolve("TimeoutConfig"),
     )
@@ -63,7 +64,6 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             self.config.load::<#{TimeoutConfig}>()
                         }
 
-                        ##[doc(hidden)]
                         /// Returns a reference to the retry partition contained in this config, if any.
                         ///
                         /// WARNING: This method is unstable and may be removed at any time. Do not rely on this
@@ -246,7 +246,6 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         *codegenScope,
                     )
 
-                    Attribute.DocHidden.render(this)
                     rustTemplate(
                         """
                         /// Set the partition for retry-related state. When clients share a retry partition, they will
@@ -260,7 +259,6 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         *codegenScope,
                     )
 
-                    Attribute.DocHidden.render(this)
                     rustTemplate(
                         """
                         /// Set the partition for retry-related state. When clients share a retry partition, they will
@@ -286,7 +284,7 @@ class ResiliencyReExportCustomization(codegenContext: ClientCodegenContext) {
     fun extras(rustCrate: RustCrate) {
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
-                "pub use #{sleep}::{AsyncSleep, SharedAsyncSleep, Sleep};",
+                "pub use #{sleep}::{Sleep};",
                 "sleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep"),
             )
         }

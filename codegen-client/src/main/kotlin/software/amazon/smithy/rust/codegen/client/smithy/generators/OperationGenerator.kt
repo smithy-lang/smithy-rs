@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientHttpBou
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -77,10 +78,9 @@ open class OperationGenerator(
         )
         Attribute(derive(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         Attribute.NonExhaustive.render(operationWriter)
-        Attribute.DocHidden.render(operationWriter)
         operationWriter.rust("pub struct $operationName;")
         operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
-            Attribute.DocHidden.render(operationWriter)
+            docs("Creates a new `$operationName`")
             rustBlock("pub fn new() -> Self") {
                 rust("Self")
             }
@@ -91,11 +91,11 @@ open class OperationGenerator(
                 *preludeScope,
                 "Arc" to RuntimeType.Arc,
                 "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
-                "Input" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Input"),
+                "Input" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Input"),
                 "Operation" to symbolProvider.toSymbol(operationShape),
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
@@ -164,9 +164,9 @@ open class OperationGenerator(
                 }
                 """,
                 *codegenScope,
-                "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
+                "Error" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Error"),
                 "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-                "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "OrchestratorError" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::error::OrchestratorError"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),

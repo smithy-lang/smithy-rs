@@ -16,6 +16,7 @@ use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use smithy_rs_tool_common::ci::running_in_ci;
+use smithy_rs_tool_common::package::PackageStability;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -78,9 +79,30 @@ impl Manifest {
         let value = self.metadata.get("package").and_then(|v| v.get("publish"));
         match value {
             None => Ok(true),
-            Some(value) => value
-                .as_bool()
-                .ok_or(anyhow::Error::msg("unexpected publish setting")),
+            Some(value) => value.as_bool().ok_or(anyhow::Error::msg(format!(
+                "unexpected publish setting: {value}"
+            ))),
+        }
+    }
+
+    fn stability(&self) -> Result<PackageStability> {
+        let value = self
+            .metadata
+            .get("package")
+            .and_then(|v| v.get("metadata"))
+            .and_then(|v| v.get("smithy-rs-release-tooling"))
+            .and_then(|v| v.get("stable"));
+        match value {
+            None => Ok(PackageStability::Unstable),
+            Some(value) => {
+                if value.as_bool().ok_or(anyhow::Error::msg(format!(
+                    "unexpected stable setting: {value}"
+                )))? {
+                    Ok(PackageStability::Stable)
+                } else {
+                    Ok(PackageStability::Unstable)
+                }
+            }
         }
     }
 }
@@ -122,11 +144,21 @@ impl Versions {
     fn get(&self, crate_name: &str) -> Option<&Version> {
         self.0.get(crate_name).map(|v| &v.version)
     }
+
+    fn stable(&self, crate_name: &str) -> Option<bool> {
+        match self.0.get(crate_name) {
+            Some(VersionWithMetadata { stability, .. }) => {
+                Some(*stability == PackageStability::Stable)
+            }
+            _ => None,
+        }
+    }
 }
 
 struct VersionWithMetadata {
     version: Version,
     publish: bool,
+    stability: PackageStability,
 }
 
 async fn read_manifests(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Manifest>> {
@@ -150,6 +182,7 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
             None => continue,
         };
         let publish = manifest.publish()?;
+        let stability = manifest.stability()?;
         let name = package
             .get("name")
             .and_then(|name| name.as_str())
@@ -163,7 +196,14 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
                 anyhow::Error::msg(format!("{:?} is missing a package version", manifest.path))
             })?;
         let version = parse_version(&manifest.path, version)?;
-        versions.insert(name.into(), VersionWithMetadata { version, publish });
+        versions.insert(
+            name.into(),
+            VersionWithMetadata {
+                version,
+                publish,
+                stability,
+            },
+        );
     }
     Ok(Versions(versions))
 }
@@ -319,16 +359,19 @@ fn fix_manifest(versions: &Versions, manifest: &mut Manifest) -> Result<usize> {
 mod tests {
     use super::*;
 
-    fn make_versions<'a>(versions: impl Iterator<Item = &'a (&'a str, &'a str, bool)>) -> Versions {
+    fn make_versions<'a>(
+        versions: impl Iterator<Item = &'a (&'a str, &'a str, bool, PackageStability)>,
+    ) -> Versions {
         let map = versions
             .into_iter()
-            .map(|(name, version, publish)| {
+            .map(|(name, version, publish, stability)| {
                 let publish = *publish;
                 (
                     name.to_string(),
                     VersionWithMetadata {
                         version: Version::parse(&version).unwrap(),
                         publish,
+                        stability: *stability,
                     },
                 )
             })
@@ -362,9 +405,19 @@ mod tests {
             metadata,
         };
         let versions = &[
-            ("local_build_something", "0.2.0", true),
-            ("local_dev_something", "0.1.0", false),
-            ("local_something", "1.1.3", false),
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", false, PackageStability::Stable),
         ];
         let versions = make_versions(versions.iter());
         fix_manifest(&versions, &mut manifest).expect_err("depends on unpublished local something");
@@ -398,9 +451,19 @@ mod tests {
             metadata,
         };
         let versions = &[
-            ("local_build_something", "0.2.0", true),
-            ("local_dev_something", "0.1.0", false),
-            ("local_something", "1.1.3", true),
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", true, PackageStability::Stable),
         ];
         let versions = make_versions(versions.iter());
 
@@ -458,5 +521,53 @@ mod tests {
         assert!(is_example_manifest(
             "aws-sdk-rust/examples/foo/bar/Cargo.toml"
         ));
+    }
+
+    #[test]
+    fn test_package_stability_from_manifest() {
+        fn verify_package_stability_for_manifest(
+            manifest: &[u8],
+            expected_stability: PackageStability,
+        ) {
+            let metadata = toml::from_slice(manifest).unwrap();
+            let manifest = Manifest {
+                path: "test".into(),
+                metadata,
+            };
+            assert_eq!(expected_stability, manifest.stability().unwrap());
+        }
+
+        let stable_manifest = br#"
+            [package]
+            name = "test"
+            version = "1.0.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = true
+        "#;
+        verify_package_stability_for_manifest(stable_manifest, PackageStability::Stable);
+
+        let explicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = false
+        "#;
+        verify_package_stability_for_manifest(
+            explicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
+
+        let implicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+        "#;
+        verify_package_stability_for_manifest(
+            implicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
     }
 }

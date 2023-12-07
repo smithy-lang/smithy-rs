@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.runWithWarnings
 import software.amazon.smithy.rust.codegen.core.util.CommandError
+import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 /**
  * End-to-end test of endpoint resolvers, attaching a real resolver to a fully generated service
@@ -128,7 +129,7 @@ class EndpointsDecoratorTest {
         val testDir = clientIntegrationTest(
             model,
             // Just run integration tests.
-            IntegrationTestParams(command = { "cargo test --test *".runWithWarnings(it) }),
+            IntegrationTestParams(command = { "cargo test --all-features --test *".runCommand(it) }),
         ) { clientCodegenContext, rustCrate ->
             rustCrate.integrationTest("endpoint_params_test") {
                 val moduleName = clientCodegenContext.moduleUseName()

@@ -67,7 +67,7 @@ pub struct UriSpec {
 }
 
 impl UriSpec {
-    // TODO(https://github.com/awslabs/smithy-rs/issues/950): When we add support for the endpoint
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/950): When we add support for the endpoint
     // trait, this constructor will take in a first argument `host_prefix`.
     pub fn new(path_and_query: PathAndQuerySpec) -> Self {
         UriSpec {
@@ -115,7 +115,7 @@ impl From<&PathSpec> for Regex {
                 .fold(String::new(), |a, b| a + sep + &b)
         };
 
-        Regex::new(&format!("^{}$", re)).expect("invalid `Regex` from `PathSpec`; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+        Regex::new(&format!("^{}$", re)).expect("invalid `Regex` from `PathSpec`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     }
 }
 
@@ -150,7 +150,7 @@ impl RequestSpec {
     /// kind of conflicts. However, the Smithy CLI does allow _other_ conflicting patterns to
     /// coexist, e.g. `/` and `/{label}`. We therefore have to take a stance on (1), since if we
     /// route arbitrarily [we render basic usage
-    /// impossible](https://github.com/awslabs/smithy-rs/issues/1009).
+    /// impossible](https://github.com/smithy-lang/smithy-rs/issues/1009).
     /// So this ranking of routes implements some basic pattern conflict disambiguation with some
     /// common sense. It's also the same behavior that [the TypeScript sSDK is implementing].
     ///

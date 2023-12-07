@@ -116,4 +116,8 @@ pub mod runtime_components;
 
 pub mod runtime_plugin;
 
+pub mod behavior_version;
+
 pub mod ser_de;
+
+pub mod stalled_stream_protection;

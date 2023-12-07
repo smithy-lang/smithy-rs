@@ -1,11 +1,11 @@
 RFC: Finding New Home for Credential Types
 ===================================================
 
-> Status: Implemented in [smithy-rs#2108](https://github.com/awslabs/smithy-rs/pull/2108)
+> Status: Implemented in [smithy-rs#2108](https://github.com/smithy-lang/smithy-rs/pull/2108)
 >
 > Applies to: clients
 
-This RFC supplements [RFC 28](https://github.com/awslabs/smithy-rs/blob/main/design/src/rfcs/rfc0028_sdk_credential_cache_type_safety.md) and discusses for the selected design where to place the types for credentials providers, credentials caching, and everything else that comes with them.
+This RFC supplements [RFC 28](https://github.com/smithy-lang/smithy-rs/blob/main/design/src/rfcs/rfc0028_sdk_credential_cache_type_safety.md) and discusses for the selected design where to place the types for credentials providers, credentials caching, and everything else that comes with them.
 
 It is assumed that the primary motivation behind the introduction of type safe credentials caching remains the same as the preceding RFC.
 

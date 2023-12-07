@@ -40,9 +40,11 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNullIfEmpty
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
+import java.nio.file.Files
 import java.nio.file.Files.createTempDirectory
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
+import kotlin.io.path.writeText
 
 val TestModuleDocProvider = object : ModuleDocProvider {
     override fun docsWriter(module: RustModule.LeafModule): Writable = writable {
@@ -109,7 +111,7 @@ object TestWorkspace {
             )
             newProject.resolve("rust-toolchain.toml").writeText(
                 // help rust select the right version when we run cargo test
-                // TODO(https://github.com/awslabs/smithy-rs/issues/2048): load this from the msrv property using a
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this from the msrv property using a
                 //  method as we do for runtime crate versions
                 "[toolchain]\nchannel = \"1.70.0\"\n",
             )
@@ -162,6 +164,7 @@ fun generatePluginContext(
     model: Model,
     additionalSettings: ObjectNode = ObjectNode.builder().build(),
     addModuleToEventStreamAllowList: Boolean = false,
+    moduleVersion: String = "1.0.0",
     service: String? = null,
     runtimeConfig: RuntimeConfig? = null,
     overrideTestDir: File? = null,
@@ -172,7 +175,7 @@ fun generatePluginContext(
     val manifest = FileManifest.create(testPath)
     var settingsBuilder = Node.objectNodeBuilder()
         .withMember("module", Node.from(moduleName))
-        .withMember("moduleVersion", Node.from("1.0.0"))
+        .withMember("moduleVersion", Node.from(moduleVersion))
         .withMember("moduleDescription", Node.from("test"))
         .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
         .letIf(service != null) { it.withMember("service", service) }
@@ -340,12 +343,31 @@ fun TestWriterDelegator.compileAndTest(
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }
-    val env = mapOf("RUSTFLAGS" to "-A dead_code")
+
+    // Clean `RUSTFLAGS` because in CI we pass in `--deny warnings` and
+    // we still generate test code with warnings.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
+    val env = mapOf("RUSTFLAGS" to "")
+    baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
+
     val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
         "cargo clippy --all-features".runCommand(baseDir, env)
     }
     return testOutput
+}
+
+fun Path.writeDotCargoConfigToml(rustFlags: List<String>) {
+    val dotCargoDir = this.resolve(".cargo")
+    Files.createDirectory(dotCargoDir)
+
+    dotCargoDir.resolve("config.toml")
+        .writeText(
+            """
+            [build]
+            rustflags = [${rustFlags.joinToString(",") { "\"$it\"" }}]
+            """.trimIndent(),
+        )
 }
 
 fun TestWriterDelegator.rustSettings() =
