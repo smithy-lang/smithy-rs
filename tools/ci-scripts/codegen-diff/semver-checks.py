@@ -37,7 +37,7 @@ def main(skip_generation=False):
     deny_list = [
         # add crate names here to exclude them from the semver checks
     ]
-    for path in list(os.listdir())[:10]:
+    for path in os.listdir():
         eprint(f'checking {path}...', end='')
         if path in deny_list:
             eprint(f"skipping {path} because it is in 'deny_list'")
