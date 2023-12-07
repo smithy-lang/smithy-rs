@@ -33,9 +33,9 @@ class ResponseDeserializerGenerator(
 
     private val codegenScope by lazy {
         val interceptorContext =
-            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context")
+            CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType().resolve("client::interceptors::context")
         val orchestrator =
-            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator")
+            CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType().resolve("client::orchestrator")
         arrayOf(
             *preludeScope,
             "Error" to interceptorContext.resolve("Error"),
@@ -44,7 +44,7 @@ class ResponseDeserializerGenerator(
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
-            "ResponseDeserializer" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::ser_de::ResponseDeserializer"),
+            "DeserializeResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::ser_de::DeserializeResponse"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
@@ -61,7 +61,7 @@ class ResponseDeserializerGenerator(
             """
             ##[derive(Debug)]
             struct ${operationName}ResponseDeserializer;
-            impl #{ResponseDeserializer} for ${operationName}ResponseDeserializer {
+            impl #{DeserializeResponse} for ${operationName}ResponseDeserializer {
                 #{deserialize_streaming}
 
                 fn deserialize_nonstreaming(&self, response: &#{HttpResponse}) -> #{OutputOrError} {

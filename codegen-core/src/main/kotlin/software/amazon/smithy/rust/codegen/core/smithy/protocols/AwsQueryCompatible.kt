@@ -49,7 +49,7 @@ class AwsQueryCompatible(
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.HttpHeaderMap,
+        "Headers" to RuntimeType.headers(runtimeConfig),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
         "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
@@ -74,7 +74,7 @@ class AwsQueryCompatible(
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     let mut builder =
                         #{json_errors}::parse_error_metadata(response_body, response_headers)?;
                     if let Some((error_code, error_type)) =
@@ -92,4 +92,7 @@ class AwsQueryCompatible(
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         awsJson.parseEventStreamErrorMetadata(operationShape)
+
+    override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
+        listOf("x-amz-target" to "${codegenContext.serviceShape.id.name}.${operationShape.id.name}")
 }

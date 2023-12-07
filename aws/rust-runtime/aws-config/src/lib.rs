@@ -11,6 +11,7 @@
     rustdoc::missing_crate_level_docs,
     unreachable_pub
 )]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 //! `aws-config` provides implementations of region and credential resolution.
 //!
@@ -25,14 +26,15 @@
 //!
 //! Load default SDK configuration:
 //! ```no_run
-//! # mod aws_sdk_dynamodb {
+//! use aws_config::BehaviorVersion;
+//! mod aws_sdk_dynamodb {
 //! #   pub struct Client;
 //! #   impl Client {
 //! #     pub fn new(config: &aws_types::SdkConfig) -> Self { Client }
 //! #   }
 //! # }
 //! # async fn docs() {
-//! let config = aws_config::load_from_env().await;
+//! let config = aws_config::load_defaults(BehaviorVersion::v2023_11_09()).await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
 //! ```
@@ -48,6 +50,7 @@
 //! # async fn docs() {
 //! # use aws_config::meta::region::RegionProviderChain;
 //! let region_provider = RegionProviderChain::default_provider().or_else("us-east-1");
+//! // Note: requires the `behavior-version-latest` feature enabled
 //! let config = aws_config::from_env().region(region_provider).load().await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
@@ -84,7 +87,7 @@
 //! # fn custom_provider(base: &SdkConfig) -> impl ProvideCredentials {
 //! #   base.credentials_provider().unwrap().clone()
 //! # }
-//! let sdk_config = aws_config::load_from_env().await;
+//! let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
 //! let custom_credentials_provider = custom_provider(&sdk_config);
 //! let dynamo_config = aws_sdk_dynamodb::config::Builder::from(&sdk_config)
 //!   .credentials_provider(custom_credentials_provider)
@@ -93,14 +96,21 @@
 //! # }
 //! ```
 
-pub use aws_smithy_http::endpoint;
+pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 // Re-export types from aws-types
 pub use aws_types::{
     app_name::{AppName, InvalidAppName},
+    region::Region,
     SdkConfig,
 };
 /// Load default sources for all configuration with override support
 pub use loader::ConfigLoader;
+
+/// Types for configuring identity caching.
+pub mod identity {
+    pub use aws_smithy_runtime::client::identity::IdentityCache;
+    pub use aws_smithy_runtime::client::identity::LazyCacheBuilder;
+}
 
 #[allow(dead_code)]
 const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -112,7 +122,6 @@ mod fs_util;
 mod http_credential_provider;
 mod json_credentials;
 
-pub mod connector;
 pub mod credential_process;
 pub mod default_provider;
 pub mod ecs;
@@ -122,55 +131,102 @@ pub mod meta;
 pub mod profile;
 pub mod provider_config;
 pub mod retry;
-#[cfg(feature = "credentials-sso")]
+mod sensitive_command;
+#[cfg(feature = "sso")]
 pub mod sso;
+pub mod stalled_stream_protection;
 pub(crate) mod standard_property;
 pub mod sts;
 pub mod timeout;
 pub mod web_identity_token;
 
-/// Create an environment loader for AWS Configuration
+/// Create a config loader with the _latest_ defaults.
+///
+/// This loader will always set [`BehaviorVersion::latest`].
 ///
 /// # Examples
 /// ```no_run
 /// # async fn create_config() {
-/// use aws_types::region::Region;
 /// let config = aws_config::from_env().region("us-east-1").load().await;
 /// # }
 /// ```
+#[cfg(feature = "behavior-version-latest")]
 pub fn from_env() -> ConfigLoader {
-    ConfigLoader::default()
+    ConfigLoader::default().behavior_version(BehaviorVersion::latest())
 }
 
-/// Load a default configuration from the environment
+/// Load default configuration with the _latest_ defaults.
 ///
-/// Convenience wrapper equivalent to `aws_config::from_env().load().await`
-pub async fn load_from_env() -> aws_types::SdkConfig {
+/// Convenience wrapper equivalent to `aws_config::load_defaults(BehaviorVersion::latest()).await`
+#[cfg(feature = "behavior-version-latest")]
+pub async fn load_from_env() -> SdkConfig {
     from_env().load().await
 }
 
+/// Create a config loader with the _latest_ defaults.
+#[cfg(not(feature = "behavior-version-latest"))]
+#[deprecated(
+    note = "Use the `aws_config::defaults` function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
+)]
+pub fn from_env() -> ConfigLoader {
+    ConfigLoader::default().behavior_version(BehaviorVersion::latest())
+}
+
+/// Load default configuration with the _latest_ defaults.
+#[cfg(not(feature = "behavior-version-latest"))]
+#[deprecated(
+    note = "Use the `aws_config::load_defaults` function. If you don't care about future default behavior changes, you can continue to use this function by enabling the `behavior-version-latest` feature. Doing so will make this deprecation notice go away."
+)]
+pub async fn load_from_env() -> SdkConfig {
+    load_defaults(BehaviorVersion::latest()).await
+}
+
+/// Create a config loader with the defaults for the given behavior version.
+///
+/// # Examples
+/// ```no_run
+/// # async fn create_config() {
+/// use aws_config::BehaviorVersion;
+/// let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
+///     .region("us-east-1")
+///     .load()
+///     .await;
+/// # }
+/// ```
+pub fn defaults(version: BehaviorVersion) -> ConfigLoader {
+    ConfigLoader::default().behavior_version(version)
+}
+
+/// Load default configuration with the given behavior version.
+///
+/// Convenience wrapper equivalent to `aws_config::defaults(behavior_version).load().await`
+pub async fn load_defaults(version: BehaviorVersion) -> SdkConfig {
+    defaults(version).load().await
+}
+
 mod loader {
-    use std::sync::Arc;
-
-    use aws_credential_types::cache::CredentialsCache;
-    use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
-    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-    use aws_smithy_client::http_connector::HttpConnector;
-    use aws_smithy_types::retry::RetryConfig;
-    use aws_smithy_types::timeout::TimeoutConfig;
-    use aws_types::app_name::AppName;
-    use aws_types::docs_for;
-    use aws_types::os_shim_internal::{Env, Fs};
-    use aws_types::SdkConfig;
-
-    use crate::connector::default_connector;
     use crate::default_provider::use_dual_stack::use_dual_stack_provider;
     use crate::default_provider::use_fips::use_fips_provider;
     use crate::default_provider::{app_name, credentials, region, retry_config, timeout_config};
     use crate::meta::region::ProvideRegion;
     use crate::profile::profile_file::ProfileFiles;
     use crate::provider_config::ProviderConfig;
+    use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
+    use aws_credential_types::Credentials;
+    use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
+    use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+    use aws_smithy_runtime_api::client::http::HttpClient;
+    use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
+    use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
+    use aws_smithy_runtime_api::shared::IntoShared;
+    use aws_smithy_types::retry::RetryConfig;
+    use aws_smithy_types::timeout::TimeoutConfig;
+    use aws_types::app_name::AppName;
+    use aws_types::docs_for;
+    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::sdk_config::SharedHttpClient;
+    use aws_types::SdkConfig;
 
     #[derive(Default, Debug)]
     enum CredentialsProviderOption {
@@ -192,7 +248,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
-        credentials_cache: Option<CredentialsCache>,
+        identity_cache: Option<SharedIdentityCache>,
         credentials_provider: CredentialsProviderOption,
         endpoint_url: Option<String>,
         region: Option<Box<dyn ProvideRegion>>,
@@ -200,17 +256,25 @@ mod loader {
         sleep: Option<SharedAsyncSleep>,
         timeout_config: Option<TimeoutConfig>,
         provider_config: Option<ProviderConfig>,
-        http_connector: Option<HttpConnector>,
+        http_client: Option<SharedHttpClient>,
         profile_name_override: Option<String>,
         profile_files_override: Option<ProfileFiles>,
         use_fips: Option<bool>,
         use_dual_stack: Option<bool>,
         time_source: Option<SharedTimeSource>,
+        stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
+        behavior_version: Option<BehaviorVersion>,
     }
 
     impl ConfigLoader {
+        /// Sets the [`BehaviorVersion`] used to build [`SdkConfig`](aws_types::SdkConfig).
+        pub fn behavior_version(mut self, behavior_version: BehaviorVersion) -> Self {
+            self.behavior_version = Some(behavior_version);
+            self
+        }
+
         /// Override the region used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
         /// # Examples
@@ -246,6 +310,7 @@ mod loader {
         }
 
         /// Override the timeout config used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
         /// **Note: This only sets timeouts for calls to AWS services.** Timeouts for the credentials
         /// provider chain are configured separately.
         ///
@@ -270,82 +335,94 @@ mod loader {
             self
         }
 
-        /// Override the sleep implementation for this [`ConfigLoader`]. The sleep implementation
-        /// is used to create timeout futures.
+        /// Override the sleep implementation for this [`ConfigLoader`].
+        ///
+        /// The sleep implementation is used to create timeout futures.
+        /// You generally won't need to change this unless you're using an async runtime other
+        /// than Tokio.
         pub fn sleep_impl(mut self, sleep: impl AsyncSleep + 'static) -> Self {
             // it's possible that we could wrapping an `Arc in an `Arc` and that's OK
-            self.sleep = Some(SharedAsyncSleep::new(sleep));
+            self.sleep = Some(sleep.into_shared());
             self
         }
 
-        /// Set the time source used for tasks like signing requests
+        /// Set the time source used for tasks like signing requests.
+        ///
+        /// You generally won't need to change this unless you're compiling for a target
+        /// that can't provide a default, such as WASM, or unless you're writing a test against
+        /// the client that needs a fixed time.
         pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
-            self.time_source = Some(SharedTimeSource::new(time_source));
+            self.time_source = Some(time_source.into_shared());
             self
         }
 
-        /// Override the [`HttpConnector`] for this [`ConfigLoader`]. The connector will be used for
-        /// both AWS services and credential providers. When [`HttpConnector::ConnectorFn`] is used,
-        /// the connector will be lazily instantiated as needed based on the provided settings.
+        /// Override the [`HttpClient`](aws_smithy_runtime_api::client::http::HttpClient) for this [`ConfigLoader`].
         ///
-        /// **Note**: In order to take advantage of late-configured timeout settings, you MUST use
-        /// [`HttpConnector::ConnectorFn`]
-        /// when configuring this connector.
+        /// The HTTP client will be used for both AWS services and credentials providers.
         ///
-        /// If you wish to use a separate connector when creating clients, use the client-specific config.
+        /// If you wish to use a separate HTTP client for credentials providers when creating clients,
+        /// then override the HTTP client set with this function on the client-specific `Config`s.
+        ///
         /// ## Examples
+        ///
         /// ```no_run
         /// # use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-        /// use aws_smithy_client::http_connector::HttpConnector;
         /// #[cfg(feature = "client-hyper")]
         /// # async fn create_config() {
         /// use std::time::Duration;
-        /// use aws_smithy_client::{Client, hyper_ext};
-        /// use aws_smithy_client::erase::DynConnector;
-        /// use aws_smithy_client::http_connector::ConnectorSettings;
+        /// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
         ///
-        /// let connector_fn = |settings:  &ConnectorSettings, sleep: Option<SharedAsyncSleep>| {
-        ///   let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        ///       .with_webpki_roots()
-        ///       // NOTE: setting `https_only()` will not allow this connector to work with IMDS.
-        ///       .https_only()
-        ///       .enable_http1()
-        ///       .enable_http2()
-        ///       .build();
-        ///   let mut smithy_connector = hyper_ext::Adapter::builder()
-        ///       // Optionally set things like timeouts as well
-        ///       .connector_settings(settings.clone());
-        ///   smithy_connector.set_sleep_impl(sleep);
-        ///   Some(DynConnector::new(smithy_connector.build(https_connector)))
-        /// };
-        /// let connector = HttpConnector::ConnectorFn(std::sync::Arc::new(connector_fn));
+        /// let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
+        ///     .with_webpki_roots()
+        ///     // NOTE: setting `https_only()` will not allow this connector to work with IMDS.
+        ///     .https_only()
+        ///     .enable_http1()
+        ///     .enable_http2()
+        ///     .build();
+        ///
+        /// let hyper_client = HyperClientBuilder::new().build(tls_connector);
         /// let sdk_config = aws_config::from_env()
-        ///     .http_connector(connector)
+        ///     .http_client(hyper_client)
         ///     .load()
         ///     .await;
         /// # }
         /// ```
-        pub fn http_connector(mut self, http_connector: impl Into<HttpConnector>) -> Self {
-            self.http_connector = Some(http_connector.into());
+        pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
+            self.http_client = Some(http_client.into_shared());
             self
         }
 
-        /// Override the credentials cache used to build [`SdkConfig`](aws_types::SdkConfig).
+        /// Override the identity cache used to build [`SdkConfig`](aws_types::SdkConfig).
+        ///
+        /// The identity cache caches AWS credentials and SSO tokens. By default, a lazy cache is used
+        /// that will load credentials upon first request, cache them, and then reload them during
+        /// another request when they are close to expiring.
         ///
         /// # Examples
         ///
-        /// Override the credentials cache but load the default value for region:
+        /// Change a setting on the default lazy caching implementation:
         /// ```no_run
-        /// # use aws_credential_types::cache::CredentialsCache;
+        /// use aws_config::identity::IdentityCache;
+        /// use std::time::Duration;
+        ///
         /// # async fn create_config() {
         /// let config = aws_config::from_env()
-        ///     .credentials_cache(CredentialsCache::lazy())
+        ///     .identity_cache(
+        ///         IdentityCache::lazy()
+        ///             // Change the load timeout to 10 seconds.
+        ///             // Note: there are other timeouts that could trigger if the load timeout is too long.
+        ///             .load_timeout(Duration::from_secs(10))
+        ///             .build()
+        ///     )
         ///     .load()
         ///     .await;
         /// # }
         /// ```
-        pub fn credentials_cache(mut self, credentials_cache: CredentialsCache) -> Self {
-            self.credentials_cache = Some(credentials_cache);
+        pub fn identity_cache(
+            mut self,
+            identity_cache: impl ResolveCachedIdentity + 'static,
+        ) -> Self {
+            self.identity_cache = Some(identity_cache.into_shared());
             self
         }
 
@@ -382,6 +459,10 @@ mod loader {
         /// anonymous auth for S3, calling operations in STS that don't require a signature,
         /// or using token-based auth.
         ///
+        /// **Note**: For tests, e.g. with a service like DynamoDB Local, this is **not** what you
+        /// want. If credentials are disabled, requests cannot be signed. For these use cases, use
+        /// [`test_credentials`](Self::test_credentials).
+        ///
         /// # Examples
         ///
         /// Turn off credentials in order to call a service without signing:
@@ -396,6 +477,11 @@ mod loader {
         pub fn no_credentials(mut self) -> Self {
             self.credentials_provider = CredentialsProviderOption::ExplicitlyUnset;
             self
+        }
+
+        /// Set test credentials for use when signing requests
+        pub fn test_credentials(self) -> Self {
+            self.credentials_provider(Credentials::for_tests())
         }
 
         /// Override the name of the app used to build [`SdkConfig`](aws_types::SdkConfig).
@@ -522,30 +608,36 @@ mod loader {
             self
         }
 
-        /// Set configuration for all sub-loaders (credentials, region etc.)
+        /// Override the [`StalledStreamProtectionConfig`] used to build [`SdkConfig`](aws_types::SdkConfig).
         ///
-        /// Update the `ProviderConfig` used for all nested loaders. This can be used to override
-        /// the HTTPs connector used by providers or to stub in an in memory `Env` or `Fs` for testing.
+        /// This configures stalled stream protection. When enabled, download streams
+        /// that stop (stream no data) for longer than a configured grace period will return an error.
+        ///
+        /// By default, streams that transmit less than one byte per-second for five seconds will
+        /// be cancelled.
+        ///
+        /// _Note_: When an override is provided, the default implementation is replaced.
         ///
         /// # Examples
         /// ```no_run
-        /// # #[cfg(feature = "hyper-client")]
         /// # async fn create_config() {
-        /// use aws_config::provider_config::ProviderConfig;
-        /// let custom_https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        ///     .with_webpki_roots()
-        ///     .https_only()
-        ///     .enable_http1()
-        ///     .build();
-        /// let provider_config = ProviderConfig::default().with_tcp_connector(custom_https_connector);
-        /// let shared_config = aws_config::from_env().configure(provider_config).load().await;
+        /// use aws_config::stalled_stream_protection::StalledStreamProtectionConfig;
+        /// use std::time::Duration;
+        /// let config = aws_config::from_env()
+        ///     .stalled_stream_protection(
+        ///         StalledStreamProtectionConfig::enabled()
+        ///             .grace_period(Duration::from_secs(1))
+        ///             .build()
+        ///     )
+        ///     .load()
+        ///     .await;
         /// # }
         /// ```
-        #[deprecated(
-            note = "Use setters on this builder instead. configure is very hard to use correctly."
-        )]
-        pub fn configure(mut self, provider_config: ProviderConfig) -> Self {
-            self.provider_config = Some(provider_config);
+        pub fn stalled_stream_protection(
+            mut self,
+            stalled_stream_protection_config: StalledStreamProtectionConfig,
+        ) -> Self {
+            self.stalled_stream_protection_config = Some(stalled_stream_protection_config);
             self
         }
 
@@ -559,10 +651,6 @@ mod loader {
         /// This means that if you provide a region provider that does not return a region, no region will
         /// be set in the resulting [`SdkConfig`](aws_types::SdkConfig)
         pub async fn load(self) -> SdkConfig {
-            let http_connector = self
-                .http_connector
-                .unwrap_or_else(|| HttpConnector::ConnectorFn(Arc::new(default_connector)));
-
             let time_source = self.time_source.unwrap_or_default();
 
             let sleep_impl = if self.sleep.is_some() {
@@ -583,12 +671,32 @@ mod loader {
             let conf = self
                 .provider_config
                 .unwrap_or_else(|| {
-                    ProviderConfig::init(time_source.clone(), sleep_impl.clone())
+                    let mut config = ProviderConfig::init(time_source.clone(), sleep_impl.clone())
                         .with_fs(self.fs.unwrap_or_default())
-                        .with_env(self.env.unwrap_or_default())
-                        .with_http_connector(http_connector.clone())
+                        .with_env(self.env.unwrap_or_default());
+                    if let Some(http_client) = self.http_client.clone() {
+                        config = config.with_http_client(http_client);
+                    }
+                    config
                 })
                 .with_profile_config(self.profile_files_override, self.profile_name_override);
+
+            let use_fips = if let Some(use_fips) = self.use_fips {
+                Some(use_fips)
+            } else {
+                use_fips_provider(&conf).await
+            };
+
+            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
+                Some(use_dual_stack)
+            } else {
+                use_dual_stack_provider(&conf).await
+            };
+
+            let conf = conf
+                .with_use_fips(use_fips)
+                .with_use_dual_stack(use_dual_stack);
+
             let region = if let Some(provider) = self.region {
                 provider.region().await
             } else {
@@ -637,43 +745,22 @@ mod loader {
                 CredentialsProviderOption::ExplicitlyUnset => None,
             };
 
-            let credentials_cache = if credentials_provider.is_some() {
-                Some(self.credentials_cache.unwrap_or_else(|| {
-                    let mut builder =
-                        CredentialsCache::lazy_builder().time_source(conf.time_source());
-                    builder.set_sleep(conf.sleep());
-                    builder.into_credentials_cache()
-                }))
-            } else {
-                None
-            };
-
-            let use_fips = if let Some(use_fips) = self.use_fips {
-                Some(use_fips)
-            } else {
-                use_fips_provider(&conf).await
-            };
-
-            let use_dual_stack = if let Some(use_dual_stack) = self.use_dual_stack {
-                Some(use_dual_stack)
-            } else {
-                use_dual_stack_provider(&conf).await
-            };
-
             let mut builder = SdkConfig::builder()
                 .region(region)
                 .retry_config(retry_config)
                 .timeout_config(timeout_config)
-                .time_source(time_source)
-                .http_connector(http_connector);
+                .time_source(time_source);
 
+            builder.set_behavior_version(self.behavior_version);
+            builder.set_http_client(self.http_client);
             builder.set_app_name(app_name);
-            builder.set_credentials_cache(credentials_cache);
+            builder.set_identity_cache(self.identity_cache);
             builder.set_credentials_provider(credentials_provider);
             builder.set_sleep_impl(sleep_impl);
             builder.set_endpoint_url(self.endpoint_url);
             builder.set_use_fips(use_fips);
             builder.set_use_dual_stack(use_dual_stack);
+            builder.set_stalled_stream_protection(self.stalled_stream_protection_config);
             builder.build()
         }
     }
@@ -693,22 +780,18 @@ mod loader {
 
     #[cfg(test)]
     mod test {
+        use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
+        use crate::test_case::{no_traffic_client, InstantSleep};
+        use crate::BehaviorVersion;
+        use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
-        use aws_smithy_async::time::{StaticTimeSource, TimeSource};
-        use aws_smithy_client::erase::DynConnector;
-        use aws_smithy_client::never::NeverConnector;
-        use aws_smithy_client::test_connection::infallible_connection_fn;
+        use aws_smithy_runtime::client::http::test_util::{infallible_client_fn, NeverClient};
         use aws_types::app_name::AppName;
         use aws_types::os_shim_internal::{Env, Fs};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
-        use std::time::{SystemTime, UNIX_EPOCH};
         use tracing_test::traced_test;
-
-        use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
-        use crate::test_case::{no_traffic_connector, InstantSleep};
-        use crate::{from_env, ConfigLoader};
 
         #[tokio::test]
         #[traced_test]
@@ -721,11 +804,11 @@ mod loader {
             ]);
             let fs =
                 Fs::from_slice(&[("test_config", "[profile custom]\nsdk-ua-app-id = correct")]);
-            let loader = from_env()
+            let loader = defaults(BehaviorVersion::latest())
                 .sleep_impl(TokioSleep::new())
                 .env(env)
                 .fs(fs)
-                .http_connector(DynConnector::new(NeverConnector::new()))
+                .http_client(NeverClient::new())
                 .profile_name("custom")
                 .profile_files(
                     ProfileFiles::builder()
@@ -765,9 +848,9 @@ mod loader {
         }
 
         fn base_conf() -> ConfigLoader {
-            from_env()
+            defaults(BehaviorVersion::latest())
                 .sleep_impl(InstantSleep)
-                .http_connector(no_traffic_connector())
+                .http_client(no_traffic_client())
         }
 
         #[tokio::test]
@@ -795,8 +878,11 @@ mod loader {
         #[cfg(feature = "rustls")]
         #[tokio::test]
         async fn disable_default_credentials() {
-            let config = from_env().no_credentials().load().await;
-            assert!(config.credentials_cache().is_none());
+            let config = defaults(BehaviorVersion::latest())
+                .no_credentials()
+                .load()
+                .await;
+            assert!(config.identity_cache().is_none());
             assert!(config.credentials_provider().is_none());
         }
 
@@ -804,49 +890,24 @@ mod loader {
         async fn connector_is_shared() {
             let num_requests = Arc::new(AtomicUsize::new(0));
             let movable = num_requests.clone();
-            let conn = infallible_connection_fn(move |_req| {
+            let http_client = infallible_client_fn(move |_req| {
                 movable.fetch_add(1, Ordering::Relaxed);
                 http::Response::new("ok!")
             });
-            let config = from_env().http_connector(conn.clone()).load().await;
+            let config = defaults(BehaviorVersion::latest())
+                .fs(Fs::from_slice(&[]))
+                .env(Env::from_slice(&[]))
+                .http_client(http_client.clone())
+                .load()
+                .await;
             config
                 .credentials_provider()
                 .unwrap()
                 .provide_credentials()
                 .await
-                .expect_err("no traffic is allowed");
+                .expect_err("did not expect credentials to be loaded—no traffic is allowed");
             let num_requests = num_requests.load(Ordering::Relaxed);
             assert!(num_requests > 0, "{}", num_requests);
-        }
-
-        #[tokio::test]
-        async fn time_source_is_passed() {
-            #[derive(Debug)]
-            struct PanicTs;
-            impl TimeSource for PanicTs {
-                fn now(&self) -> SystemTime {
-                    panic!("timesource-was-used")
-                }
-            }
-            let config = from_env()
-                .sleep_impl(InstantSleep)
-                .time_source(StaticTimeSource::new(UNIX_EPOCH))
-                .http_connector(no_traffic_connector())
-                .load()
-                .await;
-            // assert that the innards contain the customized fields
-            for inner in ["InstantSleep", "StaticTimeSource"] {
-                assert!(
-                    format!("{:#?}", config.credentials_cache()).contains(inner),
-                    "{:#?}",
-                    config.credentials_cache()
-                );
-                assert!(
-                    format!("{:#?}", config.credentials_provider()).contains(inner),
-                    "{:#?}",
-                    config.credentials_cache()
-                );
-            }
         }
     }
 }

@@ -32,12 +32,13 @@
 //!     todo!()
 //! }
 //!
-//! let app = Service::builder_without_plugins()
+//! let config = ServiceConfig::builder()
+//!     // Generate a server request ID and add it to the response header.
+//!     .layer(ServerRequestIdProviderLayer::new_with_response_header(HeaderName::from_static("x-request-id")))
+//!     .build();
+//! let app = Service::builder(config)
 //!     .operation(handler)
 //!     .build().unwrap();
-//!
-//! let app = app
-//!     .layer(&ServerRequestIdProviderLayer::new_with_response_header(HeaderName::from_static("x-request-id"))); /* Generate a server request ID and add it to the response header */
 //!
 //! let bind: std::net::SocketAddr = format!("{}:{}", args.address, args.port)
 //!     .parse()

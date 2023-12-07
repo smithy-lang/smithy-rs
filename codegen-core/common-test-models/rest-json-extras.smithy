@@ -65,7 +65,7 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
         // They're being added in https://github.com/smithy-lang/smithy/pull/1908
         HttpPayloadWithUnion,
     ],
@@ -317,7 +317,7 @@ operation CaseInsensitiveErrorOperation {
 
 @httpResponseTests([
     {
-        documentation: "Upper case error modeled lower case. See: https://github.com/awslabs/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
+        documentation: "Upper case error modeled lower case. See: https://github.com/smithy-lang/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
         id: "UpperErrorModeledLower",
         protocol: "aws.protocols#restJson1",
         code: 500,
@@ -351,96 +351,3 @@ structure EmptyStructWithContentOnWireOpOutput {
 operation EmptyStructWithContentOnWireOp {
     output: EmptyStructWithContentOnWireOpOutput,
 }
-
-// TODO(https://github.com/awslabs/smithy-rs/issues/2968): Delete the HttpPayloadWithUnion tests below once Smithy vends them
-// They're being added in https://github.com/smithy-lang/smithy/pull/1908
-
-/// This examples serializes a union in the payload.
-@idempotent
-@http(uri: "/HttpPayloadWithUnion", method: "PUT")
-operation HttpPayloadWithUnion {
-    input: HttpPayloadWithUnionInputOutput,
-    output: HttpPayloadWithUnionInputOutput
-}
-
-structure HttpPayloadWithUnionInputOutput {
-    @httpPayload
-    nested: UnionPayload,
-}
-
-union UnionPayload {
-    greeting: String
-}
-
-apply HttpPayloadWithUnion @httpRequestTests([
-    {
-        id: "RestJsonHttpPayloadWithUnion",
-        documentation: "Serializes a union in the payload.",
-        protocol: restJson1,
-        method: "PUT",
-        uri: "/HttpPayloadWithUnion",
-        body: """
-              {
-                  "greeting": "hello"
-              }""",
-        bodyMediaType: "application/json",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        requireHeaders: [
-            "Content-Length"
-        ],
-        params: {
-            nested: {
-                greeting: "hello"
-            }
-        }
-    },
-    {
-        id: "RestJsonHttpPayloadWithUnsetUnion",
-        documentation: "No payload is sent if the union has no value.",
-        protocol: restJson1,
-        method: "PUT",
-        uri: "/HttpPayloadWithUnion",
-        body: "",
-        headers: {
-            "Content-Type": "application/json",
-            "Content-Length": "0"
-        },
-        params: {}
-    }
-])
-
-apply HttpPayloadWithUnion @httpResponseTests([
-    {
-        id: "RestJsonHttpPayloadWithUnion",
-        documentation: "Serializes a union in the payload.",
-        protocol: restJson1,
-        code: 200,
-        body: """
-              {
-                  "greeting": "hello"
-              }""",
-        bodyMediaType: "application/json",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        params: {
-            nested: {
-                greeting: "hello"
-            }
-        }
-    },
-    {
-        id: "RestJsonHttpPayloadWithUnsetUnion",
-        documentation: "No payload is sent if the union has no value.",
-        protocol: restJson1,
-        code: 200,
-        body: "",
-        headers: {
-            "Content-Type": "application/json",
-            "Content-Length": "0"
-        },
-        params: {}
-    }
-])

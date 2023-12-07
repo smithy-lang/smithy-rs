@@ -5,7 +5,7 @@ authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Types for AWS SDK credentials."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 hardcoded-credentials = []
@@ -15,23 +15,17 @@ test-util = []
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
-fastrand = "2.0.0"
-tokio = { version = "1.23.1", features = ["sync"] }
-tracing = "0.1"
 zeroize = "1"
 
 [dev-dependencies]
-aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio", "test-util"] }
-
-# used to test compatibility
-async-trait = "0.1.51"
-env_logger = "0.9.0"
-
+async-trait = "0.1.51" # used to test compatibility
 tokio = { version = "1.23.1", features = ["full", "test-util", "rt"] }
-tracing-test = "0.2.4"
 
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[package.metadata.smithy-rs-release-tooling]
+stable = true

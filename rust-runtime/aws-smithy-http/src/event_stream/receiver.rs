@@ -3,15 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::body::SdkBody;
-use crate::result::{ConnectorError, SdkError};
 use aws_smithy_eventstream::frame::{
-    DecodedFrame, Message, MessageFrameDecoder, UnmarshallMessage, UnmarshalledMessage,
+    DecodedFrame, MessageFrameDecoder, UnmarshallMessage, UnmarshalledMessage,
 };
+use aws_smithy_runtime_api::client::result::{ConnectorError, SdkError};
+use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::event_stream::{Message, RawMessage};
 use bytes::Buf;
 use bytes::Bytes;
 use bytes_utils::SegmentedBuf;
-use hyper::body::HttpBody;
+use http_body::Body;
 use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
@@ -83,23 +84,6 @@ impl RecvBuf {
             RecvBuf::EosPartial(_) => panic!("already end of stream; this is a bug"),
             RecvBuf::Terminated => panic!("stream terminated; this is a bug"),
         }
-    }
-}
-
-/// Raw message from a [`Receiver`] when a [`SdkError::ResponseError`] is returned.
-#[derive(Debug)]
-#[non_exhaustive]
-pub enum RawMessage {
-    /// Message was decoded into a valid frame, but failed to unmarshall into a modeled type.
-    Decoded(Message),
-    /// Message failed to be decoded into a valid frame. The raw bytes may not be available in the
-    /// case where decoding consumed the buffer.
-    Invalid(Option<Bytes>),
-}
-
-impl RawMessage {
-    pub(crate) fn invalid(buf: &mut SegmentedBuf<Bytes>) -> Self {
-        Self::Invalid(Some(buf.copy_to_bytes(buf.remaining())))
     }
 }
 
@@ -209,11 +193,12 @@ impl<T, E> Receiver<T, E> {
         }
         if self.buffer.has_data() {
             trace!(remaining_data = ?self.buffer, "data left over in the event stream response stream");
+            let buf = self.buffer.buffered();
             return Err(SdkError::response_error(
                 ReceiverError {
                     kind: ReceiverErrorKind::UnexpectedEndOfStream,
                 },
-                RawMessage::invalid(self.buffer.buffered()),
+                RawMessage::invalid(Some(buf.copy_to_bytes(buf.remaining()))),
             ));
         }
         Ok(None)
@@ -276,10 +261,11 @@ impl<T, E> Receiver<T, E> {
 #[cfg(test)]
 mod tests {
     use super::{Receiver, UnmarshallMessage};
-    use crate::body::SdkBody;
-    use crate::result::SdkError;
     use aws_smithy_eventstream::error::Error as EventStreamError;
-    use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshalledMessage};
+    use aws_smithy_eventstream::frame::{write_message_to, UnmarshalledMessage};
+    use aws_smithy_runtime_api::client::result::SdkError;
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
     use bytes::Bytes;
     use hyper::body::Body;
     use std::error::Error as StdError;
@@ -287,7 +273,7 @@ mod tests {
 
     fn encode_initial_response() -> Bytes {
         let mut buffer = Vec::new();
-        Message::new(Bytes::new())
+        let message = Message::new(Bytes::new())
             .add_header(Header::new(
                 ":message-type",
                 HeaderValue::String("event".into()),
@@ -295,17 +281,15 @@ mod tests {
             .add_header(Header::new(
                 ":event-type",
                 HeaderValue::String("initial-response".into()),
-            ))
-            .write_to(&mut buffer)
-            .unwrap();
+            ));
+        write_message_to(&message, &mut buffer).unwrap();
         buffer.into()
     }
 
     fn encode_message(message: &str) -> Bytes {
         let mut buffer = Vec::new();
-        Message::new(Bytes::copy_from_slice(message.as_bytes()))
-            .write_to(&mut buffer)
-            .unwrap();
+        let message = Message::new(Bytes::copy_from_slice(message.as_bytes()));
+        write_message_to(&message, &mut buffer).unwrap();
         buffer.into()
     }
 
@@ -342,7 +326,7 @@ mod tests {
         let chunks: Vec<Result<_, IOError>> =
             vec![Ok(encode_message("one")), Ok(encode_message("two"))];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
             TestMessage("one".into()),
@@ -363,7 +347,7 @@ mod tests {
             Ok(Bytes::from_static(&[])),
         ];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
             TestMessage("one".into()),
@@ -384,7 +368,7 @@ mod tests {
             Ok(encode_message("three").split_to(10)),
         ];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
             TestMessage("one".into()),
@@ -410,7 +394,7 @@ mod tests {
             )),
         ];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
             TestMessage("one".into()),
@@ -463,7 +447,7 @@ mod tests {
                 ];
 
                 let chunk_stream = futures_util::stream::iter(chunks);
-                let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+                let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
                 let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
                 for payload in &["one", "two", "three", "four", "five", "six", "seven", "eight"] {
                     assert_eq!(
@@ -483,7 +467,7 @@ mod tests {
             Err(IOError::new(ErrorKind::ConnectionReset, FakeError)),
         ];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
             TestMessage("one".into()),
@@ -504,7 +488,7 @@ mod tests {
             Ok(Bytes::from_static(&[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])),
         ];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert_eq!(
             TestMessage("one".into()),
@@ -521,7 +505,7 @@ mod tests {
         let chunks: Vec<Result<_, IOError>> =
             vec![Ok(encode_initial_response()), Ok(encode_message("one"))];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert!(receiver.try_recv_initial().await.unwrap().is_some());
         assert_eq!(
@@ -535,7 +519,7 @@ mod tests {
         let chunks: Vec<Result<_, IOError>> =
             vec![Ok(encode_message("one")), Ok(encode_message("two"))];
         let chunk_stream = futures_util::stream::iter(chunks);
-        let body = SdkBody::from(Body::wrap_stream(chunk_stream));
+        let body = SdkBody::from_body_0_4(Body::wrap_stream(chunk_stream));
         let mut receiver = Receiver::<TestMessage, EventStreamError>::new(Unmarshaller, body);
         assert!(receiver.try_recv_initial().await.unwrap().is_none());
         assert_eq!(

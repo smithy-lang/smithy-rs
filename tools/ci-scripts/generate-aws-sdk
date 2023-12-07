@@ -23,7 +23,7 @@ fi
 
 echo -e "${C_YELLOW}Taking examples from 'awsdocs/aws-doc-sdk-examples'...${C_RESET}"
 examples_revision=$(cd aws-doc-sdk-examples; git rev-parse HEAD)
-mv aws-doc-sdk-examples/rust_dev_preview smithy-rs/aws/sdk/examples
+mv aws-doc-sdk-examples/rustv1 smithy-rs/aws/sdk/examples
 rm -rf smithy-rs/aws/sdk/examples/.cargo
 
 echo -e "${C_YELLOW}Creating empty model metadata file since we don't have model update information...${C_RESET}"

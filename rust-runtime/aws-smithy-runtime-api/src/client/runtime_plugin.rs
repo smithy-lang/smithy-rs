@@ -9,7 +9,7 @@
 //! This can include:
 //! - Registering interceptors
 //! - Registering auth schemes
-//! - Adding entries to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) for orchestration
+//! - Adding entries to the [`ConfigBag`] for orchestration
 //! - Setting runtime components
 //!
 //! Runtime plugins are divided into service/operation "levels", with service runtime plugins
@@ -22,10 +22,14 @@ use crate::box_error::BoxError;
 use crate::client::runtime_components::{
     RuntimeComponentsBuilder, EMPTY_RUNTIME_COMPONENTS_BUILDER,
 };
+use crate::impl_shared_conversions;
+use crate::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer};
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::sync::Arc;
+
+const DEFAULT_ORDER: Order = Order::Overrides;
 
 /// Runtime plugin ordering.
 ///
@@ -54,7 +58,7 @@ pub enum Order {
 
 /// Runtime plugin trait
 ///
-/// A `RuntimePlugin` is the unit of configuration for augmenting the SDK with new behavior.
+/// A `RuntimePlugin` is the unit of configuration for augmenting the client with new behavior.
 ///
 /// Runtime plugins can register interceptors, set runtime components, and modify configuration.
 pub trait RuntimePlugin: Debug + Send + Sync {
@@ -70,10 +74,10 @@ pub trait RuntimePlugin: Debug + Send + Sync {
     /// service runtime plugins will run before [`Overrides`](Order::Overrides)
     /// service runtime plugins.
     fn order(&self) -> Order {
-        Order::Overrides
+        DEFAULT_ORDER
     }
 
-    /// Optionally returns additional config that should be added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag).
+    /// Optionally returns additional config that should be added to the [`ConfigBag`].
     ///
     /// As a best practice, a frozen layer should be stored on the runtime plugin instance as
     /// a member, and then cloned upon return since that clone is cheap. Constructing a new
@@ -111,7 +115,7 @@ pub trait RuntimePlugin: Debug + Send + Sync {
 pub struct SharedRuntimePlugin(Arc<dyn RuntimePlugin>);
 
 impl SharedRuntimePlugin {
-    /// Returns a new [`SharedRuntimePlugin`].
+    /// Creates a new [`SharedRuntimePlugin`].
     pub fn new(plugin: impl RuntimePlugin + 'static) -> Self {
         Self(Arc::new(plugin))
     }
@@ -134,11 +138,14 @@ impl RuntimePlugin for SharedRuntimePlugin {
     }
 }
 
+impl_shared_conversions!(convert SharedRuntimePlugin from RuntimePlugin using SharedRuntimePlugin::new);
+
 /// Runtime plugin that simply returns the config and components given at construction time.
 #[derive(Default, Debug)]
 pub struct StaticRuntimePlugin {
     config: Option<FrozenLayer>,
     runtime_components: Option<RuntimeComponentsBuilder>,
+    order: Option<Order>,
 }
 
 impl StaticRuntimePlugin {
@@ -158,9 +165,19 @@ impl StaticRuntimePlugin {
         self.runtime_components = Some(runtime_components);
         self
     }
+
+    /// Changes the order of this runtime plugin.
+    pub fn with_order(mut self, order: Order) -> Self {
+        self.order = Some(order);
+        self
+    }
 }
 
 impl RuntimePlugin for StaticRuntimePlugin {
+    fn order(&self) -> Order {
+        self.order.unwrap_or(DEFAULT_ORDER)
+    }
+
     fn config(&self) -> Option<FrozenLayer> {
         self.config.clone()
     }
@@ -172,15 +189,16 @@ impl RuntimePlugin for StaticRuntimePlugin {
         self.runtime_components
             .as_ref()
             .map(Cow::Borrowed)
-            .unwrap_or_else(|| RuntimePlugin::runtime_components(self, _current_components))
+            .unwrap_or_else(|| Cow::Borrowed(&EMPTY_RUNTIME_COMPONENTS_BUILDER))
     }
 }
 
 macro_rules! insert_plugin {
-    ($vec:expr, $plugin:ident, $create_rp:expr) => {{
+    ($vec:expr, $plugin:expr) => {{
         // Insert the plugin in the correct order
+        let plugin = $plugin;
         let mut insert_index = 0;
-        let order = $plugin.order();
+        let order = plugin.order();
         for (index, other_plugin) in $vec.iter().enumerate() {
             let other_order = other_plugin.order();
             if other_order <= order {
@@ -189,7 +207,7 @@ macro_rules! insert_plugin {
                 break;
             }
         }
-        $vec.insert(insert_index, $create_rp);
+        $vec.insert(insert_index, plugin);
     }};
 }
 
@@ -210,7 +228,6 @@ macro_rules! apply_plugins {
 }
 
 /// Used internally in the orchestrator implementation and in the generated code. Not intended to be used elsewhere.
-#[doc(hidden)]
 #[derive(Default, Clone, Debug)]
 pub struct RuntimePlugins {
     client_plugins: Vec<SharedRuntimePlugin>,
@@ -218,28 +235,52 @@ pub struct RuntimePlugins {
 }
 
 impl RuntimePlugins {
+    /// Create a new empty set of runtime plugins.
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Add several client-level runtime plugins from an iterator.
+    pub fn with_client_plugins(
+        mut self,
+        plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> Self {
+        for plugin in plugins.into_iter() {
+            self = self.with_client_plugin(plugin);
+        }
+        self
+    }
+
+    /// Adds a client-level runtime plugin.
     pub fn with_client_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
         insert_plugin!(
             self.client_plugins,
-            plugin,
-            SharedRuntimePlugin::new(plugin)
+            IntoShared::<SharedRuntimePlugin>::into_shared(plugin)
         );
         self
     }
 
+    /// Add several operation-level runtime plugins from an iterator.
+    pub fn with_operation_plugins(
+        mut self,
+        plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> Self {
+        for plugin in plugins.into_iter() {
+            self = self.with_operation_plugin(plugin);
+        }
+        self
+    }
+
+    /// Adds an operation-level runtime plugin.
     pub fn with_operation_plugin(mut self, plugin: impl RuntimePlugin + 'static) -> Self {
         insert_plugin!(
             self.operation_plugins,
-            plugin,
-            SharedRuntimePlugin::new(plugin)
+            IntoShared::<SharedRuntimePlugin>::into_shared(plugin)
         );
         self
     }
 
+    /// Apply the client-level runtime plugins' config to the given config bag.
     pub fn apply_client_configuration(
         &self,
         cfg: &mut ConfigBag,
@@ -247,6 +288,7 @@ impl RuntimePlugins {
         apply_plugins!(client, self.client_plugins, cfg)
     }
 
+    /// Apply the operation-level runtime plugins' config to the given config bag.
     pub fn apply_operation_configuration(
         &self,
         cfg: &mut ConfigBag,
@@ -255,14 +297,17 @@ impl RuntimePlugins {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "test-util", feature = "http-02x"))]
 mod tests {
     use super::{RuntimePlugin, RuntimePlugins};
-    use crate::client::connectors::{HttpConnector, SharedHttpConnector};
-    use crate::client::orchestrator::{BoxFuture, HttpRequest, HttpResponse};
+    use crate::client::http::{
+        http_client_fn, HttpClient, HttpConnector, HttpConnectorFuture, SharedHttpConnector,
+    };
+    use crate::client::orchestrator::HttpRequest;
     use crate::client::runtime_components::RuntimeComponentsBuilder;
-    use crate::client::runtime_plugin::Order;
-    use aws_smithy_http::body::SdkBody;
+    use crate::client::runtime_plugin::{Order, SharedRuntimePlugin};
+    use crate::shared::IntoShared;
+    use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::ConfigBag;
     use http::HeaderValue;
     use std::borrow::Cow;
@@ -294,7 +339,7 @@ mod tests {
         }
 
         fn insert_plugin(vec: &mut Vec<RP>, plugin: RP) {
-            insert_plugin!(vec, plugin, plugin);
+            insert_plugin!(vec, plugin);
         }
 
         let mut vec = Vec::new();
@@ -338,28 +383,30 @@ mod tests {
 
     #[tokio::test]
     async fn components_can_wrap_components() {
-        // CN1, the inner connector, creates a response with a `rp1` header
+        // Connector1, the inner connector, creates a response with a `rp1` header
         #[derive(Debug)]
-        struct CN1;
-        impl HttpConnector for CN1 {
-            fn call(&self, _: HttpRequest) -> BoxFuture<HttpResponse> {
-                Box::pin(async {
+        struct Connector1;
+        impl HttpConnector for Connector1 {
+            fn call(&self, _: HttpRequest) -> HttpConnectorFuture {
+                HttpConnectorFuture::new(async {
                     Ok(http::Response::builder()
                         .status(200)
                         .header("rp1", "1")
                         .body(SdkBody::empty())
+                        .unwrap()
+                        .try_into()
                         .unwrap())
                 })
             }
         }
 
-        // CN2, the outer connector, calls the inner connector and adds the `rp2` header to the response
+        // Connector2, the outer connector, calls the inner connector and adds the `rp2` header to the response
         #[derive(Debug)]
-        struct CN2(SharedHttpConnector);
-        impl HttpConnector for CN2 {
-            fn call(&self, request: HttpRequest) -> BoxFuture<HttpResponse> {
+        struct Connector2(SharedHttpConnector);
+        impl HttpConnector for Connector2 {
+            fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
                 let inner = self.0.clone();
-                Box::pin(async move {
+                HttpConnectorFuture::new(async move {
                     let mut resp = inner.call(request).await.unwrap();
                     resp.headers_mut()
                         .append("rp2", HeaderValue::from_static("1"));
@@ -368,10 +415,10 @@ mod tests {
             }
         }
 
-        // RP1 registers CN1
+        // Plugin1 registers Connector1
         #[derive(Debug)]
-        struct RP1;
-        impl RuntimePlugin for RP1 {
+        struct Plugin1;
+        impl RuntimePlugin for Plugin1 {
             fn order(&self) -> Order {
                 Order::Overrides
             }
@@ -381,16 +428,16 @@ mod tests {
                 _: &RuntimeComponentsBuilder,
             ) -> Cow<'_, RuntimeComponentsBuilder> {
                 Cow::Owned(
-                    RuntimeComponentsBuilder::new("RP1")
-                        .with_http_connector(Some(SharedHttpConnector::new(CN1))),
+                    RuntimeComponentsBuilder::new("Plugin1")
+                        .with_http_client(Some(http_client_fn(|_, _| Connector1.into_shared()))),
                 )
             }
         }
 
-        // RP2 registers CN2
+        // Plugin2 registers Connector2
         #[derive(Debug)]
-        struct RP2;
-        impl RuntimePlugin for RP2 {
+        struct Plugin2;
+        impl RuntimePlugin for Plugin2 {
             fn order(&self) -> Order {
                 Order::NestedComponents
             }
@@ -399,9 +446,13 @@ mod tests {
                 &self,
                 current_components: &RuntimeComponentsBuilder,
             ) -> Cow<'_, RuntimeComponentsBuilder> {
+                let current = current_components.http_client().unwrap();
                 Cow::Owned(
-                    RuntimeComponentsBuilder::new("RP2").with_http_connector(Some(
-                        SharedHttpConnector::new(CN2(current_components.http_connector().unwrap())),
+                    RuntimeComponentsBuilder::new("Plugin2").with_http_client(Some(
+                        http_client_fn(move |settings, components| {
+                            let connector = current.http_connector(settings, components);
+                            SharedHttpConnector::new(Connector2(connector))
+                        }),
                     )),
                 )
             }
@@ -410,22 +461,18 @@ mod tests {
         // Emulate assembling a full runtime plugins list and using it to apply configuration
         let plugins = RuntimePlugins::new()
             // intentionally configure the plugins in the reverse order
-            .with_client_plugin(RP2)
-            .with_client_plugin(RP1);
+            .with_client_plugin(Plugin2)
+            .with_client_plugin(Plugin1);
         let mut cfg = ConfigBag::base();
         let components = plugins.apply_client_configuration(&mut cfg).unwrap();
+        let fake_components = RuntimeComponentsBuilder::for_tests().build().unwrap();
 
         // Use the resulting HTTP connector to make a response
         let resp = components
-            .http_connector()
+            .http_client()
             .unwrap()
-            .call(
-                http::Request::builder()
-                    .method("GET")
-                    .uri("/")
-                    .body(SdkBody::empty())
-                    .unwrap(),
-            )
+            .http_connector(&Default::default(), &fake_components)
+            .call(HttpRequest::empty())
             .await
             .unwrap();
         dbg!(&resp);
@@ -434,5 +481,26 @@ mod tests {
         // which will only be possible if they were run in the correct order
         assert_eq!("1", resp.headers().get("rp1").unwrap());
         assert_eq!("1", resp.headers().get("rp2").unwrap());
+    }
+
+    #[test]
+    fn shared_runtime_plugin_new_specialization() {
+        #[derive(Debug)]
+        struct RP;
+        impl RuntimePlugin for RP {}
+
+        use crate::shared::IntoShared;
+        let shared1 = SharedRuntimePlugin::new(RP);
+        let shared2: SharedRuntimePlugin = shared1.clone().into_shared();
+        assert_eq!(
+            "SharedRuntimePlugin(RP)",
+            format!("{shared1:?}"),
+            "precondition: RP shows up in the debug format"
+        );
+        assert_eq!(
+            format!("{shared1:?}"),
+            format!("{shared2:?}"),
+            "it should not nest the shared runtime plugins"
+        );
     }
 }

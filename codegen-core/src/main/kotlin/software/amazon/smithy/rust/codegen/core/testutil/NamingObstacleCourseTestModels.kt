@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.testutil
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.traits.Trait
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 
 object NamingObstacleCourseTestModels {
@@ -169,4 +170,61 @@ object NamingObstacleCourseTestModels {
             """,
         )
     }.toString().asSmithyModel()
+
+    /**
+     * This targets two bug classes:
+     * - operation inputs used as nested outputs
+     * - operation outputs used as nested outputs
+     */
+    fun reusedInputOutputShapesModel(protocol: Trait) = """
+        namespace test
+        use ${protocol.toShapeId()}
+        use aws.api#service
+        @${protocol.toShapeId().name}
+        @service(sdkId: "test")
+        service Service {
+            version: "2006-03-01",
+            operations: [GetThing, ReuseGetThingIO]
+        }
+
+        // re-use get thing output in a list & in an operation
+        @http(uri: "/SomeOperation2", method: "POST")
+        operation GetThing {
+            output: GetThingOutput
+            input: GetThingInput
+        }
+
+        // an operation that re-uses the input and output shapes from `GetThing` above. this has caused issues in the
+        // past with operation/input shape confusion during function signature generation
+        @http(uri: "/SomeOperation3", method: "POST")
+        operation ReuseGetThingIO {
+            input: GetThingNested
+            output: GetThingNested
+        }
+
+        structure GetThingOutput {
+            @required
+            meta: String
+        }
+
+        structure GetThingInput {
+            @required
+            meta: String
+        }
+
+        // nested structure which reuses input and output shapes internally
+        structure GetThingNested {
+            thingsOut: GetThingOutputList,
+            thingsIn: GetThingInputList,
+            thingOut: GetThingOutput,
+            thingIn: GetThingInput
+        }
+
+        list GetThingOutputList {
+            member: GetThingOutput
+        }
+        list GetThingInputList {
+            member: GetThingInput
+        }
+    """.asSmithyModel()
 }

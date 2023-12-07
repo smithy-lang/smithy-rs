@@ -5,7 +5,7 @@
 
 # This is the base Docker build image used by CI
 
-ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2
+ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.70.0
 ARG rust_nightly_version=nightly-2023-05-31
 
@@ -13,7 +13,7 @@ FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
 
 FROM bare_base_image as musl_toolchain
-RUN yum -y install tar gzip gcc make
+RUN yum -y install --allowerasing tar gzip gcc make
 RUN curl https://musl.libc.org/releases/musl-1.2.3.tar.gz -o musl-1.2.3.tar.gz \
   && ls \
   && tar xvzf musl-1.2.3.tar.gz \
@@ -30,17 +30,19 @@ ENV RUSTUP_HOME=/opt/rustup \
     PATH=/opt/cargo/bin/:${PATH} \
     CARGO_INCREMENTAL=0
 WORKDIR /root
-RUN yum -y install \
+RUN yum -y install --allowerasing \
         autoconf \
         automake \
         binutils \
         ca-certificates \
+        cmake \
         curl \
         gcc \
         gcc-c++ \
         git \
         make \
         openssl-devel \
+        perl \
         pkgconfig \
         tar \
         xz && \
@@ -72,11 +74,11 @@ COPY . tools/ci-build
 # when `checkout_smithy_rs_tools` is set to true, this commit will be checked out
 ARG smithy_rs_commit_hash=main
 # If the `checkout_smithy_rs_tools` arg is set to true, then the Dockerfile will acquire the tools
-# source code by checking out awslabs/smithy-rs/main rather than copying them from the local directory.
+# source code by checking out smithy-lang/smithy-rs/main rather than copying them from the local directory.
 ARG checkout_smithy_rs_tools=false
 RUN set -eux; \
     if [[ "${checkout_smithy_rs_tools}" == "true" ]]; then \
-        git clone https://github.com/awslabs/smithy-rs.git; \
+        git clone https://github.com/smithy-lang/smithy-rs.git; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
@@ -131,9 +133,8 @@ ARG cargo_wasi_version=0.1.27
 RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.20.0
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
+ARG cargo_semver_checks_version=0.24.1
+RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook
 ARG cargo_mdbook_version=0.4.30
@@ -153,12 +154,13 @@ FROM bare_base_image AS final_image
 ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
-    yum -y install \
+    yum -y install --allowerasing \
         bc \
         ca-certificates \
         clang \
         gcc \
         git \
+        glibc-langpack-en \
         java-11-amazon-corretto-headless \
         make \
         openssl-devel \
@@ -188,7 +190,6 @@ COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bi
 COPY --chown=build:build --from=cargo_mdbook_mermaid /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=$PATH:/usr/local/musl/bin/
-# TODO(Rust 1.70): The sparse registry config (`CARGO_REGISTRIES_CRATES_IO_PROTOCOL`) can be removed when upgrading to Rust 1.70
 ENV PATH=/opt/cargo/bin:$PATH \
     CARGO_HOME=/opt/cargo \
     RUSTUP_HOME=/opt/rustup \
@@ -196,7 +197,6 @@ ENV PATH=/opt/cargo/bin:$PATH \
     GRADLE_USER_HOME=/home/build/.gradle \
     RUST_STABLE_VERSION=${rust_stable_version} \
     RUST_NIGHTLY_VERSION=${rust_nightly_version} \
-    CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse \
     CARGO_INCREMENTAL=0 \
     RUSTDOCFLAGS="-D warnings" \
     RUSTFLAGS="-D warnings" \

@@ -44,7 +44,7 @@ First, let's establish the aspects of auth that can be configured from the model
     - **IdentityResolver:** resolves an identity for use in authentication.
       There can be multiple identity resolvers that need to be selected from.
     - **Signer:** a signing implementation that signs a HTTP request.
-    - **AuthSchemeOptionResolver:** resolves a list of auth scheme options for a given operation and its inputs.
+    - **ResolveAuthSchemeOptions:** resolves a list of auth scheme options for a given operation and its inputs.
 
 As it is undocumented (at time of writing), this document assumes that the code generator
 creates one service-level runtime plugin, and an operation-level runtime plugin per operation, hence
@@ -61,7 +61,7 @@ At a high-level, the process of resolving an identity and signing a request look
 
 1. Retrieve the `AuthSchemeOptionResolverParams` from the config bag. The `AuthSchemeOptionResolverParams` allow client
 config and operation inputs to play a role in which auth scheme option is selected.
-2. Retrieve the `AuthSchemeOptionResolver` from the config bag, and use it to resolve the auth scheme options available
+2. Retrieve the `ResolveAuthSchemeOptions` impl from the config bag, and use it to resolve the auth scheme options available
 with the `AuthSchemeOptionResolverParams`. The returned auth scheme options are in priority order.
 3. Retrieve the `IdentityResolvers` list from the config bag.
 4. For each auth scheme option:
@@ -91,7 +91,7 @@ pub struct AuthSchemeId {
     scheme_id: &'static str,
 }
 
-pub trait AuthSchemeOptionResolver: Send + Sync + Debug {
+pub trait ResolveAuthSchemeOptions: Send + Sync + Debug {
     fn resolve_auth_scheme_options<'a>(
         &'a self,
         params: &AuthSchemeOptionResolverParams,

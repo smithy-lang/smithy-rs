@@ -34,12 +34,11 @@ class CustomizableOperationGenerator(
                 .resolve("CustomizableOperation"),
             "CustomizableSend" to ClientRustModule.Client.customize.toType()
                 .resolve("internal::CustomizableSend"),
-            "HttpRequest" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            "HttpRequest" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                 .resolve("client::orchestrator::HttpRequest"),
-            "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                 .resolve("client::orchestrator::HttpResponse"),
-            "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::interceptors::Interceptor"),
+            "Intercept" to RuntimeType.intercept(runtimeConfig),
             "MapRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
                 .resolve("client::interceptors::MapRequestInterceptor"),
             "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
@@ -51,7 +50,7 @@ class CustomizableOperationGenerator(
                 .resolve("internal::SendResult"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+            "SharedInterceptor" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                 .resolve("client::interceptors::SharedInterceptor"),
         )
 
@@ -71,26 +70,27 @@ class CustomizableOperationGenerator(
                     _error: #{PhantomData}<E>,
                 }
 
-                impl<T, E, B> CustomizableOperation<T, E, B> {
-                    /// Creates a new `CustomizableOperation` from `customizable_send`.
-                    pub(crate) fn new(customizable_send: B) -> Self {
-                        Self {
-                            customizable_send,
-                            config_override: #{None},
-                            interceptors: vec![],
-                            runtime_plugins: vec![],
-                            _output: #{PhantomData},
-                            _error: #{PhantomData}
+                    impl<T, E, B> CustomizableOperation<T, E, B> {
+                        /// Creates a new `CustomizableOperation` from `customizable_send`.
+                        ##[allow(dead_code)] // unused when a service does not provide any operations
+                        pub(crate) fn new(customizable_send: B) -> Self {
+                            Self {
+                                customizable_send,
+                                config_override: #{None},
+                                interceptors: vec![],
+                                runtime_plugins: vec![],
+                                _output: #{PhantomData},
+                                _error: #{PhantomData}
+                            }
                         }
-                    }
 
-                    /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
+                    /// Adds an [interceptor](#{Intercept}) that runs at specific stages of the request execution pipeline.
                     ///
                     /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
                     /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
                     /// The order in which those user-specified operation interceptors are invoked should not be relied upon
                     /// as it is an implementation detail.
-                    pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
+                    pub fn interceptor(mut self, interceptor: impl #{Intercept} + 'static) -> Self {
                         self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                         self
                     }
@@ -119,18 +119,18 @@ class CustomizableOperationGenerator(
                         self
                     }
 
-                    /// Convenience for `map_request` where infallible direct mutation of request is acceptable.
-                    pub fn mutate_request<F>(mut self, f: F) -> Self
-                    where
-                        F: #{Fn}(&mut http::Request<#{SdkBody}>) + #{Send} + #{Sync} + 'static,
-                    {
-                        self.interceptors.push(
-                            #{SharedInterceptor}::new(
-                                #{MutateRequestInterceptor}::new(f),
-                            ),
-                        );
-                        self
-                    }
+                        /// Convenience for `map_request` where infallible direct mutation of request is acceptable.
+                        pub fn mutate_request<F>(mut self, f: F) -> Self
+                        where
+                            F: #{Fn}(&mut #{HttpRequest}) + #{Send} + #{Sync} + 'static,
+                        {
+                            self.interceptors.push(
+                                #{SharedInterceptor}::new(
+                                    #{MutateRequestInterceptor}::new(f),
+                                ),
+                            );
+                            self
+                        }
 
                     /// Overrides config for a single operation invocation.
                     ///
@@ -206,7 +206,7 @@ class CustomizableOperationGenerator(
                 }
                 """,
                 *preludeScope,
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )

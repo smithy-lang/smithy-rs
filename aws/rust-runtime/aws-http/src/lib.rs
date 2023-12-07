@@ -14,20 +14,8 @@
     unreachable_pub
 )]
 
-/// Credentials middleware
-pub mod auth;
-
-/// Recursion Detection middleware
-pub mod recursion_detection;
-
-/// AWS-specific retry logic
-pub mod retry;
-
 /// User agent middleware
 pub mod user_agent;
 
 /// AWS-specific content-encoding tools
 pub mod content_encoding;
-
-/// AWS-specific request ID support
-pub mod request_id;

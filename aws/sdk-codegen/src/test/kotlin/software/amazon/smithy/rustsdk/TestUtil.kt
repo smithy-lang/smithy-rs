@@ -6,7 +6,6 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
@@ -38,31 +37,34 @@ fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = 
 
 fun awsSdkIntegrationTest(
     model: Model,
+    params: IntegrationTestParams = awsIntegrationTestParams(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) =
     clientIntegrationTest(
         model,
-        IntegrationTestParams(
-            cargoCommand = "cargo test --features test-util",
-            runtimeConfig = AwsTestRuntimeConfig,
-            additionalSettings = ObjectNode.builder().withMember(
-                "customizationConfig",
-                ObjectNode.builder()
-                    .withMember(
-                        "awsSdk",
-                        ObjectNode.builder()
-                            .withMember("generateReadme", false)
-                            .withMember("integrationTestPath", "../sdk/integration-tests")
-                            .build(),
-                    ).build(),
-            )
-                .withMember(
-                    "codegen",
-                    ObjectNode.builder()
-                        .withMember("includeFluentClient", false)
-                        .withMember("includeEndpointUrlConfig", BooleanNode.from(false))
-                        .build(),
-                ).build(),
-        ),
+        awsIntegrationTestParams(),
         test = test,
     )
+
+fun awsIntegrationTestParams() = IntegrationTestParams(
+    cargoCommand = "cargo test --features test-util behavior-version-latest",
+    runtimeConfig = AwsTestRuntimeConfig,
+    additionalSettings = ObjectNode.builder().withMember(
+        "customizationConfig",
+        ObjectNode.builder()
+            .withMember(
+                "awsSdk",
+                ObjectNode.builder()
+                    .withMember("generateReadme", false)
+                    .withMember("integrationTestPath", "../sdk/integration-tests")
+                    .build(),
+            ).build(),
+    )
+        .withMember(
+            "codegen",
+            ObjectNode.builder()
+                .withMember("includeFluentClient", false)
+                .withMember("includeEndpointUrlConfig", false)
+                .build(),
+        ).build(),
+)

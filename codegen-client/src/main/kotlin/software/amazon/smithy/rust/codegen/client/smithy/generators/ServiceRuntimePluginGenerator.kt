@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -40,32 +39,20 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
 
     data class RegisterRuntimeComponents(val serviceConfigName: String) : ServiceRuntimePluginSection("RegisterRuntimeComponents") {
         /** Generates the code to register an interceptor */
-        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
-            writer.rustTemplate(
-                """
-                runtime_components.push_interceptor(#{SharedInterceptor}::new(#{interceptor}) as _);
-                """,
-                "interceptor" to interceptor,
-                "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::SharedInterceptor"),
-            )
+        fun registerInterceptor(writer: RustWriter, interceptor: Writable) {
+            writer.rust("runtime_components.push_interceptor(#T);", interceptor)
         }
 
         fun registerAuthScheme(writer: RustWriter, authScheme: Writable) {
-            writer.rustTemplate(
-                """
-                runtime_components.push_auth_scheme(#{auth_scheme});
-                """,
-                "auth_scheme" to authScheme,
-            )
+            writer.rust("runtime_components.push_auth_scheme(#T);", authScheme)
         }
 
-        fun registerIdentityResolver(writer: RustWriter, identityResolver: Writable) {
-            writer.rustTemplate(
-                """
-                runtime_components.push_identity_resolver(#{identity_resolver});
-                """,
-                "identity_resolver" to identityResolver,
-            )
+        fun registerEndpointResolver(writer: RustWriter, resolver: Writable) {
+            writer.rust("runtime_components.set_endpoint_resolver(Some(#T));", resolver)
+        }
+
+        fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
+            writer.rust("runtime_components.push_retry_classifier(#T);", classifier)
         }
     }
 }
@@ -78,17 +65,19 @@ class ServiceRuntimePluginGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *preludeScope,
             "Arc" to RuntimeType.Arc,
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
             "Cow" to RuntimeType.Cow,
-            "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+            "IntoShared" to runtimeApi.resolve("shared::IntoShared"),
+            "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
             "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
+            "Order" to runtimeApi.resolve("client::runtime_plugin::Order"),
         )
     }
 
@@ -119,6 +108,10 @@ class ServiceRuntimePluginGenerator(
             impl #{RuntimePlugin} for ServiceRuntimePlugin {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
                     self.config.clone()
+                }
+
+                fn order(&self) -> #{Order} {
+                    #{Order}::Defaults
                 }
 
                 fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {

@@ -8,10 +8,10 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -22,7 +22,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -84,7 +83,7 @@ class RegionDecorator : ClientCodegenDecorator {
     // Services that have an endpoint ruleset that references the SDK::Region built in, or
     // that use SigV4, both need a configurable region.
     private fun usesRegion(codegenContext: ClientCodegenContext) =
-        codegenContext.getBuiltIn(Builtins.REGION) != null || ServiceIndex.of(codegenContext.model)
+        codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null || ServiceIndex.of(codegenContext.model)
             .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
 
     override fun configCustomizations(
@@ -109,14 +108,6 @@ class RegionDecorator : ClientCodegenDecorator {
         }
     }
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        if (usesRegion(codegenContext)) {
-            rustCrate.withModule(ClientRustModule.config) {
-                rust("pub use #T::Region;", region(codegenContext.runtimeConfig))
-            }
-        }
-    }
-
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         if (!usesRegion(codegenContext)) {
             return listOf()
@@ -125,18 +116,19 @@ class RegionDecorator : ClientCodegenDecorator {
             object : EndpointCustomization {
                 override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
                     return when (parameter.builtIn) {
-                        Builtins.REGION.builtIn -> writable {
+                        AwsBuiltIns.REGION.builtIn -> writable {
                             rustTemplate(
                                 "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
                                 "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
                             )
                         }
+
                         else -> null
                     }
                 }
 
                 override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
-                    if (name != Builtins.REGION.builtIn.get()) {
+                    if (name != AwsBuiltIns.REGION.builtIn.get()) {
                         return null
                     }
                     return writable {
@@ -156,8 +148,9 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = arrayOf(
         *preludeScope,
-        "Region" to region.resolve("Region"),
+        "Region" to configReexport(region.resolve("Region")),
     )
+
     override fun section(section: ServiceConfig) = writable {
         when (section) {
             ServiceConfig.ConfigImpl -> {

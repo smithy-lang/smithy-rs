@@ -43,7 +43,7 @@ class EndpointParamsInterceptorGenerator(
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-        val runtimeApi = CargoDependency.smithyRuntimeApi(rc).toType()
+        val runtimeApi = CargoDependency.smithyRuntimeApiClient(rc).toType()
         val interceptors = runtimeApi.resolve("client::interceptors")
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         arrayOf(
@@ -54,7 +54,7 @@ class EndpointParamsInterceptorGenerator(
             "EndpointResolverParams" to runtimeApi.resolve("client::endpoint::EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
-            "Interceptor" to RuntimeType.interceptor(rc),
+            "Intercept" to RuntimeType.intercept(rc),
             "InterceptorContext" to RuntimeType.interceptorContext(rc),
             "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
             "Input" to interceptors.resolve("context::Input"),
@@ -74,7 +74,7 @@ class EndpointParamsInterceptorGenerator(
             ##[derive(Debug)]
             struct $interceptorName;
 
-            impl #{Interceptor} for $interceptorName {
+            impl #{Intercept} for $interceptorName {
                 fn name(&self) -> &'static str {
                     ${interceptorName.dq()}
                 }

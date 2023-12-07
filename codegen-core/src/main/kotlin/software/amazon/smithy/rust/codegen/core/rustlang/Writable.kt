@@ -30,6 +30,11 @@ fun Writable.map(f: RustWriter.(Writable) -> Unit): Writable {
     return writable { f(self) }
 }
 
+/** Returns Some(..arg) */
+fun Writable.some(): Writable {
+    return this.map { rust("Some(#T)", it) }
+}
+
 fun Writable.isNotEmpty(): Boolean = !this.isEmpty()
 
 operator fun Writable.plus(other: Writable): Writable {
@@ -90,14 +95,14 @@ fun Array<Writable>.join(separator: Writable) = asIterable().join(separator)
  *     "type_params" to rustTypeParameters(
  *         symbolProvider.toSymbol(operation),
  *         RustType.Unit,
- *         runtimeConfig.smithyHttp().resolve("body::SdkBody"),
+ *         runtimeConfig.smithyTypes().resolve("body::SdkBody"),
  *         GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
  *     )
  * )
  * ```
  * would write out something like:
  * ```rust
- * some_fn::<crate::operation::SomeOperation, (), aws_smithy_http::body::SdkBody, A, B>();
+ * some_fn::<crate::operation::SomeOperation, (), aws_smithy_types::body::SdkBody, A, B>();
  * ```
  */
 fun rustTypeParameters(

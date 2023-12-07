@@ -32,7 +32,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -41,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.canUseDefault
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
-import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
@@ -53,7 +51,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`.
 
 /** BuilderGenerator customization sections */
@@ -77,8 +75,8 @@ sealed class BuilderSection(name: String) : Section(name) {
 /** Customizations for BuilderGenerator */
 abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
-fun RuntimeConfig.operationBuildError() = RuntimeType.operationModule(this).resolve("error::BuildError")
-fun RuntimeConfig.serializationError() = RuntimeType.operationModule(this).resolve("error::SerializationError")
+fun RuntimeConfig.operationBuildError() = RuntimeType.smithyTypes(this).resolve("error::operation::BuildError")
+fun RuntimeConfig.serializationError() = RuntimeType.smithyTypes(this).resolve("error::operation::SerializationError")
 
 fun MemberShape.enforceRequired(
     field: Writable,
@@ -89,6 +87,8 @@ fun MemberShape.enforceRequired(
         return field
     }
     val shape = this
+    val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
+    val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
     val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
         codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
     )
@@ -186,6 +186,14 @@ class BuilderGenerator(
             false -> implBlockWriter.format(outputSymbol)
         }
         implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
+        val trulyRequiredMembers = members.filter { trulyRequired(it) }
+        if (trulyRequiredMembers.isNotEmpty()) {
+            implBlockWriter.docs("This method will fail if any of the following fields are not set:")
+            trulyRequiredMembers.forEach {
+                val memberName = symbolProvider.toMemberName(it)
+                implBlockWriter.docs("- [`$memberName`](#T::$memberName)", symbolProvider.symbolForBuilder(shape))
+            }
+        }
         implBlockWriter.rustBlockTemplate("pub fn build(self) -> $returnType", *preludeScope) {
             conditionalBlockTemplate("#{Ok}(", ")", conditional = fallibleBuilder, *preludeScope) {
                 // If a wrapper is specified, use the `::new` associated function to construct the wrapper
@@ -216,6 +224,9 @@ class BuilderGenerator(
         val input = coreType.asArgument("input")
 
         writer.documentShape(member, model)
+        if (member.isRequired) {
+            writer.docs("This field is required.")
+        }
         writer.deprecatedShape(member)
         writer.rustBlock("pub fn $memberName(mut self, ${input.argument}) -> Self") {
             rustTemplate("self.$memberName = #{Some}(${input.value});", *preludeScope)
@@ -233,7 +244,7 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String,
     ) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
         //  a non `Option`al target type: in all other cases the client generates `Option`al types.
         val inputType = outerType.asOptional()
@@ -255,7 +266,7 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String,
     ) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
         //  a non `Option`al target type: in all other cases the client generates `Option`al types.
         val inputType = outerType.asOptional()
@@ -369,6 +380,10 @@ class BuilderGenerator(
         }
     }
 
+    private fun trulyRequired(member: MemberShape) = symbolProvider.toSymbol(member).let {
+        !it.isOptional() && !it.canUseDefault()
+    }
+
     /**
      * The core builder of the inner type. If the structure requires a fallible builder, this may use `?` to return
      * errors.
@@ -385,15 +400,22 @@ class BuilderGenerator(
             members.forEach { member ->
                 val memberName = symbolProvider.toMemberName(member)
                 val memberSymbol = symbolProvider.toSymbol(member)
-                val default = memberSymbol.defaultValue()
                 withBlock("$memberName: self.$memberName", ",") {
-                    // Write the modifier
-                    when {
-                        !memberSymbol.isOptional() && default == Default.RustDefault -> rust(".unwrap_or_default()")
-                        !memberSymbol.isOptional() -> withBlock(
-                            ".ok_or_else(||",
-                            ")?",
-                        ) { missingRequiredField(memberName) }
+                    val generator = DefaultValueGenerator(runtimeConfig, symbolProvider, model)
+                    val default = generator.defaultValue(member)
+                    if (!memberSymbol.isOptional()) {
+                        if (default != null) {
+                            if (default.isRustDefault) {
+                                rust(".unwrap_or_default()")
+                            } else {
+                                rust(".unwrap_or_else(#T)", default.expr)
+                            }
+                        } else {
+                            withBlock(
+                                ".ok_or_else(||",
+                                ")?",
+                            ) { missingRequiredField(memberName) }
+                        }
                     }
                 }
             }

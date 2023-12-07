@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rustsdk.customize.s3
 
+import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rustsdk.BaseRequestIdDecorator
@@ -16,6 +18,10 @@ class S3ExtendedRequestIdDecorator : BaseRequestIdDecorator() {
 
     override val fieldName: String = "extended_request_id"
     override val accessorFunctionName: String = "extended_request_id"
+
+    override fun asMemberShape(container: StructureShape): MemberShape? {
+        return null
+    }
 
     private val requestIdModule: RuntimeType =
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("s3_request_id"))

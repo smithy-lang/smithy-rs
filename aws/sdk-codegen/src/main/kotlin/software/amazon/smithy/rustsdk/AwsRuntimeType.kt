@@ -38,30 +38,15 @@ object AwsRuntimeType {
                 "presigning_interceptors",
                 visibility = Visibility.PUBCRATE,
                 AwsCargoDependency.awsSigv4(runtimeConfig),
-                CargoDependency.smithyRuntimeApi(runtimeConfig),
+                CargoDependency.smithyRuntimeApiClient(runtimeConfig),
             ),
         )
-
-    // TODO(enableNewSmithyRuntimeCleanup): Delete defaultMiddleware and middleware.rs, and remove tower dependency from inlinables, when cleaning up middleware
-    fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
-        InlineAwsDependency.forRustFile(
-            "middleware", visibility = Visibility.PUBLIC,
-            CargoDependency.smithyHttp(this),
-            CargoDependency.smithyHttpTower(this),
-            CargoDependency.smithyClient(this),
-            CargoDependency.Tower,
-            AwsCargoDependency.awsSigAuth(this),
-            AwsCargoDependency.awsHttp(this),
-            AwsCargoDependency.awsEndpoint(this),
-        ),
-    ).resolve("DefaultMiddleware")
 
     fun awsCredentialTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsCredentialTypes(runtimeConfig).toType()
 
     fun awsCredentialTypesTestUtil(runtimeConfig: RuntimeConfig) =
         AwsCargoDependency.awsCredentialTypes(runtimeConfig).toDevDependency().withFeature("test-util").toType()
 
-    fun awsEndpoint(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsEndpoint(runtimeConfig).toType()
     fun awsHttp(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsHttp(runtimeConfig).toType()
 
     fun awsSigv4(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigv4(runtimeConfig).toType()

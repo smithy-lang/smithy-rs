@@ -87,7 +87,7 @@ private class GlacierApiVersionCustomization(private val codegenContext: ClientC
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
             val apiVersion = codegenContext.serviceShape.version
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
+            section.registerInterceptor(this) {
                 rustTemplate(
                     "#{Interceptor}::new(${apiVersion.dq()})",
                     "Interceptor" to inlineModule(codegenContext.runtimeConfig).resolve("GlacierApiVersionInterceptor"),
@@ -152,5 +152,5 @@ private fun glacierInterceptorDependencies(runtimeConfig: RuntimeConfig) = listO
     CargoDependency.Hex,
     CargoDependency.Ring,
     CargoDependency.smithyHttp(runtimeConfig),
-    CargoDependency.smithyRuntimeApi(runtimeConfig),
+    CargoDependency.smithyRuntimeApiClient(runtimeConfig),
 )

@@ -80,7 +80,7 @@ impl<M, R> ClientBuilder<(), M, R> {
 
 Both features can now be enabled at once without creating a conflict. Since both methods have different names, it's now Ok for them to have different return types.
 
-[*This is real code, see it in context*](https://github.com/awslabs/smithy-rs/blob/2e7ed943513203f1472f2490866dc4fb8a392bd3/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L303)
+[*This is real code, see it in context*](https://github.com/smithy-lang/smithy-rs/blob/2e7ed943513203f1472f2490866dc4fb8a392bd3/rust-runtime/aws-smithy-client/src/hyper_ext.rs#L303)
 
 ### We should avoid using `#[cfg(not(feature = "some-feature"))]`
 
@@ -130,12 +130,12 @@ For an example: Say you have a crate with features `a`, `b`, `c` that all provid
     - [Mutually exclusive features are present in profiling-procmacros][profiling#32]
     - [Clang-sys features not additive][clang-sys#128]
 
-[aws-sigv4]: https://github.com/awslabs/smithy-rs/blob/5a1990791d727652587df51b77df4d1df9058252/aws/rust-runtime/aws-sigv4/Cargo.toml
+[aws-sigv4]: https://github.com/smithy-lang/smithy-rs/blob/5a1990791d727652587df51b77df4d1df9058252/aws/rust-runtime/aws-sigv4/Cargo.toml
 [aws-sdk-s3]: https://github.com/awslabs/aws-sdk-rust/blob/f2b4361b004ee822960ea9791f566fd4eb6d1aba/sdk/s3/Cargo.toml
 [Cargo Book section on features]: https://doc.rust-lang.org/cargo/reference/features.html
 [SemVer-incompatible change]: https://doc.rust-lang.org/cargo/reference/features.html#semver-compatibility
 [remove rustls from crate graph]: https://github.com/awslabs/aws-sdk-rust/issues/304
-[remove default features from runtime crates]: https://github.com/awslabs/smithy-rs/pull/935
+[remove default features from runtime crates]: https://github.com/smithy-lang/smithy-rs/pull/935
 [cfg! macro]: https://doc.rust-lang.org/rust-by-example/attribute/cfg.html
 [How to tell what "features" are available per crate?]: https://stackoverflow.com/questions/59761045/how-to-tell-what-features-are-available-per-crate
 [How do I 'pass down' feature flags to subdependencies in Cargo?]: https://stackoverflow.com/questions/40021555/how-do-i-pass-down-feature-flags-to-subdependencies-in-cargo
@@ -144,4 +144,4 @@ For an example: Say you have a crate with features `a`, `b`, `c` that all provid
 [profiling#32]: https://github.com/aclysma/profiling/issues/32
 [clang-sys#128]: https://github.com/KyleMayes/clang-sys/issues/128
 [compile-time errors]: https://doc.rust-lang.org/stable/std/macro.compile_error.html
-[native-tls example]: https://github.com/awslabs/smithy-rs/tree/bc316a0b81b75a00c389f6281a66eb0f5357172a/aws/sdk/examples/using_native_tls_instead_of_rustls
+[native-tls example]: https://github.com/smithy-lang/smithy-rs/tree/bc316a0b81b75a00c389f6281a66eb0f5357172a/aws/sdk/examples/using_native_tls_instead_of_rustls

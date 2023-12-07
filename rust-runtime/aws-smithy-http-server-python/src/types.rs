@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Python wrapped types from aws-smithy-types and aws-smithy-http.
+//! Python wrapped types from aws-smithy-types.
 //!
 //! ## `Deref` hacks for Json serializer
 //! [aws_smithy_json::serialize::JsonValueWriter] expects references to the types
@@ -31,7 +31,6 @@ use pyo3::{
     prelude::*,
 };
 use tokio::{runtime::Handle, sync::Mutex};
-use tokio_stream::StreamExt;
 
 use crate::PyError;
 
@@ -302,11 +301,11 @@ impl Deref for DateTime {
     }
 }
 
-/// Python Wrapper for [aws_smithy_http::byte_stream::ByteStream].
+/// Python Wrapper for [aws_smithy_types::byte_stream::ByteStream].
 ///
 /// ByteStream provides misuse-resistant primitives to make it easier to handle common patterns with streaming data.
 ///
-/// On the Rust side, The Python implementation wraps the original [ByteStream](aws_smithy_http::byte_stream::ByteStream)
+/// On the Rust side, The Python implementation wraps the original [ByteStream](aws_smithy_types::byte_stream::ByteStream)
 /// in a clonable structure and implements the [Stream](futures::stream::Stream) trait for it to
 /// allow Rust to handle the type transparently.
 ///
@@ -333,17 +332,17 @@ impl Deref for DateTime {
 /// effectively maintaining the asyncronous behavior that Rust exposes, while the sync one is blocking the Tokio runtime to be able
 /// to await one chunk at a time.
 ///
-/// The original Rust [ByteStream](aws_smithy_http::byte_stream::ByteStream) is wrapped inside a `Arc<Mutex>` to allow the type to be
+/// The original Rust [ByteStream](aws_smithy_types::byte_stream::ByteStream) is wrapped inside a `Arc<Mutex>` to allow the type to be
 /// [Clone] (required by PyO3) and to allow internal mutability, required to fetch the next chunk of data.
 ///
 /// :param input bytes:
 /// :rtype None:
 #[pyclass]
 #[derive(Debug, Clone)]
-pub struct ByteStream(Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>);
+pub struct ByteStream(Arc<Mutex<aws_smithy_types::byte_stream::ByteStream>>);
 
 impl futures::stream::Stream for ByteStream {
-    type Item = Result<Bytes, aws_smithy_http::byte_stream::error::Error>;
+    type Item = Result<Bytes, aws_smithy_types::byte_stream::error::Error>;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let stream = self.0.lock();
@@ -357,7 +356,7 @@ impl futures::stream::Stream for ByteStream {
 
 /// Return a new data chunk from the stream.
 async fn yield_data_chunk(
-    body: Arc<Mutex<aws_smithy_http::byte_stream::ByteStream>>,
+    body: Arc<Mutex<aws_smithy_types::byte_stream::ByteStream>>,
 ) -> PyResult<Option<Bytes>> {
     let mut stream = body.lock().await;
     stream
@@ -368,37 +367,37 @@ async fn yield_data_chunk(
 }
 
 impl ByteStream {
-    /// Construct a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a
-    /// [SdkBody](aws_smithy_http::body::SdkBody).
+    /// Construct a new [`ByteStream`](aws_smithy_types::byte_stream::ByteStream) from a
+    /// [`SdkBody`](aws_smithy_types::body::SdkBody).
     ///
     /// This method is available only to Rust and it is required to comply with the
     /// interface required by the code generator.
-    pub fn new(body: aws_smithy_http::body::SdkBody) -> Self {
+    pub fn new(body: aws_smithy_types::body::SdkBody) -> Self {
         Self(Arc::new(Mutex::new(
-            aws_smithy_http::byte_stream::ByteStream::new(body),
+            aws_smithy_types::byte_stream::ByteStream::new(body),
         )))
     }
 }
 
 impl Default for ByteStream {
     fn default() -> Self {
-        Self::new(aws_smithy_http::body::SdkBody::from(""))
+        Self::new(aws_smithy_types::body::SdkBody::from(""))
     }
 }
 
 #[pymethods]
 impl ByteStream {
-    /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a slice of bytes.
+    /// Create a new [ByteStream](aws_smithy_types::byte_stream::ByteStream) from a slice of bytes.
     #[new]
     pub fn newpy(input: &[u8]) -> Self {
         Self(Arc::new(Mutex::new(
-            aws_smithy_http::byte_stream::ByteStream::new(aws_smithy_http::body::SdkBody::from(
+            aws_smithy_types::byte_stream::ByteStream::new(aws_smithy_types::body::SdkBody::from(
                 input,
             )),
         )))
     }
 
-    /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a path, without
+    /// Create a new [ByteStream](aws_smithy_types::byte_stream::ByteStream) from a path, without
     /// requiring Python to await this method.
     ///
     /// **NOTE:** This method will block the Rust event loop when it is running.
@@ -408,7 +407,7 @@ impl ByteStream {
     #[staticmethod]
     pub fn from_path_blocking(py: Python, path: String) -> PyResult<Py<PyAny>> {
         let byte_stream = Handle::current().block_on(async {
-            aws_smithy_http::byte_stream::ByteStream::from_path(path)
+            aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))
         })?;
@@ -416,7 +415,7 @@ impl ByteStream {
         Ok(result.into_py(py))
     }
 
-    /// Create a new [ByteStream](aws_smithy_http::byte_stream::ByteStream) from a path, forcing
+    /// Create a new [ByteStream](aws_smithy_types::byte_stream::ByteStream) from a path, forcing
     /// Python to await this coroutine.
     ///
     /// :param path str:
@@ -424,7 +423,7 @@ impl ByteStream {
     #[staticmethod]
     pub fn from_path(py: Python, path: String) -> PyResult<&PyAny> {
         pyo3_asyncio::tokio::future_into_py(py, async move {
-            let byte_stream = aws_smithy_http::byte_stream::ByteStream::from_path(path)
+            let byte_stream = aws_smithy_types::byte_stream::ByteStream::from_path(path)
                 .await
                 .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
             Ok(Self(Arc::new(Mutex::new(byte_stream))))
@@ -441,7 +440,7 @@ impl ByteStream {
     /// Return the next item from the iterator. If there are no further items, raise the StopIteration exception.
     /// PyO3 allows to raise the correct exception using the enum [IterNextOutput](pyo3::pyclass::IterNextOutput).
     ///
-    /// To get tnext value of the iterator, the `Arc` inner stream is cloned and the Rust call to `next()` is executed
+    /// To get the next value of the iterator, the `Arc` inner stream is cloned and the Rust call to `next()` is executed
     /// inside a call blocking the Tokio runtime.
     ///
     /// More info: `<https://docs.python.org/3/reference/datamodel.html#object.__next__.>`

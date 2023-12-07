@@ -53,11 +53,12 @@ class OperationErrorGeneratorTest {
                     name = "generates_combined_error_enums",
                     test = """
                         use crate::operation::greeting::GreetingError;
+                        use aws_smithy_types::error::ErrorMetadata;
 
                         let error = GreetingError::InvalidGreeting(
                             InvalidGreeting::builder()
                                 .message("an error")
-                                .meta(aws_smithy_types::Error::builder().code("InvalidGreeting").message("an error").build())
+                                .meta(ErrorMetadata::builder().code("InvalidGreeting").message("an error").build())
                                 .build()
                         );
                         assert_eq!(format!("{}", error), "InvalidGreeting: an error");
@@ -71,7 +72,7 @@ class OperationErrorGeneratorTest {
                         assert_eq!(error.is_complex_error(), false);
 
                         // Unhandled variants properly delegate message.
-                        let error = GreetingError::generic(aws_smithy_types::Error::builder().message("hello").build());
+                        let error = GreetingError::generic(ErrorMetadata::builder().message("hello").build());
                         assert_eq!(error.meta().message(), Some("hello"));
 
                         let error = GreetingError::unhandled("some other error");
