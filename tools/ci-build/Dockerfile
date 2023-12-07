@@ -91,32 +91,32 @@ RUN set -eux; \
     chmod g+rw -R /opt/cargo/registry
 
 FROM install_rust AS cargo_deny
-ARG cargo_deny_version=0.13.5
+ARG cargo_deny_version=0.14.3
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
-ARG cargo_udeps_version=0.1.42
+ARG cargo_udeps_version=0.1.44
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
 
 FROM install_rust AS cargo_hack
-ARG cargo_hack_version=0.5.23
+ARG cargo_hack_version=0.6.14
 RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
-ARG cargo_minimal_versions_version=0.1.19
+ARG cargo_minimal_versions_version=0.1.22
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.8
+ARG cargo_check_external_types_version=0.1.10
 RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
-ARG maturin_version=0.14.1
+ARG maturin_version=1.4.0
 RUN cargo install maturin --locked --version ${maturin_version}
 
 FROM install_rust AS wasm_pack
-ARG wasm_pack_version=0.11.0
+ARG wasm_pack_version=0.12.1
 RUN cargo install wasm-pack --locked --version ${wasm_pack_version}
 
 FROM install_rust AS wasmtime
@@ -129,15 +129,15 @@ RUN set -eux; \
     mv wasmtime-v*/wasmtime /opt;
 
 FROM install_rust AS cargo_wasi
-ARG cargo_wasi_version=0.1.27
+ARG cargo_wasi_version=0.1.28
 RUN cargo install cargo-wasi --locked --version ${cargo_wasi_version}
 
 FROM install_rust AS cargo_semver_checks
-ARG cargo_semver_checks_version=0.24.1
+ARG cargo_semver_checks_version=0.25.0
 RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
 
 FROM install_rust AS cargo_mdbook
-ARG cargo_mdbook_version=0.4.30
+ARG cargo_mdbook_version=0.4.36
 RUN cargo install mdbook --locked --version ${cargo_mdbook_version}
 
 FROM install_rust AS cargo_mdbook_mermaid
