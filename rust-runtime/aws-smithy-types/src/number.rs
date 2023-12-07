@@ -358,6 +358,10 @@ mod test {
     fn to_i8() {
         to_signed_converter_tests!(i8);
         i8::try_from(Number::Float(-3200000.0)).expect_err("overflow");
+        i8::try_from(Number::Float(32.1)).expect_err("imprecise");
+        i8::try_from(Number::Float(i8::MAX as f64 + 0.1)).expect_err("imprecise");
+        i8::try_from(Number::Float(f64::NAN)).expect_err("nan");
+        i8::try_from(Number::Float(f64::INFINITY)).expect_err("nan");
     }
 
     #[test]
