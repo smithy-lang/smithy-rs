@@ -6,10 +6,12 @@
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class AwsQueryCompatibleTest {
     @Test
@@ -48,33 +50,40 @@ class AwsQueryCompatibleTest {
             }
         """.asSmithyModel()
 
-        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
-            val moduleName = clientCodegenContext.moduleUseName()
-            rustCrate.integrationTest("should_parse_code_and_type_fields") {
-                rust(
+        clientIntegrationTest(model) { context, rustCrate ->
+            val operation: OperationShape = context.model.lookup("test#SomeOperation")
+            rustCrate.withModule(context.symbolProvider.moduleForShape(operation)) {
+                rustTemplate(
                     """
-                    ##[test]
-                    fn should_parse_code_and_type_fields() {
-                        use aws_smithy_http::response::ParseStrictResponse;
+                    ##[cfg(test)]
+                    ##[#{tokio}::test]
+                    async fn should_parse_code_and_type_fields() {
+                        use aws_smithy_types::body::SdkBody;
 
-                        let response = http::Response::builder()
-                            .header(
-                                "x-amzn-query-error",
-                                http::HeaderValue::from_static("AWS.SimpleQueueService.NonExistentQueue;Sender"),
-                            )
-                            .status(400)
-                            .body(
-                                r##"{
-                                    "__type": "com.amazonaws.sqs##QueueDoesNotExist",
-                                    "message": "Some user-visible message"
-                                }"##,
-                            )
-                            .unwrap();
-                        let some_operation = $moduleName::operation::some_operation::SomeOperation::new();
-                        let error = some_operation
-                            .parse(&response.map(bytes::Bytes::from))
-                            .err()
-                            .unwrap();
+                        let response = |_: http::Request<SdkBody>| {
+                            http::Response::builder()
+                                .header(
+                                    "x-amzn-query-error",
+                                    http::HeaderValue::from_static("AWS.SimpleQueueService.NonExistentQueue;Sender"),
+                                )
+                                .status(400)
+                                .body(
+                                    SdkBody::from(
+                                        r##"{
+                                            "__type": "com.amazonaws.sqs##QueueDoesNotExist",
+                                            "message": "Some user-visible message"
+                                        }"##
+                                    )
+                                )
+                                .unwrap()
+                        };
+                        let client = crate::Client::from_conf(
+                            crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(response))
+                                .endpoint_url("http://localhost:1234")
+                                .build()
+                        );
+                        let error = dbg!(client.some_operation().send().await).err().unwrap().into_service_error();
                         assert_eq!(
                             Some("AWS.SimpleQueueService.NonExistentQueue"),
                             error.meta().code(),
@@ -82,6 +91,9 @@ class AwsQueryCompatibleTest {
                         assert_eq!(Some("Sender"), error.meta().extra("type"));
                     }
                     """,
+                    "infallible_client_fn" to CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                        .toType().resolve("client::http::test_util::infallible_client_fn"),
+                    "tokio" to CargoDependency.Tokio.toType(),
                 )
             }
         }
@@ -118,33 +130,43 @@ class AwsQueryCompatibleTest {
             }
         """.asSmithyModel()
 
-        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
-            val moduleName = clientCodegenContext.moduleUseName()
-            rustCrate.integrationTest("should_parse_code_from_payload") {
-                rust(
+        clientIntegrationTest(model) { context, rustCrate ->
+            val operation: OperationShape = context.model.lookup("test#SomeOperation")
+            rustCrate.withModule(context.symbolProvider.moduleForShape(operation)) {
+                rustTemplate(
                     """
-                    ##[test]
-                    fn should_parse_code_from_payload() {
-                        use aws_smithy_http::response::ParseStrictResponse;
+                    ##[cfg(test)]
+                    ##[#{tokio}::test]
+                    async fn should_parse_code_from_payload() {
+                        use aws_smithy_types::body::SdkBody;
 
-                        let response = http::Response::builder()
-                            .status(400)
-                            .body(
-                                r##"{
-                                    "__type": "com.amazonaws.sqs##QueueDoesNotExist",
-                                    "message": "Some user-visible message"
-                                }"##,
-                            )
-                            .unwrap();
-                        let some_operation = $moduleName::operation::some_operation::SomeOperation::new();
-                        let error = some_operation
-                            .parse(&response.map(bytes::Bytes::from))
-                            .err()
-                            .unwrap();
+                        let response = |_: http::Request<SdkBody>| {
+                            http::Response::builder()
+                                .status(400)
+                                .body(
+                                    SdkBody::from(
+                                        r##"{
+                                            "__type": "com.amazonaws.sqs##QueueDoesNotExist",
+                                            "message": "Some user-visible message"
+                                        }"##,
+                                    )
+                                )
+                                .unwrap()
+                        };
+                        let client = crate::Client::from_conf(
+                            crate::Config::builder()
+                                .http_client(#{infallible_client_fn}(response))
+                                .endpoint_url("http://localhost:1234")
+                                .build()
+                        );
+                        let error = dbg!(client.some_operation().send().await).err().unwrap().into_service_error();
                         assert_eq!(Some("QueueDoesNotExist"), error.meta().code());
                         assert_eq!(None, error.meta().extra("type"));
                     }
                     """,
+                    "infallible_client_fn" to CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                        .toType().resolve("client::http::test_util::infallible_client_fn"),
+                    "tokio" to CargoDependency.Tokio.toType(),
                 )
             }
         }

@@ -8,20 +8,21 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.smithy.MaybeRenamed
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.renamedFrom
-import software.amazon.smithy.rust.codegen.core.testutil.TestRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testRustSettings
+import software.amazon.smithy.rust.codegen.core.testutil.testRustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class RustReservedWordSymbolProviderTest {
-    private class TestSymbolProvider(model: Model) :
-        WrappingSymbolProvider(SymbolVisitor(testRustSettings(), model, null, TestRustSymbolProviderConfig))
+    private class TestSymbolProvider(model: Model, nullabilityCheckMode: NullableIndex.CheckMode) :
+        WrappingSymbolProvider(SymbolVisitor(testRustSettings(), model, null, testRustSymbolProviderConfig(nullabilityCheckMode)))
     private val emptyConfig = RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap())
 
     @Test
@@ -30,13 +31,13 @@ internal class RustReservedWordSymbolProviderTest {
             namespace test
             structure Self {}
         """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), emptyConfig)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model, NullableIndex.CheckMode.CLIENT), emptyConfig)
         val symbol = provider.toSymbol(model.lookup("test#Self"))
         symbol.name shouldBe "SelfValue"
     }
 
     private fun mappingTest(config: RustReservedWordConfig, model: Model, id: String, test: (String) -> Unit) {
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), config)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model, NullableIndex.CheckMode.CLIENT), config)
         val symbol = provider.toMemberName(model.lookup("test#Container\$$id"))
         test(symbol)
     }
@@ -132,7 +133,7 @@ internal class RustReservedWordSymbolProviderTest {
                 async: String
             }
         """.asSmithyModel()
-        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model), emptyConfig)
+        val provider = RustReservedWordSymbolProvider(TestSymbolProvider(model, NullableIndex.CheckMode.CLIENT), emptyConfig)
         provider.toMemberName(
             MemberShape.builder().id("namespace#container\$async").target("namespace#Integer").build(),
         ) shouldBe "r##async"
@@ -149,7 +150,7 @@ internal class RustReservedWordSymbolProviderTest {
             @enum([{ name: "dontcare", value: "dontcare" }]) string Container
         """.asSmithyModel()
         val provider = RustReservedWordSymbolProvider(
-            TestSymbolProvider(model),
+            TestSymbolProvider(model, NullableIndex.CheckMode.CLIENT),
             reservedWordConfig = emptyConfig.copy(
                 enumMemberMap = mapOf(
                     "Unknown" to "UnknownValue",

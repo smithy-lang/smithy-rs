@@ -54,7 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
-import software.amazon.smithy.rust.codegen.server.smithy.generators.serverInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerInstantiator
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
 
@@ -94,7 +94,7 @@ class ServerProtocolTestGenerator(
         inputT to outputT
     }
 
-    private val instantiator = serverInstantiator(codegenContext)
+    private val instantiator = ServerInstantiator(codegenContext)
 
     private val codegenScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
@@ -230,26 +230,6 @@ class ServerProtocolTestGenerator(
     // not been written with a server-side perspective in mind.
     private fun List<TestCase>.fixBroken(): List<TestCase> = this.map {
         when (it) {
-            is TestCase.RequestTest -> {
-                val howToFixIt = BrokenRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
-                if (howToFixIt == null) {
-                    it
-                } else {
-                    val fixed = howToFixIt(it.testCase, it.operationShape)
-                    TestCase.RequestTest(fixed, it.operationShape)
-                }
-            }
-
-            is TestCase.ResponseTest -> {
-                val howToFixIt = BrokenResponseTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
-                if (howToFixIt == null) {
-                    it
-                } else {
-                    val fixed = howToFixIt(it.testCase)
-                    TestCase.ResponseTest(fixed, it.targetShape)
-                }
-            }
-
             is TestCase.MalformedRequestTest -> {
                 val howToFixIt = BrokenMalformedRequestTests[Pair(codegenContext.serviceShape.id.toString(), it.id)]
                 if (howToFixIt == null) {
@@ -259,6 +239,7 @@ class ServerProtocolTestGenerator(
                     TestCase.MalformedRequestTest(fixed)
                 }
             }
+            else -> it
         }
     }
 
@@ -486,7 +467,8 @@ class ServerProtocolTestGenerator(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
-            let service = crate::service::$serviceName::builder_without_plugins::<#{Hyper}::body::Body>()
+            let config = crate::service::${serviceName}Config::builder().build();
+            let service = crate::service::$serviceName::builder::<#{Hyper}::body::Body, _, _, _>(config)
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {
@@ -544,7 +526,7 @@ class ServerProtocolTestGenerator(
                 (target is DoubleShape) || (target is FloatShape)
             }
 
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1147) Handle the case of nested floating point members.
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1147) Handle the case of nested floating point members.
             if (hasFloatingPointMembers) {
                 for (member in inputShape.members()) {
                     val memberName = codegenContext.symbolProvider.toMemberName(member)
@@ -580,14 +562,14 @@ class ServerProtocolTestGenerator(
 
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpResponseTestCase) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
-        checkForbidHeaders(rustWriter, "&http_response.headers()", testCase.forbidHeaders)
-        checkRequiredHeaders(rustWriter, "&http_response.headers()", testCase.requireHeaders)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
+        checkForbidHeaders(rustWriter, "http_response.headers()", testCase.forbidHeaders)
+        checkRequiredHeaders(rustWriter, "http_response.headers()", testCase.requireHeaders)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
         // invoke it with (like in the case of an `httpResponseTest` test case).
-        // In https://github.com/awslabs/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
+        // In https://github.com/smithy-lang/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
         // the operation handler trait implementation instead of directly calling `from_request()`.
 
         // If no request body is defined, then no assertions are made about the body of the message.
@@ -598,12 +580,12 @@ class ServerProtocolTestGenerator(
 
     private fun checkResponse(rustWriter: RustWriter, testCase: HttpMalformedResponseDefinition) {
         checkStatusCode(rustWriter, testCase.code)
-        checkHeaders(rustWriter, "&http_response.headers()", testCase.headers)
+        checkHeaders(rustWriter, "http_response.headers()", testCase.headers)
 
         // We can't check that the `OperationExtension` is set in the response, because it is set in the implementation
         // of the operation `Handler` trait, a code path that does not get exercised when we don't have a request to
         // invoke it with (like in the case of an `httpResponseTest` test case).
-        // In https://github.com/awslabs/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
+        // In https://github.com/smithy-lang/smithy-rs/pull/1708: We did change `httpResponseTest`s generation to `call()`
         // the operation handler trait implementation instead of directly calling `from_request()`.
 
         // If no request body is defined, then no assertions are made about the body of the message.
@@ -762,19 +744,19 @@ class ServerProtocolTestGenerator(
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
-            // Endpoint trait is not implemented yet, see https://github.com/awslabs/smithy-rs/issues/950.
+            // Endpoint trait is not implemented yet, see https://github.com/smithy-lang/smithy-rs/issues/950.
             FailingTest(RestJson, "RestJsonEndpointTrait", TestType.Request),
             FailingTest(RestJson, "RestJsonEndpointTraitWithHostLabel", TestType.Request),
 
             FailingTest(RestJson, "RestJsonOmitsEmptyListQueryValues", TestType.Request),
             // Tests involving `@range` on floats.
-            // Pending resolution from the Smithy team, see https://github.com/awslabs/smithy-rs/issues/2007.
+            // Pending resolution from the Smithy team, see https://github.com/smithy-lang/smithy-rs/issues/2007.
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloat_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloat", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMinFloat", TestType.MalformedRequest),
 
-            // Tests involving floating point shapes and the `@range` trait; see https://github.com/awslabs/smithy-rs/issues/2007
+            // Tests involving floating point shapes and the `@range` trait; see https://github.com/smithy-lang/smithy-rs/issues/2007
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeFloatOverride_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedRangeMaxFloatOverride", TestType.MalformedRequest),
@@ -789,6 +771,7 @@ class ServerProtocolTestGenerator(
             FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostAccelerateAddressing", TestType.Request),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3VirtualHostDualstackAccelerateAddressing", TestType.Request),
             FailingTest("com.amazonaws.s3#AmazonS3", "S3OperationAddressingPreferred", TestType.Request),
+            FailingTest("com.amazonaws.s3#AmazonS3", "S3OperationNoErrorWrappingResponse", TestType.Response),
 
             // AwsJson1.0 failing tests.
             FailingTest("aws.protocoltests.json10#JsonRpc10", "AwsJson10EndpointTraitWithHostLabel", TestType.Request),
@@ -827,7 +810,7 @@ class ServerProtocolTestGenerator(
             FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedUniqueItemsUnionList_case1", TestType.MalformedRequest),
 
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2472): We don't respect the `@internal` trait
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/2472): We don't respect the `@internal` trait
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumList_case1", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumMapKey_case0", TestType.MalformedRequest),
@@ -847,7 +830,25 @@ class ServerProtocolTestGenerator(
 
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
-        private val DisableTests = setOf<String>()
+        private val DisableTests = setOf<String>(
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/2891): Implement support for `@requestCompression`
+            "SDKAppendedGzipAfterProvidedEncoding_restJson1",
+            "SDKAppendedGzipAfterProvidedEncoding_restXml",
+            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_0",
+            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_1",
+            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsQuery",
+            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_ec2Query",
+            "SDKAppliedContentEncoding_awsJson1_0",
+            "SDKAppliedContentEncoding_awsJson1_1",
+            "SDKAppliedContentEncoding_awsQuery",
+            "SDKAppliedContentEncoding_ec2Query",
+            "SDKAppliedContentEncoding_restJson1",
+            "SDKAppliedContentEncoding_restXml",
+
+            // RestXml S3 tests that fail to compile
+            "S3EscapeObjectKeyInUriLabel",
+            "S3EscapePathObjectKeyInUriLabel",
+        )
 
         private fun fixRestJsonAllQueryStringTypes(
             testCase: HttpRequestTestCase,
@@ -903,33 +904,6 @@ class ServerProtocolTestGenerator(
                 ).asObjectNode().get(),
             ).build()
 
-        private fun fixRestJsonQueryStringEscaping(
-            testCase: HttpRequestTestCase,
-            @Suppress("UNUSED_PARAMETER")
-            operationShape: OperationShape,
-        ): HttpRequestTestCase =
-            testCase.toBuilder().params(
-                Node.parse(
-                    """
-                    {
-                        "queryString": "%:/?#[]@!${'$'}&'()*+,;=😹",
-                        "queryParamsMapOfStringList": {
-                            "String": ["%:/?#[]@!${'$'}&'()*+,;=😹"]
-                        }
-                    }
-                    """.trimMargin(),
-                ).asObjectNode().get(),
-            ).build()
-
-        private fun fixRestJsonInvalidGreetingError(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#InvalidGreeting").build()
-
-        private fun fixRestJsonEmptyComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
-
-        private fun fixRestJsonComplexErrorWithNoMessage(testCase: HttpResponseTestCase): HttpResponseTestCase =
-            testCase.toBuilder().putHeader("X-Amzn-Errortype", "aws.protocoltests.restjson#ComplexError").build()
-
         // TODO(https://github.com/awslabs/smithy/issues/1506)
         private fun fixRestJsonMalformedPatternReDOSString(testCase: HttpMalformedRequestTestCase): HttpMalformedRequestTestCase {
             val brokenResponse = testCase.response
@@ -951,24 +925,11 @@ class ServerProtocolTestGenerator(
                 .build()
         }
 
-        // These are tests whose definitions in the `awslabs/smithy` repository are wrong.
-        // This is because they have not been written from a server perspective, and as such the expected `params` field is incomplete.
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1288): Contribute a PR to fix them upstream.
-        private val BrokenRequestTests = mapOf(
-            // TODO(https://github.com/awslabs/smithy/pull/1564)
-            // Pair(RestJson, "RestJsonAllQueryStringTypes") to ::fixRestJsonAllQueryStringTypes,
-            // TODO(https://github.com/awslabs/smithy/pull/1562)
-            Pair(RestJson, "RestJsonQueryStringEscaping") to ::fixRestJsonQueryStringEscaping,
-        )
-
-        private val BrokenResponseTests: Map<Pair<String, String>, KFunction1<HttpResponseTestCase, HttpResponseTestCase>> =
-            // TODO(https://github.com/awslabs/smithy/issues/1494)
-            mapOf(
-                Pair(RestJson, "RestJsonInvalidGreetingError") to ::fixRestJsonInvalidGreetingError,
-                Pair(RestJson, "RestJsonEmptyComplexErrorWithNoMessage") to ::fixRestJsonEmptyComplexErrorWithNoMessage,
-                Pair(RestJson, "RestJsonComplexErrorWithNoMessage") to ::fixRestJsonComplexErrorWithNoMessage,
-            )
-
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1288): Move the fixed versions into
+        // `rest-json-extras.smithy` and put the unfixed ones in `ExpectFail`: this has the
+        // advantage that once our upstream PRs get merged and we upgrade to the next Smithy release, our build will
+        // fail and we will take notice to remove the fixes from `rest-json-extras.smithy`. This is exactly what the
+        // client does.
         private val BrokenMalformedRequestTests: Map<Pair<String, String>, KFunction1<HttpMalformedRequestTestCase, HttpMalformedRequestTestCase>> =
             // TODO(https://github.com/awslabs/smithy/issues/1506)
             mapOf(

@@ -9,10 +9,9 @@ use std::fmt;
 
 pub mod display;
 pub mod metadata;
-mod unhandled;
+pub mod operation;
 
 pub use metadata::ErrorMetadata;
-pub use unhandled::Unhandled;
 
 #[derive(Debug)]
 pub(super) enum TryFromNumberErrorKind {

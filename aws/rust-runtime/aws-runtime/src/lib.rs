@@ -16,9 +16,6 @@
 /// Supporting code for authentication in the AWS SDK.
 pub mod auth;
 
-/// Supporting code for identity in the AWS SDK.
-pub mod identity;
-
 /// Supporting code for recursion detection in the AWS SDK.
 pub mod recursion_detection;
 
@@ -33,3 +30,6 @@ pub mod invocation_id;
 
 /// Supporting code for request metadata headers in the AWS SDK.
 pub mod request_info;
+
+/// Interceptor that determines the clock skew between the client and service.
+pub mod service_clock_skew;

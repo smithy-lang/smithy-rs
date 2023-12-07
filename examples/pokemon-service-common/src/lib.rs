@@ -15,18 +15,17 @@ use std::{
 };
 
 use async_stream::stream;
-use aws_smithy_client::{conns, hyper_ext::Adapter};
-use aws_smithy_http::{body::SdkBody, byte_stream::ByteStream, operation::Request};
 use aws_smithy_http_server::Extension;
-use http::{
-    uri::{Authority, Scheme},
-    Uri,
-};
+use aws_smithy_runtime::client::http::hyper_014::HyperConnector;
+use aws_smithy_runtime_api::client::http::HttpConnector;
+use http::Uri;
 use pokemon_service_server_sdk::{
-    error, input, model, model::CapturingPayload, output, types::Blob,
+    error, input, model,
+    model::CapturingPayload,
+    output,
+    types::{Blob, ByteStream, SdkBody},
 };
 use rand::{seq::SliceRandom, Rng};
-use tower::Service;
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -37,21 +36,6 @@ const PIKACHU_ITALIAN_FLAVOR_TEXT: &str =
     "Quando vari Pokémon di questo tipo si radunano, la loro energia può causare forti tempeste.";
 const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
     "ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。";
-
-/// Rewrites the base URL of a request
-pub fn rewrite_base_url(
-    scheme: Scheme,
-    authority: Authority,
-) -> impl Fn(Request) -> Request + Clone {
-    move |mut req| {
-        let http_req = req.http_mut();
-        let mut uri_parts = http_req.uri().clone().into_parts();
-        uri_parts.authority = Some(authority.clone());
-        uri_parts.scheme = Some(scheme.clone());
-        *http_req.uri_mut() = Uri::from_parts(uri_parts).expect("failed to create uri from parts");
-        req
-    }
-}
 
 /// Kills [`Child`] process when dropped.
 #[derive(Debug)]
@@ -344,12 +328,14 @@ pub async fn stream_pokemon_radio(
         .parse::<Uri>()
         .expect("Invalid url in `RADIO_STREAMS`");
 
-    let mut connector = Adapter::builder().build(conns::https());
+    let connector = HyperConnector::builder().build_https();
     let result = connector
         .call(
             http::Request::builder()
                 .uri(radio_stream_url)
                 .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
                 .unwrap(),
         )
         .await

@@ -33,9 +33,9 @@ class ResponseDeserializerGenerator(
 
     private val codegenScope by lazy {
         val interceptorContext =
-            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context")
+            CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType().resolve("client::interceptors::context")
         val orchestrator =
-            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator")
+            CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType().resolve("client::orchestrator")
         arrayOf(
             *preludeScope,
             "Error" to interceptorContext.resolve("Error"),
@@ -44,10 +44,9 @@ class ResponseDeserializerGenerator(
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
-            "ResponseDeserializer" to orchestrator.resolve("ResponseDeserializer"),
+            "DeserializeResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::ser_de::DeserializeResponse"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "TypedBox" to RuntimeType.smithyTypes(runtimeConfig).resolve("type_erasure::TypedBox"),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
             "type_erase_result" to typeEraseResult(),
         )
@@ -62,7 +61,7 @@ class ResponseDeserializerGenerator(
             """
             ##[derive(Debug)]
             struct ${operationName}ResponseDeserializer;
-            impl #{ResponseDeserializer} for ${operationName}ResponseDeserializer {
+            impl #{DeserializeResponse} for ${operationName}ResponseDeserializer {
                 #{deserialize_streaming}
 
                 fn deserialize_nonstreaming(&self, response: &#{HttpResponse}) -> #{OutputOrError} {
@@ -95,19 +94,21 @@ class ResponseDeserializerGenerator(
         rustTemplate(
             """
             fn deserialize_streaming(&self, response: &mut #{HttpResponse}) -> #{Option}<#{OutputOrError}> {
+                ##[allow(unused_mut)]
+                let mut force_error = false;
                 #{BeforeParseResponse}
 
                 // If this is an error, defer to the non-streaming parser
-                if !response.status().is_success() && response.status().as_u16() != $successCode {
+                if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
                 }
                 #{Some}(#{type_erase_result}(#{parse_streaming_response}(response)))
             }
             """,
             *codegenScope,
-            "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, false, customizations),
+            "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, customizations),
             "BeforeParseResponse" to writable {
-                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
+                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
             },
         )
     }
@@ -137,8 +138,10 @@ class ResponseDeserializerGenerator(
             let (success, status) = (response.status().is_success(), response.status().as_u16());
             let headers = response.headers();
             let body = response.body().bytes().expect("body loaded");
+            ##[allow(unused_mut)]
+            let mut force_error = false;
             #{BeforeParseResponse}
-            let parse_result = if !success && status != $successCode {
+            let parse_result = if !success && status != $successCode || force_error {
                 #{parse_error}(status, headers, body)
             } else {
                 #{parse_response}(status, headers, body)
@@ -147,9 +150,9 @@ class ResponseDeserializerGenerator(
             """,
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
-            "parse_response" to parserGenerator.parseResponseFn(operationShape, false, customizations),
+            "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
             "BeforeParseResponse" to writable {
-                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response"))
+                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", "body"))
             },
         )
     }
@@ -162,8 +165,8 @@ class ResponseDeserializerGenerator(
                 O: ::std::fmt::Debug + #{Send} + #{Sync} + 'static,
                 E: ::std::error::Error + std::fmt::Debug + #{Send} + #{Sync} + 'static,
             {
-                result.map(|output| #{TypedBox}::new(output).erase())
-                    .map_err(|error| #{TypedBox}::new(error).erase_error())
+                result.map(|output| #{Output}::erase(output))
+                    .map_err(|error| #{Error}::erase(error))
                     .map_err(#{Into}::into)
             }
             """,

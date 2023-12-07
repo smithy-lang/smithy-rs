@@ -13,6 +13,7 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::fmt;
+use std::fmt::Display;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -57,6 +58,9 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct DateTime {
     pub(crate) seconds: i64,
+    /// Subsecond nanos always advances the wallclock time, even for times where seconds is negative
+    ///
+    /// Bigger subsecond nanos => later time
     pub(crate) subsecond_nanos: u32,
 }
 
@@ -93,12 +97,7 @@ impl DateTime {
     /// Returns the number of nanoseconds since the Unix epoch that this `DateTime` represents.
     pub fn as_nanos(&self) -> i128 {
         let seconds = self.seconds as i128 * NANOS_PER_SECOND;
-        if seconds < 0 {
-            let adjusted_nanos = self.subsecond_nanos as i128 - NANOS_PER_SECOND;
-            seconds + NANOS_PER_SECOND + adjusted_nanos
-        } else {
-            seconds + self.subsecond_nanos as i128
-        }
+        seconds + self.subsecond_nanos as i128
     }
 
     /// Creates a `DateTime` from a number of seconds and a fractional second since the Unix epoch.
@@ -331,6 +330,12 @@ impl Ord for DateTime {
     }
 }
 
+impl Display for DateTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let date = self.fmt(Format::DateTime).map_err(|_| fmt::Error)?;
+        write!(f, "{}", date)
+    }
+}
 /// Failure to convert a `DateTime` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -375,6 +380,21 @@ mod test {
     use time::OffsetDateTime;
 
     #[test]
+    fn test_display_date_time() {
+        let date_time = DateTime::from_secs(1576540098);
+        assert_eq!(format!("{}", date_time), "2019-12-16T23:48:18Z");
+
+        let date_time = DateTime::from_fractional_secs(1576540098, 0.52);
+        assert_eq!(format!("{}", date_time), "2019-12-16T23:48:18.52Z");
+
+        let date_time = DateTime::from_secs(1699942527);
+        assert_eq!(format!("{}", date_time), "2023-11-14T06:15:27Z");
+
+        let date_time = DateTime::from_secs(16995123);
+        assert_eq!(format!("{}", date_time), "1970-07-16T16:52:03Z");
+    }
+
+    #[test]
     fn test_fmt() {
         let date_time = DateTime::from_secs(1576540098);
         assert_eq!(
@@ -398,7 +418,7 @@ mod test {
         );
         assert_eq!(
             date_time.fmt(Format::HttpDate).unwrap(),
-            "Mon, 16 Dec 2019 23:48:18.52 GMT"
+            "Mon, 16 Dec 2019 23:48:18 GMT"
         );
     }
 
@@ -568,7 +588,7 @@ mod test {
         assert!(DateTime::from_nanos(10_000_000_000_000_000_000_999_999_999_i128).is_err());
     }
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn system_time_conversions() {

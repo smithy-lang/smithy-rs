@@ -1,22 +1,12 @@
 allowed_external_types = [
     "aws_credential_types::provider::ProvideCredentials",
-    "aws_endpoint::*",
-    "aws_http::*",
-    "aws_sig_auth::*",
-    "aws_smithy_client::*",
     "aws_smithy_http::*",
-    "aws_smithy_http_tower::*",
-    "aws_smithy_types::*",
-    "aws_types::*",
+    "aws_smithy_runtime_api::*",
+
+    "http::error::Error",
     "http::header::map::HeaderMap",
     "http::header::value::HeaderValue",
-    "http::request::Request",
-    "http::error::Error",
-    "http::uri::Uri",
     "http::method::Method",
-
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Decide if we want to continue exposing tower_layer
-    "tower_layer::Layer",
-    "tower_layer::identity::Identity",
-    "tower_layer::stack::Stack",
+    "http::request::Request",
+    "http::uri::Uri",
 ]

@@ -222,4 +222,4 @@ per semver. At that point, no further API breaking changes can be made without a
 [aws-sdk-rust]: https://github.com/awslabs/aws-sdk-rust
 [rust-semverver]: https://github.com/rust-lang/rust-semverver
 [semver]: https://semver.org/
-[smithy-rs]: https://github.com/awslabs/smithy-rs
+[smithy-rs]: https://github.com/smithy-lang/smithy-rs

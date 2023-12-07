@@ -103,12 +103,16 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             else -> rawTemplate(text + "\n", *args)
         }
 
-    private fun docText(
+    internal fun docText(
         includeHeader: Boolean,
         includeLicense: Boolean,
         asComments: Boolean,
     ): Writable = writable {
+        val moduleVersion = codegenContext.settings.moduleVersion
+        check(moduleVersion.isNotEmpty() && moduleVersion[0].isDigit())
+
         val moduleName = codegenContext.settings.moduleName
+        val stableVersion = !moduleVersion.startsWith("0.")
         val description = normalizeDescription(
             codegenContext.moduleName,
             codegenContext.settings.getService(codegenContext.model).getTrait<DocumentationTrait>()?.value ?: "",
@@ -119,13 +123,18 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
         if (includeHeader) {
             template(asComments, escape("# $moduleName\n"))
         }
-        template(
-            asComments,
-            """
-            **Please Note: The SDK is currently in Developer Preview and is intended strictly for
-            feedback purposes only. Do not use this SDK for production workloads.**${"\n"}
-            """.trimIndent(),
-        )
+
+        // TODO(PostGA): Remove warning banner conditionals.
+        // NOTE: when you change this, you must also change SDK_README.md.hb
+        if (!stableVersion) {
+            template(
+                asComments,
+                """
+                **Please Note: The SDK is currently released as a developer preview, without support or assistance for use
+                on production workloads. Any use in production is at your own risk.**${"\n"}
+                """.trimIndent(),
+            )
+        }
 
         if (description.isNotBlank()) {
             template(asComments, escape("$description\n"))
@@ -147,8 +156,8 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
             ```toml
             [dependencies]
-            aws-config = "$awsConfigVersion"
-            $moduleName = "${codegenContext.settings.moduleVersion}"
+            aws-config = { version = "$awsConfigVersion", features = ["behavior-version-latest"] }
+            $moduleName = "$moduleVersion"
             tokio = { version = "1", features = ["full"] }
             ```
 
@@ -313,7 +322,7 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
 
     private fun Element.normalizeList(indent: Int = 1) {
         // First, replace nested lists
-        for (child in children().filter { it.tagName() == "li" }) {
+        for (child in children().filter { tag -> tag.tagName() == "li" }) {
             for (itemChild in child.children()) {
                 if (itemChild.isList()) {
                     itemChild.normalizeList(indent + 1)

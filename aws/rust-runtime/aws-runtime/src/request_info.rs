@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_runtime::client::orchestrator::interceptors::ServiceClockSkew;
+use crate::service_clock_skew::ServiceClockSkew;
+use aws_smithy_async::time::TimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
-use aws_smithy_runtime_api::client::request_attempts::RequestAttempts;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::retries::RequestAttempts;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format;
@@ -16,7 +17,7 @@ use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_types::DateTime;
 use http::{HeaderName, HeaderValue};
 use std::borrow::Cow;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 #[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
 const AMZ_SDK_REQUEST: HeaderName = HeaderName::from_static("amz-sdk-request");
@@ -63,11 +64,15 @@ impl RequestInfoInterceptor {
         }
     }
 
-    fn build_ttl_pair(&self, cfg: &ConfigBag) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
+    fn build_ttl_pair(
+        &self,
+        cfg: &ConfigBag,
+        timesource: impl TimeSource,
+    ) -> Option<(Cow<'static, str>, Cow<'static, str>)> {
         let timeout_config = cfg.load::<TimeoutConfig>()?;
         let socket_read = timeout_config.read_timeout()?;
         let estimated_skew: Duration = cfg.load::<ServiceClockSkew>().cloned()?.into();
-        let current_time = SystemTime::now();
+        let current_time = timesource.now();
         let ttl = current_time.checked_add(socket_read + estimated_skew)?;
         let mut timestamp = DateTime::from(ttl);
         // Set subsec_nanos to 0 so that the formatted `DateTime` won't have fractional seconds.
@@ -86,15 +91,24 @@ impl RequestInfoInterceptor {
     }
 }
 
-impl Interceptor for RequestInfoInterceptor {
+impl Intercept for RequestInfoInterceptor {
+    fn name(&self) -> &'static str {
+        "RequestInfoInterceptor"
+    }
+
     fn modify_before_transmit(
         &self,
         context: &mut BeforeTransmitInterceptorContextMut<'_>,
-        _runtime_components: &RuntimeComponents,
+        runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let mut pairs = RequestPairs::new();
-        if let Some(pair) = self.build_ttl_pair(cfg) {
+        if let Some(pair) = self.build_ttl_pair(
+            cfg,
+            runtime_components
+                .time_source()
+                .ok_or("A timesource must be provided")?,
+        ) {
             pairs = pairs.with_pair(pair);
         }
         if let Some(pair) = self.build_attempts_pair(cfg) {
@@ -115,19 +129,19 @@ impl Interceptor for RequestInfoInterceptor {
 /// retry information header that is sent with every request. The information conveyed by this
 /// header allows services to anticipate whether a client will time out or retry a request.
 #[derive(Default, Debug)]
-pub struct RequestPairs {
+struct RequestPairs {
     inner: Vec<(Cow<'static, str>, Cow<'static, str>)>,
 }
 
 impl RequestPairs {
     /// Creates a new `RequestPairs` builder.
-    pub fn new() -> Self {
+    fn new() -> Self {
         Default::default()
     }
 
     /// Adds a pair to the `RequestPairs` builder.
     /// Only strings that can be converted to header values are considered valid.
-    pub fn with_pair(
+    fn with_pair(
         mut self,
         pair: (impl Into<Cow<'static, str>>, impl Into<Cow<'static, str>>),
     ) -> Self {
@@ -137,7 +151,7 @@ impl RequestPairs {
     }
 
     /// Converts the `RequestPairs` builder into a `HeaderValue`.
-    pub fn try_into_header_value(self) -> Result<HeaderValue, BoxError> {
+    fn try_into_header_value(self) -> Result<HeaderValue, BoxError> {
         self.try_into()
     }
 }
@@ -165,14 +179,15 @@ impl TryFrom<RequestPairs> for HeaderValue {
 mod tests {
     use super::RequestInfoInterceptor;
     use crate::request_info::RequestPairs;
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_runtime_api::client::interceptors::context::Input;
     use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-    use aws_smithy_runtime_api::client::interceptors::Interceptor;
+    use aws_smithy_runtime_api::client::interceptors::Intercept;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::retry::RetryConfig;
     use aws_smithy_types::timeout::TimeoutConfig;
-    use aws_smithy_types::type_erasure::TypeErasedBox;
+
     use http::HeaderValue;
     use std::time::Duration;
 
@@ -183,16 +198,14 @@ mod tests {
             .headers()
             .get(header_name)
             .unwrap()
-            .to_str()
-            .unwrap()
     }
 
     #[test]
     fn test_request_pairs_for_initial_attempt() {
         let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
-        let mut context = InterceptorContext::new(TypeErasedBox::doesnt_matter());
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
-        context.set_request(http::Request::builder().body(SdkBody::empty()).unwrap());
+        context.set_request(HttpRequest::empty());
 
         let mut layer = Layer::new("test");
         layer.store_put(RetryConfig::standard());

@@ -93,5 +93,7 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
                 .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
                 // Allows decorators to inject a custom symbol provider
                 .let { codegenDecorator.symbolProvider(it) }
+                // Inject custom symbols.
+                .let { CustomShapeSymbolProvider(it) }
     }
 }

@@ -15,11 +15,17 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
  * RestXml server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
  * with RestXml specific configurations.
  */
-class ServerRestXmlFactory : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
+class ServerRestXmlFactory(
+    private val additionalServerHttpBoundProtocolCustomizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
+) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
     override fun protocol(codegenContext: ServerCodegenContext): Protocol = ServerRestXmlProtocol(codegenContext)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
-        ServerHttpBoundProtocolGenerator(codegenContext, ServerRestXmlProtocol(codegenContext))
+        ServerHttpBoundProtocolGenerator(
+            codegenContext,
+            ServerRestXmlProtocol(codegenContext),
+            additionalServerHttpBoundProtocolCustomizations,
+        )
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(

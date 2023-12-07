@@ -3,56 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::client::retries::RetryPartition;
-use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_smithy_types::retry::ErrorKind;
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::trace;
-
-/// A [RuntimePlugin] to provide a token bucket, usable by a retry strategy.
-#[non_exhaustive]
-#[derive(Debug, Default)]
-pub struct TokenBucketRuntimePlugin {
-    token_bucket: TokenBucket,
-}
-
-impl TokenBucketRuntimePlugin {
-    pub fn new(initial_tokens: usize) -> Self {
-        Self {
-            token_bucket: TokenBucket::new(initial_tokens),
-        }
-    }
-}
-
-impl RuntimePlugin for TokenBucketRuntimePlugin {
-    fn config(&self) -> Option<FrozenLayer> {
-        let mut cfg = Layer::new("standard token bucket");
-        cfg.store_put(self.token_bucket.clone());
-
-        Some(cfg.freeze())
-    }
-}
-
-#[doc(hidden)]
-#[non_exhaustive]
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct TokenBucketPartition {
-    retry_partition: RetryPartition,
-}
-
-impl TokenBucketPartition {
-    pub fn new(retry_partition: RetryPartition) -> Self {
-        Self { retry_partition }
-    }
-}
 
 const DEFAULT_CAPACITY: usize = 500;
 const RETRY_COST: u32 = 5;
 const RETRY_TIMEOUT_COST: u32 = RETRY_COST * 2;
 const PERMIT_REGENERATION_AMOUNT: usize = 1;
 
+/// Token bucket used for standard and adaptive retry.
 #[derive(Clone, Debug)]
 pub struct TokenBucket {
     semaphore: Arc<Semaphore>,
@@ -77,6 +39,7 @@ impl Default for TokenBucket {
 }
 
 impl TokenBucket {
+    /// Creates a new `TokenBucket` with the given initial quota.
     pub fn new(initial_quota: usize) -> Self {
         Self {
             semaphore: Arc::new(Semaphore::new(initial_quota)),

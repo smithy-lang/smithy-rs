@@ -3,24 +3,19 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::middleware::MapRequest;
-use aws_smithy_http::operation::Request;
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_types::app_name::AppName;
 use aws_types::build_metadata::{OsFamily, BUILD_METADATA};
 use aws_types::os_shim_internal::Env;
-use http::header::{HeaderName, InvalidHeaderValue, USER_AGENT};
-use http::HeaderValue;
 use std::borrow::Cow;
-use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt;
 
 /// AWS User Agent
 ///
-/// Ths struct should be inserted into the [`PropertyBag`](aws_smithy_http::operation::Request::properties)
-/// during operation construction. [`UserAgentStage`](UserAgentStage) reads `AwsUserAgent`
-/// from the property bag and sets the `User-Agent` and `x-amz-user-agent` headers.
+/// Ths struct should be inserted into the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag)
+/// during operation construction. The `UserAgentInterceptor` reads `AwsUserAgent`
+/// from the config bag and sets the `User-Agent` and `x-amz-user-agent` headers.
 #[derive(Clone, Debug)]
 pub struct AwsUserAgent {
     sdk_metadata: SdkMetadata,
@@ -32,6 +27,7 @@ pub struct AwsUserAgent {
     config_metadata: Vec<ConfigMetadata>,
     framework_metadata: Vec<FrameworkMetadata>,
     app_name: Option<AppName>,
+    build_env_additional_metadata: Option<AdditionalMetadata>,
 }
 
 impl AwsUserAgent {
@@ -54,6 +50,11 @@ impl AwsUserAgent {
             .get("AWS_EXECUTION_ENV")
             .ok()
             .map(|name| ExecEnvMetadata { name });
+
+        // Retrieve additional metadata at compile-time from the AWS_SDK_RUST_BUILD_UA_METADATA env var
+        let build_env_additional_metadata = option_env!("AWS_SDK_RUST_BUILD_UA_METADATA")
+            .and_then(|value| AdditionalMetadata::new(value).ok());
+
         AwsUserAgent {
             sdk_metadata,
             api_metadata,
@@ -68,6 +69,7 @@ impl AwsUserAgent {
             config_metadata: Default::default(),
             framework_metadata: Default::default(),
             app_name: Default::default(),
+            build_env_additional_metadata,
         }
     }
 
@@ -98,6 +100,7 @@ impl AwsUserAgent {
             config_metadata: Vec::new(),
             framework_metadata: Vec::new(),
             app_name: None,
+            build_env_additional_metadata: None,
         }
     }
 
@@ -192,6 +195,9 @@ impl AwsUserAgent {
         }
         if let Some(app_name) = &self.app_name {
             write!(ua_value, "app/{}", app_name).unwrap();
+        }
+        if let Some(additional_metadata) = &self.build_env_additional_metadata {
+            write!(ua_value, "{}", additional_metadata).unwrap();
         }
         if ua_value.ends_with(' ') {
             ua_value.truncate(ua_value.len() - 1);
@@ -522,116 +528,12 @@ impl fmt::Display for ExecEnvMetadata {
     }
 }
 
-// TODO(enableNewSmithyRuntimeCleanup): Delete the user agent Tower middleware and consider moving all the remaining code into aws-runtime
-
-/// User agent middleware
-#[non_exhaustive]
-#[derive(Default, Clone, Debug)]
-pub struct UserAgentStage;
-
-impl UserAgentStage {
-    /// Creates a new `UserAgentStage`
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-#[derive(Debug)]
-enum UserAgentStageErrorKind {
-    /// There was no [`AwsUserAgent`] in the property bag.
-    UserAgentMissing,
-    /// The formatted user agent string is not a valid HTTP header value. This indicates a bug.
-    InvalidHeader(InvalidHeaderValue),
-}
-
-/// Failures that can arise from the user agent middleware
-#[derive(Debug)]
-pub struct UserAgentStageError {
-    kind: UserAgentStageErrorKind,
-}
-
-impl UserAgentStageError {
-    // `pub(crate)` method instead of implementing `From<InvalidHeaderValue>` so that we
-    // don't have to expose `InvalidHeaderValue` in public API.
-    pub(crate) fn from_invalid_header(value: InvalidHeaderValue) -> Self {
-        Self {
-            kind: UserAgentStageErrorKind::InvalidHeader(value),
-        }
-    }
-}
-
-impl Error for UserAgentStageError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        use UserAgentStageErrorKind::*;
-        match &self.kind {
-            InvalidHeader(source) => Some(source as _),
-            UserAgentMissing => None,
-        }
-    }
-}
-
-impl fmt::Display for UserAgentStageError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use UserAgentStageErrorKind::*;
-        match self.kind {
-            UserAgentMissing => write!(f, "user agent missing from property bag"),
-            InvalidHeader(_) => {
-                write!(f, "provided user agent header was invalid (this is a bug)")
-            }
-        }
-    }
-}
-
-impl From<UserAgentStageErrorKind> for UserAgentStageError {
-    fn from(kind: UserAgentStageErrorKind) -> Self {
-        Self { kind }
-    }
-}
-
-#[allow(clippy::declare_interior_mutable_const)] // we will never mutate this
-const X_AMZ_USER_AGENT: HeaderName = HeaderName::from_static("x-amz-user-agent");
-
-impl MapRequest for UserAgentStage {
-    type Error = UserAgentStageError;
-
-    fn name(&self) -> &'static str {
-        "generate_user_agent"
-    }
-
-    fn apply(&self, request: Request) -> Result<Request, Self::Error> {
-        request.augment(|mut req, conf| {
-            let ua = conf
-                .get::<AwsUserAgent>()
-                .ok_or(UserAgentStageErrorKind::UserAgentMissing)?;
-            req.headers_mut().append(
-                USER_AGENT,
-                HeaderValue::try_from(ua.ua_header())
-                    .map_err(UserAgentStageError::from_invalid_header)?,
-            );
-            req.headers_mut().append(
-                X_AMZ_USER_AGENT,
-                HeaderValue::try_from(ua.aws_ua_header())
-                    .map_err(UserAgentStageError::from_invalid_header)?,
-            );
-            Ok(req)
-        })
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use crate::user_agent::{
-        AdditionalMetadata, ApiMetadata, AwsUserAgent, ConfigMetadata, FrameworkMetadata,
-        UserAgentStage,
-    };
-    use crate::user_agent::{FeatureMetadata, X_AMZ_USER_AGENT};
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::middleware::MapRequest;
-    use aws_smithy_http::operation;
+    use super::*;
     use aws_types::app_name::AppName;
     use aws_types::build_metadata::OsFamily;
     use aws_types::os_shim_internal::Env;
-    use http::header::USER_AGENT;
     use std::borrow::Cow;
 
     fn make_deterministic(ua: &mut AwsUserAgent) {
@@ -773,63 +675,53 @@ mod test {
     }
 
     #[test]
-    fn ua_stage_adds_headers() {
-        let stage = UserAgentStage::new();
-        let req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
-        stage
-            .apply(req)
-            .expect_err("adding UA should fail without a UA set");
-        let mut req = operation::Request::new(http::Request::new(SdkBody::from("some body")));
-        req.properties_mut()
-            .insert(AwsUserAgent::new_from_environment(
-                Env::from_slice(&[]),
-                ApiMetadata {
-                    service_id: "dynamodb".into(),
-                    version: "0.123",
-                },
-            ));
-        let req = stage.apply(req).expect("setting user agent should succeed");
-        let (req, _) = req.into_parts();
-        req.headers()
-            .get(USER_AGENT)
-            .expect("UA header should be set");
-        req.headers()
-            .get(X_AMZ_USER_AGENT)
-            .expect("UA header should be set");
+    fn generate_a_valid_ua_with_build_env_additional_metadata() {
+        let mut ua = AwsUserAgent::for_tests();
+        ua.build_env_additional_metadata = Some(AdditionalMetadata::new("asdf").unwrap());
+        assert_eq!(
+            ua.aws_ua_header(),
+            "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 md/asdf"
+        );
+        assert_eq!(
+            ua.ua_header(),
+            "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+        );
     }
 }
 
 /*
 Appendix: User Agent ABNF
-sdk-ua-header        = "x-amz-user-agent:" OWS ua-string OWS
-ua-pair              = ua-name ["/" ua-value]
-ua-name              = token
-ua-value             = token
-version              = token
-name                 = token
-service-id           = token
-sdk-name             = java / ruby / php / dotnet / python / cli / kotlin / rust / js / cpp / go / go-v2
-os-family            = windows / linux / macos / android / ios / other
-config               = retry-mode
-additional-metadata  = "md/" ua-pair
-sdk-metadata         = "aws-sdk-" sdk-name "/" version
-api-metadata         = "api/" service-id "/" version
-os-metadata          = "os/" os-family ["/" version]
-language-metadata    = "lang/" language "/" version *(RWS additional-metadata)
-env-metadata         = "exec-env/" name
-feat-metadata        = "ft/" name ["/" version] *(RWS additional-metadata)
-config-metadata      = "cfg/" config ["/" value]
-framework-metadata   = "lib/" name ["/" version] *(RWS additional-metadata)
-appId                = "app/" name
-ua-string            = sdk-metadata RWS
-                       [api-metadata RWS]
-                       os-metadata RWS
-                       language-metadata RWS
-                       [env-metadata RWS]
-                       *(feat-metadata RWS)
-                       *(config-metadata RWS)
-                       *(framework-metadata RWS)
-                       [appId]
+sdk-ua-header                 = "x-amz-user-agent:" OWS ua-string OWS
+ua-pair                       = ua-name ["/" ua-value]
+ua-name                       = token
+ua-value                      = token
+version                       = token
+name                          = token
+service-id                    = token
+sdk-name                      = java / ruby / php / dotnet / python / cli / kotlin / rust / js / cpp / go / go-v2
+os-family                     = windows / linux / macos / android / ios / other
+config                        = retry-mode
+additional-metadata           = "md/" ua-pair
+sdk-metadata                  = "aws-sdk-" sdk-name "/" version
+api-metadata                  = "api/" service-id "/" version
+os-metadata                   = "os/" os-family ["/" version]
+language-metadata             = "lang/" language "/" version *(RWS additional-metadata)
+env-metadata                  = "exec-env/" name
+feat-metadata                 = "ft/" name ["/" version] *(RWS additional-metadata)
+config-metadata               = "cfg/" config ["/" value]
+framework-metadata            = "lib/" name ["/" version] *(RWS additional-metadata)
+app-id                        = "app/" name
+build-env-additional-metadata = "md/" value
+ua-string                     = sdk-metadata RWS
+                                [api-metadata RWS]
+                                os-metadata RWS
+                                language-metadata RWS
+                                [env-metadata RWS]
+                                *(feat-metadata RWS)
+                                *(config-metadata RWS)
+                                *(framework-metadata RWS)
+                                [app-id]
+                                [build-env-additional-metadata]
 
 # New metadata field might be added in the future and they must follow this format
 prefix               = token

@@ -17,11 +17,8 @@
     unreachable_pub
 )]
 
-pub mod cache;
 pub mod credential_fn;
 mod credentials_impl;
 pub mod provider;
-#[doc(hidden)]
-pub mod time_source;
 
 pub use credentials_impl::Credentials;

@@ -7,7 +7,7 @@
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt;
@@ -67,11 +67,15 @@ where
     }
 }
 
-impl<G, T> Interceptor for Route53ResourceIdInterceptor<G, T>
+impl<G, T> Intercept for Route53ResourceIdInterceptor<G, T>
 where
-    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String>,
+    G: for<'a> Fn(&'a mut T) -> &'a mut Option<String> + Send + Sync,
     T: fmt::Debug + Send + Sync + 'static,
 {
+    fn name(&self) -> &'static str {
+        "Route53ResourceIdInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         context: &mut BeforeSerializationInterceptorContextMut<'_>,

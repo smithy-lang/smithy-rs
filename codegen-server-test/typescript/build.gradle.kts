@@ -16,12 +16,13 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
+val buildDir = layout.buildDirectory.get().asFile
 
 val pluginName = "rust-server-codegen-typescript"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-typescript/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+    outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
 }
 
 buildscript {

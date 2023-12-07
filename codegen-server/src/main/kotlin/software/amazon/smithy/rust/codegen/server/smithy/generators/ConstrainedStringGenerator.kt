@@ -285,7 +285,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
     private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable {
         val pattern = patternTrait.pattern
         val errorMessageForUnsupportedRegex =
-            """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support"""
+            """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"""
 
         return {
             rustTemplate(

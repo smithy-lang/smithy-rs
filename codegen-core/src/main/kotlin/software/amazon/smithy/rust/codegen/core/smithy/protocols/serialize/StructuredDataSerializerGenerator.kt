@@ -9,6 +9,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 interface StructuredDataSerializerGenerator {
@@ -27,11 +28,21 @@ interface StructuredDataSerializerGenerator {
      * Generate the correct data when attempting to serialize a structure that is unset
      *
      * ```rust
-     * fn rest_json_unsetpayload() -> Vec<u8> {
+     * fn rest_json_unset_struct_payload() -> Vec<u8> {
      *     ...
      * }
      */
     fun unsetStructure(structure: StructureShape): RuntimeType
+
+    /**
+     * Generate the correct data when attempting to serialize a union that is unset
+     *
+     * ```rust
+     * fn rest_json_unset_union_payload() -> Vec<u8> {
+     *     ...
+     * }
+     */
+    fun unsetUnion(union: UnionShape): RuntimeType
 
     /**
      * Generate a serializer for an operation input structure.

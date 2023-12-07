@@ -12,11 +12,6 @@ export RUSTFLAG="--cfg aws_sdk_unstable"
 set -eu
 cd smithy-rs
 
-# TODO(enableNewSmithyRuntimeCleanup): Remove the middleware test run when cleaning up middleware
-echo -e "## ${C_YELLOW}Running SDK adhoc tests against the middleware implementation...${C_RESET}"
+echo -e "## ${C_YELLOW}Running SDK adhoc tests...${C_RESET}"
 ./gradlew aws:sdk-adhoc-test:clean
-./gradlew aws:sdk-adhoc-test:check -Psmithy.runtime.mode=middleware
-
-echo -e "## ${C_YELLOW}Running SDK adhoc tests against the orchestrator implementation...${C_RESET}"
-./gradlew aws:sdk-adhoc-test:clean
-./gradlew aws:sdk-adhoc-test:check -Psmithy.runtime.mode=orchestrator
+./gradlew aws:sdk-adhoc-test:check

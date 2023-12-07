@@ -35,3 +35,14 @@ impl PackageCategory {
         }
     }
 }
+
+/// Enum to denote whether a package we have control over publishing is stable or not
+///
+/// If a package is a third-party one and we cannot publish it, then it is considered as `Unstable`.
+/// In general, tooling cares about crates that we have control over publishing, so the third-party
+/// crates being marked as `Unstable` does not affect the integrity of tooling.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PackageStability {
+    Stable,
+    Unstable,
+}

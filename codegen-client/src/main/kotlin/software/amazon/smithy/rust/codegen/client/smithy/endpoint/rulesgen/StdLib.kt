@@ -6,13 +6,13 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointStdLib
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -22,16 +22,10 @@ import software.amazon.smithy.rust.codegen.core.util.dq
  * Standard library functions available to all generated crates (e.g. not `aws.` specific / prefixed)
  */
 internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> = listOf(
-    SimpleRuntimeFunction("substring", endpointsLib("substring").toType().resolve("substring")),
-    SimpleRuntimeFunction("isValidHostLabel", endpointsLib("host").toType().resolve("is_valid_host_label")),
-    SimpleRuntimeFunction(
-        "parseURL",
-        endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url).toType().resolve("parse_url"),
-    ),
-    SimpleRuntimeFunction(
-        "uriEncode",
-        endpointsLib("uri_encode", CargoDependency.PercentEncoding).toType().resolve("uri_encode"),
-    ),
+    SimpleRuntimeFunction("substring", EndpointsLib.substring),
+    SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel),
+    SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl),
+    SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode),
 )
 
 /**
@@ -40,20 +34,9 @@ internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> = listOf(
  * This is defined in client-codegen to support running tests—it is not used when generating smithy-native services.
  */
 fun awsStandardLib(runtimeConfig: RuntimeConfig, partitionsDotJson: Node) = listOf(
-    SimpleRuntimeFunction("aws.parseArn", endpointsLib("arn").toType().resolve("parse_arn")),
-    SimpleRuntimeFunction(
-        "aws.isVirtualHostableS3Bucket",
-        endpointsLib(
-            "s3",
-            endpointsLib("host"),
-            CargoDependency.OnceCell,
-            CargoDependency.Regex,
-        ).toType().resolve("is_virtual_hostable_s3_bucket"),
-    ),
-    AwsPartitionResolver(
-        runtimeConfig,
-        partitionsDotJson,
-    ),
+    SimpleRuntimeFunction("aws.parseArn", EndpointsLib.awsParseArn),
+    SimpleRuntimeFunction("aws.isVirtualHostableS3Bucket", EndpointsLib.awsIsVirtualHostableS3Bucket),
+    AwsPartitionResolver(runtimeConfig, partitionsDotJson),
 )
 
 /**
@@ -65,19 +48,26 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
     CustomRuntimeFunction() {
     override val id: String = "aws.partition"
     private val codegenScope = arrayOf(
-        "PartitionResolver" to endpointsLib(
-            "partition",
-            CargoDependency.smithyJson(runtimeConfig),
-            CargoDependency.Regex,
-        ).toType()
-            .resolve("PartitionResolver"),
+        "PartitionResolver" to EndpointsLib.PartitionResolver(runtimeConfig),
+        "Lazy" to CargoDependency.OnceCell.toType().resolve("sync::Lazy"),
     )
 
     override fun structFieldInit() = writable {
         val json = Node.printJson(partitionsDotJson).dq()
         rustTemplate(
-            """partition_resolver: #{PartitionResolver}::new_from_json(b$json).expect("valid JSON")""",
+            """partition_resolver: #{DEFAULT_PARTITION_RESOLVER}.clone()""",
             *codegenScope,
+            "DEFAULT_PARTITION_RESOLVER" to RuntimeType.forInlineFun("DEFAULT_PARTITION_RESOLVER", EndpointStdLib) {
+                rustTemplate(
+                    """
+                    // Loading the partition JSON is expensive since it involves many regex compilations,
+                    // so cache the result so that it only need to be paid for the first constructed client.
+                    pub(crate) static DEFAULT_PARTITION_RESOLVER: #{Lazy}<#{PartitionResolver}> =
+                        #{Lazy}::new(|| #{PartitionResolver}::new_from_json(b$json).expect("valid JSON"));
+                    """,
+                    *codegenScope,
+                )
+            },
         )
     }
 

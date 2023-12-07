@@ -206,6 +206,6 @@ Because RFCs become outdated as designs evolve. It is our intention to keep this
 [dynamic dispatch]: https://doc.rust-lang.org/book/ch17-02-trait-objects.html#trait-objects-perform-dynamic-dispatch
 [TypeId]: https://doc.rust-lang.org/stable/std/any/struct.TypeId.html
 [downcast]: https://en.wikipedia.org/wiki/Downcasting
-[orchestrate-impl]: https://github.com/awslabs/smithy-rs/blob/8bc93fc04dd8c8d7447bfe3f5196a75cba0b10ba/rust-runtime/aws-smithy-runtime/src/client/orchestrator.rs#L23
-[aws-smithy-runtime]: https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime
-[aws-smithy-runtime-api]: https://github.com/awslabs/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime-api
+[orchestrate-impl]: https://github.com/smithy-lang/smithy-rs/blob/8bc93fc04dd8c8d7447bfe3f5196a75cba0b10ba/rust-runtime/aws-smithy-runtime/src/client/orchestrator.rs#L23
+[aws-smithy-runtime]: https://github.com/smithy-lang/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime
+[aws-smithy-runtime-api]: https://github.com/smithy-lang/smithy-rs/tree/main/rust-runtime/aws-smithy-runtime-api
