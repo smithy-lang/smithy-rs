@@ -10,11 +10,14 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 [features]
 convert-chrono = ["aws-smithy-types", "chrono"]
 convert-time = ["aws-smithy-types", "time"]
+convert-futures = ["aws-smithy-async", "futures"]
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types", optional = true }
+aws-smithy-async = {path = "../aws-smithy-async", optional = true}
 chrono = { version = "0.4.26", optional = true, default-features = false, features = ["std"] }
 time = { version = "0.3.4", optional = true }
+futures = {version = "0.3.29", optional = true}
 
 [package.metadata.docs.rs]
 all-features = true
