@@ -9,8 +9,6 @@ repos:
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
   rev: v2.11.0
   hooks:
-  - id: pretty-format-kotlin
-    args: [--autofix, --ktlint-version, 1.0.1]
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
   - id: pretty-format-rust
@@ -18,6 +16,11 @@ repos:
     files: ^.*\.rs$
 - repo: local
   hooks:
+  - id: ktlint
+    name: Ktlint
+    entry: ./.pre-commit-hooks/ktlint.sh
+    language: system
+    files: ^.*\.kt$
   - id: kotlin-block-quotes
     name: Kotlin Block Quotes
     entry: ./.pre-commit-hooks/kotlin-block-quotes.py
