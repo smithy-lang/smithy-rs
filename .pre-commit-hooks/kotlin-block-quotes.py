@@ -168,7 +168,8 @@ def fix_file(file_name):
             print("INFO: Fixed indentation in `" + file_name + "`.")
             return True
     else:
-        print("INFO: `" + file_name + "` is fine.")
+        # This print is useful when debugging this script, but spammy otherwise. Leave it commented.
+        # print("INFO: `" + file_name + "` is fine.")
         return False
 
 class SelfTest(unittest.TestCase):
