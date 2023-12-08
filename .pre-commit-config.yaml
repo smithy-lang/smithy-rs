@@ -10,7 +10,7 @@ repos:
   rev: v2.11.0
   hooks:
   - id: pretty-format-kotlin
-    args: [--autofix, --ktlint-version, 0.48.2]
+    args: [--autofix, --ktlint-version, 1.0.1]
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
   - id: pretty-format-rust
