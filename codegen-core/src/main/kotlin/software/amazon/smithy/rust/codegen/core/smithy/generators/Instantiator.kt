@@ -487,10 +487,10 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                     val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
                     rustTemplate(
                         """
-                    let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
-                    let mut tokens = #{json_token_iter}(json_bytes).peekable();
-                    #{expect_document}(&mut tokens).expect("well formed json")
-                    """,
+                        let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
+                        let mut tokens = #{json_token_iter}(json_bytes).peekable();
+                        #{expect_document}(&mut tokens).expect("well formed json")
+                        """,
                         "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
                         "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
                     )
