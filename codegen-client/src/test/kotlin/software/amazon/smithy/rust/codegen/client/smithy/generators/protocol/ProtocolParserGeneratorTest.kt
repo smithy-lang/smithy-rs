@@ -13,16 +13,16 @@ class ProtocolParserGeneratorTest {
     private val model = """
         ${'$'}version: "2.0"
         namespace test
-        
+
         use aws.protocols#restJson1
-        
+
         @restJson1
         service TestService {
             version: "2019-12-16",
             operations: [SomeOperation]
             errors: [SomeTopLevelError]
         }
-        
+
         @http(uri: "/SomeOperation", method: "POST")
         operation SomeOperation {
             input: SomeOperationInputOutput,
@@ -35,7 +35,7 @@ class ProtocolParserGeneratorTest {
             a: String,
             b: Integer
         }
-        
+
         @error("server")
         structure SomeTopLevelError {
             @required
@@ -48,7 +48,7 @@ class ProtocolParserGeneratorTest {
 
             context: String
         }
-        
+
         @error("client")
         structure SomeOperationError {
             @required

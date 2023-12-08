@@ -197,12 +197,12 @@ class ServiceConfigGenerator(
                 pub(crate) model_plugins: M,
                 #{BuilderRequiredMethodFlagDefinitions:W}
             }
-            
+
             #{BuilderRequiredMethodError:W}
 
             impl<L, H, M> ${serviceName}ConfigBuilder<L, H, M> {
                 #{InjectedMethods:W}
-            
+
                 /// Add a [`#{Tower}::Layer`] to the service.
                 pub fn layer<NewLayer>(self, layer: NewLayer) -> ${serviceName}ConfigBuilder<#{Stack}<NewLayer, L>, H, M> {
                     ${serviceName}ConfigBuilder {
@@ -246,7 +246,7 @@ class ServiceConfigGenerator(
                         #{BuilderRequiredMethodFlagsMove3:W}
                     }
                 }
-                
+
                 #{BuilderBuildMethod:W}
             }
             """,
@@ -295,9 +295,9 @@ class ServiceConfigGenerator(
                 writable {
                     rust(
                         """
-                    ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
-                    ${it.requiredErrorVariant()},
-                    """,
+                        ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
+                        ${it.requiredErrorVariant()},
+                        """,
                     )
                 }
             }
