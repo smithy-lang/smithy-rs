@@ -28,10 +28,13 @@ class DisabledAuthDecorator : ClientCodegenDecorator {
                 ),
         )
 
-    private fun applies(service: ServiceShape) =
-        optionalAuth.containsKey(service.id)
+    private fun applies(service: ServiceShape) = optionalAuth.containsKey(service.id)
 
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model {
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model {
         if (!applies(service)) {
             return model
         }

@@ -29,12 +29,12 @@ class ServerRestXmlFactory(
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
-            /* Client support */
+            // Client support
             requestSerialization = false,
             requestBodySerialization = false,
             responseDeserialization = false,
             errorDeserialization = false,
-            /* Server support */
+            // Server support
             requestDeserialization = true,
             requestBodyDeserialization = true,
             responseSerialization = true,

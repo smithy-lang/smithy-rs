@@ -46,11 +46,13 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
 
-val TestModuleDocProvider = object : ModuleDocProvider {
-    override fun docsWriter(module: RustModule.LeafModule): Writable = writable {
-        docs("Some test documentation\n\nSome more details...")
+val TestModuleDocProvider =
+    object : ModuleDocProvider {
+        override fun docsWriter(module: RustModule.LeafModule): Writable =
+            writable {
+                docs("Some test documentation\n\nSome more details...")
+            }
     }
-}
 
 /**
  * Waiting for Kotlin to stabilize their temp directory functionality
@@ -70,11 +72,12 @@ private fun tempDir(directory: File? = null): File {
  */
 object TestWorkspace {
     private val baseDir by lazy {
-        val appDataDir = System.getProperty("APPDATA")
-            ?: System.getenv("XDG_DATA_HOME")
-            ?: System.getProperty("user.home")
-                ?.let { Path.of(it, ".local", "share").absolutePathString() }
-                ?.also { File(it).mkdirs() }
+        val appDataDir =
+            System.getProperty("APPDATA")
+                ?: System.getenv("XDG_DATA_HOME")
+                ?: System.getProperty("user.home")
+                    ?.let { Path.of(it, ".local", "share").absolutePathString() }
+                    ?.also { File(it).mkdirs() }
         if (appDataDir != null) {
             File(Path.of(appDataDir, "smithy-test-workspace").absolutePathString())
         } else {
@@ -89,13 +92,15 @@ object TestWorkspace {
 
     private fun generate() {
         val cargoToml = baseDir.resolve("Cargo.toml")
-        val workspaceToml = TomlWriter().write(
-            mapOf(
-                "workspace" to mapOf(
-                    "members" to subprojects,
+        val workspaceToml =
+            TomlWriter().write(
+                mapOf(
+                    "workspace" to
+                        mapOf(
+                            "members" to subprojects,
+                        ),
                 ),
-            ),
-        )
+            )
         cargoToml.writeText(workspaceToml)
     }
 
@@ -173,28 +178,30 @@ fun generatePluginContext(
     val moduleName = "test_${testDir.nameWithoutExtension}"
     val testPath = testDir.toPath()
     val manifest = FileManifest.create(testPath)
-    var settingsBuilder = Node.objectNodeBuilder()
-        .withMember("module", Node.from(moduleName))
-        .withMember("moduleVersion", Node.from(moduleVersion))
-        .withMember("moduleDescription", Node.from("test"))
-        .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
-        .letIf(service != null) { it.withMember("service", service) }
-        .withMember(
-            "runtimeConfig",
-            Node.objectNodeBuilder().withMember(
-                "relativePath",
-                Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
-            ).build(),
-        )
+    var settingsBuilder =
+        Node.objectNodeBuilder()
+            .withMember("module", Node.from(moduleName))
+            .withMember("moduleVersion", Node.from(moduleVersion))
+            .withMember("moduleDescription", Node.from("test"))
+            .withMember("moduleAuthors", Node.fromStrings("testgenerator@smithy.com"))
+            .letIf(service != null) { it.withMember("service", service) }
+            .withMember(
+                "runtimeConfig",
+                Node.objectNodeBuilder().withMember(
+                    "relativePath",
+                    Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
+                ).build(),
+            )
 
     if (addModuleToEventStreamAllowList) {
-        settingsBuilder = settingsBuilder.withMember(
-            "codegen",
-            Node.objectNodeBuilder().withMember(
-                "eventStreamAllowList",
-                Node.fromStrings(moduleName),
-            ).build(),
-        )
+        settingsBuilder =
+            settingsBuilder.withMember(
+                "codegen",
+                Node.objectNodeBuilder().withMember(
+                    "eventStreamAllowList",
+                    Node.fromStrings(moduleName),
+                ).build(),
+            )
     }
 
     val settings = settingsBuilder.merge(additionalSettings).build()
@@ -232,10 +239,14 @@ fun RustWriter.unitTest(
     return testDependenciesOnly { rustBlock("fn $name()", *args, block = block) }
 }
 
-fun RustWriter.cargoDependencies() = dependencies.map { RustDependency.fromSymbolDependency(it) }
-    .filterIsInstance<CargoDependency>().distinct()
+fun RustWriter.cargoDependencies() =
+    dependencies.map { RustDependency.fromSymbolDependency(it) }
+        .filterIsInstance<CargoDependency>().distinct()
 
-fun RustWriter.assertNoNewDependencies(block: Writable, dependencyFilter: (CargoDependency) -> String?): RustWriter {
+fun RustWriter.assertNoNewDependencies(
+    block: Writable,
+    dependencyFilter: (CargoDependency) -> String?,
+): RustWriter {
     val startingDependencies = cargoDependencies().toSet()
     block(this)
     val endingDependencies = cargoDependencies().toSet()
@@ -260,19 +271,25 @@ fun RustWriter.assertNoNewDependencies(block: Writable, dependencyFilter: (Cargo
     return this
 }
 
-fun RustWriter.testDependenciesOnly(block: Writable) = assertNoNewDependencies(block) { dep ->
-    if (dep.scope != DependencyScope.Dev) {
-        "Cannot add $dep — this writer should only add test dependencies."
-    } else {
-        null
+fun RustWriter.testDependenciesOnly(block: Writable) =
+    assertNoNewDependencies(block) { dep ->
+        if (dep.scope != DependencyScope.Dev) {
+            "Cannot add $dep — this writer should only add test dependencies."
+        } else {
+            null
+        }
     }
-}
 
-fun testDependenciesOnly(block: Writable): Writable = {
-    testDependenciesOnly(block)
-}
+fun testDependenciesOnly(block: Writable): Writable =
+    {
+        testDependenciesOnly(block)
+    }
 
-fun RustWriter.tokioTest(name: String, vararg args: Any, block: Writable) {
+fun RustWriter.tokioTest(
+    name: String,
+    vararg args: Any,
+    block: Writable,
+) {
     unitTest(name, attribute = Attribute.TokioTest, async = true, block = block, args = args)
 }
 
@@ -301,13 +318,14 @@ class TestWriterDelegator(
  *
  * This should only be used in test code—the generated module name will be something like `tests_123`
  */
-fun RustCrate.testModule(block: Writable) = lib {
-    withInlineModule(
-        RustModule.inlineTests(safeName("tests")),
-        TestModuleDocProvider,
-        block,
-    )
-}
+fun RustCrate.testModule(block: Writable) =
+    lib {
+        withInlineModule(
+            RustModule.inlineTests(safeName("tests")),
+            TestModuleDocProvider,
+            block,
+        )
+    }
 
 fun FileManifest.printGeneratedFiles() {
     this.files.forEach { path ->
@@ -324,12 +342,13 @@ fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
 ): String {
-    val stubModel = """
+    val stubModel =
+        """
         namespace fake
         service Fake {
             version: "123"
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
     this.finalize(
         rustSettings(),
         stubModel,
@@ -393,27 +412,31 @@ fun RustWriter.compileAndTest(
     clippy: Boolean = false,
     expectFailure: Boolean = false,
 ): String {
-    val deps = this.dependencies
-        .map { RustDependency.fromSymbolDependency(it) }
-        .filterIsInstance<CargoDependency>()
-        .distinct()
-        .mergeDependencyFeatures()
-        .mergeIdenticalTestDependencies()
-    val module = if (this.namespace.contains("::")) {
-        this.namespace.split("::")[1]
-    } else {
-        "lib"
-    }
-    val tempDir = this.toString()
-        .intoCrate(deps, module = module, main = main, strict = clippy)
+    val deps =
+        this.dependencies
+            .map { RustDependency.fromSymbolDependency(it) }
+            .filterIsInstance<CargoDependency>()
+            .distinct()
+            .mergeDependencyFeatures()
+            .mergeIdenticalTestDependencies()
+    val module =
+        if (this.namespace.contains("::")) {
+            this.namespace.split("::")[1]
+        } else {
+            "lib"
+        }
+    val tempDir =
+        this.toString()
+            .intoCrate(deps, module = module, main = main, strict = clippy)
     val mainRs = tempDir.resolve("src/main.rs")
     val testModule = tempDir.resolve("src/$module.rs")
     try {
-        val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
-            "cargo test".runCommand(tempDir.toPath())
-        } else {
-            "cargo check".runCommand(tempDir.toPath())
-        }
+        val testOutput =
+            if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
+                "cargo test".runCommand(tempDir.toPath())
+            } else {
+                "cargo check".runCommand(tempDir.toPath())
+            }
         if (expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
         }
@@ -434,18 +457,19 @@ private fun String.intoCrate(
 ): File {
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
-    val cargoToml = RustWriter.toml("Cargo.toml").apply {
-        CargoTomlGenerator(
-            moduleName = tempDir.nameWithoutExtension,
-            moduleVersion = "0.0.1",
-            moduleAuthors = listOf("Testy McTesterson"),
-            moduleDescription = null,
-            moduleLicense = null,
-            moduleRepository = null,
-            writer = this,
-            dependencies = deps,
-        ).render()
-    }.toString()
+    val cargoToml =
+        RustWriter.toml("Cargo.toml").apply {
+            CargoTomlGenerator(
+                moduleName = tempDir.nameWithoutExtension,
+                moduleVersion = "0.0.1",
+                moduleAuthors = listOf("Testy McTesterson"),
+                moduleDescription = null,
+                moduleLicense = null,
+                moduleRepository = null,
+                writer = this,
+                dependencies = deps,
+            ).render()
+        }.toString()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()
     val mainRs = tempDir.resolve("src/main.rs")
@@ -507,7 +531,10 @@ fun String.compileAndRun(vararg strings: String) {
     binary.absolutePath.runCommand()
 }
 
-fun RustCrate.integrationTest(name: String, writable: Writable) = this.withFile("tests/$name.rs", writable)
+fun RustCrate.integrationTest(
+    name: String,
+    writable: Writable,
+) = this.withFile("tests/$name.rs", writable)
 
 fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     lib {

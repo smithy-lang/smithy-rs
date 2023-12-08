@@ -57,20 +57,23 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> = baseCustomizations +
-        ResiliencyConfigCustomization(codegenContext) +
-        IdentityCacheConfigCustomization(codegenContext) +
-        InterceptorConfigCustomization(codegenContext) +
-        TimeSourceCustomization(codegenContext) +
-        RetryClassifierConfigCustomization(codegenContext)
+    ): List<ConfigCustomization> =
+        baseCustomizations +
+            ResiliencyConfigCustomization(codegenContext) +
+            IdentityCacheConfigCustomization(codegenContext) +
+            InterceptorConfigCustomization(codegenContext) +
+            TimeSourceCustomization(codegenContext) +
+            RetryClassifierConfigCustomization(codegenContext)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> =
-        baseCustomizations + AllowLintsCustomization()
+    ): List<LibRsCustomization> = baseCustomizations + AllowLintsCustomization()
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val rc = codegenContext.runtimeConfig
 
         // Add rt-tokio feature for `ByteStream::from_path`
@@ -126,7 +129,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> = baseCustomizations +
-        ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
-        RetryClassifierServiceRuntimePluginCustomization(codegenContext)
+    ): List<ServiceRuntimePluginCustomization> =
+        baseCustomizations +
+            ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
+            RetryClassifierServiceRuntimePluginCustomization(codegenContext)
 }

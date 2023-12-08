@@ -17,23 +17,25 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
     private val moduleUseName = codegenContext.moduleUseName()
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    private val codegenScope = arrayOf(
-        "Intercept" to configReexport(RuntimeType.intercept(runtimeConfig)),
-        "SharedInterceptor" to configReexport(RuntimeType.sharedInterceptor(runtimeConfig)),
-    )
+    private val codegenScope =
+        arrayOf(
+            "Intercept" to configReexport(RuntimeType.intercept(runtimeConfig)),
+            "SharedInterceptor" to configReexport(RuntimeType.sharedInterceptor(runtimeConfig)),
+        )
 
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
-                ServiceConfig.ConfigImpl -> rustTemplate(
-                    """
-                    /// Returns interceptors currently registered by the user.
-                    pub fn interceptors(&self) -> impl Iterator<Item = #{SharedInterceptor}> + '_ {
-                        self.runtime_components.interceptors()
-                    }
-                    """,
-                    *codegenScope,
-                )
+                ServiceConfig.ConfigImpl ->
+                    rustTemplate(
+                        """
+                        /// Returns interceptors currently registered by the user.
+                        pub fn interceptors(&self) -> impl Iterator<Item = #{SharedInterceptor}> + '_ {
+                            self.runtime_components.interceptors()
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(

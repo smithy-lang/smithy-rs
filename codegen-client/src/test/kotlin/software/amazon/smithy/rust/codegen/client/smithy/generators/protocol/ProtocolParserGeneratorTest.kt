@@ -10,7 +10,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class ProtocolParserGeneratorTest {
-    private val model = """
+    private val model =
+        """
         ${'$'}version: "2.0"
         namespace test
 
@@ -61,8 +62,8 @@ class ProtocolParserGeneratorTest {
 
             context: String
         }
-    """
-        .asSmithyModel()
+        """
+            .asSmithyModel()
 
     @Test
     fun `generate an complex error structure that compiles`() {

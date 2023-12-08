@@ -19,7 +19,8 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class ClientInstantiatorTest {
-    private val model = """
+    private val model =
+        """
         namespace com.test
 
         @enum([
@@ -39,7 +40,7 @@ internal class ClientInstantiatorTest {
             },
         ])
         string NamedEnum
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     private val codegenContext = testClientCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider

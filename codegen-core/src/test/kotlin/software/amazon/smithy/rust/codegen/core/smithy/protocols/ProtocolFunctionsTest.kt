@@ -12,7 +12,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class ProtocolFunctionsTest {
-    private val testModel = """
+    private val testModel =
+        """
         namespace test
 
         structure SomeStruct1 {
@@ -79,13 +80,16 @@ class ProtocolFunctionsTest {
         operation Op2 {
             input: Op1Input,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generates function names for shapes`() {
         val symbolProvider = testSymbolProvider(testModel)
 
-        fun test(shapeId: String, expected: String) {
+        fun test(
+            shapeId: String,
+            expected: String,
+        ) {
             symbolProvider.shapeFunctionName(null, testModel.lookup(shapeId)) shouldBe expected
         }
 

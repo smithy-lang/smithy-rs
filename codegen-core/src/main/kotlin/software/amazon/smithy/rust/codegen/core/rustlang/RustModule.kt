@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
  * - There is no guarantee _which_ module will be rendered.
  */
 sealed class RustModule {
-
     /** lib.rs */
     object LibRs : RustModule()
 
@@ -33,11 +32,10 @@ sealed class RustModule {
         val rustMetadata: RustMetadata,
         val parent: RustModule = LibRs,
         val inline: Boolean = false,
-        /* module is a cfg(test) module */
+        // module is a cfg(test) module
         val tests: Boolean = false,
         val documentationOverride: String? = null,
     ) : RustModule() {
-
         init {
             check(!name.contains("::")) {
                 "Module names CANNOT contain `::`—modules must be nested with parent (name was: `$name`)"
@@ -52,14 +50,14 @@ sealed class RustModule {
         }
 
         /** Convert a module into a module gated with `#[cfg(test)]` */
-        fun cfgTest(): LeafModule = this.copy(
-            rustMetadata = rustMetadata.copy(additionalAttributes = rustMetadata.additionalAttributes + Attribute.CfgTest),
-            tests = true,
-        )
+        fun cfgTest(): LeafModule =
+            this.copy(
+                rustMetadata = rustMetadata.copy(additionalAttributes = rustMetadata.additionalAttributes + Attribute.CfgTest),
+                tests = true,
+            )
     }
 
     companion object {
-
         /** Creates a new module with the specified visibility */
         fun new(
             name: String,
@@ -84,29 +82,33 @@ sealed class RustModule {
             parent: RustModule = LibRs,
             documentationOverride: String? = null,
             additionalAttributes: List<Attribute> = emptyList(),
-        ): LeafModule = new(
-            name,
-            visibility = Visibility.PUBLIC,
-            inline = false,
-            parent = parent,
-            documentationOverride = documentationOverride,
-            additionalAttributes = additionalAttributes,
-        )
+        ): LeafModule =
+            new(
+                name,
+                visibility = Visibility.PUBLIC,
+                inline = false,
+                parent = parent,
+                documentationOverride = documentationOverride,
+                additionalAttributes = additionalAttributes,
+            )
 
         /** Creates a new private module */
-        fun private(name: String, parent: RustModule = LibRs): LeafModule =
-            new(name, visibility = Visibility.PRIVATE, inline = false, parent = parent)
+        fun private(
+            name: String,
+            parent: RustModule = LibRs,
+        ): LeafModule = new(name, visibility = Visibility.PRIVATE, inline = false, parent = parent)
 
         fun pubCrate(
             name: String,
             parent: RustModule = LibRs,
             additionalAttributes: List<Attribute> = emptyList(),
-        ): LeafModule = new(
-            name, visibility = Visibility.PUBCRATE,
-            inline = false,
-            parent = parent,
-            additionalAttributes = additionalAttributes,
-        )
+        ): LeafModule =
+            new(
+                name, visibility = Visibility.PUBCRATE,
+                inline = false,
+                parent = parent,
+                additionalAttributes = additionalAttributes,
+            )
 
         fun inlineTests(
             name: String = "test",
@@ -121,29 +123,32 @@ sealed class RustModule {
         ).cfgTest()
     }
 
-    fun isInline(): Boolean = when (this) {
-        is LibRs -> false
-        is LeafModule -> this.inline
-    }
+    fun isInline(): Boolean =
+        when (this) {
+            is LibRs -> false
+            is LeafModule -> this.inline
+        }
 
     /**
      * Fully qualified path to this module, e.g. `crate::grandparent::parent::child`
      */
-    fun fullyQualifiedPath(): String = when (this) {
-        is LibRs -> "crate"
-        is LeafModule -> parent.fullyQualifiedPath() + "::" + name
-    }
+    fun fullyQualifiedPath(): String =
+        when (this) {
+            is LibRs -> "crate"
+            is LeafModule -> parent.fullyQualifiedPath() + "::" + name
+        }
 
     /**
      * The file this module is homed in, e.g. `src/grandparent/parent/child.rs`
      */
-    fun definitionFile(): String = when (this) {
-        is LibRs -> "src/lib.rs"
-        is LeafModule -> {
-            val path = fullyQualifiedPath().split("::").drop(1).joinToString("/")
-            "src/$path.rs"
+    fun definitionFile(): String =
+        when (this) {
+            is LibRs -> "src/lib.rs"
+            is LeafModule -> {
+                val path = fullyQualifiedPath().split("::").drop(1).joinToString("/")
+                "src/$path.rs"
+            }
         }
-    }
 
     /**
      * Renders the usage statement, approximately:
@@ -152,7 +157,10 @@ sealed class RustModule {
      * pub mod my_module_name
      * ```
      */
-    fun renderModStatement(writer: RustWriter, moduleDocProvider: ModuleDocProvider) {
+    fun renderModStatement(
+        writer: RustWriter,
+        moduleDocProvider: ModuleDocProvider,
+    ) {
         when (this) {
             is LeafModule -> {
                 if (name.startsWith("r#")) {

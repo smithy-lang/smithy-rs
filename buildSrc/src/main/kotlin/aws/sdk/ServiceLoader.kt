@@ -40,7 +40,7 @@ class AwsServices(
             // Root tests should not be included since they can't be part of the root Cargo workspace
             // in order to test differences in Cargo features. Examples should not be included either
             // because each example itself is a workspace.
-            ).toSortedSet()
+        ).toSortedSet()
     }
 
     val examples: List<String> by lazy {
@@ -68,11 +68,12 @@ class AwsServices(
     private fun manifestCompatibleWithGeneratedServices(path: File) =
         File(path, "Cargo.toml").let { cargoToml ->
             if (cargoToml.exists()) {
-                val usedModules = cargoToml.readLines()
-                    .map { line -> line.substringBefore('=').trim() }
-                    .filter { line -> line.startsWith("aws-sdk-") }
-                    .map { line -> line.substringAfter("aws-sdk-") }
-                    .toSet()
+                val usedModules =
+                    cargoToml.readLines()
+                        .map { line -> line.substringBefore('=').trim() }
+                        .filter { line -> line.startsWith("aws-sdk-") }
+                        .map { line -> line.substringAfter("aws-sdk-") }
+                        .toSet()
                 moduleNames.containsAll(usedModules)
             } else {
                 false
@@ -96,47 +97,53 @@ class AwsServices(
  * Since this function parses all models, it is relatively expensive to call. The result should be cached in a property
  * during build.
  */
-fun Project.discoverServices(awsModelsPath: String?, serviceMembership: Membership): AwsServices {
+fun Project.discoverServices(
+    awsModelsPath: String?,
+    serviceMembership: Membership,
+): AwsServices {
     val models = awsModelsPath?.let { File(it) } ?: project.file("aws-models")
     logger.info("Using model path: $models")
-    val baseServices = fileTree(models)
-        .sortedBy { file -> file.name }
-        .mapNotNull { file ->
-            val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
-            val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
-            if (services.size > 1) {
-                throw Exception("There must be exactly one service in each aws model file")
-            }
-            if (services.isEmpty()) {
-                logger.info("${file.name} has no services")
-                null
-            } else {
-                val service = services[0]
-                val title = service.expectTrait(TitleTrait::class.java).value
-                val sdkId = service.expectTrait(ServiceTrait::class.java).sdkId
-                    .toLowerCase()
-                    .replace(" ", "")
-                    // The smithy models should not include the suffix "service" but currently they do
-                    .removeSuffix("service")
-                    .removeSuffix("api")
-                val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
-                val extras = if (testFile.exists()) {
-                    logger.warn("Discovered protocol tests for ${file.name}")
-                    listOf(testFile)
-                } else {
-                    listOf()
+    val baseServices =
+        fileTree(models)
+            .sortedBy { file -> file.name }
+            .mapNotNull { file ->
+                val model = Model.assembler().addImport(file.absolutePath).assemble().result.get()
+                val services: List<ServiceShape> = model.shapes(ServiceShape::class.java).sorted().toList()
+                if (services.size > 1) {
+                    throw Exception("There must be exactly one service in each aws model file")
                 }
-                AwsService(
-                    service = service.id.toString(),
-                    module = sdkId,
-                    moduleDescription = "AWS SDK for $title",
-                    modelFile = file,
-                    // Order is important for the versions.toml model hash calculation
-                    extraFiles = extras.sorted(),
-                    humanName = title,
-                )
+                if (services.isEmpty()) {
+                    logger.info("${file.name} has no services")
+                    null
+                } else {
+                    val service = services[0]
+                    val title = service.expectTrait(TitleTrait::class.java).value
+                    val sdkId =
+                        service.expectTrait(ServiceTrait::class.java).sdkId
+                            .toLowerCase()
+                            .replace(" ", "")
+                            // The smithy models should not include the suffix "service" but currently they do
+                            .removeSuffix("service")
+                            .removeSuffix("api")
+                    val testFile = file.parentFile.resolve("$sdkId-tests.smithy")
+                    val extras =
+                        if (testFile.exists()) {
+                            logger.warn("Discovered protocol tests for ${file.name}")
+                            listOf(testFile)
+                        } else {
+                            listOf()
+                        }
+                    AwsService(
+                        service = service.id.toString(),
+                        module = sdkId,
+                        moduleDescription = "AWS SDK for $title",
+                        modelFile = file,
+                        // Order is important for the versions.toml model hash calculation
+                        extraFiles = extras.sorted(),
+                        humanName = title,
+                    )
+                }
             }
-        }
     val baseModules = baseServices.map { it.module }.toSet()
     logger.info("Discovered base service modules to generate: $baseModules")
 
@@ -182,26 +189,29 @@ data class AwsService(
     val humanName: String,
 ) {
     fun modelFiles(): List<File> = listOf(modelFile) + extraFiles
+
     fun Project.examples(): File = projectDir.resolve("examples").resolve(module)
 
     /**
      * Generate a link to the examples for a given service
      */
-    fun examplesUri(project: Project) = if (project.examples().exists()) {
-        "https://github.com/awslabs/aws-sdk-rust/tree/main/examples/$module"
-    } else {
-        null
-    }
+    fun examplesUri(project: Project) =
+        if (project.examples().exists()) {
+            "https://github.com/awslabs/aws-sdk-rust/tree/main/examples/$module"
+        } else {
+            null
+        }
 }
 
 fun AwsService.crate(): String = "aws-sdk-$module"
 
-private fun Membership.isMember(member: String): Boolean = when {
-    exclusions.contains(member) -> false
-    inclusions.contains(member) -> true
-    inclusions.isEmpty() -> true
-    else -> false
-}
+private fun Membership.isMember(member: String): Boolean =
+    when {
+        exclusions.contains(member) -> false
+        inclusions.contains(member) -> true
+        inclusions.isEmpty() -> true
+        else -> false
+    }
 
 fun parseMembership(rawList: String): Membership {
     val inclusions = mutableSetOf<String>()

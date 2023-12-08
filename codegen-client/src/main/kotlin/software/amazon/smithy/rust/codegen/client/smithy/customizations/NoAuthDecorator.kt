@@ -30,16 +30,17 @@ class NoAuthDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> = baseAuthSchemeOptions +
-        AuthSchemeOption.StaticAuthSchemeOption(
-            noAuthSchemeShapeId,
-            listOf(
-                writable {
-                    rustTemplate(
-                        "#{NO_AUTH_SCHEME_ID}",
-                        "NO_AUTH_SCHEME_ID" to noAuthModule(codegenContext).resolve("NO_AUTH_SCHEME_ID"),
-                    )
-                },
-            ),
-        )
+    ): List<AuthSchemeOption> =
+        baseAuthSchemeOptions +
+            AuthSchemeOption.StaticAuthSchemeOption(
+                noAuthSchemeShapeId,
+                listOf(
+                    writable {
+                        rustTemplate(
+                            "#{NO_AUTH_SCHEME_ID}",
+                            "NO_AUTH_SCHEME_ID" to noAuthModule(codegenContext).resolve("NO_AUTH_SCHEME_ID"),
+                        )
+                    },
+                ),
+            )
 }

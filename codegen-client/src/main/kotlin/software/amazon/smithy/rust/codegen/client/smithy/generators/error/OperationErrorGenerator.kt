@@ -56,22 +56,25 @@ class OperationErrorGenerator(
 
     private fun operationErrors(): List<StructureShape> =
         (operationOrEventStream as OperationShape).operationErrors(model).map { it.asStructureShape().get() }
+
     private fun eventStreamErrors(): List<StructureShape> =
         (operationOrEventStream as UnionShape).eventStreamErrors()
             .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
 
     fun render(writer: RustWriter) {
-        val (errorSymbol, errors) = when (operationOrEventStream) {
-            is OperationShape -> symbolProvider.symbolForOperationError(operationOrEventStream) to operationErrors()
-            is UnionShape -> symbolProvider.symbolForEventStreamError(operationOrEventStream) to eventStreamErrors()
-            else -> UNREACHABLE("OperationErrorGenerator only supports operation or event stream shapes")
-        }
+        val (errorSymbol, errors) =
+            when (operationOrEventStream) {
+                is OperationShape -> symbolProvider.symbolForOperationError(operationOrEventStream) to operationErrors()
+                is UnionShape -> symbolProvider.symbolForEventStreamError(operationOrEventStream) to eventStreamErrors()
+                else -> UNREACHABLE("OperationErrorGenerator only supports operation or event stream shapes")
+            }
 
-        val meta = RustMetadata(
-            derives = setOf(RuntimeType.Debug),
-            additionalAttributes = listOf(Attribute.NonExhaustive),
-            visibility = Visibility.PUBLIC,
-        )
+        val meta =
+            RustMetadata(
+                derives = setOf(RuntimeType.Debug),
+                additionalAttributes = listOf(Attribute.NonExhaustive),
+                visibility = Visibility.PUBLIC,
+            )
 
         writer.rust("/// Error type for the `${errorSymbol.name}` operation.")
         meta.render(writer)
@@ -123,24 +126,28 @@ class OperationErrorGenerator(
         }
     }
 
-    private fun RustWriter.renderImplDisplay(errorSymbol: Symbol, errors: List<StructureShape>) {
+    private fun RustWriter.renderImplDisplay(
+        errorSymbol: Symbol,
+        errors: List<StructureShape>,
+    ) {
         rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result") {
                 delegateToVariants(errors) { variantMatch ->
                     when (variantMatch) {
-                        is VariantMatch.Unhandled -> writable {
-                            rustTemplate(
-                                """
-                                if let #{Some}(code) = #{ProvideErrorMetadata}::code(self) {
-                                    write!(f, "unhandled error ({code})")
-                                } else {
-                                    f.write_str("unhandled error")
-                                }
-                                """,
-                                *preludeScope,
-                                "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
-                            )
-                        }
+                        is VariantMatch.Unhandled ->
+                            writable {
+                                rustTemplate(
+                                    """
+                                    if let #{Some}(code) = #{ProvideErrorMetadata}::code(self) {
+                                        write!(f, "unhandled error ({code})")
+                                    } else {
+                                        f.write_str("unhandled error")
+                                    }
+                                    """,
+                                    *preludeScope,
+                                    "ProvideErrorMetadata" to RuntimeType.provideErrorMetadataTrait(runtimeConfig),
+                                )
+                            }
                         is VariantMatch.Modeled -> writable { rust("_inner.fmt(f)") }
                     }
                 }
@@ -148,7 +155,10 @@ class OperationErrorGenerator(
         }
     }
 
-    private fun RustWriter.renderImplProvideErrorMetadata(errorSymbol: Symbol, errors: List<StructureShape>) {
+    private fun RustWriter.renderImplProvideErrorMetadata(
+        errorSymbol: Symbol,
+        errors: List<StructureShape>,
+    ) {
         val errorMetadataTrait = RuntimeType.provideErrorMetadataTrait(runtimeConfig)
         rustBlock("impl #T for ${errorSymbol.name}", errorMetadataTrait) {
             rustBlock("fn meta(&self) -> &#T", errorMetadata(runtimeConfig)) {
@@ -164,7 +174,10 @@ class OperationErrorGenerator(
         }
     }
 
-    private fun RustWriter.renderImplProvideErrorKind(errorSymbol: Symbol, errors: List<StructureShape>) {
+    private fun RustWriter.renderImplProvideErrorKind(
+        errorSymbol: Symbol,
+        errors: List<StructureShape>,
+    ) {
         val retryErrorKindT = RuntimeType.retryErrorKind(symbolProvider.config.runtimeConfig)
         rustBlock(
             "impl #T for ${errorSymbol.name}",
@@ -198,7 +211,10 @@ class OperationErrorGenerator(
         }
     }
 
-    private fun RustWriter.renderImpl(errorSymbol: Symbol, errors: List<StructureShape>) {
+    private fun RustWriter.renderImpl(
+        errorSymbol: Symbol,
+        errors: List<StructureShape>,
+    ) {
         rustBlock("impl ${errorSymbol.name}") {
             rustTemplate(
                 """
@@ -246,7 +262,10 @@ class OperationErrorGenerator(
         }
     }
 
-    private fun RustWriter.renderImplStdError(errorSymbol: Symbol, errors: List<StructureShape>) {
+    private fun RustWriter.renderImplStdError(
+        errorSymbol: Symbol,
+        errors: List<StructureShape>,
+    ) {
         rustBlock("impl #T for ${errorSymbol.name}", RuntimeType.StdError) {
             rustBlockTemplate(
                 "fn source(&self) -> #{Option}<&(dyn #{StdError} + 'static)>",
@@ -255,12 +274,14 @@ class OperationErrorGenerator(
             ) {
                 delegateToVariants(errors) { variantMatch ->
                     when (variantMatch) {
-                        is VariantMatch.Unhandled -> writable {
-                            rustTemplate("#{Some}(&*_inner.source)", *preludeScope)
-                        }
-                        is VariantMatch.Modeled -> writable {
-                            rustTemplate("#{Some}(_inner)", *preludeScope)
-                        }
+                        is VariantMatch.Unhandled ->
+                            writable {
+                                rustTemplate("#{Some}(&*_inner.source)", *preludeScope)
+                            }
+                        is VariantMatch.Modeled ->
+                            writable {
+                                rustTemplate("#{Some}(_inner)", *preludeScope)
+                            }
                     }
                 }
             }
@@ -269,6 +290,7 @@ class OperationErrorGenerator(
 
     sealed class VariantMatch(name: String) : Section(name) {
         object Unhandled : VariantMatch("Unhandled")
+
         data class Modeled(val symbol: Symbol, val shape: Shape) : VariantMatch("Modeled")
     }
 
