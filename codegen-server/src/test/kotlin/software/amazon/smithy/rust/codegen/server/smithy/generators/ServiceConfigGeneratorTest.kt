@@ -24,62 +24,69 @@ internal class ServiceConfigGeneratorTest {
     fun `it should inject an aws_auth method that configures an HTTP plugin and a model plugin`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        val decorator = object : ServerCodegenDecorator {
-            override val name: String
-                get() = "AWSAuth pre-applied middleware decorator"
-            override val order: Byte
-                get() = -69
+        val decorator =
+            object : ServerCodegenDecorator {
+                override val name: String
+                    get() = "AWSAuth pre-applied middleware decorator"
+                override val order: Byte
+                    get() = -69
 
-            override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
-                val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-                val codegenScope = arrayOf(
-                    "SmithyHttpServer" to smithyHttpServer,
-                )
-                return listOf(
-                    ConfigMethod(
-                        name = "aws_auth",
-                        docs = "Docs",
-                        params = listOf(
-                            Binding("auth_spec", RuntimeType.String),
-                            Binding("authorizer", RuntimeType.U64),
-                        ),
-                        errorType = RuntimeType.std.resolve("io::Error"),
-                        initializer = Initializer(
-                            code = writable {
-                                rustTemplate(
-                                    """
-                                    if authorizer != 69 {
-                                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
-                                    }
+                override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
+                    val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+                    val codegenScope =
+                        arrayOf(
+                            "SmithyHttpServer" to smithyHttpServer,
+                        )
+                    return listOf(
+                        ConfigMethod(
+                            name = "aws_auth",
+                            docs = "Docs",
+                            params =
+                                listOf(
+                                    Binding("auth_spec", RuntimeType.String),
+                                    Binding("authorizer", RuntimeType.U64),
+                                ),
+                            errorType = RuntimeType.std.resolve("io::Error"),
+                            initializer =
+                                Initializer(
+                                    code =
+                                        writable {
+                                            rustTemplate(
+                                                """
+                                                if authorizer != 69 {
+                                                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
+                                                }
 
-                                    if auth_spec.len() != 69 {
-                                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
-                                    }
-                                    let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
-                                    let authz_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
-                                    """,
-                                    *codegenScope,
-                                )
-                            },
-                            layerBindings = emptyList(),
-                            httpPluginBindings = listOf(
-                                Binding(
-                                    "authn_plugin",
-                                    smithyHttpServer.resolve("plugin::IdentityPlugin"),
+                                                if auth_spec.len() != 69 {
+                                                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
+                                                }
+                                                let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
+                                                let authz_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
+                                                """,
+                                                *codegenScope,
+                                            )
+                                        },
+                                    layerBindings = emptyList(),
+                                    httpPluginBindings =
+                                        listOf(
+                                            Binding(
+                                                "authn_plugin",
+                                                smithyHttpServer.resolve("plugin::IdentityPlugin"),
+                                            ),
+                                        ),
+                                    modelPluginBindings =
+                                        listOf(
+                                            Binding(
+                                                "authz_plugin",
+                                                smithyHttpServer.resolve("plugin::IdentityPlugin"),
+                                            ),
+                                        ),
                                 ),
-                            ),
-                            modelPluginBindings = listOf(
-                                Binding(
-                                    "authz_plugin",
-                                    smithyHttpServer.resolve("plugin::IdentityPlugin"),
-                                ),
-                            ),
+                            isRequired = true,
                         ),
-                        isRequired = true,
-                    ),
-                )
+                    )
+                }
             }
-        }
 
         serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
             rustCrate.testModule {
@@ -150,47 +157,52 @@ internal class ServiceConfigGeneratorTest {
     fun `it should inject an method that applies three non-required layers`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        val decorator = object : ServerCodegenDecorator {
-            override val name: String
-                get() = "ApplyThreeNonRequiredLayers"
-            override val order: Byte
-                get() = 69
+        val decorator =
+            object : ServerCodegenDecorator {
+                override val name: String
+                    get() = "ApplyThreeNonRequiredLayers"
+                override val order: Byte
+                    get() = 69
 
-            override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
-                val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
-                val codegenScope = arrayOf(
-                    "Identity" to identityLayer,
-                )
-                return listOf(
-                    ConfigMethod(
-                        name = "three_non_required_layers",
-                        docs = "Docs",
-                        params = emptyList(),
-                        errorType = null,
-                        initializer = Initializer(
-                            code = writable {
-                                rustTemplate(
-                                    """
-                                    let layer1 = #{Identity}::new();
-                                    let layer2 = #{Identity}::new();
-                                    let layer3 = #{Identity}::new();
-                                    """,
-                                    *codegenScope,
-                                )
-                            },
-                            layerBindings = listOf(
-                                Binding("layer1", identityLayer),
-                                Binding("layer2", identityLayer),
-                                Binding("layer3", identityLayer),
-                            ),
-                            httpPluginBindings = emptyList(),
-                            modelPluginBindings = emptyList(),
+                override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
+                    val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
+                    val codegenScope =
+                        arrayOf(
+                            "Identity" to identityLayer,
+                        )
+                    return listOf(
+                        ConfigMethod(
+                            name = "three_non_required_layers",
+                            docs = "Docs",
+                            params = emptyList(),
+                            errorType = null,
+                            initializer =
+                                Initializer(
+                                    code =
+                                        writable {
+                                            rustTemplate(
+                                                """
+                                                let layer1 = #{Identity}::new();
+                                                let layer2 = #{Identity}::new();
+                                                let layer3 = #{Identity}::new();
+                                                """,
+                                                *codegenScope,
+                                            )
+                                        },
+                                    layerBindings =
+                                        listOf(
+                                            Binding("layer1", identityLayer),
+                                            Binding("layer2", identityLayer),
+                                            Binding("layer3", identityLayer),
+                                        ),
+                                    httpPluginBindings = emptyList(),
+                                    modelPluginBindings = emptyList(),
+                                ),
+                            isRequired = false,
                         ),
-                        isRequired = false,
-                    ),
-                )
+                    )
+                }
             }
-        }
 
         serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
             rustCrate.testModule {

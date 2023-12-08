@@ -28,7 +28,8 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class AwsQuerySerializerGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
         use aws.protocols#restJson1
 
@@ -85,15 +86,16 @@ class AwsQuerySerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource("true", "false")
     fun `generates valid serializers`(generateUnknownVariant: Boolean) {
-        val codegenTarget = when (generateUnknownVariant) {
-            true -> CodegenTarget.CLIENT
-            false -> CodegenTarget.SERVER
-        }
+        val codegenTarget =
+            when (generateUnknownVariant) {
+                true -> CodegenTarget.CLIENT
+                false -> CodegenTarget.SERVER
+            }
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model, codegenTarget = codegenTarget)
         val symbolProvider = codegenContext.symbolProvider
@@ -155,7 +157,8 @@ class AwsQuerySerializerGeneratorTest {
         project.compileAndTest()
     }
 
-    private val baseModelWithRequiredTypes = """
+    private val baseModelWithRequiredTypes =
+        """
         namespace test
         use aws.protocols#restJson1
 
@@ -219,7 +222,7 @@ class AwsQuerySerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource(
@@ -229,13 +232,18 @@ class AwsQuerySerializerGeneratorTest {
         "true, CLIENT_ZERO_VALUE_V1_NO_INPUT",
         "false, SERVER",
     )
-    fun `generates valid serializers for required types`(generateUnknownVariant: Boolean, nullabilityCheckMode: NullableIndex.CheckMode) {
-        val codegenTarget = when (generateUnknownVariant) {
-            true -> CodegenTarget.CLIENT
-            false -> CodegenTarget.SERVER
-        }
+    fun `generates valid serializers for required types`(
+        generateUnknownVariant: Boolean,
+        nullabilityCheckMode: NullableIndex.CheckMode,
+    ) {
+        val codegenTarget =
+            when (generateUnknownVariant) {
+                true -> CodegenTarget.CLIENT
+                false -> CodegenTarget.SERVER
+            }
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModelWithRequiredTypes))
-        val codegenContext = testCodegenContext(model, codegenTarget = codegenTarget, nullabilityCheckMode = nullabilityCheckMode)
+        val codegenContext =
+            testCodegenContext(model, codegenTarget = codegenTarget, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = AwsQuerySerializerGenerator(codegenContext)
         val operationGenerator = parserGenerator.operationInputSerializer(model.lookup("test#Op"))
@@ -245,7 +253,12 @@ class AwsQuerySerializerGeneratorTest {
         // Depending on the nullability check mode, the builder can be fallible or not. When it's fallible, we need to
         // add unwrap calls.
         val builderIsFallible = hasFallibleBuilder(model.lookup<StructureShape>("test#Top"), symbolProvider)
-        val maybeUnwrap = if (builderIsFallible) { ".unwrap()" } else { "" }
+        val maybeUnwrap =
+            if (builderIsFallible) {
+                ".unwrap()"
+            } else {
+                ""
+            }
         project.lib {
             unitTest(
                 "query_serializer",

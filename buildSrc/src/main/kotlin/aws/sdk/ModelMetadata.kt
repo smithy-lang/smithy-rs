@@ -27,17 +27,20 @@ data class ModelMetadata(
         fun fromString(value: String): ModelMetadata {
             val toml = Toml().read(value)
             return ModelMetadata(
-                crates = toml.getTable("crates")?.entrySet()?.map { entry ->
-                    entry.key to when (val kind = (entry.value as Toml).getString("kind")) {
-                        "Feature" -> ChangeType.FEATURE
-                        "Documentation" -> ChangeType.DOCUMENTATION
-                        else -> throw IllegalArgumentException("Unrecognized change type: $kind")
-                    }
-                }?.toMap() ?: emptyMap(),
+                crates =
+                    toml.getTable("crates")?.entrySet()?.map { entry ->
+                        entry.key to
+                            when (val kind = (entry.value as Toml).getString("kind")) {
+                                "Feature" -> ChangeType.FEATURE
+                                "Documentation" -> ChangeType.DOCUMENTATION
+                                else -> throw IllegalArgumentException("Unrecognized change type: $kind")
+                            }
+                    }?.toMap() ?: emptyMap(),
             )
         }
     }
 
     fun hasCrates(): Boolean = crates.isNotEmpty()
+
     fun changeType(moduleName: String): ChangeType = crates[moduleName] ?: ChangeType.UNCHANGED
 }

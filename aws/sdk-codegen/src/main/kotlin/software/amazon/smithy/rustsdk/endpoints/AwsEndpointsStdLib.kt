@@ -29,14 +29,16 @@ class AwsEndpointsStdLib() : ClientCodegenDecorator {
 
     private fun partitionMetadata(sdkSettings: SdkSettings): ObjectNode {
         if (partitionsCache == null) {
-            val partitionsJson = when (val path = sdkSettings.partitionsConfigPath) {
-                null -> (
-                    javaClass.getResource("/default-partitions.json")
-                        ?: throw IllegalStateException("Failed to find default-partitions.json in the JAR")
-                    ).readText()
+            val partitionsJson =
+                when (val path = sdkSettings.partitionsConfigPath) {
+                    null ->
+                        (
+                            javaClass.getResource("/default-partitions.json")
+                                ?: throw IllegalStateException("Failed to find default-partitions.json in the JAR")
+                        ).readText()
 
-                else -> path.readText()
-            }
+                    else -> path.readText()
+                }
             partitionsCache = Node.parse(partitionsJson).expectObjectNode()
         }
         return partitionsCache!!

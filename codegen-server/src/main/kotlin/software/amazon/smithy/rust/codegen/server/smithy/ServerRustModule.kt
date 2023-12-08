@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.DocHandlerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.handlerImports
+
 object ServerRustModule {
     val root = RustModule.LibRs
 
@@ -67,43 +68,49 @@ class ServerModuleDocProvider(private val codegenContext: ServerCodegenContext) 
         }
     }
 
-    private fun operationShapeModuleDoc(): Writable = writable {
-        val index = TopDownIndex.of(codegenContext.model)
-        val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
+    private fun operationShapeModuleDoc(): Writable =
+        writable {
+            val index = TopDownIndex.of(codegenContext.model)
+            val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(compareBy { it.id })
 
-        val firstOperation = operations.first() ?: return@writable
-        val crateName = codegenContext.settings.moduleName.toSnakeCase()
+            val firstOperation = operations.first() ?: return@writable
+            val crateName = codegenContext.settings.moduleName.toSnakeCase()
 
-        rustTemplate(
-            """
-            /// A collection of types representing each operation defined in the service closure.
-            ///
-            /// The [plugin system](#{SmithyHttpServer}::plugin) makes use of these
-            /// [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html##zero-sized-types-zsts) (ZSTs) to
-            /// parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. Their traits, such as
-            /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape), can be used to provide
-            /// operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
-            """.trimIndent(),
-            "SmithyHttpServer" to
-                ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-            "Tower" to ServerCargoDependency.Tower.toType(),
-            "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///").docSignature(),
-            "HandlerImports" to handlerImports(crateName, operations, commentToken = "///"),
-        )
-    }
+            rustTemplate(
+                """
+                /// A collection of types representing each operation defined in the service closure.
+                ///
+                /// The [plugin system](#{SmithyHttpServer}::plugin) makes use of these
+                /// [zero-sized types](https://doc.rust-lang.org/nomicon/exotic-sizes.html##zero-sized-types-zsts) (ZSTs) to
+                /// parameterize [`Plugin`](#{SmithyHttpServer}::plugin::Plugin) implementations. Their traits, such as
+                /// [`OperationShape`](#{SmithyHttpServer}::operation::OperationShape), can be used to provide
+                /// operation specific information to the [`Layer`](#{Tower}::Layer) being applied.
+                """.trimIndent(),
+                "SmithyHttpServer" to
+                    ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+                "Tower" to ServerCargoDependency.Tower.toType(),
+                "Handler" to DocHandlerGenerator(codegenContext, firstOperation, "handler", commentToken = "///").docSignature(),
+                "HandlerImports" to handlerImports(crateName, operations, commentToken = "///"),
+            )
+        }
 }
 
 object ServerModuleProvider : ModuleProvider {
-    override fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule = when (shape) {
-        is OperationShape -> ServerRustModule.Operation
-        is StructureShape -> when {
-            shape.hasTrait<ErrorTrait>() -> ServerRustModule.Error
-            shape.hasTrait<SyntheticInputTrait>() -> ServerRustModule.Input
-            shape.hasTrait<SyntheticOutputTrait>() -> ServerRustModule.Output
+    override fun moduleForShape(
+        context: ModuleProviderContext,
+        shape: Shape,
+    ): RustModule.LeafModule =
+        when (shape) {
+            is OperationShape -> ServerRustModule.Operation
+            is StructureShape ->
+                when {
+                    shape.hasTrait<ErrorTrait>() -> ServerRustModule.Error
+                    shape.hasTrait<SyntheticInputTrait>() -> ServerRustModule.Input
+                    shape.hasTrait<SyntheticOutputTrait>() -> ServerRustModule.Output
+                    else -> ServerRustModule.Model
+                }
             else -> ServerRustModule.Model
         }
-        else -> ServerRustModule.Model
-    }
 
     override fun moduleForOperationError(
         context: ModuleProviderContext,
@@ -115,18 +122,24 @@ object ServerModuleProvider : ModuleProvider {
         eventStream: UnionShape,
     ): RustModule.LeafModule = ServerRustModule.Error
 
-    override fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule {
+    override fun moduleForBuilder(
+        context: ModuleProviderContext,
+        shape: Shape,
+        symbol: Symbol,
+    ): RustModule.LeafModule {
         val pubCrate = !(context.settings as ServerRustSettings).codegenConfig.publicConstrainedTypes
-        val builderNamespace = RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase()) +
-            if (pubCrate) {
-                "_internal"
-            } else {
-                ""
+        val builderNamespace =
+            RustReservedWords.escapeIfNeeded(symbol.name.toSnakeCase()) +
+                if (pubCrate) {
+                    "_internal"
+                } else {
+                    ""
+                }
+        val visibility =
+            when (pubCrate) {
+                true -> Visibility.PUBCRATE
+                false -> Visibility.PUBLIC
             }
-        val visibility = when (pubCrate) {
-            true -> Visibility.PUBCRATE
-            false -> Visibility.PUBLIC
-        }
         return RustModule.new(
             builderNamespace,
             visibility,

@@ -28,7 +28,8 @@ class ServerRestJsonFactory(
     private val additionalServerHttpBoundProtocolCustomizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
     private val additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) : ProtocolGeneratorFactory<ServerHttpBoundProtocolGenerator, ServerCodegenContext> {
-    override fun protocol(codegenContext: ServerCodegenContext): Protocol = ServerRestJsonProtocol(codegenContext, additionalParserCustomizations)
+    override fun protocol(codegenContext: ServerCodegenContext): Protocol =
+        ServerRestJsonProtocol(codegenContext, additionalParserCustomizations)
 
     override fun buildProtocolGenerator(codegenContext: ServerCodegenContext): ServerHttpBoundProtocolGenerator =
         ServerHttpBoundProtocolGenerator(
@@ -43,12 +44,12 @@ class ServerRestJsonFactory(
 
     override fun support(): ProtocolSupport {
         return ProtocolSupport(
-            /* Client support */
+            // Client support
             requestSerialization = false,
             requestBodySerialization = false,
             responseDeserialization = false,
             errorDeserialization = false,
-            /* Server support */
+            // Server support
             requestDeserialization = true,
             requestBodyDeserialization = true,
             responseSerialization = true,
@@ -65,9 +66,10 @@ class ServerRestJsonSerializerGenerator(
             codegenContext,
             httpBindingResolver,
             ::restJsonFieldName,
-            customizations = listOf(
-                BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext),
-                BeforeSerializingMemberJsonCustomization(codegenContext),
-            ),
+            customizations =
+                listOf(
+                    BeforeIteratingOverMapOrCollectionJsonCustomization(codegenContext),
+                    BeforeSerializingMemberJsonCustomization(codegenContext),
+                ),
         ),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator

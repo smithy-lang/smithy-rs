@@ -14,9 +14,10 @@ class ServerRuntimeTypesReExportsGenerator(
     codegenContext: CodegenContext,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope = arrayOf(
-        "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-    )
+    private val codegenScope =
+        arrayOf(
+            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+        )
 
     fun render(writer: RustWriter) {
         writer.rustTemplate(

@@ -13,7 +13,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 
 class SerializerUtil(private val model: Model) {
-    fun RustWriter.ignoreZeroValues(shape: MemberShape, value: ValueExpression, inner: Writable) {
+    fun RustWriter.ignoreZeroValues(
+        shape: MemberShape,
+        value: ValueExpression,
+        inner: Writable,
+    ) {
         // Required shapes should always be serialized
         // See https://github.com/smithy-lang/smithy-rs/issues/230 and https://github.com/aws/aws-sdk-go-v2/pull/1129
         if (

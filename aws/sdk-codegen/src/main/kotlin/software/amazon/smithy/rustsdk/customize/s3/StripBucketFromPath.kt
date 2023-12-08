@@ -14,18 +14,20 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class StripBucketFromHttpPath {
     private val transformer = ModelTransformer.create()
+
     fun transform(model: Model): Model {
         // Remove `/{Bucket}` from the path (http trait)
         // The endpoints 2.0 rules handle either placing the bucket into the virtual host or adding it to the path
         return transformer.mapTraits(model) { shape, trait ->
             when (trait) {
                 is HttpTrait -> {
-                    val appliedToOperation = shape
-                        .asOperationShape()
-                        .map { operation ->
-                            model.expectShape(operation.inputShape, StructureShape::class.java)
-                                .getMember("Bucket").isPresent
-                        }.orElse(false)
+                    val appliedToOperation =
+                        shape
+                            .asOperationShape()
+                            .map { operation ->
+                                model.expectShape(operation.inputShape, StructureShape::class.java)
+                                    .getMember("Bucket").isPresent
+                            }.orElse(false)
                     trait.letIf(appliedToOperation) {
                         it.toBuilder().uri(UriPattern.parse(transformUri(trait.uri.toString()))).build()
                     }

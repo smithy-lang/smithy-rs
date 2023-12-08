@@ -101,23 +101,23 @@ sealed class PythonType {
     }
 
     data class Opaque(override val name: String, val pythonRootModuleName: String, val rustNamespace: String? = null) : PythonType() {
-
-        override val namespace: String? = rustNamespace?.split("::")?.joinToString(".") {
-            when (it) {
-                "crate" -> pythonRootModuleName
-                // In Python, we expose submodules from `aws_smithy_http_server_python`
-                // like `types`, `middleware`, `tls` etc. from Python root module
-                "aws_smithy_http_server_python" -> pythonRootModuleName
-                else -> it
-            }
-        }
-            // Most opaque types have a leading `::`, so strip that for Python as needed
-            .let {
-                when (it?.startsWith(".")) {
-                    true -> it.substring(1)
+        override val namespace: String? =
+            rustNamespace?.split("::")?.joinToString(".") {
+                when (it) {
+                    "crate" -> pythonRootModuleName
+                    // In Python, we expose submodules from `aws_smithy_http_server_python`
+                    // like `types`, `middleware`, `tls` etc. from Python root module
+                    "aws_smithy_http_server_python" -> pythonRootModuleName
                     else -> it
                 }
             }
+                // Most opaque types have a leading `::`, so strip that for Python as needed
+                .let {
+                    when (it?.startsWith(".")) {
+                        true -> it.substring(1)
+                        else -> it
+                    }
+                }
     }
 }
 
@@ -139,12 +139,13 @@ fun RustType.pythonType(pythonRootModuleName: String): PythonType =
         is RustType.Option -> PythonType.Optional(this.member.pythonType(pythonRootModuleName))
         is RustType.Box -> this.member.pythonType(pythonRootModuleName)
         is RustType.Dyn -> this.member.pythonType(pythonRootModuleName)
-        is RustType.Application -> PythonType.Application(
-            this.type.pythonType(pythonRootModuleName),
-            this.args.map {
-                it.pythonType(pythonRootModuleName)
-            },
-        )
+        is RustType.Application ->
+            PythonType.Application(
+                this.type.pythonType(pythonRootModuleName),
+                this.args.map {
+                    it.pythonType(pythonRootModuleName)
+                },
+            )
         is RustType.Opaque -> PythonType.Opaque(this.name, pythonRootModuleName, rustNamespace = this.namespace)
         is RustType.MaybeConstrained -> this.member.pythonType(pythonRootModuleName)
     }
@@ -154,39 +155,41 @@ fun RustType.pythonType(pythonRootModuleName: String): PythonType =
  * It generates something like `typing.Dict[String, String]`.
  */
 fun PythonType.render(fullyQualified: Boolean = true): String {
-    val namespace = if (fullyQualified) {
-        this.namespace?.let { "$it." } ?: ""
-    } else {
-        ""
-    }
-    val base = when (this) {
-        is PythonType.None -> this.name
-        is PythonType.Bool -> this.name
-        is PythonType.Float -> this.name
-        is PythonType.Int -> this.name
-        is PythonType.Str -> this.name
-        is PythonType.Any -> this.name
-        is PythonType.Opaque -> this.name
-        is PythonType.List -> "${this.name}[${this.member.render(fullyQualified)}]"
-        is PythonType.Dict -> "${this.name}[${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}]"
-        is PythonType.Set -> "${this.name}[${this.member.render(fullyQualified)}]"
-        is PythonType.Awaitable -> "${this.name}[${this.member.render(fullyQualified)}]"
-        is PythonType.Optional -> "${this.name}[${this.member.render(fullyQualified)}]"
-        is PythonType.AsyncIterator -> "${this.name}[${this.member.render(fullyQualified)}]"
-        is PythonType.Application -> {
-            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
-            "${this.name}[$args]"
+    val namespace =
+        if (fullyQualified) {
+            this.namespace?.let { "$it." } ?: ""
+        } else {
+            ""
         }
-        is PythonType.Callable -> {
-            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
-            val rtype = this.rtype.render(fullyQualified)
-            "${this.name}[[$args], $rtype]"
+    val base =
+        when (this) {
+            is PythonType.None -> this.name
+            is PythonType.Bool -> this.name
+            is PythonType.Float -> this.name
+            is PythonType.Int -> this.name
+            is PythonType.Str -> this.name
+            is PythonType.Any -> this.name
+            is PythonType.Opaque -> this.name
+            is PythonType.List -> "${this.name}[${this.member.render(fullyQualified)}]"
+            is PythonType.Dict -> "${this.name}[${this.key.render(fullyQualified)}, ${this.member.render(fullyQualified)}]"
+            is PythonType.Set -> "${this.name}[${this.member.render(fullyQualified)}]"
+            is PythonType.Awaitable -> "${this.name}[${this.member.render(fullyQualified)}]"
+            is PythonType.Optional -> "${this.name}[${this.member.render(fullyQualified)}]"
+            is PythonType.AsyncIterator -> "${this.name}[${this.member.render(fullyQualified)}]"
+            is PythonType.Application -> {
+                val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+                "${this.name}[$args]"
+            }
+            is PythonType.Callable -> {
+                val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+                val rtype = this.rtype.render(fullyQualified)
+                "${this.name}[[$args], $rtype]"
+            }
+            is PythonType.Union -> {
+                val args = this.args.joinToString(", ") { it.render(fullyQualified) }
+                "${this.name}[$args]"
+            }
         }
-        is PythonType.Union -> {
-            val args = this.args.joinToString(", ") { it.render(fullyQualified) }
-            "${this.name}[$args]"
-        }
-    }
     return "$namespace$base"
 }
 

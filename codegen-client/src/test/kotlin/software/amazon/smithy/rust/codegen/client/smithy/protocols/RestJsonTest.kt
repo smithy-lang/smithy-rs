@@ -10,7 +10,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 internal class RestJsonTest {
-    val model = """
+    val model =
+        """
         namespace test
         use aws.protocols#restJson1
         use aws.api#service
@@ -36,7 +37,7 @@ internal class RestJsonTest {
             a: String,
             b: Integer
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generate a rest json service that compiles`() {

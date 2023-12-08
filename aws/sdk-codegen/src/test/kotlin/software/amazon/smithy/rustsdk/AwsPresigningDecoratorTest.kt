@@ -27,7 +27,11 @@ class AwsPresigningDecoratorTest {
         testTransform("com.amazonaws.s3", "GetObject", presignable = true)
     }
 
-    private fun testTransform(namespace: String, name: String, presignable: Boolean) {
+    private fun testTransform(
+        namespace: String,
+        name: String,
+        presignable: Boolean,
+    ) {
         val settings = testClientRustSettings()
         val decorator = AwsPresigningDecorator()
         val model = testOperation(namespace, name)
@@ -35,7 +39,11 @@ class AwsPresigningDecoratorTest {
         hasPresignableTrait(transformed, namespace, name) shouldBe presignable
     }
 
-    private fun hasPresignableTrait(model: Model, namespace: String, name: String): Boolean =
+    private fun hasPresignableTrait(
+        model: Model,
+        namespace: String,
+        name: String,
+    ): Boolean =
         model.shapes().filter { shape -> shape is OperationShape && shape.id == ShapeId.fromParts(namespace, name) }
             .findFirst()
             .orNull()!!
@@ -44,7 +52,10 @@ class AwsPresigningDecoratorTest {
     private fun serviceShape(model: Model): ServiceShape =
         model.shapes().filter { shape -> shape is ServiceShape }.findFirst().orNull()!! as ServiceShape
 
-    private fun testOperation(namespace: String, name: String): Model =
+    private fun testOperation(
+        namespace: String,
+        name: String,
+    ): Model =
         """
         namespace $namespace
         use aws.protocols#restJson1
@@ -68,7 +79,8 @@ class OverrideHttpMethodTransformTest {
     @Test
     fun `it should override the HTTP method for the listed operations`() {
         val settings = testClientRustSettings()
-        val model = """
+        val model =
+            """
             namespace test
             use aws.protocols#restJson1
 
@@ -89,26 +101,28 @@ class OverrideHttpMethodTransformTest {
 
             @http(uri: "/three", method: "POST")
             operation Three { input: TestInput, output: TestOutput }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val serviceShape = model.expectShape(ShapeId.from("test#TestService"), ServiceShape::class.java)
-        val presignableOp = PresignableOperation(
-            PayloadSigningType.EMPTY,
-            listOf(
-                OverrideHttpMethodTransform(
-                    mapOf(
-                        ShapeId.from("test#One") to "GET",
-                        ShapeId.from("test#Two") to "POST",
+        val presignableOp =
+            PresignableOperation(
+                PayloadSigningType.EMPTY,
+                listOf(
+                    OverrideHttpMethodTransform(
+                        mapOf(
+                            ShapeId.from("test#One") to "GET",
+                            ShapeId.from("test#Two") to "POST",
+                        ),
                     ),
                 ),
-            ),
-        )
-        val transformed = AwsPresigningDecorator(
-            mapOf(
-                ShapeId.from("test#One") to presignableOp,
-                ShapeId.from("test#Two") to presignableOp,
-            ),
-        ).transformModel(serviceShape, model, settings)
+            )
+        val transformed =
+            AwsPresigningDecorator(
+                mapOf(
+                    ShapeId.from("test#One") to presignableOp,
+                    ShapeId.from("test#Two") to presignableOp,
+                ),
+            ).transformModel(serviceShape, model, settings)
 
         val synthNamespace = "test.synthetic.aws.presigned"
         transformed.expectShape(ShapeId.from("$synthNamespace#One")).expectTrait<HttpTrait>().method shouldBe "GET"
@@ -118,11 +132,11 @@ class OverrideHttpMethodTransformTest {
 }
 
 class MoveDocumentMembersToQueryParamsTransformTest {
-
     @Test
     fun `it should move document members to query parameters for the listed operations`() {
         val settings = testClientRustSettings()
-        val model = """
+        val model =
+            """
             namespace test
             use aws.protocols#restJson1
 
@@ -156,39 +170,43 @@ class MoveDocumentMembersToQueryParamsTransformTest {
 
             @http(uri: "/two", method: "POST")
             operation Two { input: TwoInputOutput, output: TwoInputOutput }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val serviceShape = model.expectShape(ShapeId.from("test#TestService"), ServiceShape::class.java)
-        val presignableOp = PresignableOperation(
-            PayloadSigningType.EMPTY,
-            listOf(
-                MoveDocumentMembersToQueryParamsTransform(
-                    listOf(ShapeId.from("test#One")),
+        val presignableOp =
+            PresignableOperation(
+                PayloadSigningType.EMPTY,
+                listOf(
+                    MoveDocumentMembersToQueryParamsTransform(
+                        listOf(ShapeId.from("test#One")),
+                    ),
                 ),
-            ),
-        )
-        val transformed = AwsPresigningDecorator(
-            mapOf(ShapeId.from("test#One") to presignableOp),
-        ).transformModel(serviceShape, model, settings)
+            )
+        val transformed =
+            AwsPresigningDecorator(
+                mapOf(ShapeId.from("test#One") to presignableOp),
+            ).transformModel(serviceShape, model, settings)
 
         val index = HttpBindingIndex(transformed)
         index.getRequestBindings(ShapeId.from("test.synthetic.aws.presigned#One")).map { (key, value) ->
             key to value.location
-        }.toMap() shouldBe mapOf(
-            "one" to HttpBinding.Location.HEADER,
-            "two" to HttpBinding.Location.QUERY,
-            "three" to HttpBinding.Location.QUERY,
-            "four" to HttpBinding.Location.QUERY,
-        )
+        }.toMap() shouldBe
+            mapOf(
+                "one" to HttpBinding.Location.HEADER,
+                "two" to HttpBinding.Location.QUERY,
+                "three" to HttpBinding.Location.QUERY,
+                "four" to HttpBinding.Location.QUERY,
+            )
 
         transformed.getShape(ShapeId.from("test.synthetic.aws.presigned#Two")).orNull() shouldBe null
         index.getRequestBindings(ShapeId.from("test#Two")).map { (key, value) ->
             key to value.location
-        }.toMap() shouldBe mapOf(
-            "one" to HttpBinding.Location.HEADER,
-            "two" to HttpBinding.Location.QUERY,
-            "three" to HttpBinding.Location.DOCUMENT,
-            "four" to HttpBinding.Location.DOCUMENT,
-        )
+        }.toMap() shouldBe
+            mapOf(
+                "one" to HttpBinding.Location.HEADER,
+                "two" to HttpBinding.Location.QUERY,
+                "three" to HttpBinding.Location.DOCUMENT,
+                "four" to HttpBinding.Location.DOCUMENT,
+            )
     }
 }

@@ -17,9 +17,10 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import kotlin.io.path.pathString
 
 internal class InlineDependencyTest {
-    private fun makeDep(name: String) = InlineDependency(name, RustModule.private("module")) {
-        rustBlock("fn foo()") {}
-    }
+    private fun makeDep(name: String) =
+        InlineDependency(name, RustModule.private("module")) {
+            rustBlock("fn foo()") {}
+        }
 
     @Test
     fun `equal dependencies should be equal`() {
@@ -60,13 +61,14 @@ internal class InlineDependencyTest {
         val a = RustModule.public("a")
         val b = RustModule.public("b", parent = a)
         val c = RustModule.public("c", parent = b)
-        val type = RuntimeType.forInlineFun("forty2", c) {
-            rust(
-                """
-                pub fn forty2() -> usize { 42 }
-                """,
-            )
-        }
+        val type =
+            RuntimeType.forInlineFun("forty2", c) {
+                rust(
+                    """
+                    pub fn forty2() -> usize { 42 }
+                    """,
+                )
+            }
         val crate = TestWorkspace.testProject()
         crate.lib {
             unitTest("use_nested_module") {

@@ -17,8 +17,11 @@ object ServerRuntimeType {
     fun router(runtimeConfig: RuntimeConfig) =
         ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("routing::Router")
 
-    fun protocol(name: String, path: String, runtimeConfig: RuntimeConfig) =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("protocol::$path::$name")
+    fun protocol(
+        name: String,
+        path: String,
+        runtimeConfig: RuntimeConfig,
+    ) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("protocol::$path::$name")
 
     fun protocol(runtimeConfig: RuntimeConfig) = protocol("Protocol", "", runtimeConfig)
 }

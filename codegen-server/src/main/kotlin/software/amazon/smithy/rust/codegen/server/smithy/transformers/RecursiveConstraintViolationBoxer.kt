@@ -65,10 +65,11 @@ object RecursiveConstraintViolationBoxer {
      *
      * [0] https://github.com/smithy-lang/smithy-rs/pull/2040
      */
-    fun transform(model: Model): Model = RecursiveShapeBoxer(
-        containsIndirectionPredicate = ::constraintViolationLoopContainsIndirection,
-        boxShapeFn = ::addConstraintViolationRustBoxTrait,
-    ).transform(model)
+    fun transform(model: Model): Model =
+        RecursiveShapeBoxer(
+            containsIndirectionPredicate = ::constraintViolationLoopContainsIndirection,
+            boxShapeFn = ::addConstraintViolationRustBoxTrait,
+        ).transform(model)
 
     private fun constraintViolationLoopContainsIndirection(loop: Collection<Shape>): Boolean =
         loop.find { it.hasTrait<ConstraintViolationRustBoxTrait>() } != null

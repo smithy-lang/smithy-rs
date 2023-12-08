@@ -18,13 +18,14 @@ class ModelMetadataTest {
 
     @Test
     fun `it should parse`() {
-        val contents = """
+        val contents =
+            """
             [crates.aws-sdk-someservice]
             kind = "Feature"
 
             [crates.aws-sdk-s3]
             kind = "Documentation"
-        """.trimIndent()
+            """.trimIndent()
 
         val result = ModelMetadata.fromString(contents)
         assertEquals(ChangeType.FEATURE, result.changeType("aws-sdk-someservice"))

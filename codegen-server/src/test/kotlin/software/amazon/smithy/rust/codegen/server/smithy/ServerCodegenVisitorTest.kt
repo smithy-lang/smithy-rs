@@ -18,7 +18,8 @@ import kotlin.io.path.writeText
 class ServerCodegenVisitorTest {
     @Test
     fun `baseline transform verify mixins removed`() {
-        val model = """
+        val model =
+            """
             namespace com.example
 
             use aws.protocols#awsJson1_0
@@ -43,7 +44,7 @@ class ServerCodegenVisitorTest {
             ] {
                 greeting: String
             }
-        """.asSmithyModel(smithyVersion = "2.0")
+            """.asSmithyModel(smithyVersion = "2.0")
         val (ctx, testDir) = generatePluginContext(model)
         testDir.resolve("src/main.rs").writeText("fn main() {}")
         val codegenDecorator =

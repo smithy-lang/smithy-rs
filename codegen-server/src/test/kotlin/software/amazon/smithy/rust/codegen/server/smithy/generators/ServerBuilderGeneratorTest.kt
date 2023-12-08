@@ -24,7 +24,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCode
 class ServerBuilderGeneratorTest {
     @Test
     fun `it respects the sensitive trait in Debug impl`() {
-        val model = """
+        val model =
+            """
             namespace test
             @sensitive
             string SecretKey
@@ -37,7 +38,7 @@ class ServerBuilderGeneratorTest {
                 password: Password,
                 secretKey: SecretKey
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val codegenContext = serverTestCodegenContext(model)
         val project = TestWorkspace.testProject()
@@ -46,12 +47,13 @@ class ServerBuilderGeneratorTest {
             val shape = model.lookup<StructureShape>("test#Credentials")
 
             StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList(), codegenContext.structSettings()).render()
-            val builderGenerator = ServerBuilderGenerator(
-                codegenContext,
-                shape,
-                SmithyValidationExceptionConversionGenerator(codegenContext),
-                ServerRestJsonProtocol(codegenContext),
-            )
+            val builderGenerator =
+                ServerBuilderGenerator(
+                    codegenContext,
+                    shape,
+                    SmithyValidationExceptionConversionGenerator(codegenContext),
+                    ServerRestJsonProtocol(codegenContext),
+                )
 
             builderGenerator.render(project, writer)
 
