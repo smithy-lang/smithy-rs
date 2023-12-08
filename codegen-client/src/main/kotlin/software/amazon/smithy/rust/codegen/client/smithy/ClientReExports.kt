@@ -15,3 +15,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 fun configReexport(type: RuntimeType): RuntimeType = RuntimeType.forInlineFun(type.name, module = ClientRustModule.config) {
     rustTemplate("pub use #{type};", "type" to type)
 }
+
+fun primitivesReexport(type: RuntimeType): RuntimeType = RuntimeType.forInlineFun(type.name, module = ClientRustModule.primitives) {
+    rustTemplate("pub use #{type};", "type" to type)
+}

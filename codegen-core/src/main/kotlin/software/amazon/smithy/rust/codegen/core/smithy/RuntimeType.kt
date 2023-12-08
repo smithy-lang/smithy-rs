@@ -158,14 +158,18 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
      * (e.g. when bringing a trait into scope). See [CodegenWriter.addUseImports].
      */
     fun toSymbol(): Symbol {
-        val builder = Symbol
-            .builder()
+        return setSymbol(Symbol.builder()).build()
+    }
+
+    fun setSymbol(builder: Symbol.Builder): Symbol.Builder {
+        builder
             .name(name)
             .namespace(namespace, "::")
             .rustType(RustType.Opaque(name, namespace))
+            .runtimeType(this)
 
         dependency?.run { builder.addDependency(this) }
-        return builder.build()
+        return builder
     }
 
     /**

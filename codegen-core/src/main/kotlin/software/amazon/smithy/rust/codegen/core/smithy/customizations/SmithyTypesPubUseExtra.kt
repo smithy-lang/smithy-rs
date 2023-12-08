@@ -37,28 +37,9 @@ private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) ->
         union.members().any { member -> predicate(model.expectShape(member.target)) }
     }
 
-/** Returns true if the model uses any blob shapes */
-private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isBlobShape)
-
-/** Returns true if the model uses any timestamp shapes */
-private fun hasDateTimes(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isTimestampShape)
-
 /** Adds re-export statements for Smithy primitives */
 fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model, rustCrate: RustCrate): Writable = writable {
     val rc = codegenContext.runtimeConfig
-    if (hasBlobs(model)) {
-        rustTemplate("pub use #{Blob};", "Blob" to RuntimeType.blob(rc))
-    }
-    if (hasDateTimes(model)) {
-        rustTemplate(
-            """
-            pub use #{DateTime};
-            pub use #{Format} as DateTimeFormat;
-            """,
-            "DateTime" to RuntimeType.dateTime(rc),
-            "Format" to RuntimeType.format(rc),
-        )
-    }
     if (hasStreamingOperations(model)) {
         rustCrate.mergeFeature(
             Feature(

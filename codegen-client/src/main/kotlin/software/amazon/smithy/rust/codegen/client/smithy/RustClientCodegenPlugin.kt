@@ -103,6 +103,7 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
                 // be the name of an operation input
                 .let { RustReservedWordSymbolProvider(it, ClientReservedWords) }
+                .let { ReExportSymbolProvider(it) }
                 // Allows decorators to inject a custom symbol provider
                 .let { codegenDecorator.symbolProvider(it) }
     }

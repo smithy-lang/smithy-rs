@@ -126,6 +126,7 @@ fun Symbol.isOptional(): Boolean = when (this.rustType()) {
 fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 
 private const val RUST_TYPE_KEY = "rusttype"
+private const val RUNTIME_TYPE_KEY = "runtimetype"
 private const val SHAPE_KEY = "shape"
 private const val RUST_MODULE_KEY = "rustmodule"
 private const val RENAMED_FROM_KEY = "renamedfrom"
@@ -134,6 +135,8 @@ private const val SYMBOL_DEFAULT = "symboldefault"
 // Symbols should _always_ be created with a Rust type & shape attached
 fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
+fun Symbol.Builder.runtimeType(runtimeType: RuntimeType): Symbol.Builder = this.putProperty(RUNTIME_TYPE_KEY, runtimeType)
+fun Symbol.runtimeType(): RuntimeType = this.expectProperty(RUNTIME_TYPE_KEY, RuntimeType::class.java)
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
 fun Symbol.Builder.shape(shape: Shape?): Symbol.Builder = this.putProperty(SHAPE_KEY, shape)
 fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)

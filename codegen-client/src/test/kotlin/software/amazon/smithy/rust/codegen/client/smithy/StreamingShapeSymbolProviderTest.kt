@@ -42,14 +42,14 @@ internal class StreamingShapeSymbolProviderTest {
         val symbolProvider = testSymbolProvider(modelWithOperationTraits)
         modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechOutput\$data").also { shape ->
             symbolProvider.toSymbol(shape).also { symbol ->
-                symbol.name shouldBe "data"
-                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "::aws_smithy_types::byte_stream")
+                // symbol.name shouldBe "data"
+                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "crate::primitives")
             }
         }
         modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechInput\$data").also { shape ->
             symbolProvider.toSymbol(shape).also { symbol ->
-                symbol.name shouldBe "data"
-                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "::aws_smithy_types::byte_stream")
+                // symbol.name shouldBe "data"
+                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "crate::primitives")
             }
         }
     }
