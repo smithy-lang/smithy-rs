@@ -97,3 +97,15 @@ message = "[`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/e
 references = ["smithy-rs#3294"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Add support for construction [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported."
+references = ["smithy-rs#3300", "aws-sdk-rust#977"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add support for construction [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported."
+references = ["smithy-rs#3300", "aws-sdk-rust#977"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
