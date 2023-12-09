@@ -161,7 +161,7 @@ internal class BuilderGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         project.moduleFor(errorStruct) {
             rust("##![allow(deprecated)]")
-            StructureGenerator(model, provider, this, errorStruct, emptyList()).render()
+            StructureGenerator(model, provider, this, errorStruct, emptyList(), StructSettings(false)).render()
             implBlock(provider.toSymbol(errorStruct)) {
                 BuilderGenerator.renderConvenienceMethod(this, provider, errorStruct)
             }
