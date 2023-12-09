@@ -3,16 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/// Smithy auth scheme implementations.
 pub mod auth;
 
-/// Smithy code related to connectors and connections.
+pub mod defaults;
+
+pub mod dns;
+
+/// Built-in Smithy HTTP clients and connectors.
 ///
-/// A "connector" manages one or more "connections", handles connection timeouts, re-establishes
-/// connections, etc.
-///
-/// "Connections" refers to the actual transport layer implementation of the connector.
-/// By default, the orchestrator uses a connector provided by `hyper`.
-pub mod connectors;
+/// See the [module docs in `aws-smithy-runtime-api`](aws_smithy_runtime_api::client::http)
+/// for more information about clients and connectors.
+pub mod http;
+
+/// Utility to simplify config building for config and config overrides.
+pub mod config_override;
 
 /// The client orchestrator implementation
 pub mod orchestrator;
@@ -36,3 +41,6 @@ pub mod identity;
 
 /// Interceptors for Smithy clients.
 pub mod interceptors;
+
+/// Stalled stream protection for clients
+pub mod stalled_stream_protection;

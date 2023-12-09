@@ -23,7 +23,7 @@ struct IntermediateStructure {
   = help: insert indirection (e.g., a `Box`, `Rc`, or `&`) at some point to make `main::TopStructure` representable
 ```
 
-This occurs because Rust types must be a size known at compile time. The way around this, as the message suggests, is to Box the offending type. `smithy-rs` implements this design in [RecursiveShapeBoxer.kt](https://github.com/awslabs/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/RecursiveShapeBoxer.kt)
+This occurs because Rust types must be a size known at compile time. The way around this, as the message suggests, is to Box the offending type. `smithy-rs` implements this design in [RecursiveShapeBoxer.kt](https://github.com/smithy-lang/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/transformers/RecursiveShapeBoxer.kt)
 
 To support this, as the message suggests, we must "`Box`" the offending type. There is a touch of trickiness—only one element in the cycle needs to be boxed, but we need to select it deterministically such that we always pick the same element between multiple codegen runs. To do this the Rust SDK will:
 

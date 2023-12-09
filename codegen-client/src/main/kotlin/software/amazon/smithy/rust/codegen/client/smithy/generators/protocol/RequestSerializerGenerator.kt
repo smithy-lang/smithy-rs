@@ -10,7 +10,6 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientAdditionalPayloadContext
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -35,10 +34,8 @@ class RequestSerializerGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenScope by lazy {
-        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
         val interceptorContext = runtimeApi.resolve("client::interceptors::context")
-        val orchestrator = runtimeApi.resolve("client::orchestrator")
-        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         arrayOf(
             *preludeScope,
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
@@ -46,18 +43,17 @@ class RequestSerializerGenerator(
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
             "header_util" to RuntimeType.smithyHttp(codegenContext.runtimeConfig).resolve("header"),
             "http" to RuntimeType.Http,
-            "HttpRequest" to orchestrator.resolve("HttpRequest"),
+            "HttpRequest" to runtimeApi.resolve("client::orchestrator::HttpRequest"),
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
             "Input" to interceptorContext.resolve("Input"),
             "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
-            "RequestSerializer" to orchestrator.resolve("RequestSerializer"),
+            "SerializeRequest" to runtimeApi.resolve("client::ser_de::SerializeRequest"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "HeaderSerializationSettings" to RuntimeType.forInlineDependency(
                 InlineDependency.serializationSettings(
                     codegenContext.runtimeConfig,
                 ),
             ).resolve("HeaderSerializationSettings"),
-            "TypedBox" to smithyTypes.resolve("type_erasure::TypedBox"),
         )
     }
 
@@ -70,17 +66,17 @@ class RequestSerializerGenerator(
             """
             ##[derive(Debug)]
             struct $serializerName;
-            impl #{RequestSerializer} for $serializerName {
+            impl #{SerializeRequest} for $serializerName {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
-                    let input = #{TypedBox}::<#{ConcreteInput}>::assume_from(input).expect("correct type").unwrap();
+                    let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
                     let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
                     };
                     let body = #{generate_body};
                     #{add_content_length}
-                    #{Ok}(request_builder.body(body).expect("valid request"))
+                    #{Ok}(request_builder.body(body).expect("valid request").try_into().unwrap())
                 }
             }
             """,
@@ -90,12 +86,7 @@ class RequestSerializerGenerator(
             "generate_body" to writable {
                 if (bodyGenerator != null) {
                     val body = writable {
-                        bodyGenerator.generatePayload(
-                            this,
-                            "input",
-                            operationShape,
-                            ClientAdditionalPayloadContext(propertyBagAvailable = false),
-                        )
+                        bodyGenerator.generatePayload(this, "input", operationShape)
                     }
                     val streamingMember = inputShape.findStreamingMember(codegenContext.model)
                     val isBlobStreaming =

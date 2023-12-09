@@ -40,7 +40,7 @@ class PythonServerStructureGenerator(
     private val codegenContext: ServerCodegenContext,
     private val writer: RustWriter,
     private val shape: StructureShape,
-) : StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList()) {
+) : StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList(), codegenContext.structSettings()) {
 
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = codegenContext.settings.moduleName.toSnakeCase()

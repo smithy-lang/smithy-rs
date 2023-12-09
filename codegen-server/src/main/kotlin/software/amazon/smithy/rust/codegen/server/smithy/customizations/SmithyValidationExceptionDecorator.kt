@@ -44,7 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
  *
  * [0]: https://github.com/awslabs/smithy/tree/main/smithy-validation-model
  *
- * TODO(https://github.com/awslabs/smithy-rs/pull/2053): once the RFC is implemented, consider moving this back into the
+ * TODO(https://github.com/smithy-lang/smithy-rs/pull/2053): once the RFC is implemented, consider moving this back into the
  *  generators.
  */
 class SmithyValidationExceptionDecorator : ServerCodegenDecorator {
@@ -78,7 +78,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                     };
                     Self::ConstraintViolation(
                         crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
-                            .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
+                            .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                     )
                 }
             }

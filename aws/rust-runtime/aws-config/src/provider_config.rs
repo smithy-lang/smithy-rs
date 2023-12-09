@@ -5,27 +5,23 @@
 
 //! Configuration Options for Credential Providers
 
-use aws_credential_types::time_source::TimeSource;
+use crate::profile;
+use crate::profile::profile_file::ProfileFiles;
+use crate::profile::{ProfileFileLoadError, ProfileSet};
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-use aws_smithy_async::time::SharedTimeSource;
-use aws_smithy_client::erase::DynConnector;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
+use aws_smithy_runtime_api::client::http::HttpClient;
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
+use aws_smithy_types::retry::RetryConfig;
 use aws_types::os_shim_internal::{Env, Fs};
-use aws_types::{
-    http_connector::{ConnectorSettings, HttpConnector},
-    region::Region,
-};
+use aws_types::region::Region;
+use aws_types::sdk_config::SharedHttpClient;
+use aws_types::SdkConfig;
 use std::borrow::Cow;
-
 use std::fmt::{Debug, Formatter};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
-
-use crate::connector::default_connector;
-use crate::profile;
-
-use crate::profile::profile_file::ProfileFiles;
-use crate::profile::{ProfileFileLoadError, ProfileSet};
 
 /// Configuration options for Credential Providers
 ///
@@ -40,9 +36,11 @@ pub struct ProviderConfig {
     env: Env,
     fs: Fs,
     time_source: SharedTimeSource,
-    connector: HttpConnector,
-    sleep: Option<SharedAsyncSleep>,
+    http_client: Option<SharedHttpClient>,
+    sleep_impl: Option<SharedAsyncSleep>,
     region: Option<Region>,
+    use_fips: Option<bool>,
+    use_dual_stack: Option<bool>,
     /// An AWS profile created from `ProfileFiles` and a `profile_name`
     parsed_profile: Arc<OnceCell<Result<ProfileSet, ProfileFileLoadError>>>,
     /// A list of [std::path::Path]s to profile files
@@ -56,27 +54,28 @@ impl Debug for ProviderConfig {
         f.debug_struct("ProviderConfig")
             .field("env", &self.env)
             .field("fs", &self.fs)
-            .field("sleep", &self.sleep)
+            .field("time_source", &self.time_source)
+            .field("http_client", &self.http_client)
+            .field("sleep_impl", &self.sleep_impl)
             .field("region", &self.region)
+            .field("use_fips", &self.use_fips)
+            .field("use_dual_stack", &self.use_dual_stack)
+            .field("profile_name_override", &self.profile_name_override)
             .finish()
     }
 }
 
 impl Default for ProviderConfig {
     fn default() -> Self {
-        let connector = HttpConnector::ConnectorFn(Arc::new(
-            |settings: &ConnectorSettings, sleep: Option<SharedAsyncSleep>| {
-                default_connector(settings, sleep)
-            },
-        ));
-
         Self {
             env: Env::default(),
             fs: Fs::default(),
             time_source: SharedTimeSource::default(),
-            connector,
-            sleep: default_async_sleep(),
+            http_client: None,
+            sleep_impl: default_async_sleep(),
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
             profile_name_override: None,
@@ -91,6 +90,7 @@ impl ProviderConfig {
     /// Unlike [`ProviderConfig::empty`] where `env` and `fs` will use their non-mocked implementations,
     /// this method will use an empty mock environment and an empty mock file system.
     pub fn no_configuration() -> Self {
+        use aws_smithy_async::time::StaticTimeSource;
         use std::collections::HashMap;
         use std::time::UNIX_EPOCH;
         let fs = Fs::from_raw_map(HashMap::new());
@@ -100,10 +100,12 @@ impl ProviderConfig {
             profile_files: ProfileFiles::default(),
             env,
             fs,
-            time_source: SharedTimeSource::new(UNIX_EPOCH),
-            connector: HttpConnector::Prebuilt(None),
-            sleep: None,
+            time_source: SharedTimeSource::new(StaticTimeSource::new(UNIX_EPOCH)),
+            http_client: None,
+            sleep_impl: None,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             profile_name_override: None,
         }
     }
@@ -141,11 +143,33 @@ impl ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
             time_source: SharedTimeSource::default(),
-            connector: HttpConnector::Prebuilt(None),
-            sleep: None,
+            http_client: None,
+            sleep_impl: None,
             region: None,
+            use_fips: None,
+            use_dual_stack: None,
             parsed_profile: Default::default(),
             profile_files: ProfileFiles::default(),
+            profile_name_override: None,
+        }
+    }
+
+    /// Initializer for ConfigBag to avoid possibly setting incorrect defaults.
+    pub(crate) fn init(
+        time_source: SharedTimeSource,
+        sleep_impl: Option<SharedAsyncSleep>,
+    ) -> Self {
+        Self {
+            parsed_profile: Default::default(),
+            profile_files: ProfileFiles::default(),
+            env: Env::default(),
+            fs: Fs::default(),
+            time_source,
+            http_client: None,
+            sleep_impl,
+            region: None,
+            use_fips: None,
+            use_dual_stack: None,
             profile_name_override: None,
         }
     }
@@ -166,6 +190,19 @@ impl ProviderConfig {
         Self::without_region().load_default_region().await
     }
 
+    pub(crate) fn client_config(&self) -> SdkConfig {
+        let mut builder = SdkConfig::builder()
+            .retry_config(RetryConfig::standard())
+            .region(self.region())
+            .time_source(self.time_source())
+            .use_fips(self.use_fips().unwrap_or_default())
+            .use_dual_stack(self.use_dual_stack().unwrap_or_default())
+            .behavior_version(crate::BehaviorVersion::latest());
+        builder.set_http_client(self.http_client.clone());
+        builder.set_sleep_impl(self.sleep_impl.clone());
+        builder.build()
+    }
+
     // When all crate features are disabled, these accessors are unused
 
     #[allow(dead_code)]
@@ -184,24 +221,28 @@ impl ProviderConfig {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn default_connector(&self) -> Option<DynConnector> {
-        self.connector
-            .connector(&Default::default(), self.sleep.clone())
+    pub(crate) fn http_client(&self) -> Option<SharedHttpClient> {
+        self.http_client.clone()
     }
 
     #[allow(dead_code)]
-    pub(crate) fn connector(&self, settings: &ConnectorSettings) -> Option<DynConnector> {
-        self.connector.connector(settings, self.sleep.clone())
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn sleep(&self) -> Option<SharedAsyncSleep> {
-        self.sleep.clone()
+    pub(crate) fn sleep_impl(&self) -> Option<SharedAsyncSleep> {
+        self.sleep_impl.clone()
     }
 
     #[allow(dead_code)]
     pub(crate) fn region(&self) -> Option<Region> {
         self.region.clone()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn use_fips(&self) -> Option<bool> {
+        self.use_fips
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn use_dual_stack(&self) -> Option<bool> {
+        self.use_dual_stack
     }
 
     pub(crate) async fn try_profile(&self) -> Result<&ProfileSet, &ProfileFileLoadError> {
@@ -231,6 +272,18 @@ impl ProviderConfig {
     /// Override the region for the configuration
     pub fn with_region(mut self, region: Option<Region>) -> Self {
         self.region = region;
+        self
+    }
+
+    /// Override the `use_fips` setting.
+    pub(crate) fn with_use_fips(mut self, use_fips: Option<bool>) -> Self {
+        self.use_fips = use_fips;
+        self
+    }
+
+    /// Override the `use_dual_stack` setting.
+    pub(crate) fn with_use_dual_stack(mut self, use_dual_stack: Option<bool>) -> Self {
+        self.use_dual_stack = use_dual_stack;
         self
     }
 
@@ -270,10 +323,7 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
-    // these setters are doc(hidden) because they only exist for tests
-
-    #[doc(hidden)]
-    pub fn with_fs(self, fs: Fs) -> Self {
+    pub(crate) fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             fs,
@@ -281,8 +331,7 @@ impl ProviderConfig {
         }
     }
 
-    #[doc(hidden)]
-    pub fn with_env(self, env: Env) -> Self {
+    pub(crate) fn with_env(self, env: Env) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             env,
@@ -290,66 +339,26 @@ impl ProviderConfig {
         }
     }
 
-    #[doc(hidden)]
-    pub fn with_time_source(self, time_source: TimeSource) -> Self {
+    /// Override the time source for this configuration
+    pub fn with_time_source(self, time_source: impl TimeSource + 'static) -> Self {
         ProviderConfig {
-            time_source: SharedTimeSource::new(time_source),
+            time_source: time_source.into_shared(),
             ..self
         }
     }
 
-    /// Override the HTTPS connector for this configuration
-    ///
-    /// **Warning**: Use of this method will prevent you from taking advantage of the HTTP connect timeouts.
-    /// Consider [`ProviderConfig::with_tcp_connector`].
-    ///
-    /// # Stability
-    /// This method is expected to change to support HTTP configuration.
-    pub fn with_http_connector(self, connector: DynConnector) -> Self {
+    /// Override the HTTP client for this configuration
+    pub fn with_http_client(self, http_client: impl HttpClient + 'static) -> Self {
         ProviderConfig {
-            connector: HttpConnector::Prebuilt(Some(connector)),
-            ..self
-        }
-    }
-
-    /// Override the TCP connector for this configuration
-    ///
-    /// This connector MUST provide an HTTPS encrypted connection.
-    ///
-    /// # Stability
-    /// This method may change to support HTTP configuration.
-    #[cfg(feature = "client-hyper")]
-    pub fn with_tcp_connector<C>(self, connector: C) -> Self
-    where
-        C: Clone + Send + Sync + 'static,
-        C: tower::Service<http::Uri>,
-        C::Response: hyper::client::connect::Connection
-            + tokio::io::AsyncRead
-            + tokio::io::AsyncWrite
-            + Send
-            + Unpin
-            + 'static,
-        C::Future: Unpin + Send + 'static,
-        C::Error: Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
-    {
-        let connector_fn = move |settings: &ConnectorSettings, sleep: Option<SharedAsyncSleep>| {
-            let mut builder = aws_smithy_client::hyper_ext::Adapter::builder()
-                .connector_settings(settings.clone());
-            if let Some(sleep) = sleep {
-                builder = builder.sleep_impl(sleep);
-            };
-            Some(DynConnector::new(builder.build(connector.clone())))
-        };
-        ProviderConfig {
-            connector: HttpConnector::ConnectorFn(Arc::new(connector_fn)),
+            http_client: Some(http_client.into_shared()),
             ..self
         }
     }
 
     /// Override the sleep implementation for this configuration
-    pub fn with_sleep(self, sleep: impl AsyncSleep + 'static) -> Self {
+    pub fn with_sleep_impl(self, sleep_impl: impl AsyncSleep + 'static) -> Self {
         ProviderConfig {
-            sleep: Some(SharedAsyncSleep::new(sleep)),
+            sleep_impl: Some(sleep_impl.into_shared()),
             ..self
         }
     }

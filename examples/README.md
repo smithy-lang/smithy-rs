@@ -14,8 +14,8 @@ These servers, and their clients, are generated using smithy-rs. You're invited
 to benchmark the performance of these servers to see whether smithy-rs might be
 a suitable choice for implementing your web service.
 
-[middleware]: https://awslabs.github.io/smithy-rs/design/server/middleware.html
-[extractors]: https://awslabs.github.io/smithy-rs/design/server/from_parts.html
+[middleware]: https://smithy-lang.github.io/smithy-rs/design/server/middleware.html
+[extractors]: https://smithy-lang.github.io/smithy-rs/design/server/from_parts.html
 
 
 ## Pre-requisites

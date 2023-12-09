@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_dynamodb::config::{Credentials, Region};
+use aws_sdk_dynamodb::config::{Credentials, Region, StalledStreamProtectionConfig};
+use aws_smithy_runtime::client::http::test_util::capture_request;
 use http::Uri;
 
 /// Iterative test of loading clients from shared configuration
@@ -11,11 +12,12 @@ use http::Uri;
 async fn shared_config_testbed() {
     let shared_config = aws_types::SdkConfig::builder()
         .region(Region::new("us-east-4"))
+        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .build();
-    let (conn, request) = aws_smithy_client::test_connection::capture_request(None);
+    let (http_client, request) = capture_request(None);
     let conf = aws_sdk_dynamodb::config::Builder::from(&shared_config)
         .credentials_provider(Credentials::for_tests())
-        .http_connector(conn)
+        .http_client(http_client)
         .endpoint_url("http://localhost:8000")
         .build();
     let svc = aws_sdk_dynamodb::Client::from_conf(conf);

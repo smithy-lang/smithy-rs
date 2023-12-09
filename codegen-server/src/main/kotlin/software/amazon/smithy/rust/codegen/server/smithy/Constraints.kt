@@ -88,7 +88,7 @@ val supportedCollectionConstraintTraits = setOf(
  */
 fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when (this) {
     is StructureShape -> {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
         //  The only reason why the functions in this file have
         //  to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
         //  `required`, so we can't use `member.isOptional` here.
@@ -111,7 +111,7 @@ fun Shape.isTransitivelyButNotDirectlyConstrained(model: Model, symbolProvider: 
 
 fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
     if (this is MemberShape) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not implemented
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Constraint traits on member shapes are not implemented
         //  yet. Also, note that a walker over a member shape can, perhaps counterintuitively, reach the _containing_ shape,
         //  so we can't simply delegate to the `else` branch when we implement them.
         this.targetCanReachConstrainedShape(model, symbolProvider)

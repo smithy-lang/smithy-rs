@@ -5,13 +5,18 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.CsvSource
+import software.amazon.smithy.model.knowledge.NullableIndex
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.EnumGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.TestEnumType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpTraitHttpBindingResolver
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolContentTypes
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -103,10 +108,17 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         }
     """.asSmithyModel()
 
-    @Test
-    fun `generates valid serializers`() {
+    @ParameterizedTest
+    @CsvSource(
+        "CLIENT",
+        "CLIENT_CAREFUL",
+        "CLIENT_ZERO_VALUE_V1",
+        "CLIENT_ZERO_VALUE_V1_NO_INPUT",
+        "SERVER",
+    )
+    fun `generates valid serializers`(nullabilityCheckMode: NullableIndex.CheckMode) {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
-        val codegenContext = testCodegenContext(model)
+        val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
         val parserGenerator = XmlBindingTraitSerializerGenerator(
             codegenContext,
@@ -120,14 +132,14 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                 "serialize_xml",
                 """
                 use test_model::Top;
-                let inp = crate::test_input::OpInput::builder().payload(
+                let input = crate::test_input::OpInput::builder().payload(
                    Top::builder()
                        .field("hello!")
                        .extra(45)
                        .recursive(Top::builder().extra(55).build())
                        .build()
                 ).build().unwrap();
-                let serialized = ${format(operationSerializer)}(&inp.payload.unwrap()).unwrap();
+                let serialized = ${format(operationSerializer)}(&input.payload.unwrap()).unwrap();
                 let output = std::str::from_utf8(&serialized).unwrap();
                 assert_eq!(output, "<Top extra=\"45\"><field>hello!</field><recursive extra=\"55\"></recursive></Top>");
                 """,
@@ -142,6 +154,163 @@ internal class XmlBindingTraitSerializerGeneratorTest {
                         .build()
                 ).build().unwrap();
                 ${format(operationSerializer)}(&input.payload.unwrap()).expect_err("cannot serialize unknown variant");
+                """,
+            )
+        }
+        model.lookup<StructureShape>("test#Top").also { top ->
+            top.renderWithModelBuilder(model, symbolProvider, project)
+            project.moduleFor(top) {
+                UnionGenerator(model, symbolProvider, this, model.lookup("test#Choice")).render()
+                val enum = model.lookup<StringShape>("test#FooEnum")
+                EnumGenerator(model, symbolProvider, enum, TestEnumType).render(this)
+            }
+        }
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    private val baseModelWithRequiredTypes = """
+        namespace test
+        use aws.protocols#restXml
+        union Choice {
+            boolean: Boolean,
+            @xmlFlattened
+            @xmlName("Hi")
+            flatMap: MyMap,
+            deepMap: MyMap,
+            @xmlFlattened
+            flatList: SomeList,
+            deepList: SomeList,
+            s: String,
+            enum: FooEnum,
+            date: Timestamp,
+            number: Double,
+            top: Top,
+            blob: Blob,
+            unit: Unit,
+        }
+
+        @enum([{name: "FOO", value: "FOO"}])
+        string FooEnum
+
+        map MyMap {
+            @xmlName("Name")
+            key: String,
+            @xmlName("Setting")
+            value: Choice,
+        }
+
+        list SomeList {
+            member: Choice
+        }
+
+
+        structure Top {
+            @required
+            choice: Choice,
+            @required
+            field: String,
+            @required
+            @xmlAttribute
+            extra: Long,
+            @xmlName("prefix:local")
+            renamedWithPrefix: String,
+            @xmlName("rec")
+            @xmlFlattened
+            recursive: TopList
+        }
+
+        list TopList {
+            member: Top
+        }
+
+        @input
+        structure OpInput {
+            @required
+            @httpPayload
+            payload: Top
+        }
+
+        @http(uri: "/top", method: "POST")
+        operation Op {
+            input: OpInput,
+        }
+    """.asSmithyModel()
+
+    @ParameterizedTest
+    @CsvSource(
+        "CLIENT",
+        "CLIENT_CAREFUL",
+        "CLIENT_ZERO_VALUE_V1",
+        "CLIENT_ZERO_VALUE_V1_NO_INPUT",
+        "SERVER",
+    )
+    fun `generates valid serializers for required types`(nullabilityCheckMode: NullableIndex.CheckMode) {
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModelWithRequiredTypes))
+        val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserGenerator = XmlBindingTraitSerializerGenerator(
+            codegenContext,
+            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
+        )
+        val operationSerializer = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
+
+        val project = TestWorkspace.testProject(symbolProvider)
+
+        // Depending on the nullability check mode, the builder can be fallible or not. When it's fallible, we need to
+        // add unwrap calls.
+        val builderIsFallible =
+            BuilderGenerator.hasFallibleBuilder(model.lookup<StructureShape>("test#Top"), symbolProvider)
+        val maybeUnwrap = if (builderIsFallible) { ".unwrap()" } else { "" }
+        val payloadIsOptional = model.lookup<MemberShape>("test#OpInput\$payload").let {
+            symbolProvider.toSymbol(it).isOptional()
+        }
+        val maybeUnwrapPayload = if (payloadIsOptional) { ".unwrap()" } else { "" }
+        project.lib {
+            unitTest(
+                "serialize_xml",
+                """
+                use test_model::{Choice, Top};
+
+                let input = crate::test_input::OpInput::builder()
+                    .payload(
+                        Top::builder()
+                            .field("Hello")
+                            .choice(Choice::Boolean(true))
+                            .extra(45)
+                            .recursive(
+                                Top::builder()
+                                    .field("World!")
+                                    .choice(Choice::Boolean(true))
+                                    .extra(55)
+                                    .build()
+                                    $maybeUnwrap
+                            )
+                            .build()
+                            $maybeUnwrap
+                    )
+                    .build()
+                    .unwrap();
+                let serialized = ${format(operationSerializer)}(&input.payload$maybeUnwrapPayload).unwrap();
+                let output = std::str::from_utf8(&serialized).unwrap();
+                assert_eq!(output, "<Top extra=\"45\"><choice><boolean>true</boolean></choice><field>Hello</field><rec extra=\"55\"><choice><boolean>true</boolean></choice><field>World!</field></rec></Top>");
+                """,
+            )
+            unitTest(
+                "unknown_variants",
+                """
+                use test_model::{Choice, Top};
+                let input = crate::test_input::OpInput::builder().payload(
+                    Top::builder()
+                        .field("Hello")
+                        .choice(Choice::Unknown)
+                        .extra(45)
+                        .build()
+                        $maybeUnwrap
+                ).build().unwrap();
+                ${format(operationSerializer)}(&input.payload$maybeUnwrapPayload).expect_err("cannot serialize unknown variant");
                 """,
             )
         }

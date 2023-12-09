@@ -5,23 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
-import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.traits.OptionalAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.noAuthSchemeShapeId
-import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthOption
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
-import java.util.logging.Logger
 
 /**
  * Generates operation-level runtime plugins
@@ -29,25 +21,26 @@ import java.util.logging.Logger
 class OperationRuntimePluginGenerator(
     private val codegenContext: ClientCodegenContext,
 ) {
-    private val logger: Logger = Logger.getLogger(javaClass.name)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
-            "AuthOptionResolverParams" to runtimeApi.resolve("client::auth::AuthOptionResolverParams"),
+            *preludeScope,
+            "AuthSchemeOptionResolverParams" to runtimeApi.resolve("client::auth::AuthSchemeOptionResolverParams"),
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
             "ConfigBag" to RuntimeType.configBag(codegenContext.runtimeConfig),
-            "ConfigBagAccessors" to RuntimeType.configBagAccessors(codegenContext.runtimeConfig),
-            "DynAuthOptionResolver" to runtimeApi.resolve("client::auth::DynAuthOptionResolver"),
-            "DynResponseDeserializer" to runtimeApi.resolve("client::orchestrator::DynResponseDeserializer"),
+            "Cow" to RuntimeType.Cow,
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+            "IntoShared" to runtimeApi.resolve("shared::IntoShared"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
             "RetryClassifiers" to runtimeApi.resolve("client::retries::RetryClassifiers"),
-            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
-            "SharedRequestSerializer" to runtimeApi.resolve("client::orchestrator::SharedRequestSerializer"),
-            "StaticAuthOptionResolver" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
-            "StaticAuthOptionResolverParams" to runtimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolverParams"),
+            "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(codegenContext.runtimeConfig),
+            "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+            "SharedAuthSchemeOptionResolver" to runtimeApi.resolve("client::auth::SharedAuthSchemeOptionResolver"),
+            "SharedRequestSerializer" to runtimeApi.resolve("client::ser_de::SharedRequestSerializer"),
+            "SharedResponseDeserializer" to runtimeApi.resolve("client::ser_de::SharedResponseDeserializer"),
+            "StaticAuthSchemeOptionResolver" to runtimeApi.resolve("client::auth::static_resolver::StaticAuthSchemeOptionResolver"),
+            "StaticAuthSchemeOptionResolverParams" to runtimeApi.resolve("client::auth::static_resolver::StaticAuthSchemeOptionResolverParams"),
         )
     }
 
@@ -55,35 +48,33 @@ class OperationRuntimePluginGenerator(
         writer: RustWriter,
         operationShape: OperationShape,
         operationStructName: String,
-        authOptions: List<AuthOption>,
         customizations: List<OperationCustomization>,
     ) {
+        val layerName = operationShape.id.name.dq()
         writer.rustTemplate(
             """
             impl #{RuntimePlugin} for $operationStructName {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    let mut cfg = #{Layer}::new(${operationShape.id.name.dq()});
-                    use #{ConfigBagAccessors} as _;
+                    let mut cfg = #{Layer}::new($layerName);
 
-                    cfg.set_request_serializer(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
-                    cfg.set_response_deserializer(#{DynResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
-
-                    // Retry classifiers are operation-specific because they need to downcast operation-specific error types.
-                    let retry_classifiers = #{RetryClassifiers}::new()
-                        #{retry_classifier_customizations};
-                    cfg.set_retry_classifiers(retry_classifiers);
+                    cfg.store_put(#{SharedRequestSerializer}::new(${operationStructName}RequestSerializer));
+                    cfg.store_put(#{SharedResponseDeserializer}::new(${operationStructName}ResponseDeserializer));
 
                     ${"" /* TODO(IdentityAndAuth): Resolve auth parameters from input for services that need this */}
-                    cfg.set_auth_option_resolver_params(#{AuthOptionResolverParams}::new(#{StaticAuthOptionResolverParams}::new()));
+                    cfg.store_put(#{AuthSchemeOptionResolverParams}::new(#{StaticAuthSchemeOptionResolverParams}::new()));
 
-                    #{auth_options}
                     #{additional_config}
 
-                    Some(cfg.freeze())
+                    #{Some}(cfg.freeze())
                 }
 
-                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
-                    #{interceptors}
+                fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                    ##[allow(unused_mut)]
+                    let mut rcb = #{RuntimeComponentsBuilder}::new($layerName)
+                            #{interceptors}
+                            #{retry_classifiers};
+
+                    #{Cow}::Owned(rcb)
                 }
             }
 
@@ -91,7 +82,6 @@ class OperationRuntimePluginGenerator(
             """,
             *codegenScope,
             *preludeScope,
-            "auth_options" to generateAuthOptions(operationShape, authOptions),
             "additional_config" to writable {
                 writeCustomizations(
                     customizations,
@@ -100,12 +90,6 @@ class OperationRuntimePluginGenerator(
                         newLayerName = "cfg",
                         operationShape,
                     ),
-                )
-            },
-            "retry_classifier_customizations" to writable {
-                writeCustomizations(
-                    customizations,
-                    OperationSection.RetryClassifier(customizations, "cfg", operationShape),
                 )
             },
             "runtime_plugin_supporting_types" to writable {
@@ -117,49 +101,15 @@ class OperationRuntimePluginGenerator(
             "interceptors" to writable {
                 writeCustomizations(
                     customizations,
-                    OperationSection.AdditionalInterceptors(customizations, "_interceptors", operationShape),
+                    OperationSection.AdditionalInterceptors(customizations, operationShape),
+                )
+            },
+            "retry_classifiers" to writable {
+                writeCustomizations(
+                    customizations,
+                    OperationSection.RetryClassifiers(customizations, operationShape),
                 )
             },
         )
-    }
-
-    private fun generateAuthOptions(
-        operationShape: OperationShape,
-        authOptions: List<AuthOption>,
-    ): Writable = writable {
-        if (authOptions.any { it is AuthOption.CustomResolver }) {
-            throw IllegalStateException("AuthOption.CustomResolver is unimplemented")
-        } else {
-            val authOptionsMap = authOptions.associate {
-                val option = it as AuthOption.StaticAuthOption
-                option.schemeShapeId to option
-            }
-            withBlockTemplate(
-                "cfg.set_auth_option_resolver(#{DynAuthOptionResolver}::new(#{StaticAuthOptionResolver}::new(vec![",
-                "])));",
-                *codegenScope,
-            ) {
-                var noSupportedAuthSchemes = true
-                val authSchemes = ServiceIndex.of(codegenContext.model)
-                    .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
-                for (schemeShapeId in authSchemes.keys) {
-                    val authOption = authOptionsMap[schemeShapeId]
-                    if (authOption != null) {
-                        authOption.constructor(this)
-                        noSupportedAuthSchemes = false
-                    } else {
-                        logger.warning(
-                            "No auth scheme implementation available for $schemeShapeId. " +
-                                "The generated client will not attempt to use this auth scheme.",
-                        )
-                    }
-                }
-                if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
-                    val authOption = authOptionsMap[noAuthSchemeShapeId]
-                        ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")
-                    authOption.constructor(this)
-                }
-            }
-        }
     }
 }

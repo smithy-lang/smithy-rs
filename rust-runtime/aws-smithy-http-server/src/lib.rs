@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -16,6 +19,7 @@ pub mod body;
 pub(crate) mod error;
 pub mod extension;
 pub mod instrumentation;
+pub mod layer;
 pub mod operation;
 pub mod plugin;
 #[doc(hidden)]

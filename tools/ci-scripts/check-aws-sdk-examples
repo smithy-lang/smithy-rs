@@ -13,6 +13,7 @@ cd aws-sdk/examples
 for example in *; do
     echo -e "${C_YELLOW}Checking examples/${example}...${C_RESET}"
     pushd "${example}" &>/dev/null
-    cargo check && cargo clean
+    RUSTFLAGS="" cargo check
+    cargo clean
     popd &>/dev/null
 done

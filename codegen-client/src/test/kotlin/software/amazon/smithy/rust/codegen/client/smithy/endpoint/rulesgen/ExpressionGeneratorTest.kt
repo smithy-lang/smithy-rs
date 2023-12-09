@@ -9,12 +9,12 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.BooleanNode
 import software.amazon.smithy.model.node.Node
-import software.amazon.smithy.rulesengine.language.stdlib.BooleanEquals
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
-import software.amazon.smithy.rulesengine.language.syntax.expr.Expression
-import software.amazon.smithy.rulesengine.language.syntax.expr.Literal
-import software.amazon.smithy.rulesengine.language.syntax.expr.Template
-import software.amazon.smithy.rulesengine.language.syntax.fn.LibraryFunction
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Template
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.BooleanEquals
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.StringEquals
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.FunctionRegistry
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -26,25 +26,13 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 internal class ExprGeneratorTest {
-    /**
-     * This works around a bug in smithy-endpoint-rules where the constructors on functions like `BooleanEquals`
-     * hit the wrong branch in the visitor (but when they get parsed, they hit the right branch).
-     */
-    fun Expression.shoop() = Expression.fromNode(this.toNode())
     private val testContext = Context(FunctionRegistry(listOf()), TestRuntimeConfig)
 
     @Test
-    fun `fail when smithy is fixed`() {
-        check(BooleanEquals.ofExpressions(Expression.of(true), Expression.of(true)) is LibraryFunction) {
-            "smithy has been fixed, shoop can be removed"
-        }
-    }
-
-    @Test
     fun generateExprs() {
-        val boolEq = Expression.of(true).equal(true).shoop()
-        val strEq = Expression.of("helloworld").equal("goodbyeworld").not().shoop()
-        val combined = BooleanEquals.ofExpressions(boolEq, strEq).shoop()
+        val boolEq = BooleanEquals.ofExpressions(Expression.of(true), Expression.of(true))
+        val strEq = StringEquals.ofExpressions(Expression.of("helloworld"), Expression.of("goodbyeworld")).not()
+        val combined = BooleanEquals.ofExpressions(boolEq, strEq)
         TestWorkspace.testProject().unitTest {
             val generator = ExpressionGenerator(Ownership.Borrowed, testContext)
             rust("assert_eq!(true, #W);", generator.generate(boolEq))
@@ -55,10 +43,10 @@ internal class ExprGeneratorTest {
 
     @Test
     fun generateLiterals1() {
-        val literal = Literal.record(
+        val literal = Literal.recordLiteral(
             mutableMapOf(
-                Identifier.of("this") to Literal.integer(5),
-                Identifier.of("that") to Literal.string(
+                Identifier.of("this") to Literal.integerLiteral(5),
+                Identifier.of("that") to Literal.stringLiteral(
                     Template.fromString("static"),
                 ),
             ),

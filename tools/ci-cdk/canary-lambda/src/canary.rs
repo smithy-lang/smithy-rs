@@ -50,6 +50,7 @@ pub fn get_canaries_to_run(
 
 pub struct CanaryEnv {
     pub(crate) s3_bucket_name: String,
+    pub(crate) s3_mrap_bucket_arn: String,
     pub(crate) expected_transcribe_result: String,
     #[allow(dead_code)]
     pub(crate) page_size: usize,
@@ -59,6 +60,7 @@ impl fmt::Debug for CanaryEnv {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CanaryEnv")
             .field("s3_bucket_name", &"*** redacted ***")
+            .field("s3_mrap_bucket_arn", &"*** redacted ***")
             .field(
                 "expected_transcribe_result",
                 &self.expected_transcribe_result,
@@ -72,13 +74,16 @@ impl CanaryEnv {
         // S3 bucket name to test against
         let s3_bucket_name =
             env::var("CANARY_S3_BUCKET_NAME").expect("CANARY_S3_BUCKET_NAME must be set");
+        // S3 MRAP bucket name to test against
+        let s3_mrap_bucket_arn =
+            env::var("CANARY_S3_MRAP_BUCKET_ARN").expect("CANARY_S3_MRAP_BUCKET_ARN must be set");
 
         // Expected transcription from Amazon Transcribe from the embedded audio file.
         // This is an environment variable so that the code doesn't need to be changed if
         // Amazon Transcribe starts returning different output for the same audio.
         let expected_transcribe_result = env::var("CANARY_EXPECTED_TRANSCRIBE_RESULT")
             .unwrap_or_else(|_| {
-                "Good day to you transcribe. This is Polly talking to you from the Rust ST K."
+                "Good day to you transcribe. This is Polly talking to you from the Rust S. D. K."
                     .to_string()
             });
 
@@ -89,6 +94,7 @@ impl CanaryEnv {
 
         Self {
             s3_bucket_name,
+            s3_mrap_bucket_arn,
             expected_transcribe_result,
             page_size,
         }

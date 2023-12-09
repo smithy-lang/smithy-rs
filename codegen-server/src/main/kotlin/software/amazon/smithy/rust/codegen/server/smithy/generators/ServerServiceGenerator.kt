@@ -33,6 +33,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output
 class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
+    private val isConfigBuilderFallible: Boolean,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -53,7 +54,6 @@ class ServerServiceGenerator(
     private val serviceId = service.id
     private val serviceName = serviceId.name.toPascalCase()
     private val builderName = "${serviceName}Builder"
-    private val builderBodyGenericTypeName = "Body"
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)
@@ -108,6 +108,11 @@ class ServerServiceGenerator(
             val docHandler = DocHandlerGenerator(codegenContext, operationShape, "handler", "///")
             val handler = docHandler.docSignature()
             val handlerFixed = docHandler.docFixedSignature()
+            val unwrapConfigBuilder = if (isConfigBuilderFallible) {
+                ".expect(\"config failed to build\")"
+            } else {
+                ""
+            }
             rustTemplate(
                 """
                 /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -118,49 +123,50 @@ class ServerServiceGenerator(
                 /// ## Example
                 ///
                 /// ```no_run
-                /// use $crateName::$serviceName;
+                /// use $crateName::{$serviceName, ${serviceName}Config};
                 ///
                 #{HandlerImports:W}
                 ///
                 #{Handler:W}
                 ///
-                /// let app = $serviceName::builder_without_plugins()
+                /// let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
+                /// let app = $serviceName::builder(config)
                 ///     .$fieldName(handler)
                 ///     /* Set other handlers */
                 ///     .build()
                 ///     .unwrap();
-                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
                 /// ```
                 ///
                 pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
                 where
                     HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
 
-                    ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        $serviceName,
+                    ModelPl: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
                         crate::operation_shape::$structName,
                         #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
                     >,
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                        $serviceName,
+                        $serviceName<L>,
                         crate::operation_shape::$structName,
-                        ModelPlugin::Output
+                        ModelPl::Output
                     >,
-                    HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        $serviceName,
+                    HttpPl: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
                         crate::operation_shape::$structName,
                         <
                             #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
                             as #{SmithyHttpServer}::plugin::Plugin<
-                                $serviceName,
+                                $serviceName<L>,
                                 crate::operation_shape::$structName,
-                                ModelPlugin::Output
+                                ModelPl::Output
                             >
                         >::Output
                     >,
 
-                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -180,50 +186,51 @@ class ServerServiceGenerator(
                 /// ## Example
                 ///
                 /// ```no_run
-                /// use $crateName::$serviceName;
+                /// use $crateName::{$serviceName, ${serviceName}Config};
                 ///
                 #{HandlerImports:W}
                 ///
                 #{HandlerFixed:W}
                 ///
+                /// let config = ${serviceName}Config::builder().build()$unwrapConfigBuilder;
                 /// let svc = #{Tower}::util::service_fn(handler);
-                /// let app = $serviceName::builder_without_plugins()
+                /// let app = $serviceName::builder(config)
                 ///     .${fieldName}_service(svc)
                 ///     /* Set other handlers */
                 ///     .build()
                 ///     .unwrap();
-                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::Route<#{SmithyHttp}::body::SdkBody>> = app;
+                /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
                 /// ```
                 ///
                 pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
                 where
                     S: #{SmithyHttpServer}::operation::OperationService<crate::operation_shape::$structName, ServiceExtractors>,
 
-                    ModelPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        $serviceName,
+                    ModelPl: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
                         crate::operation_shape::$structName,
                         #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
                     >,
                     #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                        $serviceName,
+                        $serviceName<L>,
                         crate::operation_shape::$structName,
-                        ModelPlugin::Output
+                        ModelPl::Output
                     >,
-                    HttpPlugin: #{SmithyHttpServer}::plugin::Plugin<
-                        $serviceName,
+                    HttpPl: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
                         crate::operation_shape::$structName,
                         <
                             #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
                             as #{SmithyHttpServer}::plugin::Plugin<
-                                $serviceName,
+                                $serviceName<L>,
                                 crate::operation_shape::$structName,
-                                ModelPlugin::Output
+                                ModelPl::Output
                             >
                         >::Output
                     >,
 
-                    HttpPlugin::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                    <HttpPlugin::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
 
                 {
                     use #{SmithyHttpServer}::operation::OperationShapeExt;
@@ -246,6 +253,7 @@ class ServerServiceGenerator(
                     self
                 }
                 """,
+                "Router" to protocol.routerType(),
                 "Protocol" to protocol.markerStruct(),
                 "Handler" to handler,
                 "HandlerFixed" to handlerFixed,
@@ -294,8 +302,18 @@ class ServerServiceGenerator(
             /// Forgetting to register a handler for one or more operations will result in an error.
             ///
             /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
-            /// unspecified route requested.
-            pub fn build(self) -> Result<$serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>, MissingOperationsError>
+            /// unspecified route is requested.
+            pub fn build(self) -> Result<
+                $serviceName<
+                    #{SmithyHttpServer}::routing::RoutingService<
+                        #{Router}<L::Service>,
+                        #{Protocol},
+                    >,
+                >,
+                MissingOperationsError,
+            >
+            where
+                L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
             {
                 let router = {
                     use #{SmithyHttpServer}::operation::OperationShape;
@@ -306,21 +324,22 @@ class ServerServiceGenerator(
                             operation_names2setter_methods: $missingOperationsVariableName,
                         });
                     }
-                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/awslabs/smithy-rs/issues";
+                    let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";
 
                     #{PatternInitializations:W}
 
                     #{Router}::from_iter([#{RoutesArrayElements:W}])
                 };
-                Ok($serviceName {
-                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
-                })
+                let svc = #{SmithyHttpServer}::routing::RoutingService::new(router);
+                let svc = svc.map(|s| s.layer(self.layer));
+                Ok($serviceName { svc })
             }
             """,
+            *codegenScope,
+            "Protocol" to protocol.markerStruct(),
             "Router" to protocol.routerType(),
             "NullabilityChecks" to nullabilityChecks,
             "RoutesArrayElements" to routesArrayElements,
-            "SmithyHttpServer" to smithyHttpServer,
             "PatternInitializations" to patternInitializations(),
         )
     }
@@ -376,34 +395,40 @@ class ServerServiceGenerator(
             ///
             /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
             /// not have a registered handler.
-            pub fn build_unchecked(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<$builderBodyGenericTypeName>>
+            pub fn build_unchecked(self) -> $serviceName<L::Service>
             where
-                $builderBodyGenericTypeName: Send + 'static
+                Body: Send + 'static,
+                L: #{Tower}::Layer<
+                    #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>
+                >
             {
                 let router = #{Router}::from_iter([#{Pairs:W}]);
-                $serviceName {
-                    router: #{SmithyHttpServer}::routing::RoutingService::new(router),
-                }
+                let svc = self
+                    .layer
+                    .layer(#{SmithyHttpServer}::routing::RoutingService::new(router));
+                $serviceName { svc }
             }
             """,
+            *codegenScope,
+            "Protocol" to protocol.markerStruct(),
             "Router" to protocol.routerType(),
             "Pairs" to pairs,
-            "SmithyHttpServer" to smithyHttpServer,
         )
     }
 
     /** Returns a `Writable` containing the builder struct definition and its implementations. */
     private fun builder(): Writable = writable {
-        val builderGenerics = listOf(builderBodyGenericTypeName, "HttpPlugin", "ModelPlugin").joinToString(", ")
+        val builderGenerics = listOf("Body", "L", "HttpPl", "ModelPl").joinToString(", ")
         rustTemplate(
             """
             /// The service builder for [`$serviceName`].
             ///
-            /// Constructed via [`$serviceName::builder_with_plugins`] or [`$serviceName::builder_without_plugins`].
+            /// Constructed via [`$serviceName::builder`].
             pub struct $builderName<$builderGenerics> {
                 ${builderFields.joinToString(", ")},
-                http_plugin: HttpPlugin,
-                model_plugin: ModelPlugin
+                layer: L,
+                http_plugin: HttpPl,
+                model_plugin: ModelPl
             }
 
             impl<$builderGenerics> $builderName<$builderGenerics> {
@@ -445,14 +470,14 @@ class ServerServiceGenerator(
     }
 
     /** Returns a `Writable` comma delimited sequence of `builder_field: None`. */
-    private val notSetFields = builderFieldNames.values.map {
+    private fun notSetFields(): Writable = builderFieldNames.values.map {
         writable {
             rustTemplate(
                 "$it: None",
                 *codegenScope,
             )
         }
-    }
+    }.join(", ")
 
     /** Returns a `Writable` containing the service struct definition and its implementations. */
     private fun serviceStruct(): Writable = writable {
@@ -463,21 +488,63 @@ class ServerServiceGenerator(
             ///
             /// See the [root](crate) documentation for more information.
             ##[derive(Clone)]
-            pub struct $serviceName<S = #{SmithyHttpServer}::routing::Route> {
-                router: #{SmithyHttpServer}::routing::RoutingService<#{Router}<S>, #{Protocol}>,
+            pub struct $serviceName<
+                S = #{SmithyHttpServer}::routing::RoutingService<
+                    #{Router}<
+                        #{SmithyHttpServer}::routing::Route<
+                            #{SmithyHttpServer}::body::BoxBody
+                        >,
+                    >,
+                    #{Protocol},
+                >
+            > {
+                // This is the router wrapped by layers.
+                svc: S,
             }
 
             impl $serviceName<()> {
+                /// Constructs a builder for [`$serviceName`].
+                /// You must specify a configuration object holding any plugins and layers that should be applied
+                /// to the operations in this service.
+                pub fn builder<
+                    Body,
+                    L,
+                    HttpPl: #{SmithyHttpServer}::plugin::HttpMarker,
+                    ModelPl: #{SmithyHttpServer}::plugin::ModelMarker,
+                >(
+                    config: ${serviceName}Config<L, HttpPl, ModelPl>,
+                ) -> $builderName<Body, L, HttpPl, ModelPl> {
+                    $builderName {
+                        #{NotSetFields1:W},
+                        layer: config.layers,
+                        http_plugin: config.http_plugins,
+                        model_plugin: config.model_plugins,
+                    }
+                }
+
                 /// Constructs a builder for [`$serviceName`].
                 /// You must specify what plugins should be applied to the operations in this service.
                 ///
                 /// Use [`$serviceName::builder_without_plugins`] if you don't need to apply plugins.
                 ///
-                /// Check out [`PluginPipeline`](#{SmithyHttpServer}::plugin::PluginPipeline) if you need to apply
+                /// Check out [`HttpPlugins`](#{SmithyHttpServer}::plugin::HttpPlugins) and
+                /// [`ModelPlugins`](#{SmithyHttpServer}::plugin::ModelPlugins) if you need to apply
                 /// multiple plugins.
-                pub fn builder_with_plugins<Body, HttpPlugin, ModelPlugin>(http_plugin: HttpPlugin, model_plugin: ModelPlugin) -> $builderName<Body, HttpPlugin, ModelPlugin> {
+                ##[deprecated(
+                    since = "0.57.0",
+                    note = "please use the `builder` constructor and register plugins on the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
+                )]
+                pub fn builder_with_plugins<
+                    Body,
+                    HttpPl: #{SmithyHttpServer}::plugin::HttpMarker,
+                    ModelPl: #{SmithyHttpServer}::plugin::ModelMarker
+                >(
+                    http_plugin: HttpPl,
+                    model_plugin: ModelPl
+                ) -> $builderName<Body, #{Tower}::layer::util::Identity, HttpPl, ModelPl> {
                     $builderName {
-                        #{NotSetFields:W},
+                        #{NotSetFields2:W},
+                        layer: #{Tower}::layer::util::Identity::new(),
                         http_plugin,
                         model_plugin
                     }
@@ -486,7 +553,16 @@ class ServerServiceGenerator(
                 /// Constructs a builder for [`$serviceName`].
                 ///
                 /// Use [`$serviceName::builder_with_plugins`] if you need to specify plugins.
-                pub fn builder_without_plugins<Body>() -> $builderName<Body, #{SmithyHttpServer}::plugin::IdentityPlugin, #{SmithyHttpServer}::plugin::IdentityPlugin> {
+                ##[deprecated(
+                    since = "0.57.0",
+                    note = "please use the `builder` constructor instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
+                )]
+                pub fn builder_without_plugins<Body>() -> $builderName<
+                    Body,
+                    #{Tower}::layer::util::Identity,
+                    #{SmithyHttpServer}::plugin::IdentityPlugin,
+                    #{SmithyHttpServer}::plugin::IdentityPlugin
+                > {
                     Self::builder_with_plugins(#{SmithyHttpServer}::plugin::IdentityPlugin, #{SmithyHttpServer}::plugin::IdentityPlugin)
                 }
             }
@@ -502,53 +578,85 @@ class ServerServiceGenerator(
                 pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
                     #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
                 }
+            }
 
+            impl<S>
+                $serviceName<
+                    #{SmithyHttpServer}::routing::RoutingService<
+                        #{Router}<S>,
+                        #{Protocol},
+                    >,
+                >
+            {
                 /// Applies a [`Layer`](#{Tower}::Layer) uniformly to all routes.
-                pub fn layer<L>(self, layer: &L) -> $serviceName<L::Service>
+                ##[deprecated(
+                    since = "0.57.0",
+                    note = "please add layers to the `${serviceName}Config` object instead; see https://github.com/smithy-lang/smithy-rs/discussions/3096"
+                )]
+                pub fn layer<L>(
+                    self,
+                    layer: &L,
+                ) -> $serviceName<
+                    #{SmithyHttpServer}::routing::RoutingService<
+                        #{Router}<L::Service>,
+                        #{Protocol},
+                    >,
+                >
                 where
-                    L: #{Tower}::Layer<S>
+                    L: #{Tower}::Layer<S>,
                 {
                     $serviceName {
-                        router: self.router.map(|s| s.layer(layer))
+                        svc: self.svc.map(|s| s.layer(layer)),
                     }
                 }
 
                 /// Applies [`Route::new`](#{SmithyHttpServer}::routing::Route::new) to all routes.
                 ///
-                /// This has the effect of erasing all types accumulated via [`layer`]($serviceName::layer).
-                pub fn boxed<B>(self) -> $serviceName<#{SmithyHttpServer}::routing::Route<B>>
+                /// This has the effect of erasing all types accumulated via layers.
+                pub fn boxed<B>(
+                    self,
+                ) -> $serviceName<
+                    #{SmithyHttpServer}::routing::RoutingService<
+                        #{Router}<
+                            #{SmithyHttpServer}::routing::Route<B>,
+                        >,
+                        #{Protocol},
+                    >,
+                >
                 where
                     S: #{Tower}::Service<
                         #{Http}::Request<B>,
                         Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>,
-                        Error = std::convert::Infallible>,
+                        Error = std::convert::Infallible,
+                    >,
                     S: Clone + Send + 'static,
                     S::Future: Send + 'static,
                 {
-                    self.layer(&#{Tower}::layer::layer_fn(#{SmithyHttpServer}::routing::Route::new))
+                    self.layer(&::tower::layer::layer_fn(
+                        #{SmithyHttpServer}::routing::Route::new,
+                    ))
                 }
             }
 
-            impl<B, RespB, S> #{Tower}::Service<#{Http}::Request<B>> for $serviceName<S>
+            impl<S, R> #{Tower}::Service<R> for $serviceName<S>
             where
-                S: #{Tower}::Service<#{Http}::Request<B>, Response = #{Http}::Response<RespB>> + Clone,
-                RespB: #{HttpBody}::Body<Data = #{Bytes}> + Send + 'static,
-                RespB::Error: Into<Box<dyn std::error::Error + Send + Sync>>
+                S: #{Tower}::Service<R>,
             {
-                type Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>;
+                type Response = S::Response;
                 type Error = S::Error;
-                type Future = #{SmithyHttpServer}::routing::RoutingFuture<S, B>;
+                type Future = S::Future;
 
                 fn poll_ready(&mut self, cx: &mut std::task::Context) -> std::task::Poll<Result<(), Self::Error>> {
-                    self.router.poll_ready(cx)
+                    self.svc.poll_ready(cx)
                 }
 
-                fn call(&mut self, request: #{Http}::Request<B>) -> Self::Future {
-                    self.router.call(request)
+                fn call(&mut self, request: R) -> Self::Future {
+                    self.svc.call(request)
                 }
             }
             """,
-            "NotSetFields" to notSetFields.join(", "),
+            "NotSetFields1" to notSetFields(),
+            "NotSetFields2" to notSetFields(),
             "Router" to protocol.routerType(),
             "Protocol" to protocol.markerStruct(),
             *codegenScope,
@@ -597,7 +705,7 @@ class ServerServiceGenerator(
         val version = codegenContext.serviceShape.version?.let { "Some(\"$it\")" } ?: "None"
         rustTemplate(
             """
-            impl #{SmithyHttpServer}::service::ServiceShape for $serviceName {
+            impl<S> #{SmithyHttpServer}::service::ServiceShape for $serviceName<S> {
                 const ID: #{SmithyHttpServer}::shape_id::ShapeId = #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "$namespace", "$name");
 
                 const VERSION: Option<&'static str> = $version;
@@ -650,7 +758,9 @@ class ServerServiceGenerator(
         for ((_, value) in operationStructNames) {
             rustTemplate(
                 """
-                impl #{SmithyHttpServer}::service::ContainsOperation<crate::operation_shape::$value> for $serviceName {
+                impl<L> #{SmithyHttpServer}::service::ContainsOperation<crate::operation_shape::$value>
+                    for $serviceName<L>
+                {
                     const VALUE: Operation = Operation::$value;
                 }
                 """,

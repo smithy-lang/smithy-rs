@@ -184,4 +184,4 @@ Changes Checklist
 - [ ] Codegen `classify_result()` functions based on JMESPath expressions in Smithy model
 
 [Smithy waiter specification]: https://awslabs.github.io/smithy/1.0/spec/waiters.html
-[default `RetryHandler` uses in `aws-smithy-client`]: https://github.com/awslabs/smithy-rs/blob/main/rust-runtime/aws-smithy-client/src/retry.rs#L252-L292
+[default `RetryHandler` uses in `aws-smithy-client`]: https://github.com/smithy-lang/smithy-rs/blob/main/rust-runtime/aws-smithy-client/src/retry.rs#L252-L292

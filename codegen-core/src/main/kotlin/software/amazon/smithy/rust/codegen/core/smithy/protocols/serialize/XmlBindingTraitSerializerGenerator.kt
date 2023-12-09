@@ -35,6 +35,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
@@ -176,8 +177,8 @@ class XmlBindingTraitSerializerGenerator(
         }
     }
 
-    override fun unsetStructure(structure: StructureShape): RuntimeType {
-        return ProtocolFunctions.crossOperationFn("rest_xml_unset_payload") { fnName ->
+    override fun unsetStructure(structure: StructureShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("rest_xml_unset_struct_payload") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -187,7 +188,15 @@ class XmlBindingTraitSerializerGenerator(
                 "ByteSlab" to RuntimeType.ByteSlab,
             )
         }
-    }
+
+    override fun unsetUnion(union: UnionShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("rest_xml_unset_union_payload") { fnName ->
+            rustTemplate(
+                "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
+                *preludeScope,
+                "ByteSlab" to RuntimeType.ByteSlab,
+            )
+        }
 
     override fun operationOutputSerializer(operationShape: OperationShape): RuntimeType? {
         val outputShape = operationShape.outputShape(model)

@@ -5,16 +5,15 @@
 
 //! Error types for [`ImdsClient`](crate::imds::client::Client)
 
-use aws_smithy_client::SdkError;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::endpoint::error::InvalidEndpointError;
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+use aws_smithy_runtime_api::client::result::SdkError;
 use std::error::Error;
 use std::fmt;
 
 /// Error context for [`ImdsError::FailedToLoadToken`]
 #[derive(Debug)]
 pub struct FailedToLoadToken {
-    source: SdkError<TokenError>,
+    source: SdkError<TokenError, HttpResponse>,
 }
 
 impl FailedToLoadToken {
@@ -23,7 +22,7 @@ impl FailedToLoadToken {
         matches!(self.source, SdkError::DispatchFailure(_))
     }
 
-    pub(crate) fn into_source(self) -> SdkError<TokenError> {
+    pub(crate) fn into_source(self) -> SdkError<TokenError, HttpResponse> {
         self.source
     }
 }
@@ -31,12 +30,12 @@ impl FailedToLoadToken {
 /// Error context for [`ImdsError::ErrorResponse`]
 #[derive(Debug)]
 pub struct ErrorResponse {
-    raw: http::Response<SdkBody>,
+    raw: HttpResponse,
 }
 
 impl ErrorResponse {
     /// Returns the raw response from IMDS
-    pub fn response(&self) -> &http::Response<SdkBody> {
+    pub fn response(&self) -> &HttpResponse {
         &self.raw
     }
 }
@@ -76,11 +75,11 @@ pub enum ImdsError {
 }
 
 impl ImdsError {
-    pub(super) fn failed_to_load_token(source: SdkError<TokenError>) -> Self {
+    pub(super) fn failed_to_load_token(source: SdkError<TokenError, HttpResponse>) -> Self {
         Self::FailedToLoadToken(FailedToLoadToken { source })
     }
 
-    pub(super) fn error_response(raw: http::Response<SdkBody>) -> Self {
+    pub(super) fn error_response(raw: HttpResponse) -> Self {
         Self::ErrorResponse(ErrorResponse { raw })
     }
 
@@ -220,14 +219,6 @@ impl Error for BuildError {
         match &self.kind {
             InvalidEndpointMode(e) => Some(e),
             InvalidEndpointUri(e) => Some(e.as_ref()),
-        }
-    }
-}
-
-impl From<InvalidEndpointError> for BuildError {
-    fn from(err: InvalidEndpointError) -> Self {
-        Self {
-            kind: BuildErrorKind::InvalidEndpointUri(err.into()),
         }
     }
 }

@@ -10,9 +10,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 
 sealed class CustomizableOperationSection(name: String) : Section(name) {
     /** Write custom code into a customizable operation's impl block */
-    data class CustomizableOperationImpl(
-        val isRuntimeModeOrchestrator: Boolean,
-    ) : CustomizableOperationSection("CustomizableOperationImpl")
+    object CustomizableOperationImpl : CustomizableOperationSection("CustomizableOperationImpl")
 }
 
 abstract class CustomizableOperationCustomization : NamedCustomization<CustomizableOperationSection>()

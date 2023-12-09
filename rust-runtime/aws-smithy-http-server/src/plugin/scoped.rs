@@ -5,7 +5,7 @@
 
 use std::marker::PhantomData;
 
-use super::Plugin;
+use super::{HttpMarker, ModelMarker, Plugin};
 
 /// Marker struct for `true`.
 ///
@@ -102,12 +102,15 @@ where
     }
 }
 
+impl<Scope, Pl> HttpMarker for Scoped<Scope, Pl> where Pl: HttpMarker {}
+impl<Scope, Pl> ModelMarker for Scoped<Scope, Pl> where Pl: ModelMarker {}
+
 /// A macro to help with scoping [plugins](crate::plugin) to a subset of all operations.
 ///
 /// The scope must partition _all_ operations, that is, each and every operation must be included or excluded, but not
 /// both.
 ///
-/// The generated server SDK exports a similar `scope` macro which is aware of a services operations and can complete
+/// The generated server SDK exports a similar `scope` macro which is aware of a service's operations and can complete
 /// underspecified scopes automatically.
 ///
 /// # Example

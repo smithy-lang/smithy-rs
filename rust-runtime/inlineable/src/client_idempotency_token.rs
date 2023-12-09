@@ -3,21 +3,25 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::idempotency_token::IdempotencyTokenProvider;
+use std::borrow::Cow;
+use std::fmt;
+
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, Input,
 };
-use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorRegistrar, SharedInterceptor,
+use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::config_bag::ConfigBag;
-use std::fmt;
+
+use crate::idempotency_token::IdempotencyTokenProvider;
 
 #[derive(Debug)]
 pub(crate) struct IdempotencyTokenRuntimePlugin {
-    interceptor: SharedInterceptor,
+    runtime_components: RuntimeComponentsBuilder,
 }
 
 impl IdempotencyTokenRuntimePlugin {
@@ -26,14 +30,20 @@ impl IdempotencyTokenRuntimePlugin {
         S: Fn(IdempotencyTokenProvider, &mut Input) + Send + Sync + 'static,
     {
         Self {
-            interceptor: SharedInterceptor::new(IdempotencyTokenInterceptor { set_token }),
+            runtime_components: RuntimeComponentsBuilder::new("IdempotencyTokenRuntimePlugin")
+                .with_interceptor(SharedInterceptor::new(IdempotencyTokenInterceptor {
+                    set_token,
+                })),
         }
     }
 }
 
 impl RuntimePlugin for IdempotencyTokenRuntimePlugin {
-    fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-        interceptors.register(self.interceptor.clone());
+    fn runtime_components(
+        &self,
+        _: &RuntimeComponentsBuilder,
+    ) -> Cow<'_, RuntimeComponentsBuilder> {
+        Cow::Borrowed(&self.runtime_components)
     }
 }
 
@@ -47,13 +57,18 @@ impl<S> fmt::Debug for IdempotencyTokenInterceptor<S> {
     }
 }
 
-impl<S> Interceptor for IdempotencyTokenInterceptor<S>
+impl<S> Intercept for IdempotencyTokenInterceptor<S>
 where
     S: Fn(IdempotencyTokenProvider, &mut Input) + Send + Sync,
 {
+    fn name(&self) -> &'static str {
+        "IdempotencyTokenInterceptor"
+    }
+
     fn modify_before_serialization(
         &self,
         context: &mut BeforeSerializationInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let token_provider = cfg

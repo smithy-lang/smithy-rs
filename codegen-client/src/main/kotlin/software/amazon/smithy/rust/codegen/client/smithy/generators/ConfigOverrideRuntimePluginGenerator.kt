@@ -19,16 +19,18 @@ class ConfigOverrideRuntimePluginGenerator(
 ) {
     private val moduleUseName = codegenContext.moduleUseName()
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         arrayOf(
             *RuntimeType.preludeScope,
+            "Cow" to RuntimeType.Cow,
             "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
-            "ConfigBagAccessors" to runtimeApi.resolve("client::config_bag_accessors::ConfigBagAccessors"),
             "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
             "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
             "Layer" to smithyTypes.resolve("config_bag::Layer"),
-            "RuntimePlugin" to runtimeApi.resolve("client::runtime_plugin::RuntimePlugin"),
+            "Resolver" to RuntimeType.smithyRuntime(rc).resolve("client::config_override::Resolver"),
+            "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
+            "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
         )
     }
 
@@ -41,31 +43,42 @@ class ConfigOverrideRuntimePluginGenerator(
             /// In the case of default values requested, they will be obtained from `client_config`.
             ##[derive(Debug)]
             pub(crate) struct ConfigOverrideRuntimePlugin {
-                pub(crate) config_override: Builder,
-                pub(crate) client_config: #{FrozenLayer},
+                pub(crate) config: #{FrozenLayer},
+                pub(crate) components: #{RuntimeComponentsBuilder},
+            }
+
+            impl ConfigOverrideRuntimePlugin {
+                ##[allow(dead_code)] // unused when a service does not provide any operations
+                pub(crate) fn new(
+                    config_override: Builder,
+                    initial_config: #{FrozenLayer},
+                    initial_components: &#{RuntimeComponentsBuilder}
+                ) -> Self {
+                    let mut layer = config_override.config;
+                    let mut components = config_override.runtime_components;
+                    ##[allow(unused_mut)]
+                    let mut resolver = #{Resolver}::overrid(initial_config, initial_components, &mut layer, &mut components);
+
+                    #{config}
+
+                    let _ = resolver;
+                    Self {
+                        config: #{Layer}::from(layer)
+                            .with_name("$moduleUseName::config::ConfigOverrideRuntimePlugin").freeze(),
+                        components,
+                    }
+                }
             }
 
             impl #{RuntimePlugin} for ConfigOverrideRuntimePlugin {
                 fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                    use #{ConfigBagAccessors};
-
-                    ##[allow(unused_mut)]
-                    let layer: #{Layer} = self
-                        .config_override
-                        .inner
-                        .clone()
-                        .into();
-                    let mut layer = layer.with_name("$moduleUseName::config::ConfigOverrideRuntimePlugin");
-                    #{config}
-
-                    #{Some}(layer.freeze())
+                    Some(self.config.clone())
                 }
 
-                fn interceptors(&self, _interceptors: &mut #{InterceptorRegistrar}) {
-                    #{interceptors}
+                fn runtime_components(&self, _: &#{RuntimeComponentsBuilder}) -> #{Cow}<'_, #{RuntimeComponentsBuilder}> {
+                    #{Cow}::Borrowed(&self.components)
                 }
             }
-
             """,
             *codegenScope,
             "config" to writable {
@@ -73,9 +86,6 @@ class ConfigOverrideRuntimePluginGenerator(
                     customizations,
                     ServiceConfig.OperationConfigOverride("layer"),
                 )
-            },
-            "interceptors" to writable {
-                writeCustomizations(customizations, ServiceConfig.RuntimePluginInterceptors("_interceptors", "self.config_override"))
             },
         )
     }

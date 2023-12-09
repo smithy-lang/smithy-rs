@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 //! Protocol-agnostic types for smithy-rs.
 
 #![allow(clippy::derive_partial_eq_without_eq)]
@@ -13,34 +16,29 @@
     rust_2018_idioms,
     unreachable_pub
 )]
+
 pub mod base64;
-//TODO(enableNewSmithyRuntimeLaunch): Unhide this module when switching to the orchestrator
-#[doc(hidden)]
+pub mod body;
+pub mod byte_stream;
 /// A typemap for storing configuration.
 pub mod config_bag;
 pub mod date_time;
 pub mod endpoint;
 pub mod error;
+pub mod event_stream;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;
 
-//TODO(enableNewSmithyRuntimeLaunch): Unhide this module when switching to the orchestrator
-#[doc(hidden)]
 /// Utilities for type erasure.
 pub mod type_erasure;
 
 mod blob;
 mod document;
 mod number;
+pub mod str_bytes;
 
 pub use blob::Blob;
 pub use date_time::DateTime;
 pub use document::Document;
-// TODO(deprecated): Remove deprecated re-export
-/// Use [error::ErrorMetadata] instead.
-#[deprecated(
-    note = "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`"
-)]
-pub use error::ErrorMetadata as Error;
 pub use number::Number;

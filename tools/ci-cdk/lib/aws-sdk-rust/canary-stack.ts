@@ -10,7 +10,12 @@ import {
     Role,
     ServicePrincipal,
 } from "aws-cdk-lib/aws-iam";
-import { BlockPublicAccess, Bucket, BucketEncryption } from "aws-cdk-lib/aws-s3";
+import {
+    BlockPublicAccess,
+    Bucket,
+    BucketEncryption,
+    CfnMultiRegionAccessPoint,
+} from "aws-cdk-lib/aws-s3";
 import { StackProps, Stack, Tags, RemovalPolicy, Duration, CfnOutput } from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { GitHubOidcRole } from "../constructs/github-oidc-role";
@@ -24,10 +29,12 @@ export class CanaryStack extends Stack {
     public readonly lambdaExecutionRole: Role;
     public readonly canaryCodeBucket: Bucket;
     public readonly canaryTestBucket: Bucket;
+    public readonly canaryTestMrap: CfnMultiRegionAccessPoint;
 
     public readonly lambdaExecutionRoleArn: CfnOutput;
     public readonly canaryCodeBucketName: CfnOutput;
     public readonly canaryTestBucketName: CfnOutput;
+    public readonly canaryTestMrapBucketArn: CfnOutput;
 
     constructor(scope: Construct, id: string, props: Properties) {
         super(scope, id, props);
@@ -118,6 +125,24 @@ export class CanaryStack extends Stack {
             exportName: "canaryTestBucket",
         });
 
+        // Create a MultiRegionAccessPoint for the canary test bucket
+        this.canaryTestMrap = new CfnMultiRegionAccessPoint(this, "canary-test-mrap-bucket", {
+            regions: [{ bucket: this.canaryTestBucket.bucketName }],
+            name: "canary-test-mrap-bucket",
+        });
+
+        const accountId = this.canaryTestMrap.stack.account;
+        const alias = this.canaryTestMrap.attrAlias;
+        const canaryTestMrapBucketArn = `arn:aws:s3::${accountId}:accesspoint/${alias}`;
+        if (canaryTestMrapBucketArn) {
+            // Output the bucket name to make it easier to invoke the canary runner
+            this.canaryTestMrapBucketArn = new CfnOutput(this, "canary-test-mrap-bucket-arn", {
+                value: canaryTestMrapBucketArn,
+                description: "ARN of the canary test MRAP bucket",
+                exportName: "canaryTestMrapBucketArn",
+            });
+        }
+
         // Create a role for the canary Lambdas to assume
         this.lambdaExecutionRole = new Role(this, "lambda-execution-role", {
             roleName: "aws-sdk-rust-canary-lambda-exec-role",
@@ -143,10 +168,25 @@ export class CanaryStack extends Stack {
         // Allow canaries to talk to their test bucket
         this.canaryTestBucket.grantReadWrite(this.lambdaExecutionRole);
 
+        this.lambdaExecutionRole.addToPolicy(new PolicyStatement({
+            actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+            effect: Effect.ALLOW,
+            resources: [`${canaryTestMrapBucketArn}`, `${canaryTestMrapBucketArn}/object/*`],
+        }));
+
         // Allow canaries to call Transcribe's StartStreamTranscription
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
                 actions: ["transcribe:StartStreamTranscription"],
+                effect: Effect.ALLOW,
+                resources: ["*"],
+            }),
+        );
+
+        // Allow canaries to call EC2
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["ec2:DescribeSpotPriceHistory", "ec2:DescribeVpcs"],
                 effect: Effect.ALLOW,
                 resources: ["*"],
             }),

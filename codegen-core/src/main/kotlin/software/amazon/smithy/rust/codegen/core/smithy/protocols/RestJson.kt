@@ -64,10 +64,9 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
+        "Headers" to RuntimeType.headers(runtimeConfig),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
 
@@ -80,14 +79,19 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
      * RestJson1 implementations can denote errors in responses in several ways.
      * New server-side protocol implementations MUST use a header field named `X-Amzn-Errortype`.
      *
-     * Note that the spec says that implementations SHOULD strip the error shape ID's namespace.
-     * However, our server implementation renders the full shape ID (including namespace), since some
-     * existing clients rely on it to deserialize the error shape and fail if only the shape name is present.
-     * This is compliant with the spec, see https://github.com/awslabs/smithy/pull/1493.
-     * See https://github.com/awslabs/smithy/issues/1494 too.
+     * Note that the spec says that implementations SHOULD strip the error shape ID's namespace
+     * (see https://smithy.io/2.0/aws/protocols/aws-restjson1-protocol.html#operation-error-serialization):
+     *
+     * > The value of this component SHOULD contain only the shape name of the error's Shape ID.
+     *
+     * But it's a SHOULD; we could strip the namespace if we wanted to. In fact, we did so in smithy-rs versions
+     * 0.52.0 to 0.55.4; see:
+     * - https://github.com/smithy-lang/smithy-rs/pull/1982
+     * - https://github.com/awslabs/smithy/pull/1493
+     * - https://github.com/awslabs/smithy/issues/1494
      */
     override fun additionalErrorResponseHeaders(errorShape: StructureShape): List<Pair<String, String>> =
-        listOf("x-amzn-errortype" to errorShape.id.toString())
+        listOf("x-amzn-errortype" to errorShape.id.name)
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
         JsonParserGenerator(codegenContext, httpBindingResolver, ::restJsonFieldName)
@@ -99,7 +103,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
@@ -113,7 +117,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate
-                    #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
+                    #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,
                 *errorScope,

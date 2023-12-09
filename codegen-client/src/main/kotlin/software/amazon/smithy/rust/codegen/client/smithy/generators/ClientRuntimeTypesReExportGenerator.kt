@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -16,42 +17,42 @@ class ClientRuntimeTypesReExportGenerator(
     private val rustCrate: RustCrate,
 ) {
     fun render() {
-        if (!codegenContext.smithyRuntimeMode.generateOrchestrator) {
-            return
-        }
-
         val rc = codegenContext.runtimeConfig
-        val smithyRuntimeApi = RuntimeType.smithyRuntimeApi(rc)
+        val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(rc)
 
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
                 """
                 pub use #{ConfigBag};
-                pub use #{Interceptor};
+                pub use #{RuntimeComponents};
+                pub use #{IdentityCache};
                 """,
                 "ConfigBag" to RuntimeType.configBag(rc),
-                "Interceptor" to RuntimeType.interceptor(rc),
+                "Intercept" to RuntimeType.intercept(rc),
+                "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
+                "SharedInterceptor" to RuntimeType.sharedInterceptor(rc),
+                "IdentityCache" to RuntimeType.smithyRuntime(rc).resolve("client::identity::IdentityCache"),
             )
         }
-        rustCrate.withModule(ClientRustModule.endpoint(codegenContext)) {
+        rustCrate.withModule(ClientRustModule.Config.endpoint) {
             rustTemplate(
                 """
-                pub use #{ResolveEndpoint};
                 pub use #{SharedEndpointResolver};
+                pub use #{EndpointFuture};
+                pub use #{Endpoint};
                 """,
-                "ResolveEndpoint" to RuntimeType.smithyHttp(rc).resolve("endpoint::ResolveEndpoint"),
-                "SharedEndpointResolver" to RuntimeType.smithyHttp(rc).resolve("endpoint::SharedEndpointResolver"),
+                *Types(rc).toArray(),
             )
         }
         rustCrate.withModule(ClientRustModule.Config.retry) {
             rustTemplate(
                 """
                 pub use #{ClassifyRetry};
-                pub use #{RetryReason};
+                pub use #{RetryAction};
                 pub use #{ShouldAttempt};
                 """,
-                "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::ClassifyRetry"),
-                "RetryReason" to smithyRuntimeApi.resolve("client::retries::RetryReason"),
+                "ClassifyRetry" to smithyRuntimeApi.resolve("client::retries::classifiers::ClassifyRetry"),
+                "RetryAction" to smithyRuntimeApi.resolve("client::retries::classifiers::RetryAction"),
                 "ShouldAttempt" to smithyRuntimeApi.resolve("client::retries::ShouldAttempt"),
             )
         }
