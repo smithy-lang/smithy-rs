@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.enforceRequired
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
@@ -42,7 +43,7 @@ class EndpointParamsInterceptorGenerator(
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
     private val codegenScope = codegenContext.runtimeConfig.let { rc ->
         val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-        val runtimeApi = CargoDependency.smithyRuntimeApi(rc).toType()
+        val runtimeApi = CargoDependency.smithyRuntimeApiClient(rc).toType()
         val interceptors = runtimeApi.resolve("client::interceptors")
         val orchestrator = runtimeApi.resolve("client::orchestrator")
         arrayOf(
@@ -53,7 +54,7 @@ class EndpointParamsInterceptorGenerator(
             "EndpointResolverParams" to runtimeApi.resolve("client::endpoint::EndpointResolverParams"),
             "HttpRequest" to orchestrator.resolve("HttpRequest"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
-            "Interceptor" to RuntimeType.interceptor(rc),
+            "Intercept" to RuntimeType.intercept(rc),
             "InterceptorContext" to RuntimeType.interceptorContext(rc),
             "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
             "Input" to interceptors.resolve("context::Input"),
@@ -73,7 +74,7 @@ class EndpointParamsInterceptorGenerator(
             ##[derive(Debug)]
             struct $interceptorName;
 
-            impl #{Interceptor} for $interceptorName {
+            impl #{Intercept} for $interceptorName {
                 fn name(&self) -> &'static str {
                     ${interceptorName.dq()}
                 }
@@ -134,8 +135,10 @@ class EndpointParamsInterceptorGenerator(
         // lastly, allow these to be overridden by members
         memberParams.forEach { (memberShape, param) ->
             val memberName = codegenContext.symbolProvider.toMemberName(memberShape)
-            rust(
-                ".${EndpointParamsGenerator.setterName(param.name)}(_input.$memberName.clone())",
+            val member = memberShape.enforceRequired(writable("_input.$memberName.clone()"), codegenContext)
+
+            rustTemplate(
+                ".${EndpointParamsGenerator.setterName(param.name)}(#{member})", "member" to member,
             )
         }
     }

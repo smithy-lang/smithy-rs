@@ -8,6 +8,7 @@
 //! [`RequestRejection::XmlDeserialize`].
 
 use crate::rejection::MissingContentTypeReason;
+use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
@@ -16,9 +17,9 @@ pub enum ResponseRejection {
     #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
     InvalidHttpStatusCode(TryFromIntError),
     #[error("error building HTTP response: {0}")]
-    Build(#[from] aws_smithy_http::operation::error::BuildError),
+    Build(#[from] aws_smithy_types::error::operation::BuildError),
     #[error("error serializing XML-encoded body: {0}")]
-    Serialization(#[from] aws_smithy_http::operation::error::SerializationError),
+    Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
     HttpBuild(#[from] http::Error),
 }
@@ -58,6 +59,10 @@ pub enum RequestRejection {
 
     #[error("request does not adhere to modeled constraints: {0}")]
     ConstraintViolation(String),
+
+    /// Typically happens when the request has headers that are not valid UTF-8.
+    #[error("failed to convert request: {0}")]
+    HttpConversion(#[from] HttpError),
 }
 
 impl From<std::convert::Infallible> for RequestRejection {

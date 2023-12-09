@@ -54,12 +54,13 @@ open class EventStreamMarshallerGenerator(
     private val payloadContentType: String,
 ) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope = arrayOf(
         "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
-        "Message" to smithyEventStream.resolve("frame::Message"),
-        "Header" to smithyEventStream.resolve("frame::Header"),
-        "HeaderValue" to smithyEventStream.resolve("frame::HeaderValue"),
+        "Message" to smithyTypes.resolve("event_stream::Message"),
+        "Header" to smithyTypes.resolve("event_stream::Header"),
+        "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
         "Error" to smithyEventStream.resolve("error::Error"),
     )
 

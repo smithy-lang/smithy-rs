@@ -21,15 +21,15 @@ class OperationInputTestGeneratorTests {
         val operationModel = """
             $prefix
             namespace operations
-            
+
             operation Ping {}
         """.trimIndent()
         val serviceModel = """
             $prefix
             namespace service
-            
+
             use operations#Ping
-            
+
             service MyService {
                 operations: [Ping]
             }

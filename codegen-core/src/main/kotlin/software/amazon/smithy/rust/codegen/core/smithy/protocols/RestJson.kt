@@ -64,10 +64,9 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
+        "Headers" to RuntimeType.headers(runtimeConfig),
         "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
             .resolve("deserialize::error::DeserializeError"),
-        "Response" to RuntimeType.Http.resolve("Response"),
         "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
     )
 
@@ -87,7 +86,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
      *
      * But it's a SHOULD; we could strip the namespace if we wanted to. In fact, we did so in smithy-rs versions
      * 0.52.0 to 0.55.4; see:
-     * - https://github.com/awslabs/smithy-rs/pull/1982
+     * - https://github.com/smithy-lang/smithy-rs/pull/1982
      * - https://github.com/awslabs/smithy/pull/1493
      * - https://github.com/awslabs/smithy/issues/1494
      */
@@ -104,7 +103,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,
@@ -118,7 +117,7 @@ open class RestJson(val codegenContext: CodegenContext) : Protocol {
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     // Note: HeaderMap::new() doesn't allocate
-                    #{json_errors}::parse_error_metadata(payload, &#{HeaderMap}::new())
+                    #{json_errors}::parse_error_metadata(payload, &#{Headers}::new())
                 }
                 """,
                 *errorScope,

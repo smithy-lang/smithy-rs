@@ -6,7 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.codegen.core.CodegenException
-import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ArrayNode
 import software.amazon.smithy.model.node.Node
@@ -18,12 +18,14 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -44,6 +46,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -84,20 +87,27 @@ open class Instantiator(
     private val runtimeConfig: RuntimeConfig,
     /** Behavior of the builder type used for structure shapes. */
     private val builderKindBehavior: BuilderKindBehavior,
-    /**
-     * A function that given a symbol for an enum shape and a string, returns a writable to instantiate the enum with
-     * the string value.
-     **/
-    private val enumFromStringFn: (Symbol, String) -> Writable,
     /** Fill out required fields with a default value. **/
     private val defaultsForRequiredFields: Boolean = false,
     private val customizations: List<InstantiatorCustomization> = listOf(),
+    private val constructPattern: InstantiatorConstructPattern = InstantiatorConstructPattern.BUILDER,
+    private val customWritable: CustomWritable = NoCustomWritable(),
 ) {
     data class Ctx(
         // The `http` crate requires that headers be lowercase, but Smithy protocol tests
         // contain headers with uppercase keys.
         val lowercaseMapKeys: Boolean = false,
     )
+
+    /**
+     * A struct can be built by:
+     * * direct instantiation: A { field_1: value_1, field_2: value_2 }
+     * * its associated builder: A::builder().field_1(value_1).field_2(value_2).build()
+     */
+    enum class InstantiatorConstructPattern {
+        DIRECT,
+        BUILDER,
+    }
 
     /**
      * Client and server structures have different builder types. `Instantiator` needs to know how the builder
@@ -113,85 +123,54 @@ open class Instantiator(
         fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
     }
 
+    /**
+     * Customize how each shape is rendered, instead of relying on static `Node` data.
+     */
+    interface CustomWritable {
+        // Return `null` to rely on the default behavior, which uses the static `Node` data.
+        fun generate(shape: Shape): Writable?
+    }
+
+    class NoCustomWritable : CustomWritable {
+        override fun generate(shape: Shape): Writable? = null
+    }
+
     fun generate(shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) = writable {
         render(this, shape, data, headers, ctx)
     }
 
-    fun render(writer: RustWriter, shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) {
-        when (shape) {
-            // Compound Shapes
-            is StructureShape -> renderStructure(writer, shape, data as ObjectNode, headers, ctx)
-            is UnionShape -> renderUnion(writer, shape, data as ObjectNode, ctx)
+    open fun render(
+        writer: RustWriter,
+        shape: Shape,
+        data: Node,
+        headers: Map<String, String> = mapOf(),
+        ctx: Ctx = Ctx(),
+    ) {
+        customWritable.generate(shape)
+            ?.let { it(writer) }
+            ?: run {
+                when (shape) {
+                    // Compound Shapes
+                    is StructureShape -> renderStructure(writer, shape, data as ObjectNode, headers, ctx)
+                    is UnionShape -> renderUnion(writer, shape, data as ObjectNode, ctx)
 
-            // Collections
-            is ListShape -> renderList(writer, shape, data as ArrayNode, ctx)
-            is MapShape -> renderMap(writer, shape, data as ObjectNode, ctx)
-            is SetShape -> renderSet(writer, shape, data as ArrayNode, ctx)
+                    // Collections
+                    is ListShape -> renderList(writer, shape, data as ArrayNode, ctx)
+                    is MapShape -> renderMap(writer, shape, data as ObjectNode, ctx)
+                    is SetShape -> renderSet(writer, shape, data as ArrayNode, ctx)
 
-            // Members, supporting potentially optional members
-            is MemberShape -> renderMember(writer, shape, data, ctx)
+                    // Members, supporting potentially optional members
+                    is MemberShape -> renderMember(writer, shape, data, ctx)
 
-            // Wrapped Shapes
-            is TimestampShape -> {
-                val node = (data as NumberNode)
-                val num = BigDecimal(node.toString())
-                val wholePart = num.toInt()
-                val fractionalPart = num.remainder(BigDecimal.ONE)
-                writer.rust(
-                    "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
-                    RuntimeType.dateTime(runtimeConfig),
-                )
-            }
+                    is SimpleShape -> PrimitiveInstantiator(runtimeConfig, symbolProvider).instantiate(
+                        shape,
+                        data,
+                        customWritable,
+                    )(writer)
 
-            /**
-             * ```rust
-             * Blob::new("arg")
-             * ```
-             */
-            is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
-                writer.rust(
-                    "#T::from_static(b${(data as StringNode).value.dq()})",
-                    RuntimeType.byteStream(runtimeConfig),
-                )
-            } else {
-                writer.rust(
-                    "#T::new(${(data as StringNode).value.dq()})",
-                    RuntimeType.blob(runtimeConfig),
-                )
-            }
-
-            // Simple Shapes
-            is StringShape -> renderString(writer, shape, data as StringNode)
-            is NumberShape -> when (data) {
-                is StringNode -> {
-                    val numberSymbol = symbolProvider.toSymbol(shape)
-                    // support Smithy custom values, such as Infinity
-                    writer.rust(
-                        """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
-                        numberSymbol,
-                        RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
-                    )
+                    else -> writer.writeWithNoFormatting("todo!() /* $shape $data */")
                 }
-
-                is NumberNode -> writer.write(data.value)
             }
-
-            is BooleanShape -> writer.rust(data.asBooleanNode().get().toString())
-            is DocumentShape -> writer.rustBlock("") {
-                val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
-                rustTemplate(
-                    """
-                    let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
-                    let mut tokens = #{json_token_iter}(json_bytes).peekable();
-                    #{expect_document}(&mut tokens).expect("well formed json")
-                    """,
-                    "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
-                    "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
-                )
-            }
-
-            else -> writer.writeWithNoFormatting("todo!() /* $shape $data */")
-        }
     }
 
     /**
@@ -201,44 +180,53 @@ open class Instantiator(
     private fun renderMember(writer: RustWriter, memberShape: MemberShape, data: Node, ctx: Ctx) {
         val targetShape = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
-        if (data is NullNode) {
-            check(symbol.isOptional()) {
-                "A null node was provided for $memberShape but the symbol was not optional. This is invalid input data."
-            }
-            writer.rustTemplate("#{None}", *preludeScope)
-        } else {
-            // Structure builder setters for structure shape members _always_ take in `Option<T>`.
-            // Other aggregate shapes' members are optional only when their symbol is.
-            writer.conditionalBlockTemplate(
-                "#{Some}(",
-                ")",
-                // The conditions are not commutative: note client builders always take in `Option<T>`.
-                conditional = symbol.isOptional() ||
-                    (model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(memberShape)),
-                *preludeScope,
-            ) {
-                writer.conditionalBlockTemplate(
-                    "#{Box}::new(",
-                    ")",
-                    conditional = symbol.rustType().stripOuter<RustType.Option>() is RustType.Box,
-                    *preludeScope,
-                ) {
-                    render(
-                        this,
-                        targetShape,
-                        data,
-                        mapOf(),
-                        ctx.copy()
-                            .letIf(memberShape.hasTrait<HttpPrefixHeadersTrait>()) {
-                                it.copy(lowercaseMapKeys = true)
-                            },
-                    )
+        customWritable.generate(memberShape)
+            ?.let { it(writer) }
+            ?: run {
+                if (data is NullNode && !targetShape.isDocumentShape) {
+                    check(symbol.isOptional()) {
+                        "A null node was provided for $memberShape but the symbol was not optional. This is invalid input data."
+                    }
+                    writer.rustTemplate("#{None}", *preludeScope)
+                } else {
+                    // Structure builder setters for structure shape members _always_ take in `Option<T>`.
+                    // Other aggregate shapes' members are optional only when their symbol is.
+                    writer.conditionalBlockTemplate(
+                        "#{Some}(",
+                        ")",
+                        // The conditions are not commutative: note client builders always take in `Option<T>`.
+                        conditional = symbol.isOptional() ||
+                            (
+                                model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(
+                                    memberShape,
+                                )
+                                ),
+                        *preludeScope,
+                    ) {
+                        writer.conditionalBlockTemplate(
+                            "#{Box}::new(",
+                            ")",
+                            conditional = symbol.rustType().stripOuter<RustType.Option>() is RustType.Box,
+                            *preludeScope,
+                        ) {
+                            render(
+                                this,
+                                targetShape,
+                                data,
+                                mapOf(),
+                                ctx.copy()
+                                    .letIf(memberShape.hasTrait<HttpPrefixHeadersTrait>()) {
+                                        it.copy(lowercaseMapKeys = true)
+                                    },
+                            )
+                        }
+                    }
                 }
             }
-        }
     }
 
-    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) = renderList(writer, shape, data, ctx)
+    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) =
+        renderList(writer, shape, data, ctx)
 
     /**
      * ```rust
@@ -317,29 +305,34 @@ open class Instantiator(
         }
     }
 
-    private fun renderString(writer: RustWriter, shape: StringShape, arg: StringNode) {
-        val data = writer.escape(arg.value).dq()
-        if (!shape.hasTrait<EnumTrait>()) {
-            writer.rust("$data.to_owned()")
-        } else {
-            val enumSymbol = symbolProvider.toSymbol(shape)
-            writer.rustTemplate("#{EnumFromStringFn:W}", "EnumFromStringFn" to enumFromStringFn(enumSymbol, data))
-        }
-    }
-
     /**
      * ```rust
      * MyStruct::builder().field_1("hello").field_2(5).build()
      * ```
      */
-    private fun renderStructure(writer: RustWriter, shape: StructureShape, data: ObjectNode, headers: Map<String, String>, ctx: Ctx) {
-        writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
+    private fun renderStructure(
+        writer: RustWriter,
+        shape: StructureShape,
+        data: ObjectNode,
+        headers: Map<String, String>,
+        ctx: Ctx,
+    ) {
+        when (constructPattern) {
+            InstantiatorConstructPattern.DIRECT ->
+                writer.withBlockTemplate("#{T} {", "}", "T" to symbolProvider.toSymbol(shape)) {
+                    renderStructureMembers(writer, shape, data, headers, ctx)
+                }
 
-        renderStructureMembers(writer, shape, data, headers, ctx)
+            InstantiatorConstructPattern.BUILDER -> {
+                writer.rust("#T::builder()", symbolProvider.toSymbol(shape))
 
-        writer.rust(".build()")
-        if (builderKindBehavior.hasFallibleBuilder(shape)) {
-            writer.rust(".unwrap()")
+                renderStructureMembers(writer, shape, data, headers, ctx)
+
+                writer.rust(".build()")
+                if (builderKindBehavior.hasFallibleBuilder(shape)) {
+                    writer.rust(".unwrap()")
+                }
+            }
         }
     }
 
@@ -350,10 +343,23 @@ open class Instantiator(
         headers: Map<String, String>,
         ctx: Ctx,
     ) {
+        val renderedMembers = mutableSetOf<MemberShape>()
         fun renderMemberHelper(memberShape: MemberShape, value: Node) {
-            val setterName = builderKindBehavior.setterName(memberShape)
-            writer.withBlock(".$setterName(", ")") {
-                renderMember(this, memberShape, value, ctx)
+            renderedMembers.add(memberShape)
+            when (constructPattern) {
+                InstantiatorConstructPattern.DIRECT -> {
+                    val fieldName = symbolProvider.toMemberName(memberShape)
+                    writer.withBlock("$fieldName:", ",") {
+                        renderMember(this, memberShape, value, ctx)
+                    }
+                }
+
+                InstantiatorConstructPattern.BUILDER -> {
+                    val setterName = builderKindBehavior.setterName(memberShape)
+                    writer.withBlock(".$setterName(", ")") {
+                        renderMember(this, memberShape, value, ctx)
+                    }
+                }
             }
         }
 
@@ -372,7 +378,7 @@ open class Instantiator(
                 .filter { it.value.hasTrait<HttpHeaderTrait>() }
                 .forEach { (_, value) ->
                     val trait = value.expectTrait<HttpHeaderTrait>().value
-                    headers.get(trait)?.let { renderMemberHelper(value, Node.from(it)) }
+                    headers[trait]?.let { renderMemberHelper(value, Node.from(it)) }
                 }
         }
 
@@ -390,6 +396,13 @@ open class Instantiator(
             ?.let {
                 renderMemberHelper(it.value, fillDefaultValue(model.expectShape(it.value.target)))
             }
+
+        if (constructPattern == InstantiatorConstructPattern.DIRECT) {
+            val membersToRender = shape.allMembers.values.minus(renderedMembers)
+            check(membersToRender.all { it.isOptional })
+            membersToRender
+                .forEach { renderMemberHelper(it, Node.nullNode()) }
+        }
     }
 
     /**
@@ -414,5 +427,84 @@ open class Instantiator(
         is BooleanShape -> Node.from(false)
         is DocumentShape -> Node.objectNode()
         else -> throw CodegenException("Unrecognized shape `$shape`")
+    }
+}
+
+class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private val symbolProvider: SymbolProvider) {
+    fun instantiate(
+        shape: SimpleShape,
+        data: Node,
+        customWritable: Instantiator.CustomWritable = Instantiator.NoCustomWritable(),
+    ): Writable =
+        customWritable.generate(shape) ?: writable {
+            when (shape) {
+                // Simple Shapes
+                is TimestampShape -> {
+                    val node = (data as NumberNode)
+                    val num = BigDecimal(node.toString())
+                    val wholePart = num.toInt()
+                    val fractionalPart = num.remainder(BigDecimal.ONE)
+                    rust(
+                        "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
+                        RuntimeType.dateTime(runtimeConfig),
+                    )
+                }
+
+                /**
+                 * ```rust
+                 * Blob::new("arg")
+                 * ```
+                 */
+                is BlobShape -> if (shape.hasTrait<StreamingTrait>()) {
+                    rust(
+                        "#T::from_static(b${(data as StringNode).value.dq()})",
+                        RuntimeType.byteStream(runtimeConfig),
+                    )
+                } else {
+                    rust(
+                        "#T::new(${(data as StringNode).value.dq()})",
+                        RuntimeType.blob(runtimeConfig),
+                    )
+                }
+
+                is StringShape -> renderString(shape, data as StringNode)(this)
+                is NumberShape -> when (data) {
+                    is StringNode -> {
+                        val numberSymbol = symbolProvider.toSymbol(shape)
+                        // support Smithy custom values, such as Infinity
+                        rust(
+                            """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
+                            numberSymbol,
+                            RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
+                        )
+                    }
+
+                    is NumberNode -> write(data.value)
+                }
+
+                is BooleanShape -> rust(data.asBooleanNode().get().toString())
+                is DocumentShape -> rustBlock("") {
+                    val smithyJson = CargoDependency.smithyJson(runtimeConfig).toType()
+                    rustTemplate(
+                        """
+                    let json_bytes = br##"${Node.prettyPrintJson(data)}"##;
+                    let mut tokens = #{json_token_iter}(json_bytes).peekable();
+                    #{expect_document}(&mut tokens).expect("well formed json")
+                    """,
+                        "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
+                        "json_token_iter" to smithyJson.resolve("deserialize::json_token_iter"),
+                    )
+                }
+            }
+        }
+
+    private fun renderString(shape: StringShape, arg: StringNode): Writable = {
+        val data = escape(arg.value).dq()
+        if (shape.hasTrait<EnumTrait>() || shape is EnumShape) {
+            val enumSymbol = symbolProvider.toSymbol(shape)
+            rust("""$data.parse::<#T>().expect("static value validated to member")""", enumSymbol)
+        } else {
+            rust("$data.to_owned()")
+        }
     }
 }

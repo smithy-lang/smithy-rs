@@ -58,8 +58,7 @@ class AwsQueryCompatibleTest {
                     ##[cfg(test)]
                     ##[#{tokio}::test]
                     async fn should_parse_code_and_type_fields() {
-                        use #{smithy_client}::test_connection::infallible_connection_fn;
-                        use aws_smithy_http::body::SdkBody;
+                        use aws_smithy_types::body::SdkBody;
 
                         let response = |_: http::Request<SdkBody>| {
                             http::Response::builder()
@@ -80,7 +79,7 @@ class AwsQueryCompatibleTest {
                         };
                         let client = crate::Client::from_conf(
                             crate::Config::builder()
-                                .http_connector(infallible_connection_fn(response))
+                                .http_client(#{infallible_client_fn}(response))
                                 .endpoint_url("http://localhost:1234")
                                 .build()
                         );
@@ -92,8 +91,8 @@ class AwsQueryCompatibleTest {
                         assert_eq!(Some("Sender"), error.meta().extra("type"));
                     }
                     """,
-                    "smithy_client" to CargoDependency.smithyClient(context.runtimeConfig)
-                        .toDevDependency().withFeature("test-util").toType(),
+                    "infallible_client_fn" to CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                        .toType().resolve("client::http::test_util::infallible_client_fn"),
                     "tokio" to CargoDependency.Tokio.toType(),
                 )
             }
@@ -139,8 +138,7 @@ class AwsQueryCompatibleTest {
                     ##[cfg(test)]
                     ##[#{tokio}::test]
                     async fn should_parse_code_from_payload() {
-                        use #{smithy_client}::test_connection::infallible_connection_fn;
-                        use aws_smithy_http::body::SdkBody;
+                        use aws_smithy_types::body::SdkBody;
 
                         let response = |_: http::Request<SdkBody>| {
                             http::Response::builder()
@@ -157,7 +155,7 @@ class AwsQueryCompatibleTest {
                         };
                         let client = crate::Client::from_conf(
                             crate::Config::builder()
-                                .http_connector(infallible_connection_fn(response))
+                                .http_client(#{infallible_client_fn}(response))
                                 .endpoint_url("http://localhost:1234")
                                 .build()
                         );
@@ -166,8 +164,8 @@ class AwsQueryCompatibleTest {
                         assert_eq!(None, error.meta().extra("type"));
                     }
                     """,
-                    "smithy_client" to CargoDependency.smithyClient(context.runtimeConfig)
-                        .toDevDependency().withFeature("test-util").toType(),
+                    "infallible_client_fn" to CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                        .toType().resolve("client::http::test_util::infallible_client_fn"),
                     "tokio" to CargoDependency.Tokio.toType(),
                 )
             }

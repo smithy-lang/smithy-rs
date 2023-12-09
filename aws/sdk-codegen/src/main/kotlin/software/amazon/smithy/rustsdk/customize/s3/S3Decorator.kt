@@ -23,7 +23,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientRestXmlFactory
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -86,6 +88,7 @@ class S3Decorator : ClientCodegenDecorator {
             )
             // enable optional auth for operations commonly used with public buckets
             .let(AddOptionalAuth()::transform)
+            .let(MakeS3BoolsAndNumbersOptional()::processModel)
 
     override fun endpointCustomizations(codegenContext: ClientCodegenContext): List<EndpointCustomization> {
         return listOf(
@@ -106,6 +109,34 @@ class S3Decorator : ClientCodegenDecorator {
         )
     }
 
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> {
+        return baseCustomizations + object : OperationCustomization() {
+            override fun section(section: OperationSection): Writable {
+                return writable {
+                    when (section) {
+                        is OperationSection.BeforeParseResponse -> {
+                            section.body?.also { body ->
+                                rustTemplate(
+                                    """
+                                    if matches!(#{errors}::body_is_error($body), Ok(true)) {
+                                        ${section.forceError} = true;
+                                    }
+                                    """,
+                                    "errors" to RuntimeType.unwrappedXmlErrors(codegenContext.runtimeConfig),
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+                }
+            }
+        }
+    }
+
     private fun isInInvalidXmlRootAllowList(shape: Shape): Boolean {
         return shape.isStructureShape && invalidXmlRootAllowList.contains(shape.id)
     }
@@ -115,7 +146,7 @@ class FilterEndpointTests(
     private val testFilter: (EndpointTestCase) -> EndpointTestCase? = { a -> a },
     private val operationInputFilter: (EndpointTestOperationInput) -> EndpointTestOperationInput? = { a -> a },
 ) {
-    fun updateEndpointTests(endpointTests: List<EndpointTestCase>): List<EndpointTestCase> {
+    private fun updateEndpointTests(endpointTests: List<EndpointTestCase>): List<EndpointTestCase> {
         val filteredTests = endpointTests.mapNotNull { test -> testFilter(test) }
         return filteredTests.map { test ->
             val operationInputs = test.operationInputs
@@ -123,7 +154,7 @@ class FilterEndpointTests(
         }
     }
 
-    fun transform(model: Model) = ModelTransformer.create().mapTraits(model) { _, trait ->
+    fun transform(model: Model): Model = ModelTransformer.create().mapTraits(model) { _, trait ->
         when (trait) {
             is EndpointTestsTrait -> EndpointTestsTrait.builder().testCases(updateEndpointTests(trait.testCases))
                 .version(trait.version).build()
@@ -135,15 +166,9 @@ class FilterEndpointTests(
 
 // TODO(P96049742): This model transform may need to change depending on if and how the S3 model is updated.
 private class AddOptionalAuth {
-    private val s3OptionalAuthOperations = listOf(
-        ShapeId.from("com.amazonaws.s3#ListObjects"),
-        ShapeId.from("com.amazonaws.s3#ListObjectsV2"),
-        ShapeId.from("com.amazonaws.s3#HeadObject"),
-        ShapeId.from("com.amazonaws.s3#GetObject"),
-    )
-
-    fun transform(model: Model) = ModelTransformer.create().mapShapes(model) { shape ->
-        if (shape is OperationShape && s3OptionalAuthOperations.contains(shape.id) && !shape.hasTrait<OptionalAuthTrait>()) {
+    fun transform(model: Model): Model = ModelTransformer.create().mapShapes(model) { shape ->
+        // Add @optionalAuth to all S3 operations
+        if (shape is OperationShape && !shape.hasTrait<OptionalAuthTrait>()) {
             shape.toBuilder()
                 .addTrait(OptionalAuthTrait())
                 .build()
@@ -160,8 +185,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadata" to RuntimeType.errorMetadata(runtimeConfig),
         "ErrorBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.HttpHeaderMap,
-        "Response" to RuntimeType.HttpResponse,
+        "Headers" to RuntimeType.headers(runtimeConfig),
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
         "base_errors" to restXmlErrors,
     )
@@ -169,7 +193,7 @@ class S3ProtocolOverride(codegenContext: CodegenContext) : RestXml(codegenContex
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType {
         return ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> #{Result}<#{ErrorBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rustTemplate(

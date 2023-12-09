@@ -6,11 +6,8 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -21,8 +18,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val codegenScope = arrayOf(
         *preludeScope,
+        "IntoShared" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("shared::IntoShared"),
         "SharedTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::SharedTimeSource"),
         "StaticTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::StaticTimeSource"),
+        "TimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::TimeSource"),
         "UNIX_EPOCH" to RuntimeType.std.resolve("time::UNIX_EPOCH"),
         "Duration" to RuntimeType.std.resolve("time::Duration"),
     )
@@ -49,9 +48,9 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                         /// Sets the time source used for this service
                         pub fn time_source(
                             mut self,
-                            time_source: impl #{Into}<#{SharedTimeSource}>,
+                            time_source: impl #{TimeSource} + 'static,
                         ) -> Self {
-                            self.set_time_source(#{Some}(time_source.into()));
+                            self.set_time_source(#{Some}(#{IntoShared}::into_shared(time_source)));
                             self
                         }
                         """,
@@ -99,20 +98,4 @@ class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCust
                 else -> emptySection
             }
         }
-}
-
-class TimeSourceOperationCustomization : OperationCustomization() {
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateRequest -> writable {
-                rust(
-                    """
-                    ${section.request}.properties_mut().insert(${section.config}.time_source.clone());
-                    """,
-                )
-            }
-
-            else -> emptySection
-        }
-    }
 }

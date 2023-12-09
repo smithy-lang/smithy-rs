@@ -11,8 +11,9 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
-import software.amazon.smithy.rulesengine.language.syntax.parameters.Builtins
+import software.amazon.smithy.rulesengine.language.syntax.parameters.BuiltIns
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -57,7 +58,9 @@ fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
 }
 
 private fun promotedBuiltins(parameter: Parameter) =
-    parameter == Builtins.FIPS || parameter == Builtins.DUALSTACK || parameter == Builtins.SDK_ENDPOINT
+    parameter.builtIn == AwsBuiltIns.FIPS.builtIn ||
+        parameter.builtIn == AwsBuiltIns.DUALSTACK.builtIn ||
+        parameter.builtIn == BuiltIns.SDK_ENDPOINT.builtIn
 
 private fun configParamNewtype(parameter: Parameter, name: String, runtimeConfig: RuntimeConfig): RuntimeType {
     val type = parameter.symbol().mapRustType { t -> t.stripOuter<RustType.Option>() }
@@ -193,10 +196,13 @@ fun Node.toWritable(): Writable {
 
 val PromotedBuiltInsDecorators =
     listOf(
-        decoratorForBuiltIn(Builtins.FIPS),
-        decoratorForBuiltIn(Builtins.DUALSTACK),
+        decoratorForBuiltIn(AwsBuiltIns.FIPS),
+        decoratorForBuiltIn(AwsBuiltIns.DUALSTACK),
         decoratorForBuiltIn(
-            Builtins.SDK_ENDPOINT,
-            ConfigParam.Builder().name("endpoint_url").type(RuntimeType.String.toSymbol()).setterDocs(endpointUrlDocs),
+            BuiltIns.SDK_ENDPOINT,
+            ConfigParam.Builder()
+                .name("endpoint_url")
+                .type(RuntimeType.String.toSymbol())
+                .setterDocs(endpointUrlDocs),
         ),
     ).toTypedArray()

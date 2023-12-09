@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import aws.sdk.AwsExamplesLayout
 import aws.sdk.AwsServices
 import aws.sdk.Membership
 import aws.sdk.discoverServices
@@ -20,7 +19,7 @@ plugins {
 }
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    smithyBuildConfigs = files(buildDir.resolve("smithy-build.json"))
+    smithyBuildConfigs = files(layout.buildDirectory.file("smithy-build.json"))
     allowUnknownTraits = true
 }
 
@@ -31,9 +30,9 @@ val properties = PropertyRetriever(rootProject, project)
 val crateHasherToolPath = rootProject.projectDir.resolve("tools/ci-build/crate-hasher")
 val publisherToolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
 val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-versioner")
-val outputDir = buildDir.resolve("aws-sdk")
-val sdkOutputDir = outputDir.resolve("sdk")
-val examplesOutputDir = outputDir.resolve("examples")
+val outputDir = layout.buildDirectory.dir("aws-sdk").get()
+val sdkOutputDir = outputDir.dir("sdk")
+val examplesOutputDir = outputDir.dir("examples")
 
 buildscript {
     val smithyVersion: String by project
@@ -61,6 +60,7 @@ val crateVersioner by lazy { aws.sdk.CrateVersioner.defaultFor(rootProject, prop
 
 fun getRustMSRV(): String = properties.get("rust.msrv") ?: throw Exception("Rust MSRV missing")
 fun getPreviousReleaseVersionManifestPath(): String? = properties.get("aws.sdk.previous.release.versions.manifest")
+fun getNullabilityCheckMode(): String = properties.get("nullability.check.mode") ?: "CLIENT_CAREFUL"
 
 fun loadServiceMembership(): Membership {
     val membershipOverride = properties.get("aws.services")?.let { parseMembership(it) }
@@ -76,8 +76,8 @@ fun eventStreamAllowList(): Set<String> {
 }
 
 fun generateSmithyBuild(services: AwsServices): String {
-    val awsConfigVersion = properties.get("smithy.rs.runtime.crate.version")
-        ?: throw IllegalStateException("missing smithy.rs.runtime.crate.version for aws-config version")
+    val awsConfigVersion = properties.get(CrateSet.STABLE_VERSION_PROP_NAME)
+        ?: throw IllegalStateException("missing ${CrateSet.STABLE_VERSION_PROP_NAME} for aws-config version")
     val debugMode = properties.get("debugMode").toBoolean()
     val serviceProjections = services.services.map { service ->
         val files = service.modelFiles().map { extraFile ->
@@ -104,7 +104,8 @@ fun generateSmithyBuild(services: AwsServices): String {
                             "renameErrors": false,
                             "debugMode": $debugMode,
                             "eventStreamAllowList": [$eventStreamAllowListMembers],
-                            "enableUserConfigurableRuntimePlugins": false
+                            "enableUserConfigurableRuntimePlugins": false,
+                            "nullabilityCheckMode": "${getNullabilityCheckMode()}"
                         },
                         "service": "${service.service}",
                         "module": "$moduleName",
@@ -143,10 +144,10 @@ tasks.register("generateSmithyBuild") {
     inputs.property("servicelist", awsServices.services.toString())
     inputs.property("eventStreamAllowList", eventStreamAllowList)
     inputs.dir(projectDir.resolve("aws-models"))
-    outputs.file(buildDir.resolve("smithy-build.json"))
+    outputs.file(layout.buildDirectory.file("smithy-build.json"))
 
     doFirst {
-        buildDir.resolve("smithy-build.json").writeText(generateSmithyBuild(awsServices))
+        layout.buildDirectory.file("smithy-build.json").get().asFile.writeText(generateSmithyBuild(awsServices))
     }
     outputs.upToDateWhen { false }
 }
@@ -155,7 +156,7 @@ tasks.register("generateIndexMd") {
     dependsOn("smithyBuildJar")
 
     inputs.property("servicelist", awsServices.services.toString())
-    val indexMd = outputDir.resolve("index.md")
+    val indexMd = outputDir.file("index.md").asFile
     outputs.file(indexMd)
     doLast {
         project.docsLandingPage(awsServices, indexMd)
@@ -170,22 +171,22 @@ tasks.register("relocateServices") {
         awsServices.services.forEach {
             logger.info("Relocating ${it.module}...")
             copy {
-                from("$buildDir/smithyprojections/sdk/${it.module}/rust-client-codegen")
-                into(sdkOutputDir.resolve(it.module))
+                from(layout.buildDirectory.dir("smithyprojections/sdk/${it.module}/rust-client-codegen"))
+                into(sdkOutputDir.dir(it.module))
             }
 
             copy {
                 from(projectDir.resolve("integration-tests/${it.module}/tests"))
-                into(sdkOutputDir.resolve(it.module).resolve("tests"))
+                into(sdkOutputDir.dir(it.module).dir("tests"))
             }
 
             copy {
                 from(projectDir.resolve("integration-tests/${it.module}/benches"))
-                into(sdkOutputDir.resolve(it.module).resolve("benches"))
+                into(sdkOutputDir.dir(it.module).dir("benches"))
             }
         }
     }
-    inputs.dir("$buildDir/smithyprojections/sdk/")
+    inputs.dir(layout.buildDirectory.dir("smithyprojections/sdk"))
     outputs.dir(sdkOutputDir)
 }
 
@@ -225,7 +226,7 @@ tasks.register("relocateTests") {
                 awsServices.rootTests.forEach { test ->
                     include(test.path.toRelativeString(testDir) + "/**")
                 }
-                into(outputDir.resolve("tests"))
+                into(outputDir.dir("tests"))
                 exclude("**/target")
                 filter { line -> line.replace("build/aws-sdk/sdk/", "sdk/") }
             }
@@ -244,22 +245,12 @@ tasks.register<ExecRustBuildTool>("fixExampleManifests") {
 
     toolPath = sdkVersionerToolPath
     binaryName = "sdk-versioner"
-    arguments = when (AwsExamplesLayout.detect(project)) {
-        AwsExamplesLayout.Flat -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", "../../sdk",
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-        AwsExamplesLayout.Workspaces -> listOf(
-            "use-path-and-version-dependencies",
-            "--isolate-crates",
-            "--sdk-path", sdkOutputDir.absolutePath,
-            "--versions-toml", outputDir.resolve("versions.toml").absolutePath,
-            outputDir.resolve("examples").absolutePath,
-        )
-    }
+    arguments = listOf(
+        "use-path-and-version-dependencies",
+        "--sdk-path", sdkOutputDir.asFile.absolutePath,
+        "--versions-toml", outputDir.file("versions.toml").asFile.absolutePath,
+        outputDir.dir("examples").asFile.absolutePath,
+    )
 
     outputs.dir(outputDir)
     dependsOn("relocateExamples", "generateVersionManifest")
@@ -279,10 +270,10 @@ fun rewritePathDependency(line: String): String {
 tasks.register<Copy>("copyAllRuntimes") {
     dependsOn("smithyBuildJar")
     from("$rootDir/aws/rust-runtime") {
-        CrateSet.AWS_SDK_RUNTIME.forEach { include("$it/**") }
+        CrateSet.AWS_SDK_RUNTIME.forEach { include("${it.name}/**") }
     }
     from("$rootDir/rust-runtime") {
-        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { include("$it/**") }
+        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { include("${it.name}/**") }
     }
     exclude("**/target")
     exclude("**/Cargo.lock")
@@ -294,9 +285,9 @@ tasks.register("relocateAwsRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        CrateSet.AWS_SDK_RUNTIME.forEach { moduleName ->
-            patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteRuntimeCrateVersion(properties, line.let(::rewritePathDependency))
+        CrateSet.AWS_SDK_RUNTIME.forEach { module ->
+            patchFile(sdkOutputDir.file("${module.name}/Cargo.toml").asFile) { line ->
+                rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line.let(::rewritePathDependency))
             }
         }
     }
@@ -305,9 +296,9 @@ tasks.register("relocateRuntime") {
     dependsOn("copyAllRuntimes")
     doLast {
         // Patch the Cargo.toml files
-        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { moduleName ->
-            patchFile(sdkOutputDir.resolve("$moduleName/Cargo.toml")) { line ->
-                rewriteRuntimeCrateVersion(properties, line)
+        CrateSet.AWS_SDK_SMITHY_RUNTIME.forEach { module ->
+            patchFile(sdkOutputDir.file("${module.name}/Cargo.toml").asFile) { line ->
+                rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line)
             }
         }
     }
@@ -334,9 +325,9 @@ fun generateCargoWorkspace(services: AwsServices): String {
 tasks.register("generateCargoWorkspace") {
     description = "generate Cargo.toml workspace file"
     doFirst {
-        outputDir.mkdirs()
-        outputDir.resolve("Cargo.toml").writeText(generateCargoWorkspace(awsServices))
-        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.resolve("clippy.toml"), overwrite = true)
+        outputDir.asFile.mkdirs()
+        outputDir.file("Cargo.toml").asFile.writeText(generateCargoWorkspace(awsServices))
+        rootProject.rootDir.resolve("clippy-root.toml").copyTo(outputDir.file("clippy.toml").asFile, overwrite = true)
     }
     inputs.property("servicelist", awsServices.moduleNames.toString())
     if (awsServices.examples.isNotEmpty()) {
@@ -345,8 +336,8 @@ tasks.register("generateCargoWorkspace") {
     for (test in awsServices.rootTests) {
         inputs.dir(test.path)
     }
-    outputs.file(outputDir.resolve("Cargo.toml"))
-    outputs.file(outputDir.resolve("clippy.toml"))
+    outputs.file(outputDir.file("Cargo.toml"))
+    outputs.file(outputDir.file("clippy.toml"))
     outputs.upToDateWhen { false }
 }
 
@@ -363,7 +354,7 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
 
     toolPath = publisherToolPath
     binaryName = "publisher"
-    arguments = mutableListOf("fix-manifests", "--location", outputDir.absolutePath).apply {
+    arguments = mutableListOf("fix-manifests", "--location", outputDir.asFile.absolutePath).apply {
         if (crateVersioner.independentVersioningEnabled()) {
             add("--disable-version-number-validation")
         }
@@ -376,16 +367,16 @@ tasks.register<ExecRustBuildTool>("hydrateReadme") {
 
     inputs.dir(publisherToolPath)
     inputs.file(rootProject.projectDir.resolve("aws/SDK_README.md.hb"))
-    outputs.file(outputDir.resolve("README.md").absolutePath)
+    outputs.file(outputDir.file("README.md").asFile.absolutePath)
 
     toolPath = publisherToolPath
     binaryName = "publisher"
     arguments = listOf(
         "hydrate-readme",
-        "--versions-manifest", outputDir.resolve("versions.toml").toString(),
+        "--versions-manifest", outputDir.file("versions.toml").toString(),
         "--msrv", getRustMSRV(),
         "--input", rootProject.projectDir.resolve("aws/SDK_README.md.hb").toString(),
-        "--output", outputDir.resolve("README.md").absolutePath,
+        "--output", outputDir.file("README.md").asFile.absolutePath,
     )
 }
 
@@ -407,15 +398,15 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     arguments = mutableListOf(
         "generate-version-manifest",
         "--input-location",
-        sdkOutputDir.absolutePath,
+        sdkOutputDir.asFile.absolutePath,
         "--output-location",
-        outputDir.absolutePath,
+        outputDir.asFile.absolutePath,
         "--smithy-build",
-        buildDir.resolve("smithy-build.json").normalize().absolutePath,
+        layout.buildDirectory.file("smithy-build.json").get().asFile.normalize().absolutePath,
         "--examples-revision",
         properties.get("aws.sdk.examples.revision") ?: "missing",
     ).apply {
-        val previousReleaseManifestPath = getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
+        getPreviousReleaseVersionManifestPath()?.let { manifestPath ->
             add("--previous-release-versions")
             add(manifestPath)
         }
@@ -423,7 +414,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
 }
 
 tasks["smithyBuildJar"].apply {
-    inputs.file(buildDir.resolve("smithy-build.json"))
+    inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
     dependsOn("generateCargoWorkspace")
@@ -448,8 +439,8 @@ tasks["assemble"].apply {
     outputs.upToDateWhen { false }
 }
 
-project.registerCargoCommandsTasks(outputDir, defaultRustDocFlags)
-project.registerGenerateCargoConfigTomlTask(outputDir)
+project.registerCargoCommandsTasks(outputDir.asFile, defaultRustDocFlags)
+project.registerGenerateCargoConfigTomlTask(outputDir.asFile)
 
 tasks["test"].dependsOn("assemble")
 tasks["test"].finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
@@ -464,5 +455,5 @@ tasks.register<Delete>("deleteSdk") {
 }
 tasks["clean"].dependsOn("deleteSdk")
 tasks["clean"].doFirst {
-    delete(buildDir.resolve("smithy-build.json"))
+    delete(layout.buildDirectory.file("smithy-build.json"))
 }

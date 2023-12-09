@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.StructSettings
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
@@ -34,6 +35,7 @@ class ErrorGenerator(
     private val shape: StructureShape,
     private val error: ErrorTrait,
     private val implCustomizations: List<ErrorImplCustomization>,
+    private val structSettings: StructSettings,
 ) {
     private val runtimeConfig = symbolProvider.config.runtimeConfig
     private val symbol = symbolProvider.toSymbol(shape)
@@ -59,6 +61,7 @@ class ErrorGenerator(
                         }
                     },
                 ),
+                structSettings,
             ).render()
 
             ErrorImplGenerator(

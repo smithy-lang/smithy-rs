@@ -8,7 +8,7 @@ use std::io::BufReader;
 use std::process::Command;
 use std::time::Duration;
 
-use aws_smithy_client::hyper_ext::Adapter;
+use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use command_group::{CommandGroup, GroupChild};
 use pokemon_service_client::{Client, Config};
 use tokio::time;
@@ -102,7 +102,7 @@ pub fn http2_client() -> PokemonClient {
     let mut roots = tokio_rustls::rustls::RootCertStore::empty();
     roots.add_parsable_certificates(&certs);
 
-    let connector = hyper_rustls::HttpsConnectorBuilder::new()
+    let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
         .with_tls_config(
             tokio_rustls::rustls::ClientConfig::builder()
                 .with_safe_defaults()
@@ -115,7 +115,7 @@ pub fn http2_client() -> PokemonClient {
 
     let base_url = PokemonServiceVariant::Http2.base_url();
     let config = Config::builder()
-        .http_connector(Adapter::builder().build(connector))
+        .http_client(HyperClientBuilder::new().build(tls_connector))
         .endpoint_url(base_url)
         .build();
     Client::from_conf(config)

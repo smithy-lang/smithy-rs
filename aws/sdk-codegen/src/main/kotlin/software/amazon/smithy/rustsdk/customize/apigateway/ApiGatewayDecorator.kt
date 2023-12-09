@@ -31,14 +31,14 @@ private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegen
     ServiceRuntimePluginCustomization() {
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
+            section.registerInterceptor(this) {
                 rustTemplate(
                     "#{Interceptor}::default()",
                     "Interceptor" to RuntimeType.forInlineDependency(
                         InlineAwsDependency.forRustFile(
                             "apigateway_interceptors",
                             additionalDependency = arrayOf(
-                                CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig),
+                                CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
                             ),
                         ),
                     ).resolve("AcceptHeaderInterceptor"),

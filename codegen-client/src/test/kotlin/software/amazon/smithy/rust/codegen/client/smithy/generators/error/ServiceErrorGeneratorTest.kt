@@ -84,4 +84,30 @@ internal class ServiceErrorGeneratorTest {
             }
         }
     }
+
+    @Test
+    fun `provides error metadata`() {
+        clientIntegrationTest(model) { _, rustCrate ->
+            rustCrate.moduleFor(model.lookup<StructureShape>("com.example#CanYouRepeatThat")) {
+                unitTest(
+                    name = "generates_combined_error_enums",
+                    test = """
+                        use crate::Error;
+                        use crate::error::{ErrorMetadata, ProvideErrorMetadata};
+                        use crate::operation::say_hello::SayHelloError;
+                        use crate::types::error::*;
+
+                        // Unhandled variants properly delegate source.
+                        let error = Error::from(SayHelloError::SorryBusy(
+                            SorryBusy::builder()
+                                .meta(ErrorMetadata::builder().code("some code").message("some message").build())
+                                .build()
+                        ));
+                        assert_eq!("some code", error.code().expect("code field"));
+                        assert_eq!("some message", error.message().expect("message field"));
+                    """,
+                )
+            }
+        }
+    }
 }

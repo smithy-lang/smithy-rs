@@ -30,7 +30,7 @@ sealed interface AuthSchemeOption {
     /** Auth scheme for the `StaticAuthSchemeOptionResolver` */
     data class StaticAuthSchemeOption(
         val schemeShapeId: ShapeId,
-        val constructor: Writable,
+        val constructor: List<Writable>,
     ) : AuthSchemeOption
 
     class CustomResolver(/* unimplemented */) : AuthSchemeOption

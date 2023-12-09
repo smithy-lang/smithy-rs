@@ -99,3 +99,5 @@ fun TestWriterDelegator.clientRustSettings() =
         moduleName = "test_${baseDir.toFile().nameWithoutExtension}",
         codegenConfig = codegenConfig as ClientCodegenConfig,
     )
+
+fun TestWriterDelegator.clientCodegenContext(model: Model) = testClientCodegenContext(model, settings = clientRustSettings())

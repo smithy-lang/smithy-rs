@@ -18,7 +18,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.PaginatorGen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.isPaginated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -30,17 +32,17 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docLink
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.featureGatedBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.normalizeHtml
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -50,19 +52,19 @@ import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.getterName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
+import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
+private val BehaviorVersionLatest = Feature("behavior-version-latest", false, listOf())
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
-    private val reexportSmithyClientBuilder: Boolean = true,
-    private val generics: FluentClientGenerics,
     private val customizations: List<FluentClientCustomization> = emptyList(),
-    private val retryClassifier: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig)
-        .resolve("retry::DefaultResponseRetryClassifier"),
 ) {
+
     companion object {
         fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
             RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
@@ -85,7 +87,7 @@ class FluentClientGenerator(
     fun render(crate: RustCrate, customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList()) {
         renderFluentClient(crate)
 
-        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, generics, customizableOperationCustomizations)
+        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, customizableOperationCustomizations)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
@@ -96,42 +98,14 @@ class FluentClientGenerator(
     }
 
     private fun renderFluentClient(crate: RustCrate) {
+        crate.mergeFeature(BehaviorVersionLatest)
         crate.withModule(ClientRustModule.client) {
-            if (reexportSmithyClientBuilder) {
-                rustTemplate(
-                    """
-                    ##[doc(inline)]
-                    pub use #{client}::Builder;
-                    """,
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                )
-            }
-            val clientScope = arrayOf(
-                *preludeScope,
-                "Arc" to RuntimeType.Arc,
-                "client" to RuntimeType.smithyClient(runtimeConfig),
-                "client_docs" to writable
-                    {
-                        customizations.forEach {
-                            it.section(
-                                FluentClientSection.FluentClientDocs(
-                                    serviceShape,
-                                ),
-                            )(this)
-                        }
-                    },
-                "RetryConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::RetryConfig"),
-                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                "TimeoutConfig" to RuntimeType.smithyTypes(runtimeConfig).resolve("timeout::TimeoutConfig"),
-                // TODO(enableNewSmithyRuntimeCleanup): Delete the generics when cleaning up middleware
-                "generics_decl" to generics.decl,
-                "smithy_inst" to generics.smithyInst,
-            )
             rustTemplate(
                 """
                 ##[derive(Debug)]
                 pub(crate) struct Handle {
                     pub(crate) conf: crate::Config,
+                    ##[allow(dead_code)] // unused when a service does not provide any operations
                     pub(crate) runtime_plugins: #{RuntimePlugins},
                 }
 
@@ -146,25 +120,24 @@ class FluentClientGenerator(
                     ///
                     /// ## Panics
                     ///
-                    /// This method will panic if the `conf` has retry or timeouts enabled without a `sleep_impl`.
-                    /// If you experience this panic, it can be fixed by setting the `sleep_impl`, or by disabling
-                    /// retries and timeouts.
+                    /// This method will panic in the following cases:
+                    ///
+                    /// - Retries or timeouts are enabled without a `sleep_impl` configured.
+                    /// - Identity caching is enabled without a `sleep_impl` and `time_source` configured.
+                    /// - No `behavior_version` is provided.
+                    ///
+                    /// The panic message for each of these will have instructions on how to resolve them.
+                    ##[track_caller]
                     pub fn from_conf(conf: crate::Config) -> Self {
-                        let retry_config = conf.retry_config().cloned().unwrap_or_else(#{RetryConfig}::disabled);
-                        let timeout_config = conf.timeout_config().cloned().unwrap_or_else(#{TimeoutConfig}::disabled);
-                        let sleep_impl = conf.sleep_impl();
-                        if (retry_config.has_retry() || timeout_config.has_timeouts()) && sleep_impl.is_none() {
-                            panic!("An async sleep implementation is required for retries or timeouts to work. \
-                                    Set the `sleep_impl` on the Config passed into this function to fix this panic.");
+                        let handle = Handle {
+                            conf: conf.clone(),
+                            runtime_plugins: #{base_client_runtime_plugins}(conf),
+                        };
+                        if let Err(err) = Self::validate_config(&handle) {
+                            panic!("Invalid client configuration: {err}");
                         }
-
                         Self {
-                            handle: #{Arc}::new(
-                                Handle {
-                                    conf: conf.clone(),
-                                    runtime_plugins: #{base_client_runtime_plugins}(conf),
-                                }
-                            )
+                            handle: #{Arc}::new(handle)
                         }
                     }
 
@@ -173,25 +146,31 @@ class FluentClientGenerator(
                         &self.handle.conf
                     }
 
-                    ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                    // This is currently kept around so the tests still compile in both modes
-                    /// Creates a client with the given service configuration.
-                    pub fn with_config<C, M, R>(_client: #{client}::Client<C, M, R>, conf: crate::Config) -> Self {
-                        Self::from_conf(conf)
-                    }
-
-                    ##[doc(hidden)]
-                    // TODO(enableNewSmithyRuntimeCleanup): Delete this function when cleaning up middleware
-                    // This is currently kept around so the tests still compile in both modes
-                    /// Returns the client's configuration.
-                    pub fn conf(&self) -> &crate::Config {
-                        &self.handle.conf
+                    fn validate_config(handle: &Handle) -> Result<(), #{BoxError}> {
+                        let mut cfg = #{ConfigBag}::base();
+                        handle.runtime_plugins
+                            .apply_client_configuration(&mut cfg)?
+                            .validate_base_client_config(&cfg)?;
+                        Ok(())
                     }
                 }
                 """,
-                *clientScope,
-                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(runtimeConfig),
+                *preludeScope,
+                "Arc" to RuntimeType.Arc,
+                "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
+                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                "client_docs" to writable {
+                    customizations.forEach {
+                        it.section(
+                            FluentClientSection.FluentClientDocs(
+                                serviceShape,
+                            ),
+                        )(this)
+                    }
+                },
+                "ConfigBag" to RuntimeType.configBag(runtimeConfig),
+                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                "tracing" to CargoDependency.Tracing.toType(),
             )
         }
 
@@ -202,11 +181,7 @@ class FluentClientGenerator(
 
             val privateModule = RustModule.private(moduleName, parent = ClientRustModule.client)
             crate.withModule(privateModule) {
-                rustBlockTemplate(
-                    "impl${generics.inst} super::Client${generics.inst} #{bounds:W}",
-                    "client" to RuntimeType.smithyClient(runtimeConfig),
-                    "bounds" to generics.bounds,
-                ) {
+                rustBlock("impl super::Client") {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
                     val maybePaginated = if (operation.isPaginated(model)) {
                         "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
@@ -252,7 +227,7 @@ class FluentClientGenerator(
 
                     rustTemplate(
                         """
-                        pub fn $fnName(&self) -> #{FluentBuilder}${generics.inst} {
+                        pub fn $fnName(&self) -> #{FluentBuilder} {
                             #{FluentBuilder}::new(self.handle.clone())
                         }
                         """,
@@ -277,16 +252,13 @@ class FluentClientGenerator(
             rustTemplate(
                 """
                 /// Sends a request with this input using the given client.
-                pub async fn send_with${generics.inst}(
-                    self,
-                    client: &crate::Client${generics.inst}
-                ) -> #{Result}<
+                pub async fn send_with(self, client: &crate::Client) -> #{Result}<
                     #{OperationOutput},
                     #{SdkError}<
                         #{OperationError},
                         #{RawResponseType}
                     >
-                > #{send_bounds:W} #{boundsWithoutWhereClause:W} {
+                > {
                     let mut fluent_builder = client.$fnName();
                     fluent_builder.inner = self;
                     fluent_builder.send().await
@@ -294,14 +266,11 @@ class FluentClientGenerator(
                 """,
                 *preludeScope,
                 "RawResponseType" to
-                    RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
                 "OperationOutput" to outputType,
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                "SdkSuccess" to RuntimeType.sdkSuccess(runtimeConfig),
-                "boundsWithoutWhereClause" to generics.boundsWithoutWhereClause,
-                "send_bounds" to generics.sendBounds(operationSymbol, outputType, errorType, retryClassifier),
             )
         }
 
@@ -313,33 +282,53 @@ class FluentClientGenerator(
         deprecatedShape(operation)
         Attribute(derive(derives.toSet())).render(this)
         withBlockTemplate(
-            "pub struct $builderName#{generics:W} {",
+            "pub struct $builderName {",
             "}",
-            "generics" to generics.decl,
         ) {
             rustTemplate(
                 """
-                handle: #{Arc}<crate::client::Handle${generics.inst}>,
+                handle: #{Arc}<crate::client::Handle>,
                 inner: #{Inner},
                 """,
                 "Inner" to symbolProvider.symbolForBuilder(input),
                 "Arc" to RuntimeType.Arc,
-                "generics" to generics.decl,
             )
             rustTemplate("config_override: #{Option}<crate::config::Builder>,", *preludeScope)
         }
 
-        rustBlockTemplate(
-            "impl${generics.inst} $builderName${generics.inst} #{bounds:W}",
-            "client" to RuntimeType.smithyClient(runtimeConfig),
-            "bounds" to generics.bounds,
-        ) {
+        rustTemplate(
+            """
+            impl
+                crate::client::customize::internal::CustomizableSend<
+                    #{OperationOutput},
+                    #{OperationError},
+                > for $builderName
+            {
+                fn send(
+                    self,
+                    config_override: crate::config::Builder,
+                ) -> crate::client::customize::internal::BoxFuture<
+                    crate::client::customize::internal::SendResult<
+                        #{OperationOutput},
+                        #{OperationError},
+                    >,
+                > {
+                    #{Box}::pin(async move { self.config_override(config_override).send().await })
+                }
+            }
+            """,
+            *preludeScope,
+            "OperationError" to errorType,
+            "OperationOutput" to outputType,
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        )
+
+        rustBlock("impl $builderName") {
             rust("/// Creates a new `${operationSymbol.name}`.")
             withBlockTemplate(
-                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle${generics.inst}>) -> Self {",
+                "pub(crate) fn new(handle: #{Arc}<crate::client::Handle>) -> Self {",
                 "}",
                 "Arc" to RuntimeType.Arc,
-                "generics" to generics.decl,
             ) {
                 withBlockTemplate(
                     "Self {",
@@ -361,8 +350,8 @@ class FluentClientGenerator(
             val orchestratorScope = arrayOf(
                 *preludeScope,
                 "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                    .resolve("orchestrator::CustomizableOperation"),
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
+                    .resolve("CustomizableOperation"),
+                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::orchestrator::HttpResponse"),
                 "Operation" to operationSymbol,
                 "OperationError" to errorType,
@@ -392,31 +381,11 @@ class FluentClientGenerator(
                     #{Operation}::orchestrate(&runtime_plugins, input).await
                 }
 
-                /// Consumes this builder, creating a customizable operation that can be modified before being
-                /// sent.
-                // TODO(enableNewSmithyRuntimeCleanup): Remove `async` and `Result` once we switch to orchestrator
-                pub async fn customize(
+                /// Consumes this builder, creating a customizable operation that can be modified before being sent.
+                pub fn customize(
                     self,
-                ) -> #{Result}<
-                    #{CustomizableOperation}<
-                        #{OperationOutput},
-                        #{OperationError},
-                    >,
-                    #{SdkError}<#{OperationError}>,
-                >
-                {
-                    #{Ok}(#{CustomizableOperation} {
-                        customizable_send: #{Box}::new(move |config_override| {
-                            #{Box}::pin(async {
-                                self.config_override(config_override)
-                                    .send()
-                                    .await
-                            })
-                        }),
-                        config_override: None,
-                        interceptors: vec![],
-                        runtime_plugins: vec![],
-                    })
+                ) -> #{CustomizableOperation}<#{OperationOutput}, #{OperationError}, Self> {
+                    #{CustomizableOperation}::new(self)
                 }
                 """,
                 *orchestratorScope,
@@ -442,14 +411,14 @@ class FluentClientGenerator(
                 """,
             )
 
-            PaginatorGenerator.paginatorType(codegenContext, generics, operation, retryClassifier)
+            PaginatorGenerator.paginatorType(codegenContext, operation)
                 ?.also { paginatorType ->
                     rustTemplate(
                         """
                         /// Create a paginator for this request
                         ///
-                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a `Stream`.
-                        pub fn into_paginator(self) -> #{Paginator}${generics.inst} {
+                        /// Paginators are used by calling [`send().await`](#{Paginator}::send) which returns a [`PaginationStream`](aws_smithy_async::future::pagination_stream::PaginationStream).
+                        pub fn into_paginator(self) -> #{Paginator} {
                             #{Paginator}::new(self.handle, self.inner)
                         }
                         """,
@@ -485,8 +454,13 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeType =
+private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
     RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
+        val api = RuntimeType.smithyRuntimeApiClient(rc)
+        val rt = RuntimeType.smithyRuntime(rc)
+        val behaviorVersionError = "Invalid client configuration: A behavior major version must be set when sending a " +
+            "request or constructing a client. You must set it during client construction or by enabling the " +
+            "`${BehaviorVersionLatest.name}` cargo feature."
         rustTemplate(
             """
             pub(crate) fn base_client_runtime_plugins(
@@ -494,14 +468,27 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             ) -> #{RuntimePlugins} {
                 let mut configured_plugins = #{Vec}::new();
                 ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+                ##[allow(unused_mut)]
+                let mut behavior_version = config.behavior_version.clone();
+                #{update_bmv}
+
                 let mut plugins = #{RuntimePlugins}::new()
+                    // defaults
+                    .with_client_plugins(#{default_plugins}(
+                        #{DefaultPluginParams}::new()
+                            .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
+                            .with_behavior_version(behavior_version.expect(${behaviorVersionError.dq()}))
+                    ))
+                    // user config
                     .with_client_plugin(
                         #{StaticRuntimePlugin}::new()
                             .with_config(config.config.clone())
                             .with_runtime_components(config.runtime_components.clone())
                     )
+                    // codegen config
                     .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
                     .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+
                 for plugin in configured_plugins {
                     plugins = plugins.with_client_plugin(plugin);
                 }
@@ -509,13 +496,25 @@ private fun baseClientRuntimePluginsFn(runtimeConfig: RuntimeConfig): RuntimeTyp
             }
             """,
             *preludeScope,
-            "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-            "NoAuthRuntimePlugin" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-            "StaticRuntimePlugin" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
+            "default_plugins" to rt.resolve("client::defaults::default_plugins"),
+            "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+            "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
+            "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
+            "update_bmv" to featureGatedBlock(BehaviorVersionLatest) {
+                rustTemplate(
+                    """
+                    if behavior_version.is_none() {
+                        behavior_version = Some(#{BehaviorVersion}::latest());
+                    }
+
+                    """,
+                    "BehaviorVersion" to api.resolve("client::behavior_version::BehaviorVersion"),
+                )
+            },
         )
     }
+}
 
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
@@ -543,7 +542,7 @@ private fun generateOperationShapeDocs(
             else -> "(undocumented)"
         }
 
-        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink): $docs"
+        "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink):<br>required: **${memberShape.isRequired}**<br>$docs<br>"
     }
 }
 

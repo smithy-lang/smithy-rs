@@ -176,8 +176,8 @@ Next = Callable[[Request], Awaitable[Response]]
 @app.middleware
 async def check_content_type_header(request: Request, next: Next) -> Response:
     content_type = request.headers.get("content-type")
-    if content_type == "application/json":
-        logging.debug("found valid `application/json` content type")
+    if content_type in ["application/json", "application/vnd.amazon.eventstream"]:
+        logging.debug("found valid `%s` content type", content_type)
     else:
         logging.warning(
             "invalid content type %s, dumping headers: %s",
@@ -203,7 +203,7 @@ async def add_x_amzn_answer_header(request: Request, next: Next) -> Response:
 async def check_x_amzn_answer_header(request: Request, next: Next) -> Response:
     # Check that `x-amzn-answer` is 42.
     if request.headers.get("x-amzn-answer") != "42":
-        # Return an HTTP 401 Unauthorized if the content type is not JSON.
+        # Return an HTTP 401 Unauthorized.
         raise MiddlewareException("Invalid answer", 401)
     return await next(request)
 

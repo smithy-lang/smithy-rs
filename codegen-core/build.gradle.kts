@@ -23,7 +23,7 @@ val smithyVersion: String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jsoup:jsoup:1.14.3")
+    implementation("org.jsoup:jsoup:1.16.2")
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -53,18 +53,47 @@ fun gitCommitHash(): String {
 }
 
 val generateSmithyRuntimeCrateVersion by tasks.registering {
+    fun kv(key: String, value: String) = "\"$key\": \"$value\""
     // generate the version of the runtime to use as a resource.
     // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/core"
-    val versionFile = file("$resourcesDir/runtime-crate-version.txt")
+    val resourcesDir = layout.buildDirectory.dir("resources/main/software/amazon/smithy/rust/codegen/core")
+    val versionFile = resourcesDir.get().file("runtime-crate-version.txt")
     outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
-    inputs.property("crateVersion", crateVersion)
+    val stableCrateVersion = project.properties["smithy.rs.runtime.crate.stable.version"].toString()
+    val unstableCrateVersion = project.properties["smithy.rs.runtime.crate.unstable.version"].toString()
+    inputs.property("crateVersion", stableCrateVersion)
     // version format must be in sync with `software.amazon.smithy.rust.codegen.core.Version`
-    val version = "$crateVersion\n${gitCommitHash()}"
+    val version = StringBuilder().append("{")
+    version.append(kv("githash", gitCommitHash())).append(",")
+    version.append(kv("stableVersion", stableCrateVersion)).append(",")
+    version.append(kv("unstableVersion", unstableCrateVersion)).append(",")
+    // hack for internal build
+    val smithyStableCrates = listOf(
+        // AWS crates
+        "aws-config",
+        "aws-credential-types",
+        "aws-runtime",
+        "aws-runtime-api",
+        "aws-sigv4",
+        "aws-types",
+
+        // smithy crates
+        "aws-smithy-async",
+        "aws-smithy-runtime-api",
+        "aws-smithy-runtime",
+        "aws-smithy-types",
+    )
+
+    val runtimeCrates =
+        smithyStableCrates.joinToString(separator = ",", prefix = "{", postfix = "}") { crate ->
+            kv(crate, stableCrateVersion)
+        }
+
+    version.append(""""runtimeCrates": $runtimeCrates""").append("}")
+
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
-        versionFile.writeText(version)
+        versionFile.asFile.writeText(version.toString())
     }
 }
 
@@ -125,7 +154,7 @@ if (isTestingEnabled.toBoolean()) {
         reports {
             xml.required.set(false)
             csv.required.set(false)
-            html.outputLocation.set(file("$buildDir/reports/jacoco"))
+            html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
         }
     }
 
@@ -140,5 +169,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

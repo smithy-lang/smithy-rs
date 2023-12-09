@@ -119,7 +119,7 @@ version = "0.0.1"
 edition = "2021"
 description = "Placeholder ahead of the next smithy-rs release"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs""#,
+repository = "https://github.com/smithy-lang/smithy-rs""#,
         package_name
     );
     fs.write_file(directory_path.join("Cargo.toml"), cargo_toml.as_bytes())

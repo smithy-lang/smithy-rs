@@ -70,7 +70,7 @@ class MapConstraintViolationGenerator(
         }
 
         inlineModuleCreator(constraintViolationSymbol) {
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
             //  types here. One will just have variants for each constraint trait on the map shape, for use by the user.
             //  The other one will have variants if the shape's key or value is directly or transitively constrained,
             //  and is for use by the framework.

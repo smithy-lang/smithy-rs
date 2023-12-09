@@ -7,7 +7,6 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
-import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
@@ -18,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
-import software.amazon.smithy.rust.codegen.core.util.letIf
 import java.io.File
 
 // In aws-sdk-codegen, the working dir when gradle runs tests is actually `./aws`. So, to find the smithy runtime, we need
@@ -37,37 +35,36 @@ fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = 
         settings = settings ?: testClientRustSettings(runtimeConfig = AwsTestRuntimeConfig),
     )
 
-// TODO(enableNewSmithyRuntimeCleanup): Remove generateOrchestrator once the runtime switches to the orchestrator
 fun awsSdkIntegrationTest(
     model: Model,
-    generateOrchestrator: Boolean = true,
+    params: IntegrationTestParams = awsIntegrationTestParams(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) =
     clientIntegrationTest(
         model,
-        IntegrationTestParams(
-            cargoCommand = "cargo test --features test-util",
-            runtimeConfig = AwsTestRuntimeConfig,
-            additionalSettings = ObjectNode.builder().withMember(
-                "customizationConfig",
-                ObjectNode.builder()
-                    .withMember(
-                        "awsSdk",
-                        ObjectNode.builder()
-                            .withMember("generateReadme", false)
-                            .withMember("integrationTestPath", "../sdk/integration-tests")
-                            .build(),
-                    ).build(),
-            )
-                .withMember(
-                    "codegen",
-                    ObjectNode.builder()
-                        .withMember("includeFluentClient", false)
-                        .letIf(generateOrchestrator) {
-                            it.withMember("enableNewSmithyRuntime", StringNode.from("orchestrator"))
-                        }
-                        .build(),
-                ).build(),
-        ),
+        awsIntegrationTestParams(),
         test = test,
     )
+
+fun awsIntegrationTestParams() = IntegrationTestParams(
+    cargoCommand = "cargo test --features test-util behavior-version-latest",
+    runtimeConfig = AwsTestRuntimeConfig,
+    additionalSettings = ObjectNode.builder().withMember(
+        "customizationConfig",
+        ObjectNode.builder()
+            .withMember(
+                "awsSdk",
+                ObjectNode.builder()
+                    .withMember("generateReadme", false)
+                    .withMember("integrationTestPath", "../sdk/integration-tests")
+                    .build(),
+            ).build(),
+    )
+        .withMember(
+            "codegen",
+            ObjectNode.builder()
+                .withMember("includeFluentClient", false)
+                .withMember("includeEndpointUrlConfig", false)
+                .build(),
+        ).build(),
+)

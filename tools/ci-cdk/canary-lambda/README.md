@@ -34,6 +34,7 @@ invoke the canary:
 
 ```bash
 export CANARY_S3_BUCKET_NAME=<your bucket name>
+export CANARY_S3_MRAP_BUCKET_ARN=<your MRAP bucket ARN>
 # run with `--all-features` so you run all canaries (including canaries that don't work against older versions)
 cargo run --all-features -- --local
 ```

@@ -50,7 +50,7 @@ class ConstrainedShapeSymbolMetadataProvider(
 
         // We should _always_ be able to `#[derive(Debug)]`: all constrained shapes' types are simply tuple newtypes
         // wrapping a single type which always implements `Debug`.
-        // The wrapped type may not _derive_ `Debug` though, hence why this line is required; see https://github.com/awslabs/smithy-rs/issues/2582.
+        // The wrapped type may not _derive_ `Debug` though, hence why this line is required; see https://github.com/smithy-lang/smithy-rs/issues/2582.
         derives += RuntimeType.Debug
 
         val visibility = Visibility.publicIf(constrainedTypes, Visibility.PUBCRATE)
