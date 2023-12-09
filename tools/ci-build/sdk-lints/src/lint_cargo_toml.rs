@@ -224,6 +224,7 @@ fn fix_docs_rs(contents: &str) -> Result<String> {
         &mut new,
         &("[package.metadata.docs.rs]", "# End of docs.rs metadata"),
         DEFAULT_DOCS_RS_SECTION,
+        None,
     )?;
     Ok(new)
 }
