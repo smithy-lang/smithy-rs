@@ -405,13 +405,21 @@ fun FileManifest.printGeneratedFiles() {
  * ```
  * All features are enabled by default. If you wish to disable them, set enableAllFeatures to False.
  * ```kotlin
- * compileAndTest(featuresToEnable = false)
+ * compileAndTest(enableAllFeatures = false)
  * ```
+ *
+ * You can run with `--cfg aws_sdk_unstable` by setting enableUnstableFlag to True.
+ * This feature is not enabled by default.
+ * e.g.
+ *  ```kotlin
+ *  compileAndTest(enableUnstableFlag = true)
+ *  compileAndTest(enableUnstableFlag = true, featuresToEnable = ["serde-serialize", "serde-deserialize"])
+ *  ```
  */
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
-    enableUnstableFlag: Boolean = true,
+    enableUnstableFlag: Boolean = false,
     enableAllFeatures: Boolean = true,
     featuresToEnable: Array<String>? = null,
 ): String {
