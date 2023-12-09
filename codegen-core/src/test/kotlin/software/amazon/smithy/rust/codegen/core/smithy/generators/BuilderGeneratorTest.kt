@@ -26,10 +26,9 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
+import software.amazon.smithy.rust.codegen.core.util.lookup
 import kotlin.io.path.extension
 import kotlin.io.path.readText
-import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
