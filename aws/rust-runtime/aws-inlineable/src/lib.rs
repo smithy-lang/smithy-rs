@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 //! Collection of modules that get conditionally included directly into the code generated
 //! SDK service crates. For example, when generating S3, the `s3_errors` module will get copied
 //! into the generated S3 crate to support the code generator.
