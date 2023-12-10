@@ -23,7 +23,7 @@ val smithyVersion: String by project
 dependencies {
     implementation(project(":codegen-core"))
     implementation(project(":codegen-client"))
-    implementation("org.jsoup:jsoup:1.15.3")
+    implementation("org.jsoup:jsoup:1.16.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
     implementation("software.amazon.smithy:smithy-rules-engine:$smithyVersion")
