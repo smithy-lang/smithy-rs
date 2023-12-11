@@ -32,8 +32,8 @@ class AwsEndpointsStdLib() : ClientCodegenDecorator {
         if (partitionsCache == null) {
             val partitionsJson = when (val path = sdkSettings.partitionsConfigPath) {
                 null -> {
-                    if (sdkSettings.productionSdkBuild) {
-                        PANIC("cannot use hardcoded partitions in AWS SDK production build")
+                    if (sdkSettings.awsSdkBuild) {
+                        PANIC("cannot use hardcoded partitions in AWS SDK build")
                     }
                     (
                         javaClass.getResource("/default-partitions.json")

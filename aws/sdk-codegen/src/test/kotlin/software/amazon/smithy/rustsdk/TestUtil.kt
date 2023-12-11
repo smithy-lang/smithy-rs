@@ -43,33 +43,34 @@ fun awsSdkIntegrationTest(
     model: Model,
     params: IntegrationTestParams = awsIntegrationTestParams(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
-) = clientIntegrationTest(
-    model,
-    awsIntegrationTestParams(),
-    test = test,
-)
-
-fun awsIntegrationTestParams() =
-    IntegrationTestParams(
-        cargoCommand = "cargo test --features test-util behavior-version-latest",
-        runtimeConfig = AwsTestRuntimeConfig,
-        additionalSettings =
-            ObjectNode.builder().withMember(
-                "customizationConfig",
-                ObjectNode.builder()
-                    .withMember(
-                        "awsSdk",
-                        ObjectNode.builder()
-                            .withMember("generateReadme", false)
-                            .withMember("integrationTestPath", "../sdk/integration-tests")
-                            .build(),
-                    ).build(),
-            )
-                .withMember(
-                    "codegen",
-                    ObjectNode.builder()
-                        .withMember("includeFluentClient", false)
-                        .withMember("includeEndpointUrlConfig", false)
-                        .build(),
-                ).build(),
+) =
+    clientIntegrationTest(
+        model,
+        params,
+        test = test,
     )
+
+fun awsIntegrationTestParams() = IntegrationTestParams(
+    cargoCommand = "cargo test --features test-util behavior-version-latest",
+    runtimeConfig = AwsTestRuntimeConfig,
+    additionalSettings = ObjectNode.builder().withMember(
+        "customizationConfig",
+        ObjectNode.builder()
+            .withMember(
+                "awsSdk",
+                ObjectNode.builder()
+                    .withMember("awsSdkBuild", true)
+                    .withMember("integrationTestPath", "../sdk/integration-tests")
+                    .withMember("partitionsConfigPath", "../sdk/aws-models/sdk-endpoints.json")
+                    .withMember("awsConfigVersion", "1")
+                    .build(),
+            ).build(),
+    )
+        .withMember(
+            "codegen",
+            ObjectNode.builder()
+                .withMember("includeFluentClient", false)
+                .withMember("includeEndpointUrlConfig", false)
+                .build(),
+        ).build(),
+)

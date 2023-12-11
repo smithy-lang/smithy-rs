@@ -122,10 +122,9 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "license": "Apache-2.0",
                         "customizationConfig": {
                             "awsSdk": {
-                                "generateReadme": true,
+                                "awsSdkBuild": true,
                                 "awsConfigVersion": "$awsConfigVersion",
                                 "defaultConfigPath": "${services.defaultConfigPath}",
-                                "productionSdkBuild": true,
                                 "partitionsConfigPath": "${services.partitionsConfigPath}",
                                 "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
                             }

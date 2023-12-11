@@ -30,8 +30,8 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
         get() =
             awsSdk?.getStringMember("partitionsConfigPath")?.orNull()?.value?.let { Paths.get(it) }
 
-    val productionSdkBuild: Boolean
-        get() = awsSdk?.getBooleanMember("productionSdkBuild")?.orNull()?.value ?: false
+    val awsSdkBuild: Boolean
+        get() = awsSdk?.getBooleanMember("awsSdkBuild")?.orNull()?.value ?: false
 
     /** Path to AWS SDK integration tests */
     val integrationTestPath: String
@@ -45,11 +45,10 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
 
     /** Whether to generate a README */
     val generateReadme: Boolean
-        get() =
-            awsSdk?.getBooleanMember("generateReadme")?.orNull()?.value ?: false
+        get() = awsSdkBuild
 
     val requireEndpointResolver: Boolean
-        get() = awsSdk?.getBooleanMember("requireEndpointResolver")?.orNull()?.value ?: true
+        get() = awsSdkBuild
 }
 
 fun ClientCodegenContext.sdkSettings() = SdkSettings.from(this.settings)
