@@ -58,7 +58,7 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
         return writable {
             containerDocs(
                 """
-                #\## How to enable `Serialize` and `Deserialize`
+                ## How to enable `Serialize` and `Deserialize`
                 
                 This data type implements `Serialize` and `Deserialize` traits from the popular serde crate, but those traits are behind feature gate.
     
