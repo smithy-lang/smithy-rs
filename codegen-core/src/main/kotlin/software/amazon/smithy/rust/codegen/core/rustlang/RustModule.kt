@@ -79,14 +79,19 @@ sealed class RustModule {
         }
 
         /** Creates a new public module */
-        fun public(name: String, parent: RustModule = LibRs, documentationOverride: String? = null): LeafModule =
-            new(
-                name,
-                visibility = Visibility.PUBLIC,
-                inline = false,
-                parent = parent,
-                documentationOverride = documentationOverride,
-            )
+        fun public(
+            name: String,
+            parent: RustModule = LibRs,
+            documentationOverride: String? = null,
+            additionalAttributes: List<Attribute> = emptyList(),
+        ): LeafModule = new(
+            name,
+            visibility = Visibility.PUBLIC,
+            inline = false,
+            parent = parent,
+            documentationOverride = documentationOverride,
+            additionalAttributes = additionalAttributes,
+        )
 
         /** Creates a new private module */
         fun private(name: String, parent: RustModule = LibRs): LeafModule =

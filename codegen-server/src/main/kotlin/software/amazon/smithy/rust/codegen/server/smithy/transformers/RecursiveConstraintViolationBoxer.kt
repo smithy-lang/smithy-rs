@@ -63,7 +63,7 @@ object RecursiveConstraintViolationBoxer {
      * Places where constraint violations are handled (like where unconstrained types are converted to constrained
      * types) must account for the scenario where they now are or need to be boxed.
      *
-     * [0] https://github.com/awslabs/smithy-rs/pull/2040
+     * [0] https://github.com/smithy-lang/smithy-rs/pull/2040
      */
     fun transform(model: Model): Model = RecursiveShapeBoxer(
         containsIndirectionPredicate = ::constraintViolationLoopContainsIndirection,

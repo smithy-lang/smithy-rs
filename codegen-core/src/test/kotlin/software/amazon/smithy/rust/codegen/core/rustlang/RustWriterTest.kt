@@ -143,7 +143,7 @@ class RustWriterTest {
         )
         val sut = RustWriter.root()
         metadata.render(sut)
-        sut.toString().shouldContain("#[allow(deprecated)]\n#[derive(std::fmt::Debug)]\n#[foo]")
+        sut.toString().shouldContain("#[allow(deprecated)]\n#[derive(::std::fmt::Debug)]\n#[foo]")
     }
 
     @Test
@@ -183,7 +183,7 @@ class RustWriterTest {
             "Inner" to inner,
             "http" to RuntimeType.Http.resolve("foo"),
         )
-        sut.toString().shouldContain("inner: hello, regular: http::foo")
+        sut.toString().shouldContain("inner: hello, regular: ::http::foo")
     }
 
     @Test

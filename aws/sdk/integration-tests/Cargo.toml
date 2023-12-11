@@ -14,7 +14,7 @@ members = [
     "s3",
     "s3control",
     "sts",
+    "timestreamquery",
     "transcribestreaming",
-    "using-native-tls-instead-of-rustls",
     "webassembly",
 ]

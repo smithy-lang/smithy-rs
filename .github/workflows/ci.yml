@@ -29,7 +29,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.67.1
+  rust_version: 1.70.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -108,6 +108,8 @@ jobs:
           runner: ubuntu-latest
         - action: check-style-and-lints
           runner: ubuntu-latest
+        - action: check-book
+          runner: ubuntu-latest
         - action: check-tools
           runner: smithy_ubuntu-latest_8-core
         - action: check-deterministic-codegen
@@ -184,6 +186,9 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
+      # To fix OpenSSL not found on Windows: https://github.com/sfackler/rust-openssl/issues/1542
+    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - run: vcpkg install openssl:x64-windows-static-md
     - name: Run tests
       shell: bash
       run: |
@@ -208,8 +213,6 @@ jobs:
       matrix:
         include:
         # We always exclude aws-smithy-http-server-python since the Python framework is experimental.
-        # We only build the `native-tls` feature here because `rustls` depends on `ring` which in turn
-        # does not support powerpc as a target platform (see https://github.com/briansmith/ring/issues/389)
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
@@ -218,17 +221,17 @@ jobs:
           test_aws_exclude: ''
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
         - target: powerpc-unknown-linux-gnu
-          build_smithy_rs_features: --features native-tls
+          build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
-          test_smithy_rs_features: --features native-tls
+          test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
         - target: powerpc64-unknown-linux-gnu
-          build_smithy_rs_features: --features native-tls
+          build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
-          test_smithy_rs_features: --features native-tls
+          test_smithy_rs_features: ''
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript
     env:

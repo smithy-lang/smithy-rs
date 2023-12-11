@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.core.rustlang
 
 import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldEndWith
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
@@ -33,7 +34,7 @@ internal class RustTypeParametersTest {
     @Test
     fun `rustTypeParameters accepts RuntimeType`() {
         val runtimeType = RuntimeType.String
-        forInputExpectOutput(runtimeType, "'<std::string::String>'")
+        forInputExpectOutput(runtimeType, "'<::std::string::String>'")
     }
 
     @Test
@@ -60,7 +61,7 @@ internal class RustTypeParametersTest {
         writer.rustInlineTemplate("#{tps:W}", "tps" to tps)
         writer.rustInlineTemplate("'")
 
-        writer.toString() shouldContain "'<crate::operation::Operation, (), std::string::String, T, A, B>'"
+        writer.toString() shouldContain "'<crate::operation::Operation, (), ::std::string::String, T, A, B>'"
     }
 
     @Test
@@ -105,5 +106,14 @@ internal class RustTypeParametersTest {
             yield(writable("F"))
         }.join(writable("+"))(writer)
         writer.toString() shouldContain "A-B-CD+E+F"
+    }
+
+    @Test
+    fun `test map`() {
+        val writer = RustWriter.forModule("model")
+        val a = writable { rust("a") }
+        val b = a.map { rust("b(#T)", it) }
+        b(writer)
+        writer.toString().trim() shouldEndWith "b(a)"
     }
 }

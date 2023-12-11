@@ -111,6 +111,13 @@ sealed class PythonType {
                 else -> it
             }
         }
+            // Most opaque types have a leading `::`, so strip that for Python as needed
+            .let {
+                when (it?.startsWith(".")) {
+                    true -> it.substring(1)
+                    else -> it
+                }
+            }
     }
 }
 

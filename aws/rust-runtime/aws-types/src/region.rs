@@ -5,6 +5,7 @@
 
 //! Region type for determining the endpoint to send requests to.
 
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::borrow::Cow;
 use std::fmt::{Display, Formatter};
 
@@ -33,6 +34,10 @@ impl Display for Region {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+impl Storable for Region {
+    type Storer = StoreReplace<Region>;
 }
 
 impl Region {
@@ -75,5 +80,56 @@ impl SigningRegion {
     /// Creates a `SigningRegion` from a static str.
     pub const fn from_static(region: &'static str) -> Self {
         SigningRegion(Cow::Borrowed(region))
+    }
+}
+
+impl Storable for SigningRegion {
+    type Storer = StoreReplace<Self>;
+}
+
+// The region set to use when signing Sigv4a requests
+///
+/// Generally, user code will not need to interact with `SigningRegionSet`. See `[Region](crate::Region)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SigningRegionSet(Cow<'static, str>);
+
+impl From<Region> for SigningRegionSet {
+    fn from(inp: Region) -> Self {
+        SigningRegionSet(inp.0)
+    }
+}
+
+impl From<&'static str> for SigningRegionSet {
+    fn from(region: &'static str) -> Self {
+        SigningRegionSet(Cow::Borrowed(region))
+    }
+}
+
+impl<'a> FromIterator<&'a str> for SigningRegionSet {
+    fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
+        let mut s = String::new();
+        let mut iter = iter.into_iter();
+
+        if let Some(region) = iter.next() {
+            s.push_str(region);
+        }
+
+        // If more than one region is present in the iter, separate remaining regions with commas
+        for region in iter {
+            s.push(',');
+            s.push_str(region);
+        }
+
+        SigningRegionSet(Cow::Owned(s))
+    }
+}
+
+impl Storable for SigningRegionSet {
+    type Storer = StoreReplace<Self>;
+}
+
+impl AsRef<str> for SigningRegionSet {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
     }
 }

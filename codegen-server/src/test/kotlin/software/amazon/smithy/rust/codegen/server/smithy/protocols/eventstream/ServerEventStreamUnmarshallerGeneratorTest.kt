@@ -16,7 +16,7 @@ class ServerEventStreamUnmarshallerGeneratorTest {
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
     fun test(testCase: TestCase) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1442): Enable tests for `publicConstrainedTypes = false`
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1442): Enable tests for `publicConstrainedTypes = false`
         // by deleting this if/return
         if (!testCase.publicConstrainedTypes) {
             return

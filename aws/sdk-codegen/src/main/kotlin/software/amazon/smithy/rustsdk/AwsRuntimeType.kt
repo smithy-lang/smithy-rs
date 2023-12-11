@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rustsdk
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -13,16 +12,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import java.io.File
 import java.nio.file.Path
-
-fun defaultSdkVersion(): String {
-    // generated as part of the build, see codegen/build.gradle.kts
-    try {
-        return object {}.javaClass.getResource("sdk-crate-version.txt")?.readText()
-            ?: throw CodegenException("sdk-crate-version.txt does not exist")
-    } catch (ex: Exception) {
-        throw CodegenException("failed to load sdk-crate-version.txt which sets the default client-runtime version", ex)
-    }
-}
 
 fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
     val updatedPath = runtimeCrateLocation.path?.let { cratePath ->
@@ -43,30 +32,22 @@ fun RuntimeConfig.awsRoot(): RuntimeCrateLocation {
 object AwsRuntimeType {
     fun presigning(): RuntimeType =
         RuntimeType.forInlineDependency(InlineAwsDependency.forRustFile("presigning", visibility = Visibility.PUBLIC))
-
-    fun RuntimeConfig.defaultMiddleware() = RuntimeType.forInlineDependency(
-        InlineAwsDependency.forRustFile(
-            "middleware", visibility = Visibility.PUBLIC,
-            CargoDependency.smithyHttp(this),
-            CargoDependency.smithyHttpTower(this),
-            CargoDependency.smithyClient(this),
-            CargoDependency.Tower,
-            AwsCargoDependency.awsSigAuth(this),
-            AwsCargoDependency.awsHttp(this),
-            AwsCargoDependency.awsEndpoint(this),
-        ),
-    ).resolve("DefaultMiddleware")
+    fun presigningInterceptor(runtimeConfig: RuntimeConfig): RuntimeType =
+        RuntimeType.forInlineDependency(
+            InlineAwsDependency.forRustFile(
+                "presigning_interceptors",
+                visibility = Visibility.PUBCRATE,
+                AwsCargoDependency.awsSigv4(runtimeConfig),
+                CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+            ),
+        )
 
     fun awsCredentialTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsCredentialTypes(runtimeConfig).toType()
 
     fun awsCredentialTypesTestUtil(runtimeConfig: RuntimeConfig) =
         AwsCargoDependency.awsCredentialTypes(runtimeConfig).toDevDependency().withFeature("test-util").toType()
 
-    fun awsEndpoint(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsEndpoint(runtimeConfig).toType()
     fun awsHttp(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsHttp(runtimeConfig).toType()
-    fun awsSigAuth(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigAuth(runtimeConfig).toType()
-    fun awsSigAuthEventStream(runtimeConfig: RuntimeConfig) =
-        AwsCargoDependency.awsSigAuthEventStream(runtimeConfig).toType()
 
     fun awsSigv4(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsSigv4(runtimeConfig).toType()
     fun awsTypes(runtimeConfig: RuntimeConfig) = AwsCargoDependency.awsTypes(runtimeConfig).toType()

@@ -7,43 +7,43 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.traits.AuthTrait
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.HttpApiKeyAuthTrait
 import software.amazon.smithy.model.traits.HttpBasicAuthTrait
 import software.amazon.smithy.model.traits.HttpBearerAuthTrait
 import software.amazon.smithy.model.traits.HttpDigestAuthTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
+import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption.StaticAuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
-fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
+private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
     val smithyRuntime =
         CargoDependency.smithyRuntime(runtimeConfig).withFeature("http-auth").toType()
-    val smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-auth").toType()
+    val smithyRuntimeApi = CargoDependency.smithyRuntimeApiClient(runtimeConfig).withFeature("http-auth").toType()
     val authHttp = smithyRuntime.resolve("client::auth::http")
     val authHttpApi = smithyRuntimeApi.resolve("client::auth::http")
     return arrayOf(
+        "Token" to configReexport(smithyRuntimeApi.resolve("client::identity::http::Token")),
+        "Login" to configReexport(smithyRuntimeApi.resolve("client::identity::http::Login")),
+        "ResolveIdentity" to configReexport(smithyRuntimeApi.resolve("client::identity::ResolveIdentity")),
+
+        "AuthSchemeId" to smithyRuntimeApi.resolve("client::auth::AuthSchemeId"),
         "ApiKeyAuthScheme" to authHttp.resolve("ApiKeyAuthScheme"),
         "ApiKeyLocation" to authHttp.resolve("ApiKeyLocation"),
-        "StaticAuthOptionResolver" to smithyRuntimeApi.resolve("client::auth::option_resolver::StaticAuthOptionResolver"),
         "BasicAuthScheme" to authHttp.resolve("BasicAuthScheme"),
         "BearerAuthScheme" to authHttp.resolve("BearerAuthScheme"),
         "DigestAuthScheme" to authHttp.resolve("DigestAuthScheme"),
@@ -51,11 +51,8 @@ fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
         "HTTP_BASIC_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_BASIC_AUTH_SCHEME_ID"),
         "HTTP_BEARER_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_BEARER_AUTH_SCHEME_ID"),
         "HTTP_DIGEST_AUTH_SCHEME_ID" to authHttpApi.resolve("HTTP_DIGEST_AUTH_SCHEME_ID"),
-        "IdentityResolver" to smithyRuntimeApi.resolve("client::identity::IdentityResolver"),
-        "IdentityResolvers" to smithyRuntimeApi.resolve("client::identity::IdentityResolvers"),
-        "Login" to smithyRuntimeApi.resolve("client::identity::http::Login"),
-        "PropertyBag" to RuntimeType.smithyHttp(runtimeConfig).resolve("property_bag::PropertyBag"),
-        "Token" to smithyRuntimeApi.resolve("client::identity::http::Token"),
+        "SharedAuthScheme" to smithyRuntimeApi.resolve("client::auth::SharedAuthScheme"),
+        "SharedIdentityResolver" to smithyRuntimeApi.resolve("client::identity::SharedIdentityResolver"),
     )
 }
 
@@ -68,12 +65,11 @@ private data class HttpAuthSchemes(
     companion object {
         fun from(codegenContext: ClientCodegenContext): HttpAuthSchemes {
             val authSchemes = ServiceIndex.of(codegenContext.model).getAuthSchemes(codegenContext.serviceShape).keys
-            val newRuntimeEnabled = codegenContext.settings.codegenConfig.enableNewSmithyRuntime
             return HttpAuthSchemes(
-                apiKey = newRuntimeEnabled && authSchemes.contains(HttpApiKeyAuthTrait.ID),
-                basic = newRuntimeEnabled && authSchemes.contains(HttpBasicAuthTrait.ID),
-                bearer = newRuntimeEnabled && authSchemes.contains(HttpBearerAuthTrait.ID),
-                digest = newRuntimeEnabled && authSchemes.contains(HttpDigestAuthTrait.ID),
+                apiKey = authSchemes.contains(HttpApiKeyAuthTrait.ID),
+                basic = authSchemes.contains(HttpBasicAuthTrait.ID),
+                bearer = authSchemes.contains(HttpBearerAuthTrait.ID),
+                digest = authSchemes.contains(HttpDigestAuthTrait.ID),
             )
         }
     }
@@ -86,6 +82,39 @@ private data class HttpAuthSchemes(
 class HttpAuthDecorator : ClientCodegenDecorator {
     override val name: String get() = "HttpAuthDecorator"
     override val order: Byte = 0
+
+    override fun authOptions(
+        codegenContext: ClientCodegenContext,
+        operationShape: OperationShape,
+        baseAuthSchemeOptions: List<AuthSchemeOption>,
+    ): List<AuthSchemeOption> {
+        val serviceIndex = ServiceIndex.of(codegenContext.model)
+        val authSchemes = serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
+        val codegenScope = codegenScope(codegenContext.runtimeConfig)
+        val options = ArrayList<AuthSchemeOption>()
+        for (authScheme in authSchemes.keys) {
+            fun addOption(schemeShapeId: ShapeId, name: String) {
+                options.add(
+                    StaticAuthSchemeOption(
+                        schemeShapeId,
+                        listOf(
+                            writable {
+                                rustTemplate(name, *codegenScope)
+                            },
+                        ),
+                    ),
+                )
+            }
+            when (authScheme) {
+                HttpApiKeyAuthTrait.ID -> addOption(authScheme, "#{HTTP_API_KEY_AUTH_SCHEME_ID}")
+                HttpBasicAuthTrait.ID -> addOption(authScheme, "#{HTTP_BASIC_AUTH_SCHEME_ID}")
+                HttpBearerAuthTrait.ID -> addOption(authScheme, "#{HTTP_BEARER_AUTH_SCHEME_ID}")
+                HttpDigestAuthTrait.ID -> addOption(authScheme, "#{HTTP_DIGEST_AUTH_SCHEME_ID}")
+                else -> {}
+            }
+        }
+        return baseAuthSchemeOptions + options
+    }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -106,32 +135,6 @@ class HttpAuthDecorator : ClientCodegenDecorator {
                 it + HttpAuthServiceRuntimePluginCustomization(codegenContext, authSchemes)
             }
         }
-
-    override fun operationRuntimePluginCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationRuntimePluginCustomization>,
-    ): List<OperationRuntimePluginCustomization> =
-        HttpAuthSchemes.from(codegenContext).let { authSchemes ->
-            baseCustomizations.letIf(authSchemes.anyEnabled()) {
-                it + HttpAuthOperationRuntimePluginCustomization(codegenContext)
-            }
-        }
-
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val authSchemes = HttpAuthSchemes.from(codegenContext)
-        if (authSchemes.anyEnabled()) {
-            rustCrate.withModule(ClientRustModule.Config) {
-                val codegenScope = codegenScope(codegenContext.runtimeConfig)
-                if (authSchemes.isTokenBased()) {
-                    rustTemplate("pub use #{Token};", *codegenScope)
-                }
-                if (authSchemes.isLoginBased()) {
-                    rustTemplate("pub use #{Login};", *codegenScope)
-                }
-            }
-        }
-    }
 }
 
 private class HttpAuthServiceRuntimePluginCustomization(
@@ -143,7 +146,19 @@ private class HttpAuthServiceRuntimePluginCustomization(
 
     override fun section(section: ServiceRuntimePluginSection): Writable = writable {
         when (section) {
-            is ServiceRuntimePluginSection.HttpAuthScheme -> {
+            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
+                fun registerAuthScheme(scheme: Writable) {
+                    section.registerAuthScheme(this) {
+                        rustTemplate("#{SharedAuthScheme}::new(#{Scheme})", *codegenScope, "Scheme" to scheme)
+                    }
+                }
+
+                fun registerNamedAuthScheme(name: String) {
+                    registerAuthScheme {
+                        rustTemplate("#{$name}::new()", *codegenScope)
+                    }
+                }
+
                 if (authSchemes.apiKey) {
                     val trait = serviceShape.getTrait<HttpApiKeyAuthTrait>()!!
                     val location = when (trait.`in`!!) {
@@ -157,74 +172,28 @@ private class HttpAuthServiceRuntimePluginCustomization(
                         HttpApiKeyAuthTrait.Location.QUERY -> "Query"
                     }
 
-                    rustTemplate(
-                        """
-                        .auth_scheme(
-                            #{HTTP_API_KEY_AUTH_SCHEME_ID},
+                    registerAuthScheme {
+                        rustTemplate(
+                            """
                             #{ApiKeyAuthScheme}::new(
                                 ${trait.scheme.orElse("").dq()},
                                 #{ApiKeyLocation}::$location,
                                 ${trait.name.dq()},
                             )
+                            """,
+                            *codegenScope,
                         )
-                        """,
-                        *codegenScope,
-                    )
-                }
-                if (authSchemes.basic) {
-                    rustTemplate(".auth_scheme(#{HTTP_BASIC_AUTH_SCHEME_ID}, #{BasicAuthScheme}::new())", *codegenScope)
-                }
-                if (authSchemes.bearer) {
-                    rustTemplate(
-                        ".auth_scheme(#{HTTP_BEARER_AUTH_SCHEME_ID}, #{BearerAuthScheme}::new())",
-                        *codegenScope,
-                    )
-                }
-                if (authSchemes.digest) {
-                    rustTemplate(
-                        ".auth_scheme(#{HTTP_DIGEST_AUTH_SCHEME_ID}, #{DigestAuthScheme}::new())",
-                        *codegenScope,
-                    )
-                }
-            }
-
-            is ServiceRuntimePluginSection.AdditionalConfig -> {
-                if (authSchemes.anyEnabled()) {
-                    rust("cfg.set_identity_resolvers(self.handle.conf.identity_resolvers().clone());")
-                }
-            }
-        }
-    }
-}
-
-private class HttpAuthOperationRuntimePluginCustomization(
-    codegenContext: ClientCodegenContext,
-) : OperationRuntimePluginCustomization() {
-    private val serviceShape = codegenContext.serviceShape
-    private val codegenScope = codegenScope(codegenContext.runtimeConfig)
-
-    override fun section(section: OperationRuntimePluginSection): Writable = writable {
-        when (section) {
-            is OperationRuntimePluginSection.AdditionalConfig -> {
-                withBlockTemplate(
-                    "let auth_option_resolver = #{StaticAuthOptionResolver}::new(vec![",
-                    "]);",
-                    *codegenScope,
-                ) {
-                    val authTrait: AuthTrait? = section.operationShape.getTrait() ?: serviceShape.getTrait()
-                    for (authScheme in authTrait?.valueSet ?: emptySet()) {
-                        when (authScheme) {
-                            HttpApiKeyAuthTrait.ID -> rustTemplate("#{HTTP_API_KEY_AUTH_SCHEME_ID},", *codegenScope)
-                            HttpBasicAuthTrait.ID -> rustTemplate("#{HTTP_BASIC_AUTH_SCHEME_ID},", *codegenScope)
-                            HttpBearerAuthTrait.ID -> rustTemplate("#{HTTP_BEARER_AUTH_SCHEME_ID},", *codegenScope)
-                            HttpDigestAuthTrait.ID -> rustTemplate("#{HTTP_DIGEST_AUTH_SCHEME_ID},", *codegenScope)
-                            else -> {}
-                        }
                     }
                 }
-
-                // TODO(enableNewSmithyRuntime): Make auth options additive in the config bag so that multiple codegen decorators can register them
-                rustTemplate("${section.configBagName}.set_auth_option_resolver(auth_option_resolver);", *codegenScope)
+                if (authSchemes.basic) {
+                    registerNamedAuthScheme("BasicAuthScheme")
+                }
+                if (authSchemes.bearer) {
+                    registerNamedAuthScheme("BearerAuthScheme")
+                }
+                if (authSchemes.digest) {
+                    registerNamedAuthScheme("DigestAuthScheme")
+                }
             }
 
             else -> emptySection
@@ -240,10 +209,6 @@ private class HttpAuthConfigCustomization(
 
     override fun section(section: ServiceConfig): Writable = writable {
         when (section) {
-            is ServiceConfig.BuilderStruct -> {
-                rustTemplate("identity_resolvers: #{IdentityResolvers},", *codegenScope)
-            }
-
             is ServiceConfig.BuilderImpl -> {
                 if (authSchemes.apiKey) {
                     rustTemplate(
@@ -254,10 +219,11 @@ private class HttpAuthConfigCustomization(
                         }
 
                         /// Sets an API key resolver will be used for authentication.
-                        pub fn api_key_resolver(mut self, api_key_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            self.identity_resolvers = self.identity_resolvers.to_builder()
-                                .identity_resolver(#{HTTP_API_KEY_AUTH_SCHEME_ID}, api_key_resolver)
-                                .build();
+                        pub fn api_key_resolver(mut self, api_key_resolver: impl #{ResolveIdentity} + 'static) -> Self {
+                            self.runtime_components.set_identity_resolver(
+                                #{HTTP_API_KEY_AUTH_SCHEME_ID},
+                                #{SharedIdentityResolver}::new(api_key_resolver)
+                            );
                             self
                         }
                         """,
@@ -273,10 +239,11 @@ private class HttpAuthConfigCustomization(
                         }
 
                         /// Sets a bearer token provider that will be used for HTTP bearer auth.
-                        pub fn bearer_token_resolver(mut self, bearer_token_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            self.identity_resolvers = self.identity_resolvers.to_builder()
-                                .identity_resolver(#{HTTP_BEARER_AUTH_SCHEME_ID}, bearer_token_resolver)
-                                .build();
+                        pub fn bearer_token_resolver(mut self, bearer_token_resolver: impl #{ResolveIdentity} + 'static) -> Self {
+                            self.runtime_components.set_identity_resolver(
+                                #{HTTP_BEARER_AUTH_SCHEME_ID},
+                                #{SharedIdentityResolver}::new(bearer_token_resolver)
+                            );
                             self
                         }
                         """,
@@ -292,10 +259,11 @@ private class HttpAuthConfigCustomization(
                         }
 
                         /// Sets a login resolver that will be used for HTTP basic auth.
-                        pub fn basic_auth_login_resolver(mut self, basic_auth_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            self.identity_resolvers = self.identity_resolvers.to_builder()
-                                .identity_resolver(#{HTTP_BASIC_AUTH_SCHEME_ID}, basic_auth_resolver)
-                                .build();
+                        pub fn basic_auth_login_resolver(mut self, basic_auth_resolver: impl #{ResolveIdentity} + 'static) -> Self {
+                            self.runtime_components.set_identity_resolver(
+                                #{HTTP_BASIC_AUTH_SCHEME_ID},
+                                #{SharedIdentityResolver}::new(basic_auth_resolver)
+                            );
                             self
                         }
                         """,
@@ -311,36 +279,17 @@ private class HttpAuthConfigCustomization(
                         }
 
                         /// Sets a login resolver that will be used for HTTP digest auth.
-                        pub fn digest_auth_login_resolver(mut self, digest_auth_resolver: impl #{IdentityResolver} + 'static) -> Self {
-                            self.identity_resolvers = self.identity_resolvers.to_builder()
-                                .identity_resolver(#{HTTP_DIGEST_AUTH_SCHEME_ID}, digest_auth_resolver)
-                                .build();
+                        pub fn digest_auth_login_resolver(mut self, digest_auth_resolver: impl #{ResolveIdentity} + 'static) -> Self {
+                            self.runtime_components.set_identity_resolver(
+                                #{HTTP_DIGEST_AUTH_SCHEME_ID},
+                                #{SharedIdentityResolver}::new(digest_auth_resolver)
+                            );
                             self
                         }
                         """,
                         *codegenScope,
                     )
                 }
-            }
-
-            is ServiceConfig.BuilderBuild -> {
-                rust("identity_resolvers: self.identity_resolvers,")
-            }
-
-            is ServiceConfig.ConfigStruct -> {
-                rustTemplate("identity_resolvers: #{IdentityResolvers},", *codegenScope)
-            }
-
-            is ServiceConfig.ConfigImpl -> {
-                rustTemplate(
-                    """
-                    /// Returns the identity resolvers.
-                    pub fn identity_resolvers(&self) -> &#{IdentityResolvers} {
-                        &self.identity_resolvers
-                    }
-                    """,
-                    *codegenScope,
-                )
             }
 
             else -> {}

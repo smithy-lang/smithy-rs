@@ -4,6 +4,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-set -eux
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -eu
 cd smithy-rs
-./gradlew aws:sdk-adhoc-test:test
+
+echo -e "## ${C_YELLOW}Running SDK adhoc tests...${C_RESET}"
+./gradlew aws:sdk-adhoc-test:clean
+./gradlew aws:sdk-adhoc-test:check

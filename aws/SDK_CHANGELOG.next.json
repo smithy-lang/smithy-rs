@@ -6,123 +6,21 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Integrate Endpoints 2.0 into the Rust SDK. Endpoints 2.0 enables features like S3 virtual addressing & S3\nobject lambda. As part of this change, there are several breaking changes although efforts have been made to deprecate\nwhere possible to smooth the upgrade path.\n1. `aws_smithy_http::endpoint::Endpoint` and the `endpoint_resolver` methods have been deprecated. In general, these usages\n   should be replaced with usages of `endpoint_url` instead. `endpoint_url` accepts a string so an `aws_smithy_http::Endpoint`\n   does not need to be constructed. This structure and methods will be removed in a future release.\n2. The `endpoint_resolver` method on `<service>::config::Builder` now accepts a service specific endpoint resolver instead\n   of an implementation of `ResolveAwsEndpoint`. Most users will be able to replace these usages with a usage of `endpoint_url`.\n3. `ResolveAwsEndpoint` has been deprecated and will be removed in a future version of the SDK.\n4. The SDK does not support \"pseudo regions\" anymore. Specifically, regions like `iam-fips` will no longer resolve to a FIPS endpoint.\n",
+      "message": "Make properties of S3Control PublicAccessBlockConfiguration optional. Previously, they defaulted to false, but this created invalid requests.",
       "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#1784",
-        "smithy-rs#2074"
-      ],
-      "since-commit": "40da9a32b38e198da6ca2223b86c314b26438230",
-      "age": 5
-    },
-    {
-      "message": "Add additional configuration parameters to `aws_sdk_s3::Config`.\n\nThe launch of endpoints 2.0 includes more configuration options for S3. The default behavior for endpoint resolution has\nbeen changed. Before, all requests hit the path-style endpoint. Going forward, all requests that can be routed to the\nvirtually hosted bucket will be routed there automatically.\n- `force_path_style`: Requests will now default to the virtually-hosted endpoint `<bucketname>.s3.<region>.amazonaws.com`\n- `use_arn_region`: Enables this client to use an ARN’s region when constructing an endpoint instead of the client’s configured region.\n- `accelerate`: Enables this client to use S3 Transfer Acceleration endpoints.\n\nNote: the AWS SDK for Rust does not currently support Multi Region Access Points (MRAP).\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#1784",
-        "smithy-rs#2074"
-      ],
-      "since-commit": "40da9a32b38e198da6ca2223b86c314b26438230",
-      "age": 5
-    },
-    {
-      "message": "Move types for AWS SDK credentials to a separate crate.\nA new AWS runtime crate called `aws-credential-types` has been introduced. Types for AWS SDK credentials have been moved to that crate from `aws-config` and `aws-types`. The new crate is placed at the top of the dependency graph among AWS runtime crates with the aim of the downstream crates having access to the types defined in it.\n",
-      "meta": {
-        "bug": false,
+        "bug": true,
         "breaking": true,
         "tada": false
       },
-      "author": "ysaito1001",
+      "author": "milesziemer",
       "references": [
-        "smithy-rs#2108"
+        "smithy-rs#3246"
       ],
-      "since-commit": "40da9a32b38e198da6ca2223b86c314b26438230",
+      "since-commit": "e155c3048b9989fe406ef575d461ea01dfaf294c",
       "age": 5
     },
     {
-      "message": "Add support for overriding profile name and profile file location across all providers. Prior to this change, each provider needed to be updated individually.\n\n### Before\n```rust\nuse aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};\nuse aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};\n\nlet profile_files = ProfileFiles::builder()\n    .with_file(ProfileFileKind::Credentials, \"some/path/to/credentials-file\")\n    .build();\nlet credentials_provider = ProfileFileCredentialsProvider::builder()\n    .profile_files(profile_files.clone())\n    .build();\nlet region_provider = ProfileFileRegionProvider::builder()\n    .profile_files(profile_files)\n    .build();\n\nlet sdk_config = aws_config::from_env()\n    .credentials_provider(credentials_provider)\n    .region(region_provider)\n    .load()\n    .await;\n```\n\n### After\n```rust\nuse aws_config::profile::{ProfileFileCredentialsProvider, ProfileFileRegionProvider};\nuse aws_config::profile::profile_file::{ProfileFiles, ProfileFileKind};\n\nlet profile_files = ProfileFiles::builder()\n    .with_file(ProfileFileKind::Credentials, \"some/path/to/credentials-file\")\n    .build();\nlet sdk_config = aws_config::from_env()\n    .profile_files(profile_files)\n    .load()\n    .await;\n/// ```\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2152"
-      ],
-      "since-commit": "40da9a32b38e198da6ca2223b86c314b26438230",
-      "age": 5
-    },
-    {
-      "message": "`aws_config::profile::retry_config` && `aws_config::environment::retry_config` have been removed. Use `aws_config::default_provider::retry_config` instead.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2162"
-      ],
-      "since-commit": "40da9a32b38e198da6ca2223b86c314b26438230",
-      "age": 5
-    },
-    {
-      "message": "Add support for resolving FIPS and dual-stack endpoints.\n\nFIPS and dual-stack endpoints can each be configured in multiple ways:\n1. Automatically from the environment and AWS profile\n2. Across all clients loaded from the same `SdkConfig` via `from_env().use_dual_stack(true).load().await`\n3. At a client level when constructing the configuration for an individual client.\n\nNote: Not all services support FIPS and dual-stack.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2168"
-      ],
-      "since-commit": "40da9a32b38e198da6ca2223b86c314b26438230",
-      "age": 5
-    },
-    {
-      "message": "Improve SDK credentials caching through type safety. `LazyCachingCredentialsProvider` has been renamed to `LazyCredentialsCache` and is no longer treated as a credentials provider. Furthermore, you do not create a `LazyCredentialsCache` directly, and instead you interact with `CredentialsCache`. This introduces the following breaking changes.\n\nIf you previously used `LazyCachingCredentialsProvider`, you can replace it with `CredentialsCache`.\n<details>\n<summary>Example</summary>\n\nBefore:\n```rust\nuse aws_config::meta::credentials::lazy_caching::LazyCachingCredentialsProvider;\nuse aws_types::provider::ProvideCredentials;\n\nfn make_provider() -> impl ProvideCredentials {\n    // --snip--\n}\n\nlet credentials_provider =\n    LazyCachingCredentialsProvider::builder()\n        .load(make_provider())\n        .build();\n\nlet sdk_config = aws_config::from_env()\n    .credentials_provider(credentials_provider)\n    .load()\n    .await;\n\nlet client = aws_sdk_s3::Client::new(&sdk_config);\n```\n\nAfter:\n```rust\nuse aws_credential_types::cache::CredentialsCache;\nuse aws_types::provider::ProvideCredentials;\n\nfn make_provider() -> impl ProvideCredentials {\n    // --snip--\n}\n\n// Wrapping a result of `make_provider` in `LazyCredentialsCache` is done automatically.\nlet sdk_config = aws_config::from_env()\n    .credentials_cache(CredentialsCache::lazy()) // This line can be omitted because it is on by default.\n    .credentials_provider(make_provider())\n    .load()\n    .await;\n\nlet client = aws_sdk_s3::Client::new(&sdk_config);\n```\n\nIf you previously configured a `LazyCachingCredentialsProvider`, you can use the builder for `LazyCredentialsCache` instead.\n\nBefore:\n```rust\nuse aws_config::meta::credentials::lazy_caching::LazyCachingCredentialsProvider;\nuse aws_types::provider::ProvideCredentials;\nuse std::time::Duration;\n\nfn make_provider() -> impl ProvideCredentials {\n    // --snip--\n}\n\nlet credentials_provider =\n    LazyCachingCredentialsProvider::builder()\n        .load(make_provider())\n        .load_timeout(Duration::from_secs(60)) // Configures timeout.\n        .build();\n\nlet sdk_config = aws_config::from_env()\n    .credentials_provider(credentials_provider)\n    .load()\n    .await;\n\nlet client = aws_sdk_s3::Client::new(&sdk_config);\n```\n\nAfter:\n```rust\nuse aws_credential_types::cache::CredentialsCache;\nuse aws_types::provider::ProvideCredentials;\nuse std::time::Duration;\n\nfn make_provider() -> impl ProvideCredentials {\n    // --snip--\n}\n\nlet sdk_config = aws_config::from_env()\n    .credentials_cache(\n        CredentialsCache::lazy_builder()\n            .load_timeout(Duration::from_secs(60)) // Configures timeout.\n            .into_credentials_cache(),\n    )\n    .credentials_provider(make_provider())\n    .load()\n    .await;\n\nlet client = aws_sdk_s3::Client::new(&sdk_config);\n```\n\nThe examples above only demonstrate how to use `credentials_cache` and `credentials_provider` methods on `aws_config::ConfigLoader` but the same code update can be applied when you interact with `aws_types::sdk_config::Builder` or the builder for a service-specific config, e.g. `aws_sdk_s3::config::Builder`.\n\n</details>\n\n\nIf you previously configured a `DefaultCredentialsChain` by calling `load_timeout`, `buffer_time`, or `default_credential_expiration` on its builder, you need to call the same set of methods on the builder for `LazyCredentialsCache` instead.\n<details>\n<summary>Example</summary>\n\nBefore:\n```rust\nuse aws_config::default_provider::credentials::DefaultCredentialsChain;\nuse std::time::Duration;\n\nlet credentials_provider = DefaultCredentialsChain::builder()\n    .buffer_time(Duration::from_secs(30))\n    .default_credential_expiration(Duration::from_secs(20 * 60))\n    .build()\n    .await;\n\nlet sdk_config = aws_config::from_env()\n    .credentials_provider(credentials_provider)\n    .load()\n    .await;\n\nlet client = aws_sdk_s3::Client::new(&sdk_config);\n```\n\nAfter:\n```rust\nuse aws_config::default_provider::credentials::default_provider;\nuse aws_credential_types::cache::CredentialsCache;\nuse std::time::Duration;\n\n// Previously used methods no longer exist on the builder for `DefaultCredentialsChain`.\nlet credentials_provider = default_provider().await;\n\nlet sdk_config = aws_config::from_env()\n    .credentials_cache(\n        CredentialsCache::lazy_builder()\n            .buffer_time(Duration::from_secs(30))\n            .default_credential_expiration(Duration::from_secs(20 * 60))\n            .into_credentials_cache(),\n    )\n    .credentials_provider(credentials_provider)\n    .load()\n    .await;\n\nlet client = aws_sdk_s3::Client::new(&sdk_config);\n```\n\n</details>\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2122",
-        "smithy-rs#2227"
-      ],
-      "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 3
-    },
-    {
-      "message": "The introduction of `CredentialsCache` comes with an accompanying type `SharedCredentialsCache`, which we will store in the property bag instead of a `SharedCredentialsProvider`. As a result, `aws_http::auth:set_provider` has been updated to `aws_http::auth::set_credentials_cache`.\n\nBefore:\n```rust\nuse aws_credential_types::Credentials;\nuse aws_credential_types::provider::SharedCredentialsProvider;\nuse aws_http::auth::set_provider;\nuse aws_smithy_http::body::SdkBody;\nuse aws_smithy_http::operation;\n\nlet mut req = operation::Request::new(http::Request::new(SdkBody::from(\"some body\")));\nlet credentials = Credentials::new(\"example\", \"example\", None, None, \"my_provider_name\");\nset_provider(\n    &mut req.properties_mut(),\n    SharedCredentialsProvider::new(credentials),\n);\n```\n\nAfter:\n```rust\nuse aws_credential_types::Credentials;\nuse aws_credential_types::cache::{CredentialsCache, SharedCredentialsCache};\nuse aws_credential_types::provider::SharedCredentialsProvider;\nuse aws_http::auth::set_credentials_cache;\nuse aws_smithy_http::body::SdkBody;\nuse aws_smithy_http::operation;\n\nlet mut req = operation::Request::new(http::Request::new(SdkBody::from(\"some body\")));\nlet credentials = Credentials::new(\"example\", \"example\", None, None, \"my_provider_name\");\nlet credentials_cache = CredentialsCache::lazy_builder()\n    .into_credentials_cache()\n    .create_cache(SharedCredentialsProvider::new(credentials));\nset_credentials_cache(\n    &mut req.properties_mut(),\n    SharedCredentialsCache::new(credentials_cache),\n);\n```\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#2122",
-        "smithy-rs#2227"
-      ],
-      "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 3
-    },
-    {
-      "message": "Fix endpoint for s3.write_get_object_response(). This bug was introduced in 0.53.",
+      "message": "Allow `--` to be used in bucket names for S3",
       "meta": {
         "bug": true,
         "breaking": false,
@@ -130,13 +28,13 @@
       },
       "author": "rcoh",
       "references": [
-        "smithy-rs#2204"
+        "smithy-rs#3253"
       ],
-      "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 3
+      "since-commit": "48e3c95a3f10eebd5a637f8e7670c4232cdabbe4",
+      "age": 4
     },
     {
-      "message": "Add `with_test_defaults()` and `set_test_defaults()` to `<service>::Config`. These methods fill in defaults for configuration that is mandatory to successfully send a request.",
+      "message": "Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -144,118 +42,43 @@
       },
       "author": "rcoh",
       "references": [
-        "smithy-rs#2204"
+        "aws-sdk-rust#738",
+        "aws-sdk-rust#858"
       ],
-      "since-commit": "48ce90d3a32cc87337d87d1f291b41fc64f1e5bd",
-      "age": 3
+      "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
+      "age": 2
     },
     {
-      "message": "Request IDs can now be easily retrieved on successful responses. For example, with S3:\n```rust\n// Import the trait to get the `request_id` method on outputs\nuse aws_sdk_s3::types::RequestId;\nlet output = client.list_buckets().send().await?;\nprintln!(\"Request ID: {:?}\", output.request_id());\n```\n",
+      "message": "Make some properties for IoT types optional. Previously, they defaulted to false, but that isn't how the service actual works.",
       "meta": {
-        "bug": false,
+        "bug": true,
         "breaking": true,
         "tada": false
       },
-      "author": "jdisanti",
+      "author": "milesziemer",
       "references": [
-        "smithy-rs#76",
-        "smithy-rs#2129"
+        "smithy-rs#3256"
       ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
+      "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
+      "age": 2
     },
     {
-      "message": "Retrieving a request ID from errors now requires importing the `RequestId` trait. For example, with S3:\n```rust\nuse aws_sdk_s3::types::RequestId;\nprintln!(\"Request ID: {:?}\", error.request_id());\n```\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#76",
-        "smithy-rs#2129"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "The `message()` and `code()` methods on errors have been moved into `ProvideErrorMetadata` trait. This trait will need to be imported to continue calling these.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#76",
-        "smithy-rs#2129"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "The `*Error` and `*ErrorKind` types have been combined to make error matching simpler.\n<details>\n<summary>Example with S3</summary>\n**Before:**\n```rust\nlet result = client\n    .get_object()\n    .bucket(BUCKET_NAME)\n    .key(\"some-key\")\n    .send()\n    .await;\nmatch result {\n    Ok(_output) => { /* Do something with the output */ }\n    Err(err) => match err.into_service_error() {\n        GetObjectError { kind, .. } => match kind {\n            GetObjectErrorKind::InvalidObjectState(value) => println!(\"invalid object state: {:?}\", value),\n            GetObjectErrorKind::NoSuchKey(_) => println!(\"object didn't exist\"),\n        }\n        err @ GetObjectError { .. } if err.code() == Some(\"SomeUnmodeledError\") => {}\n        err @ _ => return Err(err.into()),\n    },\n}\n```\n**After:**\n```rust\n// Needed to access the `.code()` function on the error type:\nuse aws_sdk_s3::types::ProvideErrorMetadata;\nlet result = client\n    .get_object()\n    .bucket(BUCKET_NAME)\n    .key(\"some-key\")\n    .send()\n    .await;\nmatch result {\n    Ok(_output) => { /* Do something with the output */ }\n    Err(err) => match err.into_service_error() {\n        GetObjectError::InvalidObjectState(value) => {\n            println!(\"invalid object state: {:?}\", value);\n        }\n        GetObjectError::NoSuchKey(_) => {\n            println!(\"object didn't exist\");\n        }\n        err if err.code() == Some(\"SomeUnmodeledError\") => {}\n        err @ _ => return Err(err.into()),\n    },\n}\n```\n</details>\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#76",
-        "smithy-rs#2129",
-        "smithy-rs#2075"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "`aws_smithy_types::Error` has been renamed to `aws_smithy_types::error::ErrorMetadata`.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#76",
-        "smithy-rs#2129"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Fluent builder methods on the client are now marked as deprecated when the related operation is deprecated.",
+      "message": "Fix `config::Builder::set_credentials_provider` to override a credentials provider previously set.",
       "meta": {
         "bug": true,
         "breaking": false,
-        "tada": true
+        "tada": false
       },
-      "author": "Velfi",
+      "author": "ysaito1001",
       "references": [
-        "aws-sdk-rust#740"
+        "aws-sdk-rust#973",
+        "smithy-rs#3278"
       ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
+      "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
       "age": 1
     },
     {
-      "message": "`SdkError` variants can now be constructed for easier unit testing.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#2428",
-        "smithy-rs#2208"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Add more client re-exports. Specifically, it re-exports `aws_smithy_http::body::SdkBody`, `aws_smithy_http::byte_stream::error::Error`, and `aws_smithy_http::operation::{Request, Response}`.",
+      "message": "`config::Config::credentials_provider` has been broken since `release-2023-11-15` and is now marked as `deprecated` explicitly.",
       "meta": {
         "bug": false,
         "breaking": false,
@@ -263,113 +86,10 @@
       },
       "author": "ysaito1001",
       "references": [
-        "smithy-rs#2437",
-        "aws-sdk-rust#600"
+        "smithy-rs#3251",
+        "smithy-rs#3278"
       ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Enable presigning for S3's `HeadObject` operation.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "aws-sdk-rust#753",
-        "smithy-rs#2451"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "The modules in the SDK crates have been reorganized. See the [SDK Crate Reorganization Upgrade Guidance](https://github.com/awslabs/aws-sdk-rust/discussions/752) to see how to fix your code after this change.",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#2433"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Reconnect on transient errors.\n\nIf a transient error (timeout, 500, 503, 503) is encountered, the connection will be evicted from the pool and will not\nbe reused. This is enabled by default for all AWS services. It can be disabled by setting `RetryConfig::with_reconnect_mode`\n\nAlthough there is no API breakage from this change, it alters the client behavior in a way that may cause breakage for customers.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "aws-sdk-rust#160",
-        "smithy-rs#2445"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Update MSRV to 1.66.1",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#2467"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Default connector provided by `aws-config` now respects `ConnectorSettings`.\n\nPreviously, it used the timeout settings provided by aws-config. A test from @Oliboy50 has been incorporated to verify this behavior.\n\n**Behavior Change**: Prior to this change, the Hyper client would be shared between all service clients. After this change, each service client will use its own Hyper Client.\nTo revert to the previous behavior, set `HttpConnector::Prebuilt` on `SdkConfig::http_connector`.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2471",
-        "smithy-rs#2333",
-        "smithy-rs#2151"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Remove deprecated `ResolveAwsEndpoint` interfaces.\n[For details see the longform changelog entry](https://github.com/awslabs/aws-sdk-rust/discussions/755).\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2390",
-        "smithy-rs#1784"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
-      "age": 1
-    },
-    {
-      "message": "Increase Tokio version to 1.23.1 for all crates. This is to address [RUSTSEC-2023-0001](https://rustsec.org/advisories/RUSTSEC-2023-0001)",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#2474"
-      ],
-      "since-commit": "562e196bbfb5c57270b2855479a5c365ba3d2dff",
+      "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
       "age": 1
     }
   ],

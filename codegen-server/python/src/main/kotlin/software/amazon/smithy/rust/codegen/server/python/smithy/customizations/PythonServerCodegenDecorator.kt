@@ -23,7 +23,6 @@ import software.amazon.smithy.rust.codegen.server.python.smithy.generators.Pytho
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddInternalServerErrorToAllOperationsDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
-import java.io.File
 
 /**
  * Configure the [lib] section of `Cargo.toml`.
@@ -206,14 +205,11 @@ class AddStubgenScriptDecorator : ServerCodegenDecorator {
     override val order: Byte = 0
 
     override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
-        val runtimeCratesPath = codegenContext.runtimeConfig.runtimeCratesPath()
-        val stubgenPythonLocation = "$runtimeCratesPath/aws-smithy-http-server-python/stubgen.py"
-        val stubgenPythonContent = File(stubgenPythonLocation).readText(Charsets.UTF_8)
+        val stubgenPythonContent = this::class.java.getResource("/stubgen.py").readText()
         rustCrate.withFile("stubgen.py") {
             writeWithNoFormatting("$stubgenPythonContent")
         }
-        val stubgenShellLocation = "$runtimeCratesPath/aws-smithy-http-server-python/stubgen.sh"
-        val stubgenShellContent = File(stubgenShellLocation).readText(Charsets.UTF_8)
+        val stubgenShellContent = this::class.java.getResource("/stubgen.sh").readText()
         rustCrate.withFile("stubgen.sh") {
             writeWithNoFormatting("$stubgenShellContent")
         }

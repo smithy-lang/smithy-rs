@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
+import software.amazon.smithy.rust.codegen.core.rustlang.rawRust
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -50,6 +51,7 @@ class LibRsGenerator(
             if (requireDocs) {
                 rust("##![warn(missing_docs)]")
             }
+            rawRust("#![cfg_attr(docsrs, feature(doc_auto_cfg))]")
 
             // Allow for overriding the default service docs via customization
             val defaultServiceDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value
@@ -80,7 +82,7 @@ class LibRsGenerator(
                         writeTo(this)
                     }
 
-                    // TODO(https://github.com/awslabs/smithy-rs/issues/69): Generate a basic example for all crates (eg. select first operation and render an example of usage)
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/69): Generate a basic example for all crates (eg. select first operation and render an example of usage)
                     settings.examplesUri?.also { uri ->
                         containerDocs("Examples can be found [here]($uri).")
                     }

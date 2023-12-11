@@ -3,12 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use crate::fs::Fs;
-use crate::package::{discover_package_manifests, Error, PackageHandle};
+use crate::package::{discover_packages, PackageHandle, Publish};
 use crate::publish::{has_been_published_on_crates_io, publish};
 use crate::subcommand::publish::correct_owner;
 use crate::{cargo, SDK_REPO_NAME};
-use anyhow::Context;
-use cargo_toml::Manifest;
 use clap::Parser;
 use dialoguer::Confirm;
 use semver::Version;
@@ -79,20 +77,11 @@ async fn discover_publishable_crate_names(repository_root: &Path) -> anyhow::Res
         fs: Fs,
         path: PathBuf,
     ) -> anyhow::Result<HashSet<String>> {
-        let manifest_paths = discover_package_manifests(path).await?;
+        let packages = discover_packages(fs, path).await?;
         let mut publishable_package_names = HashSet::new();
-        for manifest_path in manifest_paths {
-            let contents: Vec<u8> = fs.read_file(&manifest_path).await?;
-            let manifest = Manifest::from_slice(&contents).with_context(|| {
-                format!("failed to load package manifest for {:?}", manifest_path)
-            })?;
-            let package = manifest
-                .package
-                .ok_or(Error::InvalidManifest(manifest_path))
-                .context("crate manifest doesn't have a `[package]` section")?;
-            let name = package.name;
-            if let cargo_toml::Publish::Flag(true) = package.publish {
-                publishable_package_names.insert(name);
+        for package in packages {
+            if let Publish::Allowed = package.publish {
+                publishable_package_names.insert(package.handle.name);
             }
         }
         Ok(publishable_package_names)
@@ -130,7 +119,7 @@ version = "0.0.1"
 edition = "2021"
 description = "Placeholder ahead of the next smithy-rs release"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs""#,
+repository = "https://github.com/smithy-lang/smithy-rs""#,
         package_name
     );
     fs.write_file(directory_path.join("Cargo.toml"), cargo_toml.as_bytes())

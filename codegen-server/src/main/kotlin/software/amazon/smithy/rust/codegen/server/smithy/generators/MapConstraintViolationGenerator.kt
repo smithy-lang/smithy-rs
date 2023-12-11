@@ -45,10 +45,12 @@ class MapConstraintViolationGenerator(
         val constraintViolationName = constraintViolationSymbol.name
 
         val constraintViolationCodegenScopeMutableList: MutableList<Pair<String, Any>> = mutableListOf()
-        if (isKeyConstrained(keyShape, symbolProvider)) {
+        val keyConstraintViolationExists = shape.isReachableFromOperationInput() && isKeyConstrained(keyShape, symbolProvider)
+        val valueConstraintViolationExists = shape.isReachableFromOperationInput() && isValueConstrained(valueShape, model, symbolProvider)
+        if (keyConstraintViolationExists) {
             constraintViolationCodegenScopeMutableList.add("KeyConstraintViolationSymbol" to constraintViolationSymbolProvider.toSymbol(keyShape))
         }
-        if (isValueConstrained(valueShape, model, symbolProvider)) {
+        if (valueConstraintViolationExists) {
             constraintViolationCodegenScopeMutableList.add(
                 "ValueConstraintViolationSymbol" to
                     constraintViolationSymbolProvider.toSymbol(valueShape).letIf(
@@ -68,7 +70,7 @@ class MapConstraintViolationGenerator(
         }
 
         inlineModuleCreator(constraintViolationSymbol) {
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
             //  types here. One will just have variants for each constraint trait on the map shape, for use by the user.
             //  The other one will have variants if the shape's key or value is directly or transitively constrained,
             //  and is for use by the framework.
@@ -78,8 +80,8 @@ class MapConstraintViolationGenerator(
                 ##[derive(Debug, PartialEq)]
                 pub${ if (constraintViolationVisibility == Visibility.PUBCRATE) " (crate) " else "" } enum $constraintViolationName {
                     ${if (shape.hasTrait<LengthTrait>()) "Length(usize)," else ""}
-                    ${if (isKeyConstrained(keyShape, symbolProvider)) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
-                    ${if (isValueConstrained(valueShape, model, symbolProvider)) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
+                    ${if (keyConstraintViolationExists) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
+                    ${if (valueConstraintViolationExists) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
                 }
                 """,
                 *constraintViolationCodegenScope,

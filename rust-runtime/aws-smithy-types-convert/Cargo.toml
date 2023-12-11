@@ -5,7 +5,7 @@ authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Conversion of types from aws-smithy-types to other libraries."
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 convert-chrono = ["aws-smithy-types", "chrono"]
@@ -13,7 +13,7 @@ convert-time = ["aws-smithy-types", "time"]
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types", optional = true }
-chrono = { version = "0.4.19", optional = true, default-features = false, features = ["std"] }
+chrono = { version = "0.4.26", optional = true, default-features = false, features = ["std"] }
 time = { version = "0.3.4", optional = true }
 
 [package.metadata.docs.rs]

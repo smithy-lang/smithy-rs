@@ -61,7 +61,7 @@ class PythonServerEventStreamErrorGenerator(
                         """
                         if let Ok(it) = obj.extract::<#T>() {
                             return Ok(Self::${symbol.name}(it));
-                        }    
+                        }
                         """,
                         symbol,
                     )

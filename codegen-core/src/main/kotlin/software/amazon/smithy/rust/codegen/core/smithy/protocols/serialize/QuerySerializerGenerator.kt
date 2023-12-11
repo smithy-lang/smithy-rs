@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -44,13 +45,14 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
+abstract class QuerySerializerGenerator(private val codegenContext: CodegenContext) : StructuredDataSerializerGenerator {
     protected data class Context<T : Shape>(
         /** Expression that yields a QueryValueWriter */
         val writerExpression: String,
         /** Expression representing the value to write to the QueryValueWriter */
         val valueExpression: ValueExpression,
         val shape: T,
+        val isOptional: Boolean = false,
     )
 
     protected data class MemberContext(
@@ -88,6 +90,7 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     protected val model = codegenContext.model
     protected val symbolProvider = codegenContext.symbolProvider
     protected val runtimeConfig = codegenContext.runtimeConfig
+    private val nullableIndex = NullableIndex(model)
     private val target = codegenContext.target
     private val serviceShape = codegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
@@ -118,7 +121,11 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType {
-        TODO("AwsQuery doesn't support payload serialization")
+        TODO("$protocolName doesn't support payload serialization")
+    }
+
+    override fun unsetUnion(union: UnionShape): RuntimeType {
+        TODO("$protocolName doesn't support payload serialization")
     }
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
@@ -175,7 +182,8 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 rust("Ok(())")
             }
         }
-        rust("#T(${context.writerExpression}, ${context.valueExpression.name})?;", structureSerializer)
+
+        rust("#T(${context.writerExpression}, ${context.valueExpression.asRef()})?;", structureSerializer)
     }
 
     private fun RustWriter.serializeStructureInner(context: Context<StructureShape>) {
@@ -212,9 +220,11 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
-            is StringShape -> when (target.hasTrait<EnumTrait>()) {
-                true -> rust("$writer.string(${value.name}.as_str());")
-                false -> rust("$writer.string(${value.name});")
+            is StringShape -> {
+                when (target.hasTrait<EnumTrait>()) {
+                    true -> rust("$writer.string(${value.name}.as_str());")
+                    false -> rust("$writer.string(${value.asRef()});")
+                }
             }
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
             is NumberShape -> {
@@ -230,13 +240,13 @@ abstract class QuerySerializerGenerator(codegenContext: CodegenContext) : Struct
                 )
             }
             is BlobShape -> rust(
-                "$writer.string(&#T(${value.name}));",
+                "$writer.string(&#T(${value.asRef()}));",
                 RuntimeType.base64Encode(runtimeConfig),
             )
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
                 val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
-                rust("$writer.date_time(${value.name}, #T)?;", timestampFormatType)
+                rust("$writer.date_time(${value.asRef()}, #T)?;", timestampFormatType)
             }
             is CollectionShape -> serializeCollection(context, Context(writer, context.valueExpression, target))
             is MapShape -> serializeMap(context, Context(writer, context.valueExpression, target))

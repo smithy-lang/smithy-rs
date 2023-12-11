@@ -5,16 +5,19 @@
 
 //! Errors related to Smithy interceptors
 
+use crate::box_error::BoxError;
 use std::fmt;
 
 macro_rules! interceptor_error_fn {
     ($fn_name:ident => $error_kind:ident (with source)) => {
         #[doc = concat!("Create a new error indicating a failure with a ", stringify!($fn_name), " interceptor.")]
         pub fn $fn_name(
+            interceptor_name: impl Into<String>,
             source: impl Into<Box<dyn std::error::Error + Send + Sync + 'static>>,
         ) -> Self {
             Self {
                 kind: ErrorKind::$error_kind,
+                interceptor_name: Some(interceptor_name.into()),
                 source: Some(source.into()),
             }
         }
@@ -24,19 +27,18 @@ macro_rules! interceptor_error_fn {
         pub fn $fn_name() -> Self {
             Self {
                 kind: ErrorKind::$error_kind,
+                interceptor_name: None,
                 source: None,
             }
         }
     }
 }
 
-/// A generic error that behaves itself in async contexts
-pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
-
 /// An error related to Smithy interceptors.
 #[derive(Debug)]
 pub struct InterceptorError {
     kind: ErrorKind,
+    interceptor_name: Option<String>,
     source: Option<BoxError>,
 }
 
@@ -60,6 +62,11 @@ impl InterceptorError {
     interceptor_error_fn!(read_after_attempt => ReadAfterAttempt (with source));
     interceptor_error_fn!(modify_before_completion => ModifyBeforeCompletion (with source));
     interceptor_error_fn!(read_after_execution => ReadAfterExecution (with source));
+
+    interceptor_error_fn!(modify_before_attempt_completion_failed => ModifyBeforeAttemptCompletion (with source));
+    interceptor_error_fn!(read_after_attempt_failed => ReadAfterAttempt (with source));
+    interceptor_error_fn!(modify_before_completion_failed => ModifyBeforeCompletion (with source));
+    interceptor_error_fn!(read_after_execution_failed => ReadAfterExecution (with source));
 
     interceptor_error_fn!(invalid_request_access => InvalidRequestAccess (invalid request access));
     interceptor_error_fn!(invalid_response_access => InvalidResponseAccess (invalid response access));
@@ -122,14 +129,15 @@ macro_rules! display_interceptor_err {
         {
         use ErrorKind::*;
         match &$self.kind {
-            $($error_kind => display_interceptor_err!($f, $fn_name, ($($option)+)),)+
+            $($error_kind => display_interceptor_err!($self, $f, $fn_name, ($($option)+)),)+
         }
     }
     };
-    ($f:ident, $fn_name:ident, (interceptor error)) => {
-        $f.write_str(concat!(stringify!($fn_name), " interceptor encountered an error"))
-    };
-    ($f:ident, $fn_name:ident, (invalid access $name:ident $message:literal)) => {
+    ($self:ident, $f:ident, $fn_name:ident, (interceptor error)) => {{
+        $f.write_str($self.interceptor_name.as_deref().unwrap_or_default())?;
+        $f.write_str(concat!(" ", stringify!($fn_name), " interceptor encountered an error"))
+    }};
+    ($self:ident, $f:ident, $fn_name:ident, (invalid access $name:ident $message:literal)) => {
         $f.write_str(concat!("tried to access the ", stringify!($name), " ", $message))
     };
 }
@@ -178,6 +186,7 @@ pub struct ContextAttachedError {
 }
 
 impl ContextAttachedError {
+    /// Creates a new `ContextAttachedError` with the given `context` and `source`.
     pub fn new(context: impl Into<String>, source: impl Into<BoxError>) -> Self {
         Self {
             context: context.into(),

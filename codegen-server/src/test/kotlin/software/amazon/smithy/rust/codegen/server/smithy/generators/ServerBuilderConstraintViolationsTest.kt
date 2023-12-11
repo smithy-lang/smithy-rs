@@ -11,7 +11,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 
 class ServerBuilderConstraintViolationsTest {
 
-    // This test exists not to regress on [this](https://github.com/awslabs/smithy-rs/issues/2343) issue.
+    // This test exists not to regress on [this](https://github.com/smithy-lang/smithy-rs/issues/2343) issue.
     // We generated constraint violation variants, pointing to a structure (StructWithInnerDefault below),
     // but the structure was not constrained, because the structure's member have a default value
     // and default values are validated at generation time from the model.

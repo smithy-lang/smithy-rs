@@ -14,7 +14,7 @@ import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
-import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
@@ -30,8 +30,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
-class ClientProtocolLoader(supportedProtocols: ProtocolMap<ClientProtocolGenerator, ClientCodegenContext>) :
-    ProtocolLoader<ClientProtocolGenerator, ClientCodegenContext>(supportedProtocols) {
+class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>) :
+    ProtocolLoader<OperationGenerator, ClientCodegenContext>(supportedProtocols) {
 
     companion object {
         val DefaultProtocols = mapOf(
@@ -60,7 +60,7 @@ private val CLIENT_PROTOCOL_SUPPORT = ProtocolSupport(
 )
 
 private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
-    ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+    ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol =
         if (compatibleWithAwsQuery(codegenContext.serviceShape, version)) {
             AwsQueryCompatible(codegenContext, AwsJson(codegenContext, version))
@@ -68,8 +68,8 @@ private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
             AwsJson(codegenContext, version)
         }
 
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
+        OperationGenerator(codegenContext, protocol(codegenContext))
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
 
@@ -77,40 +77,40 @@ private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
         serviceShape.hasTrait<AwsQueryCompatibleTrait>() && version == AwsJsonVersion.Json10
 }
 
-private class ClientAwsQueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+private class ClientAwsQueryFactory : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = AwsQueryProtocol(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
+        OperationGenerator(codegenContext, protocol(codegenContext))
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
 }
 
-private class ClientRestJsonFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+private class ClientRestJsonFactory : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = RestJson(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, RestJson(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
+        OperationGenerator(codegenContext, RestJson(codegenContext))
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
 }
 
-private class ClientEc2QueryFactory : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+private class ClientEc2QueryFactory : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = Ec2QueryProtocol(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
+        OperationGenerator(codegenContext, protocol(codegenContext))
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
 }
 
 class ClientRestXmlFactory(
     private val generator: (CodegenContext) -> Protocol = { RestXml(it) },
-) : ProtocolGeneratorFactory<HttpBoundProtocolGenerator, ClientCodegenContext> {
+) : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
     override fun protocol(codegenContext: ClientCodegenContext): Protocol = generator(codegenContext)
 
-    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): HttpBoundProtocolGenerator =
-        HttpBoundProtocolGenerator(codegenContext, protocol(codegenContext))
+    override fun buildProtocolGenerator(codegenContext: ClientCodegenContext): OperationGenerator =
+        OperationGenerator(codegenContext, protocol(codegenContext))
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
 }

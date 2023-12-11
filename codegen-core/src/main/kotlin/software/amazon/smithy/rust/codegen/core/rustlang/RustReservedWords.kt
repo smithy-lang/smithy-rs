@@ -69,7 +69,7 @@ class RustReservedWordSymbolProvider(
             "RustReservedWordSymbolProvider should only run once"
         }
 
-        var renamedSymbol = internal.toSymbol(shape)
+        val renamedSymbol = internal.toSymbol(shape)
         return when (shape) {
             is MemberShape -> {
                 val container = model.expectShape(shape.container)

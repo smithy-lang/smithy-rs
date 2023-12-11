@@ -10,16 +10,18 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -32,7 +34,7 @@ class Route53Decorator : ClientCodegenDecorator {
     private val logger: Logger = Logger.getLogger(javaClass.name)
     private val resourceShapes = setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
 
-    override fun transformModel(service: ServiceShape, model: Model): Model =
+    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isResourceId(shape)) {
                 logger.info("Adding TrimResourceId trait to $shape")
@@ -45,10 +47,14 @@ class Route53Decorator : ClientCodegenDecorator {
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
     ): List<OperationCustomization> {
-        val hostedZoneMember =
-            operation.inputShape(codegenContext.model).members().find { it.hasTrait<TrimResourceId>() }
+        val inputShape = operation.inputShape(codegenContext.model)
+        val hostedZoneMember = inputShape.members().find { it.hasTrait<TrimResourceId>() }
         return if (hostedZoneMember != null) {
-            baseCustomizations + TrimResourceIdCustomization(codegenContext.symbolProvider.toMemberName(hostedZoneMember))
+            baseCustomizations + TrimResourceIdCustomization(
+                codegenContext,
+                inputShape,
+                codegenContext.symbolProvider.toMemberName(hostedZoneMember),
+            )
         } else {
             baseCustomizations
         }
@@ -59,25 +65,34 @@ class Route53Decorator : ClientCodegenDecorator {
     }
 }
 
-class TrimResourceIdCustomization(private val fieldName: String) : OperationCustomization() {
-    override fun mutSelf(): Boolean = true
-    override fun consumesSelf(): Boolean = true
+class TrimResourceIdCustomization(
+    private val codegenContext: ClientCodegenContext,
+    private val inputShape: StructureShape,
+    private val fieldName: String,
+) : OperationCustomization() {
 
-    private val trimResourceId =
-        RuntimeType.forInlineDependency(
-            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
-        )
-            .resolve("trim_resource_id")
-
-    override fun section(section: OperationSection): Writable {
-        return when (section) {
-            is OperationSection.MutateInput -> writable {
-                rustTemplate(
-                    "#{trim_resource_id}(&mut ${section.input}.$fieldName);",
-                    "trim_resource_id" to trimResourceId,
-                )
+    override fun section(section: OperationSection): Writable = writable {
+        when (section) {
+            is OperationSection.AdditionalInterceptors -> {
+                section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                    val interceptor =
+                        RuntimeType.forInlineDependency(
+                            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
+                        ).resolve("Route53ResourceIdInterceptor")
+                    rustTemplate(
+                        """
+                        #{Route53ResourceIdInterceptor}::new(|input: &mut #{Input}| {
+                            &mut input.$fieldName
+                        })
+                        """,
+                        "Input" to codegenContext.symbolProvider.toSymbol(inputShape),
+                        "Route53ResourceIdInterceptor" to interceptor,
+                        "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
+                    )
+                }
             }
-            else -> emptySection
+            else -> {}
         }
     }
 }

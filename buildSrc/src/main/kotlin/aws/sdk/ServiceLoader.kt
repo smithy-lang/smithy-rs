@@ -35,8 +35,8 @@ class AwsServices(
     val allModules: Set<String> by lazy {
         (
             services.map(AwsService::module).map { "sdk/$it" } +
-                CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/$it" } +
-                CrateSet.AWS_SDK_RUNTIME.map { "sdk/$it" }
+                CrateSet.AWS_SDK_SMITHY_RUNTIME.map { "sdk/${it.name}" } +
+                CrateSet.AWS_SDK_RUNTIME.map { "sdk/${it.name}" }
             // Root tests should not be included since they can't be part of the root Cargo workspace
             // in order to test differences in Cargo features. Examples should not be included either
             // because each example itself is a workspace.
@@ -44,10 +44,10 @@ class AwsServices(
     }
 
     val examples: List<String> by lazy {
-        project.projectDir.resolve("examples")
-            .listFiles { file -> !file.name.startsWith(".") }.orEmpty().toList()
-            .filter { file -> manifestCompatibleWithGeneratedServices(file) }
-            .map { "examples/${it.name}" }
+        val examplesRoot = project.projectDir.resolve("examples")
+        examplesRoot.listFiles { file ->
+            !file.name.startsWith(".") && file.isDirectory() && file.resolve("Cargo.toml").exists()
+        }.orEmpty().toList().map { "examples/${it.name}" }
     }
 
     /**
@@ -207,7 +207,7 @@ fun parseMembership(rawList: String): Membership {
     val inclusions = mutableSetOf<String>()
     val exclusions = mutableSetOf<String>()
 
-    rawList.split(",").map { it.trim() }.forEach { item ->
+    rawList.split(",").map { it.trim() }.filter { it.isNotEmpty() }.forEach { item ->
         when {
             item.startsWith('-') -> exclusions.add(item.substring(1))
             item.startsWith('+') -> inclusions.add(item.substring(1))

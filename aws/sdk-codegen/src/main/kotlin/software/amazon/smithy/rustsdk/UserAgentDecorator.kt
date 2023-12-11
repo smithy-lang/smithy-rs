@@ -6,7 +6,6 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.aws.traits.ServiceTrait
-import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -18,16 +17,13 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
-import software.amazon.smithy.rust.codegen.core.util.letIf
 
 /**
  * Inserts a UserAgent configuration into the operation
@@ -40,24 +36,14 @@ class UserAgentDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + AppNameCustomization(codegenContext.runtimeConfig)
-    }
-
-    override fun operationCustomizations(
-        codegenContext: ClientCodegenContext,
-        operation: OperationShape,
-        baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> {
-        return baseCustomizations + UserAgentMutateOpRequest(codegenContext)
+        return baseCustomizations + AppNameCustomization(codegenContext)
     }
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations.letIf(codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
-            it + listOf(AddApiMetadataIntoConfigBag(codegenContext))
-        }
+        baseCustomizations + AddApiMetadataIntoConfigBag(codegenContext)
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return listOf(
@@ -88,7 +74,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
             )
         }
 
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             // Re-export the app name so that it can be specified in config programmatically without an explicit dependency
             rustTemplate(
                 "pub use #{AppName};",
@@ -103,57 +89,27 @@ class UserAgentDecorator : ClientCodegenDecorator {
         private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
         override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-            if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-                section.putConfigValue(this) {
-                    rust("#T.clone()", ClientRustModule.Meta.toType().resolve("API_METADATA"))
-                }
-                section.registerInterceptor(runtimeConfig, this) {
-                    rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
-                }
-            }
-        }
-    }
-
-    // TODO(enableNewSmithyRuntime): Remove this customization class
-    private class UserAgentMutateOpRequest(
-        codegenContext: ClientCodegenContext,
-    ) : OperationCustomization() {
-        private val runtimeConfig = codegenContext.runtimeConfig
-
-        override fun section(section: OperationSection): Writable = when (section) {
-            is OperationSection.MutateRequest -> writable {
-                rustTemplate(
-                    """
-                    let mut user_agent = #{ua_module}::AwsUserAgent::new_from_environment(
-                        #{Env}::real(),
-                        #{meta}::API_METADATA.clone(),
-                    );
-                    if let Some(app_name) = _config.app_name() {
-                        user_agent = user_agent.with_app_name(app_name.clone());
+            when (section) {
+                is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
+                    section.registerInterceptor(this) {
+                        rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
                     }
-                    ${section.request}.properties_mut().insert(user_agent);
-                    """,
-                    "meta" to ClientRustModule.Meta,
-                    "ua_module" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
-                    "Env" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("os_shim_internal::Env"),
-                )
+                }
+                else -> emptySection
             }
-
-            else -> emptySection
         }
     }
 
-    private class AppNameCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+    private class AppNameCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+        private val runtimeConfig = codegenContext.runtimeConfig
         private val codegenScope = arrayOf(
+            *preludeScope,
             "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
+            "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
         )
 
         override fun section(section: ServiceConfig): Writable =
             when (section) {
-                is ServiceConfig.BuilderStruct -> writable {
-                    rustTemplate("app_name: Option<#{AppName}>,", *codegenScope)
-                }
-
                 is ServiceConfig.BuilderImpl -> writable {
                     rustTemplate(
                         """
@@ -165,13 +121,18 @@ class UserAgentDecorator : ClientCodegenDecorator {
                             self.set_app_name(Some(app_name));
                             self
                         }
+                        """,
+                        *codegenScope,
+                    )
 
+                    rustTemplate(
+                        """
                         /// Sets the name of the app that is using the client.
                         ///
                         /// This _optional_ name is used to identify the application in the user agent that
                         /// gets sent along with requests.
-                        pub fn set_app_name(&mut self, app_name: Option<#{AppName}>) -> &mut Self {
-                            self.app_name = app_name;
+                        pub fn set_app_name(&mut self, app_name: #{Option}<#{AppName}>) -> &mut Self {
+                            self.config.store_or_unset(app_name);
                             self
                         }
                         """,
@@ -180,11 +141,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 }
 
                 is ServiceConfig.BuilderBuild -> writable {
-                    rust("app_name: self.app_name,")
-                }
-
-                is ServiceConfig.ConfigStruct -> writable {
-                    rustTemplate("app_name: Option<#{AppName}>,", *codegenScope)
+                    rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
                 }
 
                 is ServiceConfig.ConfigImpl -> writable {
@@ -194,9 +151,18 @@ class UserAgentDecorator : ClientCodegenDecorator {
                         ///
                         /// This _optional_ name is used to identify the application in the user agent that
                         /// gets sent along with requests.
-                        pub fn app_name(&self) -> Option<&#{AppName}> {
-                            self.app_name.as_ref()
+                        pub fn app_name(&self) -> #{Option}<&#{AppName}> {
+                           self.config.load::<#{AppName}>()
                         }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                is ServiceConfig.DefaultForTests -> writable {
+                    rustTemplate(
+                        """
+                        self.config.store_put(#{AwsUserAgent}::for_tests());
                         """,
                         *codegenScope,
                     )

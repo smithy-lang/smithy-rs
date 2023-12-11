@@ -3,12 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 #[allow(dead_code)]
 mod aws_query_compatible_errors;
+#[allow(unused)]
+mod client_http_checksum_required;
+#[allow(dead_code)]
+mod client_idempotency_token;
 #[allow(unused)]
 mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
+#[allow(unused)]
+mod event_receiver;
 #[allow(dead_code)]
 mod idempotency_token;
 #[allow(dead_code)]
@@ -17,9 +26,15 @@ mod json_errors;
 mod rest_xml_unwrapped_errors;
 #[allow(unused)]
 mod rest_xml_wrapped_errors;
+#[allow(unused)]
+mod serialization_settings;
 
 #[allow(unused)]
 mod endpoint_lib;
+
+#[allow(unused)]
+mod auth_plugin;
+
 // This test is outside of uuid.rs to enable copying the entirety of uuid.rs into the SDK without
 // requiring a proptest dependency
 #[cfg(test)]
@@ -27,7 +42,7 @@ mod test {
     use crate::idempotency_token;
     use crate::idempotency_token::{uuid_v4, IdempotencyTokenProvider};
     use proptest::prelude::*;
-    use regex::Regex;
+    use regex_lite::Regex;
 
     #[test]
     fn test_uuid() {

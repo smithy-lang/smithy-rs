@@ -15,16 +15,17 @@ use std::{
 };
 
 use async_stream::stream;
-use aws_smithy_http::operation::Request;
 use aws_smithy_http_server::Extension;
-use http::{
-    uri::{Authority, Scheme},
-    Uri,
-};
+use aws_smithy_runtime::client::http::hyper_014::HyperConnector;
+use aws_smithy_runtime_api::client::http::HttpConnector;
+use http::Uri;
 use pokemon_service_server_sdk::{
-    error, input, model, model::CapturingPayload, output, types::Blob,
+    error, input, model,
+    model::CapturingPayload,
+    output,
+    types::{Blob, ByteStream, SdkBody},
 };
-use rand::Rng;
+use rand::{seq::SliceRandom, Rng};
 use tracing_subscriber::{prelude::*, EnvFilter};
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
@@ -35,21 +36,6 @@ const PIKACHU_ITALIAN_FLAVOR_TEXT: &str =
     "Quando vari Pokémon di questo tipo si radunano, la loro energia può causare forti tempeste.";
 const PIKACHU_JAPANESE_FLAVOR_TEXT: &str =
     "ほっぺたの りょうがわに ちいさい でんきぶくろを もつ。ピンチのときに ほうでんする。";
-
-/// Rewrites the base URL of a request
-pub fn rewrite_base_url(
-    scheme: Scheme,
-    authority: Authority,
-) -> impl Fn(Request) -> Request + Clone {
-    move |mut req| {
-        let http_req = req.http_mut();
-        let mut uri_parts = http_req.uri().clone().into_parts();
-        uri_parts.authority = Some(authority.clone());
-        uri_parts.scheme = Some(scheme.clone());
-        *http_req.uri_mut() = Uri::from_parts(uri_parts).expect("failed to create uri from parts");
-        req
-    }
-}
 
 /// Kills [`Child`] process when dropped.
 #[derive(Debug)]
@@ -325,6 +311,39 @@ pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutpu
 /// Operation used to show the service is running.
 pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
     output::CheckHealthOutput {}
+}
+
+const RADIO_STREAMS: [&str; 2] = [
+    "https://ia800107.us.archive.org/33/items/299SoundEffectCollection/102%20Palette%20Town%20Theme.mp3",
+    "https://ia600408.us.archive.org/29/items/PocketMonstersGreenBetaLavenderTownMusicwwwFlvtoCom/Pocket%20Monsters%20Green%20Beta-%20Lavender%20Town%20Music-%5Bwww_flvto_com%5D.mp3",
+];
+
+/// Streams a random Pokémon song.
+pub async fn stream_pokemon_radio(
+    _input: input::StreamPokemonRadioInput,
+) -> output::StreamPokemonRadioOutput {
+    let radio_stream_url = RADIO_STREAMS
+        .choose(&mut rand::thread_rng())
+        .expect("`RADIO_STREAMS` is empty")
+        .parse::<Uri>()
+        .expect("Invalid url in `RADIO_STREAMS`");
+
+    let connector = HyperConnector::builder().build_https();
+    let result = connector
+        .call(
+            http::Request::builder()
+                .uri(radio_stream_url)
+                .body(SdkBody::empty())
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    output::StreamPokemonRadioOutput {
+        data: ByteStream::new(result.into_body()),
+    }
 }
 
 #[cfg(test)]

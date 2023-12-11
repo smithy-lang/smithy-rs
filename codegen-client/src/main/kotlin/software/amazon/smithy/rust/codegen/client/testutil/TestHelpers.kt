@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 fun testClientRustSettings(
     service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
@@ -72,7 +73,7 @@ fun testSymbolProvider(model: Model, serviceShape: ServiceShape? = null): RustSy
     )
 
 fun testClientCodegenContext(
-    model: Model,
+    model: Model = "namespace empty".asSmithyModel(),
     symbolProvider: RustSymbolProvider? = null,
     serviceShape: ServiceShape? = null,
     settings: ClientRustSettings = testClientRustSettings(),
@@ -89,9 +90,14 @@ fun testClientCodegenContext(
     rootDecorator ?: CombinedClientCodegenDecorator(emptyList()),
 )
 
+fun ClientCodegenContext.withEnableUserConfigurableRuntimePlugins(enableUserConfigurableRuntimePlugins: Boolean): ClientCodegenContext =
+    copy(settings = settings.copy(codegenConfig = settings.codegenConfig.copy(enableUserConfigurableRuntimePlugins = enableUserConfigurableRuntimePlugins)))
+
 fun TestWriterDelegator.clientRustSettings() =
     testClientRustSettings(
         service = ShapeId.from("fake#Fake"),
         moduleName = "test_${baseDir.toFile().nameWithoutExtension}",
         codegenConfig = codegenConfig as ClientCodegenConfig,
     )
+
+fun TestWriterDelegator.clientCodegenContext(model: Model) = testClientCodegenContext(model, settings = clientRustSettings())

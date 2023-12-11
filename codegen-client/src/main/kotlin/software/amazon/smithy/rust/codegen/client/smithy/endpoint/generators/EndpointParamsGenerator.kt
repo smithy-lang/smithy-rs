@@ -5,9 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
-import software.amazon.smithy.rulesengine.language.eval.Value
+import software.amazon.smithy.rulesengine.language.evaluation.value.BooleanValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.StringValue
+import software.amazon.smithy.rulesengine.language.evaluation.value.Value
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
@@ -28,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.makeOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
@@ -36,12 +40,12 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 // internals contains the actual resolver function
-val EndpointImpl = RustModule.private("internals", parent = ClientRustModule.Endpoint)
+fun endpointImplModule() = RustModule.private("internals", parent = ClientRustModule.Config.endpoint)
 
-val EndpointTests = RustModule.new(
+fun endpointTestsModule() = RustModule.new(
     "test",
     visibility = Visibility.PRIVATE,
-    parent = ClientRustModule.Endpoint,
+    parent = ClientRustModule.Config.endpoint,
     inline = true,
     documentationOverride = "",
 ).cfgTest()
@@ -107,22 +111,24 @@ val EndpointStdLib = RustModule.private("endpoint_lib")
  *  ```
  */
 
-internal class EndpointParamsGenerator(private val parameters: Parameters) {
-
+internal class EndpointParamsGenerator(
+    private val codegenContext: ClientCodegenContext,
+    private val parameters: Parameters,
+) {
     companion object {
         fun memberName(parameterName: String) = Identifier.of(parameterName).rustName()
         fun setterName(parameterName: String) = "set_${memberName(parameterName)}"
     }
 
-    fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", ClientRustModule.Endpoint) {
+    fun paramsStruct(): RuntimeType = RuntimeType.forInlineFun("Params", ClientRustModule.Config.endpoint) {
         generateEndpointsStruct(this)
     }
 
-    internal fun paramsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Endpoint) {
+    internal fun paramsBuilder(): RuntimeType = RuntimeType.forInlineFun("ParamsBuilder", ClientRustModule.Config.endpoint) {
         generateEndpointParamsBuilder(this)
     }
 
-    private fun paramsError(): RuntimeType = RuntimeType.forInlineFun("InvalidParams", ClientRustModule.Endpoint) {
+    private fun paramsError(): RuntimeType = RuntimeType.forInlineFun("InvalidParams", ClientRustModule.Config.endpoint) {
         rust(
             """
             /// An error that occurred during endpoint resolution
@@ -212,8 +218,8 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
 
     private fun value(value: Value): String {
         return when (value) {
-            is Value.String -> value.value().dq() + ".to_string()"
-            is Value.Bool -> value.expectBool().toString()
+            is StringValue -> value.value.dq() + ".to_string()"
+            is BooleanValue -> value.value.toString()
             else -> TODO("unexpected type: $value")
         }
     }
@@ -232,7 +238,8 @@ internal class EndpointParamsGenerator(private val parameters: Parameters) {
         rustWriter.rustBlock("impl ParamsBuilder") {
             docs("Consume this builder, creating [`Params`].")
             rustBlockTemplate(
-                "pub fn build(self) -> Result<#{Params}, #{ParamsError}>",
+                "pub fn build(self) -> #{Result}<#{Params}, #{ParamsError}>",
+                *preludeScope,
                 "Params" to paramsStruct(),
                 "ParamsError" to paramsError(),
             ) {

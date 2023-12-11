@@ -9,7 +9,9 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docsTemplate
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizationsOrElse
 
 object AwsDocs {
     /**
@@ -19,13 +21,34 @@ object AwsDocs {
     fun canRelyOnAwsConfig(codegenContext: ClientCodegenContext): Boolean =
         SdkSettings.from(codegenContext.settings).awsConfigVersion != null &&
             !setOf(
-                ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
                 ShapeId.from("com.amazonaws.sso#SWBPortalService"),
+                ShapeId.from("com.amazonaws.ssooidc#AWSSSOOIDCService"),
+                ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
             ).contains(codegenContext.serviceShape.id)
+
+    fun constructClient(codegenContext: ClientCodegenContext, indent: String): Writable {
+        val crateName = codegenContext.moduleUseName()
+        return writable {
+            writeCustomizationsOrElse(
+                codegenContext.rootDecorator.extraSections(codegenContext),
+                DocSection.CreateClient(crateName = crateName, indent = indent),
+            ) {
+                if (canRelyOnAwsConfig(codegenContext)) {
+                    addDependency(AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency())
+                }
+                rustTemplate(
+                    """
+                    let config = aws_config::load_from_env().await;
+                    let client = $crateName::Client::new(&config);
+                    """.trimIndent().prependIndent(indent),
+                )
+            }
+        }
+    }
 
     fun clientConstructionDocs(codegenContext: ClientCodegenContext): Writable = {
         if (canRelyOnAwsConfig(codegenContext)) {
-            val crateName = codegenContext.moduleName.toSnakeCase()
+            val crateName = codegenContext.moduleUseName()
             docsTemplate(
                 """
                 #### Constructing a `Client`
@@ -40,8 +63,7 @@ object AwsDocs {
                 In the simplest case, creating a client looks as follows:
                 ```rust,no_run
                 ## async fn wrapper() {
-                let config = #{aws_config}::load_from_env().await;
-                let client = $crateName::Client::new(&config);
+                #{constructClient}
                 ## }
                 ```
 
@@ -76,6 +98,7 @@ object AwsDocs {
                 [builder pattern]: https://rust-lang.github.io/api-guidelines/type-safety.html##builders-enable-construction-of-complex-values-c-builder
                 """.trimIndent(),
                 "aws_config" to AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency().toType(),
+                "constructClient" to constructClient(codegenContext, indent = ""),
             )
         }
     }

@@ -4,124 +4,165 @@
  */
 
 use aws_smithy_http::endpoint::error::ResolveEndpointError;
-use aws_smithy_http::endpoint::{
-    apply_endpoint, EndpointPrefix, ResolveEndpoint, SharedEndpointResolver,
+use aws_smithy_http::endpoint::EndpointPrefix;
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::endpoint::{
+    EndpointFuture, EndpointResolverParams, ResolveEndpoint,
 };
-use aws_smithy_runtime_api::client::interceptors::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::{
-    BoxError, ConfigBagAccessors, EndpointResolver, EndpointResolverParams, HttpRequest,
-    HttpResponse,
-};
-use aws_smithy_runtime_api::config_bag::ConfigBag;
+use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::endpoint::Endpoint;
 use http::header::HeaderName;
+use http::uri::PathAndQuery;
 use http::{HeaderValue, Uri};
+use std::borrow::Cow;
 use std::fmt::Debug;
 use std::str::FromStr;
+use tracing::trace;
 
-#[derive(Debug, Clone)]
+/// An endpoint resolver that uses a static URI.
+#[derive(Clone, Debug)]
 pub struct StaticUriEndpointResolver {
-    endpoint: Uri,
+    endpoint: String,
 }
 
 impl StaticUriEndpointResolver {
+    /// Create a resolver that resolves to `http://localhost:{port}`.
     pub fn http_localhost(port: u16) -> Self {
         Self {
-            endpoint: Uri::from_str(&format!("http://localhost:{port}"))
-                .expect("all u16 values are valid ports"),
+            endpoint: format!("http://localhost:{port}"),
         }
     }
 
-    pub fn uri(endpoint: Uri) -> Self {
-        Self { endpoint }
-    }
-}
-
-impl EndpointResolver for StaticUriEndpointResolver {
-    fn resolve_and_apply_endpoint(
-        &self,
-        _params: &EndpointResolverParams,
-        _endpoint_prefix: Option<&EndpointPrefix>,
-        request: &mut HttpRequest,
-    ) -> Result<(), BoxError> {
-        apply_endpoint(request.uri_mut(), &self.endpoint, None)?;
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct DefaultEndpointResolver<Params> {
-    inner: SharedEndpointResolver<Params>,
-}
-
-impl<Params> DefaultEndpointResolver<Params> {
-    pub fn new(resolve_endpoint: SharedEndpointResolver<Params>) -> Self {
+    /// Create a resolver that resolves to the given URI.
+    pub fn uri(endpoint: impl Into<String>) -> Self {
         Self {
-            inner: resolve_endpoint,
+            endpoint: endpoint.into(),
         }
     }
 }
 
-impl<Params> EndpointResolver for DefaultEndpointResolver<Params>
-where
-    Params: Debug + Send + Sync + 'static,
-{
-    fn resolve_and_apply_endpoint(
-        &self,
-        params: &EndpointResolverParams,
-        endpoint_prefix: Option<&EndpointPrefix>,
-        request: &mut HttpRequest,
-    ) -> Result<(), BoxError> {
-        let endpoint = match params.get::<Params>() {
-            Some(params) => self.inner.resolve_endpoint(params)?,
-            None => {
-                return Err(Box::new(ResolveEndpointError::message(
-                    "params of expected type was not present",
-                )));
-            }
-        };
+impl ResolveEndpoint for StaticUriEndpointResolver {
+    fn resolve_endpoint<'a>(&'a self, _params: &'a EndpointResolverParams) -> EndpointFuture<'a> {
+        EndpointFuture::ready(Ok(Endpoint::builder()
+            .url(self.endpoint.to_string())
+            .build()))
+    }
+}
 
-        let uri: Uri = endpoint.url().parse().map_err(|err| {
-            ResolveEndpointError::from_source("endpoint did not have a valid uri", err)
-        })?;
+/// Empty params to be used with [`StaticUriEndpointResolver`].
+#[derive(Debug, Default)]
+pub struct StaticUriEndpointResolverParams;
 
-        apply_endpoint(request.uri_mut(), &uri, endpoint_prefix).map_err(|err| {
+impl StaticUriEndpointResolverParams {
+    /// Creates a new `StaticUriEndpointResolverParams`.
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl From<StaticUriEndpointResolverParams> for EndpointResolverParams {
+    fn from(params: StaticUriEndpointResolverParams) -> Self {
+        EndpointResolverParams::new(params)
+    }
+}
+
+pub(super) async fn orchestrate_endpoint(
+    ctx: &mut InterceptorContext,
+    runtime_components: &RuntimeComponents,
+    cfg: &mut ConfigBag,
+) -> Result<(), BoxError> {
+    trace!("orchestrating endpoint resolution");
+
+    let params = cfg
+        .load::<EndpointResolverParams>()
+        .expect("endpoint resolver params must be set");
+    let endpoint_prefix = cfg.load::<EndpointPrefix>();
+    tracing::debug!(endpoint_params = ?params, endpoint_prefix = ?endpoint_prefix, "resolving endpoint");
+    let request = ctx.request_mut().expect("set during serialization");
+
+    let endpoint = runtime_components
+        .endpoint_resolver()
+        .resolve_endpoint(params)
+        .await?;
+    tracing::debug!("will use endpoint {:?}", endpoint);
+    apply_endpoint(request, &endpoint, endpoint_prefix)?;
+
+    // Make the endpoint config available to interceptors
+    cfg.interceptor_state().store_put(endpoint);
+    Ok(())
+}
+
+fn apply_endpoint(
+    request: &mut HttpRequest,
+    endpoint: &Endpoint,
+    endpoint_prefix: Option<&EndpointPrefix>,
+) -> Result<(), BoxError> {
+    let endpoint_url = match endpoint_prefix {
+        None => Cow::Borrowed(endpoint.url()),
+        Some(prefix) => {
+            let parsed = endpoint.url().parse::<Uri>()?;
+            let scheme = parsed.scheme_str().unwrap_or_default();
+            let prefix = prefix.as_str();
+            let authority = parsed
+                .authority()
+                .map(|auth| auth.as_str())
+                .unwrap_or_default();
+            let path_and_query = parsed
+                .path_and_query()
+                .map(PathAndQuery::as_str)
+                .unwrap_or_default();
+            Cow::Owned(format!("{scheme}://{prefix}{authority}{path_and_query}"))
+        }
+    };
+
+    request
+        .uri_mut()
+        .set_endpoint(&endpoint_url)
+        .map_err(|err| {
             ResolveEndpointError::message(format!(
-                "failed to apply endpoint `{:?}` to request `{:?}`",
-                uri, request,
+                "failed to apply endpoint `{}` to request `{:?}`",
+                endpoint_url, request,
             ))
             .with_source(Some(err.into()))
         })?;
 
-        for (header_name, header_values) in endpoint.headers() {
-            request.headers_mut().remove(header_name);
-            for value in header_values {
-                request.headers_mut().insert(
-                    HeaderName::from_str(header_name).map_err(|err| {
-                        ResolveEndpointError::message("invalid header name")
-                            .with_source(Some(err.into()))
-                    })?,
-                    HeaderValue::from_str(value).map_err(|err| {
-                        ResolveEndpointError::message("invalid header value")
-                            .with_source(Some(err.into()))
-                    })?,
-                );
-            }
+    for (header_name, header_values) in endpoint.headers() {
+        request.headers_mut().remove(header_name);
+        for value in header_values {
+            request.headers_mut().append(
+                HeaderName::from_str(header_name).map_err(|err| {
+                    ResolveEndpointError::message("invalid header name")
+                        .with_source(Some(err.into()))
+                })?,
+                HeaderValue::from_str(value).map_err(|err| {
+                    ResolveEndpointError::message("invalid header value")
+                        .with_source(Some(err.into()))
+                })?,
+            );
         }
-
-        Ok(())
     }
+    Ok(())
 }
 
-pub(super) fn orchestrate_endpoint(
-    ctx: &mut InterceptorContext<HttpRequest, HttpResponse>,
-    cfg: &ConfigBag,
-) -> Result<(), BoxError> {
-    let params = cfg.endpoint_resolver_params();
-    let endpoint_prefix = cfg.get::<EndpointPrefix>();
-    let request = ctx.request_mut()?;
+#[cfg(test)]
+mod test {
+    use aws_smithy_http::endpoint::EndpointPrefix;
+    use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+    use aws_smithy_types::endpoint::Endpoint;
 
-    let endpoint_resolver = cfg.endpoint_resolver();
-    endpoint_resolver.resolve_and_apply_endpoint(params, endpoint_prefix, request)?;
-
-    Ok(())
+    #[test]
+    fn test_apply_endpoint() {
+        let mut req = HttpRequest::empty();
+        req.set_uri("/foo?bar=1").unwrap();
+        let endpoint = Endpoint::builder().url("https://s3.amazon.com").build();
+        let prefix = EndpointPrefix::new("prefix.subdomain.").unwrap();
+        super::apply_endpoint(&mut req, &endpoint, Some(&prefix)).expect("should succeed");
+        assert_eq!(
+            req.uri(),
+            "https://prefix.subdomain.s3.amazon.com/foo?bar=1"
+        );
+    }
 }

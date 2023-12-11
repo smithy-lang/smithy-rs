@@ -10,17 +10,19 @@
 //! version numbers in addition to the dependency path.
 
 use crate::fs::Fs;
-use crate::package::{discover_package_manifests, parse_version};
+use crate::package::{discover_manifests, parse_version};
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use semver::Version;
 use smithy_rs_tool_common::ci::running_in_ci;
+use smithy_rs_tool_common::package::PackageStability;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use toml::value::Table;
-use tracing::info;
+use toml::Value;
+use tracing::{debug, info};
 
 mod validate;
 
@@ -55,7 +57,7 @@ pub async fn subcommand_fix_manifests(
         true => Mode::Check,
         false => Mode::Execute,
     };
-    let manifest_paths = discover_package_manifests(location.into()).await?;
+    let manifest_paths = discover_manifests(location.into()).await?;
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
 
@@ -71,6 +73,94 @@ struct Manifest {
     metadata: toml::Value,
 }
 
+impl Manifest {
+    /// Returns the `publish` setting for a given crate
+    fn publish(&self) -> Result<bool> {
+        let value = self.metadata.get("package").and_then(|v| v.get("publish"));
+        match value {
+            None => Ok(true),
+            Some(value) => value.as_bool().ok_or(anyhow::Error::msg(format!(
+                "unexpected publish setting: {value}"
+            ))),
+        }
+    }
+
+    fn stability(&self) -> Result<PackageStability> {
+        let value = self
+            .metadata
+            .get("package")
+            .and_then(|v| v.get("metadata"))
+            .and_then(|v| v.get("smithy-rs-release-tooling"))
+            .and_then(|v| v.get("stable"));
+        match value {
+            None => Ok(PackageStability::Unstable),
+            Some(value) => {
+                if value.as_bool().ok_or(anyhow::Error::msg(format!(
+                    "unexpected stable setting: {value}"
+                )))? {
+                    Ok(PackageStability::Stable)
+                } else {
+                    Ok(PackageStability::Unstable)
+                }
+            }
+        }
+    }
+}
+
+struct Versions(BTreeMap<String, VersionWithMetadata>);
+#[derive(Copy, Clone)]
+enum FilterType {
+    AllCrates,
+    PublishedOnly,
+}
+struct VersionView<'a>(&'a Versions, FilterType);
+impl VersionView<'_> {
+    fn get(&self, crate_name: &str) -> Option<&Version> {
+        let version = match (self.1, self.0 .0.get(crate_name)) {
+            (FilterType::AllCrates, version) => version,
+            (FilterType::PublishedOnly, v @ Some(VersionWithMetadata { publish: true, .. })) => v,
+            _ => None,
+        };
+        version.map(|v| &v.version)
+    }
+
+    fn all_crates(&self) -> Self {
+        VersionView(self.0, FilterType::AllCrates)
+    }
+}
+
+impl Versions {
+    fn published(&self) -> VersionView {
+        VersionView(self, FilterType::PublishedOnly)
+    }
+
+    fn published_crates(&self) -> impl Iterator<Item = (&str, &Version)> + '_ {
+        self.0
+            .iter()
+            .filter(|(_, v)| v.publish)
+            .map(|(k, v)| (k.as_str(), &v.version))
+    }
+
+    fn get(&self, crate_name: &str) -> Option<&Version> {
+        self.0.get(crate_name).map(|v| &v.version)
+    }
+
+    fn stable(&self, crate_name: &str) -> Option<bool> {
+        match self.0.get(crate_name) {
+            Some(VersionWithMetadata { stability, .. }) => {
+                Some(*stability == PackageStability::Stable)
+            }
+            _ => None,
+        }
+    }
+}
+
+struct VersionWithMetadata {
+    version: Version,
+    publish: bool,
+    stability: PackageStability,
+}
+
 async fn read_manifests(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Manifest>> {
     let mut result = Vec::new();
     for path in manifest_paths {
@@ -83,7 +173,7 @@ async fn read_manifests(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Mani
 }
 
 /// Returns a map of crate name to semver version number
-fn package_versions(manifests: &[Manifest]) -> Result<BTreeMap<String, Version>> {
+fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
     let mut versions = BTreeMap::new();
     for manifest in manifests {
         // ignore workspace manifests
@@ -91,6 +181,8 @@ fn package_versions(manifests: &[Manifest]) -> Result<BTreeMap<String, Version>>
             Some(package) => package,
             None => continue,
         };
+        let publish = manifest.publish()?;
+        let stability = manifest.stability()?;
         let name = package
             .get("name")
             .and_then(|name| name.as_str())
@@ -104,16 +196,19 @@ fn package_versions(manifests: &[Manifest]) -> Result<BTreeMap<String, Version>>
                 anyhow::Error::msg(format!("{:?} is missing a package version", manifest.path))
             })?;
         let version = parse_version(&manifest.path, version)?;
-        versions.insert(name.into(), version);
+        versions.insert(
+            name.into(),
+            VersionWithMetadata {
+                version,
+                publish,
+                stability,
+            },
+        );
     }
-    Ok(versions)
+    Ok(Versions(versions))
 }
 
-fn fix_dep_set(
-    versions: &BTreeMap<String, Version>,
-    key: &str,
-    metadata: &mut toml::Value,
-) -> Result<usize> {
+fn fix_dep_set(versions: &VersionView, key: &str, metadata: &mut Value) -> Result<usize> {
     let mut changed = 0;
     if let Some(dependencies) = metadata.as_table_mut().unwrap().get_mut(key) {
         if let Some(dependencies) = dependencies.as_table_mut() {
@@ -133,11 +228,8 @@ fn fix_dep_set(
     Ok(changed)
 }
 
-fn update_dep(
-    table: &mut Table,
-    dep_name: &str,
-    versions: &BTreeMap<String, Version>,
-) -> Result<usize> {
+// Update a version of `dep_name` that has a path dependency to be that appearing in `versions`.
+fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Result<usize> {
     if !table.contains_key("path") {
         return Ok(0);
     }
@@ -159,9 +251,10 @@ fn update_dep(
     }
 }
 
-fn fix_dep_sets(versions: &BTreeMap<String, Version>, metadata: &mut toml::Value) -> Result<usize> {
+fn fix_dep_sets(versions: &VersionView, metadata: &mut toml::Value) -> Result<usize> {
     let mut changed = fix_dep_set(versions, "dependencies", metadata)?;
-    changed += fix_dep_set(versions, "dev-dependencies", metadata)?;
+    // allow dev dependencies to be unpublished
+    changed += fix_dep_set(&versions.all_crates(), "dev-dependencies", metadata)?;
     changed += fix_dep_set(versions, "build-dependencies", metadata)?;
     Ok(changed)
 }
@@ -192,45 +285,53 @@ fn conditionally_disallow_publish(
     // is not being run from CI, and disallow publish in that case. Also disallow
     // publishing of examples.
     if !is_github_actions || is_example {
-        if let Some(package) = metadata.as_table_mut().unwrap().get_mut("package") {
-            info!(
-                "Detected {}. Disallowing publish for {:?}.",
-                if is_example { "example" } else { "local build" },
-                manifest_path,
-            );
-            package
-                .as_table_mut()
-                .unwrap()
-                .insert("publish".into(), toml::Value::Boolean(false));
-            return Ok(true);
+        if let Some(value) = set_publish_false(manifest_path, metadata, is_example) {
+            return Ok(value);
         }
     }
     Ok(false)
 }
 
+fn set_publish_false(manifest_path: &Path, metadata: &mut Value, is_example: bool) -> Option<bool> {
+    if let Some(package) = metadata.as_table_mut().unwrap().get_mut("package") {
+        info!(
+            "Detected {}. Disallowing publish for {:?}.",
+            if is_example { "example" } else { "local build" },
+            manifest_path,
+        );
+        package
+            .as_table_mut()
+            .unwrap()
+            .insert("publish".into(), toml::Value::Boolean(false));
+        return Some(true);
+    }
+    None
+}
+
 async fn fix_manifests(
     fs: Fs,
-    versions: &BTreeMap<String, Version>,
+    versions: &Versions,
     manifests: &mut Vec<Manifest>,
     mode: Mode,
 ) -> Result<()> {
     for manifest in manifests {
         let package_changed =
             conditionally_disallow_publish(&manifest.path, &mut manifest.metadata)?;
-        let dependencies_changed = fix_dep_sets(versions, &mut manifest.metadata)?;
-        if package_changed || dependencies_changed > 0 {
+        let num_deps_changed = fix_manifest(versions, manifest)?;
+        if package_changed || num_deps_changed > 0 {
             let contents =
                 "# Code generated by software.amazon.smithy.rust.codegen.smithy-rs. DO NOT EDIT.\n"
                     .to_string()
                     + &toml::to_string(&manifest.metadata).with_context(|| {
                         format!("failed to serialize to toml for {:?}", manifest.path)
                     })?;
+
             match mode {
                 Mode::Execute => {
                     fs.write_file(&manifest.path, contents.as_bytes()).await?;
                     info!(
                         "Changed {} dependencies in {:?}.",
-                        dependencies_changed, manifest.path
+                        num_deps_changed, manifest.path
                     );
                 }
                 Mode::Check => {
@@ -245,9 +346,85 @@ async fn fix_manifests(
     Ok(())
 }
 
+fn fix_manifest(versions: &Versions, manifest: &mut Manifest) -> Result<usize> {
+    let mut view = versions.published();
+    if !manifest.publish()? {
+        debug!(package = ?&manifest.path, "package has publishing disabled, allowing unpublished crates to be used");
+        view = view.all_crates();
+    }
+    fix_dep_sets(&view, &mut manifest.metadata)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn make_versions<'a>(
+        versions: impl Iterator<Item = &'a (&'a str, &'a str, bool, PackageStability)>,
+    ) -> Versions {
+        let map = versions
+            .into_iter()
+            .map(|(name, version, publish, stability)| {
+                let publish = *publish;
+                (
+                    name.to_string(),
+                    VersionWithMetadata {
+                        version: Version::parse(&version).unwrap(),
+                        publish,
+                        stability: *stability,
+                    },
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        Versions(map)
+    }
+
+    #[test]
+    fn unpublished_deps_cant_be_deps() {
+        let manifest = br#"
+            [package]
+            name = "test"
+            version = "1.2.0"
+
+            [build-dependencies]
+            build_something = "1.3"
+            local_build_something = { path = "../local_build_something", version = "0.4.0-different" }
+
+            [dev-dependencies]
+            dev_something = "1.1"
+            local_dev_something = { path = "../local_dev_something" }
+
+            [dependencies]
+            something = "1.0"
+            local_something = { path = "../local_something" }
+        "#;
+        let metadata = toml::from_slice(manifest).unwrap();
+        let mut manifest = Manifest {
+            path: "test".into(),
+            metadata,
+        };
+        let versions = &[
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", false, PackageStability::Stable),
+        ];
+        let versions = make_versions(versions.iter());
+        fix_manifest(&versions, &mut manifest).expect_err("depends on unpublished local something");
+        set_publish_false(&manifest.path, &mut manifest.metadata, false).unwrap();
+        fix_manifest(&versions, &mut manifest)
+            .expect("now it will work, the crate isn't published");
+    }
 
     #[test]
     fn test_fix_dep_sets() {
@@ -273,16 +450,24 @@ mod tests {
             path: "test".into(),
             metadata,
         };
-        let versions = vec![
-            ("local_build_something", "0.2.0"),
-            ("local_dev_something", "0.1.0"),
-            ("local_something", "1.1.3"),
-        ]
-        .into_iter()
-        .map(|e| (e.0.to_string(), Version::parse(e.1).unwrap()))
-        .collect();
+        let versions = &[
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", true, PackageStability::Stable),
+        ];
+        let versions = make_versions(versions.iter());
 
-        fix_dep_sets(&versions, &mut manifest.metadata).expect("success");
+        fix_dep_sets(&versions.published(), &mut manifest.metadata).expect("success");
 
         let actual_deps = &manifest.metadata["dependencies"];
         assert_eq!(
@@ -336,5 +521,53 @@ mod tests {
         assert!(is_example_manifest(
             "aws-sdk-rust/examples/foo/bar/Cargo.toml"
         ));
+    }
+
+    #[test]
+    fn test_package_stability_from_manifest() {
+        fn verify_package_stability_for_manifest(
+            manifest: &[u8],
+            expected_stability: PackageStability,
+        ) {
+            let metadata = toml::from_slice(manifest).unwrap();
+            let manifest = Manifest {
+                path: "test".into(),
+                metadata,
+            };
+            assert_eq!(expected_stability, manifest.stability().unwrap());
+        }
+
+        let stable_manifest = br#"
+            [package]
+            name = "test"
+            version = "1.0.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = true
+        "#;
+        verify_package_stability_for_manifest(stable_manifest, PackageStability::Stable);
+
+        let explicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = false
+        "#;
+        verify_package_stability_for_manifest(
+            explicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
+
+        let implicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+        "#;
+        verify_package_stability_for_manifest(
+            implicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
     }
 }

@@ -17,8 +17,10 @@ from pokemon_service_server_sdk.error import (
     MasterBallUnsuccessful,
     ResourceNotFoundException,
     UnsupportedRegionError,
+    StorageAccessNotAuthorized,
 )
 from pokemon_service_server_sdk.input import (
+    GetStorageInput,
     CapturePokemonInput,
     CheckHealthInput,
     DoNothingInput,
@@ -28,8 +30,14 @@ from pokemon_service_server_sdk.input import (
 )
 from pokemon_service_server_sdk.logging import TracingHandler
 from pokemon_service_server_sdk.middleware import MiddlewareException, Request, Response
-from pokemon_service_server_sdk.model import CaptureEvent, CapturePokemonEvents, FlavorText, Language
+from pokemon_service_server_sdk.model import (
+    CaptureEvent,
+    CapturePokemonEvents,
+    FlavorText,
+    Language,
+)
 from pokemon_service_server_sdk.output import (
+    GetStorageOutput,
     CapturePokemonOutput,
     CheckHealthOutput,
     DoNothingOutput,
@@ -42,7 +50,14 @@ from pokemon_service_server_sdk.types import ByteStream
 
 # Logging can bee setup using standard Python tooling. We provide
 # fast logging handler, Tracingandler based on Rust tracing crate.
-logging.basicConfig(handlers=[TracingHandler(level=logging.DEBUG).handler()])
+logging.basicConfig(
+    handlers=[
+        TracingHandler(
+            level=logging.DEBUG,
+            format="pretty",  # You can also use "json" or "compact" (default)
+        ).handler()
+    ]
+)
 
 
 class SafeCounter:
@@ -161,10 +176,14 @@ Next = Callable[[Request], Awaitable[Response]]
 @app.middleware
 async def check_content_type_header(request: Request, next: Next) -> Response:
     content_type = request.headers.get("content-type")
-    if content_type == "application/json":
-        logging.debug("found valid `application/json` content type")
+    if content_type in ["application/json", "application/vnd.amazon.eventstream"]:
+        logging.debug("found valid `%s` content type", content_type)
     else:
-        logging.warning("invalid content type %s, dumping headers: %s", content_type, request.headers.items())
+        logging.warning(
+            "invalid content type %s, dumping headers: %s",
+            content_type,
+            request.headers.items(),
+        )
     return await next(request)
 
 
@@ -184,7 +203,7 @@ async def add_x_amzn_answer_header(request: Request, next: Next) -> Response:
 async def check_x_amzn_answer_header(request: Request, next: Next) -> Response:
     # Check that `x-amzn-answer` is 42.
     if request.headers.get("x-amzn-answer") != "42":
-        # Return an HTTP 401 Unauthorized if the content type is not JSON.
+        # Return an HTTP 401 Unauthorized.
         raise MiddlewareException("Invalid answer", 401)
     return await next(request)
 
@@ -198,9 +217,24 @@ def do_nothing(_: DoNothingInput) -> DoNothingOutput:
     return DoNothingOutput()
 
 
+# Retrieves the user's storage.
+@app.get_storage
+def get_storage(input: GetStorageInput) -> GetStorageOutput:
+    logging.debug("attempting to authenticate storage user")
+
+    # We currently only support Ash and he has nothing stored
+    if input.user != "ash" or input.passcode != "pikachu123":
+        logging.debug("authentication failed")
+        raise StorageAccessNotAuthorized()
+
+    return GetStorageOutput([])
+
+
 # Get the translation of a Pokémon specie or an error.
 @app.get_pokemon_species
-def get_pokemon_species(input: GetPokemonSpeciesInput, context: Context) -> GetPokemonSpeciesOutput:
+def get_pokemon_species(
+    input: GetPokemonSpeciesInput, context: Context
+) -> GetPokemonSpeciesOutput:
     if context.lambda_ctx is not None:
         logging.debug(
             "lambda Context: %s",
@@ -218,7 +252,9 @@ def get_pokemon_species(input: GetPokemonSpeciesInput, context: Context) -> GetP
     if flavor_text_entries:
         logging.debug("total requests executed: %s", context.get_calls_count())
         logging.info("found description for Pokémon %s", input.name)
-        return GetPokemonSpeciesOutput(name=input.name, flavor_text_entries=flavor_text_entries)
+        return GetPokemonSpeciesOutput(
+            name=input.name, flavor_text_entries=flavor_text_entries
+        )
     else:
         logging.warning("description for Pokémon %s not in the database", input.name)
         raise ResourceNotFoundException("Requested Pokémon not available")
@@ -226,7 +262,9 @@ def get_pokemon_species(input: GetPokemonSpeciesInput, context: Context) -> GetP
 
 # Get the number of requests served by this server.
 @app.get_server_statistics
-def get_server_statistics(_: GetServerStatisticsInput, context: Context) -> GetServerStatisticsOutput:
+def get_server_statistics(
+    _: GetServerStatisticsInput, context: Context
+) -> GetServerStatisticsOutput:
     calls_count = context.get_calls_count()
     logging.debug("the service handled %d requests", calls_count)
     return GetServerStatisticsOutput(calls_count=calls_count)
@@ -393,7 +431,9 @@ def capture_pokemon(input: CapturePokemonInput) -> CapturePokemonOutput:
 
 # Stream a random Pokémon song.
 @app.stream_pokemon_radio
-async def stream_pokemon_radio(_: StreamPokemonRadioInput, context: Context) -> StreamPokemonRadioOutput:
+async def stream_pokemon_radio(
+    _: StreamPokemonRadioInput, context: Context
+) -> StreamPokemonRadioOutput:
     import aiohttp
 
     radio_url = context.get_random_radio_stream()

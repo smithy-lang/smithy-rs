@@ -9,10 +9,13 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientBuilderInstantiator
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 
 /**
  * [ClientCodegenContext] contains code-generation context that is _specific_ to the [RustClientCodegenPlugin] plugin
@@ -30,6 +33,12 @@ data class ClientCodegenContext(
     // Expose the `rootDecorator`, enabling customizations to compose by referencing information from the root codegen
     // decorator
     val rootDecorator: ClientCodegenDecorator,
+    val protocolImpl: Protocol? = null,
 ) : CodegenContext(
     model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
-)
+) {
+    val enableUserConfigurableRuntimePlugins: Boolean get() = settings.codegenConfig.enableUserConfigurableRuntimePlugins
+    override fun builderInstantiator(): BuilderInstantiator {
+        return ClientBuilderInstantiator(this)
+    }
+}

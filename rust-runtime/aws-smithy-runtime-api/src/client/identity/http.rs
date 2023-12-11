@@ -5,9 +5,9 @@
 
 //! Identity types for HTTP auth
 
-use crate::client::identity::{Identity, IdentityResolver};
-use crate::client::orchestrator::Future;
-use crate::config_bag::ConfigBag;
+use crate::client::identity::{Identity, IdentityFuture, ResolveIdentity};
+use crate::client::runtime_components::RuntimeComponents;
+use aws_smithy_types::config_bag::ConfigBag;
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -64,9 +64,13 @@ impl From<String> for Token {
     }
 }
 
-impl IdentityResolver for Token {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> Future<Identity> {
-        Future::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
+impl ResolveIdentity for Token {
+    fn resolve_identity<'a>(
+        &'a self,
+        _runtime_components: &'a RuntimeComponents,
+        _config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a> {
+        IdentityFuture::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }
 
@@ -123,8 +127,12 @@ impl Login {
     }
 }
 
-impl IdentityResolver for Login {
-    fn resolve_identity(&self, _config_bag: &ConfigBag) -> Future<Identity> {
-        Future::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
+impl ResolveIdentity for Login {
+    fn resolve_identity<'a>(
+        &'a self,
+        _runtime_components: &'a RuntimeComponents,
+        _config_bag: &'a ConfigBag,
+    ) -> IdentityFuture<'a> {
+        IdentityFuture::ready(Ok(Identity::new(self.clone(), self.0.expiration)))
     }
 }

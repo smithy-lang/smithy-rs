@@ -11,6 +11,9 @@ use smithy.framework#ValidationException
 service ConstraintsService {
     operations: [
         ConstrainedShapesOperation,
+        // See https://github.com/smithy-lang/smithy-rs/issues/2760 for why testing operations reaching
+        // constrained shapes that only lie in the output is important.
+        ConstrainedShapesOnlyInOutputOperation,
         ConstrainedHttpBoundShapesOperation,
         ConstrainedHttpPayloadBoundShapeOperation,
         ConstrainedRecursiveShapesOperation,
@@ -34,7 +37,7 @@ service ConstraintsService {
 
         QueryParamsTargetingMapOfEnumStringOperation,
         QueryParamsTargetingMapOfListOfEnumStringOperation,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1431)
         // HttpPrefixHeadersTargetingMapOfEnumStringOperation,
 
         NonStreamingBlobOperation,
@@ -49,6 +52,11 @@ operation ConstrainedShapesOperation {
     input: ConstrainedShapesOperationInputOutput,
     output: ConstrainedShapesOperationInputOutput,
     errors: [ValidationException]
+}
+
+@http(uri: "/constrained-shapes-only-in-output-operation", method: "POST")
+operation ConstrainedShapesOnlyInOutputOperation {
+    output: ConstrainedShapesOnlyInOutputOperationOutput,
 }
 
 @http(
@@ -266,7 +274,7 @@ structure ConstrainedHttpBoundShapesOperationInputOutput {
     @httpHeader("X-Range-Long-List")
     rangeLongListHeader: ListOfRangeLong,
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1431)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1431)
     // @httpHeader("X-Enum")
     //enumStringHeader: EnumString,
 
@@ -490,7 +498,7 @@ structure ConA {
     mapOfLengthString: MapOfLengthString,
 
     listOfLengthBlob: ListOfLengthBlob,
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401): a `set` shape is
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): a `set` shape is
     //  just a `list` shape with `uniqueItems`, which hasn't been implemented yet.
     // setOfLengthBlob: SetOfLengthBlob,
     mapOfLengthBlob: MapOfLengthBlob,
@@ -934,4 +942,32 @@ map MapOfMapOfListOfListOfConB {
 map MapOfListOfListOfConB {
     key: String,
     value: ConBList
+}
+
+structure ConstrainedShapesOnlyInOutputOperationOutput {
+    list: ConstrainedListInOutput
+    map: ConstrainedMapInOutput
+    // Unions were not affected by
+    // https://github.com/smithy-lang/smithy-rs/issues/2760, but testing anyway for
+    // good measure.
+    union: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+list ConstrainedListInOutput {
+    member: ConstrainedUnionInOutput
+}
+
+@length(min: 69)
+map ConstrainedMapInOutput {
+    key: String
+    value: TransitivelyConstrainedStructureInOutput
+}
+
+union ConstrainedUnionInOutput {
+    structure: TransitivelyConstrainedStructureInOutput
+}
+
+structure TransitivelyConstrainedStructureInOutput {
+    lengthString: LengthString
 }

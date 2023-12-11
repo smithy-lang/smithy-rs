@@ -29,9 +29,6 @@ enum Args {
         /// Path(s) to recursively update Cargo.toml files in
         #[clap()]
         crate_paths: Vec<PathBuf>,
-        /// Makes each individual crate its own workspace
-        #[clap(long)]
-        isolate_crates: bool,
     },
     /// Revise crates to use version numbers in dependencies
     UseVersionDependencies {
@@ -41,9 +38,6 @@ enum Args {
         /// Path(s) to recursively update Cargo.toml files in
         #[clap()]
         crate_paths: Vec<PathBuf>,
-        /// Makes each individual crate its own workspace
-        #[clap(long)]
-        isolate_crates: bool,
     },
     /// Revise crates to use version numbers AND paths in dependencies
     UsePathAndVersionDependencies {
@@ -56,9 +50,6 @@ enum Args {
         /// Path(s) to recursively update Cargo.toml files in
         #[clap()]
         crate_paths: Vec<PathBuf>,
-        /// Makes each individual crate its own workspace
-        #[clap(long)]
-        isolate_crates: bool,
     },
 }
 
@@ -71,14 +62,6 @@ impl Args {
         }
     }
 
-    fn isolate_crates(&self) -> bool {
-        *match self {
-            Self::UsePathDependencies { isolate_crates, .. } => isolate_crates,
-            Self::UseVersionDependencies { isolate_crates, .. } => isolate_crates,
-            Self::UsePathAndVersionDependencies { isolate_crates, .. } => isolate_crates,
-        }
-    }
-
     fn validate(self) -> Result<Self> {
         if self.crate_paths().is_empty() {
             bail!("Must provide at least one crate path to recursively update");
@@ -87,8 +70,26 @@ impl Args {
     }
 }
 
-struct DependencyContext<'a> {
-    sdk_path: Option<&'a Path>,
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/2810): Remove `SdkPath` and just use a `PathBuf` with the new logic
+// This is only around for backwards compatibility for the next release's sync process0
+enum SdkPath {
+    /// Don't even attempt to resolve the correct relative path to dependencies
+    UseDumbLogic(PathBuf),
+    /// Resolve the correct relative path to dependencies
+    UseNewLogic(PathBuf),
+}
+impl From<&PathBuf> for SdkPath {
+    fn from(value: &PathBuf) -> Self {
+        if !value.exists() {
+            SdkPath::UseDumbLogic(value.into())
+        } else {
+            SdkPath::UseNewLogic(value.into())
+        }
+    }
+}
+
+struct DependencyContext {
+    sdk_path: Option<SdkPath>,
     versions_manifest: Option<VersionsManifest>,
 }
 
@@ -96,7 +97,7 @@ fn main() -> Result<()> {
     let args = Args::parse().validate()?;
     let dependency_context = match &args {
         Args::UsePathDependencies { sdk_path, .. } => DependencyContext {
-            sdk_path: Some(sdk_path),
+            sdk_path: Some(sdk_path.into()),
             versions_manifest: None,
         },
         Args::UseVersionDependencies { versions_toml, .. } => DependencyContext {
@@ -108,7 +109,7 @@ fn main() -> Result<()> {
             versions_toml,
             ..
         } => DependencyContext {
-            sdk_path: Some(sdk_path),
+            sdk_path: Some(sdk_path.into()),
             versions_manifest: Some(VersionsManifest::from_file(versions_toml)?),
         },
     };
@@ -120,7 +121,7 @@ fn main() -> Result<()> {
     }
 
     for manifest_path in manifest_paths {
-        update_manifest(&manifest_path, &dependency_context, args.isolate_crates())?;
+        update_manifest(&manifest_path, &dependency_context)?;
     }
 
     println!("Finished in {:?}", start_time.elapsed());
@@ -130,9 +131,9 @@ fn main() -> Result<()> {
 fn update_manifest(
     manifest_path: &Path,
     dependency_context: &DependencyContext,
-    isolate_crates: bool,
 ) -> anyhow::Result<()> {
     println!("Updating {:?}...", manifest_path);
+    let crate_path = manifest_path.parent().expect("manifest has a parent");
 
     let mut metadata: Document = String::from_utf8(
         fs::read(manifest_path).with_context(|| format!("failed to read {manifest_path:?}"))?,
@@ -150,21 +151,12 @@ fn update_manifest(
                     manifest_path
                 );
             }
-            changed =
-                update_dependencies(dependencies.as_table_mut().unwrap(), dependency_context)?
-                    || changed;
+            changed = update_dependencies(
+                dependencies.as_table_mut().unwrap(),
+                dependency_context,
+                crate_path,
+            )? || changed;
         }
-    }
-    if isolate_crates && !metadata.contains_key("workspace") {
-        let package_position = metadata["package"]
-            .as_table()
-            .expect("has a package")
-            .position()
-            .unwrap_or_default();
-        let mut workspace = Table::new();
-        workspace.set_position(package_position);
-        metadata.insert("workspace", Item::Table(workspace));
-        changed = true;
     }
 
     if changed {
@@ -177,6 +169,7 @@ fn update_manifest(
 fn update_dependencies(
     dependencies: &mut Table,
     dependency_context: &DependencyContext,
+    crate_path: &Path,
 ) -> Result<bool> {
     let mut changed = false;
     for (key, value) in dependencies.iter_mut() {
@@ -191,6 +184,7 @@ fn update_dependencies(
                 key.get(),
                 old_value,
                 dependency_context,
+                crate_path,
             )?));
             changed = true;
         }
@@ -210,10 +204,14 @@ fn crate_path_name(name: &str) -> &str {
 }
 
 fn updated_dependency_value(
-    crate_name: &str,
+    dependency_name: &str,
     old_value: Table,
     dependency_context: &DependencyContext,
+    crate_path: &Path,
 ) -> Result<InlineTable> {
+    let crate_path = crate_path
+        .canonicalize()
+        .context("failed to canonicalize crate path")?;
     let mut value = old_value;
 
     // Remove keys that will be replaced
@@ -223,25 +221,45 @@ fn updated_dependency_value(
     value.remove("path");
 
     // Set the `path` if one was given
-    if let Some(path) = &dependency_context.sdk_path {
-        let crate_path = path.join(crate_path_name(crate_name));
-        value["path"] = toml_edit::value(
-            crate_path
-                .as_os_str()
-                .to_str()
-                .expect("valid utf-8 path")
-                .to_string(),
-        );
+    match &dependency_context.sdk_path {
+        Some(SdkPath::UseDumbLogic(sdk_path)) => {
+            let crate_path = sdk_path.join(crate_path_name(dependency_name));
+            value["path"] = toml_edit::value(
+                crate_path
+                    .as_os_str()
+                    .to_str()
+                    .expect("valid utf-8 path")
+                    .to_string(),
+            );
+        }
+        Some(SdkPath::UseNewLogic(sdk_path)) => {
+            let dependency_path = sdk_path
+                .join(crate_path_name(dependency_name))
+                .canonicalize()
+                .context("failed to canonicalize dependency path")?;
+            if let Some(relative_path) = pathdiff::diff_paths(&dependency_path, &crate_path) {
+                value["path"] = toml_edit::value(
+                    relative_path
+                        .as_os_str()
+                        .to_str()
+                        .expect("valid utf-8 path")
+                        .to_string(),
+                );
+            } else {
+                bail!("Failed to create relative path from {crate_path:?} to {dependency_path:?}");
+            }
+        }
+        _ => {}
     }
 
     // Set the `version` if one was given
     if let Some(manifest) = &dependency_context.versions_manifest {
-        if let Some(crate_metadata) = manifest.crates.get(crate_name) {
+        if let Some(crate_metadata) = manifest.crates.get(dependency_name) {
             value["version"] = toml_edit::value(crate_metadata.version.clone());
         } else {
             bail!(
                 "Crate `{}` was missing from the `versions.toml`",
-                crate_name
+                dependency_name
             );
         }
     }
@@ -270,11 +288,12 @@ fn discover_manifests(manifests: &mut Vec<PathBuf>, path: impl AsRef<Path>) -> a
 
 #[cfg(test)]
 mod tests {
-    use crate::{update_manifest, DependencyContext};
+    use crate::{crate_path_name, update_manifest, DependencyContext, SdkPath};
     use pretty_assertions::assert_eq;
     use smithy_rs_tool_common::package::PackageCategory;
     use smithy_rs_tool_common::versions_manifest::{CrateVersion, VersionsManifest};
     use std::path::PathBuf;
+    use std::{fs, process};
 
     fn versions_toml_for(crates: &[(&str, &str)]) -> VersionsManifest {
         VersionsManifest {
@@ -321,12 +340,46 @@ features = ["foo", "baz"]
 "#;
 
     #[track_caller]
-    fn test_with_context(isolate_crates: bool, context: DependencyContext, expected: &[u8]) {
-        let manifest_file = tempfile::NamedTempFile::new().unwrap();
-        let manifest_path = manifest_file.into_temp_path();
+    fn test_with_context(
+        crate_path_rel: &str,
+        sdk_crates: &[&'static str],
+        context: DependencyContext,
+        expected: &[u8],
+    ) {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let crate_path = temp_dir.path().join(crate_path_rel);
+        fs::create_dir_all(&crate_path).unwrap();
+
+        let manifest_path = crate_path.join("Cargo.toml");
         std::fs::write(&manifest_path, TEST_MANIFEST).unwrap();
 
-        update_manifest(&manifest_path, &context, isolate_crates).expect("success");
+        if let Some(SdkPath::UseNewLogic(sdk_path)) = context.sdk_path.as_ref() {
+            for sdk_crate in sdk_crates {
+                let sdk_crate_path = temp_dir
+                    .path()
+                    .join(sdk_path)
+                    .join(crate_path_name(sdk_crate));
+                fs::create_dir_all(sdk_crate_path).unwrap();
+            }
+        }
+        // Assist with debugging when the tests fail
+        if let Ok(output) = process::Command::new("find").arg(temp_dir.path()).output() {
+            println!(
+                "Test directory structure:\n{}",
+                String::from_utf8_lossy(&output.stdout)
+            );
+        }
+
+        let fixed_context = if let Some(SdkPath::UseNewLogic(sdk_path)) = context.sdk_path.as_ref()
+        {
+            DependencyContext {
+                sdk_path: Some(SdkPath::UseNewLogic(temp_dir.path().join(sdk_path))),
+                versions_manifest: context.versions_manifest,
+            }
+        } else {
+            context
+        };
+        update_manifest(&manifest_path, &fixed_context).expect("success");
 
         let actual =
             String::from_utf8(std::fs::read(&manifest_path).expect("read tmp file")).unwrap();
@@ -337,7 +390,8 @@ features = ["foo", "baz"]
     #[test]
     fn update_dependencies_with_versions() {
         test_with_context(
-            false,
+            "examples/foo",
+            &[],
             DependencyContext {
                 sdk_path: None,
                 versions_manifest: Some(versions_toml_for(&[
@@ -373,9 +427,15 @@ features = ["foo", "baz"]
     #[test]
     fn update_dependencies_with_paths() {
         test_with_context(
-            false,
+            "path/to/test",
+            &[
+                "aws-config",
+                "aws-sdk-s3",
+                "aws-smithy-types",
+                "aws-smithy-http",
+            ],
             DependencyContext {
-                sdk_path: Some(&PathBuf::from("/foo/asdf/")),
+                sdk_path: Some(SdkPath::UseNewLogic(PathBuf::from("sdk"))),
                 versions_manifest: None,
             },
             br#"
@@ -385,10 +445,47 @@ version = "0.1.0"
 
 # Some comment that should be preserved
 [dependencies]
-aws-config = { path = "/foo/asdf/aws-config" }
-aws-sdk-s3 = { path = "/foo/asdf/s3" }
-aws-smithy-types = { path = "/foo/asdf/aws-smithy-types" }
-aws-smithy-http = { path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
+aws-config = { path = "../../../sdk/aws-config" }
+aws-sdk-s3 = { path = "../../../sdk/s3" }
+aws-smithy-types = { path = "../../../sdk/aws-smithy-types" }
+aws-smithy-http = { path = "../../../sdk/aws-smithy-http", features = ["test-util"] }
+something-else = { version = "0.1", no-default-features = true }
+tokio = { version = "1.18", features = ["net"] }
+
+[dev-dependencies.another-thing]
+# some comment
+version = "5.0"
+# another comment
+features = ["foo", "baz"]
+"#,
+        );
+    }
+
+    #[test]
+    fn update_dependencies_with_paths_dumb_logic() {
+        test_with_context(
+            "path/to/test",
+            &[
+                "aws-config",
+                "aws-sdk-s3",
+                "aws-smithy-types",
+                "aws-smithy-http",
+            ],
+            DependencyContext {
+                sdk_path: Some(SdkPath::UseDumbLogic(PathBuf::from("a/dumb/path/to"))),
+                versions_manifest: None,
+            },
+            br#"
+[package]
+name = "test"
+version = "0.1.0"
+
+# Some comment that should be preserved
+[dependencies]
+aws-config = { path = "a/dumb/path/to/aws-config" }
+aws-sdk-s3 = { path = "a/dumb/path/to/s3" }
+aws-smithy-types = { path = "a/dumb/path/to/aws-smithy-types" }
+aws-smithy-http = { path = "a/dumb/path/to/aws-smithy-http", features = ["test-util"] }
 something-else = { version = "0.1", no-default-features = true }
 tokio = { version = "1.18", features = ["net"] }
 
@@ -404,9 +501,15 @@ features = ["foo", "baz"]
     #[test]
     fn update_dependencies_with_versions_and_paths() {
         test_with_context(
-            false,
+            "deep/path/to/test",
+            &[
+                "aws-config",
+                "aws-sdk-s3",
+                "aws-smithy-types",
+                "aws-smithy-http",
+            ],
             DependencyContext {
-                sdk_path: Some(&PathBuf::from("/foo/asdf/")),
+                sdk_path: Some(SdkPath::UseNewLogic(PathBuf::from("sdk"))),
                 versions_manifest: Some(versions_toml_for(&[
                     ("aws-config", "0.5.0"),
                     ("aws-sdk-s3", "0.13.0"),
@@ -421,48 +524,10 @@ version = "0.1.0"
 
 # Some comment that should be preserved
 [dependencies]
-aws-config = { version = "0.5.0", path = "/foo/asdf/aws-config" }
-aws-sdk-s3 = { version = "0.13.0", path = "/foo/asdf/s3" }
-aws-smithy-types = { version = "0.10.0", path = "/foo/asdf/aws-smithy-types" }
-aws-smithy-http = { version = "0.9.0", path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
-something-else = { version = "0.1", no-default-features = true }
-tokio = { version = "1.18", features = ["net"] }
-
-[dev-dependencies.another-thing]
-# some comment
-version = "5.0"
-# another comment
-features = ["foo", "baz"]
-"#
-        );
-    }
-
-    #[test]
-    fn update_dependencies_isolate_crates() {
-        test_with_context(
-            true,
-            DependencyContext {
-                sdk_path: Some(&PathBuf::from("/foo/asdf/")),
-                versions_manifest: Some(versions_toml_for(&[
-                    ("aws-config", "0.5.0"),
-                    ("aws-sdk-s3", "0.13.0"),
-                    ("aws-smithy-types", "0.10.0"),
-                    ("aws-smithy-http", "0.9.0"),
-                ])),
-            },
-            br#"
-[package]
-name = "test"
-version = "0.1.0"
-
-[workspace]
-
-# Some comment that should be preserved
-[dependencies]
-aws-config = { version = "0.5.0", path = "/foo/asdf/aws-config" }
-aws-sdk-s3 = { version = "0.13.0", path = "/foo/asdf/s3" }
-aws-smithy-types = { version = "0.10.0", path = "/foo/asdf/aws-smithy-types" }
-aws-smithy-http = { version = "0.9.0", path = "/foo/asdf/aws-smithy-http", features = ["test-util"] }
+aws-config = { version = "0.5.0", path = "../../../../sdk/aws-config" }
+aws-sdk-s3 = { version = "0.13.0", path = "../../../../sdk/s3" }
+aws-smithy-types = { version = "0.10.0", path = "../../../../sdk/aws-smithy-types" }
+aws-smithy-http = { version = "0.9.0", path = "../../../../sdk/aws-smithy-http", features = ["test-util"] }
 something-else = { version = "0.1", no-default-features = true }
 tokio = { version = "1.18", features = ["net"] }
 

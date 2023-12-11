@@ -18,6 +18,7 @@ data class CodegenTest(
     val service: String,
     val module: String,
     val extraConfig: String? = null,
+    val extraCodegenConfig: String? = null,
     val imports: List<String> = emptyList(),
 )
 
@@ -38,6 +39,7 @@ private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: L
                         "relativePath": "$projectDir/rust-runtime"
                     },
                     "codegen": {
+                        ${it.extraCodegenConfig ?: ""}
                     },
                     "service": "${it.service}",
                     "module": "${it.module}",
@@ -88,9 +90,11 @@ private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTe
         allTests
     }
     require(ret.isNotEmpty()) {
-        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${allTests.map {
-            it.module
-        }}`)"
+        "None of the provided module overrides (`$modulesOverride`) are valid test services (`${
+            allTests.map {
+                it.module
+            }
+        }`)"
     }
     return ret
 }
@@ -119,9 +123,11 @@ fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
         AllCargoCommands
     }
     require(ret.isNotEmpty()) {
-        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${AllCargoCommands.map {
-            it.toString
-        }}`)"
+        "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${
+            AllCargoCommands.map {
+                it.toString
+            }
+        }`)"
     }
     return ret
 }
@@ -135,6 +141,7 @@ fun Project.registerGenerateSmithyBuildTask(
     this.tasks.register("generateSmithyBuild") {
         description = "generate smithy-build.json"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
+        // NOTE: This is not working.
         allCodegenTests.flatMap { it.imports }.forEach { inputs.file(project.projectDir.resolve(it)) }
 
         doFirst {
@@ -202,7 +209,7 @@ fun Project.registerModifyMtimeTask() {
     // hashes coincide.
     // Debugging tip: it is useful to run with `CARGO_LOG=cargo::core::compiler::fingerprint=trace` to learn why Cargo
     // determines a compilation unit needs a rebuild.
-    // For more information see https://github.com/awslabs/smithy-rs/issues/1412.
+    // For more information see https://github.com/smithy-lang/smithy-rs/issues/1412.
     this.tasks.register("modifyMtime") {
         description = "modify Rust files' `mtime` if the contents did not change"
         dependsOn("generateSmithyBuild")
@@ -252,7 +259,7 @@ fun Project.registerCargoCommandsTasks(
         dependsOn(dependentTasks)
         workingDir(outputDir)
         environment("RUSTFLAGS", "--cfg aws_sdk_unstable")
-        commandLine("cargo", "test", "--all-features")
+        commandLine("cargo", "test", "--all-features", "--no-fail-fast")
     }
 
     this.tasks.register<Exec>(Cargo.DOCS.toString) {

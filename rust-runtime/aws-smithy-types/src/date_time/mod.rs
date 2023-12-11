@@ -13,11 +13,17 @@ use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error as StdError;
 use std::fmt;
+use std::fmt::Display;
 use std::time::Duration;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
+#[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
+mod de;
 mod format;
+#[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
+mod ser;
+
 pub use self::format::DateTimeFormatError;
 pub use self::format::DateTimeParseError;
 
@@ -51,8 +57,11 @@ const NANOS_PER_SECOND_U32: u32 = 1_000_000_000;
 /// [`time`](https://crates.io/crates/time) or [`chrono`](https://crates.io/crates/chrono).
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct DateTime {
-    seconds: i64,
-    subsecond_nanos: u32,
+    pub(crate) seconds: i64,
+    /// Subsecond nanos always advances the wallclock time, even for times where seconds is negative
+    ///
+    /// Bigger subsecond nanos => later time
+    pub(crate) subsecond_nanos: u32,
 }
 
 /* ANCHOR_END: date_time */
@@ -88,12 +97,7 @@ impl DateTime {
     /// Returns the number of nanoseconds since the Unix epoch that this `DateTime` represents.
     pub fn as_nanos(&self) -> i128 {
         let seconds = self.seconds as i128 * NANOS_PER_SECOND;
-        if seconds < 0 {
-            let adjusted_nanos = self.subsecond_nanos as i128 - NANOS_PER_SECOND;
-            seconds + NANOS_PER_SECOND + adjusted_nanos
-        } else {
-            seconds + self.subsecond_nanos as i128
-        }
+        seconds + self.subsecond_nanos as i128
     }
 
     /// Creates a `DateTime` from a number of seconds and a fractional second since the Unix epoch.
@@ -176,11 +180,23 @@ impl DateTime {
         self.seconds
     }
 
+    /// Set the seconds component of this `DateTime`.
+    pub fn set_seconds(&mut self, seconds: i64) -> &mut Self {
+        self.seconds = seconds;
+        self
+    }
+
     /// Returns the sub-second nanos component of the `DateTime`.
     ///
     /// _Note: this does not include the number of seconds since the epoch._
     pub fn subsec_nanos(&self) -> u32 {
         self.subsecond_nanos
+    }
+
+    /// Set the "sub-second" nanoseconds of this `DateTime`.
+    pub fn set_subsec_nanos(&mut self, subsec_nanos: u32) -> &mut Self {
+        self.subsecond_nanos = subsec_nanos;
+        self
     }
 
     /// Converts the `DateTime` to the number of milliseconds since the Unix epoch.
@@ -310,13 +326,16 @@ impl PartialOrd for DateTime {
 
 impl Ord for DateTime {
     fn cmp(&self, other: &Self) -> Ordering {
-        match self.seconds.cmp(&other.seconds) {
-            Ordering::Equal => self.subsecond_nanos.cmp(&other.subsecond_nanos),
-            ordering => ordering,
-        }
+        self.as_nanos().cmp(&other.as_nanos())
     }
 }
 
+impl Display for DateTime {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let date = self.fmt(Format::DateTime).map_err(|_| fmt::Error)?;
+        write!(f, "{}", date)
+    }
+}
 /// Failure to convert a `DateTime` to or from another type.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -333,16 +352,20 @@ impl fmt::Display for ConversionError {
 /// Formats for representing a `DateTime` in the Smithy protocols.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Format {
-    /// RFC-3339 Date Time. If the date time has an offset, an error will be returned
+    /// RFC-3339 Date Time. If the date time has an offset, an error will be returned.
+    /// e.g. `2019-12-16T23:48:18Z`
     DateTime,
 
-    /// RFC-3339 Date Time. Offsets are supported
+    /// RFC-3339 Date Time. Offsets are supported.
+    /// e.g. `2019-12-16T23:48:18+01:00`
     DateTimeWithOffset,
 
     /// Date format used by the HTTP `Date` header, specified in RFC-7231.
+    /// e.g. `Mon, 16 Dec 2019 23:48:18 GMT`
     HttpDate,
 
     /// Number of seconds since the Unix epoch formatted as a floating point.
+    /// e.g. `1576540098.52`
     EpochSeconds,
 }
 
@@ -350,10 +373,26 @@ pub enum Format {
 mod test {
     use crate::date_time::Format;
     use crate::DateTime;
+    use proptest::proptest;
     use std::convert::TryFrom;
     use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
+
+    #[test]
+    fn test_display_date_time() {
+        let date_time = DateTime::from_secs(1576540098);
+        assert_eq!(format!("{}", date_time), "2019-12-16T23:48:18Z");
+
+        let date_time = DateTime::from_fractional_secs(1576540098, 0.52);
+        assert_eq!(format!("{}", date_time), "2019-12-16T23:48:18.52Z");
+
+        let date_time = DateTime::from_secs(1699942527);
+        assert_eq!(format!("{}", date_time), "2023-11-14T06:15:27Z");
+
+        let date_time = DateTime::from_secs(16995123);
+        assert_eq!(format!("{}", date_time), "1970-07-16T16:52:03Z");
+    }
 
     #[test]
     fn test_fmt() {
@@ -379,7 +418,7 @@ mod test {
         );
         assert_eq!(
             date_time.fmt(Format::HttpDate).unwrap(),
-            "Mon, 16 Dec 2019 23:48:18.52 GMT"
+            "Mon, 16 Dec 2019 23:48:18 GMT"
         );
     }
 
@@ -549,7 +588,7 @@ mod test {
         assert!(DateTime::from_nanos(10_000_000_000_000_000_000_999_999_999_i128).is_err());
     }
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
     #[test]
     fn system_time_conversions() {
@@ -572,28 +611,59 @@ mod test {
     #[test]
     fn ord() {
         let first = DateTime::from_secs_and_nanos(-1, 0);
-        let second = DateTime::from_secs_and_nanos(0, 0);
-        let third = DateTime::from_secs_and_nanos(0, 1);
-        let fourth = DateTime::from_secs_and_nanos(1, 0);
+        let second = DateTime::from_secs_and_nanos(-1, 1);
+        let third = DateTime::from_secs_and_nanos(0, 0);
+        let fourth = DateTime::from_secs_and_nanos(0, 1);
+        let fifth = DateTime::from_secs_and_nanos(1, 0);
 
         assert!(first == first);
         assert!(first < second);
         assert!(first < third);
         assert!(first < fourth);
+        assert!(first < fifth);
 
         assert!(second > first);
         assert!(second == second);
         assert!(second < third);
         assert!(second < fourth);
+        assert!(second < fifth);
 
         assert!(third > first);
         assert!(third > second);
         assert!(third == third);
         assert!(third < fourth);
+        assert!(third < fifth);
 
         assert!(fourth > first);
         assert!(fourth > second);
         assert!(fourth > third);
         assert!(fourth == fourth);
+        assert!(fourth < fifth);
+
+        assert!(fifth > first);
+        assert!(fifth > second);
+        assert!(fifth > third);
+        assert!(fifth > fourth);
+        assert!(fifth == fifth);
+    }
+
+    const MIN_RFC_3339_MILLIS: i64 = -62135596800000;
+    const MAX_RFC_3339_MILLIS: i64 = 253402300799999;
+
+    // This test uses milliseconds, because `Format::DateTime` does not support nanoseconds.
+    proptest! {
+        #[test]
+        fn ord_proptest(
+            left_millis in MIN_RFC_3339_MILLIS..MAX_RFC_3339_MILLIS,
+            right_millis in MIN_RFC_3339_MILLIS..MAX_RFC_3339_MILLIS,
+        ) {
+            let left = DateTime::from_millis(left_millis);
+            let right = DateTime::from_millis(right_millis);
+
+            let left_str = left.fmt(Format::DateTime).unwrap();
+            let right_str = right.fmt(Format::DateTime).unwrap();
+
+            assert_eq!(left.cmp(&right), left_str.cmp(&right_str));
+        }
     }
 }

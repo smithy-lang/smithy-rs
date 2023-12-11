@@ -40,27 +40,28 @@ class ServiceGenerator(
             decorator.errorCustomizations(codegenContext, emptyList()),
         ).render(rustCrate)
 
-        rustCrate.withModule(ClientRustModule.Config) {
+        rustCrate.withModule(ClientRustModule.config) {
             val serviceConfigGenerator = ServiceConfigGenerator.withBaseBehavior(
                 codegenContext,
                 extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
             )
             serviceConfigGenerator.render(this)
 
-            if (codegenContext.settings.codegenConfig.enableNewSmithyRuntime) {
-                // Enable users to opt in to the test-utils in the runtime crate
-                rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-smithy-runtime/test-util")))
+            // Enable users to opt in to the test-utils in the runtime crate
+            rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-smithy-runtime/test-util")))
 
-                ServiceRuntimePluginGenerator(codegenContext)
-                    .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
+            ServiceRuntimePluginGenerator(codegenContext)
+                .render(this, decorator.serviceRuntimePluginCustomizations(codegenContext, emptyList()))
 
-                serviceConfigGenerator.renderRuntimePluginImplForBuilder(this, codegenContext)
-            }
+            ConfigOverrideRuntimePluginGenerator(codegenContext)
+                .render(this, decorator.configCustomizations(codegenContext, listOf()))
         }
 
         rustCrate.lib {
             Attribute.DocInline.render(this)
             write("pub use config::Config;")
         }
+
+        ClientRuntimeTypesReExportGenerator(codegenContext, rustCrate).render()
     }
 }

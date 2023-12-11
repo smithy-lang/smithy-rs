@@ -66,7 +66,7 @@ impl Fix for ReadmesHaveFooters {
 
 const README_FOOTER: &str =
     "\nThis crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) \
-and the [smithy-rs](https://github.com/awslabs/smithy-rs) code generator.";
+and the [smithy-rs](https://github.com/smithy-lang/smithy-rs) code generator.";
 const NOT_TO_BE_USED_DIRECTLY: &str = " In most cases, it should not be used directly.";
 
 fn fix_readme(path: impl AsRef<Path>, to_be_used_directly: bool) -> Result<(bool, String)> {
@@ -78,7 +78,11 @@ fn fix_readme(path: impl AsRef<Path>, to_be_used_directly: bool) -> Result<(bool
 
     let mut contents = fs::read_to_string(path.as_ref())
         .with_context(|| format!("failure to read readme: {:?}", path.as_ref()))?;
-    let updated =
-        anchor::replace_anchor(&mut contents, &anchor::anchors("footer"), &footer_contents)?;
+    let updated = anchor::replace_anchor(
+        &mut contents,
+        &anchor::anchors("footer"),
+        &footer_contents,
+        None,
+    )?;
     Ok((updated, contents))
 }

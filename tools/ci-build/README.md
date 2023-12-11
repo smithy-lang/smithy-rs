@@ -21,7 +21,7 @@ To create the starting space, do the following:
 
 ```bash
 cd /path/to/my/starting-space
-git clone https://github.com/awslabs/smithy-rs.git
+git clone https://github.com/smithy-lang/smithy-rs.git
 # Optionally check out the revision you want to work with in the checked out smithy-rs.
 # Just make sure you are in /path/to/my/starting-space (or whatever you called it) after.
 ```

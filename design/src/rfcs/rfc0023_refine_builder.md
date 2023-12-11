@@ -40,7 +40,7 @@ Constraints:
 Let's start by reviewing the API proposed in [RFC 20]. We will use the [Pokemon service] as our driving example throughout the RFC.
 This is what the startup code looks like:
 
-```rust
+```rust,ignore
 #[tokio::main]
 pub async fn main() {
     // [...]
@@ -115,7 +115,7 @@ Given the above, we think that the impact of a runtime error is low enough to be
 Moving from a compile-time error to a runtime error does not require extensive refactoring.
 The definition of `PokemonServiceBuilder` goes from:
 
-```rust
+```rust,ignore
 pub struct PokemonServiceBuilder<
     Op1,
     Op2,
@@ -145,7 +145,7 @@ pub struct PokemonServiceBuilder<
 
 to:
 
-```rust
+```rust,ignore
 pub struct PokemonServiceBuilder<
     Op1,
     Op2,
@@ -176,7 +176,7 @@ pub struct PokemonServiceBuilder<
 All operation fields are now `Option`-wrapped.
 We introduce a new `MissingOperationsError` error to hold the names of the missing operations and their respective setter methods:
 
-```rust
+```rust,ignore
 #[derive(Debug)]
 pub struct MissingOperationsError {
     service_name: &'static str,
@@ -208,7 +208,7 @@ We can also provide actionable suggestions: Rust beginners should be able to eas
 
 Let's take a second look at the (updated) definition of `PokemonServiceBuilder`:
 
-```rust
+```rust,ignore
 pub struct PokemonServiceBuilder<
     Op1,
     Op2,
@@ -255,7 +255,7 @@ Let's consider a toy example: if a `check_database` flag is set to `true`, we wa
 
 The "obvious" solution would look somewhat like this:
 
-```rust
+```rust,ignore
 let check_database: bool = /* */;
 let app = if check_database {
     app.check_health(check_health)
@@ -303,7 +303,7 @@ The developer has three options to move forward:
 
 I can't easily see a way to accomplish 1) using the current API. Pursuing 2) is straight-forward with a single conditional:
 
-```rust
+```rust,ignore
 let check_database: bool = /* */;
 let app = if check_database {
     app.check_health(check_health).build()
@@ -314,7 +314,7 @@ let app = if check_database {
 
 It becomes more cumbersome when we have more than a single conditional:
 
-```rust
+```rust,ignore
 let check_database: bool = /* */;
 let include_cpu_statics: bool = /* */;
 match (check_database, include_cpu_statics) {
@@ -339,7 +339,7 @@ match (check_database, include_cpu_statics) {
 
 A lot of repetition compared to the code for the "obvious" approach:
 
-```rust
+```rust,ignore
 let check_database: bool = /* */;
 let include_cpu_statics: bool = /* */;
 let app = if check_database {
@@ -367,7 +367,7 @@ The service builder must be one of the arguments if we want to register handlers
 
 A first sketch:
 
-```rust
+```rust,ignore
 fn partial_setup(builder: PokemonServiceBuilder) -> PokemonServiceBuilder {
     /* */
 }
@@ -395,7 +395,7 @@ note: struct defined here, with at least 6 generic parameters: `Op1`, `Op2`, `Op
 
 We could try to nudge the compiler into inferring them:
 
-```rust
+```rust,ignore
 fn partial_setup(
     builder: PokemonServiceBuilder<_, _, _, _, _, _>,
 ) -> PokemonServiceBuilder<_, _, _, _, _, _> {
@@ -421,7 +421,7 @@ error[E0121]: the placeholder `_` is not allowed within types on item signatures
 
 We must type it all out:
 
-```rust
+```rust,ignore
 fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
     builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
 ) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
@@ -432,7 +432,7 @@ fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
 That compiles, at last.
 Let's try to register an operation handler now:
 
-```rust
+```rust,ignore
 fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6>(
     builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
 ) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6> {
@@ -468,7 +468,7 @@ Can we get rid of them?
 
 Yes! Let's look at one possible approach:
 
-```rust
+```rust,ignore
 pub struct PokemonServiceBuilder<Body, Plugin> {
     check_health: Option<Route<Body>>,
     do_nothing: Option<Route<Body>>,
@@ -483,7 +483,7 @@ pub struct PokemonServiceBuilder<Body, Plugin> {
 We no longer store the raw handlers inside `PokemonServiceBuilder`.
 We eagerly upgrade the operation handlers to a `Route` instance when they are registered with the builder.
 
-```rust
+```rust,ignore
 impl<Body, Plugin> PokemonServiceBuilder<Body, Plugin> {
     pub fn get_pokemon_species<Handler, Extensions>(mut self, handler: Handler) -> Self
     /* Complex trait bounds */
@@ -500,7 +500,7 @@ impl<Body, Plugin> PokemonServiceBuilder<Body, Plugin> {
 The existing API performs the upgrade when `build` is called, forcing `PokemonServiceBuilder` to store the raw handlers and keep two generic parameters around (`OpX` and `ExtsX`) for each operation.
 The proposed API requires plugins to be specified upfront, when creating an instance of the builder. They cannot be modified after a `PokemonServiceBuilder` instance has been built:
 
-```rust
+```rust,ignore
 impl PokemonService<()> {
     /// Constructs a builder for [`PokemonService`].
     pub fn builder<Body, Plugin>(plugin: Plugin) -> PokemonServiceBuilder<Body, Plugin> {
@@ -526,7 +526,7 @@ We have seen how cumbersome it is to break the startup logic into different func
 
 The new design prohibits the following invocation style:
 
-```rust
+```rust,ignore
 let plugin = ColorPlugin::new();
 PokemonService::builder(plugin)
     // [...]
@@ -548,7 +548,7 @@ There are no technical obstacles preventing us from implementing this API, but I
 We can provide developers with other mechanisms to register plugins for a single operation or a subset of operations without introducing ambiguity.
 For attaching additional plugins to a single operation, we could introduce a blanket `Pluggable` implementation for all operations in `aws-smithy-http-server`:
 
-```rust
+```rust,ignore
 impl<P, Op, Pl, S, L> Pluggable<Pl> for Operation<S, L> where Pl: Plugin<P, Op, S, L> {
     type Output = Operation<Pl::Service, Pl::Layer>;
 
@@ -561,7 +561,7 @@ impl<P, Op, Pl, S, L> Pluggable<Pl> for Operation<S, L> where Pl: Plugin<P, Op, 
 which would allow developers to invoke `op.apply(MyPlugin)` or call extensions methods such as `op.print()` where `op` is an `Operation`.
 For attaching additional plugins to a subgroup of operations, instead, we could introduce nested builders:
 
-```rust
+```rust,ignore
 let initial_plugins = ColorPlugin;
 let mut builder = PokemonService::builder(initial_plugins)
     .get_pokemon_species(get_pokemon_species);
@@ -602,7 +602,7 @@ We are going to explore both approaches under the assumption that we want to pre
 
 This is the current definition of the `Upgradable` trait:
 
-```rust
+```rust,ignore
 /// Provides an interface to convert a representation of an operation to a HTTP [`Service`](tower::Service) with
 /// canonical associated types.
 pub trait Upgradable<Protocol, Operation, Exts, Body, Plugin> {
@@ -631,7 +631,7 @@ The above leaves us with two unconstrained type parameters, `Operation` and `Ext
 
 Going back to the branching example:
 
-```rust
+```rust,ignore
 let check_database: bool = /* */;
 let builder = if check_database {
     builder.check_health(check_health)
@@ -643,7 +643,7 @@ let app = builder.build();
 
 In approach 1), we could leverage the `.boxed()` method to convert the actual `OpX` type into a `Box<dyn Upgradable>`, thus ensuring that both branches return the same type:
 
-```rust
+```rust,ignore
 let check_database: bool = /* */;
 let builder = if check_database {
     builder.check_health_operation(Operation::from_handler(check_health).boxed())
@@ -655,7 +655,7 @@ let app = builder.build();
 
 The same cannot be done when conditionally registering a route, because on the `else` branch we cannot convert `MissingOperation` into a `Box<dyn Upgradable>` since `MissingOperation` doesn't implement `Upgradable` - the pillar on which we built all our compile-time safety story.
 
-```rust
+```rust,ignore
 // This won't compile!
 let builder = if check_database {
     builder.check_health_operation(Operation::from_handler(check_health).boxed())
@@ -666,7 +666,7 @@ let builder = if check_database {
 
 In approach 2), we can erase the whole builder in both branches when they both register a route:
 
-```rust
+```rust,ignore
 let check_database: bool = /* */;
 let boxed_builder = if check_database {
     builder.check_health(check_health).erase()
@@ -682,7 +682,7 @@ but, like in approach 1), we will still get a type mismatch error if one of the 
 
 Developers would still have to spell out all generic parameters when writing a function that takes in a builder as a parameter:
 
-```rust
+```rust,ignore
 fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin>(
     builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin>,
 ) -> PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin> {
@@ -693,7 +693,7 @@ fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin>(
 Writing the signature after having modified the builder becomes easier though.
 In approach 1), they can explicitly change the touched operation parameters to the boxed variant:
 
-```rust
+```rust,ignore
 fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6, Exts4, Body, Plugin>(
     builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6, Body, Plugin, Exts4=Exts4>,
 ) -> PokemonServiceBuilder<
@@ -706,7 +706,7 @@ fn partial_setup<Op1, Op2, Op3, Op4, Op5, Op6, Exts4, Body, Plugin>(
 
 It becomes trickier in approach 2), since to retain compile-time safety on the builder we expect `erase` to map `MissingOperation` into `MissingOperation`. Therefore, we can't write something like this:
 
-```rust
+```rust,ignore
 fn partial_setup<Body, Op1, Op2, Op3, Op4, Op5, Op6>(
     builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
 ) -> PokemonServiceBuilder<Route<B>, Route<B>, Route<B>, Route<B>, Route<B>, Route<B>> {
@@ -716,7 +716,7 @@ fn partial_setup<Body, Op1, Op2, Op3, Op4, Op5, Op6>(
 
 The compiler would reject it since it can't guarantee that all other operations can be erased to a `Route<B>`. This is likely to require something along the lines of:
 
-```rust
+```rust,ignore
 fn partial_setup<Body, Op1, Op2, Op3, Op4, Op5, Op6>(
     builder: PokemonServiceBuilder<Op1, Op2, Op3, Op4, Op5, Op6>,
 ) -> PokemonServiceBuilder<<Op1 as TypeErase>::Erased, <Op2 as TypeErase>::Erased, <Op3 as TypeErase>::Erased, <Op4 as TypeErase>::Erased, <Op5 as TypeErase>::Erased, <Op6 as TypeErase>::Erased>
@@ -742,7 +742,7 @@ We believe that the ergonomics advantages of the proposal advanced by this RFC o
 
 The `Pluggable` trait was an interesting development out of [RFC 20]: it allows you to attach methods to a service builder using an extension trait.
 
-```rust
+```rust,ignore
 /// An extension to service builders to add the `print()` function.
 pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable<PrintPlugin> {
     /// Causes all operations to print the operation name when called.
@@ -760,7 +760,7 @@ pub trait PrintExt: aws_smithy_http_server::plugin::Pluggable<PrintPlugin> {
 This pattern needs to be revisited if we want to move forward with this RFC, since new plugins cannot be registered after the builder has been instantiated.
 My recommendation would be to implement `Pluggable` for `PluginStack`, providing the same pattern ahead of the creation of the builder:
 
-```rust
+```rust,ignore
 // Currently you'd have to go for `PluginStack::new(IdentityPlugin, IdentityPlugin)`,
 // but that can be smoothed out even if this RFC isn't approved.
 let plugin_stack = PluginStack::default()
@@ -782,13 +782,13 @@ The API proposed in this RFC has been manually implemented for the Pokemon servi
 ## Changes checklist
 
 - [x] Update `codegen-server` to generate the proposed service builder API
-  - <https://github.com/awslabs/smithy-rs/pull/1954>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1954>
 - [x] Implement `Pluggable` for `PluginStack`
-  - <https://github.com/awslabs/smithy-rs/pull/1954>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1954>
 - [x] Evaluate the introduction of a `PluginBuilder` as the primary API to compose multiple plugins (instead of `PluginStack::new(IdentityPlugin, IdentityPlugin).apply(...)`)
-  - <https://github.com/awslabs/smithy-rs/pull/1971>
+  - <https://github.com/smithy-lang/smithy-rs/pull/1971>
 
 [RFC 20]: rfc0020_service_builder.md
-[Pokemon service]: https://github.com/awslabs/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy
+[Pokemon service]: https://github.com/smithy-lang/smithy-rs/blob/c7ddb164b28b920313432789cfe05d8112a035cc/codegen-core/common-test-models/pokemon.smithy
 [typestate builder pattern]: https://www.greyblake.com/blog/builder-with-typestate-in-rust/
 [^further-dev-productivity-improvements]: The impact of a runtime error on developer productivity can be further minimised by encouraging adoption of integration testing; this can be achieved, among other options, by authoring guides that highlight its benefits and provide implementation guidance.

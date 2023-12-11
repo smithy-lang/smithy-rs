@@ -10,27 +10,13 @@ use std::{
     task::{Context, Poll},
 };
 
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http_server::{
-    operation::Operation,
-    plugin::{Plugin, PluginPipeline},
-};
-use tower::layer::util::Stack;
+use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, Plugin};
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 use tower::{Layer, Service};
 
-use pokemon_service_client::{operation::do_nothing::DoNothingInput, Config};
+use aws_smithy_runtime::client::http::test_util::capture_request;
+use pokemon_service_client::{Client, Config};
 use pokemon_service_common::do_nothing;
-
-trait OperationExt {
-    /// Convert an SDK operation into an `http::Request`.
-    fn into_http(self) -> http::Request<SdkBody>;
-}
-
-impl<H, R> OperationExt for aws_smithy_http::operation::Operation<H, R> {
-    fn into_http(self) -> http::Request<SdkBody> {
-        self.into_request_response().0.into_parts().0
-    }
-}
 
 #[tokio::test]
 async fn plugin_layers_are_executed_in_registration_order() {
@@ -38,20 +24,27 @@ async fn plugin_layers_are_executed_in_registration_order() {
     // We can then check the vector content to verify the invocation order
     let output = Arc::new(Mutex::new(Vec::new()));
 
-    let pipeline = PluginPipeline::new()
+    let http_plugins = HttpPlugins::new()
         .push(SentinelPlugin::new("first", output.clone()))
         .push(SentinelPlugin::new("second", output.clone()));
-    let mut app = pokemon_service_server_sdk::PokemonService::builder_with_plugins(pipeline)
+    let config = PokemonServiceConfig::builder()
+        .http_plugin(http_plugins)
+        .build();
+    let mut app = PokemonService::builder(config)
         .do_nothing(do_nothing)
         .build_unchecked();
-    let request = DoNothingInput::builder()
-        .build()
-        .unwrap()
-        .make_operation(&Config::builder().build())
-        .await
-        .unwrap()
-        .into_http();
-    app.call(request).await.unwrap();
+
+    let request = {
+        let (http_client, rcvr) = capture_request(None);
+        let config = Config::builder()
+            .http_client(http_client)
+            .endpoint_url("http://localhost:1234")
+            .build();
+        Client::from_conf(config).do_nothing().send().await.unwrap();
+        rcvr.expect_request()
+    };
+
+    app.call(request.try_into_http02x().unwrap()).await.unwrap();
 
     let output_guard = output.lock().unwrap();
     assert_eq!(output_guard.deref(), &vec!["first", "second"]);
@@ -68,19 +61,20 @@ impl SentinelPlugin {
     }
 }
 
-impl<Protocol, Op, S, L> Plugin<Protocol, Op, S, L> for SentinelPlugin {
-    type Service = S;
-    type Layer = Stack<L, SentinelLayer>;
+impl<Ser, Op, T> Plugin<Ser, Op, T> for SentinelPlugin {
+    type Output = SentinelService<T>;
 
-    fn map(&self, input: Operation<S, L>) -> Operation<Self::Service, Self::Layer> {
-        input.layer(SentinelLayer {
+    fn apply(&self, inner: T) -> Self::Output {
+        SentinelService {
+            inner,
             name: self.name,
             output: self.output.clone(),
-        })
+        }
     }
 }
 
-/// A [`Service`] that adds a print log.
+impl HttpMarker for SentinelPlugin {}
+
 #[derive(Clone, Debug)]
 pub struct SentinelService<S> {
     inner: S,
@@ -106,7 +100,6 @@ where
     }
 }
 
-/// A [`Layer`] which constructs the [`PrintService`].
 #[derive(Debug)]
 pub struct SentinelLayer {
     name: &'static str,

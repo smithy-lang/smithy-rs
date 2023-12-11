@@ -4,5 +4,7 @@
  */
 
 mod never;
+pub(crate) mod standard;
 
 pub use never::NeverRetryStrategy;
+pub use standard::StandardRetryStrategy;

@@ -1,0 +1,81 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# This workflow tests the TLS configuration of the smithy-rs client
+# To run on an Ubuntu machine, run each step in this order.
+# Each script can be run on your Ubuntu host.
+# You will have to install Docker and rustc/cargo manually.
+
+env:
+  rust_version: 1.68.2
+
+name: Verify client TLS configuration
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify-tls-config:
+    name: Verify TLS configuration
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install packages
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get -y install gcc make python3-pip nginx git ruby openjdk-17-jre pkg-config libssl-dev faketime
+        pip3 install certbuilder crlbuilder
+    - name: Stop nginx
+      run: sudo systemctl stop nginx
+    - name: Checkout smithy-rs
+      uses: actions/checkout@v3
+      with:
+        path: ./smithy-rs
+    - name: Checkout trytls
+      uses: actions/checkout@v3
+      with:
+        repository: ouspg/trytls
+        path: ./trytls
+    - name: Checkout badtls
+      uses: actions/checkout@v3
+      with:
+        repository: wbond/badtls.io
+        path: ./badtls.io
+    - name: Checkout badssl
+      uses: actions/checkout@v3
+      with:
+        repository: chromium/badssl.com
+        path: ./badssl.com
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: Build badssl.com
+      shell: bash
+      working-directory: badssl.com
+      env:
+        DOCKER_BUILDKIT: 1
+      run: ../smithy-rs/tools/ci-scripts/configure-tls/configure-badssl
+    - name: Build SDK
+      working-directory: smithy-rs
+      run: ./gradlew :aws:sdk:assemble -Paws.services=+sts,+sso,+ssooidc
+    - name: Build trytls
+      shell: bash
+      working-directory: trytls
+      run: ../smithy-rs/tools/ci-scripts/configure-tls/configure-trytls
+    - name: Build badtls.io
+      working-directory: badtls.io
+      shell: bash
+      run: ../smithy-rs/tools/ci-scripts/configure-tls/configure-badtls
+    - name: Update TLS configuration
+      shell: bash
+      run: smithy-rs/tools/ci-scripts/configure-tls/update-certs
+    - name: Build TLS stub
+      working-directory: smithy-rs/tools/ci-resources/tls-stub
+      shell: bash
+      run: cargo build
+    - name: Test TLS configuration
+      working-directory: smithy-rs/tools
+      shell: bash
+      run: trytls https target/debug/stub

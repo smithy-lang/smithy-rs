@@ -3,23 +3,23 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_config::SdkConfig;
+#![cfg(feature = "test-util")]
+
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::Builder;
 use aws_sdk_s3::config::{Credentials, Region};
-use aws_sdk_s3::Client;
-use aws_smithy_client::test_connection::{capture_request, CaptureRequestReceiver};
-use std::convert::Infallible;
-use std::time::{Duration, UNIX_EPOCH};
+use aws_sdk_s3::{Client, Config};
+use aws_smithy_runtime::client::http::test_util::{capture_request, CaptureRequestReceiver};
 
 fn test_client(update_builder: fn(Builder) -> Builder) -> (CaptureRequestReceiver, Client) {
-    let (conn, captured_request) = capture_request(None);
-    let sdk_config = SdkConfig::builder()
+    let (http_client, captured_request) = capture_request(None);
+    let config = Config::builder()
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .region(Region::new("us-west-4"))
-        .http_connector(conn)
-        .build();
-    let client = Client::from_conf(update_builder(Builder::from(&sdk_config)).build());
+        .http_client(http_client)
+        .behavior_version(aws_sdk_s3::config::BehaviorVersion::latest())
+        .with_test_defaults();
+    let client = Client::from_conf(update_builder(config).build());
     (captured_request, client)
 }
 
@@ -65,18 +65,28 @@ async fn dual_stack() {
 
 #[tokio::test]
 async fn multi_region_access_points() {
-    let (_captured_request, client) = test_client(|b| b);
-    let response = client
+    let (captured_request, client) = test_client(|b| b);
+    let _ = client
         .get_object()
         .bucket("arn:aws:s3::123456789012:accesspoint/mfzwi23gnjvgw.mrap")
         .key("blah")
         .send()
         .await;
-    let error = response.expect_err("should fail—sigv4a is not supported");
+    let captured_request = captured_request.expect_request();
+    assert_eq!(
+        captured_request.uri().to_string(),
+        "https://mfzwi23gnjvgw.mrap.accesspoint.s3-global.amazonaws.com/blah?x-id=GetObject"
+    );
+    let auth_header = captured_request.headers().get("AUTHORIZATION").unwrap();
+    // Verifies that the sigv4a signing algorithm was used, that the signing scope doesn't include a region, and that the x-amz-region-set header was signed.
+    let expected_start =
+        "AWS4-ECDSA-P256-SHA256 Credential=ANOTREAL/20090213/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-region-set;x-amz-user-agent, Signature=";
+
     assert!(
-        dbg!(format!("{:?}", error)).contains("No auth schemes were supported"),
-        "message should contain the correct error, found: {:?}",
-        error
+        auth_header.starts_with(expected_start),
+        "expected auth header to start with {} but it was {}",
+        expected_start,
+        auth_header
     );
 }
 
@@ -87,22 +97,12 @@ async fn s3_object_lambda() {
         .get_object()
         .bucket("arn:aws:s3-object-lambda:us-east-100:123412341234:accesspoint/myolap")
         .key("s3.txt")
-        .customize()
-        .await
-        .unwrap()
-        .map_operation(|mut op| {
-            op.properties_mut()
-                .insert(UNIX_EPOCH + Duration::from_secs(1234567890));
-            Result::<_, Infallible>::Ok(op)
-        })
-        .unwrap()
         .send()
         .await
         .unwrap();
     let captured_request = captured_request.expect_request();
     assert_eq!(captured_request.uri().to_string(), "https://myolap-123412341234.s3-object-lambda.us-east-100.amazonaws.com/s3.txt?x-id=GetObject");
     let auth_header = captured_request.headers().get("AUTHORIZATION").unwrap();
-    let auth_header = auth_header.to_str().unwrap();
     // verifies that both the signing scope (s3-object-lambda) has been set as well as the ARN region
     // us-east-100
     let expected_start =
@@ -139,14 +139,16 @@ async fn s3_object_lambda_no_cross_region() {
 #[tokio::test]
 async fn write_get_object_response() {
     let (req, client) = test_client(|b| b);
-    let _write = client
-        .write_get_object_response()
-        .request_route("req-route")
-        .request_token("token")
-        .status_code(200)
-        .body(vec![1, 2, 3].into())
-        .send()
-        .await;
+    let _write = dbg!(
+        client
+            .write_get_object_response()
+            .request_route("req-route")
+            .request_token("token")
+            .status_code(200)
+            .body(vec![1, 2, 3].into())
+            .send()
+            .await
+    );
 
     let captured_request = req.expect_request();
     assert_eq!(

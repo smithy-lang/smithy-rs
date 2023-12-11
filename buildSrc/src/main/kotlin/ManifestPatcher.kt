@@ -14,8 +14,8 @@ fun rewriteCrateVersion(line: String, version: String): String = line.replace(
  * Smithy runtime crate versions in smithy-rs are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
  * these should be changed to the smithy-rs version.
  */
-fun rewriteRuntimeCrateVersion(properties: PropertyRetriever, line: String): String =
-    rewriteCrateVersion(line, properties.get("smithy.rs.runtime.crate.version")!!)
+fun rewriteRuntimeCrateVersion(version: String, line: String): String =
+    rewriteCrateVersion(line, version)
 
 /** Patches a file with the result of the given `operation` being run on each line */
 fun patchFile(path: File, operation: (String) -> String) {

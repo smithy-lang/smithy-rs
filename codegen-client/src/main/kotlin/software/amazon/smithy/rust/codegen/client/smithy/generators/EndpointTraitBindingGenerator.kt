@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
@@ -44,7 +43,11 @@ class EndpointTraitBindings(
      *
      * The returned expression is a `Result<EndpointPrefix, UriError>`
      */
-    fun render(writer: RustWriter, input: String, enableNewSmithyRuntime: Boolean) {
+    fun render(
+        writer: RustWriter,
+        input: String,
+        generateValidation: Boolean = true,
+    ) {
         // the Rust format pattern to make the endpoint prefix e.g. "{}.foo"
         val formatLiteral = endpointTrait.prefixFormatString()
         if (endpointTrait.hostPrefix.labels.isEmpty()) {
@@ -67,28 +70,20 @@ class EndpointTraitBindings(
                         // NOTE: this is dead code until we start respecting @required
                         rust("let $field = &$input.$field;")
                     }
-                    val contents = if (enableNewSmithyRuntime) {
-                        // TODO(enableNewSmithyRuntime): Remove the allow attribute once all places need .into method
-                        """
-                        if $field.is_empty() {
-                            ##[allow(clippy::useless_conversion)]
-                            return Err(#{invalidFieldError:W}.into())
-                        }
-                        """
-                    } else {
-                        """
-                        if $field.is_empty() {
-                            return Err(#{invalidFieldError:W})
-                        }
-                        """
+                    if (generateValidation) {
+                        val errorString = "$field was unset or empty but must be set as part of the endpoint prefix"
+                        val contents =
+                            """
+                            if $field.is_empty() {
+                                return Err(#{InvalidEndpointError}::failed_to_construct_uri("$errorString").into());
+                            }
+                            """
+                        rustTemplate(
+                            contents,
+                            "InvalidEndpointError" to RuntimeType.smithyHttp(runtimeConfig)
+                                .resolve("endpoint::error::InvalidEndpointError"),
+                        )
                     }
-                    rustTemplate(
-                        contents,
-                        "invalidFieldError" to OperationBuildError(runtimeConfig).invalidField(
-                            field,
-                            "$field was unset or empty but must be set as part of the endpoint prefix",
-                        ),
-                    )
                     "${label.content} = $field"
                 }
                 rustTemplate(

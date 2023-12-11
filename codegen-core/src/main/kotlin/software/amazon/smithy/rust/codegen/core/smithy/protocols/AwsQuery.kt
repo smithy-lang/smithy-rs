@@ -42,8 +42,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val errorScope = arrayOf(
         "Bytes" to RuntimeType.Bytes,
         "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.HttpHeaderMap,
-        "Response" to RuntimeType.HttpResponse,
+        "Headers" to RuntimeType.headers(runtimeConfig),
         "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
     )
 
@@ -60,7 +59,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_error_metadata(response_body)", awsQueryErrors)

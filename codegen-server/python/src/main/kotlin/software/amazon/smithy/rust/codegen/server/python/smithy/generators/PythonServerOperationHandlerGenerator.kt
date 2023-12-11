@@ -54,7 +54,7 @@ class PythonServerOperationHandlerGenerator(
         val operationName = symbolProvider.toSymbol(operation).name
         val input = "crate::input::${operationName.toPascalCase()}Input"
         val output = "crate::output::${operationName.toPascalCase()}Output"
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2552) - Use to pascalCase for error shapes.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2552) - Use to pascalCase for error shapes.
         val error = "crate::error::${operationName}Error"
         val fnName = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operation).name.toSnakeCase())
 
@@ -115,7 +115,7 @@ class PythonServerOperationHandlerGenerator(
                     };
                     #{pyo3_asyncio}::tokio::into_future(coroutine)
                 })?;
-                result.await.map(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))?
+                result.await.and_then(|r| #{pyo3}::Python::with_gil(|py| r.extract::<$output>(py)))
                 """,
                 *codegenScope,
             )

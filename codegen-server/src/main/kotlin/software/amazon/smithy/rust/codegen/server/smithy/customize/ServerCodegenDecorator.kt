@@ -6,12 +6,17 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customize
 
 import software.amazon.smithy.build.PluginContext
+import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.ValidationResult
+import software.amazon.smithy.rust.codegen.server.smithy.generators.ConfigMethod
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import java.util.logging.Logger
@@ -21,7 +26,7 @@ typealias ServerProtocolMap = ProtocolMap<ServerProtocolGenerator, ServerCodegen
 /**
  * [ServerCodegenDecorator] allows downstream users to customize code generation.
  */
-interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext> {
+interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, ServerRustSettings> {
     fun protocols(serviceId: ShapeId, currentProtocols: ServerProtocolMap): ServerProtocolMap = currentProtocols
     fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator? = null
 
@@ -30,6 +35,28 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext> {
      * constrained but the `ValidationException` shape is not attached to the operation's errors.
      */
     fun postprocessValidationExceptionNotAttachedErrorMessage(validationResult: ValidationResult) = validationResult
+
+    /**
+     * For each operation in the service's closure, this hook allows decorators to return a collection of structure shapes that will additionally be generated.
+     * If a structure shape is in the service's closure, note that returning it here will cause for it to be generated more than once,
+     * making the resulting crate not compile (since it will contain more than one struct with the same name).
+     * Therefore, ensure that all the structure shapes returned by this method are not in the service's closure.
+     */
+    fun postprocessOperationGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> = emptyList()
+
+    /**
+     * For each service, this hook allows decorators to return a collection of structure shapes that will additionally be generated.
+     * If a structure shape is in the service's closure, note that returning it here will cause for it to be generated more than once,
+     * making the resulting crate not compile (since it will contain more than one struct with the same name).
+     * Therefore, ensure that all the structure shapes returned by this method are not in the service's closure.
+     */
+    fun postprocessServiceGenerateAdditionalStructures(serviceShape: ServiceShape): List<StructureShape> = emptyList()
+
+    /**
+     * Configuration methods that should be injected into the `${serviceName}Config` struct to allow users to configure
+     * pre-applied layers and plugins.
+     */
+    fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> = emptyList()
 }
 
 /**
@@ -37,8 +64,8 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext> {
  *
  * This makes the actual concrete codegen simpler by not needing to deal with multiple separate decorators.
  */
-class CombinedServerCodegenDecorator(private val decorators: List<ServerCodegenDecorator>) :
-    CombinedCoreCodegenDecorator<ServerCodegenContext, ServerCodegenDecorator>(decorators),
+class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
+    CombinedCoreCodegenDecorator<ServerCodegenContext, ServerRustSettings, ServerCodegenDecorator>(decorators),
     ServerCodegenDecorator {
 
     private val orderedDecorators = decorators.sortedBy { it.order }
@@ -62,6 +89,15 @@ class CombinedServerCodegenDecorator(private val decorators: List<ServerCodegenD
         orderedDecorators.foldRight(validationResult) { decorator, accumulated ->
             decorator.postprocessValidationExceptionNotAttachedErrorMessage(accumulated)
         }
+
+    override fun postprocessOperationGenerateAdditionalStructures(operationShape: OperationShape): List<StructureShape> =
+        orderedDecorators.flatMap { it.postprocessOperationGenerateAdditionalStructures(operationShape) }
+
+    override fun postprocessServiceGenerateAdditionalStructures(serviceShape: ServiceShape): List<StructureShape> =
+        orderedDecorators.flatMap { it.postprocessServiceGenerateAdditionalStructures(serviceShape) }
+
+    override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> =
+        orderedDecorators.flatMap { it.configMethods(codegenContext) }
 
     companion object {
         fun fromClasspath(

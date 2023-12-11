@@ -1,7 +1,7 @@
 RFC: Improving access to request IDs in SDK clients
 ===================================================
 
-> Status: Implemented in [#2129](https://github.com/awslabs/smithy-rs/pull/2129)
+> Status: Implemented in [#2129](https://github.com/smithy-lang/smithy-rs/pull/2129)
 >
 > Applies to: AWS SDK clients
 
@@ -156,7 +156,7 @@ Example Interactions
 
 ### Generic Handling Case
 
-```rust
+```rust,ignore
 // A re-export of the RequestId trait
 use aws_sdk_service::primitives::RequestId;
 
@@ -170,7 +170,7 @@ my_request_id_logging_fn(&result);
 
 ### Success Case
 
-```rust
+```rust,ignore
 use aws_sdk_service::primitives::RequestId;
 
 let output = client.some_operation().send().await?;
@@ -179,7 +179,7 @@ println!("request ID: {:?}", output.request_id());
 
 ### Error Case with `SdkError`
 
-```rust
+```rust,ignore
 use aws_sdk_service::primitives::RequestId;
 
 match client.some_operation().send().await {
@@ -192,7 +192,7 @@ match client.some_operation().send().await {
 
 ### Error Case with operation error
 
-```rust
+```rust,ignore
 use aws_sdk_service::primitives::RequestId;
 
 match client.some_operation().send().await {

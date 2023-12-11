@@ -179,7 +179,7 @@ class ConstrainedCollectionGeneratorTest {
             project.withModule(ServerRustModule.Model) {
                 render(codegenContext, this, shape)
 
-                val instantiator = serverInstantiator(codegenContext)
+                val instantiator = ServerInstantiator(codegenContext)
                 for ((idx, validList) in testCase.validLists.withIndex()) {
                     val shapeNameIdx = "${shapeName}_$idx"
                     val buildValidFnName = "build_valid_$shapeNameIdx"
@@ -258,7 +258,7 @@ class ConstrainedCollectionGeneratorTest {
     }
 
     @Test
-    fun `type should not be constructible without using a constructor`() {
+    fun `type should not be constructable without using a constructor`() {
         val model =
             """
             namespace test
@@ -276,7 +276,7 @@ class ConstrainedCollectionGeneratorTest {
         render(codegenContext, writer, constrainedCollectionShape)
 
         // Check that the wrapped type is `pub(crate)`.
-        writer.toString() shouldContain "pub struct ConstrainedList(pub(crate) std::vec::Vec<std::string::String>);"
+        writer.toString() shouldContain "pub struct ConstrainedList(pub(crate) ::std::vec::Vec<::std::string::String>);"
     }
 
     private fun render(

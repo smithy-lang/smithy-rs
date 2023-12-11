@@ -35,30 +35,6 @@ class SerdeDecorator : ClientCodegenDecorator {
     ): List<LibRsCustomization> {
         return baseCustomizations + SerdeDocGenerator(codegenContext)
     }
-
-    // I initially tried to implement with LibRsCustomization but it didn't work some how.
-    companion object {
-        const val SerdeInfoText = """## How to enable `Serialize` and `Deserialize`
-
-            Some data type implements `Serialize` and `Deserialize` traits from the popular serde crate, but those traits are behind feature gate.
-
-            As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
-            Implementation of `serde` traits in AWS SDK for Rust is still unstable, and implementation may change anytime in future.
-
-            To enable traits, you must pass `aws_sdk_unstable` to RUSTFLAGS and enable `serde-serialize` or `serde-deserialize` feature.
-
-            e.g.
-            ```bash,no_run
-            export RUSTFLAGS="--cfg aws_sdk_unstable"
-            cargo build --features serde-serialize serde-deserialize
-            ```
-
-            If you enable `serde-serialize` and/or `serde-deserialize` without `RUSTFLAGS="--cfg aws_sdk_unstable"`,
-            compilation will fail with warning.
-
-        """
-    }
-
 }
 
 class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
@@ -71,7 +47,7 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
     companion object {
         const val SerdeInfoText = """## How to enable `Serialize` and `Deserialize`
 
-            Some data type implements `Serialize` and `Deserialize` traits from the popular serde crate, but those traits are behind feature gate.
+            This data type implements `Serialize` and `Deserialize` traits from the popular serde crate, but those traits are behind feature gate.
 
             As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
             Implementation of `serde` traits in AWS SDK for Rust is still unstable, and implementation may change anytime in future.
@@ -90,13 +66,3 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
         """
     }
 }
-/*
-I initially tried to implement with LibRsCustomization but it didn't work some how.
-override fun section(section: LibRsSection): Writable {
-    return if (section is LibRsSection.ModuleDoc && section.subsection is ModuleDocSection.UnstableFeature) {
-        writable { SerdeInfoText.trimIndent() }
-    } else {
-        emptySection
-    }
-}
-*/

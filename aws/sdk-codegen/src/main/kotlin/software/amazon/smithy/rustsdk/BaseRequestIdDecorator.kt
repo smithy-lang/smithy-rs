@@ -5,10 +5,14 @@
 
 package software.amazon.smithy.rustsdk
 
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorSection
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -17,15 +21,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.OperationSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplSection
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
@@ -72,6 +76,10 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
         }
     }
 
+    open fun asMemberShape(container: StructureShape): MemberShape? {
+        return container.members().firstOrNull { member -> member.memberName.lowercase() == "requestid" }
+    }
+
     private inner class RequestIdOperationCustomization(private val codegenContext: ClientCodegenContext) :
         OperationCustomization() {
         override fun section(section: OperationSection): Writable = writable {
@@ -82,12 +90,14 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         "apply_to_error" to applyToError(codegenContext),
                     )
                 }
+
                 is OperationSection.MutateOutput -> {
                     rust(
                         "output._set_$fieldName(#T::$accessorFunctionName(${section.responseHeadersName}).map(str::to_string));",
                         accessorTrait(codegenContext),
                     )
                 }
+
                 is OperationSection.BeforeParseResponse -> {
                     rustTemplate(
                         "#{tracing}::debug!($fieldName = ?#{trait}::$accessorFunctionName(${section.responseName}));",
@@ -95,6 +105,7 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         "trait" to accessorTrait(codegenContext),
                     )
                 }
+
                 else -> {}
             }
         }
@@ -123,10 +134,19 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                         rustBlock("fn $accessorFunctionName(&self) -> Option<&str>") {
                             rustBlock("match self") {
                                 section.allErrors.forEach { error ->
+                                    val optional = asMemberShape(error)?.let { member ->
+                                        codegenContext.symbolProvider.toSymbol(member).isOptional()
+                                    } ?: true
+                                    val wrapped = writable {
+                                        when (optional) {
+                                            false -> rustTemplate("#{Some}(e.$accessorFunctionName())", *preludeScope)
+                                            true -> rustTemplate("e.$accessorFunctionName()")
+                                        }
+                                    }
                                     val sym = codegenContext.symbolProvider.toSymbol(error)
-                                    rust("Self::${sym.name}(e) => e.$accessorFunctionName(),")
+                                    rust("Self::${sym.name}(e) => #T,", wrapped)
                                 }
-                                rust("Self::Unhandled(e) => e.$accessorFunctionName(),")
+                                rust("Self::Unhandled(e) => e.meta.$accessorFunctionName(),")
                             }
                         }
                     }

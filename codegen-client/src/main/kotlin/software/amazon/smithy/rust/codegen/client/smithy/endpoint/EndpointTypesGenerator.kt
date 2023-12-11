@@ -40,10 +40,10 @@ class EndpointTypesGenerator(
         }
     }
 
-    fun paramsStruct(): RuntimeType = EndpointParamsGenerator(params).paramsStruct()
-    fun paramsBuilder(): RuntimeType = EndpointParamsGenerator(params).paramsBuilder()
+    fun paramsStruct(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsStruct()
+    fun paramsBuilder(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsBuilder()
     fun defaultResolver(): RuntimeType? =
-        rules?.let { EndpointResolverGenerator(stdlib, runtimeConfig).defaultEndpointResolver(it) }
+        rules?.let { EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(it) }
 
     fun testGenerator(): Writable =
         defaultResolver()?.let {
@@ -53,7 +53,6 @@ class EndpointTypesGenerator(
                 it,
                 params,
                 codegenContext = codegenContext,
-                endpointCustomizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext),
             ).generate()
         }
             ?: {}

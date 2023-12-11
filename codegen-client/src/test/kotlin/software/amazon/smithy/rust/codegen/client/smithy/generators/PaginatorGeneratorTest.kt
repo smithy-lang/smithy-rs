@@ -23,6 +23,7 @@ internal class PaginatorGeneratorTest {
         }
 
         @readonly
+        @optionalAuth
         @paginated(inputToken: "nextToken", outputToken: "inner.token",
                    pageSize: "maxResults", items: "inner.items")
         operation PaginatedList {
@@ -31,6 +32,7 @@ internal class PaginatorGeneratorTest {
         }
 
         @readonly
+        @optionalAuth
         @paginated(inputToken: "nextToken", outputToken: "inner.token",
                    pageSize: "maxResults", items: "inner.mapItems")
         operation PaginatedMap {

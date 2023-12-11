@@ -4,10 +4,18 @@
  */
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.loader.ModelAssembler
+import software.amazon.smithy.model.node.ObjectNode
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.testutil.testClientRustSettings
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rustsdk.AwsCrateDocGenerator
+import software.amazon.smithy.rustsdk.AwsTestRuntimeConfig
 
 class AwsCrateDocsDecoratorTest {
     private val codegenContext = testClientCodegenContext(ModelAssembler().assemble().unwrap())
@@ -105,5 +113,50 @@ class AwsCrateDocsDecoratorTest {
                 """.trimIndent(),
             ),
         )
+    }
+
+    // TODO(PostGA): Remove warning banner conditionals.
+    @Test
+    fun warningBanner() {
+        val context = { version: String ->
+            testClientCodegenContext(
+                model = """
+                    namespace test
+
+                    service Foobaz {
+                    }
+                """.asSmithyModel(),
+                settings = testClientRustSettings(
+                    moduleVersion = version,
+                    service = ShapeId.from("test#Foobaz"),
+                    runtimeConfig = AwsTestRuntimeConfig,
+                    customizationConfig =
+                    ObjectNode.parse(
+                        """
+                        { "awsSdk": {
+                            "awsConfigVersion": "dontcare" } }
+                        """,
+                    ) as ObjectNode,
+                ),
+            )
+        }
+
+        // Test unstable versions first
+        var codegenContext = context("0.36.0")
+        var result = AwsCrateDocGenerator(codegenContext).docText(includeHeader = false, includeLicense = false, asComments = true).let { writable ->
+            val writer = RustWriter.root()
+            writable(writer)
+            writer.toString()
+        }
+        assertTrue(result.contains("The SDK is currently released as a developer preview"))
+
+        // And now stable versions
+        codegenContext = context("1.0.0")
+        result = AwsCrateDocGenerator(codegenContext).docText(includeHeader = false, includeLicense = false, asComments = true).let { writable ->
+            val writer = RustWriter.root()
+            writable(writer)
+            writer.toString()
+        }
+        assertFalse(result.contains("The SDK is currently released as a developer preview"))
     }
 }
