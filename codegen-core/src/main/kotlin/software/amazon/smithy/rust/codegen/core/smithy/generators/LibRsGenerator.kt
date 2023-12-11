@@ -84,7 +84,6 @@ class LibRsGenerator(
                 }
             }
 
-
             // Examples
             docSection(ModuleDocSection.Examples).also { docs ->
                 if (docs.isNotEmpty() || settings.examplesUri != null) {
