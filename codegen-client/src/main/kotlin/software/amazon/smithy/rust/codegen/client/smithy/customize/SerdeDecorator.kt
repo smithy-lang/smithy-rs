@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.ModuleDocSection
 
 /**
  * Decorator that adds the `serde-serialize` and `serde-deserialize` features.
@@ -40,7 +41,13 @@ class SerdeDecorator : ClientCodegenDecorator {
 class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.ModuleDoc -> writable(SerdeInfoText)
+            is LibRsSection.ModuleDoc-> {
+                if (section.subsection is ModuleDocSection.CrateOrganization) {
+                    return writable(SerdeInfoText)
+                } else {
+                    return emptySection
+                }
+            }
             else -> emptySection
         }
     }
