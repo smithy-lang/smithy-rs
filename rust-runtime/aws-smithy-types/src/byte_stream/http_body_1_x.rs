@@ -18,6 +18,6 @@ impl ByteStream {
         T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
         E: Into<crate::body::Error> + 'static,
     {
-        ByteStream::new(SdkBody::from_body_1_0(body))
+        ByteStream::new(SdkBody::from_body_1_x(body))
     }
 }

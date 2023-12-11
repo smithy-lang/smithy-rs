@@ -57,7 +57,9 @@ impl Debug for SdkBody {
 
 /// A boxed generic HTTP body that, when consumed, will result in [`Bytes`] or an [`Error`].
 enum BoxBody {
-    #[cfg(feature = "http-body-0-4-x")]
+    // This is enabled by the **dependency**, not the feature. This allows us to construct it
+    // whenever we have the dependency and keep the APIs private
+    #[cfg(feature = "http-body-0-4")]
     HttpBody04(http_body_0_4::combinators::BoxBody<Bytes, Error>),
 }
 
@@ -161,6 +163,23 @@ impl SdkBody {
             InnerProj::Taken => {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
+        }
+    }
+
+    #[cfg(feature = "http-body-0-4")]
+    pub(crate) fn from_body_0_4_internal<T, E>(body: T) -> Self
+    where
+        T: http_body_0_4::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
+        E: Into<Error> + 'static,
+    {
+        Self {
+            inner: Inner::Dyn {
+                inner: BoxBody::HttpBody04(http_body_0_4::combinators::BoxBody::new(
+                    body.map_err(Into::into),
+                )),
+            },
+            rebuild: None,
+            bytes_contents: None,
         }
     }
 

@@ -12,26 +12,18 @@ use bytes::Bytes;
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 
-use crate::body::{BoxBody, Error, Inner, SdkBody};
+use crate::body::{Error, SdkBody};
 
 impl SdkBody {
     /// Construct an `SdkBody` from a type that implements [`http_body_1_0::Body<Data = Bytes>`](http_body_1_0::Body).
     ///
     /// _Note: This is only available with `http-body-1-0` enabled._
-    pub fn from_body_1_0<T, E>(body: T) -> Self
+    pub fn from_body_1_x<T, E>(body: T) -> Self
     where
         T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
         E: Into<Error> + 'static,
     {
-        Self {
-            inner: Inner::Dyn {
-                inner: BoxBody::HttpBody04(http_body_0_4::combinators::BoxBody::new(
-                    Http1toHttp04::new(body.map_err(Into::into)),
-                )),
-            },
-            rebuild: None,
-            bytes_contents: None,
-        }
+        SdkBody::from_body_0_4_internal(Http1toHttp04::new(body.map_err(Into::into)))
     }
 }
 
@@ -59,19 +51,6 @@ where
     type Data = B::Data;
     type Error = B::Error;
 
-    ///
-    ///
-    /// # Arguments
-    ///
-    /// * `cx`:
-    ///
-    /// returns: Poll<Option<Result<<Http1toHttp04<B> as Body>::Data, <Http1toHttp04<B> as Body>::Error>>>
-    ///
-    /// # Examples
-    ///
-    /// ```
-    ///
-    /// ```
     fn poll_data(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -146,17 +125,19 @@ fn convert_header_map(input: http_1x::HeaderMap) -> http::HeaderMap {
 
 #[cfg(test)]
 mod test {
-    use crate::body::http_body_1_x::convert_header_map;
-    use crate::body::{Error, SdkBody};
-    use crate::byte_stream::ByteStream;
+    use std::collections::VecDeque;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+
     use bytes::Bytes;
     use http::header::{CONTENT_LENGTH as CL0, CONTENT_TYPE as CT0};
     use http_1x::header::{CONTENT_LENGTH as CL1, CONTENT_TYPE as CT1};
     use http_1x::{HeaderMap, HeaderName, HeaderValue};
     use http_body_1_0::Frame;
-    use std::collections::VecDeque;
-    use std::pin::Pin;
-    use std::task::{Context, Poll};
+
+    use crate::body::http_body_1_x::convert_header_map;
+    use crate::body::{Error, SdkBody};
+    use crate::byte_stream::ByteStream;
 
     struct TestBody {
         chunks: VecDeque<Chunk>,
@@ -216,7 +197,7 @@ mod test {
             ]
             .into(),
         };
-        let body = SdkBody::from_body_1_0(body);
+        let body = SdkBody::from_body_1_x(body);
         let data = ByteStream::new(body);
         assert_eq!(data.collect().await.unwrap().to_vec(), b"123456789");
     }
@@ -232,7 +213,7 @@ mod test {
             ]
             .into(),
         };
-        let mut body = SdkBody::from_body_1_0(body);
+        let mut body = SdkBody::from_body_1_x(body);
         while let Some(_data) = http_body_0_4::Body::data(&mut body).await {}
         assert_eq!(
             http_body_0_4::Body::trailers(&mut body).await.unwrap(),
@@ -252,7 +233,7 @@ mod test {
             .into(),
         };
 
-        let body = SdkBody::from_body_1_0(body);
+        let body = SdkBody::from_body_1_x(body);
         let body = ByteStream::new(body);
         body.collect().await.expect_err("body returned an error");
     }
@@ -262,7 +243,7 @@ mod test {
             chunks: vec![Chunk::Data("123"), Chunk::Data("456"), Chunk::Data("789")].into(),
         };
 
-        let body = SdkBody::from_body_1_0(body);
+        let body = SdkBody::from_body_1_x(body);
         let body = ByteStream::new(body);
         assert_eq!(body.collect().await.unwrap().to_vec(), b"123456789");
     }
