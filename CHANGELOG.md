@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 11th, 2023
+===================
+**New this release:**
+- :bug: (client, [smithy-rs#3305](https://github.com/smithy-lang/smithy-rs/issues/3305)) `crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations.
+
+
 December 8th, 2023
 ==================
 **New this release:**
