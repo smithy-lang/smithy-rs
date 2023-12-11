@@ -415,7 +415,7 @@ class ServerBuilderGenerator(
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{TryFrom}<Builder $lifetime> for #{Structure}$lifetime {
+            impl $lifetime #{TryFrom}<Builder $lifetime> for #{Structure}$lifetime {
                 type Error = ConstraintViolation;
 
                 fn try_from(builder: Builder $lifetime) -> Result<Self, Self::Error> {
