@@ -1,4 +1,25 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 11th, 2023
+===================
+**New this release:**
+- :bug: (client, [smithy-rs#3305](https://github.com/smithy-lang/smithy-rs/issues/3305)) `crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations.
+
+
+December 8th, 2023
+==================
+**New this release:**
+- :tada: (all, [smithy-rs#3121](https://github.com/smithy-lang/smithy-rs/issues/3121), [smithy-rs#3295](https://github.com/smithy-lang/smithy-rs/issues/3295)) All generated docs now include docsrs labels when features are required
+- :bug: (client, [smithy-rs#3262](https://github.com/smithy-lang/smithy-rs/issues/3262)) Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config.
+- (client, [smithy-rs#3277](https://github.com/smithy-lang/smithy-rs/issues/3277)) Improve the error messages for when auth fails to select an auth scheme for a request.
+- (client, [smithy-rs#3282](https://github.com/smithy-lang/smithy-rs/issues/3282)) Fix documentation and examples on HyperConnector and HyperClientBuilder.
+- (client, [aws-sdk-rust#990](https://github.com/awslabs/aws-sdk-rust/issues/990), @declanvk) Expose local socket address from ConnectionMetadata.
+- (all, [smithy-rs#3294](https://github.com/smithy-lang/smithy-rs/issues/3294)) [`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/enum.Number.html) `TryInto` implementations now succesfully convert from `f64` to numeric types when no precision is lost. This fixes some deserialization issues where numbers like `25.0` were sent when `Byte` fields were expected.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @declanvk ([aws-sdk-rust#990](https://github.com/awslabs/aws-sdk-rust/issues/990))
+
+
 December 1st, 2023
 ==================
 **New this release:**

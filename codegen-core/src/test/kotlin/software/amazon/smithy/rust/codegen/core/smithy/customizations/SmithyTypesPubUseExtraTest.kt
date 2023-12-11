@@ -10,7 +10,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGeneratorTest.Companion.model
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
@@ -24,6 +23,11 @@ class SmithyTypesPubUseExtraTest {
     ): Model {
         return """
             namespace test
+
+            service TestService {
+                version: "123"
+                operations: [SomeOperation]
+            }
 
             $additionalShape
             structure SomeStruct {
@@ -46,20 +50,21 @@ class SmithyTypesPubUseExtraTest {
         """.asSmithyModel()
     }
 
-    private val rustCrate: RustCrate
-    private val codegenContext: CodegenContext = testCodegenContext(model)
+    private fun initialize(model: Model): Pair<CodegenContext, RustCrate> {
+        val codegenContext = testCodegenContext(model)
 
-    init {
         val (context, _) = generatePluginContext(
             model,
             runtimeConfig = codegenContext.runtimeConfig,
         )
-        rustCrate = RustCrate(
+        val rustCrate = RustCrate(
             context.fileManifest,
             codegenContext.symbolProvider,
             codegenContext.settings.codegenConfig,
             codegenContext.expectModuleDocProvider(),
         )
+
+        return Pair(codegenContext, rustCrate)
     }
 
     private fun reexportsWithEmptyModel() = reexportsWithMember()
@@ -69,11 +74,12 @@ class SmithyTypesPubUseExtraTest {
         unionMember: String = "",
         additionalShape: String = "",
     ) = RustWriter.root().let { writer ->
-        pubUseSmithyPrimitives(
-            codegenContext,
-            modelWithMember(inputMember, outputMember, unionMember, additionalShape),
-            rustCrate,
-        )(writer)
+        val model = modelWithMember(inputMember, outputMember, unionMember, additionalShape)
+        val props = initialize(model)
+        val context = props.first
+        val rustCrate = props.second
+        pubUseSmithyPrimitives(context, model, rustCrate)(writer)
+        pubUseSmithyPrimitivesEventStream(context, model)(writer)
         writer.toString()
     }
 
@@ -149,6 +155,28 @@ class SmithyTypesPubUseExtraTest {
                 outputMember = "m: EventStream",
             ),
             streamingTypes,
+        )
+    }
+
+    @Test
+    fun `it re-exports when a model has event stream`() {
+        val eventStreamTypes =
+            listOf(
+                "crate::event_receiver::EventReceiver",
+                "::aws_smithy_types::event_stream::Header",
+                "::aws_smithy_types::event_stream::HeaderValue",
+                "::aws_smithy_types::event_stream::Message",
+                "::aws_smithy_types::str_bytes::StrBytes",
+            )
+        val eventStreamShape = "@streaming union EventStream { foo: SomeStruct }"
+
+        assertHasReexports(
+            reexportsWithMember(additionalShape = eventStreamShape, inputMember = "m: EventStream"),
+            eventStreamTypes,
+        )
+        assertHasReexports(
+            reexportsWithMember(additionalShape = eventStreamShape, outputMember = "m: EventStream"),
+            eventStreamTypes,
         )
     }
 }
