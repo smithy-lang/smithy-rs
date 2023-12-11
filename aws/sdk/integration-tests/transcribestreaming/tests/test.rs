@@ -8,6 +8,8 @@ use aws_sdk_transcribestreaming::config::{Credentials, Region};
 use aws_sdk_transcribestreaming::error::SdkError;
 use aws_sdk_transcribestreaming::operation::start_stream_transcription::StartStreamTranscriptionOutput;
 use aws_sdk_transcribestreaming::primitives::event_stream::{HeaderValue, Message};
+#[allow(unused)] // making sure `EventReceiver` is re-exported
+use aws_sdk_transcribestreaming::primitives::event_stream::EventReceiver;
 use aws_sdk_transcribestreaming::primitives::Blob;
 use aws_sdk_transcribestreaming::types::error::{AudioStreamError, TranscriptResultStreamError};
 use aws_sdk_transcribestreaming::types::{
