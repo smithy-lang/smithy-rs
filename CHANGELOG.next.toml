@@ -97,3 +97,15 @@ message = "[`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/e
 references = ["smithy-rs#3294"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "`crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations."
+references = ["smithy-rs#3305"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "`crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations."
+references = ["smithy-rs#3305"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
