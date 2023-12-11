@@ -43,7 +43,7 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
     override fun section(section: LibRsSection): Writable {
         return when (section) {
             is LibRsSection.ModuleDoc-> {
-                if (section.subsection is ModuleDocSection.CrateOrganization) {
+                if (section.subsection is ModuleDocSection.AWSSdkUnstable) {
                     return writable {
                         SerdeInfoText
                     }
@@ -55,9 +55,10 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
         }
     }
     companion object {
-        val SerdeInfoText = containerDocs("""
-            ## How to enable `Serialize` and `Deserialize`
 
+        val SerdeInfoText = """
+            ## How to enable `Serialize` and `Deserialize`
+            
             This data type implements `Serialize` and `Deserialize` traits from the popular serde crate, but those traits are behind feature gate.
 
             As they increase it's compile time dramatically, you should not turn them on unless it's necessary.
@@ -74,6 +75,6 @@ class SerdeDocGenerator(private val codegenContext: ClientCodegenContext) : LibR
             If you enable `serde-serialize` and/or `serde-deserialize` without `RUSTFLAGS="--cfg aws_sdk_unstable"`,
             compilation will fail with warning.
             
-        """.trimIndent())
+        """.trimIndent()
     }
 }
