@@ -46,6 +46,85 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.io.path.writeText
 
+// cargo commands and env values
+private object Commands {
+    const val CargoFmt = "cargo fmt"
+    const val CargoClippy = "cargo clippy"
+
+    private const val cfgUnstable = "--cfg aws_sdk_unstable"
+    private const val allFeature = "--all-features"
+
+    // helper
+    private fun func(s: String, add: String, flag: Boolean): String = if (flag) { "$s $add" } else { s }
+
+    // unstable flag
+    fun cargoEnvDenyWarnings(enableUnstable: Boolean): Map<String, String> {
+        return mapOf(
+            "RUSTFLAGS" to func("-D warnings", cfgUnstable, enableUnstable),
+        )
+    }
+
+    fun cargoEnvAllowDeadCode(enableUnstable: Boolean): Map<String, String> {
+        return mapOf(
+            "RUSTFLAGS" to func("-A dead_code", cfgUnstable, enableUnstable),
+        )
+    }
+
+    // enable all features
+    // e.g.
+    // ```kotlin
+    // cargoTest(true)
+    // // cargo test --all-features
+    // cargoTest(false)
+    // // cargo test
+    // ```
+    fun cargoTest(enableAllFeatures: Boolean): String {
+        return func("cargo test", allFeature, enableAllFeatures)
+    }
+
+    // enable all features
+    // e.g.
+    // ```kotlin
+    // cargoCheck(true)
+    // // cargo test --all-features
+    // cargoCheck(false)
+    // // cargo test
+    // ```
+    fun cargoCheck(enableAllFeatures: Boolean): String {
+        return func("cargo check", allFeature, enableAllFeatures)
+    }
+
+    // enable features specified in the array
+    // e.g.
+    // ```kotlin
+    // cargoTest(["serde-serialize", "serde-deserialize"])
+    // // cargo test --features serde-serialize serde-deserialize
+    // ```
+    fun cargoTest(featuresToEnable: Array<String>?): String {
+        if (featuresToEnable != null) {
+            val s = featuresToEnable.joinToString { " " }
+            return "cargo test --features $s"
+        } else {
+            return "cargo test"
+        }
+    }
+
+    // enable features specified in the array
+    // e.g.
+    // ```kotlin
+    // cargoCheck(["serde-serialize", "serde-deserialize"])
+    // // cargo check --features serde-serialize serde-deserialize
+    // ```
+    fun cargoCheck(featuresToEnable: Array<String>?): String {
+        if (featuresToEnable != null) {
+            val s = featuresToEnable.joinToString { " " }
+            return "cargo check --features $s"
+        } else {
+            return "cargo check"
+        }
+    }
+}
+
 val TestModuleDocProvider = object : ModuleDocProvider {
     override fun docsWriter(module: RustModule.LeafModule): Writable = writable {
         docs("Some test documentation\n\nSome more details...")
@@ -319,10 +398,30 @@ fun FileManifest.printGeneratedFiles() {
  * Setting `runClippy` to true can be helpful when debugging clippy failures, but
  * should generally be set to `false` to avoid invalidating the Cargo cache between
  * every unit test run.
+ * If you want to enable each features individually, specify the name of the feature on featuresToEnable.
+ * e.g.
+ * ```kotlin
+ * compileAndTest(featuresToEnable = ["this", "that"])
+ * ```
+ * All features are enabled by default. If you wish to disable them, set enableAllFeatures to False.
+ * ```kotlin
+ * compileAndTest(enableAllFeatures = false)
+ * ```
+ *
+ * You can run with `--cfg aws_sdk_unstable` by setting enableUnstableFlag to True.
+ * This feature is not enabled by default.
+ * e.g.
+ *  ```kotlin
+ *  compileAndTest(enableUnstableFlag = true)
+ *  compileAndTest(enableUnstableFlag = true, featuresToEnable = ["serde-serialize", "serde-deserialize"])
+ *  ```
  */
 fun TestWriterDelegator.compileAndTest(
     runClippy: Boolean = false,
     expectFailure: Boolean = false,
+    enableUnstableFlag: Boolean = false,
+    enableAllFeatures: Boolean = true,
+    featuresToEnable: Array<String>? = null,
 ): String {
     val stubModel = """
         namespace fake
@@ -339,7 +438,7 @@ fun TestWriterDelegator.compileAndTest(
     println("Generated files:")
     printGeneratedFiles()
     try {
-        "cargo fmt".runCommand(baseDir)
+        Commands.CargoFmt.runCommand(baseDir)
     } catch (e: Exception) {
         // cargo fmt errors are useless, ignore
     }
@@ -347,13 +446,21 @@ fun TestWriterDelegator.compileAndTest(
     // Clean `RUSTFLAGS` because in CI we pass in `--deny warnings` and
     // we still generate test code with warnings.
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/3194)
-    val env = mapOf("RUSTFLAGS" to "")
+    // val env = mapOf("RUSTFLAGS" to "")
+    //
+    val env = Commands.cargoEnvAllowDeadCode(enableUnstableFlag)
     baseDir.writeDotCargoConfigToml(listOf("--allow", "dead_code"))
 
-    val testOutput = "cargo test".runCommand(baseDir, env)
-    if (runClippy) {
-        "cargo clippy --all-features".runCommand(baseDir, env)
+    var testCommand = Commands.cargoTest(enableUnstableFlag)
+    if (featuresToEnable != null) {
+        testCommand = Commands.cargoCheck(featuresToEnable)
     }
+
+    val testOutput = testCommand.runCommand(baseDir, env)
+    if (runClippy) {
+        Commands.CargoClippy.runCommand(baseDir, env)
+    }
+
     return testOutput
 }
 
@@ -392,6 +499,7 @@ fun RustWriter.compileAndTest(
     main: String = "",
     clippy: Boolean = false,
     expectFailure: Boolean = false,
+    enableUnstable: Boolean = false,
 ): String {
     val deps = this.dependencies
         .map { RustDependency.fromSymbolDependency(it) }
@@ -410,9 +518,9 @@ fun RustWriter.compileAndTest(
     val testModule = tempDir.resolve("src/$module.rs")
     try {
         val testOutput = if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
-            "cargo test".runCommand(tempDir.toPath())
+            Commands.cargoTest(enableUnstable).runCommand(tempDir.toPath())
         } else {
-            "cargo check".runCommand(tempDir.toPath())
+            Commands.cargoCheck(enableUnstable).runCommand(tempDir.toPath())
         }
         if (expectFailure) {
             println("Test sources for debugging: file://${testModule.absolutePath}")
@@ -521,4 +629,4 @@ fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     return this
 }
 
-fun String.runWithWarnings(crate: Path) = this.runCommand(crate, mapOf("RUSTFLAGS" to "-D warnings"))
+fun String.runWithWarnings(crate: Path, enableUnstableFlag: Boolean = true) = this.runCommand(crate, Commands.cargoEnvDenyWarnings(enableUnstableFlag))
