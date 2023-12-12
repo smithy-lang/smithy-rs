@@ -21,8 +21,8 @@ tasks.jar {
 }
 
 val properties = PropertyRetriever(rootProject, project)
-val outputDir = buildDir.resolve("smithy-rs")
-val runtimeOutputDir = outputDir.resolve("rust-runtime")
+val outputDir = layout.buildDirectory.dir("smithy-rs")
+val runtimeOutputDir = outputDir.get().dir("rust-runtime")
 
 tasks["assemble"].apply {
     dependsOn("copyRuntimeCrates")
@@ -44,7 +44,7 @@ tasks.register("fixRuntimeCrateVersions") {
     dependsOn("copyRuntimeCrates")
     doLast {
         CrateSet.ENTIRE_SMITHY_RUNTIME.forEach { module ->
-            patchFile(runtimeOutputDir.resolve("${module.name}/Cargo.toml")) { line ->
+            patchFile(runtimeOutputDir.file("${module.name}/Cargo.toml").asFile) { line ->
                 rewriteRuntimeCrateVersion(properties.get(module.versionPropertyName)!!, line)
             }
         }
@@ -55,7 +55,7 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
     description = "Run the publisher tool's `fix-manifests` sub-command on the runtime crates"
     toolPath = rootProject.projectDir.resolve("tools/ci-build/publisher")
     binaryName = "publisher"
-    arguments = listOf("fix-manifests", "--location", runtimeOutputDir.absolutePath)
+    arguments = listOf("fix-manifests", "--location", runtimeOutputDir.asFile.absolutePath)
     dependsOn("fixRuntimeCrateVersions")
 }
 
@@ -65,5 +65,5 @@ publishing {
             from(components["java"])
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

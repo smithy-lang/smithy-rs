@@ -12,10 +12,10 @@ publish = false
 [dependencies]
 anyhow = "1"
 async-trait = "0.1.56"
-aws-config = "0.56.0"
-aws-sdk-cloudwatch = "0.29.0"
-aws-sdk-lambda = "0.29.0"
-aws-sdk-s3 = "0.29.0"
+aws-config = { version = "1", features = ["behavior-version-latest"] }
+aws-sdk-cloudwatch = "1"
+aws-sdk-lambda = "1"
+aws-sdk-s3 = "1"
 base64 = "0.13"
 clap = { version = "3.2.17", features = ["derive"] }
 hex = "0.4.3"

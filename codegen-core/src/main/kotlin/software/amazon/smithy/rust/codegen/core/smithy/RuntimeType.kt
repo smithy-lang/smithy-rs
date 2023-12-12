@@ -40,19 +40,21 @@ data class RuntimeCrateLocation(val path: String?, val versions: CrateVersionMap
     }
 }
 
-fun RuntimeCrateLocation.crateLocation(crateName: String?): DependencyLocation {
-    val version = crateName.let { versions.map[crateName] } ?: versions.map[DEFAULT_KEY]
+fun RuntimeCrateLocation.crateLocation(crateName: String): DependencyLocation {
+    val version = crateName.let {
+        versions.map[crateName]
+    } ?: Version.crateVersion(crateName)
     return when (this.path) {
         // CratesIo needs an exact version. However, for local runtime crates we do not
         // provide a detected version unless the user explicitly sets one via the `versions` map.
-        null -> CratesIo(version ?: defaultRuntimeCrateVersion())
-        else -> Local(this.path, version)
+        null -> CratesIo(version)
+        else -> Local(this.path)
     }
 }
 
 fun defaultRuntimeCrateVersion(): String {
     try {
-        return Version.crateVersion()
+        return Version.stableCrateVersion()
     } catch (ex: Exception) {
         throw CodegenException("failed to get crate version which sets the default client-runtime version", ex)
     }
@@ -93,10 +95,6 @@ data class RuntimeConfig(
             )
         }
     }
-
-    val crateSrcPrefix: String = cratePrefix.replace("-", "_")
-
-    fun runtimeCratesPath(): String? = runtimeCrateLocation.path
 
     fun smithyRuntimeCrate(
         runtimeCrateName: String,
@@ -325,7 +323,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyQuery(runtimeConfig: RuntimeConfig) = CargoDependency.smithyQuery(runtimeConfig).toType()
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntime(runtimeConfig).toType()
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntimeApi(runtimeConfig).toType()
-        fun smithyRuntimeApiClient(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType()
+        fun smithyRuntimeApiClient(runtimeConfig: RuntimeConfig) =
+            CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType()
+
         fun smithyTypes(runtimeConfig: RuntimeConfig) = CargoDependency.smithyTypes(runtimeConfig).toType()
         fun smithyXml(runtimeConfig: RuntimeConfig) = CargoDependency.smithyXml(runtimeConfig).toType()
         private fun smithyProtocolTest(runtimeConfig: RuntimeConfig) =

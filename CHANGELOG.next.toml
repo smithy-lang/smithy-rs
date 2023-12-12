@@ -49,3 +49,51 @@ This is designed for unit tests and using local mocks like DynamoDB Local and Lo
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "rcoh"
 references = ["smithy-rs#3279", "aws-sdk-rust#971"]
+
+[[aws-sdk-rust]]
+message = "Improve the error messages for when auth fails to select an auth scheme for a request."
+references = ["aws-sdk-rust#979", "smithy-rs#3277"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Improve the error messages for when auth fails to select an auth scheme for a request."
+references = ["smithy-rs#3277"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
+references = ["aws-sdk-rust#986", "smithy-rs#3282"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
+references = ["smithy-rs#3282"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Expose local socket address from ConnectionMetadata."
+references = ["aws-sdk-rust#990"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "declanvk"
+
+[[smithy-rs]]
+message = "All generated docs now include docsrs labels when features are required"
+references = ["smithy-rs#3121", "smithy-rs#3295"]
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "All generated docs now include docsrs labels when features are required"
+references = ["smithy-rs#3121", "smithy-rs#3295"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "[`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/enum.Number.html) `TryInto` implementations now succesfully convert from `f64` to numeric types when no precision is lost. This fixes some deserialization issues where numbers like `25.0` were sent when `Byte` fields were expected."
+references = ["smithy-rs#3294"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "rcoh"

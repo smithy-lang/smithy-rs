@@ -33,6 +33,12 @@ dependencies {
     implementation(gradleApi())
     implementation("com.moandjiezana.toml:toml4j:0.7.2")
     testImplementation("org.junit.jupiter:junit-jupiter:5.6.1")
+
+    constraints {
+        implementation("com.google.code.gson:gson:2.8.9") {
+            because("transitive dependency of toml4j has vulnerabilities; this upgrades it to the patched version")
+        }
+    }
 }
 
 tasks.test {
@@ -52,7 +58,7 @@ tasks.jacocoTestReport {
     reports {
         xml.required.set(false)
         csv.required.set(false)
-        html.outputLocation.set(file("$buildDir/reports/jacoco"))
+        html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
     }
 }
 

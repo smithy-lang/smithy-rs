@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 1st, 2023
+==================
+**New this release:**
+- (client, [smithy-rs#3278](https://github.com/smithy-lang/smithy-rs/issues/3278)) `RuntimeComponentsBuilder::push_identity_resolver` is now deprecated since it does not replace the existing identity resolver of a given auth scheme ID. Use `RuntimeComponentsBuilder::set_identity_resolver` instead.
+
+
 November 27th, 2023
 ===================
 **New this release:**
@@ -376,7 +382,7 @@ August 1st, 2023
     }
     ```
 
-    A single `Plugin` can no longer apply a `tower::Layer` on HTTP requests/responses _and_ modelled structures at the same time (see middleware positions [C](https://awslabs.github.io/smithy-rs/design/server/middleware.html#c-operation-specific-http-middleware) and [D](https://awslabs.github.io/smithy-rs/design/server/middleware.html#d-operation-specific-model-middleware). Instead one `Plugin` must be specified for each and passed to the service builder constructor separately:
+    A single `Plugin` can no longer apply a `tower::Layer` on HTTP requests/responses _and_ modelled structures at the same time (see middleware positions [C](https://smithy-lang.github.io/smithy-rs/design/server/middleware.html#c-operation-specific-http-middleware) and [D](https://smithy-lang.github.io/smithy-rs/design/server/middleware.html#d-operation-specific-model-middleware). Instead one `Plugin` must be specified for each and passed to the service builder constructor separately:
 
     ```rust
     let app = PokemonService::builder_with_plugins(/* HTTP plugins */, /* model plugins */)
@@ -1178,7 +1184,7 @@ September 20th, 2022
     `aws_smithy_http::operation::Parts` has been renamed to `retry_classifier`.
 
 **New this release:**
-- 🎉 (client, [smithy-rs#1647](https://github.com/smithy-lang/smithy-rs/issues/1647), [smithy-rs#1112](https://github.com/smithy-lang/smithy-rs/issues/1112)) Implemented customizable operations per [RFC-0017](https://awslabs.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).
+- 🎉 (client, [smithy-rs#1647](https://github.com/smithy-lang/smithy-rs/issues/1647), [smithy-rs#1112](https://github.com/smithy-lang/smithy-rs/issues/1112)) Implemented customizable operations per [RFC-0017](https://smithy-lang.github.io/smithy-rs/design/rfcs/rfc0017_customizable_client_operations.html).
 
     Before this change, modifying operations before sending them required using lower-level APIs:
 
