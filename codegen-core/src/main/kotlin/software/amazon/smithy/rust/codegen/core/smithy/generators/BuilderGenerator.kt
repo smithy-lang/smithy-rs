@@ -407,8 +407,10 @@ class BuilderGenerator(
                         if (default != null) {
                             if (default.isRustDefault) {
                                 rust(".unwrap_or_default()")
+                            } else if (default.complexType) {
+                                rust(".unwrap_or_else(|| #T)", default.expr)
                             } else {
-                                rust(".unwrap_or_else(#T)", default.expr)
+                                rust(".unwrap_or(#T)", default.expr)
                             }
                         } else {
                             withBlock(
