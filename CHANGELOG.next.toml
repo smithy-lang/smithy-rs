@@ -97,3 +97,15 @@ message = "[`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/e
 references = ["smithy-rs#3294"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
 author = "rcoh"
+
+[[aws-smithy-runtime]]
+message = "`rustls-webpki` feature is now available to use [`webpki-roots`](https://docs.rs/webpki-roots/latest/webpki_roots/) CA bundle rather than native one"
+references = ["smithy-rs#3309"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "rvolosatovs"
+
+[[aws-config]]
+message = "`tls-rustls-webpki` feature is now available to use [`webpki-roots`](https://docs.rs/webpki-roots/latest/webpki_roots/) CA bundle rather than native one"
+references = ["smithy-rs#3309"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+author = "rvolosatovs"

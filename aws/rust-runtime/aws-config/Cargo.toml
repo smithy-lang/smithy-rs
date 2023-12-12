@@ -12,6 +12,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 behavior-version-latest = []
 client-hyper = ["aws-smithy-runtime/connector-hyper-0-14-x"]
 rustls = ["aws-smithy-runtime/tls-rustls", "client-hyper"]
+rustls-webpki = ["aws-smithy-runtime/tls-rustls-webpki", "client-hyper"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 credentials-process = ["tokio/process"]
