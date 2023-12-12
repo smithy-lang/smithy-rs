@@ -19,5 +19,5 @@
 #[cfg(any(feature = "convert-time", feature = "convert-chrono"))]
 pub mod date_time;
 
-#[cfg(feature = "convert-futures")]
-pub mod futures;
+#[cfg(feature = "convert-streams")]
+pub mod stream;

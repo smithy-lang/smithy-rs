@@ -7,7 +7,7 @@
 
 use crate::future::pagination_stream::collect::sealed::Collectable;
 use std::future::Future;
-use std::pin::{pin, Pin};
+use std::pin::Pin;
 use std::task::{Context, Poll};
 
 pub mod collect;

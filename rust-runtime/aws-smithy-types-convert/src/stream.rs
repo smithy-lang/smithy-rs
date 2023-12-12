@@ -36,3 +36,17 @@ where
         self.pagination_stream.poll_next(cx)
     }
 }
+
+/// Trait to convert PaginationStream into implementor of `Stream`
+pub trait PaginationStreamExt<Item> {
+    /// Convert PaginationStream into implementor of `Stream`
+    fn as_stream_01x(self) -> PaginationStreamImplStream<Item>;
+}
+
+impl<Item> PaginationStreamExt<Item> for PaginationStream<Item> {
+    fn as_stream_01x(self) -> PaginationStreamImplStream<Item> {
+        PaginationStreamImplStream {
+            pagination_stream: self,
+        }
+    }
+}
