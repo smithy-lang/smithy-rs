@@ -5,9 +5,12 @@
 
 use aws_sdk_s3::config::Region;
 use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectOutput};
+use aws_sdk_s3::operation::list_buckets::ListBucketsError;
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
+use aws_smithy_types::error::metadata::ProvideErrorMetadata;
+use aws_smithy_types::error::ErrorMetadata;
 
 use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor};
 
@@ -44,9 +47,14 @@ async fn create_mock_s3_get_object() {
                 .build()
         });
 
+    let modeled_error = mock!(Client::list_buckets).then_error(|| {
+        ListBucketsError::generic(ErrorMetadata::builder().code("InvalidAccessKey").build())
+    });
+
     let get_object_mocks = MockResponseInterceptor::new()
         .with_rule(&s3_404)
-        .with_rule(&s3_real_object);
+        .with_rule(&s3_real_object)
+        .with_rule(&modeled_error);
 
     let s3 = aws_sdk_s3::Client::from_conf(
         Config::builder()
@@ -83,4 +91,7 @@ async fn create_mock_s3_get_object() {
         .to_vec();
     assert_eq!(data, b"test-test-test");
     assert_eq!(s3_real_object.num_calls(), 1);
+
+    let err = s3.list_buckets().send().await.expect_err("bad access key");
+    assert_eq!(err.code(), Some("InvalidAccessKey"));
 }

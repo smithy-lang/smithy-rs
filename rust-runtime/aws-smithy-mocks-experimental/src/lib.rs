@@ -108,6 +108,16 @@ where
             MockOutput::ModeledResponse(Arc::new(move || Ok(Output::erase(output())))),
         )
     }
+
+    /// If a rule matches, then return a specific error
+    pub fn then_error(self, output: impl Fn() -> E + Send + Sync + 'static) -> Rule {
+        Rule::new(
+            self.input_filter,
+            MockOutput::ModeledResponse(Arc::new(move || {
+                Err(OrchestratorError::operation(Error::erase(output())))
+            })),
+        )
+    }
 }
 
 #[derive(Clone)]
