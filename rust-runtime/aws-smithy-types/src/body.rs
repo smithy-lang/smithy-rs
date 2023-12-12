@@ -59,7 +59,11 @@ impl Debug for SdkBody {
 enum BoxBody {
     // This is enabled by the **dependency**, not the feature. This allows us to construct it
     // whenever we have the dependency and keep the APIs private
-    #[cfg(feature = "http-body-0-4")]
+    #[cfg(any(
+        feature = "http-body-0-4-x",
+        feature = "http-body-1-x",
+        feature = "rt-tokio"
+    ))]
     HttpBody04(http_body_0_4::combinators::BoxBody<Bytes, Error>),
 }
 
@@ -166,7 +170,11 @@ impl SdkBody {
         }
     }
 
-    #[cfg(feature = "http-body-0-4")]
+    #[cfg(any(
+        feature = "http-body-0-4-x",
+        feature = "http-body-1-x",
+        feature = "rt-tokio"
+    ))]
     pub(crate) fn from_body_0_4_internal<T, E>(body: T) -> Self
     where
         T: http_body_0_4::Body<Data = Bytes, Error = E> + Send + Sync + 'static,

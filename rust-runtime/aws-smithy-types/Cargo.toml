@@ -10,15 +10,13 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 
-# DO NOT USE `dep:http-body-0-4` in this table.
-# Doing so disables the implicit feature which we rely on internally.
 [features]
 byte-stream-poll-next = []
-http-body-0-4-x = ["http-body-0-4"]
-http-body-1-x = ["dep:http-body-1-0", "dep:http-body-util", "http-body-0-4", "http-1x"]
+http-body-0-4-x = ["dep:http-body-0-4"]
+http-body-1-x = ["dep:http-body-1-0", "dep:http-body-util", "dep:http-body-0-4", "dep:http-1x"]
 hyper-0-14-x = ["dep:hyper-0-14"]
 rt-tokio = [
-    "http-body-0-4",
+    "dep:http-body-0-4",
     "dep:tokio-util",
     "dep:tokio",
     "tokio?/rt",
