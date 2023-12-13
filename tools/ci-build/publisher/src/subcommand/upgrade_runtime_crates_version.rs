@@ -4,13 +4,14 @@
  */
 
 use crate::fs::Fs;
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use smithy_rs_tool_common::package::PackageStability;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
+use tracing::warn;
 
 static STABLE_VERSION_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
@@ -104,7 +105,8 @@ fn update_gradle_properties<'a>(
         // Special version tag used on the `main` branch
         && current_version != semver::Version::parse("0.0.0-smithy-rs-head").unwrap()
     {
-        bail!("Moving from {current_version} to {upgraded_version} would be a *downgrade*. This command doesn't allow it!");
+        // NOTE: do not backport this change to mainline during merge.
+        warn!("Moving from {current_version} to {upgraded_version} is a *downgrade*.");
     }
     Ok(version_regex.replace(gradle_properties, format!("${{field}}{}", upgraded_version)))
 }
