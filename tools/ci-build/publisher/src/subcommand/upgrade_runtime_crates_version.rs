@@ -189,7 +189,9 @@ mod tests {
         assert_eq!("smithy.rs.runtime.crate.stable.version=1.0.3", updated);
     }
 
+    // ignored: we are temporarily removing this safeguard
     #[test]
+    #[ignore]
     fn downgrading_stable_crate_should_be_caught_as_err() {
         let gradle_properties = "smithy.rs.runtime.crate.stable.version=1.0.2";
         let version = semver::Version::new(1, 0, 1);
@@ -199,7 +201,9 @@ mod tests {
         assert!(format!("{:?}", result).contains("downgrade"));
     }
 
+    // ignored: we are temporarily removing this safeguard
     #[test]
+    #[ignore]
     fn downgrading_unstable_crate_should_be_caught_as_err() {
         let gradle_properties = "smithy.rs.runtime.crate.unstable.version=0.57.1";
         let version = semver::Version::new(0, 57, 0);
