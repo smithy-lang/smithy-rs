@@ -25,12 +25,22 @@ use aws_smithy_runtime_api::http::{Response, StatusCode};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 
+// why do we need a macro for this?
+// We want customers to be able to provide an ergonomic way to say the method they're looking for,
+// `Client::list_buckets`, e.g. But there isn't enough information on that type to recover everything.
+// This macro commits a small amount of crimes to recover that type information so we can construct
+// a rule that can intercept these operations.
 #[macro_export]
 macro_rules! mock {
     ($operation: expr) => {
         #[allow(unreachable_code)]
         {
             $crate::RuleBuilder::new(
+                // We don't actually want to run this code, so we put it in a closure. The closure
+                // has the types we want which makes this whole thing type-safe (and the IDE can even
+                // figure out the right input/output types in inference!)
+                // The code generated here is:
+                // `Client::list_buckets(todo!())`
                 || $operation(todo!()).as_input().clone().build().unwrap(),
                 || $operation(todo!()).send(),
             )
