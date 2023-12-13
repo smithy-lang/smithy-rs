@@ -6,11 +6,12 @@
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 /* End of automatically managed default lints */
+use std::collections::VecDeque;
 use std::fmt::{Debug, Formatter};
 use std::future::Future;
 use std::marker::PhantomData;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
@@ -53,7 +54,7 @@ type OutputFn = Arc<dyn Fn() -> Result<Output, OrchestratorError<Error>> + Send 
 
 impl Debug for MockResponseInterceptor {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} functions", self.rules.len())
+        write!(f, "{} rules", self.rules.lock().unwrap().len())
     }
 }
 
@@ -65,7 +66,9 @@ pub enum MockOutput {
 
 /// Interceptor which produces mock responses based on a list of rules
 pub struct MockResponseInterceptor {
-    rules: Vec<Rule>,
+    rules: Arc<Mutex<VecDeque<Rule>>>,
+    enforce_order: bool,
+    must_match: bool,
 }
 
 pub struct RuleBuilder<I, O, E> {
@@ -137,6 +140,12 @@ pub struct Rule {
     used_count: Arc<AtomicUsize>,
 }
 
+impl Debug for Rule {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Rule")
+    }
+}
+
 impl Rule {
     fn new(matcher: MatchFn, output: MockOutput) -> Self {
         Self {
@@ -156,17 +165,34 @@ impl Rule {
 }
 
 #[derive(Debug)]
-struct RunIndex(usize);
-impl Storable for RunIndex {
-    type Storer = StoreReplace<RunIndex>;
+struct ActiveRule(Rule);
+impl Storable for ActiveRule {
+    type Storer = StoreReplace<ActiveRule>;
 }
 
 impl MockResponseInterceptor {
     pub fn new() -> Self {
-        Self { rules: vec![] }
+        Self {
+            rules: Default::default(),
+            enforce_order: false,
+            must_match: true,
+        }
     }
-    pub fn with_rule(mut self, rule: &Rule) -> Self {
-        self.rules.push(rule.clone());
+    pub fn with_rule(self, rule: &Rule) -> Self {
+        self.rules.lock().unwrap().push_back(rule.clone());
+        self
+    }
+
+    /// Require that rules are matched in order.
+    ///
+    /// If a rule matches out of order, the interceptor will panic.
+    pub fn enforce_order(mut self) -> Self {
+        self.enforce_order = true;
+        self
+    }
+
+    pub fn allow_passthrough(mut self) -> Self {
+        self.must_match = false;
         self
     }
 }
@@ -182,10 +208,34 @@ impl Intercept for MockResponseInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        for (idx, rule) in self.rules.iter().enumerate() {
-            if (rule.matcher)(context.inner().input().unwrap()) {
-                cfg.interceptor_state().store_put(RunIndex(idx));
-                return Ok(());
+        let mut rules = self.rules.lock().unwrap();
+        let rule = match self.enforce_order {
+            true => {
+                let rule = rules.pop_front().expect("Out of rules.");
+                if !(rule.matcher)(context.input()) {
+                    panic!(
+                        "In order matching was enforced but the next rule did not match {:?}",
+                        context.input()
+                    );
+                }
+                Some(rule)
+            }
+            false => rules
+                .iter()
+                .find(|rule| (rule.matcher)(context.input()))
+                .cloned(),
+        };
+        match rule {
+            Some(rule) => {
+                cfg.interceptor_state().store_put(ActiveRule(rule.clone()));
+            }
+            None => {
+                if self.must_match {
+                    panic!(
+                        "must_match was enabled but no rules matches {:?}",
+                        context.input()
+                    );
+                }
             }
         }
         Ok(())
@@ -196,8 +246,8 @@ impl Intercept for MockResponseInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(idx) = cfg.load::<RunIndex>() {
-            let rule = &self.rules[idx.0];
+        if let Some(rule) = cfg.load::<ActiveRule>() {
+            let rule = &rule.0;
             let result = match &rule.output {
                 MockOutput::HttpResponse(output_fn) => output_fn(),
                 _ => return Ok(()),
@@ -219,8 +269,8 @@ impl Intercept for MockResponseInterceptor {
         _runtime_components: &RuntimeComponents,
         _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        if let Some(idx) = _cfg.load::<RunIndex>() {
-            let rule = &self.rules[idx.0];
+        if let Some(rule) = _cfg.load::<ActiveRule>() {
+            let rule = &rule.0;
             let result = match &rule.output {
                 MockOutput::ModeledResponse(output_fn) => output_fn(),
                 _ => return Ok(()),

@@ -54,7 +54,8 @@ async fn create_mock_s3_get_object() {
     let get_object_mocks = MockResponseInterceptor::new()
         .with_rule(&s3_404)
         .with_rule(&s3_real_object)
-        .with_rule(&modeled_error);
+        .with_rule(&modeled_error)
+        .enforce_order();
 
     let s3 = aws_sdk_s3::Client::from_conf(
         Config::builder()
