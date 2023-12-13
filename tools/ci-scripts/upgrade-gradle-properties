@@ -15,7 +15,7 @@ mkdir -p "${ARTIFACTS_DIR}"
 pushd "${SMITHY_RS_DIR}"
 echo "gradle.properties BEFORE the upgrade"
 cat gradle.properties
-publisher upgrade-runtime-crates-version --stable-version "${STABLE_SEMANTIC_VERSION}" --version "${UNSTABLE_SEMANTIC_VERSION}"
+publisher upgrade-runtime-crates-version --stable-version "${STABLE_SEMANTIC_VERSION}" --version "${UNSTABLE_SEMANTIC_VERSION}" --allow-downgrade
 echo "gradle.properties AFTER the upgrade"
 cat gradle.properties
 git status
