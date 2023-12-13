@@ -17,7 +17,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 class SerializerUtil(private val model: Model, private val symbolProvider: SymbolProvider) {
-    fun RustWriter.ignoreDefaultsForNumbersAndBools(shape: MemberShape, value: ValueExpression, inner: Writable) {
+    fun RustWriter.ignoreDefaultsForNumbersAndBools(
+        shape: MemberShape,
+        value: ValueExpression,
+        inner: Writable,
+    ) {
         // @required shapes should always be serialized, and members with @clientOptional or part of @input structures
         // should ignore default values. If we have an Option<T>, it won't have a default anyway, so we don't need to
         // ignore it.

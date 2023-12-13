@@ -109,3 +109,15 @@ message = "Add support for constructing [`SdkBody`] and [`ByteStream`] from `htt
 references = ["smithy-rs#3300", "aws-sdk-rust#977"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false."
+references = ["smithy-rs#3252", "smithy-rs#3312"]
+meta = { "breaking" = true, "tada" = false, "bug" = true, "target" = "client" }
+author = "milesziemer"
+
+[[aws-sdk-rust]]
+message = "Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false."
+references = ["smithy-rs#3252", "smithy-rs#3312"]
+meta = { "breaking" = true, "tada" = false, "bug" = true }
+author = "milesziemer"

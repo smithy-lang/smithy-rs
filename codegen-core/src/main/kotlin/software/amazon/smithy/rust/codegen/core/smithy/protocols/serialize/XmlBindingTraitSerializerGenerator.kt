@@ -557,11 +557,12 @@ class XmlBindingTraitSerializerGenerator(
             }
         } else {
             with(util) {
-                val valueExpression = if (ctx.input.startsWith("&")) {
-                    ValueExpression.Reference(ctx.input)
-                } else {
-                    ValueExpression.Value(ctx.input)
-                }
+                val valueExpression =
+                    if (ctx.input.startsWith("&")) {
+                        ValueExpression.Reference(ctx.input)
+                    } else {
+                        ValueExpression.Value(ctx.input)
+                    }
                 ignoreDefaultsForNumbersAndBools(member, valueExpression) {
                     inner(ctx)
                 }
