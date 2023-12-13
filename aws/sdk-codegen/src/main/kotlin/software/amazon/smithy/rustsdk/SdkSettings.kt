@@ -45,7 +45,7 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
 
     /** Whether to generate a README */
     val generateReadme: Boolean
-        get() = awsSdkBuild
+        get() = awsSdkBuild && !(awsSdk?.getBooleanMember("suppressReadme")?.orNull()?.value ?: false)
 
     val requireEndpointResolver: Boolean
         get() = awsSdkBuild

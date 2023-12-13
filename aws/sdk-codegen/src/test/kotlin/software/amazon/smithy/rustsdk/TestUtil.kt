@@ -60,9 +60,9 @@ fun awsIntegrationTestParams() = IntegrationTestParams(
                 "awsSdk",
                 ObjectNode.builder()
                     .withMember("awsSdkBuild", true)
+                    .withMember("suppressReadme", true)
                     .withMember("integrationTestPath", "../sdk/integration-tests")
                     .withMember("partitionsConfigPath", "../sdk/aws-models/sdk-endpoints.json")
-                    .withMember("awsConfigVersion", "1")
                     .build(),
             ).build(),
     )
