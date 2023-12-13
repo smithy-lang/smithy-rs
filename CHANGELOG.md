@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 13th, 2023
+===================
+
 December 11th, 2023
 ===================
 **New this release:**
