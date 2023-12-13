@@ -10,9 +10,7 @@ use crate::byte_stream::ByteStream;
 use bytes::Bytes;
 
 impl ByteStream {
-    /// Construct a `ByteStream` from a type that implements [`http_body_0_4::Body<Data = Bytes>`](http_body_0_4::Body).
-    ///
-    /// _Note: This is only available with `http-body-0-4-x` enabled._
+    /// Construct a `ByteStream` from a type that implements [`http_body_1_0::Body<Data = Bytes>`](http_body_1_0::Body).
     pub fn from_body_1_x<T, E>(body: T) -> Self
     where
         T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,

@@ -16,8 +16,6 @@ use crate::body::{Error, SdkBody};
 
 impl SdkBody {
     /// Construct an `SdkBody` from a type that implements [`http_body_1_0::Body<Data = Bytes>`](http_body_1_0::Body).
-    ///
-    /// _Note: This is only available with `http-body-1-0` enabled._
     pub fn from_body_1_x<T, E>(body: T) -> Self
     where
         T: http_body_1_0::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
