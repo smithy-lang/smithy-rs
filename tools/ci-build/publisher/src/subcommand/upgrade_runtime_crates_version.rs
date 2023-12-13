@@ -4,13 +4,14 @@
  */
 
 use crate::fs::Fs;
-use anyhow::{anyhow, bail, Context};
+use anyhow::{anyhow, Context};
 use clap::Parser;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use smithy_rs_tool_common::package::PackageStability;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
+use tracing::warn;
 
 static STABLE_VERSION_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(
@@ -104,7 +105,8 @@ fn update_gradle_properties<'a>(
         // Special version tag used on the `main` branch
         && current_version != semver::Version::parse("0.0.0-smithy-rs-head").unwrap()
     {
-        bail!("Moving from {current_version} to {upgraded_version} would be a *downgrade*. This command doesn't allow it!");
+        // NOTE: do not backport this change to mainline during merge.
+        warn!("Moving from {current_version} to {upgraded_version} is a *downgrade*.");
     }
     Ok(version_regex.replace(gradle_properties, format!("${{field}}{}", upgraded_version)))
 }
@@ -187,7 +189,9 @@ mod tests {
         assert_eq!("smithy.rs.runtime.crate.stable.version=1.0.3", updated);
     }
 
+    // ignored: we are temporarily removing this safeguard
     #[test]
+    #[ignore]
     fn downgrading_stable_crate_should_be_caught_as_err() {
         let gradle_properties = "smithy.rs.runtime.crate.stable.version=1.0.2";
         let version = semver::Version::new(1, 0, 1);
@@ -197,7 +201,9 @@ mod tests {
         assert!(format!("{:?}", result).contains("downgrade"));
     }
 
+    // ignored: we are temporarily removing this safeguard
     #[test]
+    #[ignore]
     fn downgrading_unstable_crate_should_be_caught_as_err() {
         let gradle_properties = "smithy.rs.runtime.crate.unstable.version=0.57.1";
         let version = semver::Version::new(0, 57, 0);
