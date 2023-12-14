@@ -62,7 +62,7 @@ fun awsIntegrationTestParams() = IntegrationTestParams(
                     .withMember("awsSdkBuild", true)
                     .withMember("suppressReadme", true)
                     .withMember("integrationTestPath", "../sdk/integration-tests")
-                    .withMember("partitionsConfigPath", "../sdk/aws-models/sdk-endpoints.json")
+                    .withMember("partitionsConfigPath", "../sdk/aws-models/sdk-partitions.json")
                     .build(),
             ).build(),
     )
