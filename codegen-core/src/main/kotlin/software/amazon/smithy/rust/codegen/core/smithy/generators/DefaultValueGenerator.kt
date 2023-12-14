@@ -31,10 +31,11 @@ class DefaultValueGenerator(
     /** Returns the default value as set by the defaultValue trait */
     fun defaultValue(member: MemberShape): DefaultValue? {
         val target = model.expectShape(member.target)
-        val complexType = when (target) {
-            is NumberShape, is EnumShape, is BooleanShape -> false
-            else -> true
-        }
+        val complexType =
+            when (target) {
+                is NumberShape, is EnumShape, is BooleanShape -> false
+                else -> true
+            }
         return when (val default = symbolProvider.toSymbol(member).defaultValue()) {
             is Default.NoDefault -> null
             is Default.RustDefault -> DefaultValue(isRustDefault = true, writable("Default::default"), complexType)
