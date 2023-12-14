@@ -15,7 +15,8 @@ use std::sync::{Arc, Mutex};
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Error,
+    BeforeDeserializationInterceptorContextMut, BeforeDeserializationInterceptorContextRef,
+    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, Error,
     FinalizerInterceptorContextMut, Input, Output,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
@@ -31,6 +32,32 @@ use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 // `Client::list_buckets`, e.g. But there isn't enough information on that type to recover everything.
 // This macro commits a small amount of crimes to recover that type information so we can construct
 // a rule that can intercept these operations.
+
+/// `mock!` macro that produces a [`RuleBuilder`] from a client invocation
+///
+/// See the `examples` folder of this crate for fully worked examples.
+///
+/// # Examples
+/// **Mock and return a success response**:
+/// ```rust
+/// use aws_sdk_s3::operation::get_object::GetObjectOutput;
+/// use aws_sdk_s3::Client;
+/// use aws_smithy_types::byte_stream::ByteStream;
+/// use aws_smithy_mocks_experimental::mock;
+/// let get_object_happy_path = mock!(Client::get_object)
+///   .match_requests(|req|req.bucket() == Some("test-bucket") && req.key() == Some("test-key"))
+///   .then_output(||GetObjectOutput::builder().body(ByteStream::from_static(b"12345-abcde")).build());
+/// ```
+///
+/// **Mock and return an error**:
+/// ```rust
+/// use aws_sdk_s3::operation::get_object::GetObjectError;
+/// use aws_sdk_s3::types::error::NoSuchKey;
+/// use aws_sdk_s3::Client;
+/// use aws_smithy_mocks_experimental::mock;
+/// let get_object_error_path = mock!(Client::get_object)
+///   .then_error(||GetObjectError::NoSuchKey(NoSuchKey::builder().build()));
+/// ```
 #[macro_export]
 macro_rules! mock {
     ($operation: expr) => {
@@ -59,7 +86,7 @@ impl Debug for MockResponseInterceptor {
 }
 
 #[derive(Clone)]
-pub enum MockOutput {
+enum MockOutput {
     HttpResponse(Arc<dyn Fn() -> Result<HttpResponse, BoxError> + Send + Sync>),
     ModeledResponse(OutputFn),
 }
@@ -82,6 +109,7 @@ where
     O: Send + Sync + Debug + 'static,
     E: Send + Sync + Debug + std::error::Error + 'static,
 {
+    /// Creates a new [`RuleBuilder`]. This is normally constructed with the [`mock!`] macro
     pub fn new<F, R>(_input_hint: impl Fn() -> I, _output_hint: impl Fn() -> F) -> Self
     where
         F: Future<Output = Result<O, SdkError<E, R>>>,
@@ -208,10 +236,10 @@ impl Intercept for MockResponseInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let mut rules = self.rules.lock().unwrap();
+        let rules = self.rules.lock().unwrap();
         let rule = match self.enforce_order {
             true => {
-                let rule = rules.pop_front().expect("Out of rules.");
+                let rule = rules.get(0).expect("out of rules");
                 if !(rule.matcher)(context.input()) {
                     panic!(
                         "In order matching was enforced but the next rule did not match {:?}",
@@ -220,10 +248,7 @@ impl Intercept for MockResponseInterceptor {
                 }
                 Some(rule)
             }
-            false => rules
-                .iter()
-                .find(|rule| (rule.matcher)(context.input()))
-                .cloned(),
+            false => rules.iter().find(|rule| (rule.matcher)(context.input())),
         };
         match rule {
             Some(rule) => {
@@ -240,6 +265,7 @@ impl Intercept for MockResponseInterceptor {
         }
         Ok(())
     }
+
     fn modify_before_deserialization(
         &self,
         context: &mut BeforeDeserializationInterceptorContextMut<'_>,
