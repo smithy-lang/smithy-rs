@@ -46,14 +46,16 @@ class RustWriterTest {
     @Test
     fun `manually created struct`() {
         val stringShape = StringShape.builder().id("test#Hello").build()
-        val set = SetShape.builder()
-            .id("foo.bar#Records")
-            .member(stringShape.id)
-            .build()
-        val model = Model.assembler()
-            .addShapes(set, stringShape)
-            .assemble()
-            .unwrap()
+        val set =
+            SetShape.builder()
+                .id("foo.bar#Records")
+                .member(stringShape.id)
+                .build()
+        val model =
+            Model.assembler()
+                .addShapes(set, stringShape)
+                .assemble()
+                .unwrap()
 
         val provider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
@@ -99,10 +101,11 @@ class RustWriterTest {
 
     @Test
     fun `generate doc links`() {
-        val model = """
+        val model =
+            """
             namespace test
             structure Foo {}
-        """.asSmithyModel()
+            """.asSmithyModel()
         val shape = model.lookup<StructureShape>("test#Foo")
         val symbol = testSymbolProvider(model).toSymbol(shape)
         val writer = RustWriter.root()
@@ -136,11 +139,12 @@ class RustWriterTest {
     @Test
     fun `attributes with derive helpers must come after derives`() {
         val attr = Attribute("foo", isDeriveHelper = true)
-        val metadata = RustMetadata(
-            derives = setOf(RuntimeType.Debug),
-            additionalAttributes = listOf(Attribute.AllowDeprecated, attr),
-            visibility = Visibility.PUBLIC,
-        )
+        val metadata =
+            RustMetadata(
+                derives = setOf(RuntimeType.Debug),
+                additionalAttributes = listOf(Attribute.AllowDeprecated, attr),
+                visibility = Visibility.PUBLIC,
+            )
         val sut = RustWriter.root()
         metadata.render(sut)
         sut.toString().shouldContain("#[allow(deprecated)]\n#[derive(::std::fmt::Debug)]\n#[foo]")
@@ -189,13 +193,14 @@ class RustWriterTest {
     @Test
     fun `missing template parameters are enclosed in backticks in the exception message`() {
         val sut = RustWriter.root()
-        val exception = assertThrows<CodegenException> {
-            sut.rustTemplate(
-                "#{Foo} #{Bar}",
-                "Foo Bar" to CargoDependency.Http.toType().resolve("foo"),
-                "Baz" to CargoDependency.Http.toType().resolve("foo"),
-            )
-        }
+        val exception =
+            assertThrows<CodegenException> {
+                sut.rustTemplate(
+                    "#{Foo} #{Bar}",
+                    "Foo Bar" to CargoDependency.Http.toType().resolve("foo"),
+                    "Baz" to CargoDependency.Http.toType().resolve("foo"),
+                )
+            }
         exception.message shouldBe
             """
             Rust block template expected `Foo` but was not present in template.

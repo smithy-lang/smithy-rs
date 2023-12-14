@@ -39,13 +39,17 @@ fun HttpTrait.uriFormatString(): String {
     return uri.rustFormatString("/", "/")
 }
 
-fun SmithyPattern.rustFormatString(prefix: String, separator: String): String {
-    val base = segments.joinToString(separator = separator, prefix = prefix) {
-        when {
-            it.isLabel -> "{${it.content}}"
-            else -> it.content
+fun SmithyPattern.rustFormatString(
+    prefix: String,
+    separator: String,
+): String {
+    val base =
+        segments.joinToString(separator = separator, prefix = prefix) {
+            when {
+                it.isLabel -> "{${it.content}}"
+                else -> it.content
+            }
         }
-    }
     return base.dq()
 }
 
@@ -71,12 +75,13 @@ class RequestBindingGenerator(
     private val index = HttpBindingIndex.of(model)
     private val encoder = RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder")
 
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "BuildError" to runtimeConfig.operationBuildError(),
-        "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
-        "Input" to symbolProvider.toSymbol(inputShape),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "BuildError" to runtimeConfig.operationBuildError(),
+            "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
+            "Input" to symbolProvider.toSymbol(inputShape),
+        )
 
     /**
      * Generates `update_http_builder` and all necessary dependency functions into the impl block provided by
@@ -113,7 +118,7 @@ class RequestBindingGenerator(
         }
     }
 
-    /** URI Generation **/
+    // URI Generation **
 
     /**
      * Generate a function to build the request URI
@@ -122,10 +127,11 @@ class RequestBindingGenerator(
         val formatString = httpTrait.uriFormatString()
         // name of a local variable containing this member's component of the URI
         val local = { member: MemberShape -> symbolProvider.toMemberName(member) }
-        val args = httpTrait.uri.labels.map { label ->
-            val member = inputShape.expectMember(label.content)
-            "${label.content} = ${local(member)}"
-        }
+        val args =
+            httpTrait.uri.labels.map { label ->
+                val member = inputShape.expectMember(label.content)
+                "${label.content} = ${local(member)}"
+            }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
         writer.rustBlockTemplate(
             "fn uri_base(_input: &#{Input}, output: &mut #{String}) -> #{Result}<(), #{BuildError}>",
@@ -213,13 +219,15 @@ class RequestBindingGenerator(
                 val target = model.expectShape(memberShape.target)
 
                 if (memberShape.isRequired) {
-                    val codegenScope = arrayOf(
-                        *preludeScope,
-                        "BuildError" to OperationBuildError(runtimeConfig).missingField(
-                            memberName,
-                            "cannot be empty or unset",
-                        ),
-                    )
+                    val codegenScope =
+                        arrayOf(
+                            *preludeScope,
+                            "BuildError" to
+                                OperationBuildError(runtimeConfig).missingField(
+                                    memberName,
+                                    "cannot be empty or unset",
+                                ),
+                        )
                     val derefName = safeName("inner")
                     rust("let $derefName = &_input.$memberName;")
                     if (memberSymbol.isOptional()) {
@@ -266,7 +274,12 @@ class RequestBindingGenerator(
     /**
      * Format [member] when used as a queryParam
      */
-    private fun paramFmtFun(writer: RustWriter, target: Shape, member: MemberShape, targetName: String): String {
+    private fun paramFmtFun(
+        writer: RustWriter,
+        target: Shape,
+        member: MemberShape,
+        targetName: String,
+    ): String {
         return when {
             target.isStringShape -> {
                 val func = writer.format(RuntimeType.queryFormat(runtimeConfig, "fmt_string"))
@@ -291,13 +304,18 @@ class RequestBindingGenerator(
         }
     }
 
-    private fun RustWriter.serializeLabel(member: MemberShape, label: SmithyPattern.Segment, outputVar: String) {
+    private fun RustWriter.serializeLabel(
+        member: MemberShape,
+        label: SmithyPattern.Segment,
+        outputVar: String,
+    ) {
         val target = model.expectShape(member.target)
         val symbol = symbolProvider.toSymbol(member)
-        val buildError = OperationBuildError(runtimeConfig).missingField(
-            symbolProvider.toMemberName(member),
-            "cannot be empty or unset",
-        )
+        val buildError =
+            OperationBuildError(runtimeConfig).missingField(
+                symbolProvider.toMemberName(member),
+                "cannot be empty or unset",
+            )
         val input = safeName("input")
         rust("let $input = &_input.${symbolProvider.toMemberName(member)};")
         if (symbol.isOptional()) {
@@ -306,11 +324,12 @@ class RequestBindingGenerator(
         when {
             target.isStringShape -> {
                 val func = format(RuntimeType.labelFormat(runtimeConfig, "fmt_string"))
-                val encodingStrategy = if (label.isGreedyLabel) {
-                    RuntimeType.labelFormat(runtimeConfig, "EncodingStrategy::Greedy")
-                } else {
-                    RuntimeType.labelFormat(runtimeConfig, "EncodingStrategy::Default")
-                }
+                val encodingStrategy =
+                    if (label.isGreedyLabel) {
+                        RuntimeType.labelFormat(runtimeConfig, "EncodingStrategy::Greedy")
+                    } else {
+                        RuntimeType.labelFormat(runtimeConfig, "EncodingStrategy::Default")
+                    }
                 rust("let $outputVar = $func($input, #T);", encodingStrategy)
             }
 

@@ -83,12 +83,18 @@ class DeriveEqAndHashSymbolMetadataProvider(
     override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
 
     override fun structureMeta(structureShape: StructureShape) = addDeriveEqAndHashIfPossible(structureShape)
+
     override fun unionMeta(unionShape: UnionShape) = addDeriveEqAndHashIfPossible(unionShape)
+
     override fun enumMeta(stringShape: StringShape) = addDeriveEqAndHashIfPossible(stringShape)
 
     override fun listMeta(listShape: ListShape): RustMetadata = addDeriveEqAndHashIfPossible(listShape)
+
     override fun mapMeta(mapShape: MapShape): RustMetadata = addDeriveEqAndHashIfPossible(mapShape)
+
     override fun stringMeta(stringShape: StringShape): RustMetadata = addDeriveEqAndHashIfPossible(stringShape)
+
     override fun numberMeta(numberShape: NumberShape): RustMetadata = addDeriveEqAndHashIfPossible(numberShape)
+
     override fun blobMeta(blobShape: BlobShape): RustMetadata = addDeriveEqAndHashIfPossible(blobShape)
 }

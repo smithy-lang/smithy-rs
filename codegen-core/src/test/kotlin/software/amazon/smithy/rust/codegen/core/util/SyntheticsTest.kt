@@ -15,7 +15,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 class SyntheticsTest {
     @Test
     fun `it should clone operations`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             service TestService {
@@ -33,11 +34,12 @@ class SyntheticsTest {
             }
 
             operation SomeOperation { input: TestInput, output: TestOutput }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
-        val transformed = model.toBuilder().cloneOperation(model, ShapeId.from("test#SomeOperation")) { shapeId ->
-            ShapeId.fromParts(shapeId.namespace + ".cloned", shapeId.name + "Foo")
-        }.build()
+        val transformed =
+            model.toBuilder().cloneOperation(model, ShapeId.from("test#SomeOperation")) { shapeId ->
+                ShapeId.fromParts(shapeId.namespace + ".cloned", shapeId.name + "Foo")
+            }.build()
 
         val newOp = transformed.expectShape(ShapeId.from("test.cloned#SomeOperationFoo"), OperationShape::class.java)
         newOp.input.orNull() shouldBe ShapeId.from("test.cloned#TestInputFoo")
@@ -56,14 +58,15 @@ class SyntheticsTest {
 
     @Test
     fun `it should rename structs`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure SomeInput {
                 one: String,
                 two: String,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val original = model.expectShape(ShapeId.from("test#SomeInput"), StructureShape::class.java)
         val new = original.toBuilder().rename(ShapeId.from("new#SomeOtherInput")).build()

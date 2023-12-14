@@ -21,7 +21,9 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 sealed class ModuleDocSection {
     data class ServiceDocs(val documentationTraitValue: String?) : ModuleDocSection()
+
     object CrateOrganization : ModuleDocSection()
+
     object Examples : ModuleDocSection()
 }
 
@@ -41,9 +43,10 @@ class LibRsGenerator(
     private val customizations: List<LibRsCustomization>,
     private val requireDocs: Boolean,
 ) {
-    private fun docSection(section: ModuleDocSection): List<Writable> = customizations
-        .map { customization -> customization.section(LibRsSection.ModuleDoc(section)) }
-        .filter { it.isNotEmpty() }
+    private fun docSection(section: ModuleDocSection): List<Writable> =
+        customizations
+            .map { customization -> customization.section(LibRsSection.ModuleDoc(section)) }
+            .filter { it.isNotEmpty() }
 
     fun render(writer: RustWriter) {
         writer.first {

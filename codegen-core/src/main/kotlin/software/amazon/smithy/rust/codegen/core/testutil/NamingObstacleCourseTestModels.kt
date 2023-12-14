@@ -16,167 +16,172 @@ object NamingObstacleCourseTestModels {
      * Test model that confounds the generation machinery by using operations named after every item
      * in the Rust prelude.
      */
-    fun rustPreludeOperationsModel(): Model = StringBuilder().apply {
-        append(
-            """
-            ${"$"}version: "2.0"
-            namespace crate
+    fun rustPreludeOperationsModel(): Model =
+        StringBuilder().apply {
+            append(
+                """
+                ${"$"}version: "2.0"
+                namespace crate
 
-            use smithy.test#httpRequestTests
-            use smithy.test#httpResponseTests
-            use aws.protocols#awsJson1_1
-            use aws.api#service
-            use smithy.framework#ValidationException
+                use smithy.test#httpRequestTests
+                use smithy.test#httpResponseTests
+                use aws.protocols#awsJson1_1
+                use aws.api#service
+                use smithy.framework#ValidationException
 
-            structure InputAndOutput {}
+                structure InputAndOutput {}
 
-            @awsJson1_1
-            @service(sdkId: "Config")
-            service Config {
-                version: "2006-03-01",
-                rename: { "smithy.api#String": "PreludeString" },
-                operations: [
-            """,
-        )
-        for (item in rustPrelude) {
-            append("$item,\n")
-        }
-        append(
-            """
-            ]
+                @awsJson1_1
+                @service(sdkId: "Config")
+                service Config {
+                    version: "2006-03-01",
+                    rename: { "smithy.api#String": "PreludeString" },
+                    operations: [
+                """,
+            )
+            for (item in rustPrelude) {
+                append("$item,\n")
             }
-            """,
-        )
-        for (item in rustPrelude) {
-            append("operation $item { input: InputAndOutput, output: InputAndOutput, errors: [ValidationException] }\n")
-        }
-    }.toString().asSmithyModel()
-
-    fun rustPreludeStructsModel(): Model = StringBuilder().apply {
-        append(
-            """
-            ${"$"}version: "2.0"
-            namespace crate
-
-            use smithy.test#httpRequestTests
-            use smithy.test#httpResponseTests
-            use aws.protocols#awsJson1_1
-            use aws.api#service
-            use smithy.framework#ValidationException
-
-            structure InputAndOutput {}
-
-            @awsJson1_1
-            @service(sdkId: "Config")
-            service Config {
-                version: "2006-03-01",
-                rename: { "smithy.api#String": "PreludeString" },
-                operations: [
-            """,
-        )
-        for (item in rustPrelude) {
-            append("Use$item,\n")
-        }
-        append(
-            """
-            ]
+            append(
+                """
+                ]
+                }
+                """,
+            )
+            for (item in rustPrelude) {
+                append("operation $item { input: InputAndOutput, output: InputAndOutput, errors: [ValidationException] }\n")
             }
-            """,
-        )
-        for (item in rustPrelude) {
-            append("structure $item { $item: smithy.api#String }\n")
-            append("operation Use$item { input: $item, output: $item, errors: [ValidationException] }\n")
-        }
-        println(toString())
-    }.toString().asSmithyModel()
+        }.toString().asSmithyModel()
 
-    fun rustPreludeEnumsModel(): Model = StringBuilder().apply {
-        append(
-            """
-            ${"$"}version: "2.0"
-            namespace crate
+    fun rustPreludeStructsModel(): Model =
+        StringBuilder().apply {
+            append(
+                """
+                ${"$"}version: "2.0"
+                namespace crate
 
-            use smithy.test#httpRequestTests
-            use smithy.test#httpResponseTests
-            use aws.protocols#awsJson1_1
-            use aws.api#service
-            use smithy.framework#ValidationException
+                use smithy.test#httpRequestTests
+                use smithy.test#httpResponseTests
+                use aws.protocols#awsJson1_1
+                use aws.api#service
+                use smithy.framework#ValidationException
 
-            structure InputAndOutput {}
+                structure InputAndOutput {}
 
-            @awsJson1_1
-            @service(sdkId: "Config")
-            service Config {
-                version: "2006-03-01",
-                rename: { "smithy.api#String": "PreludeString" },
-                operations: [
-            """,
-        )
-        for (item in rustPrelude) {
-            append("Use$item,\n")
-        }
-        append(
-            """
-            ]
+                @awsJson1_1
+                @service(sdkId: "Config")
+                service Config {
+                    version: "2006-03-01",
+                    rename: { "smithy.api#String": "PreludeString" },
+                    operations: [
+                """,
+            )
+            for (item in rustPrelude) {
+                append("Use$item,\n")
             }
-            """,
-        )
-        for (item in rustPrelude) {
-            append("enum $item { $item }\n")
-            append("structure Struct$item { $item: $item }\n")
-            append("operation Use$item { input: Struct$item, output: Struct$item, errors: [ValidationException] }\n")
-        }
-    }.toString().asSmithyModel()
-
-    fun rustPreludeEnumVariantsModel(): Model = StringBuilder().apply {
-        append(
-            """
-            ${"$"}version: "2.0"
-            namespace crate
-
-            use smithy.test#httpRequestTests
-            use smithy.test#httpResponseTests
-            use aws.protocols#awsJson1_1
-            use aws.api#service
-            use smithy.framework#ValidationException
-
-            @awsJson1_1
-            @service(sdkId: "Config")
-            service Config {
-                version: "2006-03-01",
-                rename: { "smithy.api#String": "PreludeString" },
-                operations: [EnumOp]
+            append(
+                """
+                ]
+                }
+                """,
+            )
+            for (item in rustPrelude) {
+                append("structure $item { $item: smithy.api#String }\n")
+                append("operation Use$item { input: $item, output: $item, errors: [ValidationException] }\n")
             }
+            println(toString())
+        }.toString().asSmithyModel()
 
-            operation EnumOp {
-                input: InputAndOutput,
-                output: InputAndOutput,
-                errors: [ValidationException],
-            }
+    fun rustPreludeEnumsModel(): Model =
+        StringBuilder().apply {
+            append(
+                """
+                ${"$"}version: "2.0"
+                namespace crate
 
-            structure InputAndOutput {
-                the_enum: TheEnum,
-            }
+                use smithy.test#httpRequestTests
+                use smithy.test#httpResponseTests
+                use aws.protocols#awsJson1_1
+                use aws.api#service
+                use smithy.framework#ValidationException
 
-            enum TheEnum {
-            """,
-        )
-        for (item in rustPrelude) {
-            append("$item,\n")
-        }
-        append(
-            """
+                structure InputAndOutput {}
+
+                @awsJson1_1
+                @service(sdkId: "Config")
+                service Config {
+                    version: "2006-03-01",
+                    rename: { "smithy.api#String": "PreludeString" },
+                    operations: [
+                """,
+            )
+            for (item in rustPrelude) {
+                append("Use$item,\n")
             }
-            """,
-        )
-    }.toString().asSmithyModel()
+            append(
+                """
+                ]
+                }
+                """,
+            )
+            for (item in rustPrelude) {
+                append("enum $item { $item }\n")
+                append("structure Struct$item { $item: $item }\n")
+                append("operation Use$item { input: Struct$item, output: Struct$item, errors: [ValidationException] }\n")
+            }
+        }.toString().asSmithyModel()
+
+    fun rustPreludeEnumVariantsModel(): Model =
+        StringBuilder().apply {
+            append(
+                """
+                ${"$"}version: "2.0"
+                namespace crate
+
+                use smithy.test#httpRequestTests
+                use smithy.test#httpResponseTests
+                use aws.protocols#awsJson1_1
+                use aws.api#service
+                use smithy.framework#ValidationException
+
+                @awsJson1_1
+                @service(sdkId: "Config")
+                service Config {
+                    version: "2006-03-01",
+                    rename: { "smithy.api#String": "PreludeString" },
+                    operations: [EnumOp]
+                }
+
+                operation EnumOp {
+                    input: InputAndOutput,
+                    output: InputAndOutput,
+                    errors: [ValidationException],
+                }
+
+                structure InputAndOutput {
+                    the_enum: TheEnum,
+                }
+
+                enum TheEnum {
+                """,
+            )
+            for (item in rustPrelude) {
+                append("$item,\n")
+            }
+            append(
+                """
+                }
+                """,
+            )
+        }.toString().asSmithyModel()
 
     /**
      * This targets two bug classes:
      * - operation inputs used as nested outputs
      * - operation outputs used as nested outputs
      */
-    fun reusedInputOutputShapesModel(protocol: Trait) = """
+    fun reusedInputOutputShapesModel(protocol: Trait) =
+        """
         namespace test
         use ${protocol.toShapeId()}
         use aws.api#service
@@ -226,5 +231,5 @@ object NamingObstacleCourseTestModels {
         list GetThingInputList {
             member: GetThingInput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 }

@@ -20,10 +20,11 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 internal class OperationNormalizerTest {
     @Test
     fun `add inputs and outputs to empty operations`() {
-        val model = """
+        val model =
+            """
             namespace smithy.test
             operation Empty {}
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#Empty")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe false
         val modified = OperationNormalizer.transform(model)
@@ -43,7 +44,8 @@ internal class OperationNormalizerTest {
 
     @Test
     fun `create cloned inputs for operations`() {
-        val model = """
+        val model =
+            """
             namespace smithy.test
             structure RenameMe {
                 v: String
@@ -51,7 +53,7 @@ internal class OperationNormalizerTest {
             operation MyOp {
                 input: RenameMe
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#MyOp")
         model.expectShape(operationId, OperationShape::class.java).input.isPresent shouldBe true
         val modified = OperationNormalizer.transform(model)
@@ -66,7 +68,8 @@ internal class OperationNormalizerTest {
 
     @Test
     fun `create cloned outputs for operations`() {
-        val model = """
+        val model =
+            """
             namespace smithy.test
             structure RenameMe {
                 v: String
@@ -74,7 +77,7 @@ internal class OperationNormalizerTest {
             operation MyOp {
                 output: RenameMe
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operationId = ShapeId.from("smithy.test#MyOp")
         model.expectShape(operationId, OperationShape::class.java).output.isPresent shouldBe true
         val modified = OperationNormalizer.transform(model)
@@ -89,7 +92,8 @@ internal class OperationNormalizerTest {
 
     @Test
     fun `synthetics should not collide with other operations`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure DeleteApplicationRequest {}
@@ -107,7 +111,7 @@ internal class OperationNormalizerTest {
                 input: DeleteApplicationOutputRequest,
                 output: DeleteApplicationOutputResponse,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         (model.expectShape(ShapeId.from("test#DeleteApplicationOutput")) is OperationShape) shouldBe true
 

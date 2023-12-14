@@ -25,12 +25,14 @@ class IdempotencyTokenDecorator : ClientCodegenDecorator {
     override val order: Byte = 0
 
     private fun enabled(ctx: ClientCodegenContext) = ctx.serviceShape.needsIdempotencyToken(ctx.model)
+
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> = baseCustomizations.extendIf(enabled(codegenContext)) {
-        IdempotencyTokenProviderCustomization(codegenContext)
-    }
+    ): List<ConfigCustomization> =
+        baseCustomizations.extendIf(enabled(codegenContext)) {
+            IdempotencyTokenProviderCustomization(codegenContext)
+        }
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -46,11 +48,12 @@ class IdempotencyTokenDecorator : ClientCodegenDecorator {
     ): List<ServiceRuntimePluginCustomization> {
         return baseCustomizations.extendIf(enabled(codegenContext)) {
             object : ServiceRuntimePluginCustomization() {
-                override fun section(section: ServiceRuntimePluginSection) = writable {
-                    if (section is ServiceRuntimePluginSection.AdditionalConfig) {
-                        section.putConfigValue(this, defaultTokenProvider((codegenContext.runtimeConfig)))
+                override fun section(section: ServiceRuntimePluginSection) =
+                    writable {
+                        if (section is ServiceRuntimePluginSection.AdditionalConfig) {
+                            section.putConfigValue(this, defaultTokenProvider((codegenContext.runtimeConfig)))
+                        }
                     }
-                }
             }
         }
     }

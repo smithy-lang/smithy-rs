@@ -68,12 +68,13 @@ class PubCrateConstrainedShapeSymbolProvider(
         check(shape is CollectionShape || shape is MapShape)
 
         val name = constrainedTypeNameForCollectionOrMapShape(shape, serviceShape)
-        val module = RustModule.new(
-            RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
-            visibility = Visibility.PUBCRATE,
-            parent = ServerRustModule.ConstrainedModule,
-            inline = true,
-        )
+        val module =
+            RustModule.new(
+                RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
+                visibility = Visibility.PUBCRATE,
+                parent = ServerRustModule.ConstrainedModule,
+                inline = true,
+            )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
         return Symbol.builder()
             .rustType(rustType)
@@ -127,7 +128,10 @@ class PubCrateConstrainedShapeSymbolProvider(
     }
 }
 
-fun constrainedTypeNameForCollectionOrMapShape(shape: Shape, serviceShape: ServiceShape): String {
+fun constrainedTypeNameForCollectionOrMapShape(
+    shape: Shape,
+    serviceShape: ServiceShape,
+): String {
     check(shape is CollectionShape || shape is MapShape)
     return "${shape.id.getName(serviceShape).toPascalCase()}Constrained"
 }

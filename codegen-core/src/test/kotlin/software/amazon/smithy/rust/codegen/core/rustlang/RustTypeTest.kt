@@ -19,7 +19,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 internal class RustTypesTest {
-    private fun forInputExpectOutput(t: Writable, expectedOutput: String) {
+    private fun forInputExpectOutput(
+        t: Writable,
+        expectedOutput: String,
+    ) {
         val writer = RustWriter.forModule("rust_types")
         writer.rustInlineTemplate("'")
         t.invoke(writer)
@@ -152,17 +155,18 @@ internal class RustTypesTest {
 
     @Test
     fun `attribute macros from strings render properly`() {
-        val attributeMacro = Attribute(
-            Attribute.cfg(
-                Attribute.all(
-                    Attribute.pair("feature" to "unstable".dq()),
-                    Attribute.any(
-                        Attribute.pair("feature" to "serialize".dq()),
-                        Attribute.pair("feature" to "deserialize".dq()),
+        val attributeMacro =
+            Attribute(
+                Attribute.cfg(
+                    Attribute.all(
+                        Attribute.pair("feature" to "unstable".dq()),
+                        Attribute.any(
+                            Attribute.pair("feature" to "serialize".dq()),
+                            Attribute.pair("feature" to "deserialize".dq()),
+                        ),
                     ),
                 ),
-            ),
-        )
+            )
         forInputExpectOutput(
             writable {
                 attributeMacro.render(this)
@@ -173,16 +177,17 @@ internal class RustTypesTest {
 
     @Test
     fun `attribute macros render writers properly`() {
-        val attributeMacro = Attribute(
-            cfg(
-                all(
-                    // Normally we'd use the `pair` fn to define these but this is a test
-                    writable { rustInline("""feature = "unstable"""") },
-                    writable { rustInline("""feature = "serialize"""") },
-                    writable { rustInline("""feature = "deserialize"""") },
+        val attributeMacro =
+            Attribute(
+                cfg(
+                    all(
+                        // Normally we'd use the `pair` fn to define these but this is a test
+                        writable { rustInline("""feature = "unstable"""") },
+                        writable { rustInline("""feature = "serialize"""") },
+                        writable { rustInline("""feature = "deserialize"""") },
+                    ),
                 ),
-            ),
-        )
+            )
         forInputExpectOutput(
             writable {
                 attributeMacro.render(this)
@@ -200,13 +205,14 @@ internal class RustTypesTest {
 
     @Test
     fun `derive attribute macros render properly`() {
-        val attributeMacro = Attribute(
-            derive(
-                RuntimeType.Clone,
-                RuntimeType.Debug,
-                RuntimeType.StdError,
-            ),
-        )
+        val attributeMacro =
+            Attribute(
+                derive(
+                    RuntimeType.Clone,
+                    RuntimeType.Debug,
+                    RuntimeType.StdError,
+                ),
+            )
         forInputExpectOutput(
             writable {
                 attributeMacro.render(this)

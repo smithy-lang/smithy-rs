@@ -35,8 +35,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.ConstrainedShapeSymbolP
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import java.util.logging.Logger
 
-/* Returns the Python implementation of the ByteStream shape or the original symbol that is provided in input. */
-private fun toPythonByteStreamSymbolOrOriginal(model: Model, config: RustSymbolProviderConfig, initial: Symbol, shape: Shape): Symbol {
+// Returns the Python implementation of the ByteStream shape or the original symbol that is provided in input.
+private fun toPythonByteStreamSymbolOrOriginal(
+    model: Model,
+    config: RustSymbolProviderConfig,
+    initial: Symbol,
+    shape: Shape,
+): Symbol {
     if (shape !is MemberShape) {
         return initial
     }
@@ -75,7 +80,6 @@ class PythonServerSymbolVisitor(
     serviceShape: ServiceShape?,
     config: RustSymbolProviderConfig,
 ) : SymbolVisitor(settings, model, serviceShape, config) {
-
     private val runtimeConfig = config.runtimeConfig
     private val logger = Logger.getLogger(javaClass.name)
 
@@ -111,7 +115,6 @@ class PythonConstrainedShapeSymbolProvider(
     serviceShape: ServiceShape,
     publicConstrainedTypes: Boolean,
 ) : ConstrainedShapeSymbolProvider(base, serviceShape, publicConstrainedTypes) {
-
     override fun toSymbol(shape: Shape): Symbol {
         val initial = super.toSymbol(shape)
         return toPythonByteStreamSymbolOrOriginal(model, config, initial, shape)
@@ -127,7 +130,6 @@ class PythonConstrainedShapeSymbolProvider(
  * Note that since streaming members can only be used on the root shape, this can only impact input and output shapes.
  */
 class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider) : SymbolMetadataProvider(base) {
-
     override fun structureMeta(structureShape: StructureShape): RustMetadata {
         val baseMetadata = base.toSymbol(structureShape).expectRustMetadata()
         return if (structureShape.hasStreamingMember(model)) {
@@ -147,10 +149,16 @@ class PythonStreamingShapeMetadataProvider(private val base: RustSymbolProvider)
     }
 
     override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
+
     override fun enumMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
+
     override fun listMeta(listShape: ListShape) = base.toSymbol(listShape).expectRustMetadata()
+
     override fun mapMeta(mapShape: MapShape) = base.toSymbol(mapShape).expectRustMetadata()
+
     override fun stringMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
+
     override fun numberMeta(numberShape: NumberShape) = base.toSymbol(numberShape).expectRustMetadata()
+
     override fun blobMeta(blobShape: BlobShape) = base.toSymbol(blobShape).expectRustMetadata()
 }

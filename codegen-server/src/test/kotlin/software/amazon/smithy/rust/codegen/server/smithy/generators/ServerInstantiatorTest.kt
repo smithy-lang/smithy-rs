@@ -39,7 +39,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCode
 
 class ServerInstantiatorTest {
     // This model started off from the one in `InstantiatorTest.kt` from `codegen-core`.
-    private val model = """
+    private val model =
+        """
         namespace com.test
 
         use smithy.framework#ValidationException
@@ -136,7 +137,9 @@ class ServerInstantiatorTest {
             },
         ])
         string NamedEnum
-    """.asSmithyModel().let { RecursiveShapeBoxer().transform(it) }
+        """.asSmithyModel().let {
+            RecursiveShapeBoxer().transform(it)
+        }
 
     private val codegenContext = serverTestCodegenContext(model)
     private val symbolProvider = codegenContext.symbolProvider
@@ -269,17 +272,19 @@ class ServerInstantiatorTest {
             UnionGenerator(model, symbolProvider, this, nestedUnion).render()
 
             unitTest("writable_for_shapes") {
-                val sut = ServerInstantiator(
-                    codegenContext,
-                    customWritable = object : Instantiator.CustomWritable {
-                        override fun generate(shape: Shape): Writable? =
-                            if (model.lookup<MemberShape>("com.test#NestedStruct\$num") == shape) {
-                                writable("40 + 2")
-                            } else {
-                                null
-                            }
-                    },
-                )
+                val sut =
+                    ServerInstantiator(
+                        codegenContext,
+                        customWritable =
+                            object : Instantiator.CustomWritable {
+                                override fun generate(shape: Shape): Writable? =
+                                    if (model.lookup<MemberShape>("com.test#NestedStruct\$num") == shape) {
+                                        writable("40 + 2")
+                                    } else {
+                                        null
+                                    }
+                            },
+                    )
                 val data = Node.parse("""{ "str": "hello", "num": 1 }""")
                 withBlock("let result = ", ";") {
                     sut.render(this, model.lookup("com.test#NestedStruct"), data as ObjectNode)
@@ -294,39 +299,43 @@ class ServerInstantiatorTest {
 
             unitTest("writable_for_nested_inner_members") {
                 val map = model.lookup<MemberShape>("com.test#Inner\$map")
-                val sut = ServerInstantiator(
-                    codegenContext,
-                    customWritable = object : Instantiator.CustomWritable {
-                        private var n: Int = 0
-                        override fun generate(shape: Shape): Writable? =
-                            if (shape != map) {
-                                null
-                            } else if (n != 2) {
-                                n += 1
-                                null
-                            } else {
-                                n += 1
-                                writable("None")
-                            }
-                    },
-                )
-                val data = Node.parse(
-                    """
-                    {
-                        "map": {
-                            "k1": {
-                                "map": {
-                                    "k2": {
-                                        "map": {
-                                            "never": {}
+                val sut =
+                    ServerInstantiator(
+                        codegenContext,
+                        customWritable =
+                            object : Instantiator.CustomWritable {
+                                private var n: Int = 0
+
+                                override fun generate(shape: Shape): Writable? =
+                                    if (shape != map) {
+                                        null
+                                    } else if (n != 2) {
+                                        n += 1
+                                        null
+                                    } else {
+                                        n += 1
+                                        writable("None")
+                                    }
+                            },
+                    )
+                val data =
+                    Node.parse(
+                        """
+                        {
+                            "map": {
+                                "k1": {
+                                    "map": {
+                                        "k2": {
+                                            "map": {
+                                                "never": {}
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                    """,
-                )
+                        """,
+                    )
 
                 withBlock("let result = ", ";") {
                     sut.render(this, inner, data as ObjectNode)

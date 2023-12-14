@@ -120,26 +120,28 @@ class ServiceConfigGenerator(
 ) {
     private val crateName = codegenContext.moduleUseName()
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "Debug" to RuntimeType.Debug,
-        "SmithyHttpServer" to smithyHttpServer,
-        "PluginStack" to smithyHttpServer.resolve("plugin::PluginStack"),
-        "ModelMarker" to smithyHttpServer.resolve("plugin::ModelMarker"),
-        "HttpMarker" to smithyHttpServer.resolve("plugin::HttpMarker"),
-        "Tower" to RuntimeType.Tower,
-        "Stack" to RuntimeType.Tower.resolve("layer::util::Stack"),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "Debug" to RuntimeType.Debug,
+            "SmithyHttpServer" to smithyHttpServer,
+            "PluginStack" to smithyHttpServer.resolve("plugin::PluginStack"),
+            "ModelMarker" to smithyHttpServer.resolve("plugin::ModelMarker"),
+            "HttpMarker" to smithyHttpServer.resolve("plugin::HttpMarker"),
+            "Tower" to RuntimeType.Tower,
+            "Stack" to RuntimeType.Tower.resolve("layer::util::Stack"),
+        )
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun render(writer: RustWriter) {
-        val unwrapConfigBuilder = if (isBuilderFallible) {
-            """
-            ///    .expect("config failed to build");
-            """
-        } else {
-            ";"
-        }
+        val unwrapConfigBuilder =
+            if (isBuilderFallible) {
+                """
+                ///    .expect("config failed to build");
+                """
+            } else {
+                ";"
+            }
 
         writer.rustTemplate(
             """
@@ -197,12 +199,12 @@ class ServiceConfigGenerator(
                 pub(crate) model_plugins: M,
                 #{BuilderRequiredMethodFlagDefinitions:W}
             }
-            
+
             #{BuilderRequiredMethodError:W}
 
             impl<L, H, M> ${serviceName}ConfigBuilder<L, H, M> {
                 #{InjectedMethods:W}
-            
+
                 /// Add a [`#{Tower}::Layer`] to the service.
                 pub fn layer<NewLayer>(self, layer: NewLayer) -> ${serviceName}ConfigBuilder<#{Stack}<NewLayer, L>, H, M> {
                     ${serviceName}ConfigBuilder {
@@ -246,7 +248,7 @@ class ServiceConfigGenerator(
                         #{BuilderRequiredMethodFlagsMove3:W}
                     }
                 }
-                
+
                 #{BuilderBuildMethod:W}
             }
             """,
@@ -264,182 +266,198 @@ class ServiceConfigGenerator(
 
     private val isBuilderFallible = configMethods.isBuilderFallible()
 
-    private fun builderBuildRequiredMethodChecks() = configMethods.filter { it.isRequired }.map {
-        writable {
-            rustTemplate(
-                """
-                if !self.${it.requiredBuilderFlagName()} {
-                    return #{Err}(${serviceName}ConfigError::${it.requiredErrorVariant()});
-                }
-                """,
-                *codegenScope,
-            )
-        }
-    }.join("\n")
-
-    private fun builderRequiredMethodFlagsDefinitions() = configMethods.filter { it.isRequired }.map {
-        writable { rust("pub(crate) ${it.requiredBuilderFlagName()}: bool,") }
-    }.join("\n")
-
-    private fun builderRequiredMethodFlagsInit() = configMethods.filter { it.isRequired }.map {
-        writable { rust("${it.requiredBuilderFlagName()}: false,") }
-    }.join("\n")
-
-    private fun builderRequiredMethodFlagsMove() = configMethods.filter { it.isRequired }.map {
-        writable { rust("${it.requiredBuilderFlagName()}: self.${it.requiredBuilderFlagName()},") }
-    }.join("\n")
-
-    private fun builderRequiredMethodError() = writable {
-        if (isBuilderFallible) {
-            val variants = configMethods.filter { it.isRequired }.map {
-                writable {
-                    rust(
-                        """
-                    ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
-                    ${it.requiredErrorVariant()},
-                    """,
-                    )
-                }
-            }
-            rustTemplate(
-                """
-                ##[derive(Debug, #{ThisError}::Error)]
-                pub enum ${serviceName}ConfigError {
-                    #{Variants:W}
-                }
-                """,
-                "ThisError" to ServerCargoDependency.ThisError.toType(),
-                "Variants" to variants.join("\n"),
-            )
-        }
-    }
-
-    private fun injectedMethods() = configMethods.map {
-        writable {
-            val paramBindings = it.params.map { binding ->
-                writable { rustTemplate("${binding.name}: #{BindingTy},", "BindingTy" to binding.ty) }
-            }.join("\n")
-
-            // This produces a nested type like: "S<B, S<A, T>>", where
-            // - "S" denotes a "stack type" with two generic type parameters: the first is the "inner" part of the stack
-            //   and the second is the "outer" part  of the stack. The outer part gets executed first. For an example,
-            //   see `aws_smithy_http_server::plugin::PluginStack`.
-            // - "A", "B" are the types of the "things" that are added.
-            // - "T" is the generic type variable name used in the enclosing impl block.
-            fun List<Binding>.stackReturnType(genericTypeVarName: String, stackType: RuntimeType): Writable =
-                this.fold(writable { rust(genericTypeVarName) }) { acc, next ->
-                    writable {
-                        rustTemplate(
-                            "#{StackType}<#{Ty}, #{Acc:W}>",
-                            "StackType" to stackType,
-                            "Ty" to next.ty,
-                            "Acc" to acc,
-                        )
-                    }
-                }
-
-            val layersReturnTy =
-                it.initializer.layerBindings.stackReturnType("L", RuntimeType.Tower.resolve("layer::util::Stack"))
-            val httpPluginsReturnTy =
-                it.initializer.httpPluginBindings.stackReturnType("H", smithyHttpServer.resolve("plugin::PluginStack"))
-            val modelPluginsReturnTy =
-                it.initializer.modelPluginBindings.stackReturnType("M", smithyHttpServer.resolve("plugin::PluginStack"))
-
-            val configBuilderReturnTy = writable {
+    private fun builderBuildRequiredMethodChecks() =
+        configMethods.filter { it.isRequired }.map {
+            writable {
                 rustTemplate(
                     """
-                    ${serviceName}ConfigBuilder<
-                        #{LayersReturnTy:W},
-                        #{HttpPluginsReturnTy:W},
-                        #{ModelPluginsReturnTy:W},
-                    >
-                    """,
-                    "LayersReturnTy" to layersReturnTy,
-                    "HttpPluginsReturnTy" to httpPluginsReturnTy,
-                    "ModelPluginsReturnTy" to modelPluginsReturnTy,
-                )
-            }
-
-            val returnTy = if (it.errorType != null) {
-                writable {
-                    rustTemplate(
-                        "#{Result}<#{T:W}, #{E}>",
-                        "T" to configBuilderReturnTy,
-                        "E" to it.errorType,
-                        *codegenScope,
-                    )
-                }
-            } else {
-                configBuilderReturnTy
-            }
-
-            docs(it.docs)
-            rustBlockTemplate(
-                """
-                pub fn ${it.name}(
-                    ##[allow(unused_mut)]
-                    mut self,
-                    #{ParamBindings:W}
-                ) -> #{ReturnTy:W}
-                """,
-                "ReturnTy" to returnTy,
-                "ParamBindings" to paramBindings,
-            ) {
-                rustTemplate("#{InitializerCode:W}", "InitializerCode" to it.initializer.code)
-
-                check(it.initializer.layerBindings.size + it.initializer.httpPluginBindings.size + it.initializer.modelPluginBindings.size > 0) {
-                    "This method's initializer does not register any layers, HTTP plugins, or model plugins. It must register at least something!"
-                }
-
-                if (it.isRequired) {
-                    rust("self.${it.requiredBuilderFlagName()} = true;")
-                }
-                conditionalBlock("Ok(", ")", conditional = it.errorType != null) {
-                    val registrations = (
-                        it.initializer.layerBindings.map { ".layer(${it.name})" } +
-                            it.initializer.httpPluginBindings.map { ".http_plugin(${it.name})" } +
-                            it.initializer.modelPluginBindings.map { ".model_plugin(${it.name})" }
-                        ).joinToString("")
-                    rust("self$registrations")
-                }
-            }
-        }
-    }.join("\n\n")
-
-    private fun builderBuildReturnType() = writable {
-        val t = "super::${serviceName}Config<L, H, M>"
-
-        if (isBuilderFallible) {
-            rustTemplate("#{Result}<$t, ${serviceName}ConfigError>", *codegenScope)
-        } else {
-            rust(t)
-        }
-    }
-
-    private fun builderBuildMethod() = writable {
-        rustBlockTemplate(
-            """
-            /// Build the configuration.
-            pub fn build(self) -> #{BuilderBuildReturnTy:W}
-            """,
-            "BuilderBuildReturnTy" to builderBuildReturnType(),
-        ) {
-            rustTemplate(
-                "#{BuilderBuildRequiredMethodChecks:W}",
-                "BuilderBuildRequiredMethodChecks" to builderBuildRequiredMethodChecks(),
-            )
-
-            conditionalBlock("Ok(", ")", isBuilderFallible) {
-                rust(
-                    """
-                    super::${serviceName}Config {
-                        layers: self.layers,
-                        http_plugins: self.http_plugins,
-                        model_plugins: self.model_plugins,
+                    if !self.${it.requiredBuilderFlagName()} {
+                        return #{Err}(${serviceName}ConfigError::${it.requiredErrorVariant()});
                     }
                     """,
+                    *codegenScope,
+                )
+            }
+        }.join("\n")
+
+    private fun builderRequiredMethodFlagsDefinitions() =
+        configMethods.filter { it.isRequired }.map {
+            writable { rust("pub(crate) ${it.requiredBuilderFlagName()}: bool,") }
+        }.join("\n")
+
+    private fun builderRequiredMethodFlagsInit() =
+        configMethods.filter { it.isRequired }.map {
+            writable { rust("${it.requiredBuilderFlagName()}: false,") }
+        }.join("\n")
+
+    private fun builderRequiredMethodFlagsMove() =
+        configMethods.filter { it.isRequired }.map {
+            writable { rust("${it.requiredBuilderFlagName()}: self.${it.requiredBuilderFlagName()},") }
+        }.join("\n")
+
+    private fun builderRequiredMethodError() =
+        writable {
+            if (isBuilderFallible) {
+                val variants =
+                    configMethods.filter { it.isRequired }.map {
+                        writable {
+                            rust(
+                                """
+                                ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
+                                ${it.requiredErrorVariant()},
+                                """,
+                            )
+                        }
+                    }
+                rustTemplate(
+                    """
+                    ##[derive(Debug, #{ThisError}::Error)]
+                    pub enum ${serviceName}ConfigError {
+                        #{Variants:W}
+                    }
+                    """,
+                    "ThisError" to ServerCargoDependency.ThisError.toType(),
+                    "Variants" to variants.join("\n"),
                 )
             }
         }
-    }
+
+    private fun injectedMethods() =
+        configMethods.map {
+            writable {
+                val paramBindings =
+                    it.params.map { binding ->
+                        writable { rustTemplate("${binding.name}: #{BindingTy},", "BindingTy" to binding.ty) }
+                    }.join("\n")
+
+                // This produces a nested type like: "S<B, S<A, T>>", where
+                // - "S" denotes a "stack type" with two generic type parameters: the first is the "inner" part of the stack
+                //   and the second is the "outer" part  of the stack. The outer part gets executed first. For an example,
+                //   see `aws_smithy_http_server::plugin::PluginStack`.
+                // - "A", "B" are the types of the "things" that are added.
+                // - "T" is the generic type variable name used in the enclosing impl block.
+                fun List<Binding>.stackReturnType(
+                    genericTypeVarName: String,
+                    stackType: RuntimeType,
+                ): Writable =
+                    this.fold(writable { rust(genericTypeVarName) }) { acc, next ->
+                        writable {
+                            rustTemplate(
+                                "#{StackType}<#{Ty}, #{Acc:W}>",
+                                "StackType" to stackType,
+                                "Ty" to next.ty,
+                                "Acc" to acc,
+                            )
+                        }
+                    }
+
+                val layersReturnTy =
+                    it.initializer.layerBindings.stackReturnType("L", RuntimeType.Tower.resolve("layer::util::Stack"))
+                val httpPluginsReturnTy =
+                    it.initializer.httpPluginBindings.stackReturnType("H", smithyHttpServer.resolve("plugin::PluginStack"))
+                val modelPluginsReturnTy =
+                    it.initializer.modelPluginBindings.stackReturnType("M", smithyHttpServer.resolve("plugin::PluginStack"))
+
+                val configBuilderReturnTy =
+                    writable {
+                        rustTemplate(
+                            """
+                            ${serviceName}ConfigBuilder<
+                                #{LayersReturnTy:W},
+                                #{HttpPluginsReturnTy:W},
+                                #{ModelPluginsReturnTy:W},
+                            >
+                            """,
+                            "LayersReturnTy" to layersReturnTy,
+                            "HttpPluginsReturnTy" to httpPluginsReturnTy,
+                            "ModelPluginsReturnTy" to modelPluginsReturnTy,
+                        )
+                    }
+
+                val returnTy =
+                    if (it.errorType != null) {
+                        writable {
+                            rustTemplate(
+                                "#{Result}<#{T:W}, #{E}>",
+                                "T" to configBuilderReturnTy,
+                                "E" to it.errorType,
+                                *codegenScope,
+                            )
+                        }
+                    } else {
+                        configBuilderReturnTy
+                    }
+
+                docs(it.docs)
+                rustBlockTemplate(
+                    """
+                    pub fn ${it.name}(
+                        ##[allow(unused_mut)]
+                        mut self,
+                        #{ParamBindings:W}
+                    ) -> #{ReturnTy:W}
+                    """,
+                    "ReturnTy" to returnTy,
+                    "ParamBindings" to paramBindings,
+                ) {
+                    rustTemplate("#{InitializerCode:W}", "InitializerCode" to it.initializer.code)
+
+                    check(it.initializer.layerBindings.size + it.initializer.httpPluginBindings.size + it.initializer.modelPluginBindings.size > 0) {
+                        "This method's initializer does not register any layers, HTTP plugins, or model plugins. It must register at least something!"
+                    }
+
+                    if (it.isRequired) {
+                        rust("self.${it.requiredBuilderFlagName()} = true;")
+                    }
+                    conditionalBlock("Ok(", ")", conditional = it.errorType != null) {
+                        val registrations =
+                            (
+                                it.initializer.layerBindings.map { ".layer(${it.name})" } +
+                                    it.initializer.httpPluginBindings.map { ".http_plugin(${it.name})" } +
+                                    it.initializer.modelPluginBindings.map { ".model_plugin(${it.name})" }
+                            ).joinToString("")
+                        rust("self$registrations")
+                    }
+                }
+            }
+        }.join("\n\n")
+
+    private fun builderBuildReturnType() =
+        writable {
+            val t = "super::${serviceName}Config<L, H, M>"
+
+            if (isBuilderFallible) {
+                rustTemplate("#{Result}<$t, ${serviceName}ConfigError>", *codegenScope)
+            } else {
+                rust(t)
+            }
+        }
+
+    private fun builderBuildMethod() =
+        writable {
+            rustBlockTemplate(
+                """
+                /// Build the configuration.
+                pub fn build(self) -> #{BuilderBuildReturnTy:W}
+                """,
+                "BuilderBuildReturnTy" to builderBuildReturnType(),
+            ) {
+                rustTemplate(
+                    "#{BuilderBuildRequiredMethodChecks:W}",
+                    "BuilderBuildRequiredMethodChecks" to builderBuildRequiredMethodChecks(),
+                )
+
+                conditionalBlock("Ok(", ")", isBuilderFallible) {
+                    rust(
+                        """
+                        super::${serviceName}Config {
+                            layers: self.layers,
+                            http_plugins: self.http_plugins,
+                            model_plugins: self.model_plugins,
+                        }
+                        """,
+                    )
+                }
+            }
+        }
 }

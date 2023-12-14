@@ -63,11 +63,12 @@ class MapConstraintViolationGenerator(
         }
         val constraintViolationCodegenScope = constraintViolationCodegenScopeMutableList.toTypedArray()
 
-        val constraintViolationVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
+        val constraintViolationVisibility =
+            if (publicConstrainedTypes) {
+                Visibility.PUBLIC
+            } else {
+                Visibility.PUBCRATE
+            }
 
         inlineModuleCreator(constraintViolationSymbol) {
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
@@ -94,13 +95,14 @@ class MapConstraintViolationGenerator(
                         #{MapShapeConstraintViolationImplBlock}
                     }
                     """,
-                    "MapShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.mapShapeConstraintViolationImplBlock(
-                        shape,
-                        keyShape,
-                        valueShape,
-                        symbolProvider,
-                        model,
-                    ),
+                    "MapShapeConstraintViolationImplBlock" to
+                        validationExceptionConversionGenerator.mapShapeConstraintViolationImplBlock(
+                            shape,
+                            keyShape,
+                            valueShape,
+                            symbolProvider,
+                            model,
+                        ),
                 )
             }
         }

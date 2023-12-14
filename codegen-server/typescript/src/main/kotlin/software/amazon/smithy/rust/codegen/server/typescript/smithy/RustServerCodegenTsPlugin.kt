@@ -78,28 +78,27 @@ class RustServerCodegenTsPlugin : SmithyBuildPlugin {
             constrainedTypes: Boolean = true,
             includeConstrainedShapeProvider: Boolean = true,
             codegenDecorator: ServerCodegenDecorator,
-        ) =
-            TsServerSymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
-                // Generate public constrained types for directly constrained shapes.
-                // In the Typescript server project, this is only done to generate constrained types for simple shapes (e.g.
-                // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
-                .let {
-                    if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
-                }
-                // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
-                // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
-                // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
-                .let { ConstrainedShapeSymbolMetadataProvider(it, constrainedTypes) }
-                // Streaming shapes need different derives (e.g. they cannot derive Eq)
-                .let { TsStreamingShapeMetadataProvider(it) }
-                // Derive `Eq` and `Hash` if possible.
-                .let { DeriveEqAndHashSymbolMetadataProvider(it) }
-                // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
-                // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
-                // Allows decorators to inject a custom symbol provider
-                .let { codegenDecorator.symbolProvider(it) }
+        ) = TsServerSymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
+            // Generate public constrained types for directly constrained shapes.
+            // In the Typescript server project, this is only done to generate constrained types for simple shapes (e.g.
+            // a `string` shape with the `length` trait), but these always remain `pub(crate)`.
+            .let {
+                if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
+            }
+            // Generate different types for EventStream shapes (e.g. transcribe streaming)
+            .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
+            // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
+            .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
+            // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
+            .let { ConstrainedShapeSymbolMetadataProvider(it, constrainedTypes) }
+            // Streaming shapes need different derives (e.g. they cannot derive Eq)
+            .let { TsStreamingShapeMetadataProvider(it) }
+            // Derive `Eq` and `Hash` if possible.
+            .let { DeriveEqAndHashSymbolMetadataProvider(it) }
+            // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
+            // be the name of an operation input
+            .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
+            // Allows decorators to inject a custom symbol provider
+            .let { codegenDecorator.symbolProvider(it) }
     }
 }

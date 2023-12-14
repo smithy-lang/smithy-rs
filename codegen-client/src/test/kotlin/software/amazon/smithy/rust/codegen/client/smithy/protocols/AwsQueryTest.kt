@@ -10,7 +10,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class AwsQueryTest {
-    private val model = """
+    private val model =
+        """
         namespace test
         use aws.protocols#awsQuery
 
@@ -31,7 +32,7 @@ class AwsQueryTest {
             a: String,
             b: Integer
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generate an aws query service that compiles`() {
