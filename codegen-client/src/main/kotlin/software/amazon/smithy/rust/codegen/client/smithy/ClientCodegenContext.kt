@@ -35,9 +35,10 @@ data class ClientCodegenContext(
     val rootDecorator: ClientCodegenDecorator,
     val protocolImpl: Protocol? = null,
 ) : CodegenContext(
-    model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
-) {
+        model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.CLIENT,
+    ) {
     val enableUserConfigurableRuntimePlugins: Boolean get() = settings.codegenConfig.enableUserConfigurableRuntimePlugins
+
     override fun builderInstantiator(): BuilderInstantiator {
         return ClientBuilderInstantiator(this)
     }

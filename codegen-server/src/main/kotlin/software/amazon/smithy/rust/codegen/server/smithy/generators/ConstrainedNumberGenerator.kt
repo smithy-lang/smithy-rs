@@ -50,13 +50,14 @@ class ConstrainedNumberGenerator(
     val constrainedShapeSymbolProvider = codegenContext.constrainedShapeSymbolProvider
     val publicConstrainedTypes = codegenContext.settings.codegenConfig.publicConstrainedTypes
 
-    private val unconstrainedType = when (shape) {
-        is ByteShape -> RustType.Integer(8)
-        is ShortShape -> RustType.Integer(16)
-        is IntegerShape -> RustType.Integer(32)
-        is LongShape -> RustType.Integer(64)
-        else -> UNREACHABLE("Trying to generate a constrained number for an unsupported Smithy number shape")
-    }
+    private val unconstrainedType =
+        when (shape) {
+            is ByteShape -> RustType.Integer(8)
+            is ShortShape -> RustType.Integer(16)
+            is IntegerShape -> RustType.Integer(32)
+            is LongShape -> RustType.Integer(64)
+            else -> UNREACHABLE("Trying to generate a constrained number for an unsupported Smithy number shape")
+        }
 
     private val constraintViolationSymbolProvider =
         with(codegenContext.constraintViolationSymbolProvider) {
@@ -158,46 +159,52 @@ class ConstrainedNumberGenerator(
 }
 
 data class Range(val rangeTrait: RangeTrait) {
-    fun toTraitInfo(): TraitInfo = TraitInfo(
-        { rust("Self::check_range(value)?;") },
-        { docs("Error when a number doesn't satisfy its `@range` requirements.") },
-        {
-            rust(
-                """
-                Self::Range(_) => crate::model::ValidationExceptionField {
-                    message: format!("${rangeTrait.validationErrorMessage()}", &path),
-                    path,
-                },
-                """,
-            )
-        },
-        this::renderValidationFunction,
-    )
+    fun toTraitInfo(): TraitInfo =
+        TraitInfo(
+            { rust("Self::check_range(value)?;") },
+            { docs("Error when a number doesn't satisfy its `@range` requirements.") },
+            {
+                rust(
+                    """
+                    Self::Range(_) => crate::model::ValidationExceptionField {
+                        message: format!("${rangeTrait.validationErrorMessage()}", &path),
+                        path,
+                    },
+                    """,
+                )
+            },
+            this::renderValidationFunction,
+        )
 
     /**
      * Renders a `check_range` function to validate that the value matches the
      * required range indicated by the `@range` trait.
      */
-    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
-        val valueVariableName = "value"
-        val condition = if (rangeTrait.min.isPresent && rangeTrait.max.isPresent) {
-            "(${rangeTrait.min.get()}..=${rangeTrait.max.get()}).contains(&$valueVariableName)"
-        } else if (rangeTrait.min.isPresent) {
-            "${rangeTrait.min.get()} <= $valueVariableName"
-        } else {
-            "$valueVariableName <= ${rangeTrait.max.get()}"
-        }
-
-        rust(
-            """
-            fn check_range($valueVariableName: $unconstrainedTypeName) -> Result<(), $constraintViolation> {
-                if $condition {
-                    Ok(())
+    private fun renderValidationFunction(
+        constraintViolation: Symbol,
+        unconstrainedTypeName: String,
+    ): Writable =
+        {
+            val valueVariableName = "value"
+            val condition =
+                if (rangeTrait.min.isPresent && rangeTrait.max.isPresent) {
+                    "(${rangeTrait.min.get()}..=${rangeTrait.max.get()}).contains(&$valueVariableName)"
+                } else if (rangeTrait.min.isPresent) {
+                    "${rangeTrait.min.get()} <= $valueVariableName"
                 } else {
-                    Err($constraintViolation::Range($valueVariableName))
+                    "$valueVariableName <= ${rangeTrait.max.get()}"
                 }
-            }
-            """,
-        )
-    }
+
+            rust(
+                """
+                fn check_range($valueVariableName: $unconstrainedTypeName) -> Result<(), $constraintViolation> {
+                    if $condition {
+                        Ok(())
+                    } else {
+                        Err($constraintViolation::Range($valueVariableName))
+                    }
+                }
+                """,
+            )
+        }
 }

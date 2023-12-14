@@ -41,7 +41,6 @@ class PythonServerStructureGenerator(
     private val writer: RustWriter,
     private val shape: StructureShape,
 ) : StructureGenerator(model, codegenContext.symbolProvider, writer, shape, emptyList(), codegenContext.structSettings()) {
-
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val pyO3 = PythonServerCargoDependency.PyO3.toType()
@@ -151,13 +150,19 @@ class PythonServerStructureGenerator(
             rust("/// :rtype ${PythonType.None.renderAsDocstring()}:")
         }
 
-    private fun renderMemberSignature(shape: MemberShape, symbol: Symbol): Writable =
+    private fun renderMemberSignature(
+        shape: MemberShape,
+        symbol: Symbol,
+    ): Writable =
         writable {
             val pythonType = memberPythonType(shape, symbol)
             rust("/// :type ${pythonType.renderAsDocstring()}:")
         }
 
-    private fun memberPythonType(shape: MemberShape, symbol: Symbol): PythonType =
+    private fun memberPythonType(
+        shape: MemberShape,
+        symbol: Symbol,
+    ): PythonType =
         if (shape.isEventStream(model)) {
             val eventStreamSymbol = PythonEventStreamSymbolProvider.parseSymbol(symbol)
             val innerT = eventStreamSymbol.innerT.pythonType(libName)

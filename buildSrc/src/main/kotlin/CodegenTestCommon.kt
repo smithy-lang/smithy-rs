@@ -22,44 +22,52 @@ data class CodegenTest(
     val imports: List<String> = emptyList(),
 )
 
-fun generateImports(imports: List<String>): String = if (imports.isEmpty()) {
-    ""
-} else {
-    "\"imports\": [${imports.map { "\"$it\"" }.joinToString(", ")}],"
-}
+fun generateImports(imports: List<String>): String =
+    if (imports.isEmpty()) {
+        ""
+    } else {
+        "\"imports\": [${imports.map { "\"$it\"" }.joinToString(", ")}],"
+    }
 
-private fun generateSmithyBuild(projectDir: String, pluginName: String, tests: List<CodegenTest>): String {
-    val projections = tests.joinToString(",\n") {
-        """
-        "${it.module}": {
-            ${generateImports(it.imports)}
-            "plugins": {
-                "$pluginName": {
-                    "runtimeConfig": {
-                        "relativePath": "$projectDir/rust-runtime"
-                    },
-                    "codegen": {
-                        ${it.extraCodegenConfig ?: ""}
-                    },
-                    "service": "${it.service}",
-                    "module": "${it.module}",
-                    "moduleVersion": "0.0.1",
-                    "moduleDescription": "test",
-                    "moduleAuthors": ["protocoltest@example.com"]
-                    ${it.extraConfig ?: ""}
+private fun generateSmithyBuild(
+    projectDir: String,
+    pluginName: String,
+    tests: List<CodegenTest>,
+): String {
+    val projections =
+        tests.joinToString(",\n") {
+            """
+            "${it.module}": {
+                ${generateImports(it.imports)}
+                "plugins": {
+                    "$pluginName": {
+                        "runtimeConfig": {
+                            "relativePath": "$projectDir/rust-runtime"
+                        },
+                        "codegen": {
+                            ${it.extraCodegenConfig ?: ""}
+                        },
+                        "service": "${it.service}",
+                        "module": "${it.module}",
+                        "moduleVersion": "0.0.1",
+                        "moduleDescription": "test",
+                        "moduleAuthors": ["protocoltest@example.com"]
+                        ${it.extraConfig ?: ""}
+                    }
                 }
             }
+            """.trimIndent()
         }
-        """.trimIndent()
-    }
-    return """
+    return (
+        """
         {
             "version": "1.0",
             "projections": {
                 $projections
             }
         }
-    """.trimIndent()
+        """.trimIndent()
+    )
 }
 
 enum class Cargo(val toString: String) {
@@ -69,26 +77,34 @@ enum class Cargo(val toString: String) {
     CLIPPY("cargoClippy"),
 }
 
-private fun generateCargoWorkspace(pluginName: String, tests: List<CodegenTest>) =
+private fun generateCargoWorkspace(
+    pluginName: String,
+    tests: List<CodegenTest>,
+) = (
     """
     [workspace]
     members = [
         ${tests.joinToString(",") { "\"${it.module}/$pluginName\"" }}
     ]
     """.trimIndent()
+)
 
 /**
  * Filter the service integration tests for which to generate Rust crates in [allTests] using the given [properties].
  */
-private fun codegenTests(properties: PropertyRetriever, allTests: List<CodegenTest>): List<CodegenTest> {
+private fun codegenTests(
+    properties: PropertyRetriever,
+    allTests: List<CodegenTest>,
+): List<CodegenTest> {
     val modulesOverride = properties.get("modules")?.split(",")?.map { it.trim() }
 
-    val ret = if (modulesOverride != null) {
-        println("modulesOverride: $modulesOverride")
-        allTests.filter { modulesOverride.contains(it.module) }
-    } else {
-        allTests
-    }
+    val ret =
+        if (modulesOverride != null) {
+            println("modulesOverride: $modulesOverride")
+            allTests.filter { modulesOverride.contains(it.module) }
+        } else {
+            allTests
+        }
     require(ret.isNotEmpty()) {
         "None of the provided module overrides (`$modulesOverride`) are valid test services (`${
             allTests.map {
@@ -106,22 +122,24 @@ val AllCargoCommands = listOf(Cargo.CHECK, Cargo.TEST, Cargo.CLIPPY, Cargo.DOCS)
  * The list of Cargo commands that is run by default is defined in [AllCargoCommands].
  */
 fun cargoCommands(properties: PropertyRetriever): List<Cargo> {
-    val cargoCommandsOverride = properties.get("cargoCommands")?.split(",")?.map { it.trim() }?.map {
-        when (it) {
-            "check" -> Cargo.CHECK
-            "test" -> Cargo.TEST
-            "doc" -> Cargo.DOCS
-            "clippy" -> Cargo.CLIPPY
-            else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `doc`, `clippy`)")
+    val cargoCommandsOverride =
+        properties.get("cargoCommands")?.split(",")?.map { it.trim() }?.map {
+            when (it) {
+                "check" -> Cargo.CHECK
+                "test" -> Cargo.TEST
+                "doc" -> Cargo.DOCS
+                "clippy" -> Cargo.CLIPPY
+                else -> throw IllegalArgumentException("Unexpected Cargo command `$it` (valid commands are `check`, `test`, `doc`, `clippy`)")
+            }
         }
-    }
 
-    val ret = if (cargoCommandsOverride != null) {
-        println("cargoCommandsOverride: $cargoCommandsOverride")
-        AllCargoCommands.filter { cargoCommandsOverride.contains(it) }
-    } else {
-        AllCargoCommands
-    }
+    val ret =
+        if (cargoCommandsOverride != null) {
+            println("cargoCommandsOverride: $cargoCommandsOverride")
+            AllCargoCommands.filter { cargoCommandsOverride.contains(it) }
+        } else {
+            AllCargoCommands
+        }
     require(ret.isNotEmpty()) {
         "None of the provided cargo commands (`$cargoCommandsOverride`) are valid cargo commands (`${
             AllCargoCommands.map {
@@ -156,12 +174,13 @@ fun Project.registerGenerateSmithyBuildTask(
 
             // If this is a rebuild, cache all the hashes of the generated Rust files. These are later used by the
             // `modifyMtime` task.
-            project.extra[previousBuildHashesKey] = project.buildDir.walk()
-                .filter { it.isFile }
-                .map {
-                    getChecksumForFile(it) to it.lastModified()
-                }
-                .toMap()
+            project.extra[previousBuildHashesKey] =
+                project.buildDir.walk()
+                    .filter { it.isFile }
+                    .map {
+                        getChecksumForFile(it) to it.lastModified()
+                    }
+                    .toMap()
         }
     }
 }
@@ -182,9 +201,7 @@ fun Project.registerGenerateCargoWorkspaceTask(
     }
 }
 
-fun Project.registerGenerateCargoConfigTomlTask(
-    outputDir: File,
-) {
+fun Project.registerGenerateCargoConfigTomlTask(outputDir: File) {
     this.tasks.register("generateCargoConfigToml") {
         description = "generate `.cargo/config.toml`"
         doFirst {

@@ -37,11 +37,12 @@ inline fun <reified T : AdHocSection> adhocCustomization(
     crossinline customization: RustWriter.(T) -> Unit,
 ): AdHocCustomization =
     object : AdHocCustomization() {
-        override fun section(section: AdHocSection): Writable = writable {
-            if (section is T) {
-                customization(section)
+        override fun section(section: AdHocSection): Writable =
+            writable {
+                if (section is T) {
+                    customization(section)
+                }
             }
-        }
     }
 
 /**
@@ -51,11 +52,15 @@ inline fun <reified T : AdHocSection> adhocCustomization(
  */
 abstract class NamedCustomization<T : Section> {
     abstract fun section(section: T): Writable
+
     protected val emptySection = writable { }
 }
 
 /** Convenience for rendering a list of customizations for a given section */
-fun <T : Section> RustWriter.writeCustomizations(customizations: List<NamedCustomization<T>>, section: T) {
+fun <T : Section> RustWriter.writeCustomizations(
+    customizations: List<NamedCustomization<T>>,
+    section: T,
+) {
     for (customization in customizations) {
         customization.section(section)(this)
     }

@@ -76,7 +76,11 @@ fun <T : AbstractCodeWriter<T>> T.withBlock(
     return conditionalBlock(textBeforeNewLine, textAfterNewLine, conditional = true, block = block, args = args)
 }
 
-fun <T : AbstractCodeWriter<T>> T.assignment(variableName: String, vararg ctx: Pair<String, Any>, block: T.() -> Unit) {
+fun <T : AbstractCodeWriter<T>> T.assignment(
+    variableName: String,
+    vararg ctx: Pair<String, Any>,
+    block: T.() -> Unit,
+) {
     withBlockTemplate("let $variableName =", ";", *ctx) {
         block()
     }
@@ -185,26 +189,31 @@ fun RustWriter.rustInline(
     this.writeInline(contents, *args)
 }
 
-/* rewrite #{foo} to #{foo:T} (the smithy template format) */
-private fun transformTemplate(template: String, scope: Array<out Pair<String, Any>>, trim: Boolean = true): String {
+// rewrite #{foo} to #{foo:T} (the smithy template format)
+private fun transformTemplate(
+    template: String,
+    scope: Array<out Pair<String, Any>>,
+    trim: Boolean = true,
+): String {
     check(
         scope.distinctBy {
             it.first.lowercase()
         }.size == scope.distinctBy { it.first }.size,
     ) { "Duplicate cased keys not supported" }
-    val output = template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
-        val keyName = matchResult.groupValues[1]
-        val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
-        if (!scope.toMap().keys.contains(keyName)) {
-            throw CodegenException(
-                """
-                Rust block template expected `$keyName` but was not present in template.
-                Hint: Template contains: ${scope.map { "`${it.first}`" }}
-                """.trimIndent(),
-            )
+    val output =
+        template.replace(Regex("""#\{([a-zA-Z_0-9]+)(:\w)?\}""")) { matchResult ->
+            val keyName = matchResult.groupValues[1]
+            val templateType = matchResult.groupValues[2].ifEmpty { ":T" }
+            if (!scope.toMap().keys.contains(keyName)) {
+                throw CodegenException(
+                    """
+                    Rust block template expected `$keyName` but was not present in template.
+                    Hint: Template contains: ${scope.map { "`${it.first}`" }}
+                    """.trimIndent(),
+                )
+            }
+            "#{${keyName.lowercase()}$templateType}"
         }
-        "#{${keyName.lowercase()}$templateType}"
-    }
 
     return output.letIf(trim) { output.trim() }
 }
@@ -298,13 +307,14 @@ fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
     autoSuppressMissingDocs: Boolean = true,
     note: String? = null,
 ): T {
-    val htmlDocs: (T.() -> Unit)? = when (docString?.isNotBlank()) {
-        true -> {
-            { docs(normalizeHtml(escape(docString))) }
-        }
+    val htmlDocs: (T.() -> Unit)? =
+        when (docString?.isNotBlank()) {
+            true -> {
+                { docs(normalizeHtml(escape(docString))) }
+            }
 
-        else -> null
-    }
+            else -> null
+        }
     return docsOrFallback(htmlDocs, autoSuppressMissingDocs, note)
 }
 
@@ -334,7 +344,11 @@ fun <T : AbstractCodeWriter<T>> T.docsOrFallback(
  * Document the containing entity (e.g. module, crate, etc.)
  * Instead of prefixing lines with `///` lines are prefixed with `//!`
  */
-fun RustWriter.containerDocs(text: String, vararg args: Any, trimStart: Boolean = true): RustWriter {
+fun RustWriter.containerDocs(
+    text: String,
+    vararg args: Any,
+    trimStart: Boolean = true,
+): RustWriter {
     return docs(text, newlinePrefix = "//! ", args = args, trimStart = trimStart)
 }
 
@@ -366,13 +380,14 @@ fun <T : AbstractCodeWriter<T>> T.docs(
     this.ensureNewline()
     pushState()
     setNewlinePrefix(newlinePrefix)
-    val cleaned = text.lines()
-        .joinToString("\n") {
-            when (trimStart) {
-                true -> it.trimStart()
-                else -> it
-            }.replace("\t", "  ") // Rustdoc warns on tabs in documentation
-        }
+    val cleaned =
+        text.lines()
+            .joinToString("\n") {
+                when (trimStart) {
+                    true -> it.trimStart()
+                    else -> it
+                }.replace("\t", "  ") // Rustdoc warns on tabs in documentation
+            }
     write(cleaned, *args)
     popState()
     return this
@@ -386,16 +401,20 @@ fun <T : AbstractCodeWriter<T>> T.docsTemplate(
     vararg args: Pair<String, Any>,
     newlinePrefix: String = "/// ",
     trimStart: Boolean = false,
-): T = withTemplate(text, args, trim = false) { template ->
-    docs(template, newlinePrefix = newlinePrefix, trimStart = trimStart)
-}
+): T =
+    withTemplate(text, args, trim = false) { template ->
+        docs(template, newlinePrefix = newlinePrefix, trimStart = trimStart)
+    }
 
 /**
  * Writes a comment into the code
  *
  * Equivalent to [docs] but lines are preceded with `// ` instead of `///`
  */
-fun <T : AbstractCodeWriter<T>> T.comment(text: String, vararg args: Any): T {
+fun <T : AbstractCodeWriter<T>> T.comment(
+    text: String,
+    vararg args: Any,
+): T {
     return docs(text, *args, newlinePrefix = "// ")
 }
 
@@ -441,19 +460,28 @@ private fun Element.changeInto(tagName: String) {
 }
 
 /** Write an `impl` block for the given symbol */
-fun RustWriter.implBlock(symbol: Symbol, block: Writable) {
+fun RustWriter.implBlock(
+    symbol: Symbol,
+    block: Writable,
+) {
     rustBlock("impl ${symbol.name}") {
         block()
     }
 }
 
 /** Write a `#[cfg(feature = "...")]` block for the given feature */
-fun RustWriter.featureGateBlock(feature: String, block: Writable) {
+fun RustWriter.featureGateBlock(
+    feature: String,
+    block: Writable,
+) {
     featureGatedBlock(feature, block)(this)
 }
 
 /** Write a `#[cfg(feature = "...")]` block for the given feature */
-fun featureGatedBlock(feature: String, block: Writable): Writable {
+fun featureGatedBlock(
+    feature: String,
+    block: Writable,
+): Writable {
     return writable {
         rustBlock("##[cfg(feature = ${feature.dq()})]") {
             block()
@@ -461,7 +489,10 @@ fun featureGatedBlock(feature: String, block: Writable): Writable {
     }
 }
 
-fun featureGatedBlock(feature: Feature, block: Writable): Writable {
+fun featureGatedBlock(
+    feature: Feature,
+    block: Writable,
+): Writable {
     return writable {
         rustBlock("##[cfg(feature = ${feature.name.dq()})]") {
             block()
@@ -477,10 +508,12 @@ fun RustWriter.raw(text: String) = writeInline(escape(text))
 /**
  * [rustTemplate] equivalent for `raw()`. Note: This function won't automatically escape formatter symbols.
  */
-fun RustWriter.rawTemplate(text: String, vararg args: Pair<String, Any>) =
-    withTemplate(text, args, trim = false) { templated ->
-        writeInline(templated)
-    }
+fun RustWriter.rawTemplate(
+    text: String,
+    vararg args: Pair<String, Any>,
+) = withTemplate(text, args, trim = false) { templated ->
+    writeInline(templated)
+}
 
 /**
  * Rustdoc doesn't support `r#` for raw identifiers.
@@ -499,353 +532,391 @@ class RustWriter private constructor(
     val devDependenciesOnly: Boolean = false,
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
+        companion object {
+            fun root() = forModule(null)
 
-    companion object {
-        fun root() = forModule(null)
-        fun forModule(module: String?): RustWriter = if (module == null) {
-            RustWriter("lib.rs", "crate")
-        } else {
-            RustWriter("$module.rs", "crate::$module")
-        }
+            fun forModule(module: String?): RustWriter =
+                if (module == null) {
+                    RustWriter("lib.rs", "crate")
+                } else {
+                    RustWriter("$module.rs", "crate::$module")
+                }
 
-        fun factory(debugMode: Boolean): Factory<RustWriter> = Factory { fileName: String, namespace: String ->
-            when {
-                fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
-                fileName.endsWith(".py") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
-                fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
-                fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
-                fileName.startsWith("tests/") -> RustWriter(
+            fun factory(debugMode: Boolean): Factory<RustWriter> =
+                Factory { fileName: String, namespace: String ->
+                    when {
+                        fileName.endsWith(".toml") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
+                        fileName.endsWith(".py") -> RustWriter(fileName, namespace, "#", debugMode = debugMode)
+                        fileName.endsWith(".md") -> rawWriter(fileName, debugMode = debugMode)
+                        fileName == "LICENSE" -> rawWriter(fileName, debugMode = debugMode)
+                        fileName.startsWith("tests/") ->
+                            RustWriter(
+                                fileName,
+                                namespace,
+                                debugMode = debugMode,
+                                devDependenciesOnly = true,
+                            )
+
+                        fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
+                        fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
+                        else -> RustWriter(fileName, namespace, debugMode = debugMode)
+                    }
+                }
+
+            fun toml(
+                fileName: String,
+                debugMode: Boolean = false,
+            ): RustWriter =
+                RustWriter(
                     fileName,
-                    namespace,
+                    namespace = "ignore",
+                    commentCharacter = "#",
+                    printWarning = false,
                     debugMode = debugMode,
-                    devDependenciesOnly = true,
                 )
 
-                fileName == "package.json" -> rawWriter(fileName, debugMode = debugMode)
-                fileName == "stubgen.sh" -> rawWriter(fileName, debugMode = debugMode)
-                else -> RustWriter(fileName, namespace, debugMode = debugMode)
-            }
-        }
-
-        fun toml(fileName: String, debugMode: Boolean = false): RustWriter =
-            RustWriter(
-                fileName,
-                namespace = "ignore",
-                commentCharacter = "#",
-                printWarning = false,
-                debugMode = debugMode,
-            )
-
-        private fun rawWriter(fileName: String, debugMode: Boolean): RustWriter =
-            RustWriter(
-                fileName,
-                namespace = "ignore",
-                commentCharacter = "ignore",
-                printWarning = false,
-                debugMode = debugMode,
-            )
-    }
-
-    override fun write(content: Any?, vararg args: Any?): RustWriter {
-        // TODO(https://github.com/rust-lang/rustfmt/issues/5425): The second condition introduced here is to prevent
-        //     this rustfmt bug
-        val contentIsNotJustAComma = (content as? String?)?.let { it.trim() != "," } ?: false
-        if (debugMode && contentIsNotJustAComma) {
-            val location = Thread.currentThread().stackTrace
-            location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
-                ?.also { super.writeInline(it) }
-        }
-
-        return super.write(content, *args)
-    }
-
-    fun dirty() = super.toString().isNotBlank() || preamble.isNotEmpty()
-
-    /** Helper function to determine if a stack frame is relevant for debug purposes */
-    private fun StackTraceElement.isRelevant(): Boolean {
-        if (this.className.contains("AbstractCodeWriter") || this.className.startsWith("java.lang")) {
-            return false
-        }
-        return this.fileName != "RustWriter.kt"
-    }
-
-    private val preamble = mutableListOf<Writable>()
-    private val formatter = RustSymbolFormatter()
-    private var n = 0
-
-    init {
-        expressionStart = '#'
-        if (filename.endsWith(".rs")) {
-            require(namespace.startsWith("crate") || filename.startsWith("tests/") || filename == "build.rs") {
-                "We can only write into files in the crate (got $namespace)"
-            }
-        }
-        putFormatter('T', formatter)
-        putFormatter('D', RustDocLinker())
-        putFormatter('W', RustWriteableInjector())
-    }
-
-    fun module(): String? = if (filename.startsWith("src") && filename.endsWith(".rs")) {
-        filename.removeSuffix(".rs").substringAfterLast(File.separatorChar)
-    } else {
-        null
-    }
-
-    fun safeName(prefix: String = "var"): String {
-        n += 1
-        return "${prefix}_$n"
-    }
-
-    fun first(preWriter: Writable) {
-        preamble.add(preWriter)
-    }
-
-    private fun addDependencyTestAware(dependencyContainer: SymbolDependencyContainer): RustWriter {
-        if (!devDependenciesOnly) {
-            super.addDependency(dependencyContainer)
-        } else {
-            dependencyContainer.dependencies.forEach { dependency ->
-                super.addDependency(
-                    when (val dep = RustDependency.fromSymbolDependency(dependency)) {
-                        is CargoDependency -> dep.toDevDependency()
-                        else -> dependencyContainer
-                    },
+            private fun rawWriter(
+                fileName: String,
+                debugMode: Boolean,
+            ): RustWriter =
+                RustWriter(
+                    fileName,
+                    namespace = "ignore",
+                    commentCharacter = "ignore",
+                    printWarning = false,
+                    debugMode = debugMode,
                 )
+        }
+
+        override fun write(
+            content: Any?,
+            vararg args: Any?,
+        ): RustWriter {
+            // TODO(https://github.com/rust-lang/rustfmt/issues/5425): The second condition introduced here is to prevent
+            //     this rustfmt bug
+            val contentIsNotJustAComma = (content as? String?)?.let { it.trim() != "," } ?: false
+            if (debugMode && contentIsNotJustAComma) {
+                val location = Thread.currentThread().stackTrace
+                location.first { it.isRelevant() }?.let { "/* ${it.fileName}:${it.lineNumber} */" }
+                    ?.also { super.writeInline(it) }
             }
-        }
-        return this
-    }
 
-    /**
-     * Create an inline module. Instead of being in a new file, inline modules are written as a `mod { ... }` block
-     * directly into the parent.
-     *
-     * Callers must take care to use [this] when writing to ensure code is written to the right place:
-     * ```kotlin
-     * val writer = RustWriter.forModule("model")
-     * writer.withInlineModule(RustModule.public("nested")) {
-     *   Generator(...).render(this) // GOOD
-     *   Generator(...).render(writer) // WRONG!
-     * }
-     * ```
-     *
-     * The returned writer will inject any local imports into the module as needed.
-     */
-    fun withInlineModule(
-        module: RustModule.LeafModule,
-        moduleDocProvider: ModuleDocProvider?,
-        moduleWriter: Writable,
-    ): RustWriter {
-        check(module.isInline()) {
-            "Only inline modules may be used with `withInlineModule`: $module"
+            return super.write(content, *args)
         }
 
-        // In Rust, modules must specify their own imports—they don't have access to the parent scope.
-        // To easily handle this, create a new inner writer to collect imports, then dump it
-        // into an inline module.
-        val innerWriter = RustWriter(
-            this.filename,
-            "${this.namespace}::${module.name}",
-            printWarning = false,
-            devDependenciesOnly = devDependenciesOnly || module.tests,
-        )
-        moduleWriter(innerWriter)
-        ModuleDocProvider.writeDocs(moduleDocProvider, module, this)
-        module.rustMetadata.render(this)
-        rustBlock("mod ${module.name}") {
-            writeWithNoFormatting(innerWriter.toString())
-        }
-        innerWriter.dependencies.forEach { addDependencyTestAware(it) }
-        return this
-    }
+        fun dirty() = super.toString().isNotBlank() || preamble.isNotEmpty()
 
-    /**
-     * Generate a wrapping if statement around a nullable value.
-     * The provided code block will only be called if the value is not `None`.
-     */
-    fun ifSome(member: Symbol, value: ValueExpression, block: RustWriter.(value: ValueExpression) -> Unit) {
-        when {
-            member.isOptional() -> {
-                val innerValue = ValueExpression.Reference(safeName("inner"))
-                rustBlockTemplate("if let #{Some}(${innerValue.name}) = ${value.asRef()}", *preludeScope) {
-                    block(innerValue)
+        /** Helper function to determine if a stack frame is relevant for debug purposes */
+        private fun StackTraceElement.isRelevant(): Boolean {
+            if (this.className.contains("AbstractCodeWriter") || this.className.startsWith("java.lang")) {
+                return false
+            }
+            return this.fileName != "RustWriter.kt"
+        }
+
+        private val preamble = mutableListOf<Writable>()
+        private val formatter = RustSymbolFormatter()
+        private var n = 0
+
+        init {
+            expressionStart = '#'
+            if (filename.endsWith(".rs")) {
+                require(namespace.startsWith("crate") || filename.startsWith("tests/") || filename == "build.rs") {
+                    "We can only write into files in the crate (got $namespace)"
                 }
             }
-
-            else -> this.block(value)
+            putFormatter('T', formatter)
+            putFormatter('D', RustDocLinker())
+            putFormatter('W', RustWriteableInjector())
         }
-    }
 
-    /**
-     * Generate a wrapping if statement around a primitive field.
-     * The specified block will only be called if the field is not set to its default value - `0` for
-     * numbers, `false` for booleans.
-     */
-    fun ifNotDefault(shape: Shape, variable: ValueExpression, block: RustWriter.(field: ValueExpression) -> Unit) {
-        when (shape) {
-            is FloatShape, is DoubleShape -> rustBlock("if ${variable.asValue()} != 0.0") {
-                block(variable)
+        fun module(): String? =
+            if (filename.startsWith("src") && filename.endsWith(".rs")) {
+                filename.removeSuffix(".rs").substringAfterLast(File.separatorChar)
+            } else {
+                null
             }
 
-            is NumberShape -> rustBlock("if ${variable.asValue()} != 0") {
-                block(variable)
+        fun safeName(prefix: String = "var"): String {
+            n += 1
+            return "${prefix}_$n"
+        }
+
+        fun first(preWriter: Writable) {
+            preamble.add(preWriter)
+        }
+
+        private fun addDependencyTestAware(dependencyContainer: SymbolDependencyContainer): RustWriter {
+            if (!devDependenciesOnly) {
+                super.addDependency(dependencyContainer)
+            } else {
+                dependencyContainer.dependencies.forEach { dependency ->
+                    super.addDependency(
+                        when (val dep = RustDependency.fromSymbolDependency(dependency)) {
+                            is CargoDependency -> dep.toDevDependency()
+                            else -> dependencyContainer
+                        },
+                    )
+                }
+            }
+            return this
+        }
+
+        /**
+         * Create an inline module. Instead of being in a new file, inline modules are written as a `mod { ... }` block
+         * directly into the parent.
+         *
+         * Callers must take care to use [this] when writing to ensure code is written to the right place:
+         * ```kotlin
+         * val writer = RustWriter.forModule("model")
+         * writer.withInlineModule(RustModule.public("nested")) {
+         *   Generator(...).render(this) // GOOD
+         *   Generator(...).render(writer) // WRONG!
+         * }
+         * ```
+         *
+         * The returned writer will inject any local imports into the module as needed.
+         */
+        fun withInlineModule(
+            module: RustModule.LeafModule,
+            moduleDocProvider: ModuleDocProvider?,
+            moduleWriter: Writable,
+        ): RustWriter {
+            check(module.isInline()) {
+                "Only inline modules may be used with `withInlineModule`: $module"
             }
 
-            is BooleanShape -> rustBlock("if ${variable.asValue()}") {
-                block(variable)
-            }
-
-            else -> rustBlock("") {
-                this.block(variable)
-            }
-        }
-    }
-
-    /**
-     * Generate a wrapping if statement around a field.
-     *
-     * - If the field is optional, it will only be called if the field is present
-     * - If the field is an unboxed primitive, it will only be called if the field is non-zero
-     *
-     * # Example
-     *
-     * For a nullable structure shape (e.g. `Option<MyStruct>`), the following code will be generated:
-     *
-     * ```
-     * if let Some(v) = my_nullable_struct {
-     *   /* {block(variable)} */
-     * }
-     * ```
-     *
-     * # Example
-     *
-     * For a non-nullable integer shape, the following code will be generated:
-     *
-     * ```
-     * if my_int != 0 {
-     *   /* {block(variable)} */
-     * }
-     * ```
-     */
-    fun ifSet(
-        shape: Shape,
-        member: Symbol,
-        variable: ValueExpression,
-        block: RustWriter.(field: ValueExpression) -> Unit,
-    ) {
-        ifSome(member, variable) { inner -> ifNotDefault(shape, inner, block) }
-    }
-
-    fun listForEach(
-        target: Shape,
-        outerField: String,
-        block: RustWriter.(field: String, target: ShapeId) -> Unit,
-    ) {
-        if (target is CollectionShape) {
-            val derefName = safeName("inner")
-            rustBlock("for $derefName in $outerField") {
-                block(derefName, target.member.target)
-            }
-        } else {
-            this.block(outerField, target.toShapeId())
-        }
-    }
-
-    override fun toString(): String {
-        val contents = super.toString()
-        val preheader = if (preamble.isNotEmpty()) {
-            val prewriter =
-                RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
-            preamble.forEach { it(prewriter) }
-            prewriter.toString()
-        } else {
-            null
-        }
-
-        // Hack to support TOML: the [commentCharacter] is overridden to support writing TOML.
-        val header = if (printWarning) {
-            "$commentCharacter Code generated by software.amazon.smithy.rust.codegen.smithy-rs. DO NOT EDIT."
-        } else {
-            null
-        }
-        val useDecls = importContainer.toString().ifEmpty {
-            null
-        }
-        return listOfNotNull(preheader, header, useDecls, contents).joinToString(separator = "\n", postfix = "\n")
-    }
-
-    fun format(r: Any) = formatter.apply(r, "")
-
-    fun addDepsRecursively(symbol: Symbol) {
-        addDependencyTestAware(symbol)
-        symbol.references.forEach { addDepsRecursively(it.symbol) }
-    }
-
-    /**
-     * Generate RustDoc links, e.g. [`Abc`](crate::module::Abc)
-     */
-    inner class RustDocLinker : BiFunction<Any, String, String> {
-        override fun apply(t: Any, u: String): String {
-            return when (t) {
-                is Symbol -> "[`${t.name}`](${docLink(t.rustType().qualifiedName())})"
-                else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
-            }
-        }
-    }
-
-    /**
-     * Formatter to enable formatting any [writable] with the #W formatter.
-     */
-    inner class RustWriteableInjector : BiFunction<Any, String, String> {
-        override fun apply(t: Any, u: String): String {
-            @Suppress("UNCHECKED_CAST")
-            val func =
-                t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
+            // In Rust, modules must specify their own imports—they don't have access to the parent scope.
+            // To easily handle this, create a new inner writer to collect imports, then dump it
+            // into an inline module.
             val innerWriter =
-                RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
-            func(innerWriter)
+                RustWriter(
+                    this.filename,
+                    "${this.namespace}::${module.name}",
+                    printWarning = false,
+                    devDependenciesOnly = devDependenciesOnly || module.tests,
+                )
+            moduleWriter(innerWriter)
+            ModuleDocProvider.writeDocs(moduleDocProvider, module, this)
+            module.rustMetadata.render(this)
+            rustBlock("mod ${module.name}") {
+                writeWithNoFormatting(innerWriter.toString())
+            }
             innerWriter.dependencies.forEach { addDependencyTestAware(it) }
-            return innerWriter.toString().trimEnd()
+            return this
         }
-    }
 
-    inner class RustSymbolFormatter : BiFunction<Any, String, String> {
-        override fun apply(t: Any, u: String): String {
-            return when (t) {
-                is RuntimeType -> {
-                    t.dependency?.also { addDependencyTestAware(it) }
-                    // for now, use the fully qualified type name
-                    t.fullyQualifiedName()
+        /**
+         * Generate a wrapping if statement around a nullable value.
+         * The provided code block will only be called if the value is not `None`.
+         */
+        fun ifSome(
+            member: Symbol,
+            value: ValueExpression,
+            block: RustWriter.(value: ValueExpression) -> Unit,
+        ) {
+            when {
+                member.isOptional() -> {
+                    val innerValue = ValueExpression.Reference(safeName("inner"))
+                    rustBlockTemplate("if let #{Some}(${innerValue.name}) = ${value.asRef()}", *preludeScope) {
+                        block(innerValue)
+                    }
                 }
 
-                is RustModule -> {
-                    t.fullyQualifiedPath()
-                }
+                else -> this.block(value)
+            }
+        }
 
-                is Symbol -> {
-                    addDepsRecursively(t)
-                    t.rustType().render(fullyQualified = true)
-                }
+        /**
+         * Generate a wrapping if statement around a primitive field.
+         * The specified block will only be called if the field is not set to its default value - `0` for
+         * numbers, `false` for booleans.
+         */
+        fun ifNotDefault(
+            shape: Shape,
+            variable: ValueExpression,
+            block: RustWriter.(field: ValueExpression) -> Unit,
+        ) {
+            when (shape) {
+                is FloatShape, is DoubleShape ->
+                    rustBlock("if ${variable.asValue()} != 0.0") {
+                        block(variable)
+                    }
 
-                is RustType -> {
-                    t.render(fullyQualified = true)
-                }
+                is NumberShape ->
+                    rustBlock("if ${variable.asValue()} != 0") {
+                        block(variable)
+                    }
 
-                is Function<*> -> {
-                    @Suppress("UNCHECKED_CAST")
-                    val func =
-                        t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
-                    val innerWriter =
+                is BooleanShape ->
+                    rustBlock("if ${variable.asValue()}") {
+                        block(variable)
+                    }
+
+                else ->
+                    rustBlock("") {
+                        this.block(variable)
+                    }
+            }
+        }
+
+        /**
+         * Generate a wrapping if statement around a field.
+         *
+         * - If the field is optional, it will only be called if the field is present
+         * - If the field is an unboxed primitive, it will only be called if the field is non-zero
+         *
+         * # Example
+         *
+         * For a nullable structure shape (e.g. `Option<MyStruct>`), the following code will be generated:
+         *
+         * ```
+         * if let Some(v) = my_nullable_struct {
+         *   /* {block(variable)} */
+         * }
+         * ```
+         *
+         * # Example
+         *
+         * For a non-nullable integer shape, the following code will be generated:
+         *
+         * ```
+         * if my_int != 0 {
+         *   /* {block(variable)} */
+         * }
+         * ```
+         */
+        fun ifSet(
+            shape: Shape,
+            member: Symbol,
+            variable: ValueExpression,
+            block: RustWriter.(field: ValueExpression) -> Unit,
+        ) {
+            ifSome(member, variable) { inner -> ifNotDefault(shape, inner, block) }
+        }
+
+        fun listForEach(
+            target: Shape,
+            outerField: String,
+            block: RustWriter.(field: String, target: ShapeId) -> Unit,
+        ) {
+            if (target is CollectionShape) {
+                val derefName = safeName("inner")
+                rustBlock("for $derefName in $outerField") {
+                    block(derefName, target.member.target)
+                }
+            } else {
+                this.block(outerField, target.toShapeId())
+            }
+        }
+
+        override fun toString(): String {
+            val contents = super.toString()
+            val preheader =
+                if (preamble.isNotEmpty()) {
+                    val prewriter =
                         RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
-                    func(innerWriter)
-                    innerWriter.dependencies.forEach { addDependencyTestAware(it) }
-                    return innerWriter.toString().trimEnd()
+                    preamble.forEach { it(prewriter) }
+                    prewriter.toString()
+                } else {
+                    null
                 }
 
-                else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")
-                // escaping generates `##` sequences for all the common cases where
-                // it will be run through templating, but in this context, we won't be escaped
-            }.replace("##", "#")
+            // Hack to support TOML: the [commentCharacter] is overridden to support writing TOML.
+            val header =
+                if (printWarning) {
+                    "$commentCharacter Code generated by software.amazon.smithy.rust.codegen.smithy-rs. DO NOT EDIT."
+                } else {
+                    null
+                }
+            val useDecls =
+                importContainer.toString().ifEmpty {
+                    null
+                }
+            return listOfNotNull(preheader, header, useDecls, contents).joinToString(separator = "\n", postfix = "\n")
+        }
+
+        fun format(r: Any) = formatter.apply(r, "")
+
+        fun addDepsRecursively(symbol: Symbol) {
+            addDependencyTestAware(symbol)
+            symbol.references.forEach { addDepsRecursively(it.symbol) }
+        }
+
+        /**
+         * Generate RustDoc links, e.g. [`Abc`](crate::module::Abc)
+         */
+        inner class RustDocLinker : BiFunction<Any, String, String> {
+            override fun apply(
+                t: Any,
+                u: String,
+            ): String {
+                return when (t) {
+                    is Symbol -> "[`${t.name}`](${docLink(t.rustType().qualifiedName())})"
+                    else -> throw CodegenException("Invalid type provided to RustDocLinker ($t) expected Symbol")
+                }
+            }
+        }
+
+        /**
+         * Formatter to enable formatting any [writable] with the #W formatter.
+         */
+        inner class RustWriteableInjector : BiFunction<Any, String, String> {
+            override fun apply(
+                t: Any,
+                u: String,
+            ): String {
+                @Suppress("UNCHECKED_CAST")
+                val func =
+                    t as? Writable ?: throw CodegenException("RustWriteableInjector.apply choked on non-function t ($t)")
+                val innerWriter =
+                    RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+                func(innerWriter)
+                innerWriter.dependencies.forEach { addDependencyTestAware(it) }
+                return innerWriter.toString().trimEnd()
+            }
+        }
+
+        inner class RustSymbolFormatter : BiFunction<Any, String, String> {
+            override fun apply(
+                t: Any,
+                u: String,
+            ): String {
+                return when (t) {
+                    is RuntimeType -> {
+                        t.dependency?.also { addDependencyTestAware(it) }
+                        // for now, use the fully qualified type name
+                        t.fullyQualifiedName()
+                    }
+
+                    is RustModule -> {
+                        t.fullyQualifiedPath()
+                    }
+
+                    is Symbol -> {
+                        addDepsRecursively(t)
+                        t.rustType().render(fullyQualified = true)
+                    }
+
+                    is RustType -> {
+                        t.render(fullyQualified = true)
+                    }
+
+                    is Function<*> -> {
+                        @Suppress("UNCHECKED_CAST")
+                        val func =
+                            t as? Writable ?: throw CodegenException("Invalid function type (expected writable) ($t)")
+                        val innerWriter =
+                            RustWriter(filename, namespace, printWarning = false, devDependenciesOnly = devDependenciesOnly)
+                        func(innerWriter)
+                        innerWriter.dependencies.forEach { addDependencyTestAware(it) }
+                        return innerWriter.toString().trimEnd()
+                    }
+
+                    else -> throw CodegenException("Invalid type provided to RustSymbolFormatter: $t")
+                    // escaping generates `##` sequences for all the common cases where
+                    // it will be run through templating, but in this context, we won't be escaped
+                }.replace("##", "#")
+            }
         }
     }
-}

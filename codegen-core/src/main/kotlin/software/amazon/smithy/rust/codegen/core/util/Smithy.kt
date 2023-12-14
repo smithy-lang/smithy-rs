@@ -44,12 +44,15 @@ fun StructureShape.expectMember(member: String): MemberShape =
 fun UnionShape.expectMember(member: String): MemberShape =
     this.getMember(member).orElseThrow { CodegenException("$member did not exist on $this") }
 
-fun StructureShape.errorMessageMember(): MemberShape? = this.getMember("message").or {
-    this.getMember("Message")
-}.orNull()
+fun StructureShape.errorMessageMember(): MemberShape? =
+    this.getMember("message").or {
+        this.getMember("Message")
+    }.orNull()
 
 fun StructureShape.hasStreamingMember(model: Model) = this.findStreamingMember(model) != null
+
 fun UnionShape.hasStreamingMember(model: Model) = this.findMemberWithTrait<StreamingTrait>(model) != null
+
 fun MemberShape.isStreaming(model: Model) = this.getMemberTrait(model, StreamingTrait::class.java).isPresent
 
 fun UnionShape.isEventStream(): Boolean {
@@ -90,9 +93,10 @@ fun OperationShape.isEventStream(model: Model): Boolean {
     return isInputEventStream(model) || isOutputEventStream(model)
 }
 
-fun ServiceShape.hasEventStreamOperations(model: Model): Boolean = operations.any { id ->
-    model.expectShape(id, OperationShape::class.java).isEventStream(model)
-}
+fun ServiceShape.hasEventStreamOperations(model: Model): Boolean =
+    operations.any { id ->
+        model.expectShape(id, OperationShape::class.java).isEventStream(model)
+    }
 
 fun Shape.shouldRedact(model: Model): Boolean =
     when (this) {
@@ -102,7 +106,10 @@ fun Shape.shouldRedact(model: Model): Boolean =
 
 const val REDACTION = "\"*** Sensitive Data Redacted ***\""
 
-fun Shape.redactIfNecessary(model: Model, safeToPrint: String): String =
+fun Shape.redactIfNecessary(
+    model: Model,
+    safeToPrint: String,
+): String =
     if (this.shouldRedact(model)) {
         REDACTION
     } else {
@@ -149,5 +156,4 @@ fun String.shapeId() = ShapeId.from(this)
 fun ServiceShape.serviceNameOrDefault(default: String) = getTrait<TitleTrait>()?.value ?: default
 
 /** Returns the SDK ID of the given service shape */
-fun ServiceShape.sdkId(): String =
-    getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "") ?: id.getName(this)
+fun ServiceShape.sdkId(): String = getTrait<ServiceTrait>()?.sdkId?.lowercase()?.replace(" ", "") ?: id.getName(this)

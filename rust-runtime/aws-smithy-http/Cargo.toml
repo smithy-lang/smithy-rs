@@ -29,11 +29,11 @@ pin-utils = "0.1.0"
 tracing = "0.1"
 
 # For an adapter to enable the `Stream` trait for `aws_smithy_types::byte_stream::ByteStream`
-futures-core = "0.3.14"
+futures-core = "0.3.29"
 
 [dev-dependencies]
 async-stream = "0.3"
-futures-util = { version = "0.3.16", default-features = false }
+futures-util = { version = "0.3.29", default-features = false }
 hyper = { version = "0.14.26", features = ["stream"] }
 proptest = "1"
 tokio = { version = "1.23.1", features = [

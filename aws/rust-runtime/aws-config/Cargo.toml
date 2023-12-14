@@ -56,7 +56,7 @@ aws-sdk-ssooidc = { path = "../../sdk/build/aws-sdk/sdk/ssooidc", default-featur
 [dev-dependencies]
 aws-smithy-runtime = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "connector-hyper-0-14-x", "test-util"] }
 aws-smithy-runtime-api = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
-futures-util = { version = "0.3.16", default-features = false }
+futures-util = { version = "0.3.29", default-features = false }
 tracing-test = "0.2.1"
 tracing-subscriber = { version = "0.3.16", features = ["fmt", "json"] }
 

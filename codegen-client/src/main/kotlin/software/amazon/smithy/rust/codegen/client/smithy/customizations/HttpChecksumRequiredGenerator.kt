@@ -35,22 +35,23 @@ class HttpChecksumRequiredGenerator(
             throw CodegenException("HttpChecksum required cannot be applied to a streaming shape")
         }
         return when (section) {
-            is OperationSection.AdditionalRuntimePlugins -> writable {
-                section.addOperationRuntimePlugin(this) {
-                    rustTemplate(
-                        "#{HttpChecksumRequiredRuntimePlugin}::new()",
-                        "HttpChecksumRequiredRuntimePlugin" to
-                            InlineDependency.forRustFile(
-                                RustModule.pubCrate("client_http_checksum_required", parent = ClientRustModule.root),
-                                "/inlineable/src/client_http_checksum_required.rs",
-                                CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
-                                CargoDependency.smithyTypes(codegenContext.runtimeConfig),
-                                CargoDependency.Http,
-                                CargoDependency.Md5,
-                            ).toType().resolve("HttpChecksumRequiredRuntimePlugin"),
-                    )
+            is OperationSection.AdditionalRuntimePlugins ->
+                writable {
+                    section.addOperationRuntimePlugin(this) {
+                        rustTemplate(
+                            "#{HttpChecksumRequiredRuntimePlugin}::new()",
+                            "HttpChecksumRequiredRuntimePlugin" to
+                                InlineDependency.forRustFile(
+                                    RustModule.pubCrate("client_http_checksum_required", parent = ClientRustModule.root),
+                                    "/inlineable/src/client_http_checksum_required.rs",
+                                    CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
+                                    CargoDependency.smithyTypes(codegenContext.runtimeConfig),
+                                    CargoDependency.Http,
+                                    CargoDependency.Md5,
+                                ).toType().resolve("HttpChecksumRequiredRuntimePlugin"),
+                        )
+                    }
                 }
-            }
             else -> emptySection
         }
     }

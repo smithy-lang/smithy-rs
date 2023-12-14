@@ -98,16 +98,19 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
     private val smithyQuery = RuntimeType.smithyQuery(runtimeConfig)
     private val serdeUtil = SerializerUtil(model)
     private val protocolFunctions = ProtocolFunctions(codegenContext)
-    private val codegenScope = arrayOf(
-        "String" to RuntimeType.String,
-        "Error" to serializerError,
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-        "QueryWriter" to smithyQuery.resolve("QueryWriter"),
-        "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "String" to RuntimeType.String,
+            "Error" to serializerError,
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "QueryWriter" to smithyQuery.resolve("QueryWriter"),
+            "QueryValueWriter" to smithyQuery.resolve("QueryValueWriter"),
+        )
 
     abstract val protocolName: String
+
     abstract fun MemberShape.queryKeyName(prioritizedFallback: String? = null): String
+
     abstract fun MemberShape.isFlattened(): Boolean
 
     override fun documentSerializer(): RuntimeType {
@@ -171,17 +174,18 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             return
         }
         val structureSymbol = symbolProvider.toSymbol(context.shape)
-        val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
-            Attribute.AllowUnusedMut.render(this)
-            rustBlockTemplate(
-                "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
-                "Input" to structureSymbol,
-                *codegenScope,
-            ) {
-                serializeStructureInner(context)
-                rust("Ok(())")
+        val structureSerializer =
+            protocolFunctions.serializeFn(context.shape) { fnName ->
+                Attribute.AllowUnusedMut.render(this)
+                rustBlockTemplate(
+                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
+                    "Input" to structureSymbol,
+                    *codegenScope,
+                ) {
+                    serializeStructureInner(context)
+                    rust("Ok(())")
+                }
             }
-        }
 
         rust("#T(${context.writerExpression}, ${context.valueExpression.asRef()})?;", structureSerializer)
     }
@@ -216,7 +220,10 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         }
     }
 
-    private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
+    private fun RustWriter.serializeMemberValue(
+        context: MemberContext,
+        target: Shape,
+    ) {
         val writer = context.writerExpression
         val value = context.valueExpression
         when (target) {
@@ -228,21 +235,23 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             }
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
             is NumberShape -> {
-                val numberType = when (symbolProvider.toSymbol(target).rustType()) {
-                    is RustType.Float -> "Float"
-                    // NegInt takes an i64 while PosInt takes u64. We need this to be signed here
-                    is RustType.Integer -> "NegInt"
-                    else -> throw IllegalStateException("unreachable")
-                }
+                val numberType =
+                    when (symbolProvider.toSymbol(target).rustType()) {
+                        is RustType.Float -> "Float"
+                        // NegInt takes an i64 while PosInt takes u64. We need this to be signed here
+                        is RustType.Integer -> "NegInt"
+                        else -> throw IllegalStateException("unreachable")
+                    }
                 rust(
                     "$writer.number(##[allow(clippy::useless_conversion)]#T::$numberType((${value.asValue()}).into()));",
                     smithyTypes.resolve("Number"),
                 )
             }
-            is BlobShape -> rust(
-                "$writer.string(&#T(${value.asRef()}));",
-                RuntimeType.base64Encode(runtimeConfig),
-            )
+            is BlobShape ->
+                rust(
+                    "$writer.string(&#T(${value.asRef()}));",
+                    RuntimeType.base64Encode(runtimeConfig),
+                )
             is TimestampShape -> {
                 val timestampFormat = determineTimestampFormat(context.shape)
                 val timestampFormatType = RuntimeType.serializeTimestampFormat(runtimeConfig, timestampFormat)
@@ -251,9 +260,10 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             is CollectionShape -> serializeCollection(context, Context(writer, context.valueExpression, target))
             is MapShape -> serializeMap(context, Context(writer, context.valueExpression, target))
             is StructureShape -> serializeStructure(Context(writer, context.valueExpression, target))
-            is UnionShape -> structWriter(context) { writerExpression ->
-                serializeUnion(Context(writerExpression, context.valueExpression, target))
-            }
+            is UnionShape ->
+                structWriter(context) { writerExpression ->
+                    serializeUnion(Context(writerExpression, context.valueExpression, target))
+                }
             else -> TODO(target.toString())
         }
     }
@@ -262,7 +272,10 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         shape.getMemberTrait(model, TimestampFormatTrait::class.java).orNull()?.format
             ?: TimestampFormatTrait.Format.DATE_TIME
 
-    private fun RustWriter.structWriter(context: MemberContext, inner: RustWriter.(String) -> Unit) {
+    private fun RustWriter.structWriter(
+        context: MemberContext,
+        inner: RustWriter.(String) -> Unit,
+    ) {
         val prefix = context.shape.queryKeyName()
         safeName("scope").also { scopeName ->
             Attribute.AllowUnusedMut.render(this)
@@ -271,12 +284,16 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         }
     }
 
-    private fun RustWriter.serializeCollection(memberContext: MemberContext, context: Context<CollectionShape>) {
+    private fun RustWriter.serializeCollection(
+        memberContext: MemberContext,
+        context: Context<CollectionShape>,
+    ) {
         val flat = memberContext.shape.isFlattened()
-        val memberOverride = when (val override = context.shape.member.getTrait<XmlNameTrait>()?.value) {
-            null -> "None"
-            else -> "Some(${override.dq()})"
-        }
+        val memberOverride =
+            when (val override = context.shape.member.getTrait<XmlNameTrait>()?.value) {
+                null -> "None"
+                else -> "Some(${override.dq()})"
+            }
         val itemName = safeName("item")
         safeName("list").also { listName ->
             rust("let mut $listName = ${context.writerExpression}.start_list($flat, $memberOverride);")
@@ -294,7 +311,10 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
         }
     }
 
-    private fun RustWriter.serializeMap(memberContext: MemberContext, context: Context<MapShape>) {
+    private fun RustWriter.serializeMap(
+        memberContext: MemberContext,
+        context: Context<MapShape>,
+    ) {
         val flat = memberContext.shape.isFlattened()
         val entryKeyName = context.shape.key.queryKeyName("key").dq()
         val entryValueName = context.shape.value.queryKeyName("value").dq()
@@ -304,10 +324,11 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             rust("let mut $mapName = ${context.writerExpression}.start_map($flat, $entryKeyName, $entryValueName);")
             rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {
                 val keyTarget = model.expectShape(context.shape.key.target)
-                val keyExpression = when (keyTarget.hasTrait<EnumTrait>()) {
-                    true -> "$keyName.as_str()"
-                    else -> keyName
-                }
+                val keyExpression =
+                    when (keyTarget.hasTrait<EnumTrait>()) {
+                        true -> "$keyName.as_str()"
+                        else -> keyName
+                    }
                 val entryName = safeName("entry")
                 Attribute.AllowUnusedMut.render(this)
                 rust("let mut $entryName = $mapName.entry($keyExpression);")
@@ -319,41 +340,43 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
 
     private fun RustWriter.serializeUnion(context: Context<UnionShape>) {
         val unionSymbol = symbolProvider.toSymbol(context.shape)
-        val unionSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
-            Attribute.AllowUnusedMut.render(this)
-            rustBlockTemplate(
-                "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
-                "Input" to unionSymbol,
-                *codegenScope,
-            ) {
-                rustBlock("match input") {
-                    for (member in context.shape.members()) {
-                        val variantName = if (member.isTargetUnit()) {
-                            "${symbolProvider.toMemberName(member)}"
-                        } else {
-                            "${symbolProvider.toMemberName(member)}(inner)"
+        val unionSerializer =
+            protocolFunctions.serializeFn(context.shape) { fnName ->
+                Attribute.AllowUnusedMut.render(this)
+                rustBlockTemplate(
+                    "pub fn $fnName(mut writer: #{QueryValueWriter}, input: &#{Input}) -> Result<(), #{Error}>",
+                    "Input" to unionSymbol,
+                    *codegenScope,
+                ) {
+                    rustBlock("match input") {
+                        for (member in context.shape.members()) {
+                            val variantName =
+                                if (member.isTargetUnit()) {
+                                    "${symbolProvider.toMemberName(member)}"
+                                } else {
+                                    "${symbolProvider.toMemberName(member)}(inner)"
+                                }
+                            withBlock("#T::$variantName => {", "},", unionSymbol) {
+                                serializeMember(
+                                    MemberContext.unionMember(
+                                        context.copy(writerExpression = "writer"),
+                                        "inner",
+                                        member,
+                                    ),
+                                )
+                            }
                         }
-                        withBlock("#T::$variantName => {", "},", unionSymbol) {
-                            serializeMember(
-                                MemberContext.unionMember(
-                                    context.copy(writerExpression = "writer"),
-                                    "inner",
-                                    member,
-                                ),
+                        if (target.renderUnknownVariant()) {
+                            rustTemplate(
+                                "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
+                                "Union" to unionSymbol,
+                                *codegenScope,
                             )
                         }
                     }
-                    if (target.renderUnknownVariant()) {
-                        rustTemplate(
-                            "#{Union}::${UnionGenerator.UnknownVariantName} => return Err(#{Error}::unknown_variant(${unionSymbol.name.dq()}))",
-                            "Union" to unionSymbol,
-                            *codegenScope,
-                        )
-                    }
+                    rust("Ok(())")
                 }
-                rust("Ok(())")
             }
-        }
         rust("#T(${context.writerExpression}, ${context.valueExpression.asRef()})?;", unionSerializer)
     }
 }

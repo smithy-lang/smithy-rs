@@ -138,7 +138,10 @@ class EnumMemberModel(
     }
 }
 
-private fun RustWriter.docWithNote(doc: String?, note: String?) {
+private fun RustWriter.docWithNote(
+    doc: String?,
+    note: String?,
+) {
     if (doc.isNullOrBlank() && note.isNullOrBlank()) {
         // If the model doesn't have any documentation for the shape, then suppress the missing docs lint
         // since the lack of documentation is a modeling issue rather than a codegen issue.
@@ -166,12 +169,13 @@ open class EnumGenerator(
 
     private val enumTrait: EnumTrait = shape.expectTrait()
     private val symbol: Symbol = symbolProvider.toSymbol(shape)
-    private val context = EnumGeneratorContext(
-        enumName = symbol.name,
-        enumMeta = symbol.expectRustMetadata(),
-        enumTrait = enumTrait,
-        sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider) },
-    )
+    private val context =
+        EnumGeneratorContext(
+            enumName = symbol.name,
+            enumMeta = symbol.expectRustMetadata(),
+            enumTrait = enumTrait,
+            sortedMembers = enumTrait.values.sortedBy { it.value }.map { EnumMemberModel(shape, it, symbolProvider) },
+        )
 
     fun render(writer: RustWriter) {
         enumType.additionalEnumAttributes(context).forEach { attribute ->
@@ -200,14 +204,15 @@ open class EnumGenerator(
         insertTrailingNewline()
         // impl Blah { pub fn as_str(&self) -> &str
         implBlock(
-            asStrImpl = writable {
-                rustBlock("match self") {
-                    context.sortedMembers.forEach { member ->
-                        rust("""${context.enumName}::${member.derivedName()} => ${member.value.dq()},""")
+            asStrImpl =
+                writable {
+                    rustBlock("match self") {
+                        context.sortedMembers.forEach { member ->
+                            rust("""${context.enumName}::${member.derivedName()} => ${member.value.dq()},""")
+                        }
+                        enumType.additionalAsStrMatchArms(context)(this)
                     }
-                    enumType.additionalAsStrMatchArms(context)(this)
-                }
-            },
+                },
         )
         rustTemplate(
             """
@@ -227,9 +232,10 @@ open class EnumGenerator(
         context.enumMeta.render(this)
         rust("struct ${context.enumName}(String);")
         implBlock(
-            asStrImpl = writable {
-                rust("&self.0")
-            },
+            asStrImpl =
+                writable {
+                    rust("&self.0")
+                },
         )
 
         // Add an infallible FromStr implementation for uniformity
@@ -295,9 +301,10 @@ open class EnumGenerator(
             }
             """,
             "asStrImpl" to asStrImpl,
-            "Values" to writable {
-                rust(context.sortedMembers.joinToString(", ") { it.value.dq() })
-            },
+            "Values" to
+                writable {
+                    rust(context.sortedMembers.joinToString(", ") { it.value.dq() })
+                },
         )
     }
 
