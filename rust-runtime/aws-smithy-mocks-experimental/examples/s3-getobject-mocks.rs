@@ -1,4 +1,9 @@
-//! Example of mocking a simple warpper around S3
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Example of mocking a simple wrapper around S3
 
 #[tokio::main]
 async fn main() {
@@ -9,12 +14,12 @@ use aws_sdk_s3::operation::get_object::GetObjectError;
 use aws_sdk_s3::Client;
 use std::error::Error;
 
-struct MyFileRetriever {
+pub struct MyFileRetriever {
     s3_client: Client,
 }
 
 impl MyFileRetriever {
-    async fn get_file(&self, path: &str) -> Result<Option<String>, Box<dyn Error>> {
+    pub async fn get_file(&self, path: &str) -> Result<Option<String>, Box<dyn Error>> {
         let response = match self
             .s3_client
             .get_object()
@@ -41,13 +46,12 @@ mod test {
     use aws_sdk_s3::types::error::NoSuchKey;
     use aws_sdk_s3::Client;
     use aws_smithy_mocks_experimental::{mock, MockResponseInterceptor};
-    use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
     use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
     use aws_smithy_runtime_api::http::StatusCode;
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::byte_stream::ByteStream;
-    use aws_smithy_types::retry::RetryConfig;
 
+    #[allow(dead_code)]
     fn mocked_client(file_contents: impl AsRef<[u8]>) -> Client {
         let file_contents = file_contents.as_ref().to_vec();
         let get_object_happy_path = mock!(Client::get_object)
@@ -83,36 +87,6 @@ mod test {
         )
     }
 
-    fn force_retry() -> Client {
-        let error_500 = mock!(Client::get_object).then_http_response(|| {
-            HttpResponse::new(
-                StatusCode::try_from(500).unwrap(),
-                SdkBody::from("<Error>internal server error</Error>"),
-            )
-        });
-        let get_object_happy_path = mock!(Client::get_object)
-            .match_requests(|req| {
-                req.bucket() == Some("test-bucket") && req.key() == Some("test-key")
-            })
-            .then_output(move || {
-                GetObjectOutput::builder()
-                    .body(ByteStream::from_static(b"ok!"))
-                    .build()
-            });
-        let interceptor = MockResponseInterceptor::new()
-            .with_rule(&error_500)
-            .with_rule(&get_object_happy_path)
-            .enforce_order();
-
-        Client::from_conf(
-            aws_sdk_s3::Config::builder()
-                .with_test_defaults()
-                .retry_config(RetryConfig::standard().with_max_attempts(3))
-                .region(Region::from_static("us-east-1"))
-                .interceptor(interceptor)
-                .build(),
-        )
-    }
     #[tokio::test]
     async fn loads_file() {
         let client = super::MyFileRetriever {
@@ -125,23 +99,6 @@ mod test {
         assert_eq!(client.get_file("different-key").await.unwrap(), None)
     }
 
-    // This behavior is not currently supported!
-    // It may be supported in the future
-
-    #[tokio::test]
-    #[ignore]
-    async fn graceful_handling_of_500_antipattern_does_not_work() {
-        std::env::set_var("VERBOSE_TEST_LOGS", "true");
-        let (_guard, _rx) = capture_test_logs();
-        let client = super::MyFileRetriever {
-            s3_client: force_retry(),
-        };
-        client
-            .get_file("test-key")
-            .await
-            .expect("recovers after retry");
-    }
-
     #[tokio::test]
     async fn returns_error_on_invalid_utf8() {
         let client = super::MyFileRetriever {
@@ -152,7 +109,4 @@ mod test {
             .await
             .expect_err("invalid UTF-8");
     }
-
-    #[tokio::test]
-    async fn returns_none_when_file_missing() {}
 }

@@ -15,8 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
-    BeforeDeserializationInterceptorContextMut, BeforeDeserializationInterceptorContextRef,
-    BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut, Error,
+    BeforeDeserializationInterceptorContextMut, BeforeSerializationInterceptorContextMut, Error,
     FinalizerInterceptorContextMut, Input, Output,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
@@ -120,7 +119,9 @@ where
         }
     }
 
-    /// Add an additional filter to constrain which inputs match this rule
+    /// Add an additional filter to constrain which inputs match this rule.
+    ///
+    /// For examples, see the examples directory of this repository.
     pub fn match_requests(mut self, filter: impl Fn(&I) -> bool + Send + Sync + 'static) -> Self {
         self.input_filter = Arc::new(move |i: &Input| match i.downcast_ref::<I>() {
             Some(typed_input) => filter(typed_input),
@@ -151,6 +152,10 @@ where
     }
 
     /// If a rule matches, then return a specific error
+    ///
+    /// Although this _basically_ works, using `then_http_response` is strongly recommended to
+    /// create a higher fidelity mock. Error handling is quite complex in practice and returning errors
+    /// directly often will not perfectly capture the way the error is actually returned to the SDK.
     pub fn then_error(self, output: impl Fn() -> E + Send + Sync + 'static) -> Rule {
         Rule::new(
             self.input_filter,
@@ -206,6 +211,9 @@ impl MockResponseInterceptor {
             must_match: true,
         }
     }
+    /// Add a rule to the Interceptor
+    ///
+    /// Rules are matched in order—this rule will only apply if all previous rules do not match.
     pub fn with_rule(self, rule: &Rule) -> Self {
         self.rules.lock().unwrap().push_back(rule.clone());
         self
@@ -236,10 +244,12 @@ impl Intercept for MockResponseInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        let rules = self.rules.lock().unwrap();
+        let mut rules = self.rules.lock().unwrap();
         let rule = match self.enforce_order {
             true => {
-                let rule = rules.get(0).expect("out of rules");
+                let rule = rules
+                    .pop_front()
+                    .expect("no more rules but a new request was received");
                 if !(rule.matcher)(context.input()) {
                     panic!(
                         "In order matching was enforced but the next rule did not match {:?}",
@@ -248,7 +258,10 @@ impl Intercept for MockResponseInterceptor {
                 }
                 Some(rule)
             }
-            false => rules.iter().find(|rule| (rule.matcher)(context.input())),
+            false => rules
+                .iter()
+                .find(|rule| (rule.matcher)(context.input()))
+                .cloned(),
         };
         match rule {
             Some(rule) => {
@@ -279,6 +292,7 @@ impl Intercept for MockResponseInterceptor {
                 _ => return Ok(()),
             };
             rule.record_usage();
+
             match result {
                 Ok(http_response) => *context.response_mut() = http_response,
                 Err(e) => context
@@ -304,6 +318,7 @@ impl Intercept for MockResponseInterceptor {
 
             rule.record_usage();
             if result.is_err() {
+                // the orchestrator will panic of no response is present
                 context.inner_mut().set_response(Response::new(
                     StatusCode::try_from(500).unwrap(),
                     SdkBody::from("stubbed error response"),

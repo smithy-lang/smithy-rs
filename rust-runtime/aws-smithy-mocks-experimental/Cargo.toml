@@ -12,7 +12,6 @@ publish = false
 aws-smithy-types = "1"
 aws-smithy-runtime-api = { version = "1", features = ["http-02x"] }
 aws-smithy-runtime = { version = "1", features = ["test-util"] }
-http = "0.2.9"
 
 [dev-dependencies]
 aws-sdk-s3 = { version = "1", features = ["test-util"] }

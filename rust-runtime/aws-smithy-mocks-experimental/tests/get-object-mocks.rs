@@ -7,6 +7,8 @@ use aws_sdk_s3::config::Region;
 use aws_sdk_s3::operation::get_object::{GetObjectError, GetObjectOutput};
 use aws_sdk_s3::operation::list_buckets::ListBucketsError;
 use aws_sdk_s3::{Client, Config};
+use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
+use aws_smithy_runtime_api::http::StatusCode;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
 use aws_smithy_types::error::metadata::ProvideErrorMetadata;
@@ -29,12 +31,10 @@ async fn create_mock_s3_get_object() {
             inp.bucket() == Some("test-bucket") && inp.key() != Some("correct-key")
         })
         .then_http_response(|| {
-            http::Response::builder()
-                .status(400)
-                .body(SdkBody::from(S3_NO_SUCH_KEY))
-                .unwrap()
-                .try_into()
-                .unwrap()
+            HttpResponse::new(
+                StatusCode::try_from(400).unwrap(),
+                SdkBody::from(S3_NO_SUCH_KEY),
+            )
         });
 
     let s3_real_object = mock!(Client::get_object)
