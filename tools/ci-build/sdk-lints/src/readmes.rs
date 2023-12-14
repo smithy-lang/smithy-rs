@@ -78,7 +78,11 @@ fn fix_readme(path: impl AsRef<Path>, to_be_used_directly: bool) -> Result<(bool
 
     let mut contents = fs::read_to_string(path.as_ref())
         .with_context(|| format!("failure to read readme: {:?}", path.as_ref()))?;
-    let updated =
-        anchor::replace_anchor(&mut contents, &anchor::anchors("footer"), &footer_contents)?;
+    let updated = anchor::replace_anchor(
+        &mut contents,
+        &anchor::anchors("footer"),
+        &footer_contents,
+        None,
+    )?;
     Ok((updated, contents))
 }

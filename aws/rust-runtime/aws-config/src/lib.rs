@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
     missing_debug_implementations,
@@ -11,7 +14,6 @@
     rustdoc::missing_crate_level_docs,
     unreachable_pub
 )]
-#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 // Allow disallowed methods in tests
 #![cfg_attr(test, allow(clippy::disallowed_methods))]
 
