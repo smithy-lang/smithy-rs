@@ -193,7 +193,7 @@ impl FsBuilder {
             let body_loader = move || {
                 // If an offset was provided, seeking will be handled in `PathBody::poll_data` each
                 // time the file is loaded.
-                SdkBody::from_body_0_4(PathBody::from_path(
+                SdkBody::from_body_0_4_internal(PathBody::from_path(
                     path.clone(),
                     length,
                     buffer_size,
@@ -208,7 +208,8 @@ impl FsBuilder {
                 let _s = file.seek(io::SeekFrom::Start(offset)).await?;
             }
 
-            let body = SdkBody::from_body_0_4(PathBody::from_file(file, length, buffer_size));
+            let body =
+                SdkBody::from_body_0_4_internal(PathBody::from_file(file, length, buffer_size));
 
             Ok(ByteStream::new(body))
         } else {
