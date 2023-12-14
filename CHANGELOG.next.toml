@@ -34,3 +34,9 @@ message = "Serialize 0/false in query parameters, and ignore actual default valu
 references = ["smithy-rs#3252", "smithy-rs#3312"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "milesziemer"
+
+[[smithy-rs]]
+message = """`requireEndpointResolver: false` is no longer required to remove the need for an endpoint resolver. Instead, `"awsSdkBuilder"` (default false), now _removes_ that requirement."""
+references = ["smithy-rs#3292"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
