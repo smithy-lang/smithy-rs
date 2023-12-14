@@ -70,11 +70,12 @@ class PythonApplicationGenerator(
     private val protocol: ServerProtocol,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
-    private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
-        compareBy {
-            it.id
-        },
-    ).toList()
+    private val operations =
+        index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
+            compareBy {
+                it.id
+            },
+        ).toList()
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -348,18 +349,19 @@ class PythonApplicationGenerator(
                 val output = PythonType.Opaque("${operationName}Output", libName, rustNamespace = "crate::output")
                 val context = PythonType.Opaque("Ctx", libName)
                 val returnType = PythonType.Union(listOf(output, PythonType.Awaitable(output)))
-                val handler = PythonType.Union(
-                    listOf(
-                        PythonType.Callable(
-                            listOf(input, context),
-                            returnType,
+                val handler =
+                    PythonType.Union(
+                        listOf(
+                            PythonType.Callable(
+                                listOf(input, context),
+                                returnType,
+                            ),
+                            PythonType.Callable(
+                                listOf(input),
+                                returnType,
+                            ),
                         ),
-                        PythonType.Callable(
-                            listOf(input),
-                            returnType,
-                        ),
-                    ),
-                )
+                    )
 
                 rustTemplate(
                     """
@@ -435,21 +437,23 @@ class PythonApplicationGenerator(
         )
     }
 
-    private fun RustWriter.operationImplementationStubs(operations: List<OperationShape>) = rust(
-        operations.joinToString("\n///\n") {
-            val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
-            val ret = if (!operationDocumentation.isNullOrBlank()) {
-                operationDocumentation.replace("#", "##").prependIndent("/// ## ") + "\n"
-            } else {
-                ""
-            }
-            ret +
-                """
-                /// ${it.signature()}:
-                ///     raise NotImplementedError
-                """.trimIndent()
-        },
-    )
+    private fun RustWriter.operationImplementationStubs(operations: List<OperationShape>) =
+        rust(
+            operations.joinToString("\n///\n") {
+                val operationDocumentation = it.getTrait<DocumentationTrait>()?.value
+                val ret =
+                    if (!operationDocumentation.isNullOrBlank()) {
+                        operationDocumentation.replace("#", "##").prependIndent("/// ## ") + "\n"
+                    } else {
+                        ""
+                    }
+                ret +
+                    """
+                    /// ${it.signature()}:
+                    ///     raise NotImplementedError
+                    """.trimIndent()
+            },
+        )
 
     /**
      * Returns the function signature for an operation handler implementation. Used in the documentation.

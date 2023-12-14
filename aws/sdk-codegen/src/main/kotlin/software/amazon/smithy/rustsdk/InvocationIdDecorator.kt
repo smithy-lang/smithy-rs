@@ -30,8 +30,7 @@ class InvocationIdDecorator : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> =
-        baseCustomizations + InvocationIdConfigCustomization(codegenContext)
+    ): List<ConfigCustomization> = baseCustomizations + InvocationIdConfigCustomization(codegenContext)
 }
 
 private class InvocationIdRuntimePluginCustomization(
@@ -39,17 +38,19 @@ private class InvocationIdRuntimePluginCustomization(
 ) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
-    private val codegenScope = arrayOf(
-        "InvocationIdInterceptor" to awsRuntime.resolve("invocation_id::InvocationIdInterceptor"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "InvocationIdInterceptor" to awsRuntime.resolve("invocation_id::InvocationIdInterceptor"),
+        )
 
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-            section.registerInterceptor(this) {
-                rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                section.registerInterceptor(this) {
+                    rustTemplate("#{InvocationIdInterceptor}::new()", *codegenScope)
+                }
             }
         }
-    }
 }
 
 const val GENERATOR_DOCS: String =
@@ -61,51 +62,53 @@ private class InvocationIdConfigCustomization(
     codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val awsRuntime = AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "InvocationIdGenerator" to awsRuntime.resolve("invocation_id::InvocationIdGenerator"),
-        "SharedInvocationIdGenerator" to awsRuntime.resolve("invocation_id::SharedInvocationIdGenerator"),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "InvocationIdGenerator" to awsRuntime.resolve("invocation_id::InvocationIdGenerator"),
+            "SharedInvocationIdGenerator" to awsRuntime.resolve("invocation_id::SharedInvocationIdGenerator"),
+        )
 
-    override fun section(section: ServiceConfig): Writable = writable {
-        when (section) {
-            is ServiceConfig.BuilderImpl -> {
-                docs("Overrides the default invocation ID generator.\n\n$GENERATOR_DOCS")
-                rustTemplate(
-                    """
-                    pub fn invocation_id_generator(mut self, gen: impl #{InvocationIdGenerator} + 'static) -> Self {
-                        self.set_invocation_id_generator(#{Some}(#{SharedInvocationIdGenerator}::new(gen)));
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
+    override fun section(section: ServiceConfig): Writable =
+        writable {
+            when (section) {
+                is ServiceConfig.BuilderImpl -> {
+                    docs("Overrides the default invocation ID generator.\n\n$GENERATOR_DOCS")
+                    rustTemplate(
+                        """
+                        pub fn invocation_id_generator(mut self, gen: impl #{InvocationIdGenerator} + 'static) -> Self {
+                            self.set_invocation_id_generator(#{Some}(#{SharedInvocationIdGenerator}::new(gen)));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
-                docs("Overrides the default invocation ID generator.\n\n$GENERATOR_DOCS")
-                rustTemplate(
-                    """
-                    pub fn set_invocation_id_generator(&mut self, gen: #{Option}<#{SharedInvocationIdGenerator}>) -> &mut Self {
-                        self.config.store_or_unset(gen);
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
+                    docs("Overrides the default invocation ID generator.\n\n$GENERATOR_DOCS")
+                    rustTemplate(
+                        """
+                        pub fn set_invocation_id_generator(&mut self, gen: #{Option}<#{SharedInvocationIdGenerator}>) -> &mut Self {
+                            self.config.store_or_unset(gen);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                is ServiceConfig.ConfigImpl -> {
+                    docs("Returns the invocation ID generator if one was given in config.\n\n$GENERATOR_DOCS")
+                    rustTemplate(
+                        """
+                        pub fn invocation_id_generator(&self) -> #{Option}<#{SharedInvocationIdGenerator}> {
+                            self.config.load::<#{SharedInvocationIdGenerator}>().cloned()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                else -> {}
             }
-
-            is ServiceConfig.ConfigImpl -> {
-                docs("Returns the invocation ID generator if one was given in config.\n\n$GENERATOR_DOCS")
-                rustTemplate(
-                    """
-                    pub fn invocation_id_generator(&self) -> #{Option}<#{SharedInvocationIdGenerator}> {
-                        self.config.load::<#{SharedInvocationIdGenerator}>().cloned()
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
-
-            else -> {}
         }
-    }
 }

@@ -17,7 +17,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class FluentClientGeneratorTest {
-    val model = """
+    val model =
+        """
         namespace com.example
         use aws.protocols#awsJson1_0
 
@@ -49,16 +50,17 @@ class FluentClientGeneratorTest {
             key: String,
             value: StringList
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generate correct input docs`() {
-        val expectations = mapOf(
-            "listValue" to "list_value(impl Into<String>)",
-            "doubleListValue" to "double_list_value(Vec::<String>)",
-            "mapValue" to "map_value(impl Into<String>, Vec::<String>)",
-            "byteValue" to "byte_value(i8)",
-        )
+        val expectations =
+            mapOf(
+                "listValue" to "list_value(impl Into<String>)",
+                "doubleListValue" to "double_list_value(Vec::<String>)",
+                "mapValue" to "map_value(impl Into<String>, Vec::<String>)",
+                "byteValue" to "byte_value(i8)",
+            )
         expectations.forEach { (name, expect) ->
             val member = model.lookup<MemberShape>("com.example#TestInput\$$name")
             member.asFluentBuilderInputDoc(testSymbolProvider(model)) shouldBe expect
@@ -84,8 +86,9 @@ class FluentClientGeneratorTest {
                         check_send(client.say_hello().send());
                     }
                     """,
-                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                        .resolve("client::http::test_util::NeverClient"),
+                    "NeverClient" to
+                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("client::http::test_util::NeverClient"),
                 )
             }
         }
@@ -112,8 +115,9 @@ class FluentClientGeneratorTest {
                         assert_eq!(*input.get_byte_value(), Some(4));
                     }
                     """,
-                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                        .resolve("client::http::test_util::NeverClient"),
+                    "NeverClient" to
+                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("client::http::test_util::NeverClient"),
                 )
             }
         }
@@ -121,7 +125,8 @@ class FluentClientGeneratorTest {
 
     @Test
     fun `dead-code warning should not be issued when a service has no operations`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             use aws.protocols#awsJson1_0
 
@@ -129,7 +134,7 @@ class FluentClientGeneratorTest {
             service HelloService {
                 version: "1"
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         clientIntegrationTest(model)
     }

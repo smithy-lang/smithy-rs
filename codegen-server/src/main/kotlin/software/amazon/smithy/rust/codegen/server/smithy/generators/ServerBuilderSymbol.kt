@@ -24,18 +24,23 @@ fun StructureShape.serverBuilderSymbol(codegenContext: ServerCodegenContext): Sy
     )
 
 // TODO(https://github.com/smithy-lang/smithy-rs/issues/2396): Replace this with `RustSymbolProvider.moduleForBuilder`
-fun StructureShape.serverBuilderModule(symbolProvider: SymbolProvider, pubCrate: Boolean): RustModule.LeafModule {
+fun StructureShape.serverBuilderModule(
+    symbolProvider: SymbolProvider,
+    pubCrate: Boolean,
+): RustModule.LeafModule {
     val structureSymbol = symbolProvider.toSymbol(this)
-    val builderNamespace = RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase()) +
-        if (pubCrate) {
-            "_internal"
-        } else {
-            ""
+    val builderNamespace =
+        RustReservedWords.escapeIfNeeded(structureSymbol.name.toSnakeCase()) +
+            if (pubCrate) {
+                "_internal"
+            } else {
+                ""
+            }
+    val visibility =
+        when (pubCrate) {
+            true -> Visibility.PUBCRATE
+            false -> Visibility.PUBLIC
         }
-    val visibility = when (pubCrate) {
-        true -> Visibility.PUBCRATE
-        false -> Visibility.PUBLIC
-    }
     return RustModule.new(
         builderNamespace,
         visibility,
@@ -46,7 +51,10 @@ fun StructureShape.serverBuilderModule(symbolProvider: SymbolProvider, pubCrate:
 }
 
 // TODO(https://github.com/smithy-lang/smithy-rs/issues/2396): Replace this with `RustSymbolProvider.symbolForBuilder`
-fun StructureShape.serverBuilderSymbol(symbolProvider: SymbolProvider, pubCrate: Boolean): Symbol {
+fun StructureShape.serverBuilderSymbol(
+    symbolProvider: SymbolProvider,
+    pubCrate: Boolean,
+): Symbol {
     val builderModule = serverBuilderModule(symbolProvider, pubCrate)
     val rustType = RustType.Opaque("Builder", builderModule.fullyQualifiedPath())
     return Symbol.builder()

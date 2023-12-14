@@ -29,11 +29,12 @@ class TsApplicationGenerator(
     private val protocol: ServerProtocol,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
-    private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
-        compareBy {
-            it.id
-        },
-    ).toList()
+    private val operations =
+        index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
+            compareBy {
+                it.id
+            },
+        ).toList()
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = codegenContext.settings.moduleName.toSnakeCase()
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -263,7 +264,8 @@ class TsApplicationGenerator(
 
         writer.rustBlock("impl TsSocket") {
             writer.rustTemplate(
-                """pub fn to_raw_socket(&self) -> #{napi}::Result<#{socket2}::Socket> {
+                """
+                pub fn to_raw_socket(&self) -> #{napi}::Result<#{socket2}::Socket> {
                 self.0
                  .try_clone()
                  .map_err(|e| #{napi}::Error::from_reason(e.to_string()))
@@ -277,7 +279,8 @@ class TsApplicationGenerator(
 
     private fun renderServer(writer: RustWriter) {
         writer.rustBlockTemplate(
-            """pub fn start_hyper_worker(
+            """
+            pub fn start_hyper_worker(
             socket: &TsSocket,
             app: #{tower}::util::BoxCloneService<
                 #{http}::Request<#{SmithyServer}::body::Body>,

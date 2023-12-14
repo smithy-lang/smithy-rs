@@ -23,7 +23,8 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class AwsQueryParserGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
         use aws.protocols#awsQuery
 
@@ -37,17 +38,18 @@ class AwsQueryParserGeneratorTest {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `it modifies operation parsing to include Response and Result tags`() {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
-        val parserGenerator = AwsQueryParserGenerator(
-            codegenContext,
-            RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
-        )
+        val parserGenerator =
+            AwsQueryParserGenerator(
+                codegenContext,
+                RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
+            )
         val operationParser = parserGenerator.operationParser(model.lookup("test#SomeOperation"))!!
         val project = TestWorkspace.testProject(testSymbolProvider(model))
 

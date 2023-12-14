@@ -29,7 +29,10 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
     /**
      * Generate an accessor on [root] that consumes [root] and returns an `Option<T>` for the nested item
      */
-    fun generateOwnedAccessor(root: StructureShape, path: List<MemberShape>): RuntimeType {
+    fun generateOwnedAccessor(
+        root: StructureShape,
+        path: List<MemberShape>,
+    ): RuntimeType {
         check(path.isNotEmpty()) { "must not be called on an empty path" }
         val baseType = symbolProvider.toSymbol(path.last())
         val fnName = symbolProvider.nestedAccessorName(codegenContext.serviceShape, "", root, path)
@@ -48,7 +51,10 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
     /**
      * Generate an accessor on [root] that takes a reference and returns an `Option<&T>` for the nested item
      */
-    fun generateBorrowingAccessor(root: StructureShape, path: List<MemberShape>): RuntimeType {
+    fun generateBorrowingAccessor(
+        root: StructureShape,
+        path: List<MemberShape>,
+    ): RuntimeType {
         check(path.isNotEmpty()) { "must not be called on an empty path" }
         val baseType = symbolProvider.toSymbol(path.last()).makeOptional()
         val fnName = symbolProvider.nestedAccessorName(codegenContext.serviceShape, "ref", root, path)
@@ -65,13 +71,17 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
         }
     }
 
-    private fun generateBody(path: List<MemberShape>, reference: Boolean): Writable =
+    private fun generateBody(
+        path: List<MemberShape>,
+        reference: Boolean,
+    ): Writable =
         writable {
-            val ref = if (reference) {
-                "&"
-            } else {
-                ""
-            }
+            val ref =
+                if (reference) {
+                    "&"
+                } else {
+                    ""
+                }
             if (path.isEmpty()) {
                 rustTemplate("#{Some}(input)", *preludeScope)
             } else {

@@ -70,7 +70,11 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalInterceptors") {
-        fun registerInterceptor(runtimeConfig: RuntimeConfig, writer: RustWriter, interceptor: Writable) {
+        fun registerInterceptor(
+            runtimeConfig: RuntimeConfig,
+            writer: RustWriter,
+            interceptor: Writable,
+        ) {
             writer.rustTemplate(
                 ".with_interceptor(#{interceptor})",
                 "interceptor" to interceptor,
@@ -95,11 +99,17 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("AdditionalRuntimePlugins") {
-        fun addClientPlugin(writer: RustWriter, plugin: Writable) {
+        fun addClientPlugin(
+            writer: RustWriter,
+            plugin: Writable,
+        ) {
             writer.rustTemplate(".with_client_plugin(#{plugin})", "plugin" to plugin)
         }
 
-        fun addOperationRuntimePlugin(writer: RustWriter, plugin: Writable) {
+        fun addOperationRuntimePlugin(
+            writer: RustWriter,
+            plugin: Writable,
+        ) {
             writer.rustTemplate(".with_operation_plugin(#{plugin})", "plugin" to plugin)
         }
     }
@@ -108,7 +118,10 @@ sealed class OperationSection(name: String) : Section(name) {
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,
     ) : OperationSection("RetryClassifiers") {
-        fun registerRetryClassifier(writer: RustWriter, classifier: Writable) {
+        fun registerRetryClassifier(
+            writer: RustWriter,
+            classifier: Writable,
+        ) {
             writer.rustTemplate(".with_retry_classifier(#{classifier})", "classifier" to classifier)
         }
     }

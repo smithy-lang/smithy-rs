@@ -15,11 +15,15 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.logging.Logger
 
 // TODO(EventStream): [CLEANUP] Remove this class once the Event Stream implementation is stable
+
 /** Transformer to REMOVE operations that use EventStreaming until event streaming is supported */
 object RemoveEventStreamOperations {
     private val logger = Logger.getLogger(javaClass.name)
 
-    fun transform(model: Model, settings: ClientRustSettings): Model {
+    fun transform(
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model {
         // If Event Stream is allowed in build config, then don't remove the operations
         val allowList = settings.codegenConfig.eventStreamAllowList
         if (allowList.isEmpty() || allowList.contains(settings.moduleName)) {
@@ -30,16 +34,18 @@ object RemoveEventStreamOperations {
             if (parentShape !is OperationShape) {
                 true
             } else {
-                val ioShapes = listOfNotNull(parentShape.output.orNull(), parentShape.input.orNull()).map {
-                    model.expectShape(
-                        it,
-                        StructureShape::class.java,
-                    )
-                }
-                val hasEventStream = ioShapes.any { ioShape ->
-                    val streamingMember = ioShape.findStreamingMember(model)?.let { model.expectShape(it.target) }
-                    streamingMember?.isUnionShape ?: false
-                }
+                val ioShapes =
+                    listOfNotNull(parentShape.output.orNull(), parentShape.input.orNull()).map {
+                        model.expectShape(
+                            it,
+                            StructureShape::class.java,
+                        )
+                    }
+                val hasEventStream =
+                    ioShapes.any { ioShape ->
+                        val streamingMember = ioShape.findStreamingMember(model)?.let { model.expectShape(it.target) }
+                        streamingMember?.isUnionShape ?: false
+                    }
                 // If a streaming member has a union trait, it is an event stream. Event Streams are not currently supported
                 // by the SDK, so if we generate this API it won't work.
                 (!hasEventStream).also {

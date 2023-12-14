@@ -46,19 +46,20 @@ class ErrorGenerator(
                 model, symbolProvider, this, shape,
                 listOf(
                     object : StructureCustomization() {
-                        override fun section(section: StructureSection): Writable = writable {
-                            when (section) {
-                                is StructureSection.AdditionalFields -> {
-                                    rust("pub(crate) meta: #T,", errorMetadata(runtimeConfig))
-                                }
+                        override fun section(section: StructureSection): Writable =
+                            writable {
+                                when (section) {
+                                    is StructureSection.AdditionalFields -> {
+                                        rust("pub(crate) meta: #T,", errorMetadata(runtimeConfig))
+                                    }
 
-                                is StructureSection.AdditionalDebugFields -> {
-                                    rust("""${section.formatterName}.field("meta", &self.meta);""")
-                                }
+                                    is StructureSection.AdditionalDebugFields -> {
+                                        rust("""${section.formatterName}.field("meta", &self.meta);""")
+                                    }
 
-                                else -> {}
+                                    else -> {}
+                                }
                             }
-                        }
                     },
                 ),
                 structSettings,
@@ -89,38 +90,39 @@ class ErrorGenerator(
                 model, symbolProvider, shape,
                 listOf(
                     object : BuilderCustomization() {
-                        override fun section(section: BuilderSection): Writable = writable {
-                            when (section) {
-                                is BuilderSection.AdditionalFields -> {
-                                    rust("meta: std::option::Option<#T>,", errorMetadata(runtimeConfig))
+                        override fun section(section: BuilderSection): Writable =
+                            writable {
+                                when (section) {
+                                    is BuilderSection.AdditionalFields -> {
+                                        rust("meta: std::option::Option<#T>,", errorMetadata(runtimeConfig))
+                                    }
+
+                                    is BuilderSection.AdditionalMethods -> {
+                                        rustTemplate(
+                                            """
+                                            /// Sets error metadata
+                                            pub fn meta(mut self, meta: #{error_metadata}) -> Self {
+                                                self.meta = Some(meta);
+                                                self
+                                            }
+
+                                            /// Sets error metadata
+                                            pub fn set_meta(&mut self, meta: std::option::Option<#{error_metadata}>) -> &mut Self {
+                                                self.meta = meta;
+                                                self
+                                            }
+                                            """,
+                                            "error_metadata" to errorMetadata(runtimeConfig),
+                                        )
+                                    }
+
+                                    is BuilderSection.AdditionalFieldsInBuild -> {
+                                        rust("meta: self.meta.unwrap_or_default(),")
+                                    }
+
+                                    else -> {}
                                 }
-
-                                is BuilderSection.AdditionalMethods -> {
-                                    rustTemplate(
-                                        """
-                                        /// Sets error metadata
-                                        pub fn meta(mut self, meta: #{error_metadata}) -> Self {
-                                            self.meta = Some(meta);
-                                            self
-                                        }
-
-                                        /// Sets error metadata
-                                        pub fn set_meta(&mut self, meta: std::option::Option<#{error_metadata}>) -> &mut Self {
-                                            self.meta = meta;
-                                            self
-                                        }
-                                        """,
-                                        "error_metadata" to errorMetadata(runtimeConfig),
-                                    )
-                                }
-
-                                is BuilderSection.AdditionalFieldsInBuild -> {
-                                    rust("meta: self.meta.unwrap_or_default(),")
-                                }
-
-                                else -> {}
                             }
-                        }
                     },
                 ),
             ).render(this)

@@ -28,53 +28,54 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.extendIf
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
-/* Example Generated Code */
-/*
-pub struct Config {
-    pub(crate) region: Option<aws_types::region::Region>,
-}
-
-impl std::fmt::Debug for Config {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut config = f.debug_struct("Config");
-        config.finish()
-    }
-}
-
-impl Config {
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-}
-
-#[derive(Default)]
-pub struct Builder {
-    region: Option<aws_types::region::Region>,
-}
-
-impl Builder {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn region(mut self, region: impl Into<Option<aws_types::region::Region>>) -> Self {
-        self.region = region.into();
-        self
-    }
-
-    pub fn build(self) -> Config {
-        Config {
-            region: self.region,
-        }
-    }
-}
-
-#[test]
-fn test_1() {
-    fn assert_send_sync<T: Send + Sync>() {}
-    assert_send_sync::<Config>();
-}
- */
+// Example Generated Code
+// ----------------------
+//
+// pub struct Config {
+//     pub(crate) region: Option<aws_types::region::Region>,
+// }
+//
+// impl std::fmt::Debug for Config {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         let mut config = f.debug_struct("Config");
+//         config.finish()
+//     }
+// }
+//
+// impl Config {
+//     pub fn builder() -> Builder {
+//         Builder::default()
+//     }
+// }
+//
+// #[derive(Default)]
+// pub struct Builder {
+//     region: Option<aws_types::region::Region>,
+// }
+//
+// impl Builder {
+//     pub fn new() -> Self {
+//         Self::default()
+//     }
+//
+//     pub fn region(mut self, region: impl Into<Option<aws_types::region::Region>>) -> Self {
+//         self.region = region.into();
+//         self
+//     }
+//
+//     pub fn build(self) -> Config {
+//         Config {
+//             region: self.region,
+//         }
+//     }
+// }
+//
+// #[test]
+// fn test_1() {
+//     fn assert_send_sync<T: Send + Sync>() {}
+//     assert_send_sync::<Config>();
+// }
+//
 
 class RegionDecorator : ClientCodegenDecorator {
     override val name: String = "Region"
@@ -83,8 +84,9 @@ class RegionDecorator : ClientCodegenDecorator {
     // Services that have an endpoint ruleset that references the SDK::Region built in, or
     // that use SigV4, both need a configurable region.
     private fun usesRegion(codegenContext: ClientCodegenContext) =
-        codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null || ServiceIndex.of(codegenContext.model)
-            .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
+        codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null ||
+            ServiceIndex.of(codegenContext.model)
+                .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -114,20 +116,28 @@ class RegionDecorator : ClientCodegenDecorator {
         }
         return listOf(
             object : EndpointCustomization {
-                override fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? {
+                override fun loadBuiltInFromServiceConfig(
+                    parameter: Parameter,
+                    configRef: String,
+                ): Writable? {
                     return when (parameter.builtIn) {
-                        AwsBuiltIns.REGION.builtIn -> writable {
-                            rustTemplate(
-                                "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
-                                "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
-                            )
-                        }
+                        AwsBuiltIns.REGION.builtIn ->
+                            writable {
+                                rustTemplate(
+                                    "$configRef.load::<#{Region}>().map(|r|r.as_ref().to_owned())",
+                                    "Region" to region(codegenContext.runtimeConfig).resolve("Region"),
+                                )
+                            }
 
                         else -> null
                     }
                 }
 
-                override fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? {
+                override fun setBuiltInOnServiceConfig(
+                    name: String,
+                    value: Node,
+                    configBuilderRef: String,
+                ): Writable? {
                     if (name != AwsBuiltIns.REGION.builtIn.get()) {
                         return null
                     }
@@ -146,62 +156,64 @@ class RegionDecorator : ClientCodegenDecorator {
 class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val region = region(codegenContext.runtimeConfig)
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "Region" to configReexport(region.resolve("Region")),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "Region" to configReexport(region.resolve("Region")),
+        )
 
-    override fun section(section: ServiceConfig) = writable {
-        when (section) {
-            ServiceConfig.ConfigImpl -> {
-                rustTemplate(
-                    """
-                    /// Returns the AWS region, if it was provided.
-                    pub fn region(&self) -> #{Option}<&#{Region}> {
-                        self.config.load::<#{Region}>()
-                    }
-                    """,
-                    *codegenScope,
-                )
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                ServiceConfig.ConfigImpl -> {
+                    rustTemplate(
+                        """
+                        /// Returns the AWS region, if it was provided.
+                        pub fn region(&self) -> #{Option}<&#{Region}> {
+                            self.config.load::<#{Region}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                ServiceConfig.BuilderImpl -> {
+                    rustTemplate(
+                        """
+                        /// Sets the AWS region to use when making requests.
+                        ///
+                        /// ## Examples
+                        /// ```no_run
+                        /// use aws_types::region::Region;
+                        /// use $moduleUseName::config::{Builder, Config};
+                        ///
+                        /// let config = $moduleUseName::Config::builder()
+                        ///     .region(Region::new("us-east-1"))
+                        ///     .build();
+                        /// ```
+                        pub fn region(mut self, region: impl #{Into}<#{Option}<#{Region}>>) -> Self {
+                            self.set_region(region.into());
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+
+                    rustTemplate(
+                        """
+                        /// Sets the AWS region to use when making requests.
+                        pub fn set_region(&mut self, region: #{Option}<#{Region}>) -> &mut Self {
+                            self.config.store_or_unset(region);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                else -> emptySection
             }
-
-            ServiceConfig.BuilderImpl -> {
-                rustTemplate(
-                    """
-                    /// Sets the AWS region to use when making requests.
-                    ///
-                    /// ## Examples
-                    /// ```no_run
-                    /// use aws_types::region::Region;
-                    /// use $moduleUseName::config::{Builder, Config};
-                    ///
-                    /// let config = $moduleUseName::Config::builder()
-                    ///     .region(Region::new("us-east-1"))
-                    ///     .build();
-                    /// ```
-                    pub fn region(mut self, region: impl #{Into}<#{Option}<#{Region}>>) -> Self {
-                        self.set_region(region.into());
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
-
-                rustTemplate(
-                    """
-                    /// Sets the AWS region to use when making requests.
-                    pub fn set_region(&mut self, region: #{Option}<#{Region}>) -> &mut Self {
-                        self.config.store_or_unset(region);
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
-
-            else -> emptySection
         }
-    }
 }
 
 fun region(runtimeConfig: RuntimeConfig) = AwsRuntimeType.awsTypes(runtimeConfig).resolve("region")

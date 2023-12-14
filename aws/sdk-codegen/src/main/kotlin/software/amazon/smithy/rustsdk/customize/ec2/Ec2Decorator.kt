@@ -16,6 +16,9 @@ class Ec2Decorator : ClientCodegenDecorator {
 
     // EC2 incorrectly models primitive shapes as unboxed when they actually
     // need to be boxed for the API to work properly
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
-        EC2MakePrimitivesOptional.processModel(model)
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model = EC2MakePrimitivesOptional.processModel(model)
 }

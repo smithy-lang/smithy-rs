@@ -40,7 +40,6 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
             ShapeId.from("aws.protocoltests.json#JsonProtocol"),
             ShapeId.from("com.amazonaws.s3#AmazonS3"),
             ShapeId.from("com.amazonaws.ebs#Ebs"),
-
             // These are only loaded in the classpath and need this model transformer, but we don't generate server
             // SDKs for them. Here they are for reference.
             // ShapeId.from("aws.protocoltests.restxml#RestXml"),
@@ -52,16 +51,17 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
 
     fun transform(model: Model): Model {
         val walker = DirectedWalker(model)
-        val operationsWithConstrainedInputWithoutValidationException = model.serviceShapes
-            .filter { sherviceShapeIdAllowList.contains(it.toShapeId()) }
-            .flatMap { it.operations }
-            .map { model.expectShape(it, OperationShape::class.java) }
-            .filter { operationShape ->
-                // Walk the shapes reachable via this operation input.
-                walker.walkShapes(operationShape.inputShape(model))
-                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
-            }
-            .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
+        val operationsWithConstrainedInputWithoutValidationException =
+            model.serviceShapes
+                .filter { sherviceShapeIdAllowList.contains(it.toShapeId()) }
+                .flatMap { it.operations }
+                .map { model.expectShape(it, OperationShape::class.java) }
+                .filter { operationShape ->
+                    // Walk the shapes reachable via this operation input.
+                    walker.walkShapes(operationShape.inputShape(model))
+                        .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+                }
+                .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
 
         return ModelTransformer.create().mapShapes(model) { shape ->
             if (shape is OperationShape && operationsWithConstrainedInputWithoutValidationException.contains(shape)) {

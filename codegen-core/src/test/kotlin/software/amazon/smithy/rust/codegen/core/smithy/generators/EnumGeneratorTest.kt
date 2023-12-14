@@ -31,15 +31,17 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
 class EnumGeneratorTest {
-    private val rustReservedWordConfig = RustReservedWordConfig(
-        enumMemberMap = mapOf("Unknown" to "UnknownValue"),
-        structureMemberMap = emptyMap(),
-        unionMemberMap = emptyMap(),
-    )
+    private val rustReservedWordConfig =
+        RustReservedWordConfig(
+            enumMemberMap = mapOf("Unknown" to "UnknownValue"),
+            structureMemberMap = emptyMap(),
+            unionMemberMap = emptyMap(),
+        )
 
     @Nested
     inner class EnumMemberModelTests {
-        private val testModel = """
+        private val testModel =
+            """
             namespace test
             @enum([
                 { value: "some-value-1",
@@ -53,16 +55,17 @@ class EnumGeneratorTest {
                   documentation: "It has some docs that #need to be escaped" }
             ])
             string EnumWithUnknown
-        """.asSmithyModel()
+            """.asSmithyModel()
         private val symbolProvider = testSymbolProvider(testModel, rustReservedWordConfig = rustReservedWordConfig)
 
         private val enumTrait = testModel.lookup<StringShape>("test#EnumWithUnknown").expectTrait<EnumTrait>()
 
-        private fun model(name: String): EnumMemberModel = EnumMemberModel(
-            testModel.lookup("test#EnumWithUnknown"),
-            enumTrait.values.first { it.name.orNull() == name },
-            symbolProvider,
-        )
+        private fun model(name: String): EnumMemberModel =
+            EnumMemberModel(
+                testModel.lookup("test#EnumWithUnknown"),
+                enumTrait.values.first { it.name.orNull() == name },
+                symbolProvider,
+            )
 
         @Test
         fun `it converts enum names to PascalCase and renames any named Unknown to UnknownValue`() {
@@ -114,7 +117,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `it generates named enums`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                     {
@@ -133,7 +137,7 @@ class EnumGeneratorTest {
                 ])
                 @deprecated(since: "1.2.3")
                 string InstanceType
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#InstanceType")
             val provider = testSymbolProvider(model)
@@ -162,7 +166,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `named enums implement eq and hash`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                 {
@@ -174,7 +179,7 @@ class EnumGeneratorTest {
                     name: "Bar"
                 }])
                 string FooEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#FooEnum")
             val provider = testSymbolProvider(model)
@@ -196,7 +201,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `unnamed enums implement eq and hash`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                 {
@@ -207,7 +213,7 @@ class EnumGeneratorTest {
                 }])
                 @deprecated
                 string FooEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#FooEnum")
             val provider = testSymbolProvider(model)
@@ -230,7 +236,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `it generates unnamed enums`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                     {
@@ -250,7 +257,7 @@ class EnumGeneratorTest {
                     },
                 ])
                 string FooEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#FooEnum")
             val provider = testSymbolProvider(model)
@@ -271,7 +278,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `it should generate documentation for enums`() {
-            val model = """
+            val model =
+                """
                 namespace test
 
                 /// Some top-level documentation.
@@ -280,7 +288,7 @@ class EnumGeneratorTest {
                     { name: "Unknown", value: "Unknown" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model, rustReservedWordConfig = rustReservedWordConfig)
@@ -300,7 +308,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `it should generate documentation for unnamed enums`() {
-            val model = """
+            val model =
+                """
                 namespace test
 
                 /// Some top-level documentation.
@@ -309,7 +318,7 @@ class EnumGeneratorTest {
                     { value: "Two" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
@@ -327,14 +336,15 @@ class EnumGeneratorTest {
 
         @Test
         fun `it handles variants that clash with Rust reserved words`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                     { name: "Known", value: "Known" },
                     { name: "Self", value: "other" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
@@ -351,14 +361,15 @@ class EnumGeneratorTest {
 
         @Test
         fun `impl debug for non-sensitive enum should implement the derived debug trait`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                     { name: "Foo", value: "Foo" },
                     { name: "Bar", value: "Bar" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
@@ -378,7 +389,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `impl debug for sensitive enum should redact text`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @sensitive
                 @enum([
@@ -386,7 +398,7 @@ class EnumGeneratorTest {
                     { name: "Bar", value: "Bar" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
@@ -406,14 +418,15 @@ class EnumGeneratorTest {
 
         @Test
         fun `impl debug for non-sensitive unnamed enum should implement the derived debug trait`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                     { value: "Foo" },
                     { value: "Bar" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
@@ -437,7 +450,8 @@ class EnumGeneratorTest {
 
         @Test
         fun `impl debug for sensitive unnamed enum should redact text`() {
-            val model = """
+            val model =
+                """
                 namespace test
                 @sensitive
                 @enum([
@@ -445,7 +459,7 @@ class EnumGeneratorTest {
                     { value: "Bar" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
 
             val shape = model.lookup<StringShape>("test#SomeEnum")
             val provider = testSymbolProvider(model)
@@ -470,41 +484,48 @@ class EnumGeneratorTest {
         @Test
         fun `it supports other enum types`() {
             class CustomizingEnumType : EnumType() {
-                override fun implFromForStr(context: EnumGeneratorContext): Writable = writable {
-                    // intentional no-op
-                }
+                override fun implFromForStr(context: EnumGeneratorContext): Writable =
+                    writable {
+                        // intentional no-op
+                    }
 
-                override fun implFromStr(context: EnumGeneratorContext): Writable = writable {
-                    // intentional no-op
-                }
+                override fun implFromStr(context: EnumGeneratorContext): Writable =
+                    writable {
+                        // intentional no-op
+                    }
 
-                override fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {
-                    rust("// additional enum members")
-                }
+                override fun additionalEnumMembers(context: EnumGeneratorContext): Writable =
+                    writable {
+                        rust("// additional enum members")
+                    }
 
-                override fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable = writable {
-                    rust("// additional as_str match arm")
-                }
+                override fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable =
+                    writable {
+                        rust("// additional as_str match arm")
+                    }
 
-                override fun additionalDocs(context: EnumGeneratorContext): Writable = writable {
-                    rust("// additional docs")
-                }
+                override fun additionalDocs(context: EnumGeneratorContext): Writable =
+                    writable {
+                        rust("// additional docs")
+                    }
             }
 
-            val model = """
+            val model =
+                """
                 namespace test
                 @enum([
                     { name: "Known", value: "Known" },
                     { name: "Self", value: "other" },
                 ])
                 string SomeEnum
-            """.asSmithyModel()
+                """.asSmithyModel()
             val shape = model.lookup<StringShape>("test#SomeEnum")
 
             val provider = testSymbolProvider(model)
-            val output = RustWriter.root().apply {
-                renderEnum(model, provider, shape, CustomizingEnumType())
-            }.toString()
+            val output =
+                RustWriter.root().apply {
+                    renderEnum(model, provider, shape, CustomizingEnumType())
+                }.toString()
 
             // Since we didn't use the Infallible EnumType, there should be no Unknown variant
             output shouldNotContain "Unknown"

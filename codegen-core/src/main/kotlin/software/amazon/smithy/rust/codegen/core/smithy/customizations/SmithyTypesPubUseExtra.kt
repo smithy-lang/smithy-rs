@@ -30,12 +30,16 @@ private fun hasStreamingOperations(model: Model): Boolean {
 }
 
 // TODO(https://github.com/smithy-lang/smithy-rs/issues/2111): Fix this logic to consider collection/map shapes
-private fun structUnionMembersMatchPredicate(model: Model, predicate: (Shape) -> Boolean): Boolean =
+private fun structUnionMembersMatchPredicate(
+    model: Model,
+    predicate: (Shape) -> Boolean,
+): Boolean =
     model.structureShapes.any { structure ->
         structure.members().any { member -> predicate(model.expectShape(member.target)) }
-    } || model.unionShapes.any { union ->
-        union.members().any { member -> predicate(model.expectShape(member.target)) }
-    }
+    } ||
+        model.unionShapes.any { union ->
+            union.members().any { member -> predicate(model.expectShape(member.target)) }
+        }
 
 /** Returns true if the model uses any blob shapes */
 private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isBlobShape)
@@ -44,59 +48,68 @@ private fun hasBlobs(model: Model): Boolean = structUnionMembersMatchPredicate(m
 private fun hasDateTimes(model: Model): Boolean = structUnionMembersMatchPredicate(model, Shape::isTimestampShape)
 
 /** Adds re-export statements for Smithy primitives */
-fun pubUseSmithyPrimitives(codegenContext: CodegenContext, model: Model, rustCrate: RustCrate): Writable = writable {
-    val rc = codegenContext.runtimeConfig
-    if (hasBlobs(model)) {
-        rustTemplate("pub use #{Blob};", "Blob" to RuntimeType.blob(rc))
+fun pubUseSmithyPrimitives(
+    codegenContext: CodegenContext,
+    model: Model,
+    rustCrate: RustCrate,
+): Writable =
+    writable {
+        val rc = codegenContext.runtimeConfig
+        if (hasBlobs(model)) {
+            rustTemplate("pub use #{Blob};", "Blob" to RuntimeType.blob(rc))
+        }
+        if (hasDateTimes(model)) {
+            rustTemplate(
+                """
+                pub use #{DateTime};
+                pub use #{Format} as DateTimeFormat;
+                """,
+                "DateTime" to RuntimeType.dateTime(rc),
+                "Format" to RuntimeType.format(rc),
+            )
+        }
+        if (hasStreamingOperations(model)) {
+            rustCrate.mergeFeature(
+                Feature(
+                    "rt-tokio",
+                    true,
+                    listOf("aws-smithy-types/rt-tokio"),
+                ),
+            )
+            rustTemplate(
+                """
+                pub use #{ByteStream};
+                pub use #{AggregatedBytes};
+                pub use #{Error} as ByteStreamError;
+                pub use #{SdkBody};
+                """,
+                "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
+                "AggregatedBytes" to RuntimeType.smithyTypes(rc).resolve("byte_stream::AggregatedBytes"),
+                "Error" to RuntimeType.smithyTypes(rc).resolve("byte_stream::error::Error"),
+                "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
+            )
+        }
     }
-    if (hasDateTimes(model)) {
-        rustTemplate(
-            """
-            pub use #{DateTime};
-            pub use #{Format} as DateTimeFormat;
-            """,
-            "DateTime" to RuntimeType.dateTime(rc),
-            "Format" to RuntimeType.format(rc),
-        )
-    }
-    if (hasStreamingOperations(model)) {
-        rustCrate.mergeFeature(
-            Feature(
-                "rt-tokio",
-                true,
-                listOf("aws-smithy-types/rt-tokio"),
-            ),
-        )
-        rustTemplate(
-            """
-            pub use #{ByteStream};
-            pub use #{AggregatedBytes};
-            pub use #{Error} as ByteStreamError;
-            pub use #{SdkBody};
-            """,
-            "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
-            "AggregatedBytes" to RuntimeType.smithyTypes(rc).resolve("byte_stream::AggregatedBytes"),
-            "Error" to RuntimeType.smithyTypes(rc).resolve("byte_stream::error::Error"),
-            "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
-        )
-    }
-}
 
 /** Adds re-export statements for event-stream-related Smithy primitives */
-fun pubUseSmithyPrimitivesEventStream(codegenContext: CodegenContext, model: Model): Writable = writable {
-    val rc = codegenContext.runtimeConfig
-    if (codegenContext.serviceShape.hasEventStreamOperations(model)) {
-        rustTemplate(
-            """
-            pub use #{Header};
-            pub use #{HeaderValue};
-            pub use #{Message};
-            pub use #{StrBytes};
-            """,
-            "Header" to RuntimeType.smithyTypes(rc).resolve("event_stream::Header"),
-            "HeaderValue" to RuntimeType.smithyTypes(rc).resolve("event_stream::HeaderValue"),
-            "Message" to RuntimeType.smithyTypes(rc).resolve("event_stream::Message"),
-            "StrBytes" to RuntimeType.smithyTypes(rc).resolve("str_bytes::StrBytes"),
-        )
+fun pubUseSmithyPrimitivesEventStream(
+    codegenContext: CodegenContext,
+    model: Model,
+): Writable =
+    writable {
+        val rc = codegenContext.runtimeConfig
+        if (codegenContext.serviceShape.hasEventStreamOperations(model)) {
+            rustTemplate(
+                """
+                pub use #{Header};
+                pub use #{HeaderValue};
+                pub use #{Message};
+                pub use #{StrBytes};
+                """,
+                "Header" to RuntimeType.smithyTypes(rc).resolve("event_stream::Header"),
+                "HeaderValue" to RuntimeType.smithyTypes(rc).resolve("event_stream::HeaderValue"),
+                "Message" to RuntimeType.smithyTypes(rc).resolve("event_stream::Message"),
+                "StrBytes" to RuntimeType.smithyTypes(rc).resolve("str_bytes::StrBytes"),
+            )
+        }
     }
-}

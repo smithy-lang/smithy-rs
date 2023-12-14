@@ -37,7 +37,10 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         }
         """
 
-    private fun validateModel(model: Model, serverCodegenConfig: ServerCodegenConfig = ServerCodegenConfig()): ValidationResult {
+    private fun validateModel(
+        model: Model,
+        serverCodegenConfig: ServerCodegenConfig = ServerCodegenConfig(),
+    ): ValidationResult {
         val service = model.serviceShapes.first()
         return validateUnsupportedConstraints(model, service, serverCodegenConfig)
     }
@@ -54,16 +57,18 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             }
             """.asSmithyModel()
         val service = model.lookup<ServiceShape>("test#TestService")
-        val validationResult = validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
-            model,
-            service,
-            SmithyValidationExceptionConversionGenerator.SHAPE_ID,
-        )
+        val validationResult =
+            validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
+                model,
+                service,
+                SmithyValidationExceptionConversionGenerator.SHAPE_ID,
+            )
 
         validationResult.messages shouldHaveSize 1
 
         // Asserts the exact message, to ensure the formatting is appropriate.
-        validationResult.messages[0].message shouldBe """
+        validationResult.messages[0].message shouldBe
+            """
             Operation test#TestOperation takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a validation exception. You must model this behavior in the operation shape in your model file.
             ```smithy
             use smithy.framework#ValidationException
@@ -73,7 +78,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
                 errors: [..., ValidationException] // <-- Add this.
             }
             ```
-        """.trimIndent()
+            """.trimIndent()
     }
 
     private val constraintTraitOnStreamingBlobShapeModel =
@@ -95,10 +100,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
         val validationResult = validateModel(constraintTraitOnStreamingBlobShapeModel)
 
         validationResult.messages shouldHaveSize 1
-        validationResult.messages[0].message shouldContain """
+        validationResult.messages[0].message shouldContain
+            """
             The blob shape `test#StreamingBlob` has both the `smithy.api#length` and `smithy.api#streaming` constraint traits attached.
             It is unclear what the semantics for streaming blob shapes are.
-        """.trimIndent().replace("\n", " ")
+            """.trimIndent().replace("\n", " ")
     }
 
     private val constrainedShapesInEventStreamModel =
@@ -183,25 +189,27 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             The map shape `test#Map` is reachable from the list shape `test#UniqueItemsList`, which has the
             `@uniqueItems` trait attached.
             """.trimIndent().replace("\n", " ")
-            )
+        )
     }
 
     @Test
     fun `it should abort when a map shape is reachable from a uniqueItems list shape, despite opting into ignoreUnsupportedConstraintTraits`() {
-        val validationResult = validateModel(
-            mapShapeReachableFromUniqueItemsListShapeModel,
-            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
-        )
+        val validationResult =
+            validateModel(
+                mapShapeReachableFromUniqueItemsListShapeModel,
+                ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+            )
 
         validationResult.shouldAbort shouldBe true
     }
 
     @Test
     fun `it should abort when constraint traits in event streams are used, despite opting into ignoreUnsupportedConstraintTraits`() {
-        val validationResult = validateModel(
-            EventStreamNormalizer.transform(constrainedShapesInEventStreamModel),
-            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
-        )
+        val validationResult =
+            validateModel(
+                EventStreamNormalizer.transform(constrainedShapesInEventStreamModel),
+                ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+            )
 
         validationResult.shouldAbort shouldBe true
     }
@@ -216,10 +224,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
     @Test
     fun `it should not abort when ignoreUnsupportedConstraints is true and unsupported constraints are used`() {
-        val validationResult = validateModel(
-            constraintTraitOnStreamingBlobShapeModel,
-            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
-        )
+        val validationResult =
+            validateModel(
+                constraintTraitOnStreamingBlobShapeModel,
+                ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+            )
 
         validationResult.messages shouldHaveAtLeastSize 1
         validationResult.shouldAbort shouldBe false
@@ -235,10 +244,11 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
     @Test
     fun `it should set log level to warn when ignoreUnsupportedConstraints is true and unsupported constraints are used`() {
-        val validationResult = validateModel(
-            constraintTraitOnStreamingBlobShapeModel,
-            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
-        )
+        val validationResult =
+            validateModel(
+                constraintTraitOnStreamingBlobShapeModel,
+                ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+            )
 
         validationResult.messages shouldHaveAtLeastSize 1
         validationResult.messages.shouldForAll { it.level shouldBe Level.WARNING }
@@ -246,14 +256,16 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
     @Test
     fun `it should abort when ignoreUnsupportedConstraints is true and all used constraints are supported`() {
-        val allConstraintTraitsAreSupported = File("../codegen-core/common-test-models/constraints.smithy")
-            .readText()
-            .asSmithyModel()
+        val allConstraintTraitsAreSupported =
+            File("../codegen-core/common-test-models/constraints.smithy")
+                .readText()
+                .asSmithyModel()
 
-        val validationResult = validateModel(
-            allConstraintTraitsAreSupported,
-            ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
-        )
+        val validationResult =
+            validateModel(
+                allConstraintTraitsAreSupported,
+                ServerCodegenConfig().copy(ignoreUnsupportedConstraints = true),
+            )
 
         validationResult.messages shouldHaveSize 1
         validationResult.shouldAbort shouldBe true
@@ -262,6 +274,6 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
             effect. All the constraint traits used in the model are well-supported, please remove this flag.
             """.trimIndent().replace("\n", " ")
-            )
+        )
     }
 }
