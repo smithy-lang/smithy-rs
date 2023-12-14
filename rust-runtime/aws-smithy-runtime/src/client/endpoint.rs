@@ -3,36 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Code for resolving an endpoint (URI) that a request should be sent to
+//! Code for applying endpoints to a request.
 
-#![allow(deprecated)]
-
-use crate::endpoint::error::InvalidEndpointError;
+use aws_smithy_runtime_api::client::endpoint::{error::InvalidEndpointError, EndpointPrefix};
 use http::uri::{Authority, Uri};
 use std::borrow::Cow;
 use std::result::Result as StdResult;
 use std::str::FromStr;
 
-pub use error::ResolveEndpointError;
-
-/// An endpoint-resolution-specific Result. Contains either an [`Endpoint`](aws_smithy_types::endpoint::Endpoint) or a [`ResolveEndpointError`].
-#[deprecated(since = "0.60.1", note = "Was never used.")]
-pub type Result = std::result::Result<aws_smithy_types::endpoint::Endpoint, ResolveEndpointError>;
-
-/// A special type that adds support for services that have special URL-prefixing rules.
-#[deprecated(
-    since = "0.60.1",
-    note = "Use aws_smithy_runtime_api::client::endpoint::EndpointPrefix instead."
-)]
-pub type EndpointPrefix = aws_smithy_runtime_api::client::endpoint::EndpointPrefix;
-
 /// Apply `endpoint` to `uri`
 ///
 /// This method mutates `uri` by setting the `endpoint` on it
-#[deprecated(
-    since = "0.60.1",
-    note = "Use aws_smithy_runtime::client::endpoint::apply_endpoint instead."
-)]
 pub fn apply_endpoint(
     uri: &mut Uri,
     endpoint: &Uri,
@@ -81,24 +62,4 @@ fn merge_paths<'a>(endpoint: &'a Uri, uri: &'a Uri) -> Cow<'a, str> {
             .unwrap_or(uri_path_and_query);
         Cow::Owned(format!("{}/{}", ep_no_slash, uri_path_no_slash))
     }
-}
-
-/// Errors related to endpoint resolution and validation
-pub mod error {
-    /// Endpoint resolution failed
-    #[deprecated(
-        since = "0.60.1",
-        note = "Use aws_smithy_runtime_api::client::endpoint::error::ResolveEndpointError instead."
-    )]
-    pub type ResolveEndpointError =
-        aws_smithy_runtime_api::client::endpoint::error::ResolveEndpointError;
-
-    /// An error that occurs when an endpoint is found to be invalid. This usually occurs due to an
-    /// incomplete URI.
-    #[deprecated(
-        since = "0.60.1",
-        note = "Use aws_smithy_runtime_api::client::endpoint::error::InvalidEndpointError instead."
-    )]
-    pub type InvalidEndpointError =
-        aws_smithy_runtime_api::client::endpoint::error::InvalidEndpointError;
 }
