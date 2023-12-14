@@ -13,6 +13,7 @@ use std::borrow::Cow;
 use std::result::Result as StdResult;
 use std::str::FromStr;
 
+pub mod error;
 pub use error::ResolveEndpointError;
 
 /// An endpoint-resolution-specific Result. Contains either an [`Endpoint`](aws_smithy_types::endpoint::Endpoint) or a [`ResolveEndpointError`].
@@ -81,24 +82,4 @@ fn merge_paths<'a>(endpoint: &'a Uri, uri: &'a Uri) -> Cow<'a, str> {
             .unwrap_or(uri_path_and_query);
         Cow::Owned(format!("{}/{}", ep_no_slash, uri_path_no_slash))
     }
-}
-
-/// Errors related to endpoint resolution and validation
-pub mod error {
-    /// Endpoint resolution failed
-    #[deprecated(
-        since = "0.60.1",
-        note = "Use aws_smithy_runtime_api::client::endpoint::error::ResolveEndpointError instead."
-    )]
-    pub type ResolveEndpointError =
-        aws_smithy_runtime_api::client::endpoint::error::ResolveEndpointError;
-
-    /// An error that occurs when an endpoint is found to be invalid. This usually occurs due to an
-    /// incomplete URI.
-    #[deprecated(
-        since = "0.60.1",
-        note = "Use aws_smithy_runtime_api::client::endpoint::error::InvalidEndpointError instead."
-    )]
-    pub type InvalidEndpointError =
-        aws_smithy_runtime_api::client::endpoint::error::InvalidEndpointError;
 }
