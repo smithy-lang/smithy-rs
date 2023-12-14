@@ -164,7 +164,7 @@ mod tests {
 
     impl Debug for TestDebugMap {
         fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-            f.debug_map().entries(self.0.into_iter()).finish()
+            f.debug_map().entries(self.0).finish()
         }
     }
 

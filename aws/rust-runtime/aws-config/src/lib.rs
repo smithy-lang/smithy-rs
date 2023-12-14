@@ -12,6 +12,8 @@
     unreachable_pub
 )]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+// Allow disallowed methods in tests
+#![cfg_attr(test, allow(clippy::disallowed_methods))]
 
 //! `aws-config` provides implementations of region and credential resolution.
 //!
