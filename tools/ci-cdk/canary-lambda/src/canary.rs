@@ -21,6 +21,7 @@ macro_rules! mk_canary {
             sdk_config: &aws_config::SdkConfig,
             env: &CanaryEnv,
         ) -> Option<(&'static str, $crate::canary::CanaryFuture)> {
+            #[allow(clippy::redundant_closure_call)]
             Some(($name, Box::pin($run_canary(sdk_config, env))))
         }
     };

@@ -15,6 +15,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 private val allowedRustcLints = listOf(
     // Deprecated items should be safe to compile, so don't block the compilation.
     "deprecated",
+
+    // Unknown lints need to be allowed since we use both nightly and our MSRV, and sometimes we need
+    // to disable lints that are in nightly but don't exist in the MSRV.
+    "unknown_lints",
 )
 
 private val allowedClippyLints = listOf(
@@ -56,6 +60,9 @@ private val allowedRustdocLints = listOf(
     // Rust >=1.53.0 requires links to be wrapped in `<link>`. This is extremely hard to enforce for
     // docs that come from the modeled documentation, so we need to disable this lint
     "bare_urls",
+    // Rustdoc warns about redundant explicit links in doc comments. This is fine for handwritten
+    // crates, but is impractical to manage for code generated crates. Thus, allow it.
+    "redundant_explicit_links",
 )
 
 class AllowLintsCustomization(

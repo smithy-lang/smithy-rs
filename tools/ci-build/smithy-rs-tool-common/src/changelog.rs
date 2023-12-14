@@ -211,9 +211,9 @@ impl Changelog {
     }
 
     pub fn merge(&mut self, other: Changelog) {
-        self.smithy_rs.extend(other.smithy_rs.into_iter());
-        self.aws_sdk_rust.extend(other.aws_sdk_rust.into_iter());
-        self.sdk_models.extend(other.sdk_models.into_iter());
+        self.smithy_rs.extend(other.smithy_rs);
+        self.aws_sdk_rust.extend(other.aws_sdk_rust);
+        self.sdk_models.extend(other.sdk_models);
     }
 
     pub fn parse_str(value: &str) -> Result<Changelog> {

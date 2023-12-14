@@ -88,7 +88,7 @@ impl Check for CrateLicense {
 
 fn check_crate_license(package: Package, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
     let mut errors = vec![];
-    match package.license {
+    match package.license() {
         Some(license) if license == "Apache-2.0" => {}
         incorrect_license => errors.push(LintError::new(format!(
             "invalid license: {:?}",
@@ -145,10 +145,11 @@ fn check_crate_author(package: Package) -> Result<Vec<LintError>> {
     } else {
         RUST_SDK_TEAM
     };
-    if !package.authors.iter().any(|s| s == expected_author) {
+    if !package.authors().iter().any(|s| s == expected_author) {
         errors.push(LintError::new(format!(
             "missing `{}` in package author list ({:?})",
-            expected_author, package.authors
+            expected_author,
+            package.authors()
         )));
     }
     Ok(errors)

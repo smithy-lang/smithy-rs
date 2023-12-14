@@ -47,7 +47,7 @@ impl PathBody {
             state: State::Loaded(ReaderStream::with_capacity(file.take(length), buffer_size)),
             length,
             buffer_size,
-            /// The file used to create this `PathBody` should have already had an offset applied
+            // The file used to create this `PathBody` should have already had an offset applied
             offset: None,
         }
     }
@@ -163,7 +163,7 @@ impl FsBuilder {
         self
     }
 
-    /// Returns a [`ByteStream`](ByteStream) from this builder.
+    /// Returns a [`ByteStream`] from this builder.
     pub async fn build(self) -> Result<ByteStream, Error> {
         if self.path.is_some() && self.file.is_some() {
             panic!("The 'file' and 'path' options on an FsBuilder are mutually exclusive but both were set. Please set only one")
