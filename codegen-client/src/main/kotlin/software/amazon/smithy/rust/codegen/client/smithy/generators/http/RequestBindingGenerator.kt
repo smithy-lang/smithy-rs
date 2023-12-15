@@ -29,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerUtil
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
@@ -74,6 +75,7 @@ class RequestBindingGenerator(
         HttpBindingGenerator(protocol, codegenContext, codegenContext.symbolProvider, operationShape)
     private val index = HttpBindingIndex.of(model)
     private val encoder = RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder")
+    private val util = SerializerUtil(model, symbolProvider)
 
     private val codegenScope =
         arrayOf(
@@ -246,9 +248,15 @@ class RequestBindingGenerator(
 
                     paramList(target, derefName, param, writer, memberShape)
                 } else {
-                    ifSet(target, memberSymbol, ValueExpression.Reference("&_input.$memberName")) { field ->
-                        // if `param` is a list, generate another level of iteration
-                        paramList(target, field.name, param, writer, memberShape)
+                    // If we have an Option<T>, there won't be a default so nothing to ignore. If it's a primitive
+                    // boolean or number, we ignore the default.
+                    ifSome(memberSymbol, ValueExpression.Reference("&_input.$memberName")) { field ->
+                        with(util) {
+                            ignoreDefaultsForNumbersAndBools(memberShape, field) {
+                                // if `param` is a list, generate another level of iteration
+                                paramList(target, field.name, param, writer, memberShape)
+                            }
+                        }
                     }
                 }
             }

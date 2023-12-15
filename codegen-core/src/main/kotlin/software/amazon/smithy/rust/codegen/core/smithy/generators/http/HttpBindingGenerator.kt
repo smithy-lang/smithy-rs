@@ -55,6 +55,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.SerializerUtil
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
@@ -130,6 +131,7 @@ class HttpBindingGenerator(
     private val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val protocolFunctions = ProtocolFunctions(codegenContext)
+    private val serializerUtil = SerializerUtil(model, symbolProvider)
 
     /**
      * Generate a function to deserialize [binding] from HTTP headers.
@@ -578,7 +580,6 @@ class HttpBindingGenerator(
         // default value for that primitive type (e.g. `Some(false)` for an `Option<bool>` header).
         // If a header is multivalued, we always want to serialize its primitive members, regardless of their
         // values.
-        val serializePrimitiveValuesIfDefault = memberSymbol.isOptional() || (targetShape is CollectionShape)
         ifSome(memberSymbol, ValueExpression.Reference("&input.$memberName")) { variableName ->
             if (targetShape is CollectionShape) {
                 renderMultiValuedHeader(
@@ -597,7 +598,8 @@ class HttpBindingGenerator(
                     false,
                     timestampFormat,
                     renderErrorMessage,
-                    serializePrimitiveValuesIfDefault,
+                    serializeIfDefault = memberSymbol.isOptional(),
+                    memberShape,
                 )
             }
         }
@@ -628,6 +630,7 @@ class HttpBindingGenerator(
                 timestampFormat,
                 renderErrorMessage,
                 serializeIfDefault = true,
+                shape.member,
             )
         }
     }
@@ -647,6 +650,7 @@ class HttpBindingGenerator(
         timestampFormat: TimestampFormatTrait.Format,
         renderErrorMessage: (String) -> Writable,
         serializeIfDefault: Boolean,
+        memberShape: MemberShape,
     ) {
         val context = HeaderValueSerializationContext(value, shape)
         for (customization in customizations) {
@@ -687,7 +691,11 @@ class HttpBindingGenerator(
         if (serializeIfDefault) {
             block(context.valueExpression)
         } else {
-            ifNotDefault(context.shape, context.valueExpression, block)
+            with(serializerUtil) {
+                ignoreDefaultsForNumbersAndBools(memberShape, context.valueExpression) {
+                    block(context.valueExpression)
+                }
+            }
         }
     }
 
