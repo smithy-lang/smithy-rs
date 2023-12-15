@@ -122,7 +122,7 @@ let stream = s3_client.list_objects_v2().bucket("...").into_paginator().send().i
 """
 references = ["smithy-rs#3299"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
-author = "Erlend Langseth <erlend.langseth@openanalytics.eu>"
+author = "Ploppz"
 
 [[aws-sdk-rust]]
 message = """ Add `PaginationStreamExt` extension trait to `aws-smithy-types-convert` behind the `convert-streams` feature. This makes it possible to treat a paginator as a [`futures_core::Stream`](https://docs.rs/futures-core/latest/futures_core/stream/trait.Stream.html), allowing customers to use stream combinators like [`map`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.map) and [`filter`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.filter).
@@ -136,4 +136,4 @@ let stream = s3_client.list_objects_v2().bucket("...").into_paginator().send().i
 """
 references = ["smithy-rs#3299"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "Erlend Langseth <erlend.langseth@openanalytics.eu>"
+author = "Ploppz"
