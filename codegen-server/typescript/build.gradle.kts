@@ -29,6 +29,11 @@ dependencies {
     implementation("software.amazon.smithy:smithy-protocol-test-traits:$smithyVersion")
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 tasks.compileKotlin { kotlinOptions.jvmTarget = "11" }
 
 // Reusable license copySpec
