@@ -459,8 +459,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun operation(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation::Operation")
 
-        fun operationModule(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation")
-
         fun protocolTest(
             runtimeConfig: RuntimeConfig,
             func: String,

@@ -46,7 +46,6 @@ class RequestSerializerGenerator(
             "HttpRequest" to runtimeApi.resolve("client::orchestrator::HttpRequest"),
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
             "Input" to interceptorContext.resolve("Input"),
-            "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
             "SerializeRequest" to runtimeApi.resolve("client::ser_de::SerializeRequest"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "HeaderSerializationSettings" to
