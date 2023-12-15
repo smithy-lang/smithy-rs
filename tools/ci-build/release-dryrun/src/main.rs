@@ -34,6 +34,18 @@ struct DryRunSdk {
 )]
 #[allow(clippy::enum_variant_names)] // Want the "use" prefix in the CLI subcommand names for clarity
 enum Args {
+    /// Dry run a smithy-rs release against a rust SDK release
+    ///
+    /// You will need:
+    /// 1. An `aws-sdk-rust` repo with a clean working tree
+    /// 2. A directory containing the artifacts from a smithy-rs release dry run. This is an artifact
+    ///    named `artifacts-generate-smithy-rs-release` from the GH action (e.g. https://github.com/smithy-lang/smithy-rs/actions/runs/7200898068)
+    /// 3. An `aws-sdk-rust` release tag you want to test against
+    ///
+    /// After running the tool, you might want to do something like `cargo test` in `s3`. Make sure
+    /// to run `cargo update` to pull in the new dependencies. Use `cargo tree` to confirm you're
+    /// actually consuming the new versions.
+    #[clap(verbatim_doc_comment)]
     DryRunSdk(DryRunSdk),
 }
 
@@ -70,6 +82,8 @@ fn dry_run_sdk(args: DryRunSdk) -> Result<()> {
         Ok(())
     })?;
 
+    // By default the SDK dependencies also include a path component. This prevents
+    // patching from working
     step("Applying version-only dependencies", || {
         Command::new("sdk-versioner")
             .args([
@@ -122,6 +136,8 @@ fn dry_run_sdk(args: DryRunSdk) -> Result<()> {
             .join("\n");
         Ok(format!("[patch.crates-io]\n{patch_sections}"))
     })?;
+
+    // Note: in the future we could also automatically apply this to the system wide ~/.cargo/config.toml
     step("apply patches to workspace Cargo.toml", || {
         let workspace_cargo_toml = Path::new(&args.sdk_path).join("Cargo.toml");
         if !workspace_cargo_toml.exists() {
