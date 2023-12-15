@@ -17,3 +17,4 @@ pub mod publish;
 pub mod retry;
 pub mod sort;
 pub mod subcommand;
+pub mod yank;
