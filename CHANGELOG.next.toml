@@ -135,5 +135,5 @@ let stream = s3_client.list_objects_v2().bucket("...").into_paginator().send().i
 ```
 """
 references = ["smithy-rs#3299"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "Erlend Langseth <erlend.langseth@openanalytics.eu>"
