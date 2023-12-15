@@ -203,7 +203,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "release-dryrun"
+name = "runtime-release-dryrun"
 version = "0.1.0"
 dependencies = [
  "anyhow",

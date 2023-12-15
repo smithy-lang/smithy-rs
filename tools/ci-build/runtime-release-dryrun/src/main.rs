@@ -3,11 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// this tool is simple and works at what it does
+// potential improvements:
+// - support the release of rust-runtime crates
+// - support patching the users system-wide ~/.cargo/config.toml
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 
@@ -28,8 +33,8 @@ struct DryRunSdk {
 
 #[derive(Parser, Debug)]
 #[clap(
-    name = "release-dryrun",
-    about = "CLI tool to recursively update SDK/Smithy crate references in Cargo.toml files",
+    name = "runtime-release-dryrun",
+    about = "CLI tool to prepare the aws-sdk-rust to test the result of releasing a new set of runtime crates.",
     version
 )]
 #[allow(clippy::enum_variant_names)] // Want the "use" prefix in the CLI subcommand names for clarity
@@ -52,7 +57,11 @@ enum Args {
 fn main() -> Result<()> {
     let args = Args::parse();
     match args {
-        Args::DryRunSdk(args) => dry_run_sdk(args)?,
+        Args::DryRunSdk(args) => dry_run_sdk(args).map_err(|err| {
+            // workaround an indicatif (bug?) where one character is stripped from output on the error message
+            eprintln!(" ");
+            err
+        })?,
     }
     Ok(())
 }
@@ -67,55 +76,66 @@ fn step<T>(message: &'static str, step: impl FnOnce() -> Result<T>) -> Result<T>
         Ok(_) => "✅",
         Err(_) => "❌",
     };
-    spinner.set_style(ProgressStyle::with_template(&format!("{{msg}} {{elapsed}}")).unwrap());
+    spinner.set_style(ProgressStyle::with_template("{msg} {elapsed}").unwrap());
     spinner.finish_with_message(format!("{check} {message}"));
     result
 }
 
+fn run(command: &mut Command) -> anyhow::Result<()> {
+    let status = command.output()?;
+    if !status.status.success() {
+        bail!(
+            "command `{:?}` failed:\n{}{}",
+            command,
+            String::from_utf8_lossy(&status.stdout),
+            String::from_utf8_lossy(&status.stderr)
+        );
+    }
+    Ok(())
+}
+
 fn dry_run_sdk(args: DryRunSdk) -> Result<()> {
     step("Checking out SDK tag", || {
-        Command::new("git")
+        run(Command::new("git")
             .arg("checkout")
             .arg(&args.rust_sdk_tag)
-            .current_dir(&args.sdk_path)
-            .output()?;
+            .current_dir(&args.sdk_path))
+        .context("failed to checkout aws-sdk-rust revision")?;
         Ok(())
     })?;
 
     // By default the SDK dependencies also include a path component. This prevents
     // patching from working
     step("Applying version-only dependencies", || {
-        Command::new("sdk-versioner")
+        run(Command::new("sdk-versioner")
             .args([
                 "use-version-dependencies",
                 "--versions-toml",
                 "versions.toml",
                 "sdk",
             ])
-            .current_dir(&args.sdk_path)
-            .output()?;
+            .current_dir(&args.sdk_path))?;
 
-        Command::new("git")
+        run(Command::new("git")
             .args(["checkout", "-B", "smithy-release-dryrun"])
-            .current_dir(&args.sdk_path)
-            .output()?;
-        Command::new("git")
+            .current_dir(&args.sdk_path))?;
+        run(Command::new("git")
             .args([
                 "commit",
                 "-am",
                 "removing path dependencies to allow patching",
             ])
-            .current_dir(&args.sdk_path)
-            .output()?;
+            .current_dir(&args.sdk_path))?;
         Ok(())
     })?;
 
     let patches = step("computing patches", || {
-        let crates_to_patch =
-            std::fs::read_dir(Path::new(&args.smithy_rs_release).join("crates-to-publish"))?
-                .map(|dir| dir.unwrap().file_name())
-                .map(|osstr| osstr.into_string().expect("invalid utf-8 directory"))
-                .collect::<Vec<_>>();
+        let path = Path::new(&args.smithy_rs_release).join("crates-to-publish");
+        let crates_to_patch = std::fs::read_dir(&path)
+            .context(format!("could list crates in directory {:?}", path))?
+            .map(|dir| dir.unwrap().file_name())
+            .map(|osstr| osstr.into_string().expect("invalid utf-8 directory"))
+            .collect::<Vec<_>>();
 
         let patch_sections = crates_to_patch
             .iter()
@@ -146,15 +166,15 @@ fn dry_run_sdk(args: DryRunSdk) -> Result<()> {
                 workspace_cargo_toml
             );
         }
-        let current_contents = std::fs::read_to_string(&workspace_cargo_toml)?;
+        let current_contents = std::fs::read_to_string(&workspace_cargo_toml)
+            .context("could not read workspace cargo.toml")?;
         std::fs::write(
             workspace_cargo_toml,
             format!("{current_contents}\n{patches}"),
         )?;
-        Command::new("git")
+        run(Command::new("git")
             .args(["commit", "-am", "patching workspace Cargo.toml"])
-            .current_dir(&args.sdk_path)
-            .output()?;
+            .current_dir(&args.sdk_path))?;
         Ok(())
     })?;
     println!("{:?} has been updated to build against patches. Use `cargo update` to recompute the dependencies.", &args.sdk_path);
