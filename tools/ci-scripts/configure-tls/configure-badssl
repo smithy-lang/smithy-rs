@@ -6,7 +6,10 @@
 
 set -euxo pipefail
 
-perl -p -i -e 's/ruby2\.4/ruby2.6/' Dockerfile
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+
+cp "$DIR/new-badssl-dockerfile" Dockerfile
 grep -q 'start of badssl\.test hosts' /etc/hosts || make list-hosts | sudo tee -a /etc/hosts
 # badssl fails to create dh480.pem on our Ubuntu host.
 # Create it manually inside the docker container.
