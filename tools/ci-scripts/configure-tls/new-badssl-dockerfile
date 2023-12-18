@@ -1,4 +1,6 @@
-# Start with Ubuntu 16.04 (LTS), and build badssl.com up from there
+# What is this??
+# badssl seems to be abandoned. The orginal dockerfile was based on ubuntu 16.04 and all the bits were rotting.
+# I've updated the dockerfiel to ubuntu 22.04 which will hopefully let everything limp along a little longer.
 FROM ubuntu:22.04
 MAINTAINER April King <april@pokeinthe.io>
 EXPOSE 80 443
