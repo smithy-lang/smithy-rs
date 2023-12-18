@@ -22,7 +22,8 @@ ADD . badssl.com
 WORKDIR badssl.com
 RUN make inside-docker
 
-RUN sed -i 's/SECLEVEL=2/SECLEVEL=1/' /etc/ssl/openssl.cnf
+RUN sed -i 's/SECLEVEL=2/SECLEVEL=0/' /etc/ssl/openssl.cnf
+RUN tail -n10 /etc/ssl/openssl.cnf
 
 # Start things up!
 CMD nginx && tail -f /var/log/nginx/access.log /var/log/nginx/error.log
