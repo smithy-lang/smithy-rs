@@ -27,9 +27,9 @@ sed -i '/ 480/c \\ttrue' certs/Makefile
 sed -i 's%./tool sign $@ $(D) 1 sha256 req_v3_usr $^%faketime -f "-2d" ./tool sign $@ $(D) 1 sha256 req_v3_usr $^%' certs/Makefile
 sudo make certs-test
 sudo make docker-build
-screen -dmS badssl sudo make serve
-sleep 5
-screen -ls s | grep "badssl"
+sudo make serve
+# sleep 5
+# screen -ls s | grep "badssl"
 
 # Check if the process is still running
 # if ps -p $bg_pid > /dev/null; thenqigq
