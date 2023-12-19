@@ -29,21 +29,24 @@ class ApiGatewayDecorator : ClientCodegenDecorator {
 
 private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-            section.registerInterceptor(this) {
-                rustTemplate(
-                    "#{Interceptor}::default()",
-                    "Interceptor" to RuntimeType.forInlineDependency(
-                        InlineAwsDependency.forRustFile(
-                            "apigateway_interceptors",
-                            additionalDependency = arrayOf(
-                                CargoDependency.smithyRuntimeApi(codegenContext.runtimeConfig),
-                            ),
-                        ),
-                    ).resolve("AcceptHeaderInterceptor"),
-                )
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                section.registerInterceptor(this) {
+                    rustTemplate(
+                        "#{Interceptor}::default()",
+                        "Interceptor" to
+                            RuntimeType.forInlineDependency(
+                                InlineAwsDependency.forRustFile(
+                                    "apigateway_interceptors",
+                                    additionalDependency =
+                                        arrayOf(
+                                            CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
+                                        ),
+                                ),
+                            ).resolve("AcceptHeaderInterceptor"),
+                    )
+                }
             }
         }
-    }
 }

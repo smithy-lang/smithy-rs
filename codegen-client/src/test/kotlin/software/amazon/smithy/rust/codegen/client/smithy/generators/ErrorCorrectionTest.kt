@@ -13,7 +13,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class ErrorCorrectionTest {
-    private val model = """
+    private val model =
+        """
         namespace com.example
         use aws.protocols#awsJson1_0
 
@@ -78,7 +79,7 @@ class ErrorCorrectionTest {
             key: String,
             value: StringList
         }
-    """.asSmithyModel(smithyVersion = "2.0")
+        """.asSmithyModel(smithyVersion = "2.0")
 
     @Test
     fun correctMissingFields() {
@@ -106,7 +107,7 @@ class ErrorCorrectionTest {
                         assert_eq!(shape.not_required(), None);
 
                         // set defaults for everything else
-                        assert_eq!(shape.blob().as_ref(), &[]);
+                        assert_eq!(shape.blob().as_ref(), b"");
 
                         assert!(shape.list_value().is_empty());
                         assert!(shape.map_value().is_empty());

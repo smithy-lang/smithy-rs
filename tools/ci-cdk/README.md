@@ -1,6 +1,6 @@
 # CI CDK
 
-This is the CDK infrastructure as code for awslabs/smithy-rs and awslabs/aws-sdk-rust
+This is the CDK infrastructure as code for smithy-lang/smithy-rs and awslabs/aws-sdk-rust
 continuous integration.
 
 The `cdk.json` file tells the CDK Toolkit how to synthesize the infrastructure.

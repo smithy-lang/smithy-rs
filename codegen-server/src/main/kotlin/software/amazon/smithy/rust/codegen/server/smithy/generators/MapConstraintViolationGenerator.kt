@@ -63,14 +63,15 @@ class MapConstraintViolationGenerator(
         }
         val constraintViolationCodegenScope = constraintViolationCodegenScopeMutableList.toTypedArray()
 
-        val constraintViolationVisibility = if (publicConstrainedTypes) {
-            Visibility.PUBLIC
-        } else {
-            Visibility.PUBCRATE
-        }
+        val constraintViolationVisibility =
+            if (publicConstrainedTypes) {
+                Visibility.PUBLIC
+            } else {
+                Visibility.PUBCRATE
+            }
 
         inlineModuleCreator(constraintViolationSymbol) {
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) We should really have two `ConstraintViolation`
             //  types here. One will just have variants for each constraint trait on the map shape, for use by the user.
             //  The other one will have variants if the shape's key or value is directly or transitively constrained,
             //  and is for use by the framework.
@@ -94,13 +95,14 @@ class MapConstraintViolationGenerator(
                         #{MapShapeConstraintViolationImplBlock}
                     }
                     """,
-                    "MapShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.mapShapeConstraintViolationImplBlock(
-                        shape,
-                        keyShape,
-                        valueShape,
-                        symbolProvider,
-                        model,
-                    ),
+                    "MapShapeConstraintViolationImplBlock" to
+                        validationExceptionConversionGenerator.mapShapeConstraintViolationImplBlock(
+                            shape,
+                            keyShape,
+                            valueShape,
+                            symbolProvider,
+                            model,
+                        ),
                 )
             }
         }

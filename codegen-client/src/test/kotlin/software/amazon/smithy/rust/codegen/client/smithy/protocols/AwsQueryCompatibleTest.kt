@@ -16,7 +16,8 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 class AwsQueryCompatibleTest {
     @Test
     fun `aws-query-compatible json with aws query error should allow for retrieving error code and type from custom header`() {
-        val model = """
+        val model =
+            """
             namespace test
             use aws.protocols#awsJson1_0
             use aws.protocols#awsQueryCompatible
@@ -48,7 +49,7 @@ class AwsQueryCompatibleTest {
             structure InvalidThingException {
                 message: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         clientIntegrationTest(model) { context, rustCrate ->
             val operation: OperationShape = context.model.lookup("test#SomeOperation")
@@ -91,8 +92,9 @@ class AwsQueryCompatibleTest {
                         assert_eq!(Some("Sender"), error.meta().extra("type"));
                     }
                     """,
-                    "infallible_client_fn" to CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
-                        .toType().resolve("client::http::test_util::infallible_client_fn"),
+                    "infallible_client_fn" to
+                        CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                            .toType().resolve("client::http::test_util::infallible_client_fn"),
                     "tokio" to CargoDependency.Tokio.toType(),
                 )
             }
@@ -101,7 +103,8 @@ class AwsQueryCompatibleTest {
 
     @Test
     fun `aws-query-compatible json without aws query error should allow for retrieving error code from payload`() {
-        val model = """
+        val model =
+            """
             namespace test
             use aws.protocols#awsJson1_0
             use aws.protocols#awsQueryCompatible
@@ -128,7 +131,7 @@ class AwsQueryCompatibleTest {
             structure InvalidThingException {
                 message: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         clientIntegrationTest(model) { context, rustCrate ->
             val operation: OperationShape = context.model.lookup("test#SomeOperation")
@@ -164,8 +167,9 @@ class AwsQueryCompatibleTest {
                         assert_eq!(None, error.meta().extra("type"));
                     }
                     """,
-                    "infallible_client_fn" to CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
-                        .toType().resolve("client::http::test_util::infallible_client_fn"),
+                    "infallible_client_fn" to
+                        CargoDependency.smithyRuntimeTestUtil(context.runtimeConfig)
+                            .toType().resolve("client::http::test_util::infallible_client_fn"),
                     "tokio" to CargoDependency.Tokio.toType(),
                 )
             }

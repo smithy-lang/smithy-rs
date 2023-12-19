@@ -8,7 +8,7 @@
 | [Structure](#structure) | `struct` |
 | [Union](#union) | `enum` |
 
-Most generated types are controlled by [SymbolVisitor](https://github.com/awslabs/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt).
+Most generated types are controlled by [SymbolVisitor](https://github.com/smithy-lang/smithy-rs/blob/main/codegen/src/main/kotlin/software/amazon/smithy/rust/codegen/smithy/SymbolVisitor.kt).
 
 ## List
 List objects in Smithy are transformed into vectors in Rust. Based on the output of the [NullableIndex](https://awslabs.github.io/smithy/javadoc/1.5.1/software/amazon/smithy/model/knowledge/NullableIndex.html), the generated list may be `Vec<T>` or `Vec<Option<T>>`.
@@ -121,7 +121,7 @@ impl IoUsage {
 Smithy `Union` is modeled as `enum` in Rust.
 
 1. Generated `enum`s must be marked `#[non_exhaustive]`.
-2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/awslabs/smithy-rs/issues/185).
+2. Generated `enum`s must provide an `Unknown` variant. If parsing receives an unknown input that doesn't match any of the given union variants, `Unknown` should be constructed. [Tracking Issue](https://github.com/smithy-lang/smithy-rs/issues/185).
 3. Union members (enum variants) are **not** nullable, because Smithy union members cannot contain null values.
 4. When union members contain references to other shapes, we generate a wrapping variant (see below).
 5. Union members do not require `#[non_exhaustive]`, because changing the shape targeted by a union member is not backwards compatible.

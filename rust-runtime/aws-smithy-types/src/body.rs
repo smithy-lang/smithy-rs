@@ -6,14 +6,21 @@
 //! Types for representing the body of an HTTP request or response
 
 use bytes::Bytes;
-use http::{HeaderMap, HeaderValue};
-use http_body::{Body, SizeHint};
 use pin_project_lite::pin_project;
 use std::error::Error as StdError;
 use std::fmt::{self, Debug, Formatter};
+use std::future::poll_fn;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+
+/// This module is named after the `http-body` version number since we anticipate
+/// needing to provide equivalent functionality for 1.x of that crate in the future.
+/// The name has a suffix `_x` to avoid name collision with a third-party `http-body-0-4`.
+#[cfg(feature = "http-body-0-4-x")]
+pub mod http_body_0_4_x;
+#[cfg(feature = "http-body-1-x")]
+pub mod http_body_1_x;
 
 /// A generic, boxed error that's `Send` and `Sync`
 pub type Error = Box<dyn StdError + Send + Sync>;
@@ -49,7 +56,16 @@ impl Debug for SdkBody {
 }
 
 /// A boxed generic HTTP body that, when consumed, will result in [`Bytes`] or an [`Error`].
-pub type BoxBody = http_body::combinators::BoxBody<Bytes, Error>;
+enum BoxBody {
+    // This is enabled by the **dependency**, not the feature. This allows us to construct it
+    // whenever we have the dependency and keep the APIs private
+    #[cfg(any(
+        feature = "http-body-0-4-x",
+        feature = "http-body-1-x",
+        feature = "rt-tokio"
+    ))]
+    HttpBody04(http_body_0_4::combinators::BoxBody<Bytes, Error>),
+}
 
 pin_project! {
     #[project = InnerProj]
@@ -59,14 +75,9 @@ pin_project! {
             inner: Option<Bytes>
         },
         // A streaming body
-        Streaming {
-            #[pin]
-            inner: hyper::Body
-        },
-        // Also a streaming body
         Dyn {
             #[pin]
-            inner: BoxBody
+            inner: BoxBody,
         },
 
         /// When a streaming body is transferred out to a stream parser, the body is replaced with
@@ -80,25 +91,13 @@ impl Debug for Inner {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match &self {
             Inner::Once { inner: once } => f.debug_tuple("Once").field(once).finish(),
-            Inner::Streaming { inner: streaming } => {
-                f.debug_tuple("Streaming").field(streaming).finish()
-            }
-            Inner::Taken => f.debug_tuple("Taken").finish(),
             Inner::Dyn { .. } => write!(f, "BoxBody"),
+            Inner::Taken => f.debug_tuple("Taken").finish(),
         }
     }
 }
 
 impl SdkBody {
-    /// Construct an SdkBody from a Boxed implementation of http::Body
-    pub fn from_dyn(body: BoxBody) -> Self {
-        Self {
-            inner: Inner::Dyn { inner: body },
-            rebuild: None,
-            bytes_contents: None,
-        }
-    }
-
     /// Construct an explicitly retryable SDK body
     ///
     /// _Note: This is probably not what you want_
@@ -135,9 +134,14 @@ impl SdkBody {
         }
     }
 
-    fn poll_inner(
+    pub(crate) async fn next(&mut self) -> Option<Result<Bytes, Error>> {
+        let mut me = Pin::new(self);
+        poll_fn(|cx| me.as_mut().poll_next(cx)).await
+    }
+
+    pub(crate) fn poll_next(
         self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
+        #[allow(unused)] cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Bytes, Error>>> {
         let this = self.project();
         match this.inner.project() {
@@ -149,11 +153,61 @@ impl SdkBody {
                     None => Poll::Ready(None),
                 }
             }
-            InnerProj::Streaming { inner: body } => body.poll_data(cx).map_err(|e| e.into()),
-            InnerProj::Dyn { inner: box_body } => box_body.poll_data(cx),
+            InnerProj::Dyn { inner: body } => match body.get_mut() {
+                #[cfg(feature = "http-body-0-4-x")]
+                BoxBody::HttpBody04(box_body) => {
+                    use http_body_0_4::Body;
+                    Pin::new(box_body).poll_data(cx)
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!(
+                    "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
+                ),
+            },
             InnerProj::Taken => {
                 Poll::Ready(Some(Err("A `Taken` body should never be polled".into())))
             }
+        }
+    }
+
+    #[cfg(any(
+        feature = "http-body-0-4-x",
+        feature = "http-body-1-x",
+        feature = "rt-tokio"
+    ))]
+    pub(crate) fn from_body_0_4_internal<T, E>(body: T) -> Self
+    where
+        T: http_body_0_4::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
+        E: Into<Error> + 'static,
+    {
+        Self {
+            inner: Inner::Dyn {
+                inner: BoxBody::HttpBody04(http_body_0_4::combinators::BoxBody::new(
+                    body.map_err(Into::into),
+                )),
+            },
+            rebuild: None,
+            bytes_contents: None,
+        }
+    }
+
+    #[cfg(feature = "http-body-0-4-x")]
+    pub(crate) fn poll_next_trailers(
+        self: Pin<&mut Self>,
+        #[allow(unused)] cx: &mut Context<'_>,
+    ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Error>> {
+        let this = self.project();
+        match this.inner.project() {
+            InnerProj::Once { .. } => Poll::Ready(Ok(None)),
+            InnerProj::Dyn { inner } => match inner.get_mut() {
+                BoxBody::HttpBody04(box_body) => {
+                    use http_body_0_4::Body;
+                    Pin::new(box_body).poll_trailers(cx)
+                }
+            },
+            InnerProj::Taken => Poll::Ready(Err(
+                "A `Taken` body should never be polled for trailers".into(),
+            )),
         }
     }
 
@@ -184,7 +238,53 @@ impl SdkBody {
     /// Return the length, in bytes, of this SdkBody. If this returns `None`, then the body does not
     /// have a known length.
     pub fn content_length(&self) -> Option<u64> {
-        http_body::Body::size_hint(self).exact()
+        match self.bounds_on_remaining_length() {
+            (lo, Some(hi)) if lo == hi => Some(lo),
+            _ => None,
+        }
+    }
+
+    #[allow(dead_code)] // used by a feature-gated `http-body`'s trait method
+    pub(crate) fn is_end_stream(&self) -> bool {
+        match &self.inner {
+            Inner::Once { inner: None } => true,
+            Inner::Once { inner: Some(bytes) } => bytes.is_empty(),
+            Inner::Dyn { inner: box_body } => match box_body {
+                #[cfg(feature = "http-body-0-4-x")]
+                BoxBody::HttpBody04(box_body) => {
+                    use http_body_0_4::Body;
+                    box_body.is_end_stream()
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!(
+                    "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
+                ),
+            },
+            Inner::Taken => true,
+        }
+    }
+
+    pub(crate) fn bounds_on_remaining_length(&self) -> (u64, Option<u64>) {
+        match &self.inner {
+            Inner::Once { inner: None } => (0, Some(0)),
+            Inner::Once { inner: Some(bytes) } => {
+                let len = bytes.len() as u64;
+                (len, Some(len))
+            }
+            Inner::Dyn { inner: box_body } => match box_body {
+                #[cfg(feature = "http-body-0-4-x")]
+                BoxBody::HttpBody04(box_body) => {
+                    use http_body_0_4::Body;
+                    let hint = box_body.size_hint();
+                    (hint.lower(), hint.upper())
+                }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!(
+                    "enabling `http-body-0-4-x` is the only way to create the `Dyn` variant"
+                ),
+            },
+            Inner::Taken => (0, Some(0)),
+        }
     }
 
     /// Given a function to modify an `SdkBody`, run that function against this `SdkBody` before
@@ -238,16 +338,6 @@ impl From<Bytes> for SdkBody {
     }
 }
 
-impl From<hyper::Body> for SdkBody {
-    fn from(body: hyper::Body) -> Self {
-        SdkBody {
-            inner: Inner::Streaming { inner: body },
-            rebuild: None,
-            bytes_contents: None,
-        }
-    }
-}
-
 impl From<Vec<u8>> for SdkBody {
     fn from(data: Vec<u8>) -> Self {
         Self::from(Bytes::from(data))
@@ -266,64 +356,15 @@ impl From<&[u8]> for SdkBody {
     }
 }
 
-impl http_body::Body for SdkBody {
-    type Data = Bytes;
-    type Error = Error;
-
-    fn poll_data(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        self.poll_inner(cx)
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap<HeaderValue>>, Self::Error>> {
-        Poll::Ready(Ok(None))
-    }
-
-    fn is_end_stream(&self) -> bool {
-        match &self.inner {
-            Inner::Once { inner: None } => true,
-            Inner::Once { inner: Some(bytes) } => bytes.is_empty(),
-            Inner::Streaming { inner: hyper_body } => hyper_body.is_end_stream(),
-            Inner::Dyn { inner: box_body } => box_body.is_end_stream(),
-            Inner::Taken => true,
-        }
-    }
-
-    fn size_hint(&self) -> SizeHint {
-        match &self.inner {
-            Inner::Once { inner: None } => SizeHint::with_exact(0),
-            Inner::Once { inner: Some(bytes) } => SizeHint::with_exact(bytes.len() as u64),
-            Inner::Streaming { inner: hyper_body } => hyper_body.size_hint(),
-            Inner::Dyn { inner: box_body } => box_body.size_hint(),
-            Inner::Taken => SizeHint::new(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod test {
-    use crate::body::{BoxBody, SdkBody};
-    use http_body::Body;
+    use crate::body::SdkBody;
     use std::pin::Pin;
 
     #[test]
     fn valid_size_hint() {
-        assert_eq!(SdkBody::from("hello").size_hint().exact(), Some(5));
-        assert_eq!(SdkBody::from("").size_hint().exact(), Some(0));
-    }
-
-    #[test]
-    fn map_preserve_preserves_bytes_hint() {
-        let initial = SdkBody::from("hello!");
-        assert_eq!(initial.bytes(), Some(b"hello!".as_slice()));
-
-        let new_body = initial.map_preserve_contents(|body| SdkBody::from_dyn(BoxBody::new(body)));
-        assert_eq!(new_body.bytes(), Some(b"hello!".as_slice()));
+        assert_eq!(SdkBody::from("hello").content_length(), Some(5));
+        assert_eq!(SdkBody::from("").content_length(), Some(0));
     }
 
     #[allow(clippy::bool_assert_comparison)]
@@ -337,9 +378,9 @@ mod test {
     async fn http_body_consumes_data() {
         let mut body = SdkBody::from("hello!");
         let mut body = Pin::new(&mut body);
-        let data = body.data().await;
+        let data = body.next().await;
         assert!(data.is_some());
-        let data = body.data().await;
+        let data = body.next().await;
         assert!(data.is_none());
     }
 
@@ -348,31 +389,14 @@ mod test {
         // Its important to avoid sending empty chunks of data to avoid H2 data frame problems
         let mut body = SdkBody::from("");
         let mut body = Pin::new(&mut body);
-        let data = body.data().await;
+        let data = body.next().await;
         assert!(data.is_none());
     }
 
     #[test]
     fn sdkbody_debug_once() {
         let body = SdkBody::from("123");
-        // actually don't really care what the debug impl is, just that it doesn't crash
-        let _ = format!("{:?}", body);
-    }
-
-    #[test]
-    fn sdkbody_debug_dyn() {
-        let hyper_body = hyper::Body::channel().1;
-        let body = SdkBody::from_dyn(BoxBody::new(hyper_body.map_err(|e| e.into())));
-        // actually don't really care what the debug impl is, just that it doesn't crash
-        let _ = format!("{:?}", body);
-    }
-
-    #[test]
-    fn sdkbody_debug_hyper() {
-        let hyper_body = hyper::Body::channel().1;
-        let body = SdkBody::from(hyper_body);
-        // actually don't really care what the debug impl is, just that it doesn't crash
-        let _ = format!("{:?}", body);
+        assert!(format!("{:?}", body).contains("Once"));
     }
 
     #[test]

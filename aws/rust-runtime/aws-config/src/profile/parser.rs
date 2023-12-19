@@ -149,7 +149,7 @@ impl ProfileSet {
 
 /// An individual configuration profile
 ///
-/// An AWS config may be composed of a multiple named profiles within a [`ProfileSet`](ProfileSet)
+/// An AWS config may be composed of a multiple named profiles within a [`ProfileSet`].
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Profile {
     name: String,
@@ -237,7 +237,7 @@ impl From<ProfileParseError> for ProfileFileLoadError {
     }
 }
 
-#[doc(hidden)]
+/// An error encountered while reading the AWS config file
 #[derive(Debug, Clone)]
 pub struct CouldNotReadProfileFile {
     pub(crate) path: PathBuf,

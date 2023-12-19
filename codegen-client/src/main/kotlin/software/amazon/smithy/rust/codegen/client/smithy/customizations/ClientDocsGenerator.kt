@@ -18,11 +18,12 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 class ClientDocsGenerator(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable {
         return when (section) {
-            is LibRsSection.ModuleDoc -> if (section.subsection is ModuleDocSection.CrateOrganization) {
-                crateLayout()
-            } else {
-                emptySection
-            }
+            is LibRsSection.ModuleDoc ->
+                if (section.subsection is ModuleDocSection.CrateOrganization) {
+                    crateLayout()
+                } else {
+                    emptySection
+                }
             else -> emptySection
         }
     }

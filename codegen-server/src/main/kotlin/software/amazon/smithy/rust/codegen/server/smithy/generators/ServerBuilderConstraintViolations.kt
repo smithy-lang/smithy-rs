@@ -50,12 +50,13 @@ class ServerBuilderConstraintViolations(
             }
         }
     private val members: List<MemberShape> = shape.allMembers.values.toList()
-    val all = members.flatMap { member ->
-        listOfNotNull(
-            forMember(member),
-            builderConstraintViolationForMember(member),
-        )
-    }
+    val all =
+        members.flatMap { member ->
+            listOfNotNull(
+                forMember(member),
+                builderConstraintViolationForMember(member),
+            )
+        }
 
     fun render(
         writer: RustWriter,
@@ -102,7 +103,7 @@ class ServerBuilderConstraintViolations(
      */
     fun forMember(member: MemberShape): ConstraintViolation? {
         check(members.contains(member))
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
         return if (symbolProvider.toSymbol(member).isOptional() || member.hasNonNullDefault()) {
             null
         } else {
@@ -110,18 +111,19 @@ class ServerBuilderConstraintViolations(
         }
     }
 
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1401) This impl does not take into account the `sensitive` trait.
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) This impl does not take into account the `sensitive` trait.
     //   When constraint violation error messages are adjusted to match protocol tests, we should ensure it's honored.
     private fun renderImplDisplayConstraintViolation(writer: RustWriter) {
         writer.rustBlock("impl #T for ConstraintViolation", RuntimeType.Display) {
             rustBlock("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result") {
                 rustBlock("match self") {
                     all.forEach {
-                        val arm = if (it.hasInner()) {
-                            "ConstraintViolation::${it.name()}(_)"
-                        } else {
-                            "ConstraintViolation::${it.name()}"
-                        }
+                        val arm =
+                            if (it.hasInner()) {
+                                "ConstraintViolation::${it.name()}(_)"
+                            } else {
+                                "ConstraintViolation::${it.name()}"
+                            }
                         rust("""$arm => write!(f, "${it.message(symbolProvider, model)}"),""")
                     }
                 }
@@ -192,10 +194,11 @@ enum class ConstraintViolationKind {
 }
 
 data class ConstraintViolation(val forMember: MemberShape, val kind: ConstraintViolationKind) {
-    fun name() = when (kind) {
-        ConstraintViolationKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
-        ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> forMember.memberName.toPascalCase()
-    }
+    fun name() =
+        when (kind) {
+            ConstraintViolationKind.MISSING_MEMBER -> "Missing${forMember.memberName.toPascalCase()}"
+            ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> forMember.memberName.toPascalCase()
+        }
 
     /**
      * Whether the constraint violation is a Rust tuple struct with one element.
@@ -205,12 +208,15 @@ data class ConstraintViolation(val forMember: MemberShape, val kind: ConstraintV
     /**
      * A message for a `ConstraintViolation` variant. This is used in both Rust documentation and the `Display` trait implementation.
      */
-    fun message(symbolProvider: SymbolProvider, model: Model): String {
+    fun message(
+        symbolProvider: SymbolProvider,
+        model: Model,
+    ): String {
         val memberName = symbolProvider.toMemberName(forMember)
         val structureSymbol = symbolProvider.toSymbol(model.expectShape(forMember.container))
         return when (kind) {
             ConstraintViolationKind.MISSING_MEMBER -> "`$memberName` was not provided but it is required when building `${structureSymbol.name}`"
-            // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Nest errors. Adjust message following protocol tests.
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Nest errors. Adjust message following protocol tests.
             ConstraintViolationKind.CONSTRAINED_SHAPE_FAILURE -> "constraint violation occurred building member `$memberName` when building `${structureSymbol.name}`"
         }
     }

@@ -1,22 +1,24 @@
 # These are the allowed external types in the `aws-sdk-*` generated crates, checked by CI.
 allowed_external_types = [
-    "aws_credential_types::*",
-    "aws_http::*",
-    "aws_runtime::*",
-    "aws_smithy_async::*",
-    "aws_smithy_http::*",
-    "aws_smithy_runtime::*",
-    "aws_smithy_runtime_api::*",
     "aws_smithy_types::*",
+    "aws_credential_types::*",
     "aws_types::*",
-
-    "http::header::map::HeaderMap",
-    "http::header::value::HeaderValue",
+    "aws_smithy_runtime_api::*",
+    "aws_smithy_async::rt::sleep::*",
+    "aws_smithy_async::time::*",
+    "aws_smithy_async::future::pagination_stream::PaginationStream",
+    # only allowed in from impl for presigned request
     "http::request::Request",
-    "http::error::Error",
-    "http::uri::Uri",
-    "http::method::Method",
 
-    # TODO(https://github.com/awslabs/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
+    # TODO(https://github.com/smithy-lang/smithy-rs/issues/1193): Once tooling permits it, only allow the following types in the `event-stream` feature
     "aws_smithy_eventstream::*",
+
+    "aws_smithy_runtime::client::identity::cache::IdentityCache",
+    "aws_smithy_runtime::client::retries::RetryPartition",
+
+    "aws_runtime::invocation_id::SharedInvocationIdGenerator",
+    "aws_runtime::invocation_id::InvocationIdGenerator",
+
+    # Only exposed in transcribestreaming. This crate will be major version bumped if we MV aws_smithy_http
+    "aws_smithy_http::event_stream::sender::EventStreamSender",
 ]

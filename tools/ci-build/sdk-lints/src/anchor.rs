@@ -19,6 +19,7 @@ pub fn replace_anchor(
     haystack: &mut String,
     anchors: &(impl AsRef<str>, impl AsRef<str>),
     new_content: &str,
+    default_insertion_position: Option<usize>,
 ) -> anyhow::Result<bool> {
     let anchor_start = anchors.0.as_ref();
     let anchor_end = anchors.1.as_ref();
@@ -27,10 +28,19 @@ pub fn replace_anchor(
         if haystack.contains(anchor_end) {
             bail!("found end anchor but no start anchor");
         }
-        haystack.push('\n');
-        haystack.push_str(anchor_start);
-        haystack.push_str(new_content);
-        haystack.push_str(anchor_end);
+
+        let (prefix, suffix) = match default_insertion_position {
+            Some(position) => haystack.split_at(position),
+            None => (haystack.as_ref(), ""),
+        };
+        let mut out = String::new();
+        out.push_str(prefix);
+        out.push('\n');
+        out.push_str(anchor_start);
+        out.push_str(new_content);
+        out.push_str(anchor_end);
+        out.push_str(suffix);
+        *haystack = out;
         return Ok(true);
     }
     let start = start.unwrap_or_else(|| haystack.find(anchor_start).expect("must be present"));
@@ -59,7 +69,7 @@ mod test {
     #[test]
     fn updates_empty() {
         let mut text = "this is the start".to_string();
-        assert!(replace_anchor(&mut text, &anchors("foo"), "hello!").unwrap());
+        assert!(replace_anchor(&mut text, &anchors("foo"), "hello!", None).unwrap());
         assert_eq!(
             text,
             "this is the start\n<!-- anchor_start:foo -->hello!<!-- anchor_end:foo -->"
@@ -70,13 +80,13 @@ mod test {
     fn updates_existing() {
         let mut text =
             "this is the start\n<!-- anchor_start:foo -->hello!<!-- anchor_end:foo -->".to_string();
-        assert!(replace_anchor(&mut text, &anchors("foo"), "goodbye!").unwrap());
+        assert!(replace_anchor(&mut text, &anchors("foo"), "goodbye!", None).unwrap());
         assert_eq!(
             text,
             "this is the start\n<!-- anchor_start:foo -->goodbye!<!-- anchor_end:foo -->"
         );
 
         // no replacement should return false
-        assert!(!replace_anchor(&mut text, &anchors("foo"), "goodbye!").unwrap(),)
+        assert!(!replace_anchor(&mut text, &anchors("foo"), "goodbye!", None).unwrap(),)
     }
 }

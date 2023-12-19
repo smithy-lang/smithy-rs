@@ -6,7 +6,10 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -23,17 +26,22 @@ class DefaultValueGenerator(
 ) {
     private val instantiator = PrimitiveInstantiator(runtimeConfig, symbolProvider)
 
-    data class DefaultValue(val isRustDefault: Boolean, val expr: Writable)
+    data class DefaultValue(val isRustDefault: Boolean, val expr: Writable, val complexType: Boolean)
 
     /** Returns the default value as set by the defaultValue trait */
     fun defaultValue(member: MemberShape): DefaultValue? {
         val target = model.expectShape(member.target)
+        val complexType =
+            when (target) {
+                is NumberShape, is EnumShape, is BooleanShape -> false
+                else -> true
+            }
         return when (val default = symbolProvider.toSymbol(member).defaultValue()) {
             is Default.NoDefault -> null
-            is Default.RustDefault -> DefaultValue(isRustDefault = true, writable("Default::default"))
+            is Default.RustDefault -> DefaultValue(isRustDefault = true, writable("Default::default"), complexType)
             is Default.NonZeroDefault -> {
                 val instantiation = instantiator.instantiate(target as SimpleShape, default.value)
-                DefaultValue(isRustDefault = false, writable { rust("||#T", instantiation) })
+                DefaultValue(isRustDefault = false, writable { rust("#T", instantiation) }, complexType)
             }
         }
     }

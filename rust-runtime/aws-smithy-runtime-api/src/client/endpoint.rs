@@ -6,6 +6,7 @@
 //! APIs needed to configure endpoint resolution for clients.
 
 use crate::box_error::BoxError;
+use crate::client::runtime_components::sealed::ValidateConfig;
 use crate::impl_shared_conversions;
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
@@ -42,9 +43,6 @@ impl Storable for EndpointResolverParams {
     type Storer = StoreReplace<Self>;
 }
 
-#[deprecated(note = "Renamed to ResolveEndpoint.")]
-pub use ResolveEndpoint as EndpointResolver;
-
 /// Configurable endpoint resolver implementation.
 pub trait ResolveEndpoint: Send + Sync + fmt::Debug {
     /// Asynchronously resolves an endpoint to use from the given endpoint parameters.
@@ -69,5 +67,7 @@ impl ResolveEndpoint for SharedEndpointResolver {
         self.0.resolve_endpoint(params)
     }
 }
+
+impl ValidateConfig for SharedEndpointResolver {}
 
 impl_shared_conversions!(convert SharedEndpointResolver from ResolveEndpoint using SharedEndpointResolver::new);

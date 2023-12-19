@@ -34,7 +34,7 @@
 //! you absolutely require your middleware to run after deserialization, or to act on particular
 //! fields of your deserialized operation's input/output/errors.
 //!
-//! [the book]: https://awslabs.github.io/smithy-rs/design/server/anatomy.html
+//! [the book]: https://smithy-lang.github.io/smithy-rs/design/server/anatomy.html
 //!
 //! # Filtered application of a HTTP [`Layer`](tower::Layer)
 //!
@@ -269,8 +269,7 @@ impl<'a, Pl> HttpMarker for &'a Pl where Pl: HttpMarker {}
 /// model plugins are _operation-specific_: somewhere in the type signature of their definition,
 /// they'll rely on a particular operation shape's types. It is therefore important that you scope
 /// application of model plugins to the operations they are meant to work on, via
-/// [`Scoped`](crate::plugin::Scoped) or
-/// [`filter_by_operation`](crate::plugin::filter_by_operation).
+/// [`Scoped`] or [`filter_by_operation`].
 ///
 /// Below is an example implementation of a model plugin that can only be applied to the
 /// `CheckHealth` operation: note how in the `Service` trait implementation, we require access to

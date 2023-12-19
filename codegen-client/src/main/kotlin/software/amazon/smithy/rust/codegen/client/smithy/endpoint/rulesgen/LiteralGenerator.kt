@@ -27,59 +27,69 @@ import java.util.stream.Stream
 class LiteralGenerator(private val ownership: Ownership, private val context: Context) :
     LiteralVisitor<Writable> {
     private val runtimeConfig = context.runtimeConfig
-    private val codegenScope = arrayOf(
-        "Document" to RuntimeType.document(runtimeConfig),
-        "HashMap" to RuntimeType.HashMap,
-    )
-    override fun visitBoolean(b: Boolean) = writable {
-        rust(b.toString())
-    }
-
-    override fun visitString(value: Template) = writable {
-        val parts: Stream<Writable> = value.accept(
-            TemplateGenerator(ownership) { expr, ownership ->
-                ExpressionGenerator(ownership, context).generate(expr)
-            },
+    private val codegenScope =
+        arrayOf(
+            "Document" to RuntimeType.document(runtimeConfig),
+            "HashMap" to RuntimeType.HashMap,
         )
-        parts.forEach { part -> part(this) }
-    }
 
-    override fun visitRecord(members: MutableMap<Identifier, Literal>) = writable {
-        rustBlock("") {
-            rustTemplate(
-                "let mut out = #{HashMap}::<String, #{Document}>::new();",
-                *codegenScope,
-            )
-            members.keys.sortedBy { it.toString() }.map { k -> k to members[k]!! }.forEach { (identifier, literal) ->
-                rust(
-                    "out.insert(${identifier.toString().dq()}.to_string(), #W.into());",
-                    // When writing into the hashmap, it always needs to be an owned type
-                    ExpressionGenerator(Ownership.Owned, context).generate(literal),
-                )
-            }
-            rustTemplate("out")
+    override fun visitBoolean(b: Boolean) =
+        writable {
+            rust(b.toString())
         }
-    }
 
-    override fun visitTuple(members: MutableList<Literal>) = writable {
-        rustTemplate(
-            "vec![#{inner:W}]", *codegenScope,
-            "inner" to writable {
-                members.forEach { literal ->
-                    rustTemplate(
-                        "#{Document}::from(#{literal:W}),",
-                        *codegenScope,
-                        "literal" to ExpressionGenerator(
-                            Ownership.Owned,
-                            context,
-                        ).generate(literal),
+    override fun visitString(value: Template) =
+        writable {
+            val parts: Stream<Writable> =
+                value.accept(
+                    TemplateGenerator(ownership) { expr, ownership ->
+                        ExpressionGenerator(ownership, context).generate(expr)
+                    },
+                )
+            parts.forEach { part -> part(this) }
+        }
+
+    override fun visitRecord(members: MutableMap<Identifier, Literal>) =
+        writable {
+            rustBlock("") {
+                rustTemplate(
+                    "let mut out = #{HashMap}::<String, #{Document}>::new();",
+                    *codegenScope,
+                )
+                members.keys.sortedBy { it.toString() }.map { k -> k to members[k]!! }.forEach { (identifier, literal) ->
+                    rust(
+                        "out.insert(${identifier.toString().dq()}.to_string(), #W.into());",
+                        // When writing into the hashmap, it always needs to be an owned type
+                        ExpressionGenerator(Ownership.Owned, context).generate(literal),
                     )
                 }
-            },
-        )
-    }
+                rustTemplate("out")
+            }
+        }
 
-    override fun visitInteger(value: Int) = writable {
-        rust("$value")
-    }
+    override fun visitTuple(members: MutableList<Literal>) =
+        writable {
+            rustTemplate(
+                "vec![#{inner:W}]", *codegenScope,
+                "inner" to
+                    writable {
+                        members.forEach { literal ->
+                            rustTemplate(
+                                "#{Document}::from(#{literal:W}),",
+                                *codegenScope,
+                                "literal" to
+                                    ExpressionGenerator(
+                                        Ownership.Owned,
+                                        context,
+                                    ).generate(literal),
+                            )
+                        }
+                    },
+            )
+        }
+
+    override fun visitInteger(value: Int) =
+        writable {
+            rust("$value")
+        }
 }

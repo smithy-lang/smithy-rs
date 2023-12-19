@@ -16,15 +16,16 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 
 class TimeSourceCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "IntoShared" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("shared::IntoShared"),
-        "SharedTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::SharedTimeSource"),
-        "StaticTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::StaticTimeSource"),
-        "TimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::TimeSource"),
-        "UNIX_EPOCH" to RuntimeType.std.resolve("time::UNIX_EPOCH"),
-        "Duration" to RuntimeType.std.resolve("time::Duration"),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "IntoShared" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("shared::IntoShared"),
+            "SharedTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::SharedTimeSource"),
+            "StaticTimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::StaticTimeSource"),
+            "TimeSource" to RuntimeType.smithyAsync(codegenContext.runtimeConfig).resolve("time::TimeSource"),
+            "UNIX_EPOCH" to RuntimeType.std.resolve("time::UNIX_EPOCH"),
+            "Duration" to RuntimeType.std.resolve("time::Duration"),
+        )
 
     override fun section(section: ServiceConfig) =
         writable {

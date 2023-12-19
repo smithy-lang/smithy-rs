@@ -5,7 +5,8 @@
 
 use crate::box_error::BoxError;
 use crate::client::auth::AuthSchemeId;
-use crate::client::runtime_components::RuntimeComponents;
+use crate::client::runtime_components::sealed::ValidateConfig;
+use crate::client::runtime_components::{RuntimeComponents, RuntimeComponentsBuilder};
 use crate::impl_shared_conversions;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::any::Any;
@@ -62,6 +63,26 @@ pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
         runtime_components: &'a RuntimeComponents,
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a>;
+
+    #[doc = include_str!("../../rustdoc/validate_base_client_config.md")]
+    fn validate_base_client_config(
+        &self,
+        runtime_components: &RuntimeComponentsBuilder,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        let _ = (runtime_components, cfg);
+        Ok(())
+    }
+
+    #[doc = include_str!("../../rustdoc/validate_final_config.md")]
+    fn validate_final_config(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        let _ = (runtime_components, cfg);
+        Ok(())
+    }
 }
 
 /// Shared identity cache.
@@ -87,10 +108,25 @@ impl ResolveCachedIdentity for SharedIdentityCache {
     }
 }
 
-impl_shared_conversions!(convert SharedIdentityCache from ResolveCachedIdentity using SharedIdentityCache::new);
+impl ValidateConfig for SharedIdentityCache {
+    fn validate_base_client_config(
+        &self,
+        runtime_components: &RuntimeComponentsBuilder,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        self.0.validate_base_client_config(runtime_components, cfg)
+    }
 
-#[deprecated(note = "Renamed to ResolveIdentity.")]
-pub use ResolveIdentity as IdentityResolver;
+    fn validate_final_config(
+        &self,
+        runtime_components: &RuntimeComponents,
+        cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        self.0.validate_final_config(runtime_components, cfg)
+    }
+}
+
+impl_shared_conversions!(convert SharedIdentityCache from ResolveCachedIdentity using SharedIdentityCache::new);
 
 /// Resolver for identities.
 ///
@@ -190,6 +226,8 @@ impl ConfiguredIdentityResolver {
         self.identity_resolver.clone()
     }
 }
+
+impl ValidateConfig for ConfiguredIdentityResolver {}
 
 /// An identity that can be used for authentication.
 ///

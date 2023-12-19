@@ -29,7 +29,8 @@ import java.io.File
 class RustCrateInlineModuleComposingWriterTest {
     private val rustCrate: RustCrate
     private val codegenContext: ServerCodegenContext
-    private val model: Model = """
+    private val model: Model =
+        """
         ${'$'}version: "2.0"
         namespace test
 
@@ -56,27 +57,32 @@ class RustCrateInlineModuleComposingWriterTest {
 
         @pattern("^[a-m]+${'$'}")
         string PatternString
-    """.trimIndent().asSmithyModel()
+        """.trimIndent().asSmithyModel()
 
     init {
         codegenContext = serverTestCodegenContext(model)
         val runtimeConfig =
-            RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime").absolutePath))
+            RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.path(File("../rust-runtime").absolutePath))
 
-        val (context, _) = generatePluginContext(
-            model,
-            runtimeConfig = runtimeConfig,
-        )
+        val (context, _) =
+            generatePluginContext(
+                model,
+                runtimeConfig = runtimeConfig,
+            )
         val settings = ServerRustSettings.from(context.model, context.settings)
-        rustCrate = RustCrate(
-            context.fileManifest,
-            codegenContext.symbolProvider,
-            settings.codegenConfig,
-            codegenContext.expectModuleDocProvider(),
-        )
+        rustCrate =
+            RustCrate(
+                context.fileManifest,
+                codegenContext.symbolProvider,
+                settings.codegenConfig,
+                codegenContext.expectModuleDocProvider(),
+            )
     }
 
-    private fun createTestInlineModule(parentModule: RustModule, moduleName: String): RustModule.LeafModule =
+    private fun createTestInlineModule(
+        parentModule: RustModule,
+        moduleName: String,
+    ): RustModule.LeafModule =
         RustModule.new(
             moduleName,
             visibility = Visibility.PUBLIC,
@@ -92,13 +98,19 @@ class RustCrateInlineModuleComposingWriterTest {
             inline = true,
         )
 
-    private fun helloWorld(writer: RustWriter, moduleName: String) {
+    private fun helloWorld(
+        writer: RustWriter,
+        moduleName: String,
+    ) {
         writer.rustBlock("pub fn hello_world()") {
             writer.comment("Module $moduleName")
         }
     }
 
-    private fun byeWorld(writer: RustWriter, moduleName: String) {
+    private fun byeWorld(
+        writer: RustWriter,
+        moduleName: String,
+    ) {
         writer.rustBlock("pub fn bye_world()") {
             writer.comment("Module $moduleName")
             writer.rust("""println!("from inside $moduleName");""")
@@ -152,12 +164,13 @@ class RustCrateInlineModuleComposingWriterTest {
         // crate::output::h::i::hello_world();
 
         val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
-        val modules = hashMapOf(
-            "a" to createTestOrphanInlineModule("a"),
-            "d" to createTestOrphanInlineModule("d"),
-            "e" to createTestOrphanInlineModule("e"),
-            "i" to createTestOrphanInlineModule("i"),
-        )
+        val modules =
+            hashMapOf(
+                "a" to createTestOrphanInlineModule("a"),
+                "d" to createTestOrphanInlineModule("d"),
+                "e" to createTestOrphanInlineModule("e"),
+                "i" to createTestOrphanInlineModule("i"),
+            )
 
         modules["b"] = createTestInlineModule(ServerRustModule.Model, "b")
         modules["c"] = createTestInlineModule(modules["b"]!!, "c")

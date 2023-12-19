@@ -26,19 +26,20 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-private fun RuntimeConfig.awsInlineableHttpRequestChecksum() = RuntimeType.forInlineDependency(
-    InlineAwsDependency.forRustFile(
-        "http_request_checksum", visibility = Visibility.PUBCRATE,
-        CargoDependency.Bytes,
-        CargoDependency.Http,
-        CargoDependency.HttpBody,
-        CargoDependency.Tracing,
-        CargoDependency.smithyChecksums(this),
-        CargoDependency.smithyHttp(this),
-        CargoDependency.smithyRuntimeApi(this),
-        CargoDependency.smithyTypes(this),
-    ),
-)
+private fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
+    RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile(
+            "http_request_checksum", visibility = Visibility.PUBCRATE,
+            CargoDependency.Bytes,
+            CargoDependency.Http,
+            CargoDependency.HttpBody,
+            CargoDependency.Tracing,
+            CargoDependency.smithyChecksums(this),
+            CargoDependency.smithyHttp(this),
+            CargoDependency.smithyRuntimeApiClient(this),
+            CargoDependency.smithyTypes(this),
+        ),
+    )
 
 class HttpRequestChecksumDecorator : ClientCodegenDecorator {
     override val name: String = "HttpRequestChecksum"
@@ -48,8 +49,7 @@ class HttpRequestChecksumDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
+    ): List<OperationCustomization> = baseCustomizations + HttpRequestChecksumCustomization(codegenContext, operation)
 }
 
 private fun HttpChecksumTrait.requestAlgorithmMember(
@@ -105,48 +105,51 @@ private fun HttpChecksumTrait.checksumAlgorithmToStr(
 }
 
 // This generator was implemented based on this spec:
-// https://awslabs.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
+// https://smithy-lang.github.io/smithy/1.0/spec/aws/aws-core.html#http-request-checksums
 class HttpRequestChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    override fun section(section: OperationSection): Writable = writable {
-        // Get the `HttpChecksumTrait`, returning early if this `OperationShape` doesn't have one
-        val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
-        val requestAlgorithmMember = checksumTrait.requestAlgorithmMember(codegenContext, operationShape)
-        val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
+    override fun section(section: OperationSection): Writable =
+        writable {
+            // Get the `HttpChecksumTrait`, returning early if this `OperationShape` doesn't have one
+            val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
+            val requestAlgorithmMember = checksumTrait.requestAlgorithmMember(codegenContext, operationShape)
+            val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
 
-        when (section) {
-            is OperationSection.AdditionalInterceptors -> {
-                if (requestAlgorithmMember != null) {
-                    section.registerInterceptor(runtimeConfig, this) {
-                        val runtimeApi = RuntimeType.smithyRuntimeApi(runtimeConfig)
-                        rustTemplate(
-                            """
-                            #{RequestChecksumInterceptor}::new(|input: &#{Input}| {
-                                let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
-                                let checksum_algorithm = input.$requestAlgorithmMember();
-                                #{checksum_algorithm_to_str}
-                                #{Result}::<_, #{BoxError}>::Ok(checksum_algorithm)
-                            })
-                            """,
-                            *preludeScope,
-                            "BoxError" to RuntimeType.boxError(runtimeConfig),
-                            "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
-                            "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
-                            "RequestChecksumInterceptor" to runtimeConfig.awsInlineableHttpRequestChecksum()
-                                .resolve("RequestChecksumInterceptor"),
-                            "checksum_algorithm_to_str" to checksumTrait.checksumAlgorithmToStr(
-                                codegenContext,
-                                operationShape,
-                            ),
-                        )
+            when (section) {
+                is OperationSection.AdditionalInterceptors -> {
+                    if (requestAlgorithmMember != null) {
+                        section.registerInterceptor(runtimeConfig, this) {
+                            val runtimeApi = RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                            rustTemplate(
+                                """
+                                #{RequestChecksumInterceptor}::new(|input: &#{Input}| {
+                                    let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
+                                    let checksum_algorithm = input.$requestAlgorithmMember();
+                                    #{checksum_algorithm_to_str}
+                                    #{Result}::<_, #{BoxError}>::Ok(checksum_algorithm)
+                                })
+                                """,
+                                *preludeScope,
+                                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                                "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
+                                "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
+                                "RequestChecksumInterceptor" to
+                                    runtimeConfig.awsInlineableHttpRequestChecksum()
+                                        .resolve("RequestChecksumInterceptor"),
+                                "checksum_algorithm_to_str" to
+                                    checksumTrait.checksumAlgorithmToStr(
+                                        codegenContext,
+                                        operationShape,
+                                    ),
+                            )
+                        }
                     }
                 }
+                else -> { }
             }
-            else -> { }
         }
-    }
 }

@@ -16,14 +16,17 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 class SensitiveOutputDecoratorTest {
-    private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
-        "capture_test_logs" to CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
-            .resolve("test_util::capture_test_logs::capture_test_logs"),
-        "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-    )
+    private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> =
+        arrayOf(
+            "capture_test_logs" to
+                CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
+                    .resolve("test_util::capture_test_logs::capture_test_logs"),
+            "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        )
 
-    private val model = """
+    private val model =
+        """
         namespace com.example
         use aws.protocols#awsJson1_0
         @awsJson1_0
@@ -43,7 +46,7 @@ class SensitiveOutputDecoratorTest {
         structure TestOutput {
            credentials: Credentials,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `sensitive output in model should redact response body`() {

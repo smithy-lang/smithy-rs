@@ -34,7 +34,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.typeNameContainsNonPubl
  * traits' enforcement, this type is converted into the regular `Vec` the user
  * sees via the generated converters.
  *
- * TODO(https://github.com/awslabs/smithy-rs/issues/1401) If the collection
+ * TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) If the collection
  *  shape is _directly_ constrained, use [ConstrainedCollectionGenerator]
  *  instead.
  */
@@ -59,19 +59,21 @@ class PubCrateConstrainedCollectionGenerator(
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerMemberSymbol = if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
-            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
-        } else {
-            constrainedShapeSymbolProvider.toSymbol(shape.member)
-        }
+        val innerMemberSymbol =
+            if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
+                pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
+            } else {
+                constrainedShapeSymbolProvider.toSymbol(shape.member)
+            }
 
-        val codegenScope = arrayOf(
-            "InnerMemberSymbol" to innerMemberSymbol,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
-            "UnconstrainedSymbol" to unconstrainedSymbol,
-            "Symbol" to symbol,
-            "From" to RuntimeType.From,
-        )
+        val codegenScope =
+            arrayOf(
+                "InnerMemberSymbol" to innerMemberSymbol,
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
+                "UnconstrainedSymbol" to unconstrainedSymbol,
+                "Symbol" to symbol,
+                "From" to RuntimeType.From,
+            )
 
         inlineModuleCreator(constrainedSymbol) {
             rustTemplate(

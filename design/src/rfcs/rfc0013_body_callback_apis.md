@@ -292,5 +292,5 @@ In order to use this in a request, we'd modify codegen for that request's servic
    - (if streaming) we'd set the checksum callback on the request body object
    - (if non-streaming) we'd immediately read the body and call `BodyCallback::update` manually. Once all data was read, we'd get the checksum by calling `trailers` and insert that data as a request header.
 
-[ByteStream impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205
-[SdkBody impls]: https://github.com/awslabs/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71
+[ByteStream impls]: https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/byte_stream.rs#L205
+[SdkBody impls]: https://github.com/smithy-lang/smithy-rs/blob/f76bc159bf16510a0873f5fba691cb05816f4192/rust-runtime/aws-smithy-http/src/body.rs#L71

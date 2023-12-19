@@ -29,7 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TracingTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyProtocolTestHelpers
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApi
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -60,12 +60,13 @@ class IntegrationTestDecorator : ClientCodegenDecorator {
         return if (Files.exists(testPackagePath) && Files.exists(testPackagePath.resolve("Cargo.toml"))) {
             val hasTests = Files.exists(testPackagePath.resolve("tests"))
             val hasBenches = Files.exists(testPackagePath.resolve("benches"))
-            baseCustomizations + IntegrationTestDependencies(
-                codegenContext,
-                moduleName,
-                hasTests,
-                hasBenches,
-            )
+            baseCustomizations +
+                IntegrationTestDependencies(
+                    codegenContext,
+                    moduleName,
+                    hasTests,
+                    hasBenches,
+                )
         } else {
             baseCustomizations
         }
@@ -79,42 +80,48 @@ class IntegrationTestDependencies(
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    override fun section(section: LibRsSection) = when (section) {
-        is LibRsSection.Body -> testDependenciesOnly {
-            if (hasTests) {
-                val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
-                addDependency(FuturesUtil)
-                addDependency(SerdeJson)
-                addDependency(smithyAsync)
-                addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
-                addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
-                addDependency(smithyRuntimeApi(runtimeConfig).copy(features = setOf("test-util"), scope = DependencyScope.Dev))
-                addDependency(smithyTypes)
-                addDependency(Tokio)
-                addDependency(Tracing.toDevDependency())
-                addDependency(TracingSubscriber)
-            }
-            if (hasBenches) {
-                addDependency(Criterion)
-            }
-            for (serviceSpecific in serviceSpecificCustomizations()) {
-                serviceSpecific.section(section)(this)
-            }
+
+    override fun section(section: LibRsSection) =
+        when (section) {
+            is LibRsSection.Body ->
+                testDependenciesOnly {
+                    if (hasTests) {
+                        val smithyAsync =
+                            CargoDependency.smithyAsync(codegenContext.runtimeConfig)
+                                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                        val smithyTypes =
+                            CargoDependency.smithyTypes(codegenContext.runtimeConfig)
+                                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                        addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
+                        addDependency(FuturesUtil)
+                        addDependency(SerdeJson)
+                        addDependency(smithyAsync)
+                        addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
+                        addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
+                        addDependency(smithyRuntimeApiTestUtil(runtimeConfig))
+                        addDependency(smithyTypes)
+                        addDependency(Tokio)
+                        addDependency(Tracing.toDevDependency())
+                        addDependency(TracingSubscriber)
+                    }
+                    if (hasBenches) {
+                        addDependency(Criterion)
+                    }
+                    for (serviceSpecific in serviceSpecificCustomizations()) {
+                        serviceSpecific.section(section)(this)
+                    }
+                }
+
+            else -> emptySection
         }
 
-        else -> emptySection
-    }
-
-    private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
-        "transcribestreaming" -> listOf(TranscribeTestDependencies())
-        "s3" -> listOf(S3TestDependencies(codegenContext))
-        "dynamodb" -> listOf(DynamoDbTestDependencies())
-        else -> emptyList()
-    }
+    private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
+        when (moduleName) {
+            "transcribestreaming" -> listOf(TranscribeTestDependencies())
+            "s3" -> listOf(S3TestDependencies(codegenContext))
+            "dynamodb" -> listOf(DynamoDbTestDependencies())
+            else -> emptyList()
+        }
 }
 
 class TranscribeTestDependencies : LibRsCustomization() {
@@ -139,6 +146,7 @@ class S3TestDependencies(private val codegenContext: ClientCodegenContext) : Lib
             addDependency(AsyncStd)
             addDependency(BytesUtils.toDevDependency())
             addDependency(FastRand.toDevDependency())
+            addDependency(FuturesUtil.toDevDependency())
             addDependency(HdrHistogram)
             addDependency(HttpBody.toDevDependency())
             addDependency(Smol)

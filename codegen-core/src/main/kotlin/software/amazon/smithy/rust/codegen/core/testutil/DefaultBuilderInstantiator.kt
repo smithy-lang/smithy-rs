@@ -19,11 +19,19 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstant
  * and to serve as the base behavior for client and server instantiators.
  */
 class DefaultBuilderInstantiator(private val checkFallibleBuilder: Boolean, private val symbolProvider: RustSymbolProvider) : BuilderInstantiator {
-    override fun setField(builder: String, value: Writable, field: MemberShape): Writable {
+    override fun setField(
+        builder: String,
+        value: Writable,
+        field: MemberShape,
+    ): Writable {
         return setFieldWithSetter(builder, value, field)
     }
 
-    override fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable?): Writable {
+    override fun finalizeBuilder(
+        builder: String,
+        shape: StructureShape,
+        mapErr: Writable?,
+    ): Writable {
         return writable {
             rust("builder.build()")
             if (checkFallibleBuilder && BuilderGenerator.hasFallibleBuilder(shape, symbolProvider)) {

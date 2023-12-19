@@ -31,17 +31,25 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> =
-        baseCustomizations + AllowLintsCustomization()
+    ): List<LibRsCustomization> = baseCustomizations + AllowLintsCustomization()
 
-    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ServerCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val rc = codegenContext.runtimeConfig
 
         // Add rt-tokio feature for `ByteStream::from_path`
-        rustCrate.mergeFeature(Feature("rt-tokio", true, listOf("aws-smithy-http/rt-tokio")))
+        rustCrate.mergeFeature(
+            Feature(
+                "rt-tokio",
+                true,
+                listOf("aws-smithy-types/rt-tokio"),
+            ),
+        )
 
         rustCrate.withModule(ServerRustModule.Types) {
-            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
+            pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
             rustTemplate(
                 """
                 pub use #{DisplayErrorContext};

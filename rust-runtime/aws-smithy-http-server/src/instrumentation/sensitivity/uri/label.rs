@@ -81,6 +81,8 @@ where
         if let Some(greedy_label) = &self.greedy_label {
             // Calculate the byte index of the start of the greedy label and whether it was reached while writing the
             // normal labels.
+            // TODO(clippy): Switch from fold to try_fold
+            #[allow(clippy::manual_try_fold)]
             let (greedy_start, greedy_hit) = self
                 .path
                 .split('/')

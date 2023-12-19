@@ -45,9 +45,10 @@ class ConstrainedPythonBlobGenerator(
             }
         }
     val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
-    private val blobConstraintsInfo: List<BlobLength> = listOf(LengthTrait::class.java)
-        .mapNotNull { shape.getTrait(it).orNull() }
-        .map { BlobLength(it) }
+    private val blobConstraintsInfo: List<BlobLength> =
+        listOf(LengthTrait::class.java)
+            .mapNotNull { shape.getTrait(it).orNull() }
+            .map { BlobLength(it) }
     private val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
@@ -57,7 +58,10 @@ class ConstrainedPythonBlobGenerator(
         renderTryFrom(symbol, blobType)
     }
 
-    fun renderFrom(symbol: Symbol, blobType: RustType) {
+    fun renderFrom(
+        symbol: Symbol,
+        blobType: RustType,
+    ) {
         val name = symbol.name
         val inner = blobType.render()
         writer.rustTemplate(
@@ -79,7 +83,10 @@ class ConstrainedPythonBlobGenerator(
         )
     }
 
-    fun renderTryFrom(symbol: Symbol, blobType: RustType) {
+    fun renderTryFrom(
+        symbol: Symbol,
+        blobType: RustType,
+    ) {
         val name = symbol.name
         val inner = blobType.render()
         writer.rustTemplate(

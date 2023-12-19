@@ -5,14 +5,9 @@
 
 use crate::body::SdkBody;
 use crate::byte_stream::{error::Error, error::ErrorKind, ByteStream};
-use bytes::Bytes;
-use futures_core::ready;
-use http::HeaderMap;
-use http_body::{Body, SizeHint};
 use std::future::Future;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::task::{Context, Poll};
 use tokio::fs::File;
 use tokio::io::{self, AsyncReadExt, AsyncSeekExt};
 use tokio_util::io::ReaderStream;
@@ -52,7 +47,7 @@ impl PathBody {
             state: State::Loaded(ReaderStream::with_capacity(file.take(length), buffer_size)),
             length,
             buffer_size,
-            /// The file used to create this `PathBody` should have already had an offset applied
+            // The file used to create this `PathBody` should have already had an offset applied
             offset: None,
         }
     }
@@ -60,7 +55,6 @@ impl PathBody {
 
 /// Builder for creating [`ByteStreams`](ByteStream) from a file/path, with full control over advanced options.
 ///
-/// Example usage:
 /// ```no_run
 /// # #[cfg(feature = "rt-tokio")]
 /// # {
@@ -114,7 +108,7 @@ impl FsBuilder {
     ///
     /// You must then call either [`file`](FsBuilder::file) or [`path`](FsBuilder::path) to specify what to read from.
     pub fn new() -> Self {
-        FsBuilder {
+        Self {
             buffer_size: DEFAULT_BUFFER_SIZE,
             file: None,
             length: None,
@@ -169,7 +163,7 @@ impl FsBuilder {
         self
     }
 
-    /// Returns a [`ByteStream`](ByteStream) from this builder.
+    /// Returns a [`ByteStream`] from this builder.
     pub async fn build(self) -> Result<ByteStream, Error> {
         if self.path.is_some() && self.file.is_some() {
             panic!("The 'file' and 'path' options on an FsBuilder are mutually exclusive but both were set. Please set only one")
@@ -199,12 +193,12 @@ impl FsBuilder {
             let body_loader = move || {
                 // If an offset was provided, seeking will be handled in `PathBody::poll_data` each
                 // time the file is loaded.
-                SdkBody::from_dyn(http_body::combinators::BoxBody::new(PathBody::from_path(
+                SdkBody::from_body_0_4_internal(PathBody::from_path(
                     path.clone(),
                     length,
                     buffer_size,
                     self.offset,
-                )))
+                ))
             };
 
             Ok(ByteStream::new(SdkBody::retryable(body_loader)))
@@ -214,9 +208,8 @@ impl FsBuilder {
                 let _s = file.seek(io::SeekFrom::Start(offset)).await?;
             }
 
-            let body = SdkBody::from_dyn(http_body::combinators::BoxBody::new(
-                PathBody::from_file(file, length, buffer_size),
-            ));
+            let body =
+                SdkBody::from_body_0_4_internal(PathBody::from_file(file, length, buffer_size));
 
             Ok(ByteStream::new(body))
         } else {
@@ -240,14 +233,15 @@ enum State {
     Loaded(ReaderStream<io::Take<File>>),
 }
 
-impl Body for PathBody {
-    type Data = Bytes;
+impl http_body_0_4::Body for PathBody {
+    type Data = bytes::Bytes;
     type Error = Box<dyn std::error::Error + Send + Sync + 'static>;
 
     fn poll_data(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Result<Self::Data, Self::Error>>> {
+        use std::task::Poll;
         let offset = self.offset.unwrap_or(DEFAULT_OFFSET);
         loop {
             match self.state {
@@ -264,7 +258,7 @@ impl Body for PathBody {
                     }));
                 }
                 State::Loading(ref mut future) => {
-                    match ready!(Pin::new(future).poll(cx)) {
+                    match futures_core::ready!(Pin::new(future).poll(cx)) {
                         Ok(file) => {
                             self.state = State::Loaded(ReaderStream::with_capacity(
                                 file.take(self.length),
@@ -276,7 +270,7 @@ impl Body for PathBody {
                 }
                 State::Loaded(ref mut stream) => {
                     use futures_core::Stream;
-                    return match ready!(Pin::new(stream).poll_next(cx)) {
+                    return match futures_core::ready!(std::pin::Pin::new(stream).poll_next(cx)) {
                         Some(Ok(bytes)) => Poll::Ready(Some(Ok(bytes))),
                         None => Poll::Ready(None),
                         Some(Err(e)) => Poll::Ready(Some(Err(e.into()))),
@@ -287,10 +281,10 @@ impl Body for PathBody {
     }
 
     fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        Poll::Ready(Ok(None))
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<Option<http::HeaderMap>, Self::Error>> {
+        std::task::Poll::Ready(Ok(None))
     }
 
     fn is_end_stream(&self) -> bool {
@@ -298,17 +292,17 @@ impl Body for PathBody {
         self.length == 0
     }
 
-    fn size_hint(&self) -> SizeHint {
-        SizeHint::with_exact(self.length)
+    fn size_hint(&self) -> http_body_0_4::SizeHint {
+        http_body_0_4::SizeHint::with_exact(self.length)
     }
 }
 
+#[cfg(feature = "http-body-0-4-x")]
 #[cfg(test)]
 mod test {
     use super::FsBuilder;
     use crate::byte_stream::{ByteStream, Length};
     use bytes::Buf;
-    use http_body::Body;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -335,12 +329,12 @@ mod test {
             .into_inner();
 
         // assert that the specified length is used as size hint
-        assert_eq!(body.size_hint().exact(), Some(file_length));
+        assert_eq!(body.content_length(), Some(file_length));
 
         let mut body1 = body.try_clone().expect("retryable bodies are cloneable");
         // read a little bit from one of the clones
         let some_data = body1
-            .data()
+            .next()
             .await
             .expect("should have some data")
             .expect("read should not fail");
@@ -373,7 +367,7 @@ mod test {
             .unwrap()
             .into_inner();
 
-        assert_eq!(body.size_hint().exact(), Some(1));
+        assert_eq!(body.content_length(), Some(1));
     }
 
     #[tokio::test]

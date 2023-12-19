@@ -1,4 +1,4 @@
-/// TODO(https://github.com/awslabs/smithy-rs/issues/1508)
+/// TODO(https://github.com/smithy-lang/smithy-rs/issues/1508)
 /// reconcile this model with the main one living inside codegen-server-test/model/pokemon.smithy
 /// once the Typescript implementation supports Streaming and Union shapes.
 $version: "1.0"

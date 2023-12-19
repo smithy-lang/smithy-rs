@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,
@@ -18,10 +21,10 @@
 //! for anyone writing a library for others to use with their generated clients.
 //!
 //! If you're needing to depend on this and you're not writing a library for Smithy
-//! generated clients, then please file an issue on [smithy-rs](https://github.com/awslabs/smithy-rs)
+//! generated clients, then please file an issue on [smithy-rs](https://github.com/smithy-lang/smithy-rs)
 //! as we likely missed re-exporting one of the APIs.
 //!
-//! All client-specific code is in the [`client`](crate::client) root level module
+//! All client-specific code is in the [`client`] root level module
 //! to leave room for smithy-rs server APIs in the future.
 
 /// A boxed error that is `Send` and `Sync`.
@@ -31,8 +34,6 @@ pub mod box_error;
 #[cfg(feature = "client")]
 pub mod client;
 
-/// Internal builder macros. Not intended to be used outside of the aws-smithy-runtime crates.
-#[doc(hidden)]
-pub mod macros;
+pub mod http;
 
 pub mod shared;

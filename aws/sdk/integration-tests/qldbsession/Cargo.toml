@@ -5,7 +5,7 @@ version = "0.1.0"
 authors = ["Russell Cohen <rcoh@amazon.com>", "Shing Lyu <shinglyu@amazon.com"]
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -17,7 +17,7 @@ test-util = []
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
-aws-sdk-qldbsession = { path = "../../build/aws-sdk/sdk/qldbsession", features = ["test-util"] }
+aws-sdk-qldbsession = { path = "../../build/aws-sdk/sdk/qldbsession", features = ["test-util", "behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }

@@ -33,9 +33,9 @@ class ResponseDeserializerGenerator(
 
     private val codegenScope by lazy {
         val interceptorContext =
-            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::interceptors::context")
+            CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType().resolve("client::interceptors::context")
         val orchestrator =
-            CargoDependency.smithyRuntimeApi(runtimeConfig).toType().resolve("client::orchestrator")
+            CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType().resolve("client::orchestrator")
         arrayOf(
             *preludeScope,
             "Error" to interceptorContext.resolve("Error"),
@@ -44,7 +44,7 @@ class ResponseDeserializerGenerator(
             "Output" to interceptorContext.resolve("Output"),
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
-            "DeserializeResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::ser_de::DeserializeResponse"),
+            "DeserializeResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::ser_de::DeserializeResponse"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
@@ -52,7 +52,11 @@ class ResponseDeserializerGenerator(
         )
     }
 
-    fun render(writer: RustWriter, operationShape: OperationShape, customizations: List<OperationCustomization>) {
+    fun render(
+        writer: RustWriter,
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ) {
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
         val operationName = symbolProvider.toSymbol(operationShape).name
         val streaming = operationShape.outputShape(model).hasStreamingMember(model)
@@ -72,17 +76,19 @@ class ResponseDeserializerGenerator(
             *codegenScope,
             "O" to outputSymbol,
             "E" to symbolProvider.symbolForOperationError(operationShape),
-            "deserialize_streaming" to writable {
-                if (streaming) {
-                    deserializeStreaming(operationShape, customizations)
-                }
-            },
-            "deserialize_nonstreaming" to writable {
-                when (streaming) {
-                    true -> deserializeStreamingError(operationShape, customizations)
-                    else -> deserializeNonStreaming(operationShape, customizations)
-                }
-            },
+            "deserialize_streaming" to
+                writable {
+                    if (streaming) {
+                        deserializeStreaming(operationShape, customizations)
+                    }
+                },
+            "deserialize_nonstreaming" to
+                writable {
+                    when (streaming) {
+                        true -> deserializeStreamingError(operationShape, customizations)
+                        else -> deserializeNonStreaming(operationShape, customizations)
+                    }
+                },
         )
     }
 
@@ -107,9 +113,10 @@ class ResponseDeserializerGenerator(
             """,
             *codegenScope,
             "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, customizations),
-            "BeforeParseResponse" to writable {
-                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
-            },
+            "BeforeParseResponse" to
+                writable {
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                },
         )
     }
 
@@ -151,26 +158,28 @@ class ResponseDeserializerGenerator(
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
             "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
-            "BeforeParseResponse" to writable {
-                writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", "body"))
-            },
+            "BeforeParseResponse" to
+                writable {
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", "body"))
+                },
         )
     }
 
-    private fun typeEraseResult(): RuntimeType = ProtocolFunctions.crossOperationFn("type_erase_result") { fnName ->
-        rustTemplate(
-            """
-            pub(crate) fn $fnName<O, E>(result: #{Result}<O, E>) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>>
-            where
-                O: ::std::fmt::Debug + #{Send} + #{Sync} + 'static,
-                E: ::std::error::Error + std::fmt::Debug + #{Send} + #{Sync} + 'static,
-            {
-                result.map(|output| #{Output}::erase(output))
-                    .map_err(|error| #{Error}::erase(error))
-                    .map_err(#{Into}::into)
-            }
-            """,
-            *codegenScope,
-        )
-    }
+    private fun typeEraseResult(): RuntimeType =
+        ProtocolFunctions.crossOperationFn("type_erase_result") { fnName ->
+            rustTemplate(
+                """
+                pub(crate) fn $fnName<O, E>(result: #{Result}<O, E>) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>>
+                where
+                    O: ::std::fmt::Debug + #{Send} + #{Sync} + 'static,
+                    E: ::std::error::Error + std::fmt::Debug + #{Send} + #{Sync} + 'static,
+                {
+                    result.map(|output| #{Output}::erase(output))
+                        .map_err(|error| #{Error}::erase(error))
+                        .map_err(#{Into}::into)
+                }
+                """,
+                *codegenScope,
+            )
+        }
 }

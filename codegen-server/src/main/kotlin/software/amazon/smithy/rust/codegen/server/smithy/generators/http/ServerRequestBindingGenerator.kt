@@ -50,16 +50,16 @@ class ServerRequestBindingGenerator(
         binding: HttpBindingDescriptor,
         errorSymbol: Symbol,
         structuredHandler: RustWriter.(String) -> Unit,
-    ): RuntimeType = httpBindingGenerator.generateDeserializePayloadFn(
-        binding,
-        errorSymbol,
-        structuredHandler,
-        HttpMessageType.REQUEST,
-    )
+    ): RuntimeType =
+        httpBindingGenerator.generateDeserializePayloadFn(
+            binding,
+            errorSymbol,
+            structuredHandler,
+            HttpMessageType.REQUEST,
+        )
 
-    fun generateDeserializePrefixHeadersFn(
-        binding: HttpBindingDescriptor,
-    ): RuntimeType = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
+    fun generateDeserializePrefixHeadersFn(binding: HttpBindingDescriptor): RuntimeType =
+        httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
 }
 
 /**
@@ -68,20 +68,22 @@ class ServerRequestBindingGenerator(
  */
 class ServerRequestAfterDeserializingIntoAHashMapOfHttpPrefixHeadersWrapInUnconstrainedMapHttpBindingCustomization(val codegenContext: ServerCodegenContext) :
     HttpBindingCustomization() {
-    override fun section(section: HttpBindingSection): Writable = when (section) {
-        is HttpBindingSection.BeforeRenderingHeaderValue,
-        is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
-        -> emptySection
-        is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders -> writable {
-            if (section.memberShape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.unconstrainedShapeSymbolProvider)) {
-                rust(
-                    "let out = out.map(#T);",
-                    codegenContext.unconstrainedShapeSymbolProvider.toSymbol(section.memberShape).mapRustType {
-                        it.stripOuter<RustType.Option>()
-                    },
-                )
-            }
+    override fun section(section: HttpBindingSection): Writable =
+        when (section) {
+            is HttpBindingSection.BeforeRenderingHeaderValue,
+            is HttpBindingSection.BeforeIteratingOverMapShapeBoundWithHttpPrefixHeaders,
+            -> emptySection
+            is HttpBindingSection.AfterDeserializingIntoAHashMapOfHttpPrefixHeaders ->
+                writable {
+                    if (section.memberShape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.unconstrainedShapeSymbolProvider)) {
+                        rust(
+                            "let out = out.map(#T);",
+                            codegenContext.unconstrainedShapeSymbolProvider.toSymbol(section.memberShape).mapRustType {
+                                it.stripOuter<RustType.Option>()
+                            },
+                        )
+                    }
+                }
+            else -> emptySection
         }
-        else -> emptySection
-    }
 }

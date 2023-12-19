@@ -16,7 +16,7 @@ tracing = "0.1"
 tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
 tokio-rustls = "0.24.0"
 rustls-pemfile = "1.0.2"
-futures-util = { version = "0.3.27", default-features = false }
+futures-util = { version = "0.3.29", default-features = false }
 
 # Local paths
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }

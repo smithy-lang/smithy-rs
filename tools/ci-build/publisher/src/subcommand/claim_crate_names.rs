@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 use crate::fs::Fs;
-use crate::package::{discover_packages, PackageHandle, Publish, SemVer};
+use crate::package::{discover_packages, PackageHandle, Publish};
 use crate::publish::{has_been_published_on_crates_io, publish};
 use crate::subcommand::publish::correct_owner;
 use crate::{cargo, SDK_REPO_NAME};
 use clap::Parser;
 use dialoguer::Confirm;
+use semver::Version;
 use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::package::PackageCategory;
 use std::collections::HashSet;
@@ -61,7 +62,7 @@ async fn claim_crate_name(name: &str) -> anyhow::Result<()> {
     create_dummy_lib_crate(Fs::Real, name, crate_dir_path.to_path_buf()).await?;
 
     let category = PackageCategory::from_package_name(name);
-    let package_handle = PackageHandle::new(name, semver::Version::new(0, 0, 1));
+    let package_handle = PackageHandle::new(name, Version::new(0, 0, 1));
     publish(&package_handle, crate_dir_path).await?;
     // Keep things slow to avoid getting throttled by crates.io
     tokio::time::sleep(Duration::from_secs(2)).await;
@@ -76,7 +77,7 @@ async fn discover_publishable_crate_names(repository_root: &Path) -> anyhow::Res
         fs: Fs,
         path: PathBuf,
     ) -> anyhow::Result<HashSet<String>> {
-        let packages = discover_packages::<SemVer>(fs, path).await?;
+        let packages = discover_packages(fs, path).await?;
         let mut publishable_package_names = HashSet::new();
         for package in packages {
             if let Publish::Allowed = package.publish {
@@ -118,7 +119,7 @@ version = "0.0.1"
 edition = "2021"
 description = "Placeholder ahead of the next smithy-rs release"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs""#,
+repository = "https://github.com/smithy-lang/smithy-rs""#,
         package_name
     );
     fs.write_file(directory_path.join("Cargo.toml"), cargo_toml.as_bytes())

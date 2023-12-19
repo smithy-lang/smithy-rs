@@ -21,10 +21,9 @@ import java.io.File
 import java.nio.file.Path
 
 val TestRuntimeConfig =
-    RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../../rust-runtime").absolutePath))
+    RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.path(File("../../rust-runtime").absolutePath))
 
-fun generatePythonServerPluginContext(model: Model) =
-    generatePluginContext(model, runtimeConfig = TestRuntimeConfig)
+fun generatePythonServerPluginContext(model: Model) = generatePluginContext(model, runtimeConfig = TestRuntimeConfig)
 
 fun executePythonServerCodegenVisitor(pluginCtx: PluginContext) {
     val codegenDecorator =

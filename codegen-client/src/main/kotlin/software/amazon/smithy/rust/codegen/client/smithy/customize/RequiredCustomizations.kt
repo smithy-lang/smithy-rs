@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ConnectionPoisoningRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpChecksumRequiredGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdentityCacheConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.InterceptorConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.MetadataCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.ResiliencyConfigCustomization
@@ -28,7 +29,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLintsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
+import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitivesEventStream
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 
 val TestUtilFeature = Feature("test-util", false, listOf())
 
@@ -54,19 +57,23 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> = baseCustomizations +
-        ResiliencyConfigCustomization(codegenContext) +
-        InterceptorConfigCustomization(codegenContext) +
-        TimeSourceCustomization(codegenContext) +
-        RetryClassifierConfigCustomization(codegenContext)
+    ): List<ConfigCustomization> =
+        baseCustomizations +
+            ResiliencyConfigCustomization(codegenContext) +
+            IdentityCacheConfigCustomization(codegenContext) +
+            InterceptorConfigCustomization(codegenContext) +
+            TimeSourceCustomization(codegenContext) +
+            RetryClassifierConfigCustomization(codegenContext)
 
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> =
-        baseCustomizations + AllowLintsCustomization()
+    ): List<LibRsCustomization> = baseCustomizations + AllowLintsCustomization()
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val rc = codegenContext.runtimeConfig
 
         // Add rt-tokio feature for `ByteStream::from_path`
@@ -74,7 +81,7 @@ class RequiredCustomizations : ClientCodegenDecorator {
             Feature(
                 "rt-tokio",
                 true,
-                listOf("aws-smithy-async/rt-tokio", "aws-smithy-http/rt-tokio"),
+                listOf("aws-smithy-async/rt-tokio", "aws-smithy-types/rt-tokio"),
             ),
         )
 
@@ -83,21 +90,32 @@ class RequiredCustomizations : ClientCodegenDecorator {
         // Re-export resiliency types
         ResiliencyReExportCustomization(codegenContext).extras(rustCrate)
 
-        rustCrate.withModule(ClientRustModule.Primitives) {
-            pubUseSmithyPrimitives(codegenContext, codegenContext.model)(this)
+        rustCrate.withModule(ClientRustModule.primitives) {
+            pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
+        }
+        rustCrate.withModule(ClientRustModule.Primitives.EventStream) {
+            pubUseSmithyPrimitivesEventStream(codegenContext, codegenContext.model)(this)
         }
         rustCrate.withModule(ClientRustModule.Error) {
             rustTemplate(
                 """
                 /// Error type returned by the client.
-                pub use #{SdkError};
+                pub type SdkError<E, R = #{R}> = #{SdkError}<E, R>;
+                pub use #{BuildError};
+                pub use #{ConnectorError};
 
                 pub use #{DisplayErrorContext};
                 pub use #{ProvideErrorMetadata};
+                pub use #{ErrorMetadata};
                 """,
                 "DisplayErrorContext" to RuntimeType.smithyTypes(rc).resolve("error::display::DisplayErrorContext"),
                 "ProvideErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ProvideErrorMetadata"),
+                "ErrorMetadata" to RuntimeType.smithyTypes(rc).resolve("error::metadata::ErrorMetadata"),
+                "R" to RuntimeType.smithyRuntimeApiClient(rc).resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(rc),
+                // this can't use the auto-rexport because the builder generator is defined in codegen core
+                "BuildError" to rc.operationBuildError(),
+                "ConnectorError" to RuntimeType.smithyRuntimeApi(rc).resolve("client::result::ConnectorError"),
             )
         }
 
@@ -111,7 +129,8 @@ class RequiredCustomizations : ClientCodegenDecorator {
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> = baseCustomizations +
-        ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
-        RetryClassifierServiceRuntimePluginCustomization(codegenContext)
+    ): List<ServiceRuntimePluginCustomization> =
+        baseCustomizations +
+            ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
+            RetryClassifierServiceRuntimePluginCustomization(codegenContext)
 }

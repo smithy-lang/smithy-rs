@@ -1,7 +1,7 @@
 RFC: Improving access to request IDs in SDK clients
 ===================================================
 
-> Status: Implemented in [#2129](https://github.com/awslabs/smithy-rs/pull/2129)
+> Status: Implemented in [#2129](https://github.com/smithy-lang/smithy-rs/pull/2129)
 >
 > Applies to: AWS SDK clients
 

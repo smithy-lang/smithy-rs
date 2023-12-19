@@ -9,7 +9,7 @@ use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::identity::{
-    Identity, IdentityCachePartition, IdentityFuture, IdentityResolver, ResolveCachedIdentity,
+    Identity, IdentityCachePartition, IdentityFuture, ResolveCachedIdentity, ResolveIdentity,
     SharedIdentityCache, SharedIdentityResolver,
 };
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -241,19 +241,65 @@ impl LazyCache {
     }
 }
 
+macro_rules! required_err {
+    ($thing:literal, $how:literal) => {
+        BoxError::from(concat!(
+            "Lazy identity caching requires ",
+            $thing,
+            " to be configured. ",
+            $how,
+            " If this isn't possible, then disable identity caching by calling ",
+            "the `identity_cache` method on config with `IdentityCache::no_cache()`",
+        ))
+    };
+}
+macro_rules! validate_components {
+    ($components:ident) => {
+        let _ = $components.time_source().ok_or_else(|| {
+            required_err!(
+                "a time source",
+                "Set a time source using the `time_source` method on config."
+            )
+        })?;
+        let _ = $components.sleep_impl().ok_or_else(|| {
+            required_err!(
+                "an async sleep implementation",
+                "Set a sleep impl using the `sleep_impl` method on config."
+            )
+        })?;
+    };
+}
+
 impl ResolveCachedIdentity for LazyCache {
+    fn validate_base_client_config(
+        &self,
+        runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder,
+        _cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        validate_components!(runtime_components);
+        Ok(())
+    }
+
+    fn validate_final_config(
+        &self,
+        runtime_components: &RuntimeComponents,
+        _cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        validate_components!(runtime_components);
+        Ok(())
+    }
+
     fn resolve_cached_identity<'a>(
         &'a self,
         resolver: SharedIdentityResolver,
         runtime_components: &'a RuntimeComponents,
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
-        let time_source = runtime_components
-            .time_source()
-            .expect("Identity caching requires a time source to be configured. If this isn't possible, then disable identity caching.");
-        let sleep_impl = runtime_components
-            .sleep_impl()
-            .expect("Identity caching requires a sleep impl to be configured. If this isn't possible, then disable identity caching.");
+        let (time_source, sleep_impl) = (
+            runtime_components.time_source().expect("validated"),
+            runtime_components.sleep_impl().expect("validated"),
+        );
+
         let now = time_source.now();
         let timeout_future = sleep_impl.sleep(self.load_timeout);
         let load_timeout = self.load_timeout;
@@ -263,7 +309,12 @@ impl ResolveCachedIdentity for LazyCache {
         IdentityFuture::new(async move {
             // Attempt to get cached identity, or clear the cache if they're expired
             if let Some(identity) = cache.yield_or_clear_if_expired(now).await {
-                tracing::debug!("loaded identity from cache");
+                tracing::debug!(
+                    buffer_time=?self.buffer_time,
+                    cached_expiration=?identity.expiration(),
+                    now=?now,
+                    "loaded identity from cache"
+                );
                 Ok(identity)
             } else {
                 // If we didn't get identity from the cache, then we need to try and load.
@@ -351,7 +402,7 @@ mod tests {
             f.write_str("ResolverFn")
         }
     }
-    impl<F> IdentityResolver for ResolverFn<F>
+    impl<F> ResolveIdentity for ResolverFn<F>
     where
         F: Fn() -> IdentityFuture<'static> + Send + Sync,
     {
@@ -377,7 +428,7 @@ mod tests {
     ) -> (LazyCache, SharedIdentityResolver) {
         #[derive(Debug)]
         struct Resolver(Mutex<Vec<Result<Identity, BoxError>>>);
-        impl IdentityResolver for Resolver {
+        impl ResolveIdentity for Resolver {
             fn resolve_identity<'a>(
                 &'a self,
                 _: &'a RuntimeComponents,
@@ -638,6 +689,7 @@ mod tests {
             .unwrap();
         let (cache, _) = test_cache(BUFFER_TIME_NO_JITTER, Vec::new());
 
+        #[allow(clippy::disallowed_methods)]
         let far_future = SystemTime::now() + Duration::from_secs(10_000);
 
         // Resolver A and B both return an identical identity type with different tokens with an expiration

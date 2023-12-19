@@ -19,7 +19,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 internal class RustTypesTest {
-    private fun forInputExpectOutput(t: Writable, expectedOutput: String) {
+    private fun forInputExpectOutput(
+        t: Writable,
+        expectedOutput: String,
+    ) {
         val writer = RustWriter.forModule("rust_types")
         writer.rustInlineTemplate("'")
         t.invoke(writer)
@@ -61,7 +64,7 @@ internal class RustTypesTest {
     fun `RustType_Vec_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.Vec(RustType.String).writable,
-            "'::std::vec::Vec<::std::string::String>'",
+            "'::std::vec::Vec::<::std::string::String>'",
         )
     }
 
@@ -77,7 +80,7 @@ internal class RustTypesTest {
     fun `RustType_HashMap_writable produces a template-compatible RuntimeType`() {
         forInputExpectOutput(
             RustType.HashMap(RustType.String, RustType.String).writable,
-            "'::std::collections::HashMap<::std::string::String, ::std::string::String>'",
+            "'::std::collections::HashMap::<::std::string::String, ::std::string::String>'",
         )
     }
 
@@ -87,7 +90,7 @@ internal class RustTypesTest {
             RustType.HashSet(RustType.String).writable,
             // Rust doesn't guarantee that `HashSet`s are insertion ordered, so we use a `Vec` instead.
             // This is called out in a comment in the RustType.HashSet declaration
-            "'::std::vec::Vec<::std::string::String>'",
+            "'::std::vec::Vec::<::std::string::String>'",
         )
     }
 
@@ -146,23 +149,24 @@ internal class RustTypesTest {
     @Test
     fun `types render properly`() {
         val type = RustType.Box(RustType.Option(RustType.Reference("a", RustType.Vec(RustType.String))))
-        type.render(false) shouldBe "Box<Option<&'a Vec<String>>>"
-        type.render(true) shouldBe "::std::boxed::Box<::std::option::Option<&'a ::std::vec::Vec<::std::string::String>>>"
+        type.render(false) shouldBe "Box<Option<&'a Vec::<String>>>"
+        type.render(true) shouldBe "::std::boxed::Box<::std::option::Option<&'a ::std::vec::Vec::<::std::string::String>>>"
     }
 
     @Test
     fun `attribute macros from strings render properly`() {
-        val attributeMacro = Attribute(
-            Attribute.cfg(
-                Attribute.all(
-                    Attribute.pair("feature" to "unstable".dq()),
-                    Attribute.any(
-                        Attribute.pair("feature" to "serialize".dq()),
-                        Attribute.pair("feature" to "deserialize".dq()),
+        val attributeMacro =
+            Attribute(
+                Attribute.cfg(
+                    Attribute.all(
+                        Attribute.pair("feature" to "unstable".dq()),
+                        Attribute.any(
+                            Attribute.pair("feature" to "serialize".dq()),
+                            Attribute.pair("feature" to "deserialize".dq()),
+                        ),
                     ),
                 ),
-            ),
-        )
+            )
         forInputExpectOutput(
             writable {
                 attributeMacro.render(this)
@@ -173,16 +177,17 @@ internal class RustTypesTest {
 
     @Test
     fun `attribute macros render writers properly`() {
-        val attributeMacro = Attribute(
-            cfg(
-                all(
-                    // Normally we'd use the `pair` fn to define these but this is a test
-                    writable { rustInline("""feature = "unstable"""") },
-                    writable { rustInline("""feature = "serialize"""") },
-                    writable { rustInline("""feature = "deserialize"""") },
+        val attributeMacro =
+            Attribute(
+                cfg(
+                    all(
+                        // Normally we'd use the `pair` fn to define these but this is a test
+                        writable { rustInline("""feature = "unstable"""") },
+                        writable { rustInline("""feature = "serialize"""") },
+                        writable { rustInline("""feature = "deserialize"""") },
+                    ),
                 ),
-            ),
-        )
+            )
         forInputExpectOutput(
             writable {
                 attributeMacro.render(this)
@@ -200,13 +205,14 @@ internal class RustTypesTest {
 
     @Test
     fun `derive attribute macros render properly`() {
-        val attributeMacro = Attribute(
-            derive(
-                RuntimeType.Clone,
-                RuntimeType.Debug,
-                RuntimeType.StdError,
-            ),
-        )
+        val attributeMacro =
+            Attribute(
+                derive(
+                    RuntimeType.Clone,
+                    RuntimeType.Debug,
+                    RuntimeType.StdError,
+                ),
+            )
         forInputExpectOutput(
             writable {
                 attributeMacro.render(this)
@@ -219,5 +225,14 @@ internal class RustTypesTest {
     fun `derive attribute macros don't render when empty`() {
         val attributeMacro = Attribute(derive())
         forInputExpectOutput(writable { attributeMacro.render(this) }, "")
+    }
+
+    @Test
+    fun `finds inner reference type`() {
+        val innerReference = RustType.Reference("a", RustType.Bool)
+        val type = RustType.Box(RustType.Option(innerReference))
+
+        type.innerReference() shouldBe innerReference
+        RustType.Bool.innerReference() shouldBe null
     }
 }

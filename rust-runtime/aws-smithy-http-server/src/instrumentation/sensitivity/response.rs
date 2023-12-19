@@ -17,7 +17,7 @@ use super::{
 };
 
 /// Allows the modification the responses status code [`Display`](std::fmt::Display) and headers
-/// [`Debug`](std::fmt::Debug) to accommodate sensitivity.
+/// [`Debug`] to accommodate sensitivity.
 ///
 /// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`StatusCode`](http::StatusCode).
 #[derive(Clone)]

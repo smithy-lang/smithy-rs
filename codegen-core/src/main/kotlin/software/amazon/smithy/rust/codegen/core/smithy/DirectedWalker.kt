@@ -21,6 +21,9 @@ class DirectedWalker(model: Model) {
 
     fun walkShapes(shape: Shape): Set<Shape> = walkShapes(shape) { true }
 
-    fun walkShapes(shape: Shape, predicate: Predicate<Relationship>): Set<Shape> =
+    fun walkShapes(
+        shape: Shape,
+        predicate: Predicate<Relationship>,
+    ): Set<Shape> =
         inner.walkShapes(shape) { rel -> predicate.test(rel) && rel.direction == RelationshipDirection.DIRECTED }
 }

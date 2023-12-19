@@ -14,7 +14,7 @@ using [wrk](https://github.com/wg/wrk).
 
 <!-- vim-markdown-toc -->
 
-## [2022-03-04](https://github.com/awslabs/smithy-rs/commit/d823f61156577ab42590709627906d1dc35a5f49)
+## [2022-03-04](https://github.com/smithy-lang/smithy-rs/commit/d823f61156577ab42590709627906d1dc35a5f49)
 
 The benchmark runs against the `empty_operation()` operation, which is just
 returning an empty output and can be used to stress test the framework overhead.

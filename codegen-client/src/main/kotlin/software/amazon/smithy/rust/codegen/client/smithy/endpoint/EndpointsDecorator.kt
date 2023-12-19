@@ -44,7 +44,10 @@ interface EndpointCustomization {
      * }
      * ```
      */
-    fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? = null
+    fun loadBuiltInFromServiceConfig(
+        parameter: Parameter,
+        configRef: String,
+    ): Writable? = null
 
     /**
      * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
@@ -65,7 +68,11 @@ interface EndpointCustomization {
      * ```
      */
 
-    fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
+    fun setBuiltInOnServiceConfig(
+        name: String,
+        value: Node,
+        configBuilderRef: String,
+    ): Writable? = null
 
     /**
      * Provide a list of additional endpoints standard library functions that rules can use
@@ -113,22 +120,27 @@ class EndpointsDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> {
-        return baseCustomizations + object : ServiceRuntimePluginCustomization() {
-            override fun section(section: ServiceRuntimePluginSection): Writable {
-                return when (section) {
-                    is ServiceRuntimePluginSection.RegisterRuntimeComponents -> writable {
-                        codegenContext.defaultEndpointResolver()?.also { resolver ->
-                            section.registerEndpointResolver(this, resolver)
-                        }
-                    }
+        return baseCustomizations +
+            object : ServiceRuntimePluginCustomization() {
+                override fun section(section: ServiceRuntimePluginSection): Writable {
+                    return when (section) {
+                        is ServiceRuntimePluginSection.RegisterRuntimeComponents ->
+                            writable {
+                                codegenContext.defaultEndpointResolver()?.also { resolver ->
+                                    section.registerEndpointResolver(this, resolver)
+                                }
+                            }
 
-                    else -> emptySection
+                        else -> emptySection
+                    }
                 }
             }
-        }
     }
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val generator = EndpointTypesGenerator.fromContext(codegenContext)
         rustCrate.withModule(ClientRustModule.Config.endpoint) {
             withInlineModule(endpointTestsModule(), rustCrate.moduleDocProvider) {
@@ -146,7 +158,8 @@ class EndpointsDecorator : ClientCodegenDecorator {
 private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
     val generator = EndpointTypesGenerator.fromContext(this)
     val defaultResolver = generator.defaultResolver() ?: return null
-    val ctx = arrayOf("DefaultResolver" to defaultResolver, "ServiceSpecificResolver" to serviceSpecificEndpointResolver())
+    val ctx =
+        arrayOf("DefaultResolver" to defaultResolver, "ServiceSpecificResolver" to serviceSpecificEndpointResolver())
     return writable {
         rustTemplate(
             """{
