@@ -34,25 +34,29 @@ internal class ServiceConfigGeneratorTest {
                 override val order: Byte
                     get() = -69
 
-            override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
-                val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-                val codegenScope = arrayOf(
-                    "SmithyHttpServer" to smithyHttpServer,
-                )
-                return listOf(
-                    ConfigMethod(
-                        name = "aws_auth",
-                        docs = "Docs",
-                        params = listOf(
-                            Binding.Concrete("auth_spec", RuntimeType.String),
-                            Binding.Concrete("authorizer", RuntimeType.U64),
-                            Binding.Generic("generic_list", RuntimeType("::std::vec::Vec<T>"), setOf("T")),
-                        ),
-                        errorType = RuntimeType.std.resolve("io::Error"),
-                        initializer = Initializer(
-                            code = writable {
-                                rustTemplate(
-                                    """
+                override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
+                    val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+                    val codegenScope =
+                        arrayOf(
+                            "SmithyHttpServer" to smithyHttpServer,
+                        )
+                    return listOf(
+                        ConfigMethod(
+                            name = "aws_auth",
+                            docs = "Docs",
+                            params =
+                                listOf(
+                                    Binding.Concrete("auth_spec", RuntimeType.String),
+                                    Binding.Concrete("authorizer", RuntimeType.U64),
+                                    Binding.Generic("generic_list", RuntimeType("::std::vec::Vec<T>"), setOf("T")),
+                                ),
+                            errorType = RuntimeType.std.resolve("io::Error"),
+                            initializer =
+                                Initializer(
+                                    code =
+                                        writable {
+                                            rustTemplate(
+                                                """
                                     if authorizer != 69 {
                                         return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
                                     }
@@ -63,28 +67,30 @@ internal class ServiceConfigGeneratorTest {
                                     let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
                                     let authz_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
                                     """,
-                                    *codegenScope,
-                                )
-                            },
-                            layerBindings = emptyList(),
-                            httpPluginBindings = listOf(
-                                Binding.Concrete(
-                                    "authn_plugin",
-                                    smithyHttpServer.resolve("plugin::IdentityPlugin"),
+                                                *codegenScope,
+                                            )
+                                        },
+                                    layerBindings = emptyList(),
+                                    httpPluginBindings =
+                                        listOf(
+                                            Binding.Concrete(
+                                                "authn_plugin",
+                                                smithyHttpServer.resolve("plugin::IdentityPlugin"),
+                                            ),
+                                        ),
+                                    modelPluginBindings =
+                                        listOf(
+                                            Binding.Concrete(
+                                                "authz_plugin",
+                                                smithyHttpServer.resolve("plugin::IdentityPlugin"),
+                                            ),
+                                        ),
                                 ),
-                            ),
-                            modelPluginBindings = listOf(
-                                Binding.Concrete(
-                                    "authz_plugin",
-                                    smithyHttpServer.resolve("plugin::IdentityPlugin"),
-                                ),
-                            ),
+                            isRequired = true,
                         ),
-                        isRequired = true
                     )
-                )
+                }
             }
-        }
 
         serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
             rustCrate.testModule {
@@ -162,41 +168,45 @@ internal class ServiceConfigGeneratorTest {
                 override val order: Byte
                     get() = 69
 
-            override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
-                val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
-                val codegenScope = arrayOf(
-                    "Identity" to identityLayer,
-                )
-                return listOf(
-                    ConfigMethod(
-                        name = "three_non_required_layers",
-                        docs = "Docs",
-                        params = emptyList(),
-                        errorType = null,
-                        initializer = Initializer(
-                            code = writable {
-                                rustTemplate(
-                                    """
+                override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
+                    val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
+                    val codegenScope =
+                        arrayOf(
+                            "Identity" to identityLayer,
+                        )
+                    return listOf(
+                        ConfigMethod(
+                            name = "three_non_required_layers",
+                            docs = "Docs",
+                            params = emptyList(),
+                            errorType = null,
+                            initializer =
+                                Initializer(
+                                    code =
+                                        writable {
+                                            rustTemplate(
+                                                """
                                     let layer1 = #{Identity}::new();
                                     let layer2 = #{Identity}::new();
                                     let layer3 = #{Identity}::new();
                                     """,
-                                    *codegenScope,
-                                )
-                            },
-                            layerBindings = listOf(
-                                Binding.Concrete("layer1", identityLayer),
-                                Binding.Concrete("layer2", identityLayer),
-                                Binding.Concrete("layer3", identityLayer),
-                            ),
-                            httpPluginBindings = emptyList(),
-                            modelPluginBindings = emptyList(),
+                                                *codegenScope,
+                                            )
+                                        },
+                                    layerBindings =
+                                        listOf(
+                                            Binding.Concrete("layer1", identityLayer),
+                                            Binding.Concrete("layer2", identityLayer),
+                                            Binding.Concrete("layer3", identityLayer),
+                                        ),
+                                    httpPluginBindings = emptyList(),
+                                    modelPluginBindings = emptyList(),
+                                ),
+                            isRequired = false,
                         ),
-                        isRequired = false,
                     )
-                )
+                }
             }
-        }
 
         serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
             rustCrate.testModule {
@@ -239,40 +249,44 @@ internal class ServiceConfigGeneratorTest {
     fun `it should throw an exception if a generic binding using L, H, or M is used`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        val decorator = object : ServerCodegenDecorator {
-            override val name: String
-                get() = "InvalidGenericBindingsDecorator"
-            override val order: Byte
-                get() = 69
+        val decorator =
+            object : ServerCodegenDecorator {
+                override val name: String
+                    get() = "InvalidGenericBindingsDecorator"
+                override val order: Byte
+                    get() = 69
 
-            override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
-                val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
-                return listOf(
-                    ConfigMethod(
-                        name = "invalid_generic_bindings",
-                        docs = "Docs",
-                        params = listOf(
-                            Binding.Generic("param1_bad", identityLayer, setOf("L")),
-                            Binding.Generic("param2_bad", identityLayer, setOf("H")),
-                            Binding.Generic("param3_bad", identityLayer, setOf("M")),
-                            Binding.Generic("param4_ok", identityLayer, setOf("N")),
+                override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
+                    val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
+                    return listOf(
+                        ConfigMethod(
+                            name = "invalid_generic_bindings",
+                            docs = "Docs",
+                            params =
+                                listOf(
+                                    Binding.Generic("param1_bad", identityLayer, setOf("L")),
+                                    Binding.Generic("param2_bad", identityLayer, setOf("H")),
+                                    Binding.Generic("param3_bad", identityLayer, setOf("M")),
+                                    Binding.Generic("param4_ok", identityLayer, setOf("N")),
+                                ),
+                            errorType = null,
+                            initializer =
+                                Initializer(
+                                    code = writable {},
+                                    layerBindings = emptyList(),
+                                    httpPluginBindings = emptyList(),
+                                    modelPluginBindings = emptyList(),
+                                ),
+                            isRequired = false,
                         ),
-                        errorType = null,
-                        initializer = Initializer(
-                            code = writable {},
-                            layerBindings = emptyList(),
-                            httpPluginBindings = emptyList(),
-                            modelPluginBindings = emptyList(),
-                        ),
-                        isRequired = false,
-                    ),
-                )
+                    )
+                }
             }
-        }
 
-        val codegenException = shouldThrow<CodegenException> {
-            serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, _ -> }
-        }
+        val codegenException =
+            shouldThrow<CodegenException> {
+                serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, _ -> }
+            }
 
         codegenException.message.shouldContain("Injected config method `invalid_generic_bindings` has generic bindings that use `L`, `H`, or `M` to refer to the generic types. This is not allowed. Invalid generic bindings:")
     }
