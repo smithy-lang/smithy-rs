@@ -21,50 +21,55 @@ import java.io.File
 
 // In aws-sdk-codegen, the working dir when gradle runs tests is actually `./aws`. So, to find the smithy runtime, we need
 // to go up one more level
-val AwsTestRuntimeConfig = TestRuntimeConfig.copy(
-    runtimeCrateLocation = run {
-        val path = File("../../rust-runtime")
-        check(path.exists()) { "$path must exist to generate a working SDK" }
-        RuntimeCrateLocation.Path(path.absolutePath)
-    },
-)
-
-fun awsTestCodegenContext(model: Model? = null, settings: ClientRustSettings? = null) =
-    testClientCodegenContext(
-        model ?: "namespace test".asSmithyModel(),
-        settings = settings ?: testClientRustSettings(runtimeConfig = AwsTestRuntimeConfig),
+val AwsTestRuntimeConfig =
+    TestRuntimeConfig.copy(
+        runtimeCrateLocation =
+            run {
+                val path = File("../../rust-runtime")
+                check(path.exists()) { "$path must exist to generate a working SDK" }
+                RuntimeCrateLocation.path(path.absolutePath)
+            },
     )
+
+fun awsTestCodegenContext(
+    model: Model? = null,
+    settings: ClientRustSettings? = null,
+) = testClientCodegenContext(
+    model ?: "namespace test".asSmithyModel(),
+    settings = settings ?: testClientRustSettings(runtimeConfig = AwsTestRuntimeConfig),
+)
 
 fun awsSdkIntegrationTest(
     model: Model,
     params: IntegrationTestParams = awsIntegrationTestParams(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
-) =
-    clientIntegrationTest(
-        model,
-        awsIntegrationTestParams(),
-        test = test,
-    )
-
-fun awsIntegrationTestParams() = IntegrationTestParams(
-    cargoCommand = "cargo test --features test-util behavior-version-latest",
-    runtimeConfig = AwsTestRuntimeConfig,
-    additionalSettings = ObjectNode.builder().withMember(
-        "customizationConfig",
-        ObjectNode.builder()
-            .withMember(
-                "awsSdk",
-                ObjectNode.builder()
-                    .withMember("generateReadme", false)
-                    .withMember("integrationTestPath", "../sdk/integration-tests")
-                    .build(),
-            ).build(),
-    )
-        .withMember(
-            "codegen",
-            ObjectNode.builder()
-                .withMember("includeFluentClient", false)
-                .withMember("includeEndpointUrlConfig", false)
-                .build(),
-        ).build(),
+) = clientIntegrationTest(
+    model,
+    awsIntegrationTestParams(),
+    test = test,
 )
+
+fun awsIntegrationTestParams() =
+    IntegrationTestParams(
+        cargoCommand = "cargo test --features test-util behavior-version-latest",
+        runtimeConfig = AwsTestRuntimeConfig,
+        additionalSettings =
+            ObjectNode.builder().withMember(
+                "customizationConfig",
+                ObjectNode.builder()
+                    .withMember(
+                        "awsSdk",
+                        ObjectNode.builder()
+                            .withMember("generateReadme", false)
+                            .withMember("integrationTestPath", "../sdk/integration-tests")
+                            .build(),
+                    ).build(),
+            )
+                .withMember(
+                    "codegen",
+                    ObjectNode.builder()
+                        .withMember("includeFluentClient", false)
+                        .withMember("includeEndpointUrlConfig", false)
+                        .build(),
+                ).build(),
+    )

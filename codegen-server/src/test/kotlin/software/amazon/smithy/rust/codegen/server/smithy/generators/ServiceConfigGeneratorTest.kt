@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.CodegenException
@@ -28,11 +27,12 @@ internal class ServiceConfigGeneratorTest {
     fun `it should inject an aws_auth method that configures an HTTP plugin and a model plugin`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        val decorator = object : ServerCodegenDecorator {
-            override val name: String
-                get() = "AWSAuth pre-applied middleware decorator"
-            override val order: Byte
-                get() = -69
+        val decorator =
+            object : ServerCodegenDecorator {
+                override val name: String
+                    get() = "AWSAuth pre-applied middleware decorator"
+                override val order: Byte
+                    get() = -69
 
             override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
                 val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
@@ -80,8 +80,8 @@ internal class ServiceConfigGeneratorTest {
                                 ),
                             ),
                         ),
-                        isRequired = true,
-                    ),
+                        isRequired = true
+                    )
                 )
             }
         }
@@ -155,11 +155,12 @@ internal class ServiceConfigGeneratorTest {
     fun `it should inject a method that applies three non-required layers`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        val decorator = object : ServerCodegenDecorator {
-            override val name: String
-                get() = "ApplyThreeNonRequiredLayers"
-            override val order: Byte
-                get() = 69
+        val decorator =
+            object : ServerCodegenDecorator {
+                override val name: String
+                    get() = "ApplyThreeNonRequiredLayers"
+                override val order: Byte
+                    get() = 69
 
             override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
                 val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
@@ -192,7 +193,7 @@ internal class ServiceConfigGeneratorTest {
                             modelPluginBindings = emptyList(),
                         ),
                         isRequired = false,
-                    ),
+                    )
                 )
             }
         }

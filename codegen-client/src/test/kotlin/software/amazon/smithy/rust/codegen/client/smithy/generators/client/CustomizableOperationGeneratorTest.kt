@@ -15,7 +15,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 class CustomizableOperationGeneratorTest {
-    val model = """
+    val model =
+        """
         namespace com.example
         use aws.protocols#awsJson1_0
 
@@ -30,7 +31,7 @@ class CustomizableOperationGeneratorTest {
         structure TestInput {
            foo: String,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `CustomizableOperation is send and sync`() {
@@ -51,8 +52,9 @@ class CustomizableOperationGeneratorTest {
                         check_send_and_sync(client.say_hello().customize());
                     }
                     """,
-                    "NeverClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                        .resolve("client::http::test_util::NeverClient"),
+                    "NeverClient" to
+                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("client::http::test_util::NeverClient"),
                 )
             }
         }

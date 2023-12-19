@@ -64,14 +64,15 @@ class ConstrainedMapGenerator(
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constrainedSymbol = symbolProvider.toSymbol(shape)
 
-        val codegenScope = arrayOf(
-            "HashMap" to RuntimeType.HashMap,
-            "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
-            "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.value),
-            "From" to RuntimeType.From,
-            "TryFrom" to RuntimeType.TryFrom,
-            "ConstraintViolation" to constraintViolation,
-        )
+        val codegenScope =
+            arrayOf(
+                "HashMap" to RuntimeType.HashMap,
+                "KeySymbol" to constrainedShapeSymbolProvider.toSymbol(model.expectShape(shape.key.target)),
+                "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.value),
+                "From" to RuntimeType.From,
+                "TryFrom" to RuntimeType.TryFrom,
+                "ConstraintViolation" to constraintViolation,
+            )
 
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
@@ -134,11 +135,12 @@ class ConstrainedMapGenerator(
         ) {
             val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
             val keyNeedsConversion = keyShape.typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
-            val key = if (keyNeedsConversion) {
-                "k.into()"
-            } else {
-                "k"
-            }
+            val key =
+                if (keyNeedsConversion) {
+                    "k.into()"
+                } else {
+                    "k"
+                }
 
             writer.rustTemplate(
                 """

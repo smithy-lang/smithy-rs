@@ -6,133 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add configurable stalled-stream protection for downloads.\n\nWhen making HTTP calls,\nit's possible for a connection to 'stall out' and emit no more data due to server-side issues.\nIn the event this happens, it's desirable for the stream to error out as quickly as possible.\nWhile timeouts can protect you from this issue, they aren't adaptive to the amount of data\nbeing sent and so must be configured specifically for each use case. When enabled, stalled-stream\nprotection will ensure that bad streams error out quickly, regardless of the amount of data being\ndownloaded.\n\nProtection is enabled by default for all clients but can be configured or disabled.\nSee [this discussion](https://github.com/awslabs/aws-sdk-rust/discussions/956) for more details.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "Velfi",
-      "references": [
-        "smithy-rs#3202"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Make certain types for EMR Serverless optional. Previously, they defaulted to 0, but this created invalid requests.",
-      "meta": {
-        "bug": true,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "milesziemer",
-      "references": [
-        "smithy-rs#3217"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Prevent multiplication overflow in backoff computation",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3229",
-        "aws-sdk-rust#960"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Make some types for various services optional. Previously, they defaulted to 0, but this created invalid requests.",
-      "meta": {
-        "bug": true,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "milesziemer",
-      "references": [
-        "smithy-rs#3228"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Types/functions that were deprecated in previous releases were removed. Unfortunately, some of these deprecations\nwere ignored by the Rust compiler (we found out later that `#[deprecated]` on `pub use` doesn't work). See\nthe [deprecations removal list](https://github.com/smithy-lang/smithy-rs/discussions/3223) for more details.\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "jdisanti",
-      "references": [
-        "smithy-rs#3222"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Add `Display` impl for `DateTime`.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "HakanVardarr",
-      "references": [
-        "smithy-rs#3183"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Types/functions that were previously `#[doc(hidden)]` in `aws-config`, `aws-inlineable`, `aws-types`, and the SDK crates are now visible. For those that are not intended to be used directly, they are called out in their docs as such.",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3226"
-      ],
-      "since-commit": "f66f9246bccc376462ef47aec5707569fca214f5",
-      "age": 5
-    },
-    {
-      "message": "Make properties of S3Control PublicAccessBlockConfiguration optional. Previously, they defaulted to false, but this created invalid requests.",
-      "meta": {
-        "bug": true,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "milesziemer",
-      "references": [
-        "smithy-rs#3246"
-      ],
-      "since-commit": "e155c3048b9989fe406ef575d461ea01dfaf294c",
-      "age": 4
-    },
-    {
-      "message": "Allow `--` to be used in bucket names for S3",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "smithy-rs#3253"
-      ],
-      "since-commit": "48e3c95a3f10eebd5a637f8e7670c4232cdabbe4",
-      "age": 3
-    },
-    {
       "message": "Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)",
       "meta": {
         "bug": false,
@@ -145,7 +18,7 @@
         "aws-sdk-rust#858"
       ],
       "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
-      "age": 1
+      "age": 5
     },
     {
       "message": "Make some properties for IoT types optional. Previously, they defaulted to false, but that isn't how the service actual works.",
@@ -159,7 +32,140 @@
         "smithy-rs#3256"
       ],
       "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
-      "age": 1
+      "age": 5
+    },
+    {
+      "message": "Fix `config::Builder::set_credentials_provider` to override a credentials provider previously set.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "aws-sdk-rust#973",
+        "smithy-rs#3278"
+      ],
+      "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
+      "age": 4
+    },
+    {
+      "message": "`config::Config::credentials_provider` has been broken since `release-2023-11-15` and is now marked as `deprecated` explicitly.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#3251",
+        "smithy-rs#3278"
+      ],
+      "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
+      "age": 4
+    },
+    {
+      "message": "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "smithy-rs#3262"
+      ],
+      "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
+      "age": 3
+    },
+    {
+      "message": "Client creation now takes microseconds instead of milliseconds.\nPreviously, it would take 2-3 milliseconds for each client instantiation due to time spent compiling regexes.\nFor applications that used several clients, this would increase start-up time in cases where it really matters,\nsuch as for AWS Lambda cold starts. This time was improved by both changing regex implementation and caching the\nresult of the compilation.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "jdisanti",
+      "references": [
+        "aws-sdk-rust#975",
+        "smithy-rs#3269"
+      ],
+      "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
+      "age": 3
+    },
+    {
+      "message": "Add `test_credentials` to `ConfigLoader` in `aws_config`. This allows the following pattern during tests:\n\n```rust\nasync fn main() {\n    let conf = aws_config::defaults(BehaviorVersion::latest())\n        .test_credentials()\n        .await;\n}\n```\n\nThis is designed for unit tests and using local mocks like DynamoDB Local and LocalStack with the SDK.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3279",
+        "aws-sdk-rust#971"
+      ],
+      "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
+      "age": 3
+    },
+    {
+      "message": "Improve the error messages for when auth fails to select an auth scheme for a request.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "aws-sdk-rust#979",
+        "smithy-rs#3277"
+      ],
+      "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
+      "age": 3
+    },
+    {
+      "message": "Fix documentation and examples on HyperConnector and HyperClientBuilder.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jdisanti",
+      "references": [
+        "aws-sdk-rust#986",
+        "smithy-rs#3282"
+      ],
+      "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
+      "age": 3
+    },
+    {
+      "message": "All generated docs now include docsrs labels when features are required",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3121",
+        "smithy-rs#3295"
+      ],
+      "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
+      "age": 3
+    },
+    {
+      "message": "`crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#3305"
+      ],
+      "since-commit": "9f0ba850e03241f657e2e40ca185780e0a5878cb",
+      "age": 2
     }
   ],
   "aws-sdk-model": []

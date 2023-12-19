@@ -170,44 +170,48 @@ internal class DeriveEqAndHashSymbolMetadataProviderTest {
         }
         """.asSmithyModel(smithyVersion = "2.0")
     private val serviceShape = model.lookup<ServiceShape>("test#TestService")
-    private val deriveEqAndHashSymbolMetadataProvider = serverTestSymbolProvider(model, serviceShape)
-        .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
-        .let { DeriveEqAndHashSymbolMetadataProvider(it) }
+    private val deriveEqAndHashSymbolMetadataProvider =
+        serverTestSymbolProvider(model, serviceShape)
+            .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
+            .let { DeriveEqAndHashSymbolMetadataProvider(it) }
 
     companion object {
         @JvmStatic
         fun getShapes(): Stream<Arguments> {
-            val shapesWithNeitherEqNorHash = listOf(
-                "test#StreamingOperationInputOutput",
-                "test#EventStreamOperationInputOutput",
-                "test#StreamingUnion",
-                "test#BlobStream",
-                "test#TestInputOutput",
-                "test#HasFloat",
-                "test#HasDouble",
-                "test#HasDocument",
-                "test#ContainsFloat",
-                "test#ContainsDouble",
-                "test#ContainsDocument",
-            )
+            val shapesWithNeitherEqNorHash =
+                listOf(
+                    "test#StreamingOperationInputOutput",
+                    "test#EventStreamOperationInputOutput",
+                    "test#StreamingUnion",
+                    "test#BlobStream",
+                    "test#TestInputOutput",
+                    "test#HasFloat",
+                    "test#HasDouble",
+                    "test#HasDocument",
+                    "test#ContainsFloat",
+                    "test#ContainsDouble",
+                    "test#ContainsDocument",
+                )
 
-            val shapesWithEqAndHash = listOf(
-                "test#EqAndHashStruct",
-                "test#EqAndHashUnion",
-                "test#Enum",
-                "test#HasList",
-            )
+            val shapesWithEqAndHash =
+                listOf(
+                    "test#EqAndHashStruct",
+                    "test#EqAndHashUnion",
+                    "test#Enum",
+                    "test#HasList",
+                )
 
-            val shapesWithOnlyEq = listOf(
-                "test#HasListWithMap",
-                "test#HasMap",
-            )
+            val shapesWithOnlyEq =
+                listOf(
+                    "test#HasListWithMap",
+                    "test#HasMap",
+                )
 
             return (
                 shapesWithNeitherEqNorHash.map { Arguments.of(it, emptyList<RuntimeType>()) } +
                     shapesWithEqAndHash.map { Arguments.of(it, listOf(RuntimeType.Eq, RuntimeType.Hash)) } +
                     shapesWithOnlyEq.map { Arguments.of(it, listOf(RuntimeType.Eq)) }
-                ).stream()
+            ).stream()
         }
     }
 

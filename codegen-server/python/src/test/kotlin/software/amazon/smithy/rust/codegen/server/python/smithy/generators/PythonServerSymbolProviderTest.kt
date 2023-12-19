@@ -21,7 +21,8 @@ internal class PythonServerSymbolProviderTest {
 
     @Test
     fun `python symbol provider rewrites timestamp shape symbol`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure TimestampStruct {
@@ -45,7 +46,7 @@ internal class PythonServerSymbolProviderTest {
                 key: String,
                 value: Timestamp
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val provider =
             PythonServerSymbolVisitor(serverTestRustSettings(), model, null, ServerTestRustSymbolProviderConfig)
 
@@ -72,7 +73,8 @@ internal class PythonServerSymbolProviderTest {
 
     @Test
     fun `python symbol provider rewrites blob shape symbol`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure BlobStruct {
@@ -96,7 +98,7 @@ internal class PythonServerSymbolProviderTest {
                 key: String,
                 value: Blob
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val provider =
             PythonServerSymbolVisitor(serverTestRustSettings(), model, null, ServerTestRustSymbolProviderConfig)
 

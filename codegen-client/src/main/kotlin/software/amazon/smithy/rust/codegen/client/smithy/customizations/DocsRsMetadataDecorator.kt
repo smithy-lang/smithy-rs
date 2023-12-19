@@ -26,16 +26,17 @@ data class DocsRsMetadataSettings(
 )
 
 fun DocsRsMetadataSettings.asMap(): Map<String, Any> {
-    val inner = listOfNotNull(
-        features?.let { "features" to it },
-        allFeatures?.let { "all-features" to it },
-        noDefaultFeatures?.let { "no-default-features" to it },
-        defaultTarget?.let { "no-default-target" to it },
-        targets?.let { "targets" to it },
-        rustcArgs?.let { "rustc-args" to it },
-        rustdocArgs?.let { "rustdoc-args" to it },
-        cargoArgs?.let { "cargo-args" to it },
-    ).toMap() + custom
+    val inner =
+        listOfNotNull(
+            features?.let { "features" to it },
+            allFeatures?.let { "all-features" to it },
+            noDefaultFeatures?.let { "no-default-features" to it },
+            defaultTarget?.let { "no-default-target" to it },
+            targets?.let { "targets" to it },
+            rustcArgs?.let { "rustc-args" to it },
+            rustdocArgs?.let { "rustdoc-args" to it },
+            cargoArgs?.let { "cargo-args" to it },
+        ).toMap() + custom
     return mapOf("package" to mapOf("metadata" to mapOf("docs" to mapOf("rs" to inner))))
 }
 

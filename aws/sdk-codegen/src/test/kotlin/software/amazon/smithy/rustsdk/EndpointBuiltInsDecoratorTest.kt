@@ -13,7 +13,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 class EndpointBuiltInsDecoratorTest {
-    private val endpointUrlModel = """
+    private val endpointUrlModel =
+        """
         namespace test
 
         use aws.api#service
@@ -74,7 +75,7 @@ class EndpointBuiltInsDecoratorTest {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun endpointUrlBuiltInWorksEndToEnd() {
@@ -107,10 +108,12 @@ class EndpointBuiltInsDecoratorTest {
                     }
                     """,
                     "tokio" to CargoDependency.Tokio.toDevDependency().withFeature("rt").withFeature("macros").toType(),
-                    "StaticReplayClient" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                        .resolve("client::http::test_util::StaticReplayClient"),
-                    "ReplayEvent" to CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
-                        .resolve("client::http::test_util::ReplayEvent"),
+                    "StaticReplayClient" to
+                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("client::http::test_util::StaticReplayClient"),
+                    "ReplayEvent" to
+                        CargoDependency.smithyRuntimeTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("client::http::test_util::ReplayEvent"),
                     "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
                 )
             }

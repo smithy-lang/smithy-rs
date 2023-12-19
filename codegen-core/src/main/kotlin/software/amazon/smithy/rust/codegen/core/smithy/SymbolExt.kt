@@ -118,10 +118,11 @@ fun Symbol.canUseDefault(): Boolean = this.defaultValue() != Default.NoDefault
 /**
  * True when [this] is will be represented by Option<T> in Rust
  */
-fun Symbol.isOptional(): Boolean = when (this.rustType()) {
-    is RustType.Option -> true
-    else -> false
-}
+fun Symbol.isOptional(): Boolean =
+    when (this.rustType()) {
+        is RustType.Option -> true
+        else -> false
+    }
 
 fun Symbol.isRustBoxed(): Boolean = rustType().stripOuter<RustType.Option>() is RustType.Box
 
@@ -133,12 +134,21 @@ private const val SYMBOL_DEFAULT = "symboldefault"
 
 // Symbols should _always_ be created with a Rust type & shape attached
 fun Symbol.rustType(): RustType = this.expectProperty(RUST_TYPE_KEY, RustType::class.java)
+
 fun Symbol.Builder.rustType(rustType: RustType): Symbol.Builder = this.putProperty(RUST_TYPE_KEY, rustType)
+
 fun Symbol.shape(): Shape = this.expectProperty(SHAPE_KEY, Shape::class.java)
+
 fun Symbol.Builder.shape(shape: Shape?): Symbol.Builder = this.putProperty(SHAPE_KEY, shape)
+
 fun Symbol.module(): RustModule.LeafModule = this.expectProperty(RUST_MODULE_KEY, RustModule.LeafModule::class.java)
+
 fun Symbol.Builder.module(module: RustModule.LeafModule): Symbol.Builder = this.putProperty(RUST_MODULE_KEY, module)
+
 fun Symbol.renamedFrom(): String? = this.getProperty(RENAMED_FROM_KEY, String::class.java).orNull()
+
 fun Symbol.Builder.renamedFrom(name: String): Symbol.Builder = this.putProperty(RENAMED_FROM_KEY, name)
+
 fun Symbol.defaultValue(): Default = this.getProperty(SYMBOL_DEFAULT, Default::class.java).orElse(Default.NoDefault)
+
 fun Symbol.Builder.setDefault(default: Default): Symbol.Builder = this.putProperty(SYMBOL_DEFAULT, default)

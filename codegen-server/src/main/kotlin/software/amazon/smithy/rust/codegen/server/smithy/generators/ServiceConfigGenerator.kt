@@ -150,26 +150,28 @@ class ServiceConfigGenerator(
 ) {
     private val crateName = codegenContext.moduleUseName()
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "Debug" to RuntimeType.Debug,
-        "SmithyHttpServer" to smithyHttpServer,
-        "PluginStack" to smithyHttpServer.resolve("plugin::PluginStack"),
-        "ModelMarker" to smithyHttpServer.resolve("plugin::ModelMarker"),
-        "HttpMarker" to smithyHttpServer.resolve("plugin::HttpMarker"),
-        "Tower" to RuntimeType.Tower,
-        "Stack" to RuntimeType.Tower.resolve("layer::util::Stack"),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "Debug" to RuntimeType.Debug,
+            "SmithyHttpServer" to smithyHttpServer,
+            "PluginStack" to smithyHttpServer.resolve("plugin::PluginStack"),
+            "ModelMarker" to smithyHttpServer.resolve("plugin::ModelMarker"),
+            "HttpMarker" to smithyHttpServer.resolve("plugin::HttpMarker"),
+            "Tower" to RuntimeType.Tower,
+            "Stack" to RuntimeType.Tower.resolve("layer::util::Stack"),
+        )
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun render(writer: RustWriter) {
-        val unwrapConfigBuilder = if (isBuilderFallible) {
-            """
-            ///    .expect("config failed to build");
-            """
-        } else {
-            ";"
-        }
+        val unwrapConfigBuilder =
+            if (isBuilderFallible) {
+                """
+                ///    .expect("config failed to build");
+                """
+            } else {
+                ";"
+            }
 
         writer.rustTemplate(
             """
@@ -227,12 +229,12 @@ class ServiceConfigGenerator(
                 pub(crate) model_plugins: M,
                 #{BuilderRequiredMethodFlagDefinitions:W}
             }
-            
+
             #{BuilderRequiredMethodError:W}
 
             impl<L, H, M> ${serviceName}ConfigBuilder<L, H, M> {
                 #{InjectedMethods:W}
-            
+
                 /// Add a [`#{Tower}::Layer`] to the service.
                 pub fn layer<NewLayer>(self, layer: NewLayer) -> ${serviceName}ConfigBuilder<#{Stack}<NewLayer, L>, H, M> {
                     ${serviceName}ConfigBuilder {
@@ -276,7 +278,7 @@ class ServiceConfigGenerator(
                         #{BuilderRequiredMethodFlagsMove3:W}
                     }
                 }
-                
+
                 #{BuilderBuildMethod:W}
             }
             """,
@@ -478,8 +480,8 @@ class ServiceConfigGenerator(
                         model_plugins: self.model_plugins,
                     }
                     """,
-                )
+                    )
+                }
             }
         }
-    }
 }
