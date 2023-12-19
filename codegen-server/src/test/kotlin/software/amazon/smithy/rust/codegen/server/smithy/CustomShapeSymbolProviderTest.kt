@@ -40,20 +40,23 @@ class CustomShapeSymbolProviderTest {
         """.asSmithyModel(smithyVersion = "2.0")
     private val serviceShape = baseModel.lookup<ServiceShape>("test#TestService")
     private val rustType = RustType.Opaque("fake-type")
-    private val symbol = Symbol.builder()
-        .name("fake-symbol")
-        .rustType(rustType)
-        .build()
-    private val model = ModelTransformer.create()
-        .mapShapes(baseModel) {
-            if (it is MemberShape) {
-                it.toBuilder().addTrait(SyntheticCustomShapeTrait(ShapeId.from("some#id"), symbol)).build()
-            } else {
-                it
+    private val symbol =
+        Symbol.builder()
+            .name("fake-symbol")
+            .rustType(rustType)
+            .build()
+    private val model =
+        ModelTransformer.create()
+            .mapShapes(baseModel) {
+                if (it is MemberShape) {
+                    it.toBuilder().addTrait(SyntheticCustomShapeTrait(ShapeId.from("some#id"), symbol)).build()
+                } else {
+                    it
+                }
             }
-        }
-    private val symbolProvider = serverTestSymbolProvider(baseModel, serviceShape)
-        .let { CustomShapeSymbolProvider(it) }
+    private val symbolProvider =
+        serverTestSymbolProvider(baseModel, serviceShape)
+            .let { CustomShapeSymbolProvider(it) }
 
     @Test
     fun `override with custom symbol`() {

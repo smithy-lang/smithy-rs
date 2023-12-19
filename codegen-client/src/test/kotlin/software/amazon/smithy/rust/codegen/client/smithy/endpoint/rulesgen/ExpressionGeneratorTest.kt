@@ -43,14 +43,16 @@ internal class ExprGeneratorTest {
 
     @Test
     fun generateLiterals1() {
-        val literal = Literal.recordLiteral(
-            mutableMapOf(
-                Identifier.of("this") to Literal.integerLiteral(5),
-                Identifier.of("that") to Literal.stringLiteral(
-                    Template.fromString("static"),
+        val literal =
+            Literal.recordLiteral(
+                mutableMapOf(
+                    Identifier.of("this") to Literal.integerLiteral(5),
+                    Identifier.of("that") to
+                        Literal.stringLiteral(
+                            Template.fromString("static"),
+                        ),
                 ),
-            ),
-        )
+            )
         TestWorkspace.testProject().unitTest {
             val generator =
                 ExpressionGenerator(Ownership.Borrowed, testContext)
@@ -61,13 +63,14 @@ internal class ExprGeneratorTest {
     @Test
     fun generateLiterals2() {
         val project = TestWorkspace.testProject()
-        val gen = ExpressionGenerator(
-            Ownership.Borrowed,
-            Context(
-                FunctionRegistry(listOf()),
-                TestRuntimeConfig,
-            ),
-        )
+        val gen =
+            ExpressionGenerator(
+                Ownership.Borrowed,
+                Context(
+                    FunctionRegistry(listOf()),
+                    TestRuntimeConfig,
+                ),
+            )
         project.unitTest {
             rust("""let extra = "helloworld";""")
             rust("assert_eq!(true, #W);", gen.generate(Expression.of(true)))
@@ -83,12 +86,13 @@ internal class ExprGeneratorTest {
                 assert_eq!(expected, #{actual:W});
                 """,
                 "Document" to RuntimeType.document(TestRuntimeConfig),
-                "actual" to gen.generate(
-                    Literal.fromNode(
-                        Node.objectNode().withMember("a", true).withMember("b", "hello")
-                            .withMember("c", ArrayNode.arrayNode(BooleanNode.from(true))),
+                "actual" to
+                    gen.generate(
+                        Literal.fromNode(
+                            Node.objectNode().withMember("a", true).withMember("b", "hello")
+                                .withMember("c", ArrayNode.arrayNode(BooleanNode.from(true))),
+                        ),
                     ),
-                ),
             )
         }
     }

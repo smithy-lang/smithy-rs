@@ -42,8 +42,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> =
-        baseCustomizations + AddApiMetadataIntoConfigBag(codegenContext)
+    ): List<ServiceRuntimePluginCustomization> = baseCustomizations + AddApiMetadataIntoConfigBag(codegenContext)
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
         return listOf(
@@ -56,7 +55,10 @@ class UserAgentDecorator : ClientCodegenDecorator {
     /**
      * Adds a static `API_METADATA` variable to the crate `config` containing the serviceId & the version of the crate for this individual service
      */
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val runtimeConfig = codegenContext.runtimeConfig
 
         // We are generating an AWS SDK, the service needs to have the AWS service trait
@@ -88,85 +90,91 @@ class UserAgentDecorator : ClientCodegenDecorator {
         private val runtimeConfig = codegenContext.runtimeConfig
         private val awsRuntime = AwsRuntimeType.awsRuntime(runtimeConfig)
 
-        override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-            when (section) {
-                is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                    section.registerInterceptor(this) {
-                        rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+        override fun section(section: ServiceRuntimePluginSection): Writable =
+            writable {
+                when (section) {
+                    is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
+                        section.registerInterceptor(this) {
+                            rust("#T::new()", awsRuntime.resolve("user_agent::UserAgentInterceptor"))
+                        }
                     }
+                    else -> emptySection
                 }
-                else -> emptySection
             }
-        }
     }
 
     private class AppNameCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
         private val runtimeConfig = codegenContext.runtimeConfig
-        private val codegenScope = arrayOf(
-            *preludeScope,
-            "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
-            "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
-        )
+        private val codegenScope =
+            arrayOf(
+                *preludeScope,
+                "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
+                "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
+            )
 
         override fun section(section: ServiceConfig): Writable =
             when (section) {
-                is ServiceConfig.BuilderImpl -> writable {
-                    rustTemplate(
-                        """
-                        /// Sets the name of the app that is using the client.
-                        ///
-                        /// This _optional_ name is used to identify the application in the user agent that
-                        /// gets sent along with requests.
-                        pub fn app_name(mut self, app_name: #{AppName}) -> Self {
-                            self.set_app_name(Some(app_name));
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
+                is ServiceConfig.BuilderImpl ->
+                    writable {
+                        rustTemplate(
+                            """
+                            /// Sets the name of the app that is using the client.
+                            ///
+                            /// This _optional_ name is used to identify the application in the user agent that
+                            /// gets sent along with requests.
+                            pub fn app_name(mut self, app_name: #{AppName}) -> Self {
+                                self.set_app_name(Some(app_name));
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
 
-                    rustTemplate(
-                        """
-                        /// Sets the name of the app that is using the client.
-                        ///
-                        /// This _optional_ name is used to identify the application in the user agent that
-                        /// gets sent along with requests.
-                        pub fn set_app_name(&mut self, app_name: #{Option}<#{AppName}>) -> &mut Self {
-                            self.config.store_or_unset(app_name);
-                            self
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                        rustTemplate(
+                            """
+                            /// Sets the name of the app that is using the client.
+                            ///
+                            /// This _optional_ name is used to identify the application in the user agent that
+                            /// gets sent along with requests.
+                            pub fn set_app_name(&mut self, app_name: #{Option}<#{AppName}>) -> &mut Self {
+                                self.config.store_or_unset(app_name);
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
 
-                is ServiceConfig.BuilderBuild -> writable {
-                    rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
-                }
+                is ServiceConfig.BuilderBuild ->
+                    writable {
+                        rust("layer.store_put(#T.clone());", ClientRustModule.Meta.toType().resolve("API_METADATA"))
+                    }
 
-                is ServiceConfig.ConfigImpl -> writable {
-                    rustTemplate(
-                        """
-                        /// Returns the name of the app that is using the client, if it was provided.
-                        ///
-                        /// This _optional_ name is used to identify the application in the user agent that
-                        /// gets sent along with requests.
-                        pub fn app_name(&self) -> #{Option}<&#{AppName}> {
-                           self.config.load::<#{AppName}>()
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                is ServiceConfig.ConfigImpl ->
+                    writable {
+                        rustTemplate(
+                            """
+                            /// Returns the name of the app that is using the client, if it was provided.
+                            ///
+                            /// This _optional_ name is used to identify the application in the user agent that
+                            /// gets sent along with requests.
+                            pub fn app_name(&self) -> #{Option}<&#{AppName}> {
+                               self.config.load::<#{AppName}>()
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
 
-                is ServiceConfig.DefaultForTests -> writable {
-                    rustTemplate(
-                        """
-                        self.config.store_put(#{AwsUserAgent}::for_tests());
-                        """,
-                        *codegenScope,
-                    )
-                }
+                is ServiceConfig.DefaultForTests ->
+                    writable {
+                        rustTemplate(
+                            """
+                            self.config.store_put(#{AwsUserAgent}::for_tests());
+                            """,
+                            *codegenScope,
+                        )
+                    }
 
                 else -> emptySection
             }

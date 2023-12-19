@@ -26,7 +26,8 @@ import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 internal class ServiceConfigGeneratorTest {
     @Test
     fun `idempotency token when used`() {
-        fun model(trait: String) = """
+        fun model(trait: String) =
+            """
             namespace com.example
 
             use aws.protocols#restJson1
@@ -47,7 +48,7 @@ internal class ServiceConfigGeneratorTest {
                 $trait
                 tok: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val withToken = model("@idempotencyToken")
         val withoutToken = model("")
@@ -57,7 +58,8 @@ internal class ServiceConfigGeneratorTest {
 
     @Test
     fun `find idempotency token via resources`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             service ResourceService {
                 resources: [Resource],
@@ -75,7 +77,7 @@ internal class ServiceConfigGeneratorTest {
                 @idempotencyToken
                 tok: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         model.lookup<ServiceShape>("com.example#ResourceService").needsIdempotencyToken(model) shouldBe true
     }
 
@@ -83,57 +85,62 @@ internal class ServiceConfigGeneratorTest {
     fun `generate customizations as specified`() {
         class ServiceCustomizer(private val codegenContext: ClientCodegenContext) :
             NamedCustomization<ServiceConfig>() {
-
             override fun section(section: ServiceConfig): Writable {
                 return when (section) {
                     ServiceConfig.ConfigStructAdditionalDocs -> emptySection
 
-                    ServiceConfig.ConfigImpl -> writable {
-                        rustTemplate(
-                            """
-                            ##[allow(missing_docs)]
-                            pub fn config_field(&self) -> u64 {
-                                self.config.load::<#{T}>().map(|u| u.0).unwrap()
-                            }
-                            """,
-                            "T" to configParamNewtype(
-                                "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
-                                codegenContext.runtimeConfig,
-                            ),
-                        )
-                    }
+                    ServiceConfig.ConfigImpl ->
+                        writable {
+                            rustTemplate(
+                                """
+                                ##[allow(missing_docs)]
+                                pub fn config_field(&self) -> u64 {
+                                    self.config.load::<#{T}>().map(|u| u.0).unwrap()
+                                }
+                                """,
+                                "T" to
+                                    configParamNewtype(
+                                        "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
+                                        codegenContext.runtimeConfig,
+                                    ),
+                            )
+                        }
 
-                    ServiceConfig.BuilderImpl -> writable {
-                        rustTemplate(
-                            """
-                            ##[allow(missing_docs)]
-                            pub fn config_field(mut self, config_field: u64) -> Self {
-                                self.config.store_put(#{T}(config_field));
-                                self
-                            }
-                            """,
-                            "T" to configParamNewtype(
-                                "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
-                                codegenContext.runtimeConfig,
-                            ),
-                        )
-                    }
+                    ServiceConfig.BuilderImpl ->
+                        writable {
+                            rustTemplate(
+                                """
+                                ##[allow(missing_docs)]
+                                pub fn config_field(mut self, config_field: u64) -> Self {
+                                    self.config.store_put(#{T}(config_field));
+                                    self
+                                }
+                                """,
+                                "T" to
+                                    configParamNewtype(
+                                        "config_field".toPascalCase(), RuntimeType.U64.toSymbol(),
+                                        codegenContext.runtimeConfig,
+                                    ),
+                            )
+                        }
 
                     else -> emptySection
                 }
             }
         }
 
-        val serviceDecorator = object : ClientCodegenDecorator {
-            override val name: String = "Add service plugin"
-            override val order: Byte = 0
-            override fun configCustomizations(
-                codegenContext: ClientCodegenContext,
-                baseCustomizations: List<ConfigCustomization>,
-            ): List<ConfigCustomization> {
-                return baseCustomizations + ServiceCustomizer(codegenContext)
+        val serviceDecorator =
+            object : ClientCodegenDecorator {
+                override val name: String = "Add service plugin"
+                override val order: Byte = 0
+
+                override fun configCustomizations(
+                    codegenContext: ClientCodegenContext,
+                    baseCustomizations: List<ConfigCustomization>,
+                ): List<ConfigCustomization> {
+                    return baseCustomizations + ServiceCustomizer(codegenContext)
+                }
             }
-        }
 
         clientIntegrationTest(BasicTestModels.AwsJson10TestModel, additionalDecorators = listOf(serviceDecorator)) { ctx, rustCrate ->
             rustCrate.withModule(ClientRustModule.config) {

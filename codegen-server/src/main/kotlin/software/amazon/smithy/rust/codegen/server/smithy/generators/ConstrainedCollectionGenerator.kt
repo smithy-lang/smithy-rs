@@ -76,12 +76,13 @@ class ConstrainedCollectionGenerator(
         val constraintViolation = constraintViolationSymbolProvider.toSymbol(shape)
         val constrainedSymbol = symbolProvider.toSymbol(shape)
 
-        val codegenScope = arrayOf(
-            "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.member),
-            "From" to RuntimeType.From,
-            "TryFrom" to RuntimeType.TryFrom,
-            "ConstraintViolation" to constraintViolation,
-        )
+        val codegenScope =
+            arrayOf(
+                "ValueMemberSymbol" to constrainedShapeSymbolProvider.toSymbol(shape.member),
+                "From" to RuntimeType.From,
+                "TryFrom" to RuntimeType.TryFrom,
+                "ConstraintViolation" to constraintViolation,
+            )
 
         writer.documentShape(shape, model)
         writer.docs(rustDocsConstrainedTypeEpilogue(name))
@@ -116,9 +117,10 @@ class ConstrainedCollectionGenerator(
                 #{ValidationFunctions:W}
                 """,
                 *codegenScope,
-                "ValidationFunctions" to constraintsInfo.map {
-                    it.validationFunctionDefinition(constraintViolation, inner)
-                }.join("\n"),
+                "ValidationFunctions" to
+                    constraintsInfo.map {
+                        it.validationFunctionDefinition(constraintViolation, inner)
+                    }.join("\n"),
             )
         }
 
@@ -355,7 +357,11 @@ sealed class CollectionTraitInfo {
     }
 
     companion object {
-        private fun fromTrait(trait: Trait, shape: CollectionShape, symbolProvider: SymbolProvider): CollectionTraitInfo {
+        private fun fromTrait(
+            trait: Trait,
+            shape: CollectionShape,
+            symbolProvider: SymbolProvider,
+        ): CollectionTraitInfo {
             check(shape.hasTrait(trait.toShapeId()))
             return when (trait) {
                 is LengthTrait -> {
@@ -370,7 +376,10 @@ sealed class CollectionTraitInfo {
             }
         }
 
-        fun fromShape(shape: CollectionShape, symbolProvider: SymbolProvider): List<CollectionTraitInfo> =
+        fun fromShape(
+            shape: CollectionShape,
+            symbolProvider: SymbolProvider,
+        ): List<CollectionTraitInfo> =
             supportedCollectionConstraintTraits
                 .mapNotNull { shape.getTrait(it).orNull() }
                 .map { trait -> fromTrait(trait, shape, symbolProvider) }

@@ -37,7 +37,12 @@ private sealed class UnsupportedConstraintMessageKind {
     private val constraintTraitsUberIssue = "https://github.com/smithy-lang/smithy-rs/issues/1401"
 
     fun intoLogMessage(ignoreUnsupportedConstraints: Boolean): LogMessage {
-        fun buildMessage(intro: String, willSupport: Boolean, trackingIssue: String? = null, canBeIgnored: Boolean = true): String {
+        fun buildMessage(
+            intro: String,
+            willSupport: Boolean,
+            trackingIssue: String? = null,
+            canBeIgnored: Boolean = true,
+        ): String {
             var msg = """
                 $intro
                     This is not supported in the smithy-rs server SDK."""
@@ -62,79 +67,85 @@ private sealed class UnsupportedConstraintMessageKind {
             constraintTrait: Trait,
             trackingIssue: String,
             willSupport: Boolean = true,
-        ) =
-            buildMessage(
-                "The ${shape.type} shape `${shape.id}` has the constraint trait `${constraintTrait.toShapeId()}` attached.",
-                willSupport,
-                trackingIssue,
-            )
+        ) = buildMessage(
+            "The ${shape.type} shape `${shape.id}` has the constraint trait `${constraintTrait.toShapeId()}` attached.",
+            willSupport,
+            trackingIssue,
+        )
 
         val level = if (ignoreUnsupportedConstraints) Level.WARNING else Level.SEVERE
 
         return when (this) {
-            is UnsupportedConstraintOnMemberShape -> LogMessage(
-                level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, constraintTrait, constraintTraitsUberIssue),
-            )
+            is UnsupportedConstraintOnMemberShape ->
+                LogMessage(
+                    level,
+                    buildMessageShapeHasUnsupportedConstraintTrait(shape, constraintTrait, constraintTraitsUberIssue),
+                )
 
-            is UnsupportedConstraintOnShapeReachableViaAnEventStream -> LogMessage(
-                Level.SEVERE,
-                buildMessage(
-                    """
-                    The ${shape.type} shape `${shape.id}` has the constraint trait `${constraintTrait.toShapeId()}` attached.
-                    This shape is also part of an event stream; it is unclear what the semantics for constrained shapes in event streams are.
-                    Please remove the trait from the shape to synthesize your model.
-                    """.trimIndent().replace("\n", " "),
-                    willSupport = false,
-                    "https://github.com/awslabs/smithy/issues/1388",
-                    canBeIgnored = false,
-                ),
-            )
+            is UnsupportedConstraintOnShapeReachableViaAnEventStream ->
+                LogMessage(
+                    Level.SEVERE,
+                    buildMessage(
+                        """
+                        The ${shape.type} shape `${shape.id}` has the constraint trait `${constraintTrait.toShapeId()}` attached.
+                        This shape is also part of an event stream; it is unclear what the semantics for constrained shapes in event streams are.
+                        Please remove the trait from the shape to synthesize your model.
+                        """.trimIndent().replace("\n", " "),
+                        willSupport = false,
+                        "https://github.com/awslabs/smithy/issues/1388",
+                        canBeIgnored = false,
+                    ),
+                )
 
-            is UnsupportedLengthTraitOnStreamingBlobShape -> LogMessage(
-                level,
-                buildMessage(
-                    """
-                    The ${shape.type} shape `${shape.id}` has both the `${lengthTrait.toShapeId()}` and `${streamingTrait.toShapeId()}` constraint traits attached.
-                    It is unclear what the semantics for streaming blob shapes are.
-                    """.trimIndent().replace("\n", " "),
-                    willSupport = false,
-                    "https://github.com/awslabs/smithy/issues/1389",
-                ),
-            )
+            is UnsupportedLengthTraitOnStreamingBlobShape ->
+                LogMessage(
+                    level,
+                    buildMessage(
+                        """
+                        The ${shape.type} shape `${shape.id}` has both the `${lengthTrait.toShapeId()}` and `${streamingTrait.toShapeId()}` constraint traits attached.
+                        It is unclear what the semantics for streaming blob shapes are.
+                        """.trimIndent().replace("\n", " "),
+                        willSupport = false,
+                        "https://github.com/awslabs/smithy/issues/1389",
+                    ),
+                )
 
-            is UnsupportedRangeTraitOnShape -> LogMessage(
-                level,
-                buildMessageShapeHasUnsupportedConstraintTrait(
-                    shape,
-                    rangeTrait,
-                    willSupport = false,
-                    trackingIssue = "https://github.com/smithy-lang/smithy-rs/issues/2007",
-                ),
-            )
+            is UnsupportedRangeTraitOnShape ->
+                LogMessage(
+                    level,
+                    buildMessageShapeHasUnsupportedConstraintTrait(
+                        shape,
+                        rangeTrait,
+                        willSupport = false,
+                        trackingIssue = "https://github.com/smithy-lang/smithy-rs/issues/2007",
+                    ),
+                )
 
-            is UnsupportedUniqueItemsTraitOnShape -> LogMessage(
-                level,
-                buildMessageShapeHasUnsupportedConstraintTrait(shape, uniqueItemsTrait, constraintTraitsUberIssue),
-            )
+            is UnsupportedUniqueItemsTraitOnShape ->
+                LogMessage(
+                    level,
+                    buildMessageShapeHasUnsupportedConstraintTrait(shape, uniqueItemsTrait, constraintTraitsUberIssue),
+                )
 
-            is UnsupportedMapShapeReachableFromUniqueItemsList -> LogMessage(
-                Level.SEVERE,
-                buildMessage(
-                    """
-                    The map shape `${mapShape.id}` is reachable from the list shape `${listShape.id}`, which has the
-                    `@uniqueItems` trait attached.
-                    """.trimIndent().replace("\n", " "),
-                    willSupport = false,
-                    trackingIssue = "https://github.com/awslabs/smithy/issues/1567",
-                    canBeIgnored = false,
-                ),
-            )
+            is UnsupportedMapShapeReachableFromUniqueItemsList ->
+                LogMessage(
+                    Level.SEVERE,
+                    buildMessage(
+                        """
+                        The map shape `${mapShape.id}` is reachable from the list shape `${listShape.id}`, which has the
+                        `@uniqueItems` trait attached.
+                        """.trimIndent().replace("\n", " "),
+                        willSupport = false,
+                        trackingIssue = "https://github.com/awslabs/smithy/issues/1567",
+                        canBeIgnored = false,
+                    ),
+                )
         }
     }
 }
 
 private data class OperationWithConstrainedInputWithoutValidationException(val shape: OperationShape)
+
 private data class UnsupportedConstraintOnMemberShape(val shape: MemberShape, val constraintTrait: Trait) :
     UnsupportedConstraintMessageKind()
 
@@ -160,6 +171,7 @@ private data class UnsupportedMapShapeReachableFromUniqueItemsList(
 ) : UnsupportedConstraintMessageKind()
 
 data class LogMessage(val level: Level, val message: String)
+
 data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>) :
     Throwable(message = messages.joinToString("\n") { it.message })
 
@@ -176,17 +188,18 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): This check will go away once we add support for
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
     val walker = DirectedWalker(model)
-    val operationsWithConstrainedInputWithoutValidationExceptionSet = walker.walkShapes(service)
-        .filterIsInstance<OperationShape>()
-        .asSequence()
-        .filter { operationShape ->
-            // Walk the shapes reachable via this operation input.
-            walker.walkShapes(operationShape.inputShape(model))
-                .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
-        }
-        .filter { !it.errors.contains(validationExceptionShapeId) }
-        .map { OperationWithConstrainedInputWithoutValidationException(it) }
-        .toSet()
+    val operationsWithConstrainedInputWithoutValidationExceptionSet =
+        walker.walkShapes(service)
+            .filterIsInstance<OperationShape>()
+            .asSequence()
+            .filter { operationShape ->
+                // Walk the shapes reachable via this operation input.
+                walker.walkShapes(operationShape.inputShape(model))
+                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+            }
+            .filter { !it.errors.contains(validationExceptionShapeId) }
+            .map { OperationWithConstrainedInputWithoutValidationException(it) }
+            .toSet()
 
     val messages =
         operationsWithConstrainedInputWithoutValidationExceptionSet.map {
@@ -224,63 +237,70 @@ fun validateUnsupportedConstraints(
 
     // 1. Constraint traits on streaming blob shapes are used. Their semantics are unclear.
     // TODO(https://github.com/awslabs/smithy/issues/1389)
-    val unsupportedLengthTraitOnStreamingBlobShapeSet = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterIsInstance<BlobShape>()
-        .filter { it.hasTrait<LengthTrait>() && it.hasTrait<StreamingTrait>() }
-        .map { UnsupportedLengthTraitOnStreamingBlobShape(it, it.expectTrait(), it.expectTrait()) }
-        .toSet()
+    val unsupportedLengthTraitOnStreamingBlobShapeSet =
+        walker
+            .walkShapes(service)
+            .asSequence()
+            .filterIsInstance<BlobShape>()
+            .filter { it.hasTrait<LengthTrait>() && it.hasTrait<StreamingTrait>() }
+            .map { UnsupportedLengthTraitOnStreamingBlobShape(it, it.expectTrait(), it.expectTrait()) }
+            .toSet()
 
     // 2. Constraint traits in event streams are used. Their semantics are unclear.
     // TODO(https://github.com/awslabs/smithy/issues/1388)
-    val eventStreamShapes = walker
-        .walkShapes(service)
-        .asSequence()
-        .filter { it.hasTrait<SyntheticEventStreamUnionTrait>() }
-    val unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet = eventStreamShapes
-        .flatMap { walker.walkShapes(it) }
-        .filterMapShapesToTraits(allConstraintTraits)
-        .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
-        .toSet()
-    val eventStreamErrors = eventStreamShapes.map {
-        it.expectTrait<SyntheticEventStreamUnionTrait>()
-    }.map { it.errorMembers }
-    val unsupportedConstraintErrorShapeReachableViaAnEventStreamSet = eventStreamErrors
-        .flatMap { it }
-        .flatMap { walker.walkShapes(it) }
-        .filterMapShapesToTraits(allConstraintTraits)
-        .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
-        .toSet()
+    val eventStreamShapes =
+        walker
+            .walkShapes(service)
+            .asSequence()
+            .filter { it.hasTrait<SyntheticEventStreamUnionTrait>() }
+    val unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet =
+        eventStreamShapes
+            .flatMap { walker.walkShapes(it) }
+            .filterMapShapesToTraits(allConstraintTraits)
+            .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
+            .toSet()
+    val eventStreamErrors =
+        eventStreamShapes.map {
+            it.expectTrait<SyntheticEventStreamUnionTrait>()
+        }.map { it.errorMembers }
+    val unsupportedConstraintErrorShapeReachableViaAnEventStreamSet =
+        eventStreamErrors
+            .flatMap { it }
+            .flatMap { walker.walkShapes(it) }
+            .filterMapShapesToTraits(allConstraintTraits)
+            .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
+            .toSet()
     val unsupportedConstraintShapeReachableViaAnEventStreamSet =
         unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet + unsupportedConstraintErrorShapeReachableViaAnEventStreamSet
 
     // 3. Range trait used on unsupported shapes.
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/2007)
-    val unsupportedRangeTraitOnShapeSet = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterNot { it is IntegerShape || it is ShortShape || it is LongShape || it is ByteShape }
-        .filterMapShapesToTraits(setOf(RangeTrait::class.java))
-        .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
-        .toSet()
+    val unsupportedRangeTraitOnShapeSet =
+        walker
+            .walkShapes(service)
+            .asSequence()
+            .filterNot { it is IntegerShape || it is ShortShape || it is LongShape || it is ByteShape }
+            .filterMapShapesToTraits(setOf(RangeTrait::class.java))
+            .map { (shape, rangeTrait) -> UnsupportedRangeTraitOnShape(shape, rangeTrait as RangeTrait) }
+            .toSet()
 
     // 4. `@uniqueItems` cannot reach a map shape.
     // See https://github.com/awslabs/smithy/issues/1567.
-    val mapShapeReachableFromUniqueItemsListShapeSet = walker
-        .walkShapes(service)
-        .asSequence()
-        .filterMapShapesToTraits(setOf(UniqueItemsTrait::class.java))
-        .flatMap { (listShape, uniqueItemsTrait) ->
-            walker.walkShapes(listShape).filterIsInstance<MapShape>().map { mapShape ->
-                UnsupportedMapShapeReachableFromUniqueItemsList(
-                    listShape as ListShape,
-                    uniqueItemsTrait as UniqueItemsTrait,
-                    mapShape,
-                )
+    val mapShapeReachableFromUniqueItemsListShapeSet =
+        walker
+            .walkShapes(service)
+            .asSequence()
+            .filterMapShapesToTraits(setOf(UniqueItemsTrait::class.java))
+            .flatMap { (listShape, uniqueItemsTrait) ->
+                walker.walkShapes(listShape).filterIsInstance<MapShape>().map { mapShape ->
+                    UnsupportedMapShapeReachableFromUniqueItemsList(
+                        listShape as ListShape,
+                        uniqueItemsTrait as UniqueItemsTrait,
+                        mapShape,
+                    )
+                }
             }
-        }
-        .toSet()
+            .toSet()
 
     val messages =
         (
@@ -294,16 +314,17 @@ fun validateUnsupportedConstraints(
                 mapShapeReachableFromUniqueItemsListShapeSet.map {
                     it.intoLogMessage(codegenConfig.ignoreUnsupportedConstraints)
                 }
-            ).toMutableList()
+        ).toMutableList()
 
     if (messages.isEmpty() && codegenConfig.ignoreUnsupportedConstraints) {
-        messages += LogMessage(
-            Level.SEVERE,
-            """
-            The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
-            effect. All the constraint traits used in the model are well-supported, please remove this flag.
-            """.trimIndent().replace("\n", " "),
-        )
+        messages +=
+            LogMessage(
+                Level.SEVERE,
+                """
+                The `ignoreUnsupportedConstraints` flag in the `codegen` configuration is set to `true`, but it has no
+                effect. All the constraint traits used in the model are well-supported, please remove this flag.
+                """.trimIndent().replace("\n", " "),
+            )
     }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)

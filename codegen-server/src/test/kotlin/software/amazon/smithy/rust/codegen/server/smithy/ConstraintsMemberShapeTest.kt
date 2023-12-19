@@ -37,7 +37,8 @@ import java.io.File
 import java.nio.file.Path
 
 class ConstraintsMemberShapeTest {
-    private val outputModelOnly = """
+    private val outputModelOnly =
+        """
         namespace constrainedMemberShape
 
         use aws.protocols#restJson1
@@ -158,7 +159,7 @@ class ConstraintsMemberShapeTest {
         string PatternString
         @range(min: 0, max:1000)
         integer RangedInteger
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     private fun loadModel(model: Model): Model =
         ConstrainedMemberTransform.transform(OperationNormalizer.transform(model))
@@ -283,15 +284,20 @@ class ConstraintsMemberShapeTest {
         )
     }
 
-    private fun runServerCodeGen(model: Model, dirToUse: File? = null, writable: Writable): Path {
+    private fun runServerCodeGen(
+        model: Model,
+        dirToUse: File? = null,
+        writable: Writable,
+    ): Path {
         val runtimeConfig =
-            RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime").absolutePath))
+            RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.path(File("../rust-runtime").absolutePath))
 
-        val (context, dir) = generatePluginContext(
-            model,
-            runtimeConfig = runtimeConfig,
-            overrideTestDir = dirToUse,
-        )
+        val (context, dir) =
+            generatePluginContext(
+                model,
+                runtimeConfig = runtimeConfig,
+                overrideTestDir = dirToUse,
+            )
         val codegenDecorator =
             CombinedServerCodegenDecorator.fromClasspath(
                 context,
@@ -305,12 +311,13 @@ class ConstraintsMemberShapeTest {
 
         val codegenContext = serverTestCodegenContext(model)
         val settings = ServerRustSettings.from(context.model, context.settings)
-        val rustCrate = RustCrate(
-            context.fileManifest,
-            codegenContext.symbolProvider,
-            settings.codegenConfig,
-            codegenContext.expectModuleDocProvider(),
-        )
+        val rustCrate =
+            RustCrate(
+                context.fileManifest,
+                codegenContext.symbolProvider,
+                settings.codegenConfig,
+                codegenContext.expectModuleDocProvider(),
+            )
 
         // We cannot write to the lib anymore as the RustWriter overwrites it, so writing code directly to check.rs
         // and then adding a `mod check;` to the lib.rs
@@ -328,64 +335,65 @@ class ConstraintsMemberShapeTest {
 
     @Test
     fun `generate code and check member constrained shapes are in the right modules`() {
-        val dir = runServerCodeGen(outputModelOnly) {
-            fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
-                unitTest(
-                    "builder_module_has_${typeName.toSnakeCase()}",
-                    """
-                    #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
-                    """,
-                )
-            }
-
-            // All directly constrained members of the output structure should be in the builder module
-            setOf(
-                "ConstrainedLong",
-                "ConstrainedByte",
-                "ConstrainedShort",
-                "ConstrainedInteger",
-                "ConstrainedString",
-                "RequiredConstrainedString",
-                "RequiredConstrainedLong",
-                "RequiredConstrainedByte",
-                "RequiredConstrainedInteger",
-                "RequiredConstrainedShort",
-                "ConstrainedPatternString",
-            ).forEach(::testTypeExistsInBuilderModule)
-
-            fun Set<String>.generateUseStatements(prefix: String) =
-                this.joinToString(separator = "\n") {
-                    "#[allow(unused_imports)] use $prefix::$it;"
+        val dir =
+            runServerCodeGen(outputModelOnly) {
+                fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
+                    unitTest(
+                        "builder_module_has_${typeName.toSnakeCase()}",
+                        """
+                        #[allow(unused_imports)] use crate::output::operation_using_get_output::$typeName;
+                        """,
+                    )
                 }
 
-            unitTest(
-                "map_overridden_enum",
+                // All directly constrained members of the output structure should be in the builder module
                 setOf(
-                    "Value",
-                    "value::ConstraintViolation as ValueCV",
-                    "Key",
-                    "key::ConstraintViolation as KeyCV",
-                ).generateUseStatements("crate::model::pattern_map_override"),
-            )
+                    "ConstrainedLong",
+                    "ConstrainedByte",
+                    "ConstrainedShort",
+                    "ConstrainedInteger",
+                    "ConstrainedString",
+                    "RequiredConstrainedString",
+                    "RequiredConstrainedLong",
+                    "RequiredConstrainedByte",
+                    "RequiredConstrainedInteger",
+                    "RequiredConstrainedShort",
+                    "ConstrainedPatternString",
+                ).forEach(::testTypeExistsInBuilderModule)
 
-            unitTest(
-                "union_overridden_enum",
-                setOf(
-                    "First",
-                    "first::ConstraintViolation as FirstCV",
-                    "Second",
-                    "second::ConstraintViolation as SecondCV",
-                ).generateUseStatements("crate::model::pattern_union_override"),
-            )
+                fun Set<String>.generateUseStatements(prefix: String) =
+                    this.joinToString(separator = "\n") {
+                        "#[allow(unused_imports)] use $prefix::$it;"
+                    }
 
-            unitTest(
-                "list_overridden_enum",
-                setOf(
-                    "Member",
-                    "member::ConstraintViolation as MemberCV",
-                ).generateUseStatements("crate::model::pattern_string_list_override"),
-            )
-        }
+                unitTest(
+                    "map_overridden_enum",
+                    setOf(
+                        "Value",
+                        "value::ConstraintViolation as ValueCV",
+                        "Key",
+                        "key::ConstraintViolation as KeyCV",
+                    ).generateUseStatements("crate::model::pattern_map_override"),
+                )
+
+                unitTest(
+                    "union_overridden_enum",
+                    setOf(
+                        "First",
+                        "first::ConstraintViolation as FirstCV",
+                        "Second",
+                        "second::ConstraintViolation as SecondCV",
+                    ).generateUseStatements("crate::model::pattern_union_override"),
+                )
+
+                unitTest(
+                    "list_overridden_enum",
+                    setOf(
+                        "Member",
+                        "member::ConstraintViolation as MemberCV",
+                    ).generateUseStatements("crate::model::pattern_string_list_override"),
+                )
+            }
 
         val env = mapOf("RUSTFLAGS" to "-A dead_code")
         "cargo test".runCommand(dir, env)
@@ -424,8 +432,9 @@ class ConstraintsMemberShapeTest {
         memberTargetShape.id.name shouldNotBe beforeTransformMemberShape.target.name
 
         // Target shape's name should match the expected name
-        val expectedName = memberShape.container.name.substringAfter('#') +
-            memberShape.memberName.substringBefore('#').toPascalCase()
+        val expectedName =
+            memberShape.container.name.substringAfter('#') +
+                memberShape.memberName.substringBefore('#').toPascalCase()
 
         memberTargetShape.id.name shouldBe expectedName
 
@@ -438,19 +447,21 @@ class ConstraintsMemberShapeTest {
 
         val leftOutConstraintTrait = beforeTransformConstraintTraits - newShapeConstrainedTraits
         assert(
-            leftOutConstraintTrait.isEmpty() || leftOutConstraintTrait.all {
-                it.toShapeId() == RequiredTrait.ID
-            },
+            leftOutConstraintTrait.isEmpty() ||
+                leftOutConstraintTrait.all {
+                    it.toShapeId() == RequiredTrait.ID
+                },
         ) { lazyMessage }
 
         // In case the target shape has some more constraints, which the member shape did not override,
         // then those still need to apply on the new standalone shape that has been defined.
-        val leftOverTraits = originalTargetShape.allTraits.values
-            .filter { beforeOverridingTrait ->
-                beforeTransformConstraintTraits.none {
-                    beforeOverridingTrait.toShapeId() == it.toShapeId()
+        val leftOverTraits =
+            originalTargetShape.allTraits.values
+                .filter { beforeOverridingTrait ->
+                    beforeTransformConstraintTraits.none {
+                        beforeOverridingTrait.toShapeId() == it.toShapeId()
+                    }
                 }
-            }
         val allNewShapeTraits = memberTargetShape.allTraits.values.toList()
         assert((leftOverTraits + newShapeConstrainedTraits).all { it in allNewShapeTraits }) { lazyMessage }
     }

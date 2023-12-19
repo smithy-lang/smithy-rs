@@ -29,7 +29,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.70.0
+  rust_version: 1.72.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -65,7 +65,6 @@ jobs:
       with:
         repository: awsdocs/aws-doc-sdk-examples
         path: aws-doc-sdk-examples
-        ref: rust-launch
     - name: Run ${{ matrix.actions.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:

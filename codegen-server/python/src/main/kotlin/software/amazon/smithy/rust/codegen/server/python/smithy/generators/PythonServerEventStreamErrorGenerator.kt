@@ -34,14 +34,15 @@ class PythonServerEventStreamErrorGenerator(
     private val symbolProvider: RustSymbolProvider,
     val shape: UnionShape,
 ) : ServerOperationErrorGenerator(
-    model,
-    symbolProvider,
-    shape,
-) {
+        model,
+        symbolProvider,
+        shape,
+    ) {
     private val errorSymbol = symbolProvider.symbolForEventStreamError(shape)
-    private val errors = shape.eventStreamErrors().map {
-        model.expectShape(it.asMemberShape().get().target, StructureShape::class.java)
-    }
+    private val errors =
+        shape.eventStreamErrors().map {
+            model.expectShape(it.asMemberShape().get().target, StructureShape::class.java)
+        }
 
     private val pyO3 = PythonServerCargoDependency.PyO3.toType()
 

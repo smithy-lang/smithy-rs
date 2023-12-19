@@ -41,7 +41,10 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
             },
         )
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         rustCrate.mergeFeature(TestUtilFeature.copy(deps = listOf("aws-credential-types/test-util")))
 
         rustCrate.withModule(ClientRustModule.config) {
@@ -58,86 +61,94 @@ class CredentialsProviderDecorator : ClientCodegenDecorator {
  */
 class CredentialProviderConfig(private val codegenContext: ClientCodegenContext) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope = arrayOf(
-        *preludeScope,
-        "Credentials" to configReexport(AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials")),
-        "ProvideCredentials" to configReexport(
-            AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                .resolve("provider::ProvideCredentials"),
-        ),
-        "SharedCredentialsProvider" to configReexport(
-            AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                .resolve("provider::SharedCredentialsProvider"),
-        ),
-        "SIGV4A_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
-            .resolve("auth::sigv4a::SCHEME_ID"),
-        "SIGV4_SCHEME_ID" to AwsRuntimeType.awsRuntime(runtimeConfig)
-            .resolve("auth::sigv4::SCHEME_ID"),
-        "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
-    )
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "Credentials" to configReexport(AwsRuntimeType.awsCredentialTypes(runtimeConfig).resolve("Credentials")),
+            "ProvideCredentials" to
+                configReexport(
+                    AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                        .resolve("provider::ProvideCredentials"),
+                ),
+            "SharedCredentialsProvider" to
+                configReexport(
+                    AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                        .resolve("provider::SharedCredentialsProvider"),
+                ),
+            "SIGV4A_SCHEME_ID" to
+                AwsRuntimeType.awsRuntime(runtimeConfig)
+                    .resolve("auth::sigv4a::SCHEME_ID"),
+            "SIGV4_SCHEME_ID" to
+                AwsRuntimeType.awsRuntime(runtimeConfig)
+                    .resolve("auth::sigv4::SCHEME_ID"),
+            "TestCredentials" to AwsRuntimeType.awsCredentialTypesTestUtil(runtimeConfig).resolve("Credentials"),
+        )
 
-    override fun section(section: ServiceConfig) = writable {
-        when (section) {
-            ServiceConfig.ConfigImpl -> {
-                rustTemplate(
-                    """
-                    /// Returns the credentials provider for this service
-                    pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
-                        self.config.load::<#{SharedCredentialsProvider}>().cloned()
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
+    override fun section(section: ServiceConfig) =
+        writable {
+            when (section) {
+                ServiceConfig.ConfigImpl -> {
+                    rustTemplate(
+                        """
+                        /// This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.
+                        ##[deprecated(note = "This function was intended to be removed, and has been broken since release-2023-11-15 as it always returns a `None`. Do not use.")]
+                        pub fn credentials_provider(&self) -> Option<#{SharedCredentialsProvider}> {
+                            #{None}
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
 
-            ServiceConfig.BuilderImpl -> {
-                rustTemplate(
-                    """
-                    /// Sets the credentials provider for this service
-                    pub fn credentials_provider(mut self, credentials_provider: impl #{ProvideCredentials} + 'static) -> Self {
-                        self.set_credentials_provider(#{Some}(#{SharedCredentialsProvider}::new(credentials_provider)));
-                        self
-                    }
-                    """,
-                    *codegenScope,
-                )
+                ServiceConfig.BuilderImpl -> {
+                    rustTemplate(
+                        """
+                        /// Sets the credentials provider for this service
+                        pub fn credentials_provider(mut self, credentials_provider: impl #{ProvideCredentials} + 'static) -> Self {
+                            self.set_credentials_provider(#{Some}(#{SharedCredentialsProvider}::new(credentials_provider)));
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
-                rustBlockTemplate(
-                    """
-                    /// Sets the credentials provider for this service
-                    pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self
-                    """,
-                    *codegenScope,
-                ) {
                     rustBlockTemplate(
                         """
-                        if let Some(credentials_provider) = credentials_provider
+                        /// Sets the credentials provider for this service
+                        pub fn set_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self
                         """,
                         *codegenScope,
                     ) {
-                        if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
-                            featureGateBlock("sigv4a") {
-                                rustTemplate(
-                                    "self.runtime_components.push_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
-                                    *codegenScope,
-                                )
-                            }
-                        }
-                        rustTemplate(
-                            "self.runtime_components.push_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
+                        rustBlockTemplate(
+                            """
+                            if let Some(credentials_provider) = credentials_provider
+                            """,
                             *codegenScope,
-                        )
+                        ) {
+                            if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                                featureGateBlock("sigv4a") {
+                                    rustTemplate(
+                                        "self.runtime_components.set_identity_resolver(#{SIGV4A_SCHEME_ID}, credentials_provider.clone());",
+                                        *codegenScope,
+                                    )
+                                }
+                            }
+                            rustTemplate(
+                                "self.runtime_components.set_identity_resolver(#{SIGV4_SCHEME_ID}, credentials_provider);",
+                                *codegenScope,
+                            )
+                        }
+                        rust("self")
                     }
-                    rust("self")
                 }
+
+                is ServiceConfig.DefaultForTests ->
+                    rustTemplate(
+                        "${section.configBuilderRef}.set_credentials_provider(Some(#{SharedCredentialsProvider}::new(#{TestCredentials}::for_tests())));",
+                        *codegenScope,
+                    )
+
+                else -> emptySection
             }
-
-            is ServiceConfig.DefaultForTests -> rustTemplate(
-                "${section.configBuilderRef}.set_credentials_provider(Some(#{SharedCredentialsProvider}::new(#{TestCredentials}::for_tests())));",
-                *codegenScope,
-            )
-
-            else -> emptySection
         }
-    }
 }

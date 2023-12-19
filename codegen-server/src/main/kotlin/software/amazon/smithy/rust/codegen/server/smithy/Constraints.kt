@@ -41,7 +41,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderModule
 import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 
-/**
+/*
  * This file contains utilities to work with constrained shapes.
  */
 
@@ -49,27 +49,28 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructu
  * Whether the shape has any trait that could cause a request to be rejected with a constraint violation, _whether
  * we support it or not_.
  */
-fun Shape.hasConstraintTrait() =
-    allConstraintTraits.any(this::hasTrait)
+fun Shape.hasConstraintTrait() = allConstraintTraits.any(this::hasTrait)
 
-val allConstraintTraits = setOf(
-    LengthTrait::class.java,
-    PatternTrait::class.java,
-    RangeTrait::class.java,
-    UniqueItemsTrait::class.java,
-    EnumTrait::class.java,
-    RequiredTrait::class.java,
-)
+val allConstraintTraits =
+    setOf(
+        LengthTrait::class.java,
+        PatternTrait::class.java,
+        RangeTrait::class.java,
+        UniqueItemsTrait::class.java,
+        EnumTrait::class.java,
+        RequiredTrait::class.java,
+    )
 
 val supportedStringConstraintTraits = setOf(LengthTrait::class.java, PatternTrait::class.java)
 
 /**
  * Supported constraint traits for the `list` and `set` shapes.
  */
-val supportedCollectionConstraintTraits = setOf(
-    LengthTrait::class.java,
-    UniqueItemsTrait::class.java,
-)
+val supportedCollectionConstraintTraits =
+    setOf(
+        LengthTrait::class.java,
+        UniqueItemsTrait::class.java,
+    )
 
 /**
  * We say a shape is _directly_ constrained if:
@@ -86,30 +87,39 @@ val supportedCollectionConstraintTraits = setOf(
  *
  * [the spec]: https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html
  */
-fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean = when (this) {
-    is StructureShape -> {
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
-        //  The only reason why the functions in this file have
-        //  to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
-        //  `required`, so we can't use `member.isOptional` here.
-        this.members().any { !symbolProvider.toSymbol(it).isOptional() && !it.hasNonNullDefault() }
+fun Shape.isDirectlyConstrained(symbolProvider: SymbolProvider): Boolean =
+    when (this) {
+        is StructureShape -> {
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
+            //  The only reason why the functions in this file have
+            //  to take in a `SymbolProvider` is because non-`required` blob streaming members are interpreted as
+            //  `required`, so we can't use `member.isOptional` here.
+            this.members().any { !symbolProvider.toSymbol(it).isOptional() && !it.hasNonNullDefault() }
+        }
+
+        is MapShape -> this.hasTrait<LengthTrait>()
+        is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
+        is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
+        is IntegerShape, is ShortShape, is LongShape, is ByteShape -> this.hasTrait<RangeTrait>()
+        is BlobShape -> this.hasTrait<LengthTrait>()
+        else -> false
     }
 
-    is MapShape -> this.hasTrait<LengthTrait>()
-    is StringShape -> this.hasTrait<EnumTrait>() || supportedStringConstraintTraits.any { this.hasTrait(it) }
-    is CollectionShape -> supportedCollectionConstraintTraits.any { this.hasTrait(it) }
-    is IntegerShape, is ShortShape, is LongShape, is ByteShape -> this.hasTrait<RangeTrait>()
-    is BlobShape -> this.hasTrait<LengthTrait>()
-    else -> false
-}
-
-fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(model: Model, symbolProvider: SymbolProvider): Boolean =
+fun MemberShape.hasConstraintTraitOrTargetHasConstraintTrait(
+    model: Model,
+    symbolProvider: SymbolProvider,
+): Boolean =
     this.isDirectlyConstrained(symbolProvider) || model.expectShape(this.target).isDirectlyConstrained(symbolProvider)
 
-fun Shape.isTransitivelyButNotDirectlyConstrained(model: Model, symbolProvider: SymbolProvider): Boolean =
-    !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
+fun Shape.isTransitivelyButNotDirectlyConstrained(
+    model: Model,
+    symbolProvider: SymbolProvider,
+): Boolean = !this.isDirectlyConstrained(symbolProvider) && this.canReachConstrainedShape(model, symbolProvider)
 
-fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
+fun Shape.canReachConstrainedShape(
+    model: Model,
+    symbolProvider: SymbolProvider,
+): Boolean =
     if (this is MemberShape) {
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Constraint traits on member shapes are not implemented
         //  yet. Also, note that a walker over a member shape can, perhaps counterintuitively, reach the _containing_ shape,
@@ -119,18 +129,24 @@ fun Shape.canReachConstrainedShape(model: Model, symbolProvider: SymbolProvider)
         DirectedWalker(model).walkShapes(this).toSet().any { it.isDirectlyConstrained(symbolProvider) }
     }
 
-fun MemberShape.targetCanReachConstrainedShape(model: Model, symbolProvider: SymbolProvider): Boolean =
-    model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
+fun MemberShape.targetCanReachConstrainedShape(
+    model: Model,
+    symbolProvider: SymbolProvider,
+): Boolean = model.expectShape(this.target).canReachConstrainedShape(model, symbolProvider)
 
-fun Shape.hasPublicConstrainedWrapperTupleType(model: Model, publicConstrainedTypes: Boolean): Boolean = when (this) {
-    is CollectionShape -> publicConstrainedTypes && supportedCollectionConstraintTraits.any(this::hasTrait)
-    is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
-    is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
-    is IntegerShape, is ShortShape, is LongShape, is ByteShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
-    is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
-    is BlobShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
-    else -> false
-}
+fun Shape.hasPublicConstrainedWrapperTupleType(
+    model: Model,
+    publicConstrainedTypes: Boolean,
+): Boolean =
+    when (this) {
+        is CollectionShape -> publicConstrainedTypes && supportedCollectionConstraintTraits.any(this::hasTrait)
+        is MapShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
+        is StringShape -> !this.hasTrait<EnumTrait>() && (publicConstrainedTypes && supportedStringConstraintTraits.any(this::hasTrait))
+        is IntegerShape, is ShortShape, is LongShape, is ByteShape -> publicConstrainedTypes && this.hasTrait<RangeTrait>()
+        is MemberShape -> model.expectShape(this.target).hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
+        is BlobShape -> publicConstrainedTypes && this.hasTrait<LengthTrait>()
+        else -> false
+    }
 
 fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model: Model): Boolean =
     hasPublicConstrainedWrapperTupleType(model, true)
@@ -141,8 +157,11 @@ fun Shape.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(
  * This function is used in core code generators, so it takes in a [CodegenContext] that is downcast
  * to [ServerCodegenContext] when generating servers.
  */
-fun workingWithPublicConstrainedWrapperTupleType(shape: Shape, model: Model, publicConstrainedTypes: Boolean): Boolean =
-    shape.hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
+fun workingWithPublicConstrainedWrapperTupleType(
+    shape: Shape,
+    model: Model,
+    publicConstrainedTypes: Boolean,
+): Boolean = shape.hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)
 
 /**
  * Returns whether a shape's type _name_ contains a non-public type when `publicConstrainedTypes` is `false`.
@@ -159,16 +178,19 @@ fun Shape.typeNameContainsNonPublicType(
     model: Model,
     symbolProvider: SymbolProvider,
     publicConstrainedTypes: Boolean,
-): Boolean = !publicConstrainedTypes && when (this) {
-    is SimpleShape -> wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)
-    is MemberShape -> model.expectShape(this.target)
-        .typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
+): Boolean =
+    !publicConstrainedTypes &&
+        when (this) {
+            is SimpleShape -> wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)
+            is MemberShape ->
+                model.expectShape(this.target)
+                    .typeNameContainsNonPublicType(model, symbolProvider, publicConstrainedTypes)
 
-    is CollectionShape -> this.canReachConstrainedShape(model, symbolProvider)
-    is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
-    is StructureShape, is UnionShape -> false
-    else -> UNREACHABLE("the above arms should be exhaustive, but we received shape: $this")
-}
+            is CollectionShape -> this.canReachConstrainedShape(model, symbolProvider)
+            is MapShape -> this.canReachConstrainedShape(model, symbolProvider)
+            is StructureShape, is UnionShape -> false
+            else -> UNREACHABLE("the above arms should be exhaustive, but we received shape: $this")
+        }
 
 /**
  * For synthetic shapes that are added to the model because of member constrained shapes, it returns
@@ -183,7 +205,10 @@ fun Shape.overriddenConstrainedMemberInfo(): Pair<Shape, MemberShape>? {
 /**
  * Returns the parent and the inline module that this particular shape should go in.
  */
-fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: RustSymbolProvider, publicConstrainedTypes: Boolean): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
+fun Shape.getParentAndInlineModuleForConstrainedMember(
+    symbolProvider: RustSymbolProvider,
+    publicConstrainedTypes: Boolean,
+): Pair<RustModule.LeafModule, RustModule.LeafModule>? {
     val overriddenTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>() ?: return null
     return if (overriddenTrait.container is StructureShape) {
         val structureModule = symbolProvider.toSymbol(overriddenTrait.container).module()
@@ -202,12 +227,13 @@ fun Shape.getParentAndInlineModuleForConstrainedMember(symbolProvider: RustSymbo
             Pair(shapeModule.parent as RustModule.LeafModule, shapeModule)
         } else {
             val name = RustReservedWords.escapeIfNeeded(overriddenTrait.container.id.name).toSnakeCase() + "_internal"
-            val innerModule = RustModule.new(
-                name = name,
-                visibility = Visibility.PUBCRATE,
-                parent = ServerRustModule.Model,
-                inline = true,
-            )
+            val innerModule =
+                RustModule.new(
+                    name = name,
+                    visibility = Visibility.PUBCRATE,
+                    parent = ServerRustModule.Model,
+                    inline = true,
+                )
 
             Pair(ServerRustModule.Model, innerModule)
         }

@@ -21,7 +21,8 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProviders
 
 class PubCrateConstrainedShapeSymbolProviderTest {
-    private val model = """
+    private val model =
+        """
         $baseModelString
 
         structure NonTransitivelyConstrainedStructureShape {
@@ -46,7 +47,7 @@ class PubCrateConstrainedShapeSymbolProviderTest {
         union Union {
             structure: Structure
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     private val serverTestSymbolProviders = serverTestSymbolProviders(model)
     private val symbolProvider = serverTestSymbolProviders.symbolProvider
@@ -74,10 +75,11 @@ class PubCrateConstrainedShapeSymbolProviderTest {
         val transitivelyConstrainedCollectionType =
             pubCrateConstrainedShapeSymbolProvider.toSymbol(transitivelyConstrainedCollectionShape).rustType()
 
-        transitivelyConstrainedCollectionType shouldBe RustType.Opaque(
-            "TransitivelyConstrainedCollectionConstrained",
-            "crate::constrained::transitively_constrained_collection_constrained",
-        )
+        transitivelyConstrainedCollectionType shouldBe
+            RustType.Opaque(
+                "TransitivelyConstrainedCollectionConstrained",
+                "crate::constrained::transitively_constrained_collection_constrained",
+            )
     }
 
     @Test
@@ -86,10 +88,11 @@ class PubCrateConstrainedShapeSymbolProviderTest {
         val transitivelyConstrainedMapType =
             pubCrateConstrainedShapeSymbolProvider.toSymbol(transitivelyConstrainedMapShape).rustType()
 
-        transitivelyConstrainedMapType shouldBe RustType.Opaque(
-            "TransitivelyConstrainedMapConstrained",
-            "crate::constrained::transitively_constrained_map_constrained",
-        )
+        transitivelyConstrainedMapType shouldBe
+            RustType.Opaque(
+                "TransitivelyConstrainedMapConstrained",
+                "crate::constrained::transitively_constrained_map_constrained",
+            )
     }
 
     @Test
@@ -97,12 +100,13 @@ class PubCrateConstrainedShapeSymbolProviderTest {
         val memberShape = model.lookup<MemberShape>("test#StructureWithMemberTargetingAggregateShape\$member")
         val memberType = pubCrateConstrainedShapeSymbolProvider.toSymbol(memberShape).rustType()
 
-        memberType shouldBe RustType.Option(
-            RustType.Opaque(
-                "TransitivelyConstrainedCollectionConstrained",
-                "crate::constrained::transitively_constrained_collection_constrained",
-            ),
-        )
+        memberType shouldBe
+            RustType.Option(
+                RustType.Opaque(
+                    "TransitivelyConstrainedCollectionConstrained",
+                    "crate::constrained::transitively_constrained_collection_constrained",
+                ),
+            )
     }
 
     @Test

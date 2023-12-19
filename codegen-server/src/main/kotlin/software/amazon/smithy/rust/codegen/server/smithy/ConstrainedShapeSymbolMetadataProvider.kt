@@ -31,10 +31,12 @@ class ConstrainedShapeSymbolMetadataProvider(
     private val base: RustSymbolProvider,
     private val constrainedTypes: Boolean,
 ) : SymbolMetadataProvider(base) {
-
     override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
+
     override fun structureMeta(structureShape: StructureShape) = base.toSymbol(structureShape).expectRustMetadata()
+
     override fun unionMeta(unionShape: UnionShape) = base.toSymbol(unionShape).expectRustMetadata()
+
     override fun enumMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
 
     private fun addDerivesAndAdjustVisibilityIfConstrained(shape: Shape): RustMetadata {
@@ -58,8 +60,14 @@ class ConstrainedShapeSymbolMetadataProvider(
     }
 
     override fun listMeta(listShape: ListShape): RustMetadata = addDerivesAndAdjustVisibilityIfConstrained(listShape)
+
     override fun mapMeta(mapShape: MapShape): RustMetadata = addDerivesAndAdjustVisibilityIfConstrained(mapShape)
-    override fun stringMeta(stringShape: StringShape): RustMetadata = addDerivesAndAdjustVisibilityIfConstrained(stringShape)
-    override fun numberMeta(numberShape: NumberShape): RustMetadata = addDerivesAndAdjustVisibilityIfConstrained(numberShape)
+
+    override fun stringMeta(stringShape: StringShape): RustMetadata =
+        addDerivesAndAdjustVisibilityIfConstrained(stringShape)
+
+    override fun numberMeta(numberShape: NumberShape): RustMetadata =
+        addDerivesAndAdjustVisibilityIfConstrained(numberShape)
+
     override fun blobMeta(blobShape: BlobShape) = addDerivesAndAdjustVisibilityIfConstrained(blobShape)
 }

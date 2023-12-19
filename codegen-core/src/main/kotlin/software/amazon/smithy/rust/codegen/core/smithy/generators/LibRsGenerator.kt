@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.containerDocs
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
+import software.amazon.smithy.rust.codegen.core.rustlang.rawRust
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -20,7 +21,9 @@ import software.amazon.smithy.rust.codegen.core.util.getTrait
 
 sealed class ModuleDocSection {
     data class ServiceDocs(val documentationTraitValue: String?) : ModuleDocSection()
+
     object CrateOrganization : ModuleDocSection()
+
     object Examples : ModuleDocSection()
 }
 
@@ -40,9 +43,10 @@ class LibRsGenerator(
     private val customizations: List<LibRsCustomization>,
     private val requireDocs: Boolean,
 ) {
-    private fun docSection(section: ModuleDocSection): List<Writable> = customizations
-        .map { customization -> customization.section(LibRsSection.ModuleDoc(section)) }
-        .filter { it.isNotEmpty() }
+    private fun docSection(section: ModuleDocSection): List<Writable> =
+        customizations
+            .map { customization -> customization.section(LibRsSection.ModuleDoc(section)) }
+            .filter { it.isNotEmpty() }
 
     fun render(writer: RustWriter) {
         writer.first {
@@ -50,6 +54,7 @@ class LibRsGenerator(
             if (requireDocs) {
                 rust("##![warn(missing_docs)]")
             }
+            rawRust("#![cfg_attr(docsrs, feature(doc_auto_cfg))]")
 
             // Allow for overriding the default service docs via customization
             val defaultServiceDocs = settings.getService(model).getTrait<DocumentationTrait>()?.value

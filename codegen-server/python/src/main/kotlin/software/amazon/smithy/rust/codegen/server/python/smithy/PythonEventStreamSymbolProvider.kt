@@ -58,25 +58,28 @@ class PythonEventStreamSymbolProvider(
 
         // We can only wrap the type if it's either an input or an output that used in an operation
         model.expectShape(shape.container).let { maybeInputOutput ->
-            val operationId = maybeInputOutput.getTrait<SyntheticInputTrait>()?.operation
-                ?: maybeInputOutput.getTrait<SyntheticOutputTrait>()?.operation
+            val operationId =
+                maybeInputOutput.getTrait<SyntheticInputTrait>()?.operation
+                    ?: maybeInputOutput.getTrait<SyntheticOutputTrait>()?.operation
             operationId?.let { model.expectShape(it, OperationShape::class.java) }
         } ?: return initial
 
         val unionShape = model.expectShape(shape.target).asUnionShape().get()
-        val error = if (unionShape.eventStreamErrors().isEmpty()) {
-            RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
-        } else {
-            symbolForEventStreamError(unionShape)
-        }
+        val error =
+            if (unionShape.eventStreamErrors().isEmpty()) {
+                RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
+            } else {
+                symbolForEventStreamError(unionShape)
+            }
         val inner = initial.rustType().stripOuter<RustType.Option>()
         val innerSymbol = Symbol.builder().name(inner.name).rustType(inner).build()
         val containerName = shape.container.name
         val memberName = shape.memberName.toPascalCase()
-        val outer = when (shape.isOutputEventStream(model)) {
-            true -> "${containerName}${memberName}EventStreamSender"
-            else -> "${containerName}${memberName}Receiver"
-        }
+        val outer =
+            when (shape.isOutputEventStream(model)) {
+                true -> "${containerName}${memberName}EventStreamSender"
+                else -> "${containerName}${memberName}Receiver"
+            }
         val rustType = RustType.Opaque(outer, PythonServerRustModule.PythonEventStream.fullyQualifiedPath())
         return Symbol.builder()
             .name(rustType.name)

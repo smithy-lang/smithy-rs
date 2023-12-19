@@ -28,21 +28,22 @@ class MetadataCustomization(
         )
     }
 
-    override fun section(section: OperationSection): Writable = writable {
-        when (section) {
-            is OperationSection.AdditionalRuntimePluginConfig -> {
-                rustTemplate(
-                    """
-                    ${section.newLayerName}.store_put(#{Metadata}::new(
-                        ${operationName.dq()},
-                        ${codegenContext.serviceShape.sdkId().dq()},
-                    ));
-                    """,
-                    *codegenScope,
-                )
-            }
+    override fun section(section: OperationSection): Writable =
+        writable {
+            when (section) {
+                is OperationSection.AdditionalRuntimePluginConfig -> {
+                    rustTemplate(
+                        """
+                        ${section.newLayerName}.store_put(#{Metadata}::new(
+                            ${operationName.dq()},
+                            ${codegenContext.serviceShape.sdkId().dq()},
+                        ));
+                        """,
+                        *codegenScope,
+                    )
+                }
 
-            else -> {}
+                else -> {}
+            }
         }
-    }
 }

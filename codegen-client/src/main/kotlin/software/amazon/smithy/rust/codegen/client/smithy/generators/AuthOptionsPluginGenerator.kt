@@ -25,7 +25,11 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
     private val runtimeConfig = codegenContext.runtimeConfig
 
     private val logger: Logger = Logger.getLogger(javaClass.name)
-    fun authPlugin(operationShape: OperationShape, authSchemeOptions: List<AuthSchemeOption>) = writable {
+
+    fun authPlugin(
+        operationShape: OperationShape,
+        authSchemeOptions: List<AuthSchemeOption>,
+    ) = writable {
         rustTemplate(
             """
             #{DefaultAuthOptionsPlugin}::new(vec![#{options}])
@@ -36,22 +40,27 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
         )
     }
 
-    private fun actualAuthSchemes(operationShape: OperationShape, authSchemeOptions: List<AuthSchemeOption>): List<Writable> {
+    private fun actualAuthSchemes(
+        operationShape: OperationShape,
+        authSchemeOptions: List<AuthSchemeOption>,
+    ): List<Writable> {
         val out: MutableList<Writable> = mutableListOf()
 
         var noSupportedAuthSchemes = true
-        val authSchemes = ServiceIndex.of(codegenContext.model)
-            .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
+        val authSchemes =
+            ServiceIndex.of(codegenContext.model)
+                .getEffectiveAuthSchemes(codegenContext.serviceShape, operationShape)
 
         for (schemeShapeId in authSchemes.keys) {
-            val optionsForScheme = authSchemeOptions.filter {
-                when (it) {
-                    is AuthSchemeOption.CustomResolver -> false
-                    is AuthSchemeOption.StaticAuthSchemeOption -> {
-                        it.schemeShapeId == schemeShapeId
+            val optionsForScheme =
+                authSchemeOptions.filter {
+                    when (it) {
+                        is AuthSchemeOption.CustomResolver -> false
+                        is AuthSchemeOption.StaticAuthSchemeOption -> {
+                            it.schemeShapeId == schemeShapeId
+                        }
                     }
                 }
-            }
 
             if (optionsForScheme.isNotEmpty()) {
                 out.addAll(optionsForScheme.flatMap { (it as AuthSchemeOption.StaticAuthSchemeOption).constructor })
@@ -64,10 +73,11 @@ class AuthOptionsPluginGenerator(private val codegenContext: ClientCodegenContex
             }
         }
         if (operationShape.hasTrait<OptionalAuthTrait>() || noSupportedAuthSchemes) {
-            val authOption = authSchemeOptions.find {
-                it is AuthSchemeOption.StaticAuthSchemeOption && it.schemeShapeId == noAuthSchemeShapeId
-            }
-                ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")
+            val authOption =
+                authSchemeOptions.find {
+                    it is AuthSchemeOption.StaticAuthSchemeOption && it.schemeShapeId == noAuthSchemeShapeId
+                }
+                    ?: throw IllegalStateException("Missing 'no auth' implementation. This is a codegen bug.")
             out += (authOption as AuthSchemeOption.StaticAuthSchemeOption).constructor
         }
         if (out.any { it.isEmpty() }) {

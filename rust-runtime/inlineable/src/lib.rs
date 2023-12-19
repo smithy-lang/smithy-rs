@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 #[allow(dead_code)]
 mod aws_query_compatible_errors;
 #[allow(unused)]
@@ -39,7 +42,7 @@ mod test {
     use crate::idempotency_token;
     use crate::idempotency_token::{uuid_v4, IdempotencyTokenProvider};
     use proptest::prelude::*;
-    use regex::Regex;
+    use regex_lite::Regex;
 
     #[test]
     fn test_uuid() {
