@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
@@ -119,9 +120,10 @@ sealed class Binding {
         val ty: RuntimeType,
         /**
          * The generic type parameters contained in `ty`. For example, if `ty` renders to `Vec<T>` with `T` being a
-         * generic type parameter, then `genericTys` should be a singleton list containing `"T"`.
+         * generic type parameter, then `genericTys` should be a singleton set containing `"T"`.
+         * You can't use `L`, `H`, or `M` as the names to refer to any generic types.
          * */
-        val genericTys: List<String>
+        val genericTys: Set<String>
     ): Binding()
 
     data class Concrete(
@@ -347,7 +349,14 @@ class ServiceConfigGenerator(
             val paramBindings = it.params.map { binding ->
                 writable { rustTemplate("${binding.name()}: #{BindingTy},", "BindingTy" to binding.ty()) }
             }.join("\n")
-            val paramBindingsGenericTys = it.params.filterIsInstance<Binding.Generic>().flatMap { it.genericTys }
+            val genericBindings = it.params.filterIsInstance<Binding.Generic>()
+            val lhmBindings = genericBindings.filter { it.genericTys.contains("L") || it.genericTys.contains("H") || it.genericTys.contains("M") }
+            if (lhmBindings.isNotEmpty()) {
+                throw CodegenException(
+                    "Injected config method `${it.name}` has generic bindings that use `L`, `H`, or `M` to refer to the generic types. This is not allowed. Invalid generic bindings: $lhmBindings"
+                )
+            }
+            val paramBindingsGenericTys = genericBindings.flatMap { it.genericTys }.toSet()
             val paramBindingsGenericsWritable = rustTypeParameters(*paramBindingsGenericTys.toTypedArray())
 
             // This produces a nested type like: "S<B, S<A, T>>", where

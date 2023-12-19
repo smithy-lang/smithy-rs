@@ -5,7 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
+import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -42,7 +46,7 @@ internal class ServiceConfigGeneratorTest {
                         params = listOf(
                             Binding.Concrete("auth_spec", RuntimeType.String),
                             Binding.Concrete("authorizer", RuntimeType.U64),
-                            Binding.Generic("generic_list", RuntimeType("::std::vec::Vec<T>"), listOf("T")),
+                            Binding.Generic("generic_list", RuntimeType("::std::vec::Vec<T>"), setOf("T")),
                         ),
                         errorType = RuntimeType.std.resolve("io::Error"),
                         initializer = Initializer(
@@ -228,5 +232,47 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun `it should throw an exception if a generic binding using L, H, or M is used`() {
+        val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
+
+        val decorator = object : ServerCodegenDecorator {
+            override val name: String
+                get() = "InvalidGenericBindingsDecorator"
+            override val order: Byte
+                get() = 69
+
+            override fun configMethods(codegenContext: ServerCodegenContext): List<ConfigMethod> {
+                val identityLayer = RuntimeType.Tower.resolve("layer::util::Identity")
+                return listOf(
+                    ConfigMethod(
+                        name = "invalid_generic_bindings",
+                        docs = "Docs",
+                        params = listOf(
+                            Binding.Generic("param1_bad", identityLayer, setOf("L")),
+                            Binding.Generic("param2_bad", identityLayer, setOf("H")),
+                            Binding.Generic("param3_bad", identityLayer, setOf("M")),
+                            Binding.Generic("param4_ok", identityLayer, setOf("N")),
+                        ),
+                        errorType = null,
+                        initializer = Initializer(
+                            code = writable {},
+                            layerBindings = emptyList(),
+                            httpPluginBindings = emptyList(),
+                            modelPluginBindings = emptyList(),
+                        ),
+                        isRequired = false,
+                    ),
+                )
+            }
+        }
+
+        val codegenException = shouldThrow<CodegenException> {
+            serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, _ -> }
+        }
+
+        codegenException.message.shouldContain("Injected config method `invalid_generic_bindings` has generic bindings that use `L`, `H`, or `M` to refer to the generic types. This is not allowed. Invalid generic bindings:")
     }
 }
