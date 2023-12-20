@@ -35,6 +35,7 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
             )
         }
     }
+
     companion object {
         fun from(coreRustSettings: CoreRustSettings): SdkSettings {
             val settings = SdkSettings(coreRustSettings.customizationConfig?.getObjectMember("awsSdk")?.orNull())
