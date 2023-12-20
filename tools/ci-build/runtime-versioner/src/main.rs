@@ -1,0 +1,78 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+use crate::{
+    repo::Repo,
+    tag::{previous_release_tag, release_tags},
+};
+use anyhow::Result;
+use camino::Utf8PathBuf;
+use clap::Parser;
+use tracing_subscriber::{filter::LevelFilter, EnvFilter};
+
+mod audit;
+mod command;
+mod index;
+mod repo;
+mod tag;
+mod util;
+
+#[derive(clap::Args, Clone)]
+pub struct Audit {
+    /// Don't `git fetch` before auditing.
+    #[arg(long)]
+    no_fetch: bool,
+    /// Explicitly state the previous release's tag. Discovers it if not provided.
+    #[arg(long)]
+    previous_release_tag: Option<String>,
+    /// Path to smithy-rs. Defaults to current working directory.
+    #[arg(long)]
+    smithy_rs_path: Option<Utf8PathBuf>,
+    /// (For testing) Path to a fake crates.io index.
+    #[arg(long)]
+    fake_crates_io_index: Option<Utf8PathBuf>,
+}
+
+#[derive(clap::Args, Clone)]
+pub struct PreviousReleaseTag {
+    /// Path to smithy-rs. Defaults to current working directory.
+    #[arg(long)]
+    smithy_rs_path: Option<Utf8PathBuf>,
+}
+
+#[derive(clap::Parser, Clone)]
+#[clap(author, version, about)]
+enum Command {
+    /// Audit the runtime crate versions in the smithy-rs repo at HEAD
+    ///
+    /// Requires a full clone of smithy-rs. Will not work against shallow clones.
+    Audit(Audit),
+
+    /// Outputs the previous release tag for the revision at HEAD.
+    PreviousReleaseTag(PreviousReleaseTag),
+}
+
+fn main() -> Result<()> {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .with_env_filter(
+            EnvFilter::builder()
+                .with_default_directive(LevelFilter::INFO.into())
+                .from_env_lossy(),
+        )
+        .init();
+
+    let command = Command::parse();
+    match command {
+        Command::Audit(args) => audit::audit(args),
+        Command::PreviousReleaseTag(args) => {
+            let repo = Repo::new(args.smithy_rs_path.as_deref())?;
+            let tags = release_tags(&repo)?;
+            let tag = previous_release_tag(&repo, &tags, None)?;
+            println!("{tag}");
+            Ok(())
+        }
+    }
+}
