@@ -165,13 +165,13 @@ jobs:
     name: Test the SDK with `serde` feature enabled.
     needs: generate
     runs-on: ${{ matrix.test.runner }}
+    env:
+      RUSTFLAGS: --cfg aws_sdk_unstable
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
       fail-fast: false
       matrix:
-        env:
-          RUSTFLAGS: --cfg aws_sdk_unstable
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
         - action: check-aws-config
