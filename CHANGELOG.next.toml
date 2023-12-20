@@ -34,3 +34,15 @@ message = "Serialize 0/false in query parameters, and ignore actual default valu
 references = ["smithy-rs#3252", "smithy-rs#3312"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "milesziemer"
+
+[[smithy-rs]]
+message = "Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership."
+references = ["smithy-rs#3333", "aws-sdk-rust#998", "aws-sdk-rust#1010"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership."
+references = ["smithy-rs#3333", "aws-sdk-rust#998", "aws-sdk-rust#1010"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
