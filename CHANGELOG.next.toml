@@ -40,3 +40,9 @@ message = """`requireEndpointResolver: false` is no longer required to remove th
 references = ["smithy-rs#3292"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix bug in `CredentialsProcess` provider where `expiry` was incorrectly treated as a required field."
+references = ["smithy-rs#3335", "aws-sdk-rust#1021"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
