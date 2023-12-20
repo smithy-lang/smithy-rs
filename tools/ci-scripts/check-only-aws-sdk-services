@@ -8,8 +8,6 @@
 
 set -eux
 
-export RUSTFLAG="--cfg aws_sdk_unstable"
-
 cd aws-sdk
 
 # Remove examples from workspace
