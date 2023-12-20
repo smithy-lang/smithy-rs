@@ -26,10 +26,13 @@ interface RustSymbolProvider : SymbolProvider {
 
     fun moduleForShape(shape: Shape): RustModule.LeafModule =
         config.moduleProvider.moduleForShape(moduleProviderContext, shape)
+
     fun moduleForOperationError(operation: OperationShape): RustModule.LeafModule =
         config.moduleProvider.moduleForOperationError(moduleProviderContext, operation)
+
     fun moduleForEventStreamError(eventStream: UnionShape): RustModule.LeafModule =
         config.moduleProvider.moduleForEventStreamError(moduleProviderContext, eventStream)
+
     fun moduleForBuilder(shape: Shape): RustModule.LeafModule =
         config.moduleProvider.moduleForBuilder(moduleProviderContext, shape, toSymbol(shape))
 
@@ -61,16 +64,29 @@ fun CodegenContext.toModuleProviderContext(): ModuleProviderContext =
  */
 interface ModuleProvider {
     /** Returns the module for a shape */
-    fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule
+    fun moduleForShape(
+        context: ModuleProviderContext,
+        shape: Shape,
+    ): RustModule.LeafModule
 
     /** Returns the module for an operation error */
-    fun moduleForOperationError(context: ModuleProviderContext, operation: OperationShape): RustModule.LeafModule
+    fun moduleForOperationError(
+        context: ModuleProviderContext,
+        operation: OperationShape,
+    ): RustModule.LeafModule
 
     /** Returns the module for an event stream error */
-    fun moduleForEventStreamError(context: ModuleProviderContext, eventStream: UnionShape): RustModule.LeafModule
+    fun moduleForEventStreamError(
+        context: ModuleProviderContext,
+        eventStream: UnionShape,
+    ): RustModule.LeafModule
 
     /** Returns the module for a builder */
-    fun moduleForBuilder(context: ModuleProviderContext, shape: Shape, symbol: Symbol): RustModule.LeafModule
+    fun moduleForBuilder(
+        context: ModuleProviderContext,
+        shape: Shape,
+        symbol: Symbol,
+    ): RustModule.LeafModule
 }
 
 /**
@@ -93,9 +109,13 @@ open class WrappingSymbolProvider(private val base: RustSymbolProvider) : RustSy
     override val config: RustSymbolProviderConfig get() = base.config
 
     override fun toSymbol(shape: Shape): Symbol = base.toSymbol(shape)
+
     override fun toMemberName(shape: MemberShape): String = base.toMemberName(shape)
+
     override fun symbolForOperationError(operation: OperationShape): Symbol = base.symbolForOperationError(operation)
+
     override fun symbolForEventStreamError(eventStream: UnionShape): Symbol =
         base.symbolForEventStreamError(eventStream)
+
     override fun symbolForBuilder(shape: Shape): Symbol = base.symbolForBuilder(shape)
 }

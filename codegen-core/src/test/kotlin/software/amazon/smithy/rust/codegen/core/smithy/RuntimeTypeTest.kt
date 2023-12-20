@@ -42,51 +42,52 @@ class RuntimeTypesTest {
         crateLoc.crateLocation("aws-smithy-runtime-api") shouldBe Local("/foo", null)
         crateLoc.crateLocation("aws-smithy-http") shouldBe Local("/foo", null)
 
-        val crateLocVersioned = RuntimeCrateLocation(null, CrateVersionMap(mapOf("aws-smithy-runtime-api" to "999.999")))
+        val crateLocVersioned =
+            RuntimeCrateLocation(null, CrateVersionMap(mapOf("aws-smithy-runtime-api" to "999.999")))
         crateLocVersioned.crateLocation("aws-smithy-runtime") shouldBe CratesIo(Version.stableCrateVersion())
         crateLocVersioned.crateLocation("aws-smithy-runtime-api") shouldBe CratesIo("999.999")
         crateLocVersioned.crateLocation("aws-smithy-http") shouldBe CratesIo(Version.unstableCrateVersion())
     }
 
     companion object {
-
         @JvmStatic
-        fun runtimeConfigProvider() = listOf(
-            Arguments.of(
-                "{}",
-                RuntimeCrateLocation(null, CrateVersionMap(mapOf())),
-            ),
-            Arguments.of(
-                """
-                {
-                    "relativePath": "/path"
-                }
-                """,
-                RuntimeCrateLocation("/path", CrateVersionMap(mapOf())),
-            ),
-            Arguments.of(
-                """
-                {
-                    "versions": {
-                        "a": "1.0",
-                        "b": "2.0"
+        fun runtimeConfigProvider() =
+            listOf(
+                Arguments.of(
+                    "{}",
+                    RuntimeCrateLocation(null, CrateVersionMap(mapOf())),
+                ),
+                Arguments.of(
+                    """
+                    {
+                        "relativePath": "/path"
                     }
-                }
-                """,
-                RuntimeCrateLocation(null, CrateVersionMap(mapOf("a" to "1.0", "b" to "2.0"))),
-            ),
-            Arguments.of(
-                """
-                {
-                    "relativePath": "/path",
-                    "versions": {
-                        "a": "1.0",
-                        "b": "2.0"
+                    """,
+                    RuntimeCrateLocation("/path", CrateVersionMap(mapOf())),
+                ),
+                Arguments.of(
+                    """
+                    {
+                        "versions": {
+                            "a": "1.0",
+                            "b": "2.0"
+                        }
                     }
-                }
-                """,
-                RuntimeCrateLocation("/path", CrateVersionMap(mapOf("a" to "1.0", "b" to "2.0"))),
-            ),
-        )
+                    """,
+                    RuntimeCrateLocation(null, CrateVersionMap(mapOf("a" to "1.0", "b" to "2.0"))),
+                ),
+                Arguments.of(
+                    """
+                    {
+                        "relativePath": "/path",
+                        "versions": {
+                            "a": "1.0",
+                            "b": "2.0"
+                        }
+                    }
+                    """,
+                    RuntimeCrateLocation("/path", CrateVersionMap(mapOf("a" to "1.0", "b" to "2.0"))),
+                ),
+            )
     }
 }

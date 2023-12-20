@@ -16,7 +16,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.isDirectlyConstrained
  * Common helper functions used in [UnconstrainedMapGenerator] and [MapConstraintViolationGenerator].
  */
 
-fun isKeyConstrained(shape: StringShape, symbolProvider: SymbolProvider) = shape.isDirectlyConstrained(symbolProvider)
+fun isKeyConstrained(
+    shape: StringShape,
+    symbolProvider: SymbolProvider,
+) = shape.isDirectlyConstrained(symbolProvider)
 
-fun isValueConstrained(shape: Shape, model: Model, symbolProvider: SymbolProvider): Boolean =
-    shape.canReachConstrainedShape(model, symbolProvider)
+fun isValueConstrained(
+    shape: Shape,
+    model: Model,
+    symbolProvider: SymbolProvider,
+): Boolean = shape.canReachConstrainedShape(model, symbolProvider)

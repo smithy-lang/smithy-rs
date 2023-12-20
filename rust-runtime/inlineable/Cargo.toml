@@ -18,7 +18,7 @@ default = ["gated-tests"]
 
 
 [dependencies]
-async-trait = "0.1"
+async-trait = "0.1.74"
 aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-json = { path = "../aws-smithy-json" }
@@ -27,7 +27,7 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1"
 fastrand = "2.0.0"
-futures-util = "0.3"
+futures-util = "0.3.29"
 http = "0.2.1"
 md-5 = "0.10.0"
 once_cell = "1.16.0"

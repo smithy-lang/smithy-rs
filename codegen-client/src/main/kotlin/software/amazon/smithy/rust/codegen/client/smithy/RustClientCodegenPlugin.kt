@@ -90,20 +90,19 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
             serviceShape: ServiceShape,
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             codegenDecorator: ClientCodegenDecorator,
-        ) =
-            SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
-                // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.CLIENT) }
-                // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it) }
-                // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(NonExhaustive)) }
-                // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
-                .let { StreamingShapeMetadataProvider(it) }
-                // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
-                // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, ClientReservedWords) }
-                // Allows decorators to inject a custom symbol provider
-                .let { codegenDecorator.symbolProvider(it) }
+        ) = SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
+            // Generate different types for EventStream shapes (e.g. transcribe streaming)
+            .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.CLIENT) }
+            // Generate `ByteStream` instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
+            .let { StreamingShapeSymbolProvider(it) }
+            // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
+            .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(NonExhaustive)) }
+            // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
+            .let { StreamingShapeMetadataProvider(it) }
+            // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
+            // be the name of an operation input
+            .let { RustReservedWordSymbolProvider(it, ClientReservedWords) }
+            // Allows decorators to inject a custom symbol provider
+            .let { codegenDecorator.symbolProvider(it) }
     }
 }

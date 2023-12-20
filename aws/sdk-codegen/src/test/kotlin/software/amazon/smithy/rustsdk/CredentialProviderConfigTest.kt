@@ -17,13 +17,15 @@ internal class CredentialProviderConfigTest {
     fun `configuring credentials provider at operation level should work`() {
         awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { ctx, rustCrate ->
             val rc = ctx.runtimeConfig
-            val codegenScope = arrayOf(
-                *RuntimeType.preludeScope,
-                "capture_request" to RuntimeType.captureRequest(rc),
-                "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(rc)
-                    .resolve("Credentials"),
-                "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
-            )
+            val codegenScope =
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "capture_request" to RuntimeType.captureRequest(rc),
+                    "Credentials" to
+                        AwsRuntimeType.awsCredentialTypesTestUtil(rc)
+                            .resolve("Credentials"),
+                    "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                )
             rustCrate.integrationTest("credentials_provider") {
                 // per https://github.com/awslabs/aws-sdk-rust/issues/901
                 tokioTest("configuring_credentials_provider_at_operation_level_should_work") {
@@ -67,16 +69,19 @@ internal class CredentialProviderConfigTest {
     fun `configuring credentials provider on builder should replace what was previously set`() {
         awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { ctx, rustCrate ->
             val rc = ctx.runtimeConfig
-            val codegenScope = arrayOf(
-                *RuntimeType.preludeScope,
-                "capture_request" to RuntimeType.captureRequest(rc),
-                "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(rc)
-                    .resolve("Credentials"),
-                "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
-                "SdkConfig" to AwsRuntimeType.awsTypes(rc).resolve("sdk_config::SdkConfig"),
-                "SharedCredentialsProvider" to AwsRuntimeType.awsCredentialTypes(rc)
-                    .resolve("provider::SharedCredentialsProvider"),
-            )
+            val codegenScope =
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "capture_request" to RuntimeType.captureRequest(rc),
+                    "Credentials" to
+                        AwsRuntimeType.awsCredentialTypesTestUtil(rc)
+                            .resolve("Credentials"),
+                    "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                    "SdkConfig" to AwsRuntimeType.awsTypes(rc).resolve("sdk_config::SdkConfig"),
+                    "SharedCredentialsProvider" to
+                        AwsRuntimeType.awsCredentialTypes(rc)
+                            .resolve("provider::SharedCredentialsProvider"),
+                )
             rustCrate.integrationTest("credentials_provider") {
                 // per https://github.com/awslabs/aws-sdk-rust/issues/973
                 tokioTest("configuring_credentials_provider_on_builder_should_replace_what_was_previously_set") {

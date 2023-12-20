@@ -18,7 +18,8 @@ import kotlin.streams.toList
 internal class RecursiveShapeBoxerTest {
     @Test
     fun `leave non-recursive models unchanged`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             list BarList {
                 member: Bar
@@ -30,19 +31,20 @@ internal class RecursiveShapeBoxerTest {
             structure Bar {
                 hello: Hello
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         RecursiveShapeBoxer().transform(model) shouldBe model
     }
 
     @Test
     fun `add the box trait to simple recursive shapes`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             structure Recursive {
                 RecursiveStruct: Recursive,
                 anotherField: Boolean
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val transformed = RecursiveShapeBoxer().transform(model)
         val member: MemberShape = transformed.lookup("com.example#Recursive\$RecursiveStruct")
         member.expectTrait<RustBoxTrait>()
@@ -50,7 +52,8 @@ internal class RecursiveShapeBoxerTest {
 
     @Test
     fun `add the box trait to complex structures`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             structure Expr {
                  left: Atom,
@@ -69,14 +72,15 @@ internal class RecursiveShapeBoxerTest {
                  otherMember: Atom,
                  third: SecondTree
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val transformed = RecursiveShapeBoxer().transform(model)
         val boxed = transformed.shapes().filter { it.hasTrait<RustBoxTrait>() }.toList()
-        boxed.map { it.id.toString().removePrefix("com.example#") }.toSet() shouldBe setOf(
-            "Atom\$add",
-            "Atom\$sub",
-            "SecondTree\$third",
-            "Atom\$more",
-        )
+        boxed.map { it.id.toString().removePrefix("com.example#") }.toSet() shouldBe
+            setOf(
+                "Atom\$add",
+                "Atom\$sub",
+                "SecondTree\$third",
+                "Atom\$more",
+            )
     }
 }

@@ -35,27 +35,28 @@ class PythonConstrainedEnum(
     override fun additionalEnumAttributes(context: EnumGeneratorContext): List<Attribute> =
         listOf(Attribute(pyO3.resolve("pyclass")))
 
-    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {
-        Attribute(pyO3.resolve("pymethods")).render(this)
-        rustTemplate(
-            """
-            impl ${context.enumName} {
-                #{name_method:W}
-                ##[getter]
-                pub fn value(&self) -> &str {
-                    self.as_str()
+    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable =
+        writable {
+            Attribute(pyO3.resolve("pymethods")).render(this)
+            rustTemplate(
+                """
+                impl ${context.enumName} {
+                    #{name_method:W}
+                    ##[getter]
+                    pub fn value(&self) -> &str {
+                        self.as_str()
+                    }
+                    fn __repr__(&self) -> String  {
+                        self.as_str().to_owned()
+                    }
+                    fn __str__(&self) -> String {
+                        self.as_str().to_owned()
+                    }
                 }
-                fn __repr__(&self) -> String  {
-                    self.as_str().to_owned()
-                }
-                fn __str__(&self) -> String {
-                    self.as_str().to_owned()
-                }
-            }
-            """,
-            "name_method" to pyEnumName(context),
-        )
-    }
+                """,
+                "name_method" to pyEnumName(context),
+            )
+        }
 
     private fun pyEnumName(context: EnumGeneratorContext): Writable =
         writable {
@@ -80,8 +81,8 @@ class PythonServerEnumGenerator(
     shape: StringShape,
     validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
 ) : EnumGenerator(
-    codegenContext.model,
-    codegenContext.symbolProvider,
-    shape,
-    PythonConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator),
-)
+        codegenContext.model,
+        codegenContext.symbolProvider,
+        shape,
+        PythonConstrainedEnum(codegenContext, shape, validationExceptionConversionGenerator),
+    )

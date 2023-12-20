@@ -42,9 +42,10 @@ class RestJsonHttpBindingResolver(
      * overridden by a specific mechanism e.g. an output shape member is targeted with `httpPayload` or `mediaType` traits.
      */
     override fun responseContentType(operationShape: OperationShape): String? {
-        val members = operationShape
-            .outputShape(model)
-            .members()
+        val members =
+            operationShape
+                .outputShape(model)
+                .members()
         // TODO(https://github.com/awslabs/smithy/issues/1259)
         //  Temporary fix for https://github.com/awslabs/smithy/blob/df456a514f72f4e35f0fb07c7e26006ff03b2071/smithy-model/src/main/java/software/amazon/smithy/model/knowledge/HttpBindingIndex.java#L352
         for (member in members) {
@@ -61,14 +62,16 @@ class RestJsonHttpBindingResolver(
 
 open class RestJson(val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "Headers" to RuntimeType.headers(runtimeConfig),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
-            .resolve("deserialize::error::DeserializeError"),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "JsonError" to
+                CargoDependency.smithyJson(runtimeConfig).toType()
+                    .resolve("deserialize::error::DeserializeError"),
+            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+        )
 
     override val httpBindingResolver: HttpBindingResolver =
         RestJsonHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/json", "application/json", "application/vnd.amazon.eventstream"))

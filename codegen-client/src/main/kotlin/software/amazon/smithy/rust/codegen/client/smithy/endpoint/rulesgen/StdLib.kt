@@ -21,19 +21,23 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 /**
  * Standard library functions available to all generated crates (e.g. not `aws.` specific / prefixed)
  */
-internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> = listOf(
-    SimpleRuntimeFunction("substring", EndpointsLib.substring),
-    SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel),
-    SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl),
-    SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode),
-)
+internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> =
+    listOf(
+        SimpleRuntimeFunction("substring", EndpointsLib.substring),
+        SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel),
+        SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl),
+        SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode),
+    )
 
 /**
  * AWS Standard library functions
  *
  * This is defined in client-codegen to support running tests—it is not used when generating smithy-native services.
  */
-fun awsStandardLib(runtimeConfig: RuntimeConfig, partitionsDotJson: Node) = listOf(
+fun awsStandardLib(
+    runtimeConfig: RuntimeConfig,
+    partitionsDotJson: Node,
+) = listOf(
     SimpleRuntimeFunction("aws.parseArn", EndpointsLib.awsParseArn),
     SimpleRuntimeFunction("aws.isVirtualHostableS3Bucket", EndpointsLib.awsIsVirtualHostableS3Bucket),
     AwsPartitionResolver(runtimeConfig, partitionsDotJson),
@@ -47,45 +51,52 @@ fun awsStandardLib(runtimeConfig: RuntimeConfig, partitionsDotJson: Node) = list
 class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsDotJson: Node) :
     CustomRuntimeFunction() {
     override val id: String = "aws.partition"
-    private val codegenScope = arrayOf(
-        "PartitionResolver" to EndpointsLib.PartitionResolver(runtimeConfig),
-        "Lazy" to CargoDependency.OnceCell.toType().resolve("sync::Lazy"),
-    )
-
-    override fun structFieldInit() = writable {
-        val json = Node.printJson(partitionsDotJson).dq()
-        rustTemplate(
-            """partition_resolver: #{DEFAULT_PARTITION_RESOLVER}.clone()""",
-            *codegenScope,
-            "DEFAULT_PARTITION_RESOLVER" to RuntimeType.forInlineFun("DEFAULT_PARTITION_RESOLVER", EndpointStdLib) {
-                rustTemplate(
-                    """
-                    // Loading the partition JSON is expensive since it involves many regex compilations,
-                    // so cache the result so that it only need to be paid for the first constructed client.
-                    pub(crate) static DEFAULT_PARTITION_RESOLVER: #{Lazy}<#{PartitionResolver}> =
-                        #{Lazy}::new(|| #{PartitionResolver}::new_from_json(b$json).expect("valid JSON"));
-                    """,
-                    *codegenScope,
-                )
-            },
+    private val codegenScope =
+        arrayOf(
+            "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
+            "Lazy" to CargoDependency.OnceCell.toType().resolve("sync::Lazy"),
         )
-    }
 
-    override fun additionalArgsSignature(): Writable = writable {
-        rustTemplate("partition_resolver: &#{PartitionResolver}", *codegenScope)
-    }
+    override fun structFieldInit() =
+        writable {
+            val json = Node.printJson(partitionsDotJson).dq()
+            rustTemplate(
+                """partition_resolver: #{DEFAULT_PARTITION_RESOLVER}.clone()""",
+                *codegenScope,
+                "DEFAULT_PARTITION_RESOLVER" to
+                    RuntimeType.forInlineFun("DEFAULT_PARTITION_RESOLVER", EndpointStdLib) {
+                        rustTemplate(
+                            """
+                            // Loading the partition JSON is expensive since it involves many regex compilations,
+                            // so cache the result so that it only need to be paid for the first constructed client.
+                            pub(crate) static DEFAULT_PARTITION_RESOLVER: #{Lazy}<#{PartitionResolver}> =
+                                #{Lazy}::new(|| #{PartitionResolver}::new_from_json(b$json).expect("valid JSON"));
+                            """,
+                            *codegenScope,
+                        )
+                    },
+            )
+        }
 
-    override fun additionalArgsInvocation(self: String) = writable {
-        rust("&$self.partition_resolver")
-    }
+    override fun additionalArgsSignature(): Writable =
+        writable {
+            rustTemplate("partition_resolver: &#{PartitionResolver}", *codegenScope)
+        }
 
-    override fun structField(): Writable = writable {
-        rustTemplate("partition_resolver: #{PartitionResolver}", *codegenScope)
-    }
+    override fun additionalArgsInvocation(self: String) =
+        writable {
+            rust("&$self.partition_resolver")
+        }
 
-    override fun usage() = writable {
-        rust("partition_resolver.resolve_partition")
-    }
+    override fun structField(): Writable =
+        writable {
+            rustTemplate("partition_resolver: #{PartitionResolver}", *codegenScope)
+        }
+
+    override fun usage() =
+        writable {
+            rust("partition_resolver.resolve_partition")
+        }
 }
 
 /**

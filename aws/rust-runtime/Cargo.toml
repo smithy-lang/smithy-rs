@@ -1,7 +1,7 @@
 # Note: this workspace exists solely for the convenience of running tests. These packages will all eventually
 # end up in the final SDK workspace.
 [workspace]
-
+resolver = "2"
 members = [
     "aws-credential-types",
     "aws-endpoint",

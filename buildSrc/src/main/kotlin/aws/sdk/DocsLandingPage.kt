@@ -15,7 +15,10 @@ import java.io.File
  * The generated docs will include links to crates.io, docs.rs and GitHub examples for all generated services. The generated docs will
  * be written to `docs.md` in the provided [outputDir].
  */
-fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
+fun Project.docsLandingPage(
+    awsServices: AwsServices,
+    outputPath: File,
+) {
     val project = this
     val writer = SimpleCodeWriter()
     with(writer) {
@@ -28,7 +31,7 @@ fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
 
         writer.write("## AWS Services")
         writer.write("") // empty line between header and table
-        /* generate a basic markdown table */
+        // generate a basic markdown table
         writer.write("| Service | Package |")
         writer.write("| ------- | ------- |")
         awsServices.services.sortedBy { it.humanName }.forEach {
@@ -44,7 +47,10 @@ fun Project.docsLandingPage(awsServices: AwsServices, outputPath: File) {
 /**
  * Generate a link to the examples for a given service
  */
-private fun examplesLink(service: AwsService, project: Project) = service.examplesUri(project)?.let {
+private fun examplesLink(
+    service: AwsService,
+    project: Project,
+) = service.examplesUri(project)?.let {
     "([examples]($it))"
 }
 
@@ -52,6 +58,9 @@ private fun examplesLink(service: AwsService, project: Project) = service.exampl
  * Generate a link to the docs
  */
 private fun docsRs(service: AwsService) = docsRs(service.crate())
+
 private fun docsRs(crate: String) = "([docs](https://docs.rs/$crate))"
+
 private fun cratesIo(service: AwsService) = cratesIo(service.crate())
+
 private fun cratesIo(crate: String) = "[$crate](https://crates.io/crates/$crate)"

@@ -77,11 +77,16 @@ class StreamingShapeMetadataProvider(private val base: RustSymbolProvider) : Sym
     }
 
     override fun memberMeta(memberShape: MemberShape) = base.toSymbol(memberShape).expectRustMetadata()
+
     override fun enumMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
 
     override fun listMeta(listShape: ListShape) = base.toSymbol(listShape).expectRustMetadata()
+
     override fun mapMeta(mapShape: MapShape) = base.toSymbol(mapShape).expectRustMetadata()
+
     override fun stringMeta(stringShape: StringShape) = base.toSymbol(stringShape).expectRustMetadata()
+
     override fun numberMeta(numberShape: NumberShape) = base.toSymbol(numberShape).expectRustMetadata()
+
     override fun blobMeta(blobShape: BlobShape) = base.toSymbol(blobShape).expectRustMetadata()
 }

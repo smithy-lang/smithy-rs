@@ -15,7 +15,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class ServiceErrorGeneratorTest {
-    private val model = """
+    private val model =
+        """
         namespace com.example
 
         use aws.protocols#restJson1
@@ -44,7 +45,7 @@ internal class ServiceErrorGeneratorTest {
         @error("client")
         @deprecated
         structure MeDeprecated { }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `top level errors are send + sync`() {

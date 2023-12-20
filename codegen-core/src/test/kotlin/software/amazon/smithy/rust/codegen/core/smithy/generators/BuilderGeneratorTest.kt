@@ -67,11 +67,12 @@ internal class BuilderGeneratorTest {
     @Test
     fun `generate fallible builders`() {
         val baseProvider = testSymbolProvider(StructureGeneratorTest.model)
-        val provider = object : WrappingSymbolProvider(baseProvider) {
-            override fun toSymbol(shape: Shape): Symbol {
-                return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
+        val provider =
+            object : WrappingSymbolProvider(baseProvider) {
+                override fun toSymbol(shape: Shape): Symbol {
+                    return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
+                }
             }
-        }
         val project = TestWorkspace.testProject(provider)
 
         project.moduleFor(StructureGeneratorTest.struct) {
@@ -97,7 +98,12 @@ internal class BuilderGeneratorTest {
         project.compileAndTest()
     }
 
-    private fun generator(model: Model, provider: RustSymbolProvider, writer: RustWriter, shape: StructureShape) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
+    private fun generator(
+        model: Model,
+        provider: RustSymbolProvider,
+        writer: RustWriter,
+        shape: StructureShape,
+    ) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
 
     @Test
     fun `builder for a struct with sensitive fields should implement the debug trait as such`() {
@@ -153,7 +159,8 @@ internal class BuilderGeneratorTest {
 
     @Test
     fun `it supports nonzero defaults`() {
-        val model = """
+        val model =
+            """
             namespace com.test
             structure MyStruct {
               @default(0)
@@ -197,13 +204,14 @@ internal class BuilderGeneratorTest {
             @default(1)
             integer OneDefault
 
-        """.asSmithyModel(smithyVersion = "2.0")
+            """.asSmithyModel(smithyVersion = "2.0")
 
-        val provider = testSymbolProvider(
-            model,
-            rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
-            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL,
-        )
+        val provider =
+            testSymbolProvider(
+                model,
+                rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
+                nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL,
+            )
         val project = TestWorkspace.testProject(provider)
         val shape: StructureShape = model.lookup("com.test#MyStruct")
         project.useShapeWriter(shape) {

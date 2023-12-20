@@ -19,6 +19,7 @@ import software.amazon.smithy.model.traits.Trait
  */
 class ConstraintViolationRustBoxTrait : Trait {
     val ID = ShapeId.from("software.amazon.smithy.rust.codegen.smithy.rust.synthetic#constraintViolationBox")
+
     override fun toNode(): Node = Node.objectNode()
 
     override fun toShapeId(): ShapeId = ID

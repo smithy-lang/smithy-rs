@@ -17,16 +17,28 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
  * */
 interface BuilderInstantiator {
     /** Set a field on a builder. */
-    fun setField(builder: String, value: Writable, field: MemberShape): Writable
+    fun setField(
+        builder: String,
+        value: Writable,
+        field: MemberShape,
+    ): Writable
 
     /** Finalize a builder, turning it into a built object
      *  - In the case of builders-of-builders, the value should be returned directly
      *  - If an error is returned, you MUST use `mapErr` to convert the error type
      */
-    fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable? = null): Writable
+    fun finalizeBuilder(
+        builder: String,
+        shape: StructureShape,
+        mapErr: Writable? = null,
+    ): Writable
 
     /** Set a field on a builder using the `$setterName` method. $value will be passed directly. */
-    fun setFieldWithSetter(builder: String, value: Writable, field: MemberShape) = writable {
+    fun setFieldWithSetter(
+        builder: String,
+        value: Writable,
+        field: MemberShape,
+    ) = writable {
         rustTemplate("$builder = $builder.${field.setterName()}(#{value})", "value" to value)
     }
 }

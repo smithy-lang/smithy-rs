@@ -47,9 +47,10 @@ class ConstrainedBlobGenerator(
                 PubCrateConstraintViolationSymbolProvider(this)
             }
         }
-    private val blobConstraintsInfo: List<BlobLength> = listOf(LengthTrait::class.java)
-        .mapNotNull { shape.getTrait(it).orNull() }
-        .map { BlobLength(it) }
+    private val blobConstraintsInfo: List<BlobLength> =
+        listOf(LengthTrait::class.java)
+            .mapNotNull { shape.getTrait(it).orNull() }
+            .map { BlobLength(it) }
     private val constraintsInfo: List<TraitInfo> = blobConstraintsInfo.map { it.toTraitInfo() }
 
     fun render() {
@@ -116,7 +117,11 @@ class ConstrainedBlobGenerator(
         }
     }
 
-    private fun renderConstraintViolationEnum(writer: RustWriter, shape: BlobShape, constraintViolation: Symbol) {
+    private fun renderConstraintViolationEnum(
+        writer: RustWriter,
+        shape: BlobShape,
+        constraintViolation: Symbol,
+    ) {
         writer.rustTemplate(
             """
             ##[derive(Debug, PartialEq)]
@@ -141,41 +146,46 @@ class ConstrainedBlobGenerator(
 }
 
 data class BlobLength(val lengthTrait: LengthTrait) {
-    fun toTraitInfo(): TraitInfo = TraitInfo(
-        { rust("Self::check_length(&value)?;") },
-        {
-            docs("Error when a blob doesn't satisfy its `@length` requirements.")
-            rust("Length(usize)")
-        },
-        {
-            rust(
-                """
-                Self::Length(length) => crate::model::ValidationExceptionField {
-                    message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                    path,
+    fun toTraitInfo(): TraitInfo =
+        TraitInfo(
+            { rust("Self::check_length(&value)?;") },
+            {
+                docs("Error when a blob doesn't satisfy its `@length` requirements.")
+                rust("Length(usize)")
+            },
+            {
+                rust(
+                    """
+                    Self::Length(length) => crate::model::ValidationExceptionField {
+                        message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                        path,
                 },""",
-            )
-        },
-        this::renderValidationFunction,
-    )
+                )
+            },
+            this::renderValidationFunction,
+        )
 
     /**
      * Renders a `check_length` function to validate the blob matches the
      * required length indicated by the `@length` trait.
      */
-    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
-        rust(
-            """
-            fn check_length(blob: &$unconstrainedTypeName) -> Result<(), $constraintViolation> {
-                let length = blob.as_ref().len();
+    private fun renderValidationFunction(
+        constraintViolation: Symbol,
+        unconstrainedTypeName: String,
+    ): Writable =
+        {
+            rust(
+                """
+                fn check_length(blob: &$unconstrainedTypeName) -> Result<(), $constraintViolation> {
+                    let length = blob.as_ref().len();
 
-                if ${lengthTrait.rustCondition("length")} {
-                    Ok(())
-                } else {
-                    Err($constraintViolation::Length(length))
+                    if ${lengthTrait.rustCondition("length")} {
+                        Ok(())
+                    } else {
+                        Err($constraintViolation::Length(length))
+                    }
                 }
-            }
-            """,
-        )
-    }
+                """,
+            )
+        }
 }

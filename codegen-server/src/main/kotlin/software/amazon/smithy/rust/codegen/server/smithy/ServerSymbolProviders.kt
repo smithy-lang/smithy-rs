@@ -11,6 +11,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 
+typealias BaseSymbolProviderFactory =
+    (settings: ServerRustSettings, model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean, includeConstraintShapeProvider: Boolean, codegenDecorator: ServerCodegenDecorator) -> RustSymbolProvider
+
 /**
  * Just a handy class to centralize initialization all the symbol providers required by the server code generators, to
  * make the init blocks of the codegen visitors ([ServerCodegenVisitor] and [PythonServerCodegenVisitor]), and the
@@ -31,41 +34,46 @@ class ServerSymbolProviders private constructor(
             rustSymbolProviderConfig: RustSymbolProviderConfig,
             publicConstrainedTypes: Boolean,
             codegenDecorator: ServerCodegenDecorator,
-            baseSymbolProviderFactory: (settings: ServerRustSettings, model: Model, service: ServiceShape, rustSymbolProviderConfig: RustSymbolProviderConfig, publicConstrainedTypes: Boolean, includeConstraintShapeProvider: Boolean, codegenDecorator: ServerCodegenDecorator) -> RustSymbolProvider,
+            baseSymbolProviderFactory: BaseSymbolProviderFactory,
         ): ServerSymbolProviders {
-            val baseSymbolProvider = baseSymbolProviderFactory(settings, model, service, rustSymbolProviderConfig, publicConstrainedTypes, publicConstrainedTypes, codegenDecorator)
+            val baseSymbolProvider =
+                baseSymbolProviderFactory(settings, model, service, rustSymbolProviderConfig, publicConstrainedTypes, publicConstrainedTypes, codegenDecorator)
             return ServerSymbolProviders(
                 symbolProvider = baseSymbolProvider,
-                constrainedShapeSymbolProvider = baseSymbolProviderFactory(
-                    settings,
-                    model,
-                    service,
-                    rustSymbolProviderConfig,
-                    publicConstrainedTypes,
-                    true,
-                    codegenDecorator,
-                ),
-                unconstrainedShapeSymbolProvider = UnconstrainedShapeSymbolProvider(
+                constrainedShapeSymbolProvider =
                     baseSymbolProviderFactory(
                         settings,
                         model,
                         service,
                         rustSymbolProviderConfig,
-                        false,
-                        false,
+                        publicConstrainedTypes,
+                        true,
                         codegenDecorator,
                     ),
-                    publicConstrainedTypes, service,
-                ),
-                pubCrateConstrainedShapeSymbolProvider = PubCrateConstrainedShapeSymbolProvider(
-                    baseSymbolProvider,
-                    service,
-                ),
-                constraintViolationSymbolProvider = ConstraintViolationSymbolProvider(
-                    baseSymbolProvider,
-                    publicConstrainedTypes,
-                    service,
-                ),
+                unconstrainedShapeSymbolProvider =
+                    UnconstrainedShapeSymbolProvider(
+                        baseSymbolProviderFactory(
+                            settings,
+                            model,
+                            service,
+                            rustSymbolProviderConfig,
+                            false,
+                            false,
+                            codegenDecorator,
+                        ),
+                        publicConstrainedTypes, service,
+                    ),
+                pubCrateConstrainedShapeSymbolProvider =
+                    PubCrateConstrainedShapeSymbolProvider(
+                        baseSymbolProvider,
+                        service,
+                    ),
+                constraintViolationSymbolProvider =
+                    ConstraintViolationSymbolProvider(
+                        baseSymbolProvider,
+                        publicConstrainedTypes,
+                        service,
+                    ),
             )
         }
     }

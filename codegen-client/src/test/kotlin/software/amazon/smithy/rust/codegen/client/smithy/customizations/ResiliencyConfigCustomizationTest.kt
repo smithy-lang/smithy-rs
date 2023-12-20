@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.BasicTestModels
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 internal class ResiliencyConfigCustomizationTest {
-
     @Test
     fun `generates a valid config`() {
         clientIntegrationTest(BasicTestModels.AwsJson10TestModel) { _, crate ->

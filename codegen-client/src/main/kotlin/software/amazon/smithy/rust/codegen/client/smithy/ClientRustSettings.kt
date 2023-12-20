@@ -16,7 +16,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
 
-/**
+/*
  * [ClientRustSettings] and [ClientCodegenConfig] classes.
  *
  * These are specializations of [CoreRustSettings] and [CodegenConfig] for the `rust-client-codegen`
@@ -39,20 +39,23 @@ data class ClientRustSettings(
     override val examplesUri: String?,
     override val customizationConfig: ObjectNode?,
 ) : CoreRustSettings(
-    service,
-    moduleName,
-    moduleVersion,
-    moduleAuthors,
-    moduleDescription,
-    moduleRepository,
-    runtimeConfig,
-    codegenConfig,
-    license,
-    examplesUri,
-    customizationConfig,
-) {
+        service,
+        moduleName,
+        moduleVersion,
+        moduleAuthors,
+        moduleDescription,
+        moduleRepository,
+        runtimeConfig,
+        codegenConfig,
+        license,
+        examplesUri,
+        customizationConfig,
+    ) {
     companion object {
-        fun from(model: Model, config: ObjectNode): ClientRustSettings {
+        fun from(
+            model: Model,
+            config: ObjectNode,
+        ): ClientRustSettings {
             val coreRustSettings = CoreRustSettings.from(model, config)
             val codegenSettingsNode = config.getObjectMember(CODEGEN_SETTINGS)
             val coreCodegenConfig = CoreCodegenConfig.fromNode(codegenSettingsNode)
@@ -93,8 +96,8 @@ data class ClientCodegenConfig(
     val includeEndpointUrlConfig: Boolean = defaultIncludeEndpointUrlConfig,
     val enableUserConfigurableRuntimePlugins: Boolean = defaultEnableUserConfigurableRuntimePlugins,
 ) : CoreCodegenConfig(
-    formatTimeoutSeconds, debugMode, defaultFlattenAccessors,
-) {
+        formatTimeoutSeconds, debugMode, defaultFlattenAccessors,
+    ) {
     companion object {
         private const val defaultRenameExceptions = true
         private const val defaultIncludeFluentClient = true
@@ -107,30 +110,33 @@ data class ClientCodegenConfig(
         // Note: only clients default to true, servers default to false
         private const val defaultFlattenAccessors = true
 
-        fun fromCodegenConfigAndNode(coreCodegenConfig: CoreCodegenConfig, node: Optional<ObjectNode>) =
-            if (node.isPresent) {
-                ClientCodegenConfig(
-                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                    flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenAccessors),
-                    debugMode = coreCodegenConfig.debugMode,
-                    eventStreamAllowList = node.get().getArrayMember("eventStreamAllowList").map { array ->
+        fun fromCodegenConfigAndNode(
+            coreCodegenConfig: CoreCodegenConfig,
+            node: Optional<ObjectNode>,
+        ) = if (node.isPresent) {
+            ClientCodegenConfig(
+                formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                flattenCollectionAccessors = node.get().getBooleanMemberOrDefault("flattenCollectionAccessors", defaultFlattenAccessors),
+                debugMode = coreCodegenConfig.debugMode,
+                eventStreamAllowList =
+                    node.get().getArrayMember("eventStreamAllowList").map { array ->
                         array.toList().mapNotNull { node ->
                             node.asStringNode().orNull()?.value
                         }
                     }.orNull()?.toSet() ?: defaultEventStreamAllowList,
-                    renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
-                    includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
-                    addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
-                    includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
-                    enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
-                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", defaultNullabilityCheckMode)),
-                )
-            } else {
-                ClientCodegenConfig(
-                    formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
-                    debugMode = coreCodegenConfig.debugMode,
-                    nullabilityCheckMode = NullableIndex.CheckMode.valueOf(defaultNullabilityCheckMode),
-                )
-            }
+                renameExceptions = node.get().getBooleanMemberOrDefault("renameErrors", defaultRenameExceptions),
+                includeFluentClient = node.get().getBooleanMemberOrDefault("includeFluentClient", defaultIncludeFluentClient),
+                addMessageToErrors = node.get().getBooleanMemberOrDefault("addMessageToErrors", defaultAddMessageToErrors),
+                includeEndpointUrlConfig = node.get().getBooleanMemberOrDefault("includeEndpointUrlConfig", defaultIncludeEndpointUrlConfig),
+                enableUserConfigurableRuntimePlugins = node.get().getBooleanMemberOrDefault("enableUserConfigurableRuntimePlugins", defaultEnableUserConfigurableRuntimePlugins),
+                nullabilityCheckMode = NullableIndex.CheckMode.valueOf(node.get().getStringMemberOrDefault("nullabilityCheckMode", defaultNullabilityCheckMode)),
+            )
+        } else {
+            ClientCodegenConfig(
+                formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
+                debugMode = coreCodegenConfig.debugMode,
+                nullabilityCheckMode = NullableIndex.CheckMode.valueOf(defaultNullabilityCheckMode),
+            )
+        }
     }
 }

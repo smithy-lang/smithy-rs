@@ -64,12 +64,15 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
             symbolProvider: SymbolProvider,
         ): Boolean {
             val members = structureShape.members()
+
             fun isOptional(member: MemberShape) = symbolProvider.toSymbol(member).isOptional()
+
             fun hasDefault(member: MemberShape) = member.hasNonNullDefault()
 
-            val notFallible = members.all {
-                isOptional(it) || hasDefault(it)
-            }
+            val notFallible =
+                members.all {
+                    isOptional(it) || hasDefault(it)
+                }
 
             return !notFallible
         }
@@ -87,15 +90,19 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         ServerBuilderConstraintViolations(codegenContext, shape, builderTakesInUnconstrainedTypes = false, validationExceptionConversionGenerator)
     private val lifetime = shape.lifetimeDeclaration(symbolProvider)
 
-    private val codegenScope = arrayOf(
-        "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-        "Structure" to structureSymbol,
-        "From" to RuntimeType.From,
-        "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained,
-    )
+    private val codegenScope =
+        arrayOf(
+            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+            "Structure" to structureSymbol,
+            "From" to RuntimeType.From,
+            "TryFrom" to RuntimeType.TryFrom,
+            "MaybeConstrained" to RuntimeType.MaybeConstrained,
+        )
 
-    fun render(rustCrate: RustCrate, writer: RustWriter) {
+    fun render(
+        rustCrate: RustCrate,
+        writer: RustWriter,
+    ) {
         check(!codegenContext.settings.codegenConfig.publicConstrainedTypes) {
             "ServerBuilderGeneratorWithoutPublicConstrainedTypes should only be used when `publicConstrainedTypes` is false"
         }
@@ -206,7 +213,10 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
         }
     }
 
-    private fun renderBuilderMember(writer: RustWriter, member: MemberShape) {
+    private fun renderBuilderMember(
+        writer: RustWriter,
+        member: MemberShape,
+    ) {
         val memberSymbol = builderMemberSymbol(member)
         val memberName = symbolProvider.toMemberName(member)
         // Builder members are crate-public to enable using them directly in serializers/deserializers.
@@ -220,7 +230,10 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
      *
      * This method is meant for use by the user; it is not used by the generated crate's (de)serializers.
      */
-    private fun renderBuilderMemberFn(writer: RustWriter, member: MemberShape) {
+    private fun renderBuilderMemberFn(
+        writer: RustWriter,
+        member: MemberShape,
+    ) {
         val memberSymbol = symbolProvider.toSymbol(member)
         val memberName = symbolProvider.toMemberName(member)
 
@@ -254,7 +267,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private fun renderFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{From}<Builder $lifetime> for #{Structure}$lifetime {
+            impl$lifetime #{From}<Builder $lifetime> for #{Structure}$lifetime {
                 fn from(builder: Builder $lifetime) -> Self {
                     builder.build()
                 }
