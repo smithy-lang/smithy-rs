@@ -138,7 +138,6 @@ jobs:
     needs:
     - generate-diff
     - generate-doc-preview
-    - compiletime-benchmark
     runs-on: ubuntu-latest
     name: Post bot comment
     permissions:
@@ -164,8 +163,7 @@ jobs:
             issue_number: ${{ inputs.issue_number }},
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '${{ steps.compiletime-benchmark.outputs.compiletime-benchmark }}\n\n' +
-              '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
+            body: '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
               '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n'
               
           })
