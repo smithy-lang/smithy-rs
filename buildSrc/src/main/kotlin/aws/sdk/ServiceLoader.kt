@@ -22,7 +22,7 @@ data class RootTest(
 class AwsServices(
     private val project: Project,
     services: List<AwsService>,
-    val endpointsConfigPath: File,
+    val partitionsConfigPath: File,
     val defaultConfigPath: File,
 ) {
     val services: List<AwsService>
@@ -172,7 +172,7 @@ fun Project.discoverServices(
             val moduleNames = services.map { it.module }
             logger.info("Final service module list: $moduleNames")
         },
-        models.resolve("sdk-endpoints.json"),
+        models.resolve("sdk-partitions.json"),
         models.resolve("sdk-default-configuration.json"),
     )
 }
