@@ -11,10 +11,8 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import java.io.File
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Logger
-import kotlin.io.path.writeText
 
 /**
  * A helper class holding common data with defaults that is threaded through several functions, to make their
