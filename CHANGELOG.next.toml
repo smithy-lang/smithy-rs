@@ -46,3 +46,9 @@ message = "Add `as_service_err()` to `SdkError` to allow checking the type of an
 references = ["smithy-rs#3333", "aws-sdk-rust#998", "aws-sdk-rust#1010"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix bug in `CredentialsProcess` provider where `expiry` was incorrectly treated as a required field."
+references = ["smithy-rs#3335", "aws-sdk-rust#1021"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "rcoh"
