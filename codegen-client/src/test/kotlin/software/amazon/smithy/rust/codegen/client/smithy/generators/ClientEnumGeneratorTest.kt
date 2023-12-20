@@ -19,7 +19,11 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 class ClientEnumGeneratorTest {
     @Test
     fun `matching on enum should be forward-compatible`() {
-        fun expectMatchExpressionCompiles(model: Model, shapeId: String, enumToMatchOn: String) {
+        fun expectMatchExpressionCompiles(
+            model: Model,
+            shapeId: String,
+            enumToMatchOn: String,
+        ) {
             val shape = model.lookup<StringShape>(shapeId)
             val context = testClientCodegenContext(model)
             val project = TestWorkspace.testProject(context.symbolProvider)
@@ -40,7 +44,8 @@ class ClientEnumGeneratorTest {
             project.compileAndTest()
         }
 
-        val modelV1 = """
+        val modelV1 =
+            """
             namespace test
 
             @enum([
@@ -48,11 +53,12 @@ class ClientEnumGeneratorTest {
                 { name: "Variant2", value: "Variant2" },
             ])
             string SomeEnum
-        """.asSmithyModel()
+            """.asSmithyModel()
         val variant3AsUnknown = """SomeEnum::from("Variant3")"""
         expectMatchExpressionCompiles(modelV1, "test#SomeEnum", variant3AsUnknown)
 
-        val modelV2 = """
+        val modelV2 =
+            """
             namespace test
 
             @enum([
@@ -61,21 +67,22 @@ class ClientEnumGeneratorTest {
                 { name: "Variant3", value: "Variant3" },
             ])
             string SomeEnum
-        """.asSmithyModel()
+            """.asSmithyModel()
         val variant3AsVariant3 = "SomeEnum::Variant3"
         expectMatchExpressionCompiles(modelV2, "test#SomeEnum", variant3AsVariant3)
     }
 
     @Test
     fun `impl debug for non-sensitive enum should implement the derived debug trait`() {
-        val model = """
+        val model =
+            """
             namespace test
             @enum([
                 { name: "Foo", value: "Foo" },
                 { name: "Bar", value: "Bar" },
             ])
             string SomeEnum
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val shape = model.lookup<StringShape>("test#SomeEnum")
         val context = testClientCodegenContext(model)
@@ -99,7 +106,8 @@ class ClientEnumGeneratorTest {
 
     @Test
     fun `it escapes the Unknown variant if the enum has an unknown value in the model`() {
-        val model = """
+        val model =
+            """
             namespace test
             @enum([
                 { name: "Known", value: "Known" },
@@ -107,7 +115,7 @@ class ClientEnumGeneratorTest {
                 { name: "UnknownValue", value: "UnknownValue" },
             ])
             string SomeEnum
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val shape = model.lookup<StringShape>("test#SomeEnum")
         val context = testClientCodegenContext(model)
@@ -131,14 +139,15 @@ class ClientEnumGeneratorTest {
 
     @Test
     fun `generated named enums can roundtrip between string and enum value on the unknown variant`() {
-        val model = """
+        val model =
+            """
             namespace test
             @enum([
                 { value: "t2.nano", name: "T2_NANO" },
                 { value: "t2.micro", name: "T2_MICRO" },
             ])
             string InstanceType
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val shape = model.lookup<StringShape>("test#InstanceType")
         val context = testClientCodegenContext(model)

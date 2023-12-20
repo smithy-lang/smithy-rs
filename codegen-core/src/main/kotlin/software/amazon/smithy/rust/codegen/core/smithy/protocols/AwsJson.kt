@@ -42,11 +42,12 @@ class AwsJsonHttpBindingResolver(
     private val model: Model,
     private val awsJsonVersion: AwsJsonVersion,
 ) : HttpBindingResolver {
-    private val httpTrait = HttpTrait.builder()
-        .code(200)
-        .method("POST")
-        .uri(UriPattern.parse("/"))
-        .build()
+    private val httpTrait =
+        HttpTrait.builder()
+            .code(200)
+            .method("POST")
+            .uri(UriPattern.parse("/"))
+            .build()
 
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
@@ -76,8 +77,7 @@ class AwsJsonHttpBindingResolver(
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
         bindings(operationShape.outputShape)
 
-    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        bindings(errorShape)
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> = bindings(errorShape)
 
     override fun requestContentType(operationShape: OperationShape): String =
         "application/x-amz-json-${awsJsonVersion.value}"
@@ -96,24 +96,26 @@ class AwsJsonSerializerGenerator(
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope = arrayOf(
-        "Error" to runtimeConfig.serializationError(),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-    )
+    private val codegenScope =
+        arrayOf(
+            "Error" to runtimeConfig.serializationError(),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
         var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
         if (serializer == null) {
             val inputShape = operationShape.inputShape(codegenContext.model)
-            serializer = protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
-                rustBlockTemplate(
-                    "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                    *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
-                ) {
-                    rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
+            serializer =
+                protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
+                    rustBlockTemplate(
+                        "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                        *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
+                    ) {
+                        rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
+                    }
                 }
-            }
         }
         return serializer
     }
@@ -124,14 +126,16 @@ open class AwsJson(
     val awsJsonVersion: AwsJsonVersion,
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "Headers" to RuntimeType.headers(runtimeConfig),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
-            .resolve("deserialize::error::DeserializeError"),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "JsonError" to
+                CargoDependency.smithyJson(runtimeConfig).toType()
+                    .resolve("deserialize::error::DeserializeError"),
+            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+        )
 
     val version: AwsJsonVersion get() = awsJsonVersion
 

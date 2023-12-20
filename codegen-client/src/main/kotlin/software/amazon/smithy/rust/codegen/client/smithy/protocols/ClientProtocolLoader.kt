@@ -32,32 +32,33 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 class ClientProtocolLoader(supportedProtocols: ProtocolMap<OperationGenerator, ClientCodegenContext>) :
     ProtocolLoader<OperationGenerator, ClientCodegenContext>(supportedProtocols) {
-
     companion object {
-        val DefaultProtocols = mapOf(
-            AwsJson1_0Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json10),
-            AwsJson1_1Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json11),
-            AwsQueryTrait.ID to ClientAwsQueryFactory(),
-            Ec2QueryTrait.ID to ClientEc2QueryFactory(),
-            RestJson1Trait.ID to ClientRestJsonFactory(),
-            RestXmlTrait.ID to ClientRestXmlFactory(),
-        )
+        val DefaultProtocols =
+            mapOf(
+                AwsJson1_0Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json10),
+                AwsJson1_1Trait.ID to ClientAwsJsonFactory(AwsJsonVersion.Json11),
+                AwsQueryTrait.ID to ClientAwsQueryFactory(),
+                Ec2QueryTrait.ID to ClientEc2QueryFactory(),
+                RestJson1Trait.ID to ClientRestJsonFactory(),
+                RestXmlTrait.ID to ClientRestXmlFactory(),
+            )
         val Default = ClientProtocolLoader(DefaultProtocols)
     }
 }
 
-private val CLIENT_PROTOCOL_SUPPORT = ProtocolSupport(
-    /* Client protocol codegen enabled */
-    requestSerialization = true,
-    requestBodySerialization = true,
-    responseDeserialization = true,
-    errorDeserialization = true,
-    /* Server protocol codegen disabled */
-    requestDeserialization = false,
-    requestBodyDeserialization = false,
-    responseSerialization = false,
-    errorSerialization = false,
-)
+private val CLIENT_PROTOCOL_SUPPORT =
+    ProtocolSupport(
+        // Client protocol codegen enabled
+        requestSerialization = true,
+        requestBodySerialization = true,
+        responseDeserialization = true,
+        errorDeserialization = true,
+        // Server protocol codegen disabled
+        requestDeserialization = false,
+        requestBodyDeserialization = false,
+        responseSerialization = false,
+        errorSerialization = false,
+    )
 
 private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
     ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {
@@ -73,8 +74,10 @@ private class ClientAwsJsonFactory(private val version: AwsJsonVersion) :
 
     override fun support(): ProtocolSupport = CLIENT_PROTOCOL_SUPPORT
 
-    private fun compatibleWithAwsQuery(serviceShape: ServiceShape, version: AwsJsonVersion) =
-        serviceShape.hasTrait<AwsQueryCompatibleTrait>() && version == AwsJsonVersion.Json10
+    private fun compatibleWithAwsQuery(
+        serviceShape: ServiceShape,
+        version: AwsJsonVersion,
+    ) = serviceShape.hasTrait<AwsQueryCompatibleTrait>() && version == AwsJsonVersion.Json10
 }
 
 private class ClientAwsQueryFactory : ProtocolGeneratorFactory<OperationGenerator, ClientCodegenContext> {

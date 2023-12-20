@@ -31,7 +31,8 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class JsonSerializerGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
         use aws.protocols#restJson1
 
@@ -100,7 +101,7 @@ class JsonSerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource(
@@ -114,11 +115,12 @@ class JsonSerializerGeneratorTest {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
-        val parserSerializer = JsonSerializerGenerator(
-            codegenContext,
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
-            ::restJsonFieldName,
-        )
+        val parserSerializer =
+            JsonSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+                ::restJsonFieldName,
+            )
         val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
 
@@ -167,7 +169,8 @@ class JsonSerializerGeneratorTest {
         project.compileAndTest()
     }
 
-    private val baseModelWithRequiredTypes = """
+    private val baseModelWithRequiredTypes =
+        """
         namespace test
         use aws.protocols#restJson1
 
@@ -245,7 +248,7 @@ class JsonSerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource(
@@ -259,11 +262,12 @@ class JsonSerializerGeneratorTest {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModelWithRequiredTypes))
         val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
-        val parserSerializer = JsonSerializerGenerator(
-            codegenContext,
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
-            ::restJsonFieldName,
-        )
+        val parserSerializer =
+            JsonSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+                ::restJsonFieldName,
+            )
         val operationGenerator = parserSerializer.operationInputSerializer(model.lookup("test#Op"))
         val documentGenerator = parserSerializer.documentSerializer()
 
@@ -273,7 +277,12 @@ class JsonSerializerGeneratorTest {
         // add unwrap calls.
         val builderIsFallible =
             BuilderGenerator.hasFallibleBuilder(model.lookup<StructureShape>("test#Top"), symbolProvider)
-        val maybeUnwrap = if (builderIsFallible) { ".unwrap()" } else { "" }
+        val maybeUnwrap =
+            if (builderIsFallible) {
+                ".unwrap()"
+            } else {
+                ""
+            }
         project.lib {
             unitTest(
                 "json_serializers",

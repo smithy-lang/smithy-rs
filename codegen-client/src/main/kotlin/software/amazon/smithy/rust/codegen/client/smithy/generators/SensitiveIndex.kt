@@ -17,6 +17,7 @@ class SensitiveIndex(model: Model) : KnowledgeIndex {
     private val sensitiveOutputs = sensitiveOutputSelector.select(model).map { it.id }.toSet()
 
     fun hasSensitiveInput(operationShape: OperationShape): Boolean = sensitiveInputs.contains(operationShape.id)
+
     fun hasSensitiveOutput(operationShape: OperationShape): Boolean = sensitiveOutputs.contains(operationShape.id)
 
     companion object {

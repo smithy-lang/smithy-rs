@@ -5,6 +5,7 @@
 
 use crate::changelog::ChangelogNext;
 use crate::copyright::CopyrightHeader;
+use crate::lib_rs_attr::StandardizedRuntimeCrateLibRsAttributes;
 use crate::lint::{Check, Fix, Lint, LintError, Mode};
 use crate::lint_cargo_toml::{
     CrateAuthor, CrateLicense, DocsRs, SdkExternalLintsExposesStableCrates,
@@ -23,6 +24,7 @@ use std::{fs, io};
 mod anchor;
 mod changelog;
 mod copyright;
+mod lib_rs_attr;
 mod lint;
 mod lint_cargo_toml;
 mod readmes;
@@ -140,6 +142,7 @@ fn main() -> Result<()> {
             }
             errs.extend(StableCratesExposeStableCrates::new()?.check_all()?);
             errs.extend(SdkExternalLintsExposesStableCrates::new()?.check_all()?);
+            errs.extend(StandardizedRuntimeCrateLibRsAttributes.check_all()?);
             ok(errs)?
         }
         Args::Fix {
@@ -158,6 +161,7 @@ fn main() -> Result<()> {
             if docsrs_metadata || all {
                 ok(DocsRs.fix_all(dry_run)?)?;
             }
+            ok(StandardizedRuntimeCrateLibRsAttributes.fix_all(dry_run)?)?;
         }
     }
     Ok(())

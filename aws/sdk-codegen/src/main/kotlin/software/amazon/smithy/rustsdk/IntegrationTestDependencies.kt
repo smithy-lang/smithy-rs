@@ -60,12 +60,13 @@ class IntegrationTestDecorator : ClientCodegenDecorator {
         return if (Files.exists(testPackagePath) && Files.exists(testPackagePath.resolve("Cargo.toml"))) {
             val hasTests = Files.exists(testPackagePath.resolve("tests"))
             val hasBenches = Files.exists(testPackagePath.resolve("benches"))
-            baseCustomizations + IntegrationTestDependencies(
-                codegenContext,
-                moduleName,
-                hasTests,
-                hasBenches,
-            )
+            baseCustomizations +
+                IntegrationTestDependencies(
+                    codegenContext,
+                    moduleName,
+                    hasTests,
+                    hasBenches,
+                )
         } else {
             baseCustomizations
         }
@@ -79,42 +80,48 @@ class IntegrationTestDependencies(
     private val hasBenches: Boolean,
 ) : LibRsCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    override fun section(section: LibRsSection) = when (section) {
-        is LibRsSection.Body -> testDependenciesOnly {
-            if (hasTests) {
-                val smithyAsync = CargoDependency.smithyAsync(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                val smithyTypes = CargoDependency.smithyTypes(codegenContext.runtimeConfig)
-                    .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
-                addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
-                addDependency(FuturesUtil)
-                addDependency(SerdeJson)
-                addDependency(smithyAsync)
-                addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
-                addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
-                addDependency(smithyRuntimeApiTestUtil(runtimeConfig))
-                addDependency(smithyTypes)
-                addDependency(Tokio)
-                addDependency(Tracing.toDevDependency())
-                addDependency(TracingSubscriber)
-            }
-            if (hasBenches) {
-                addDependency(Criterion)
-            }
-            for (serviceSpecific in serviceSpecificCustomizations()) {
-                serviceSpecific.section(section)(this)
-            }
+
+    override fun section(section: LibRsSection) =
+        when (section) {
+            is LibRsSection.Body ->
+                testDependenciesOnly {
+                    if (hasTests) {
+                        val smithyAsync =
+                            CargoDependency.smithyAsync(codegenContext.runtimeConfig)
+                                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                        val smithyTypes =
+                            CargoDependency.smithyTypes(codegenContext.runtimeConfig)
+                                .copy(features = setOf("test-util"), scope = DependencyScope.Dev)
+                        addDependency(awsRuntime(runtimeConfig).toDevDependency().withFeature("test-util"))
+                        addDependency(FuturesUtil)
+                        addDependency(SerdeJson)
+                        addDependency(smithyAsync)
+                        addDependency(smithyProtocolTestHelpers(codegenContext.runtimeConfig))
+                        addDependency(smithyRuntime(runtimeConfig).copy(features = setOf("test-util", "wire-mock"), scope = DependencyScope.Dev))
+                        addDependency(smithyRuntimeApiTestUtil(runtimeConfig))
+                        addDependency(smithyTypes)
+                        addDependency(Tokio)
+                        addDependency(Tracing.toDevDependency())
+                        addDependency(TracingSubscriber)
+                    }
+                    if (hasBenches) {
+                        addDependency(Criterion)
+                    }
+                    for (serviceSpecific in serviceSpecificCustomizations()) {
+                        serviceSpecific.section(section)(this)
+                    }
+                }
+
+            else -> emptySection
         }
 
-        else -> emptySection
-    }
-
-    private fun serviceSpecificCustomizations(): List<LibRsCustomization> = when (moduleName) {
-        "transcribestreaming" -> listOf(TranscribeTestDependencies())
-        "s3" -> listOf(S3TestDependencies(codegenContext))
-        "dynamodb" -> listOf(DynamoDbTestDependencies())
-        else -> emptyList()
-    }
+    private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
+        when (moduleName) {
+            "transcribestreaming" -> listOf(TranscribeTestDependencies())
+            "s3" -> listOf(S3TestDependencies(codegenContext))
+            "dynamodb" -> listOf(DynamoDbTestDependencies())
+            else -> emptyList()
+        }
 }
 
 class TranscribeTestDependencies : LibRsCustomization() {

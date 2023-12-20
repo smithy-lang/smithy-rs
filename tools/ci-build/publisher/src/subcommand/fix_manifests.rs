@@ -369,7 +369,7 @@ mod tests {
                 (
                     name.to_string(),
                     VersionWithMetadata {
-                        version: Version::parse(&version).unwrap(),
+                        version: Version::parse(version).unwrap(),
                         publish,
                         stability: *stability,
                     },

@@ -59,19 +59,21 @@ class PubCrateConstrainedCollectionGenerator(
         val unconstrainedSymbol = unconstrainedShapeSymbolProvider.toSymbol(shape)
         val name = constrainedSymbol.name
         val innerShape = model.expectShape(shape.member.target)
-        val innerMemberSymbol = if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
-            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
-        } else {
-            constrainedShapeSymbolProvider.toSymbol(shape.member)
-        }
+        val innerMemberSymbol =
+            if (innerShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
+                pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.member)
+            } else {
+                constrainedShapeSymbolProvider.toSymbol(shape.member)
+            }
 
-        val codegenScope = arrayOf(
-            "InnerMemberSymbol" to innerMemberSymbol,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
-            "UnconstrainedSymbol" to unconstrainedSymbol,
-            "Symbol" to symbol,
-            "From" to RuntimeType.From,
-        )
+        val codegenScope =
+            arrayOf(
+                "InnerMemberSymbol" to innerMemberSymbol,
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
+                "UnconstrainedSymbol" to unconstrainedSymbol,
+                "Symbol" to symbol,
+                "From" to RuntimeType.From,
+            )
 
         inlineModuleCreator(constrainedSymbol) {
             rustTemplate(

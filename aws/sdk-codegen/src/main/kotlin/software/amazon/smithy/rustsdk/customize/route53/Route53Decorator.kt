@@ -32,9 +32,14 @@ class Route53Decorator : ClientCodegenDecorator {
     override val name: String = "Route53"
     override val order: Byte = 0
     private val logger: Logger = Logger.getLogger(javaClass.name)
-    private val resourceShapes = setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
+    private val resourceShapes =
+        setOf(ShapeId.from("com.amazonaws.route53#ResourceId"), ShapeId.from("com.amazonaws.route53#ChangeId"))
 
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isResourceId(shape)) {
                 logger.info("Adding TrimResourceId trait to $shape")
@@ -50,11 +55,12 @@ class Route53Decorator : ClientCodegenDecorator {
         val inputShape = operation.inputShape(codegenContext.model)
         val hostedZoneMember = inputShape.members().find { it.hasTrait<TrimResourceId>() }
         return if (hostedZoneMember != null) {
-            baseCustomizations + TrimResourceIdCustomization(
-                codegenContext,
-                inputShape,
-                codegenContext.symbolProvider.toMemberName(hostedZoneMember),
-            )
+            baseCustomizations +
+                TrimResourceIdCustomization(
+                    codegenContext,
+                    inputShape,
+                    codegenContext.symbolProvider.toMemberName(hostedZoneMember),
+                )
         } else {
             baseCustomizations
         }
@@ -70,29 +76,29 @@ class TrimResourceIdCustomization(
     private val inputShape: StructureShape,
     private val fieldName: String,
 ) : OperationCustomization() {
-
-    override fun section(section: OperationSection): Writable = writable {
-        when (section) {
-            is OperationSection.AdditionalInterceptors -> {
-                section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                    val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
-                    val interceptor =
-                        RuntimeType.forInlineDependency(
-                            InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
-                        ).resolve("Route53ResourceIdInterceptor")
-                    rustTemplate(
-                        """
-                        #{Route53ResourceIdInterceptor}::new(|input: &mut #{Input}| {
-                            &mut input.$fieldName
-                        })
-                        """,
-                        "Input" to codegenContext.symbolProvider.toSymbol(inputShape),
-                        "Route53ResourceIdInterceptor" to interceptor,
-                        "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
-                    )
+    override fun section(section: OperationSection): Writable =
+        writable {
+            when (section) {
+                is OperationSection.AdditionalInterceptors -> {
+                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                        val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                        val interceptor =
+                            RuntimeType.forInlineDependency(
+                                InlineAwsDependency.forRustFile("route53_resource_id_preprocessor"),
+                            ).resolve("Route53ResourceIdInterceptor")
+                        rustTemplate(
+                            """
+                            #{Route53ResourceIdInterceptor}::new(|input: &mut #{Input}| {
+                                &mut input.$fieldName
+                            })
+                            """,
+                            "Input" to codegenContext.symbolProvider.toSymbol(inputShape),
+                            "Route53ResourceIdInterceptor" to interceptor,
+                            "SharedInterceptor" to smithyRuntimeApi.resolve("client::interceptors::SharedInterceptor"),
+                        )
+                    }
                 }
+                else -> {}
             }
-            else -> {}
         }
-    }
 }

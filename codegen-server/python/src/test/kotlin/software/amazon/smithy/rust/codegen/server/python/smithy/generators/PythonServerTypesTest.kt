@@ -19,7 +19,8 @@ import kotlin.io.path.appendText
 internal class PythonServerTypesTest {
     @Test
     fun `document type`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             use aws.protocols#restJson1
@@ -44,50 +45,51 @@ internal class PythonServerTypesTest {
             structure EchoOutput {
                 value: Document,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val (pluginCtx, testDir) = generatePythonServerPluginContext(model)
         executePythonServerCodegenVisitor(pluginCtx)
 
-        val testCases = listOf(
-            Pair(
-                """ { "value": 42 } """,
-                """
-                assert input.value == 42
-                output = EchoOutput(value=input.value)
-                """,
-            ),
-            Pair(
-                """ { "value": "foobar" } """,
-                """
-                assert input.value == "foobar"
-                output = EchoOutput(value=input.value)
-                """,
-            ),
-            Pair(
-                """
-                {
-                    "value": [
-                        true,
-                        false,
-                        42,
-                        42.0,
-                        -42,
-                        {
-                            "nested": "value"
-                        },
-                        {
-                            "nested": [1, 2, 3]
-                        }
-                    ]
-                }
-                """,
-                """
-                assert input.value == [True, False, 42, 42.0, -42, {"nested": "value"}, {"nested": [1, 2, 3]}]
-                output = EchoOutput(value=input.value)
-                """,
-            ),
-        )
+        val testCases =
+            listOf(
+                Pair(
+                    """ { "value": 42 } """,
+                    """
+                    assert input.value == 42
+                    output = EchoOutput(value=input.value)
+                    """,
+                ),
+                Pair(
+                    """ { "value": "foobar" } """,
+                    """
+                    assert input.value == "foobar"
+                    output = EchoOutput(value=input.value)
+                    """,
+                ),
+                Pair(
+                    """
+                    {
+                        "value": [
+                            true,
+                            false,
+                            42,
+                            42.0,
+                            -42,
+                            {
+                                "nested": "value"
+                            },
+                            {
+                                "nested": [1, 2, 3]
+                            }
+                        ]
+                    }
+                    """,
+                    """
+                    assert input.value == [True, False, 42, 42.0, -42, {"nested": "value"}, {"nested": [1, 2, 3]}]
+                    output = EchoOutput(value=input.value)
+                    """,
+                ),
+            )
 
         val writer = RustWriter.forModule("service")
         writer.tokioTest("document_type") {
@@ -147,7 +149,8 @@ internal class PythonServerTypesTest {
 
     @Test
     fun `timestamp type`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             use aws.protocols#restJson1
@@ -178,7 +181,7 @@ internal class PythonServerTypesTest {
                 value: Timestamp,
                 opt_value: Timestamp,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
 
         val (pluginCtx, testDir) = generatePythonServerPluginContext(model)
         executePythonServerCodegenVisitor(pluginCtx)

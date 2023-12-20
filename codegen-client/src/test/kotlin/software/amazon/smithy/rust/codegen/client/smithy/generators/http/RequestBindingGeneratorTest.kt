@@ -30,7 +30,8 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 class RequestBindingGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace smithy.example
 
         @idempotent
@@ -120,7 +121,7 @@ class RequestBindingGeneratorTest {
 
         @sensitive
         string SensitiveStringHeader
-    """.asSmithyModel()
+        """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val symbolProvider = testSymbolProvider(model)
     private val operationShape = model.expectShape(ShapeId.from("smithy.example#PutObject"), OperationShape::class.java)
@@ -131,12 +132,13 @@ class RequestBindingGeneratorTest {
         inputShape.renderWithModelBuilder(model, symbolProvider, rustCrate)
         rustCrate.withModule(operationModule) {
             val codegenContext = testClientCodegenContext(model)
-            val bindingGen = RequestBindingGenerator(
-                codegenContext,
-                // Any protocol is fine for this test.
-                RestJson(codegenContext),
-                operationShape,
-            )
+            val bindingGen =
+                RequestBindingGenerator(
+                    codegenContext,
+                    // Any protocol is fine for this test.
+                    RestJson(codegenContext),
+                    operationShape,
+                )
             rustBlock("impl PutObjectInput") {
                 // RequestBindingGenerator's functions expect to be rendered inside a function,
                 // but the unit test needs to call some of these functions individually. This generates

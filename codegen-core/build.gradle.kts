@@ -23,7 +23,7 @@ val smithyVersion: String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jsoup:jsoup:1.15.3")
+    implementation("org.jsoup:jsoup:1.16.2")
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -97,8 +97,13 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
     }
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
     dependsOn(generateSmithyRuntimeCrateVersion)
 }
 
@@ -135,7 +140,7 @@ if (isTestingEnabled.toBoolean()) {
     }
 
     tasks.compileTestKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+        kotlinOptions.jvmTarget = "11"
     }
 
     tasks.test {

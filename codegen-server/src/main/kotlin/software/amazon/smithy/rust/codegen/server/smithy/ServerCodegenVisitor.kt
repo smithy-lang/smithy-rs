@@ -101,7 +101,6 @@ open class ServerCodegenVisitor(
     context: PluginContext,
     private val codegenDecorator: ServerCodegenDecorator,
 ) : ShapeVisitor.Default<Unit>() {
-
     protected val logger = Logger.getLogger(javaClass.name)
     protected var settings = ServerRustSettings.from(context.model, context.settings)
 
@@ -114,12 +113,13 @@ open class ServerCodegenVisitor(
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
     init {
-        val rustSymbolProviderConfig = RustSymbolProviderConfig(
-            runtimeConfig = settings.runtimeConfig,
-            renameExceptions = false,
-            nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
-            moduleProvider = ServerModuleProvider,
-        )
+        val rustSymbolProviderConfig =
+            RustSymbolProviderConfig(
+                runtimeConfig = settings.runtimeConfig,
+                renameExceptions = false,
+                nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
+                moduleProvider = ServerModuleProvider,
+            )
 
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
@@ -135,45 +135,50 @@ open class ServerCodegenVisitor(
 
         model = codegenDecorator.transformModel(service, baseModel, settings)
 
-        val serverSymbolProviders = ServerSymbolProviders.from(
-            settings,
-            model,
-            service,
-            rustSymbolProviderConfig,
-            settings.codegenConfig.publicConstrainedTypes,
-            codegenDecorator,
-            RustServerCodegenPlugin::baseSymbolProvider,
-        )
+        val serverSymbolProviders =
+            ServerSymbolProviders.from(
+                settings,
+                model,
+                service,
+                rustSymbolProviderConfig,
+                settings.codegenConfig.publicConstrainedTypes,
+                codegenDecorator,
+                RustServerCodegenPlugin::baseSymbolProvider,
+            )
 
-        codegenContext = ServerCodegenContext(
-            model,
-            serverSymbolProviders.symbolProvider,
-            null,
-            service,
-            protocolShape,
-            settings,
-            serverSymbolProviders.unconstrainedShapeSymbolProvider,
-            serverSymbolProviders.constrainedShapeSymbolProvider,
-            serverSymbolProviders.constraintViolationSymbolProvider,
-            serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
-        )
+        codegenContext =
+            ServerCodegenContext(
+                model,
+                serverSymbolProviders.symbolProvider,
+                null,
+                service,
+                protocolShape,
+                settings,
+                serverSymbolProviders.unconstrainedShapeSymbolProvider,
+                serverSymbolProviders.constrainedShapeSymbolProvider,
+                serverSymbolProviders.constraintViolationSymbolProvider,
+                serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
+            )
 
         // We can use a not-null assertion because [CombinedServerCodegenDecorator] returns a not null value.
         validationExceptionConversionGenerator = codegenDecorator.validationExceptionConversion(codegenContext)!!
 
-        codegenContext = codegenContext.copy(
-            moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
-                codegenContext,
-                ServerModuleDocProvider(codegenContext),
-            ),
-        )
+        codegenContext =
+            codegenContext.copy(
+                moduleDocProvider =
+                    codegenDecorator.moduleDocumentationCustomization(
+                        codegenContext,
+                        ServerModuleDocProvider(codegenContext),
+                    ),
+            )
 
-        rustCrate = RustCrate(
-            context.fileManifest,
-            codegenContext.symbolProvider,
-            settings.codegenConfig,
-            codegenContext.expectModuleDocProvider(),
-        )
+        rustCrate =
+            RustCrate(
+                context.fileManifest,
+                codegenContext.symbolProvider,
+                settings.codegenConfig,
+                codegenContext.expectModuleDocProvider(),
+            )
         protocolGenerator = this.protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
 
@@ -209,8 +214,7 @@ open class ServerCodegenVisitor(
     /**
      * Exposure purely for unit test purposes.
      */
-    internal fun baselineTransformInternalTest(model: Model) =
-        baselineTransform(model)
+    internal fun baselineTransformInternalTest(model: Model) = baselineTransform(model)
 
     /**
      * Execute code generation
@@ -324,12 +328,13 @@ open class ServerCodegenVisitor(
         writer: RustWriter,
     ) {
         if (codegenContext.settings.codegenConfig.publicConstrainedTypes || shape.isReachableFromOperationInput()) {
-            val serverBuilderGenerator = ServerBuilderGenerator(
-                codegenContext,
-                shape,
-                validationExceptionConversionGenerator,
-                protocolGenerator.protocol,
-            )
+            val serverBuilderGenerator =
+                ServerBuilderGenerator(
+                    codegenContext,
+                    shape,
+                    validationExceptionConversionGenerator,
+                    protocolGenerator.protocol,
+                )
             serverBuilderGenerator.render(rustCrate, writer)
 
             if (codegenContext.settings.codegenConfig.publicConstrainedTypes) {
@@ -366,14 +371,16 @@ open class ServerCodegenVisitor(
     }
 
     override fun listShape(shape: ListShape) = collectionShape(shape)
+
     override fun setShape(shape: SetShape) = collectionShape(shape)
 
     private fun collectionShape(shape: CollectionShape) {
         val renderUnconstrainedList =
-            shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
-                model,
-                codegenContext.symbolProvider,
-            )
+            shape.isReachableFromOperationInput() &&
+                shape.canReachConstrainedShape(
+                    model,
+                    codegenContext.symbolProvider,
+                )
         val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
 
         if (renderUnconstrainedList) {
@@ -433,10 +440,11 @@ open class ServerCodegenVisitor(
 
     override fun mapShape(shape: MapShape) {
         val renderUnconstrainedMap =
-            shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
-                model,
-                codegenContext.symbolProvider,
-            )
+            shape.isReachableFromOperationInput() &&
+                shape.canReachConstrainedShape(
+                    model,
+                    codegenContext.symbolProvider,
+                )
         val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
 
         if (renderUnconstrainedMap) {
@@ -498,15 +506,21 @@ open class ServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun serverEnumGeneratorFactory(codegenContext: ServerCodegenContext, shape: StringShape) =
-            ServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
+        fun serverEnumGeneratorFactory(
+            codegenContext: ServerCodegenContext,
+            shape: StringShape,
+        ) = ServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::serverEnumGeneratorFactory)
     }
 
     override fun integerShape(shape: IntegerShape) = integralShape(shape)
+
     override fun shortShape(shape: ShortShape) = integralShape(shape)
+
     override fun longShape(shape: LongShape) = integralShape(shape)
+
     override fun byteShape(shape: ByteShape) = integralShape(shape)
+
     private fun integralShape(shape: NumberShape) {
         if (shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
             logger.info("[rust-server-codegen] Generating a constrained integral $shape")
@@ -569,7 +583,8 @@ open class ServerCodegenVisitor(
             UnionGenerator(model, codegenContext.symbolProvider, this, shape, renderUnknownVariant = false).render()
         }
 
-        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
+        if (shape.isReachableFromOperationInput() &&
+            shape.canReachConstrainedShape(
                 model,
                 codegenContext.symbolProvider,
             )

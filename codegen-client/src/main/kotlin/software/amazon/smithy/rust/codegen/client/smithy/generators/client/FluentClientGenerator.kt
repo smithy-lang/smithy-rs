@@ -60,16 +60,21 @@ import software.amazon.smithy.rust.codegen.core.util.sdkId
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 private val BehaviorVersionLatest = Feature("behavior-version-latest", false, listOf())
+
 class FluentClientGenerator(
     private val codegenContext: ClientCodegenContext,
     private val customizations: List<FluentClientCustomization> = emptyList(),
 ) {
-
     companion object {
-        fun clientOperationFnName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
-            RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
+        fun clientOperationFnName(
+            operationShape: OperationShape,
+            symbolProvider: RustSymbolProvider,
+        ): String = RustReservedWords.escapeIfNeeded(symbolProvider.toSymbol(operationShape).name.toSnakeCase())
 
-        fun clientOperationModuleName(operationShape: OperationShape, symbolProvider: RustSymbolProvider): String =
+        fun clientOperationModuleName(
+            operationShape: OperationShape,
+            symbolProvider: RustSymbolProvider,
+        ): String =
             RustReservedWords.escapeIfNeeded(
                 symbolProvider.toSymbol(operationShape).name.toSnakeCase(),
                 EscapeFor.ModuleName,
@@ -84,10 +89,14 @@ class FluentClientGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
-    fun render(crate: RustCrate, customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList()) {
+    fun render(
+        crate: RustCrate,
+        customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList(),
+    ) {
         renderFluentClient(crate)
 
-        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext, customizableOperationCustomizations)
+        val customizableOperationGenerator =
+            CustomizableOperationGenerator(codegenContext, customizableOperationCustomizations)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
@@ -159,15 +168,16 @@ class FluentClientGenerator(
                 "Arc" to RuntimeType.Arc,
                 "base_client_runtime_plugins" to baseClientRuntimePluginsFn(codegenContext),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
-                "client_docs" to writable {
-                    customizations.forEach {
-                        it.section(
-                            FluentClientSection.FluentClientDocs(
-                                serviceShape,
-                            ),
-                        )(this)
-                    }
-                },
+                "client_docs" to
+                    writable {
+                        customizations.forEach {
+                            it.section(
+                                FluentClientSection.FluentClientDocs(
+                                    serviceShape,
+                                ),
+                            )(this)
+                        }
+                    },
                 "ConfigBag" to RuntimeType.configBag(runtimeConfig),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                 "tracing" to CargoDependency.Tracing.toType(),
@@ -183,24 +193,27 @@ class FluentClientGenerator(
             crate.withModule(privateModule) {
                 rustBlock("impl super::Client") {
                     val fullPath = operation.fullyQualifiedFluentBuilder(symbolProvider)
-                    val maybePaginated = if (operation.isPaginated(model)) {
-                        "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
-                    } else {
-                        ""
-                    }
+                    val maybePaginated =
+                        if (operation.isPaginated(model)) {
+                            "\n/// This operation supports pagination; See [`into_paginator()`]($fullPath::into_paginator)."
+                        } else {
+                            ""
+                        }
 
                     val output = operation.outputShape(model)
                     val operationOk = symbolProvider.toSymbol(output)
                     val operationErr = symbolProvider.symbolForOperationError(operation)
 
-                    val inputFieldsBody = generateOperationShapeDocs(this, symbolProvider, operation, model)
-                        .joinToString("\n") { "///   - $it" }
+                    val inputFieldsBody =
+                        generateOperationShapeDocs(this, symbolProvider, operation, model)
+                            .joinToString("\n") { "///   - $it" }
 
-                    val inputFieldsHead = if (inputFieldsBody.isNotEmpty()) {
-                        "The fluent builder is configurable:\n"
-                    } else {
-                        "The fluent builder takes no input, just [`send`]($fullPath::send) it."
-                    }
+                    val inputFieldsHead =
+                        if (inputFieldsBody.isNotEmpty()) {
+                            "The fluent builder is configurable:\n"
+                        } else {
+                            "The fluent builder takes no input, just [`send`]($fullPath::send) it."
+                        }
 
                     val outputFieldsBody =
                         generateShapeMemberDocs(this, symbolProvider, output, model).joinToString("\n") {
@@ -347,20 +360,24 @@ class FluentClientGenerator(
                 write("&self.inner")
             }
 
-            val orchestratorScope = arrayOf(
-                *preludeScope,
-                "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                    .resolve("CustomizableOperation"),
-                "HttpResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                    .resolve("client::orchestrator::HttpResponse"),
-                "Operation" to operationSymbol,
-                "OperationError" to errorType,
-                "OperationOutput" to outputType,
-                "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-                "SendResult" to ClientRustModule.Client.customize.toType()
-                    .resolve("internal::SendResult"),
-                "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            )
+            val orchestratorScope =
+                arrayOf(
+                    *preludeScope,
+                    "CustomizableOperation" to
+                        ClientRustModule.Client.customize.toType()
+                            .resolve("CustomizableOperation"),
+                    "HttpResponse" to
+                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                            .resolve("client::orchestrator::HttpResponse"),
+                    "Operation" to operationSymbol,
+                    "OperationError" to errorType,
+                    "OperationOutput" to outputType,
+                    "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
+                    "SendResult" to
+                        ClientRustModule.Client.customize.toType()
+                            .resolve("internal::SendResult"),
+                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                )
             rustTemplate(
                 """
                 /// Sends the request and returns the response.
@@ -454,67 +471,70 @@ class FluentClientGenerator(
     }
 }
 
-private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType = codegenContext.runtimeConfig.let { rc ->
-    RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
-        val api = RuntimeType.smithyRuntimeApiClient(rc)
-        val rt = RuntimeType.smithyRuntime(rc)
-        val behaviorVersionError = "Invalid client configuration: A behavior major version must be set when sending a " +
-            "request or constructing a client. You must set it during client construction or by enabling the " +
-            "`${BehaviorVersionLatest.name}` cargo feature."
-        rustTemplate(
-            """
-            pub(crate) fn base_client_runtime_plugins(
-                mut config: crate::Config,
-            ) -> #{RuntimePlugins} {
-                let mut configured_plugins = #{Vec}::new();
-                ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
-                ##[allow(unused_mut)]
-                let mut behavior_version = config.behavior_version.clone();
-                #{update_bmv}
+private fun baseClientRuntimePluginsFn(codegenContext: ClientCodegenContext): RuntimeType =
+    codegenContext.runtimeConfig.let { rc ->
+        RuntimeType.forInlineFun("base_client_runtime_plugins", ClientRustModule.config) {
+            val api = RuntimeType.smithyRuntimeApiClient(rc)
+            val rt = RuntimeType.smithyRuntime(rc)
+            val behaviorVersionError =
+                "Invalid client configuration: A behavior major version must be set when sending a " +
+                    "request or constructing a client. You must set it during client construction or by enabling the " +
+                    "`${BehaviorVersionLatest.name}` cargo feature."
+            rustTemplate(
+                """
+                pub(crate) fn base_client_runtime_plugins(
+                    mut config: crate::Config,
+                ) -> #{RuntimePlugins} {
+                    let mut configured_plugins = #{Vec}::new();
+                    ::std::mem::swap(&mut config.runtime_plugins, &mut configured_plugins);
+                    ##[allow(unused_mut)]
+                    let mut behavior_version = config.behavior_version.clone();
+                    #{update_bmv}
 
-                let mut plugins = #{RuntimePlugins}::new()
-                    // defaults
-                    .with_client_plugins(#{default_plugins}(
-                        #{DefaultPluginParams}::new()
-                            .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
-                            .with_behavior_version(behavior_version.expect(${behaviorVersionError.dq()}))
-                    ))
-                    // user config
-                    .with_client_plugin(
-                        #{StaticRuntimePlugin}::new()
-                            .with_config(config.config.clone())
-                            .with_runtime_components(config.runtime_components.clone())
-                    )
-                    // codegen config
-                    .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
-                    .with_client_plugin(#{NoAuthRuntimePlugin}::new());
+                    let mut plugins = #{RuntimePlugins}::new()
+                        // defaults
+                        .with_client_plugins(#{default_plugins}(
+                            #{DefaultPluginParams}::new()
+                                .with_retry_partition_name(${codegenContext.serviceShape.sdkId().dq()})
+                                .with_behavior_version(behavior_version.expect(${behaviorVersionError.dq()}))
+                        ))
+                        // user config
+                        .with_client_plugin(
+                            #{StaticRuntimePlugin}::new()
+                                .with_config(config.config.clone())
+                                .with_runtime_components(config.runtime_components.clone())
+                        )
+                        // codegen config
+                        .with_client_plugin(crate::config::ServiceRuntimePlugin::new(config))
+                        .with_client_plugin(#{NoAuthRuntimePlugin}::new());
 
-                for plugin in configured_plugins {
-                    plugins = plugins.with_client_plugin(plugin);
-                }
-                plugins
-            }
-            """,
-            *preludeScope,
-            "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
-            "default_plugins" to rt.resolve("client::defaults::default_plugins"),
-            "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
-            "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
-            "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
-            "update_bmv" to featureGatedBlock(BehaviorVersionLatest) {
-                rustTemplate(
-                    """
-                    if behavior_version.is_none() {
-                        behavior_version = Some(#{BehaviorVersion}::latest());
+                    for plugin in configured_plugins {
+                        plugins = plugins.with_client_plugin(plugin);
                     }
+                    plugins
+                }
+                """,
+                *preludeScope,
+                "DefaultPluginParams" to rt.resolve("client::defaults::DefaultPluginParams"),
+                "default_plugins" to rt.resolve("client::defaults::default_plugins"),
+                "NoAuthRuntimePlugin" to rt.resolve("client::auth::no_auth::NoAuthRuntimePlugin"),
+                "RuntimePlugins" to RuntimeType.runtimePlugins(rc),
+                "StaticRuntimePlugin" to api.resolve("client::runtime_plugin::StaticRuntimePlugin"),
+                "update_bmv" to
+                    featureGatedBlock(BehaviorVersionLatest) {
+                        rustTemplate(
+                            """
+                            if behavior_version.is_none() {
+                                behavior_version = Some(#{BehaviorVersion}::latest());
+                            }
 
-                    """,
-                    "BehaviorVersion" to api.resolve("client::behavior_version::BehaviorVersion"),
-                )
-            },
-        )
+                            """,
+                            "BehaviorVersion" to api.resolve("client::behavior_version::BehaviorVersion"),
+                        )
+                    },
+            )
+        }
     }
-}
 
 /**
  * For a given `operation` shape, return a list of strings where each string describes the name and input type of one of
@@ -537,10 +557,11 @@ private fun generateOperationShapeDocs(
         val builderSetterLink = docLink("$fluentBuilderFullyQualifiedName::${memberShape.setterName()}")
 
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
-        val docs = when (docTrait?.value?.isNotBlank()) {
-            true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
-            else -> "(undocumented)"
-        }
+        val docs =
+            when (docTrait?.value?.isNotBlank()) {
+                true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
+                else -> "(undocumented)"
+            }
 
         "[`$builderInputDoc`]($builderInputLink) / [`$builderSetterDoc`]($builderSetterLink):<br>required: **${memberShape.isRequired}**<br>$docs<br>"
     }
@@ -563,10 +584,11 @@ private fun generateShapeMemberDocs(
         val name = symbolProvider.toMemberName(memberShape)
         val member = symbolProvider.toSymbol(memberShape).rustType().render(fullyQualified = false)
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
-        val docs = when (docTrait?.value?.isNotBlank()) {
-            true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
-            else -> "(undocumented)"
-        }
+        val docs =
+            when (docTrait?.value?.isNotBlank()) {
+                true -> normalizeHtml(writer.escape(docTrait.value)).replace("\n", " ")
+                else -> "(undocumented)"
+            }
 
         "[`$name($member)`](${docLink("$structName::$name")}): $docs"
     }
@@ -582,9 +604,8 @@ internal fun OperationShape.fluentBuilderType(symbolProvider: RustSymbolProvider
  *
  *  * _NOTE: This function generates the links that appear under **"The fluent builder is configurable:"**_
  */
-private fun OperationShape.fullyQualifiedFluentBuilder(
-    symbolProvider: RustSymbolProvider,
-): String = fluentBuilderType(symbolProvider).fullyQualifiedName()
+private fun OperationShape.fullyQualifiedFluentBuilder(symbolProvider: RustSymbolProvider): String =
+    fluentBuilderType(symbolProvider).fullyQualifiedName()
 
 /**
  * Generate a string that looks like a Rust function pointer for documenting a fluent builder method e.g.
@@ -596,11 +617,12 @@ internal fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider)
     val memberName = symbolProvider.toMemberName(this)
     val outerType = symbolProvider.toSymbol(this).rustType().stripOuter<RustType.Option>()
     // We generate Vec/HashMap helpers
-    val renderedType = when (outerType) {
-        is RustType.Vec -> listOf(outerType.member)
-        is RustType.HashMap -> listOf(outerType.key, outerType.member)
-        else -> listOf(outerType)
-    }
+    val renderedType =
+        when (outerType) {
+            is RustType.Vec -> listOf(outerType.member)
+            is RustType.HashMap -> listOf(outerType.key, outerType.member)
+            else -> listOf(outerType)
+        }
     val args = renderedType.joinToString { it.asArgumentType(fullyQualified = false) }
 
     return "$memberName($args)"

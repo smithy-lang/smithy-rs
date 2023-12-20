@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const CRATES_TO_BE_USED_DIRECTLY: &[&str] = ["aws-config"].as_slice();
+const CRATES_TO_BE_USED_DIRECTLY: &[&str] = ["aws-config", "aws-smithy-types-convert"].as_slice();
 
 pub(crate) struct ReadmesExist;
 impl Lint for ReadmesExist {
@@ -78,7 +78,11 @@ fn fix_readme(path: impl AsRef<Path>, to_be_used_directly: bool) -> Result<(bool
 
     let mut contents = fs::read_to_string(path.as_ref())
         .with_context(|| format!("failure to read readme: {:?}", path.as_ref()))?;
-    let updated =
-        anchor::replace_anchor(&mut contents, &anchor::anchors("footer"), &footer_contents)?;
+    let updated = anchor::replace_anchor(
+        &mut contents,
+        &anchor::anchors("footer"),
+        &footer_contents,
+        None,
+    )?;
     Ok((updated, contents))
 }

@@ -16,13 +16,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 object CrateVersionCustomization {
     fun pkgVersion(module: RustModule): RuntimeType = RuntimeType(module.fullyQualifiedPath() + "::PKG_VERSION")
 
-    fun extras(rustCrate: RustCrate, module: RustModule) =
-        rustCrate.withModule(module) {
-            rust(
-                """
-                /// Crate version number.
-                pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
-                """,
-            )
-        }
+    fun extras(
+        rustCrate: RustCrate,
+        module: RustModule,
+    ) = rustCrate.withModule(module) {
+        rust(
+            """
+            /// Crate version number.
+            pub static PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+            """,
+        )
+    }
 }

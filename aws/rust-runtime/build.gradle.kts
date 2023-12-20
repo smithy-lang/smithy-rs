@@ -12,6 +12,11 @@ group = "software.amazon.aws.rustruntime"
 
 version = "0.0.3"
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 tasks.jar {
     from("./") {
         include("aws-inlineable/src/*.rs")
