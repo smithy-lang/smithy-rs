@@ -164,6 +164,5 @@ jobs:
             owner: context.repo.owner,
             repo: context.repo.repo,
             body: '${{ steps.bot-messages.outputs.codegen-diff }}\n\n' +
-              '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n'
-              
+              '${{ needs.generate-doc-preview.outputs.bot-message }}\n\n'              
           })

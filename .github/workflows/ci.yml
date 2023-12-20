@@ -317,6 +317,40 @@ jobs:
       with:
         action: check-aws-sdk-examples
 
+  compiletime-benchmark:
+    runs-on: ubuntu-latest
+    name: Run Compiletime Benchmark
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    outputs:
+      compiletime-benchmark: ${{ steps.compiletime-benchmark.outputs.compiletime-benchmark }}
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions/cache@v3
+      name: Gradle Cache
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle-
+      # JDK is needed to generate code
+    - name: Set up JDK
+      uses: actions/setup-java@v3
+      with:
+        distribution: corretto
+        java-package: jdk
+        java-version: ${{ env.java_version }}
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+    - name: run benchmark
+      id: run-compiletime-benchmark
+      run: bash tools/ci-scripts/compiletime-benchmark && cat /tmp/compiletime-benchmark.md >> "$GITHUB_OUTPUT"
+
   # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all:
