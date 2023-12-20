@@ -161,8 +161,8 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
-  test-sdk:
-    name: Test the SDK with `aws_sdk_unstable` on.
+  test-with-serde:
+    name: Test the SDK with `serde` feature enabled.
     needs: generate
     runs-on: ${{ matrix.test.runner }}
     # To avoid repeating setup boilerplate, we have the actual test commands
