@@ -329,22 +329,10 @@ jobs:
       compiletime-benchmark: ${{ steps.compiletime-benchmark.outputs.compiletime-benchmark }}
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/cache@v3
-      name: Gradle Cache
       with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-      # JDK is needed to generate code
-    - name: Set up JDK
-      uses: actions/setup-java@v3
-      with:
-        distribution: corretto
-        java-package: jdk
-        java-version: ${{ env.java_version }}
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
