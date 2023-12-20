@@ -7,8 +7,6 @@
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
-export RUSTFLAG="--cfg aws_sdk_unstable"
-
 set -eu
 cd smithy-rs
 
