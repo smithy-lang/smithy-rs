@@ -76,6 +76,7 @@ class ServerInstantiator(codegenContext: CodegenContext, customWritable: CustomW
         ServerBuilderKindBehavior(codegenContext),
         defaultsForRequiredFields = true,
         customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
+        // Construct with direct pattern to more closely replicate actual server customer usage
         constructPattern = InstantiatorConstructPattern.DIRECT,
         customWritable = customWritable,
     )
