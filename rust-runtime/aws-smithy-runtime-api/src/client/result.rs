@@ -422,6 +422,9 @@ impl<E, R> SdkError<E, R> {
     /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { unimplemented!() }
     /// # }
     /// # impl std::error::Error for GetObjectError {}
+    /// # impl GetObjectError {
+    /// #   fn is_not_found(&self) -> boolean { true }
+    /// # }
     /// # fn example() -> Result<(), GetObjectError> {
     /// # let sdk_err = SdkError::service_error(GetObjectError::NoSuchKey(()), ());
     /// if sdk_err.as_service_error().map(|e|e.is_not_found()) == Some(true) {
