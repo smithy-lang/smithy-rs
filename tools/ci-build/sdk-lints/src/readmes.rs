@@ -8,8 +8,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const CRATES_TO_BE_USED_DIRECTLY: &[&str] =
-    ["aws-config", "aws-smithy-mocks-experimental"].as_slice();
+const CRATES_TO_BE_USED_DIRECTLY: &[&str] = ["aws-config", "aws-smithy-types-convert"].as_slice();
 
 pub(crate) struct ReadmesExist;
 impl Lint for ReadmesExist {
