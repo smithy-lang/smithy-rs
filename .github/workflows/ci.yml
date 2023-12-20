@@ -320,6 +320,7 @@ jobs:
   compiletime-benchmark:
     runs-on: ubuntu-latest
     name: Run Compiletime Benchmark
+    needs: generate
     permissions:
       id-token: write
       contents: read
