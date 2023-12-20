@@ -167,6 +167,8 @@ jobs:
     runs-on: ${{ matrix.test.runner }}
     env:
       RUSTFLAGS: --cfg aws_sdk_unstable
+      CARGO_FEATURE_SERDE_SERIALIZE: true
+      CARGO_FEATURE_SERDE_DESERIALIZE: true
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
