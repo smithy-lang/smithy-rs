@@ -7,7 +7,6 @@
 # this job runs `cargo check` only instead of `cargo test --all-features`
 
 set -eux
-
 cd aws-sdk
 
 # Remove examples from workspace
