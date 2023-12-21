@@ -10,6 +10,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.shapes.IntEnumShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -114,6 +115,7 @@ class BaseSymbolMetadataProvider(
             // This covers strings with the enum trait for now, and can be removed once we're fully on EnumShape
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1700): Remove this `is StringShape` match arm
             is StringShape -> RustMetadata(visibility = Visibility.PUBLIC)
+            is IntEnumShape -> RustMetadata(visibility = Visibility.PUBLIC)
 
             else -> TODO("Unrecognized container type: $container")
         }
