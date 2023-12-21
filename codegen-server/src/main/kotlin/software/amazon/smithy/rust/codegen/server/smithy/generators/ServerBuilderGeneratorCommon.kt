@@ -32,12 +32,15 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.traits.DefaultTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.map
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.PrimitiveInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
@@ -79,8 +82,14 @@ fun generateFallbackCodeToDefaultValue(
     symbolProvider: RustSymbolProvider,
     publicConstrainedTypes: Boolean,
 ) {
-    val defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
+    var defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
     val targetShape = model.expectShape(member.target)
+    val targetSymbol = symbolProvider.toSymbol(targetShape)
+    // We need an .into() conversion to create defaults for the server types. A larger scale refactoring could store this information in the
+    // symbol, however, retrieving it in this manner works for the moment.
+    if (targetSymbol.rustType().qualifiedName().startsWith("::aws_smithy_http_server_python")) {
+        defaultValue = defaultValue.map { rust("#T.into()", it) }
+    }
 
     if (member.isStreaming(model)) {
         writer.rust(".unwrap_or_default()")
