@@ -7,6 +7,7 @@ use anyhow::Context;
 use std::borrow::Cow;
 
 use std::fmt::{Display, Formatter};
+use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug)]
@@ -136,6 +137,13 @@ where
     T: Fix,
 {
     fn check(&self, path: impl AsRef<Path>) -> anyhow::Result<Vec<LintError>> {
-        self.fix(path).map(|(errs, _)| errs)
+        let old_contents = read_to_string(path.as_ref())?;
+        let (mut errs, new_contents) = self.fix(path)?;
+        if new_contents != old_contents {
+            errs.push(LintError::new(
+                "fix would have made changes. Run `sdk-lints fix`",
+            ));
+        }
+        Ok(errs)
     }
 }

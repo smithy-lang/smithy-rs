@@ -35,22 +35,21 @@ data class Version(
         }
 
         // Returns full version in the "{smithy_rs_version}-{git_commit_hash}" format
-        fun fullVersion(): String =
-            fromDefaultResource().fullVersion
+        fun fullVersion(): String = fromDefaultResource().fullVersion
 
-        fun stableCrateVersion(): String =
-            fromDefaultResource().stableCrateVersion
+        fun stableCrateVersion(): String = fromDefaultResource().stableCrateVersion
 
-        fun unstableCrateVersion(): String =
-            fromDefaultResource().unstableCrateVersion
+        fun unstableCrateVersion(): String = fromDefaultResource().unstableCrateVersion
 
         fun crateVersion(crate: String): String {
             val version = fromDefaultResource()
             return version.crates[crate] ?: version.unstableCrateVersion
         }
-        fun fromDefaultResource(): Version = parse(
-            Version::class.java.getResource(VERSION_FILENAME)?.readText()
-                ?: throw CodegenException("$VERSION_FILENAME does not exist"),
-        )
+
+        fun fromDefaultResource(): Version =
+            parse(
+                Version::class.java.getResource(VERSION_FILENAME)?.readText()
+                    ?: throw CodegenException("$VERSION_FILENAME does not exist"),
+            )
     }
 }

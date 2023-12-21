@@ -211,6 +211,7 @@ fn check_docs_rs(package: &Package<DocsRsMetadata>) -> Vec<LintError> {
 const DEFAULT_DOCS_RS_SECTION: &str = r#"
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 "#;
 

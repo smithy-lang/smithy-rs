@@ -31,38 +31,38 @@ import software.amazon.smithy.rust.codegen.server.smithy.transformers.ShapesReac
 import java.util.stream.Stream
 
 class ConstrainedMapGeneratorTest {
-
     data class TestCase(val model: Model, val validMap: ObjectNode, val invalidMap: ObjectNode)
 
     class ConstrainedMapGeneratorTestProvider : ArgumentsProvider {
-        private val testCases = listOf(
-            // Min and max.
-            Triple("@length(min: 11, max: 12)", 11, 13),
-            // Min equal to max.
-            Triple("@length(min: 11, max: 11)", 11, 12),
-            // Only min.
-            Triple("@length(min: 11)", 15, 10),
-            // Only max.
-            Triple("@length(max: 11)", 11, 12),
-        ).map {
-            val validStringMap = List(it.second) { index -> index.toString() to "value" }.toMap()
-            val inValidStringMap = List(it.third) { index -> index.toString() to "value" }.toMap()
-            Triple(it.first, ObjectNode.fromStringMap(validStringMap), ObjectNode.fromStringMap(inValidStringMap))
-        }.map { (trait, validMap, invalidMap) ->
-            TestCase(
-                """
-                namespace test
+        private val testCases =
+            listOf(
+                // Min and max.
+                Triple("@length(min: 11, max: 12)", 11, 13),
+                // Min equal to max.
+                Triple("@length(min: 11, max: 11)", 11, 12),
+                // Only min.
+                Triple("@length(min: 11)", 15, 10),
+                // Only max.
+                Triple("@length(max: 11)", 11, 12),
+            ).map {
+                val validStringMap = List(it.second) { index -> index.toString() to "value" }.toMap()
+                val inValidStringMap = List(it.third) { index -> index.toString() to "value" }.toMap()
+                Triple(it.first, ObjectNode.fromStringMap(validStringMap), ObjectNode.fromStringMap(inValidStringMap))
+            }.map { (trait, validMap, invalidMap) ->
+                TestCase(
+                    """
+                    namespace test
 
-                $trait
-                map ConstrainedMap {
-                    key: String,
-                    value: String
-                }
-                """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform),
-                validMap,
-                invalidMap,
-            )
-        }
+                    $trait
+                    map ConstrainedMap {
+                        key: String,
+                        value: String
+                    }
+                    """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform),
+                    validMap,
+                    invalidMap,
+                )
+            }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             testCases.map { Arguments.of(it) }.stream()
@@ -129,7 +129,8 @@ class ConstrainedMapGeneratorTest {
 
     @Test
     fun `type should not be constructable without using a constructor`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @length(min: 1, max: 69)
@@ -137,7 +138,7 @@ class ConstrainedMapGeneratorTest {
                 key: String,
                 value: String
             }
-        """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
+            """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
         val constrainedMapShape = model.lookup<MapShape>("test#ConstrainedMap")
 
         val writer = RustWriter.forModule(ServerRustModule.Model.name)

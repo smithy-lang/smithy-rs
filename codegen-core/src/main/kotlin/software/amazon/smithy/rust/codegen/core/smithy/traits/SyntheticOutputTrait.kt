@@ -17,7 +17,7 @@ import software.amazon.smithy.model.traits.AnnotationTrait
  */
 class SyntheticOutputTrait constructor(val operation: ShapeId, val originalId: ShapeId?) :
     AnnotationTrait(ID, Node.objectNode()) {
-    companion object {
-        val ID: ShapeId = ShapeId.from("smithy.api.internal#syntheticOutput")
+        companion object {
+            val ID: ShapeId = ShapeId.from("smithy.api.internal#syntheticOutput")
+        }
     }
-}

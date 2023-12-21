@@ -41,16 +41,20 @@ class OperationInputTestDecorator : ClientCodegenDecorator {
     override val name: String = "OperationInputTest"
     override val order: Byte = 0
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val endpointTests = EndpointTypesGenerator.fromContext(codegenContext).tests.orNullIfEmpty() ?: return
         rustCrate.integrationTest("endpoint_tests") {
             Attribute(Attribute.cfg(Attribute.feature("test-util"))).render(this, AttributeKind.Inner)
-            val tests = endpointTests.flatMap { test ->
-                val generator = OperationInputTestGenerator(codegenContext, test)
-                test.operationInputs.filterNot { usesDeprecatedBuiltIns(it) }.map { operationInput ->
-                    generator.generateInput(operationInput)
+            val tests =
+                endpointTests.flatMap { test ->
+                    val generator = OperationInputTestGenerator(codegenContext, test)
+                    test.operationInputs.filterNot { usesDeprecatedBuiltIns(it) }.map { operationInput ->
+                        generator.generateInput(operationInput)
+                    }
                 }
-            }
             tests.join("\n")(this)
         }
     }
@@ -122,89 +126,94 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private val model = ctx.model
     private val instantiator = ClientInstantiator(ctx)
 
-    fun generateInput(testOperationInput: EndpointTestOperationInput) = writable {
-        val operationName = testOperationInput.operationName.toSnakeCase()
-        tokioTest(safeName("operation_input_test_$operationName")) {
-            rustTemplate(
-                """
-                /* builtIns: ${escape(Node.prettyPrintJson(testOperationInput.builtInParams))} */
-                /* clientParams: ${escape(Node.prettyPrintJson(testOperationInput.clientParams))} */
-                let (http_client, rcvr) = #{capture_request}(None);
-                let conf = #{conf};
-                let client = $moduleName::Client::from_conf(conf);
-                let _result = dbg!(#{invoke_operation});
-                #{assertion}
-                """,
-                "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-                "conf" to config(testOperationInput),
-                "invoke_operation" to operationInvocation(testOperationInput),
-                "assertion" to writable {
-                    test.expect.endpoint.ifPresent { endpoint ->
-                        val uri = escape(endpoint.url)
-                        rustTemplate(
-                            """
-                            let req = rcvr.expect_request();
-                            let uri = req.uri().to_string();
-                            assert!(uri.starts_with(${uri.dq()}), "expected URI to start with `$uri` but it was `{}`", uri);
-                            """,
-                        )
-                    }
-                    test.expect.error.ifPresent { error ->
-                        val expectedError =
-                            escape("expected error: $error [${test.documentation.orNull() ?: "no docs"}]")
-                        val escapedError = escape(error)
-                        rustTemplate(
-                            """
-                            rcvr.expect_no_request();
-                            let error = _result.expect_err(${expectedError.dq()});
-                            assert!(
-                                format!("{:?}", error).contains(${escapedError.dq()}),
-                                "expected error to contain `$escapedError` but it was {:?}", error
-                            );
-                            """,
-                        )
-                    }
-                },
-            )
+    fun generateInput(testOperationInput: EndpointTestOperationInput) =
+        writable {
+            val operationName = testOperationInput.operationName.toSnakeCase()
+            tokioTest(safeName("operation_input_test_$operationName")) {
+                rustTemplate(
+                    """
+                    /* builtIns: ${escape(Node.prettyPrintJson(testOperationInput.builtInParams))} */
+                    /* clientParams: ${escape(Node.prettyPrintJson(testOperationInput.clientParams))} */
+                    let (http_client, rcvr) = #{capture_request}(None);
+                    let conf = #{conf};
+                    let client = $moduleName::Client::from_conf(conf);
+                    let _result = dbg!(#{invoke_operation});
+                    #{assertion}
+                    """,
+                    "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+                    "conf" to config(testOperationInput),
+                    "invoke_operation" to operationInvocation(testOperationInput),
+                    "assertion" to
+                        writable {
+                            test.expect.endpoint.ifPresent { endpoint ->
+                                val uri = escape(endpoint.url)
+                                rustTemplate(
+                                    """
+                                    let req = rcvr.expect_request();
+                                    let uri = req.uri().to_string();
+                                    assert!(uri.starts_with(${uri.dq()}), "expected URI to start with `$uri` but it was `{}`", uri);
+                                    """,
+                                )
+                            }
+                            test.expect.error.ifPresent { error ->
+                                val expectedError =
+                                    escape("expected error: $error [${test.documentation.orNull() ?: "no docs"}]")
+                                val escapedError = escape(error)
+                                rustTemplate(
+                                    """
+                                    rcvr.expect_no_request();
+                                    let error = _result.expect_err(${expectedError.dq()});
+                                    assert!(
+                                        format!("{:?}", error).contains(${escapedError.dq()}),
+                                        "expected error to contain `$escapedError` but it was {:?}", error
+                                    );
+                                    """,
+                                )
+                            }
+                        },
+                )
+            }
         }
-    }
 
-    private fun operationInvocation(testOperationInput: EndpointTestOperationInput) = writable {
-        rust("client.${testOperationInput.operationName.toSnakeCase()}()")
-        val operationInput =
-            model.expectShape(ctx.operationId(testOperationInput), OperationShape::class.java).inputShape(model)
-        testOperationInput.operationParams.members.forEach { (key, value) ->
-            val member = operationInput.expectMember(key.value)
-            rustTemplate(
-                ".${member.setterName()}(#{value})",
-                "value" to instantiator.generate(member, value),
-            )
+    private fun operationInvocation(testOperationInput: EndpointTestOperationInput) =
+        writable {
+            rust("client.${testOperationInput.operationName.toSnakeCase()}()")
+            val operationInput =
+                model.expectShape(ctx.operationId(testOperationInput), OperationShape::class.java).inputShape(model)
+            testOperationInput.operationParams.members.forEach { (key, value) ->
+                val member = operationInput.expectMember(key.value)
+                rustTemplate(
+                    ".${member.setterName()}(#{value})",
+                    "value" to instantiator.generate(member, value),
+                )
+            }
+            rust(".send().await")
         }
-        rust(".send().await")
-    }
 
     /** initialize service config for test */
-    private fun config(operationInput: EndpointTestOperationInput) = writable {
-        rustBlock("") {
-            Attribute.AllowUnusedMut.render(this)
-            rust("let mut builder = $moduleName::Config::builder().with_test_defaults().http_client(http_client);")
-            operationInput.builtInParams.members.forEach { (builtIn, value) ->
-                val setter = endpointCustomizations.firstNotNullOfOrNull {
-                    it.setBuiltInOnServiceConfig(
-                        builtIn.value,
-                        value,
-                        "builder",
-                    )
+    private fun config(operationInput: EndpointTestOperationInput) =
+        writable {
+            rustBlock("") {
+                Attribute.AllowUnusedMut.render(this)
+                rust("let mut builder = $moduleName::Config::builder().with_test_defaults().http_client(http_client);")
+                operationInput.builtInParams.members.forEach { (builtIn, value) ->
+                    val setter =
+                        endpointCustomizations.firstNotNullOfOrNull {
+                            it.setBuiltInOnServiceConfig(
+                                builtIn.value,
+                                value,
+                                "builder",
+                            )
+                        }
+                    if (setter != null) {
+                        setter(this)
+                    } else {
+                        Logger.getLogger("OperationTestGenerator").warning("No provider for ${builtIn.value}")
+                    }
                 }
-                if (setter != null) {
-                    setter(this)
-                } else {
-                    Logger.getLogger("OperationTestGenerator").warning("No provider for ${builtIn.value}")
-                }
+                rust("builder.build()")
             }
-            rust("builder.build()")
         }
-    }
 }
 
 fun ClientCodegenContext.operationId(testOperationInput: EndpointTestOperationInput): ShapeId =

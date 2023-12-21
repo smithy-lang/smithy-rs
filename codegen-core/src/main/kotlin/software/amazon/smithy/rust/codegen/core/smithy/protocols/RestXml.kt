@@ -21,17 +21,19 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 open class RestXml(val codegenContext: CodegenContext) : Protocol {
     private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "Headers" to RuntimeType.headers(runtimeConfig),
-        "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+        )
 
-    protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
-        true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
-        false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
-    }
+    protected val restXmlErrors: RuntimeType =
+        when (restXml.isNoErrorWrapping) {
+            true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
+            false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
+        }
 
     override val httpBindingResolver: HttpBindingResolver =
         HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))

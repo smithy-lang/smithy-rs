@@ -13,9 +13,10 @@ fun stripEndpointTrait(hostPrefix: String): (Model) -> Model {
     return { model: Model ->
         ModelTransformer.create()
             .removeTraitsIf(model) { _, trait ->
-                trait is EndpointTrait && trait.hostPrefix.labels.any {
-                    it.isLabel && it.content == hostPrefix
-                }
+                trait is EndpointTrait &&
+                    trait.hostPrefix.labels.any {
+                        it.isLabel && it.content == hostPrefix
+                    }
             }
     }
 }

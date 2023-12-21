@@ -21,23 +21,25 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Struc
 class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val ec2QueryErrors: RuntimeType = RuntimeType.ec2QueryErrors(runtimeConfig)
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "Headers" to RuntimeType.headers(runtimeConfig),
-        "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+        )
 
-    override val httpBindingResolver: HttpBindingResolver = StaticHttpBindingResolver(
-        codegenContext.model,
-        HttpTrait.builder()
-            .code(200)
-            .method("POST")
-            .uri(UriPattern.parse("/"))
-            .build(),
-        "application/x-www-form-urlencoded",
-        "text/xml",
-    )
+    override val httpBindingResolver: HttpBindingResolver =
+        StaticHttpBindingResolver(
+            codegenContext.model,
+            HttpTrait.builder()
+                .code(200)
+                .method("POST")
+                .uri(UriPattern.parse("/"))
+                .build(),
+            "application/x-www-form-urlencoded",
+            "text/xml",
+        )
 
     override val defaultTimestampFormat: TimestampFormatTrait.Format = TimestampFormatTrait.Format.DATE_TIME
 

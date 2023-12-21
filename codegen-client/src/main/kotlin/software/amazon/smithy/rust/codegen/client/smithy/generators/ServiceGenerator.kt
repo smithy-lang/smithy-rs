@@ -41,10 +41,11 @@ class ServiceGenerator(
         ).render(rustCrate)
 
         rustCrate.withModule(ClientRustModule.config) {
-            val serviceConfigGenerator = ServiceConfigGenerator.withBaseBehavior(
-                codegenContext,
-                extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
-            )
+            val serviceConfigGenerator =
+                ServiceConfigGenerator.withBaseBehavior(
+                    codegenContext,
+                    extraCustomizations = decorator.configCustomizations(codegenContext, listOf()),
+                )
             serviceConfigGenerator.render(this)
 
             // Enable users to opt in to the test-utils in the runtime crate

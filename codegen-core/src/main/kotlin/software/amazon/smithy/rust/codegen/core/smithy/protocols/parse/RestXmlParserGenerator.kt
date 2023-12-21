@@ -24,11 +24,12 @@ class RestXmlParserGenerator(
         ) { context, inner ->
             val shapeName = context.outputShapeName
             // Get the non-synthetic version of the outputShape and check to see if it has the `AllowInvalidXmlRoot` trait
-            val allowInvalidRoot = context.model.getShape(context.shape.outputShape).orNull().let { shape ->
-                shape?.getTrait<SyntheticOutputTrait>()?.originalId.let { shapeId ->
-                    context.model.getShape(shapeId).orNull()?.hasTrait<AllowInvalidXmlRoot>() ?: false
+            val allowInvalidRoot =
+                context.model.getShape(context.shape.outputShape).orNull().let { shape ->
+                    shape?.getTrait<SyntheticOutputTrait>()?.originalId.let { shapeId ->
+                        context.model.getShape(shapeId).orNull()?.hasTrait<AllowInvalidXmlRoot>() ?: false
+                    }
                 }
-            }
 
             // If we DON'T allow the XML root to be invalid, insert code to check for and report a mismatch
             if (!allowInvalidRoot) {
