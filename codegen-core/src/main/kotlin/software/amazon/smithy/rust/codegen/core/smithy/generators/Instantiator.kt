@@ -56,6 +56,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomizat
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
@@ -468,18 +469,19 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                 }
 
                 is StringShape -> renderString(shape, data as StringNode)(this)
-                is NumberShape -> when (data) {
-                    is StringNode -> {
-                        val numberSymbol = symbolProvider.toSymbol(shape)
-                        // support Smithy custom values, such as Infinity
-                        rust(
-                            """<#T as #T>::parse_smithy_primitive(${data.value.dq()}).expect("invalid string for number")""",
-                            numberSymbol,
-                            RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
-                        )
+                is NumberShape -> {
+                    val value = when (data) {
+                        is StringNode -> data.value
+                        is NumberNode -> data.value.toString()
+                        else -> PANIC("Unexpected value type ${data.type} for default")
                     }
-
-                    is NumberNode -> write(data.value)
+                    val numberSymbol = symbolProvider.toSymbol(shape)
+                    // support Smithy custom values, such as Infinity
+                    rust(
+                        """<#T as #T>::parse_smithy_primitive(${value.dq()}).expect("invalid string for number")""",
+                        numberSymbol,
+                        RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Parse"),
+                    )
                 }
 
                 is BooleanShape -> rust(data.asBooleanNode().get().toString())

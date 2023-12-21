@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.SimpleShape
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -33,7 +35,7 @@ class DefaultValueGenerator(
             is Default.RustDefault -> DefaultValue(isRustDefault = true, writable("Default::default"))
             is Default.NonZeroDefault -> {
                 val instantiation = instantiator.instantiate(target as SimpleShape, default.value)
-                DefaultValue(isRustDefault = false, writable { rust("||#T", instantiation) })
+                DefaultValue(isRustDefault = false, writable { rust("|| #T", instantiation) })
             }
         }
     }
