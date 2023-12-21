@@ -371,7 +371,7 @@ fun TestWriterDelegator.compileAndTest(
 
     val testOutput = "cargo test".runCommand(baseDir, env)
     if (runClippy) {
-        "cargo clippy --all-features".runCommand(baseDir)
+        "cargo clippy --all-features".runCommand(baseDir, env)
     }
     return testOutput
 }
