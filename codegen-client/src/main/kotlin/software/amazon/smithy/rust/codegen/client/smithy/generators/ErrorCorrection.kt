@@ -58,28 +58,32 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
     val instantiator = PrimitiveInstantiator(runtimeConfig, symbolProvider)
     return writable {
         when {
-            target is EnumShape || target.hasTrait<EnumTrait>() -> rustTemplate(
-                """"no value was set".parse::<#{Shape}>().ok()""",
-                "Shape" to targetSymbol,
-            )
+            target is EnumShape || target.hasTrait<EnumTrait>() ->
+                rustTemplate(
+                    """"no value was set".parse::<#{Shape}>().ok()""",
+                    "Shape" to targetSymbol,
+                )
 
-            target is BooleanShape || target is NumberShape || target is StringShape || target is DocumentShape || target is ListShape || target is MapShape -> rust(
-                "Some(Default::default())",
-            )
+            target is BooleanShape || target is NumberShape || target is StringShape || target is DocumentShape || target is ListShape || target is MapShape ->
+                rust(
+                    "Some(Default::default())",
+                )
 
-            target is StructureShape -> rustTemplate(
-                "{ let builder = #{Builder}::default(); #{instantiate} }",
-                "Builder" to symbolProvider.symbolForBuilder(target),
-                "instantiate" to builderInstantiator().finalizeBuilder("builder", target).map {
-                    if (BuilderGenerator.hasFallibleBuilder(target, symbolProvider)) {
-                        rust("#T.ok()", it)
-                    } else {
-                        it.some()(this)
-                    }
-                }.letIf(memberSymbol.isRustBoxed()) {
-                    it.plus { rustTemplate(".map(#{Box}::new)", *preludeScope) }
-                },
-            )
+            target is StructureShape ->
+                rustTemplate(
+                    "{ let builder = #{Builder}::default(); #{instantiate} }",
+                    "Builder" to symbolProvider.symbolForBuilder(target),
+                    "instantiate" to
+                        builderInstantiator().finalizeBuilder("builder", target).map {
+                            if (BuilderGenerator.hasFallibleBuilder(target, symbolProvider)) {
+                                rust("#T.ok()", it)
+                            } else {
+                                it.some()(this)
+                            }
+                        }.letIf(memberSymbol.isRustBoxed()) {
+                            it.plus { rustTemplate(".map(#{Box}::new)", *preludeScope) }
+                        },
+                )
 
             target is TimestampShape -> instantiator.instantiate(target, Node.from(0)).some()(this)
             target is BlobShape -> instantiator.instantiate(target, Node.from("")).some()(this)
@@ -90,17 +94,18 @@ private fun ClientCodegenContext.errorCorrectedDefault(member: MemberShape): Wri
 
 fun ClientCodegenContext.correctErrors(shape: StructureShape): RuntimeType? {
     val name = symbolProvider.shapeFunctionName(serviceShape, shape) + "_correct_errors"
-    val corrections = writable {
-        shape.members().forEach { member ->
-            val memberName = symbolProvider.toMemberName(member)
-            errorCorrectedDefault(member)?.also { default ->
-                rustTemplate(
-                    """if builder.$memberName.is_none() { builder.$memberName = #{default} }""",
-                    "default" to default,
-                )
+    val corrections =
+        writable {
+            shape.members().forEach { member ->
+                val memberName = symbolProvider.toMemberName(member)
+                errorCorrectedDefault(member)?.also { default ->
+                    rustTemplate(
+                        """if builder.$memberName.is_none() { builder.$memberName = #{default} }""",
+                        "default" to default,
+                    )
+                }
             }
         }
-    }
 
     if (corrections.isEmpty()) {
         return null

@@ -53,21 +53,24 @@ class SmithyTypesPubUseExtraTest {
     private fun initialize(model: Model): Pair<CodegenContext, RustCrate> {
         val codegenContext = testCodegenContext(model)
 
-        val (context, _) = generatePluginContext(
-            model,
-            runtimeConfig = codegenContext.runtimeConfig,
-        )
-        val rustCrate = RustCrate(
-            context.fileManifest,
-            codegenContext.symbolProvider,
-            codegenContext.settings.codegenConfig,
-            codegenContext.expectModuleDocProvider(),
-        )
+        val (context, _) =
+            generatePluginContext(
+                model,
+                runtimeConfig = codegenContext.runtimeConfig,
+            )
+        val rustCrate =
+            RustCrate(
+                context.fileManifest,
+                codegenContext.symbolProvider,
+                codegenContext.settings.codegenConfig,
+                codegenContext.expectModuleDocProvider(),
+            )
 
         return Pair(codegenContext, rustCrate)
     }
 
     private fun reexportsWithEmptyModel() = reexportsWithMember()
+
     private fun reexportsWithMember(
         inputMember: String = "",
         outputMember: String = "",
@@ -83,19 +86,29 @@ class SmithyTypesPubUseExtraTest {
         writer.toString()
     }
 
-    private fun assertDoesntHaveReexports(reexports: String, expectedTypes: List<String>) =
-        expectedTypes.forEach { assertDoesntHaveReexports(reexports, it) }
+    private fun assertDoesntHaveReexports(
+        reexports: String,
+        expectedTypes: List<String>,
+    ) = expectedTypes.forEach { assertDoesntHaveReexports(reexports, it) }
 
-    private fun assertDoesntHaveReexports(reexports: String, type: String) {
+    private fun assertDoesntHaveReexports(
+        reexports: String,
+        type: String,
+    ) {
         if (reexports.contains(type)) {
             throw AssertionError("Expected $type to NOT be re-exported, but it was.")
         }
     }
 
-    private fun assertHasReexports(reexports: String, expectedTypes: List<String>) =
-        expectedTypes.forEach { assertHasReexport(reexports, it) }
+    private fun assertHasReexports(
+        reexports: String,
+        expectedTypes: List<String>,
+    ) = expectedTypes.forEach { assertHasReexport(reexports, it) }
 
-    private fun assertHasReexport(reexports: String, type: String) {
+    private fun assertHasReexport(
+        reexports: String,
+        type: String,
+    ) {
         if (!reexports.contains(type)) {
             throw AssertionError("Expected $type to be re-exported. Re-exported types:\n$reexports")
         }

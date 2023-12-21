@@ -44,7 +44,7 @@ import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.hasPublicConstrainedWrapperTupleType
 
-/**
+/*
  * Some common freestanding functions shared across:
  *     - [ServerBuilderGenerator]; and
  *     - [ServerBuilderGeneratorWithoutPublicConstrainedTypes],
@@ -54,7 +54,11 @@ import software.amazon.smithy.rust.codegen.server.smithy.hasPublicConstrainedWra
 /**
  * Returns a writable to render the return type of the server builders' `build()` method.
  */
-fun buildFnReturnType(isBuilderFallible: Boolean, structureSymbol: Symbol, lifetime: String) = writable {
+fun buildFnReturnType(
+    isBuilderFallible: Boolean,
+    structureSymbol: Symbol,
+    lifetime: String,
+) = writable {
     if (isBuilderFallible) {
         rust("Result<#T $lifetime, ConstraintViolation>", structureSymbol)
     } else {
@@ -125,7 +129,6 @@ fun defaultValue(
         CodegenException("Default value $node for member shape ${member.id} is unsupported or cannot exist; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     when (val target = model.expectShape(member.target)) {
         is EnumShape -> PrimitiveInstantiator(runtimeConfig, symbolProvider).instantiate(target, node)(this)
-
         is ByteShape -> rust(node.expectNumberNode().value.toString() + "i8")
         is ShortShape -> rust(node.expectNumberNode().value.toString() + "i16")
         is IntegerShape -> rust(node.expectNumberNode().value.toString() + "i32")
@@ -146,8 +149,6 @@ fun defaultValue(
                     "SmithyTypes" to types,
                 )
             }
-            else -> throw unsupportedDefaultValueException
-        }
         is ListShape -> {
             check(node is ArrayNode && node.isEmpty)
             rust("Vec::new()")
@@ -160,10 +161,11 @@ fun defaultValue(
 
         is DocumentShape -> {
             when (node) {
-                is NullNode -> rustTemplate(
-                    "#{SmithyTypes}::Document::Null",
-                    "SmithyTypes" to types,
-                )
+                is NullNode ->
+                    rustTemplate(
+                        "#{SmithyTypes}::Document::Null",
+                        "SmithyTypes" to types,
+                    )
 
                 is BooleanNode -> rustTemplate(
                     """#{SmithyTypes}::Document::Bool(${node.value})""",
@@ -177,10 +179,11 @@ fun defaultValue(
 
                 is NumberNode -> {
                     val value = node.value.toString()
-                    val variant = when (node.value) {
-                        is Float, is Double -> "Float"
-                        else -> if (node.value.toLong() >= 0) "PosInt" else "NegInt"
-                    }
+                    val variant =
+                        when (node.value) {
+                            is Float, is Double -> "Float"
+                            else -> if (node.value.toLong() >= 0) "PosInt" else "NegInt"
+                        }
                     rustTemplate(
                         "#{SmithyTypes}::Document::Number(#{SmithyTypes}::Number::$variant($value))",
                         "SmithyTypes" to types,

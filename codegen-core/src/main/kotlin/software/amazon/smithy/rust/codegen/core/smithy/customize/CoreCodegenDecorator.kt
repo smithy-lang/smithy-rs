@@ -43,12 +43,19 @@ interface CoreCodegenDecorator<CodegenContext, CodegenSettings> {
     /**
      * Hook to transform the Smithy model before codegen takes place.
      */
-    fun transformModel(service: ServiceShape, model: Model, settings: CodegenSettings): Model = model
+    fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: CodegenSettings,
+    ): Model = model
 
     /**
      * Hook to add additional modules to the generated crate.
      */
-    fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {}
+    fun extras(
+        codegenContext: CodegenContext,
+        rustCrate: RustCrate,
+    ) {}
 
     /**
      * Customize the documentation provider for module documentation.
@@ -84,6 +91,7 @@ interface CoreCodegenDecorator<CodegenContext, CodegenSettings> {
     ): List<StructureCustomization> = baseCustomizations
 
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): Move builder customizations into `ClientCodegenDecorator`
+
     /**
      * Hook to customize generated builders.
      */
@@ -124,11 +132,18 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, CodegenSettings, Dec
             customizations.deepMergeWith(decorator.crateManifestCustomizations(codegenContext))
         }
 
-    final override fun extras(codegenContext: CodegenContext, rustCrate: RustCrate) {
+    final override fun extras(
+        codegenContext: CodegenContext,
+        rustCrate: RustCrate,
+    ) {
         return orderedDecorators.forEach { it.extras(codegenContext, rustCrate) }
     }
 
-    final override fun transformModel(service: ServiceShape, model: Model, settings: CodegenSettings): Model =
+    final override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: CodegenSettings,
+    ): Model =
         combineCustomizations(model) { decorator, otherModel ->
             decorator.transformModel(otherModel.expectShape(service.id, ServiceShape::class.java), otherModel, settings)
         }
@@ -136,9 +151,10 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, CodegenSettings, Dec
     final override fun moduleDocumentationCustomization(
         codegenContext: CodegenContext,
         baseModuleDocProvider: ModuleDocProvider,
-    ): ModuleDocProvider = combineCustomizations(baseModuleDocProvider) { decorator, base ->
-        decorator.moduleDocumentationCustomization(codegenContext, base)
-    }
+    ): ModuleDocProvider =
+        combineCustomizations(baseModuleDocProvider) { decorator, base ->
+            decorator.moduleDocumentationCustomization(codegenContext, base)
+        }
 
     final override fun libRsCustomizations(
         codegenContext: CodegenContext,
@@ -151,23 +167,26 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, CodegenSettings, Dec
     override fun structureCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
-        decorator.structureCustomizations(codegenContext, customizations)
-    }
+    ): List<StructureCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.structureCustomizations(codegenContext, customizations)
+        }
 
     override fun builderCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<BuilderCustomization>,
-    ): List<BuilderCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
-        decorator.builderCustomizations(codegenContext, customizations)
-    }
+    ): List<BuilderCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.builderCustomizations(codegenContext, customizations)
+        }
 
     override fun errorImplCustomizations(
         codegenContext: CodegenContext,
         baseCustomizations: List<ErrorImplCustomization>,
-    ): List<ErrorImplCustomization> = combineCustomizations(baseCustomizations) { decorator, customizations ->
-        decorator.errorImplCustomizations(codegenContext, customizations)
-    }
+    ): List<ErrorImplCustomization> =
+        combineCustomizations(baseCustomizations) { decorator, customizations ->
+            decorator.errorImplCustomizations(codegenContext, customizations)
+        }
 
     final override fun extraSections(codegenContext: CodegenContext): List<AdHocCustomization> =
         addCustomizations { decorator -> decorator.extraSections(codegenContext) }
@@ -215,16 +234,18 @@ abstract class CombinedCoreCodegenDecorator<CodegenContext, CodegenSettings, Dec
             logger: Logger,
             vararg extras: Decorator,
         ): List<Decorator> {
-            val decorators = ServiceLoader.load(
-                decoratorClass,
-                context.pluginClassLoader.orElse(decoratorClass.classLoader),
-            )
+            val decorators =
+                ServiceLoader.load(
+                    decoratorClass,
+                    context.pluginClassLoader.orElse(decoratorClass.classLoader),
+                )
 
-            val filteredDecorators = decorators.asSequence()
-                .onEach { logger.info("Discovered Codegen Decorator: ${it!!::class.java.name}") }
-                .filter { it!!.classpathDiscoverable() }
-                .onEach { logger.info("Adding Codegen Decorator: ${it!!::class.java.name}") }
-                .toList()
+            val filteredDecorators =
+                decorators.asSequence()
+                    .onEach { logger.info("Discovered Codegen Decorator: ${it!!::class.java.name}") }
+                    .filter { it!!.classpathDiscoverable() }
+                    .onEach { logger.info("Adding Codegen Decorator: ${it!!::class.java.name}") }
+                    .toList()
             return filteredDecorators + extras
         }
     }

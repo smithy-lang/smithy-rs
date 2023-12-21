@@ -50,7 +50,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import java.io.File
 
 val TestRuntimeConfig =
-    RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.Path(File("../rust-runtime/").absolutePath))
+    RuntimeConfig(runtimeCrateLocation = RuntimeCrateLocation.path(File("../rust-runtime/").absolutePath))
 
 /**
  * IMPORTANT: You shouldn't need to refer to these directly in code or tests. They are private for a reason.
@@ -68,15 +68,19 @@ private object CodegenCoreTestModules {
     val OperationsTestModule = RustModule.public("test_operation")
 
     object TestModuleProvider : ModuleProvider {
-        override fun moduleForShape(context: ModuleProviderContext, shape: Shape): RustModule.LeafModule =
+        override fun moduleForShape(
+            context: ModuleProviderContext,
+            shape: Shape,
+        ): RustModule.LeafModule =
             when (shape) {
                 is OperationShape -> OperationsTestModule
-                is StructureShape -> when {
-                    shape.hasTrait<ErrorTrait>() -> ErrorsTestModule
-                    shape.hasTrait<SyntheticInputTrait>() -> InputsTestModule
-                    shape.hasTrait<SyntheticOutputTrait>() -> OutputsTestModule
-                    else -> ModelsTestModule
-                }
+                is StructureShape ->
+                    when {
+                        shape.hasTrait<ErrorTrait>() -> ErrorsTestModule
+                        shape.hasTrait<SyntheticInputTrait>() -> InputsTestModule
+                        shape.hasTrait<SyntheticOutputTrait>() -> OutputsTestModule
+                        else -> ModelsTestModule
+                    }
 
                 else -> ModelsTestModule
             }
@@ -107,12 +111,13 @@ private object CodegenCoreTestModules {
     }
 }
 
-fun testRustSymbolProviderConfig(nullabilityCheckMode: NullableIndex.CheckMode) = RustSymbolProviderConfig(
-    runtimeConfig = TestRuntimeConfig,
-    renameExceptions = true,
-    nullabilityCheckMode = nullabilityCheckMode,
-    moduleProvider = CodegenCoreTestModules.TestModuleProvider,
-)
+fun testRustSymbolProviderConfig(nullabilityCheckMode: NullableIndex.CheckMode) =
+    RustSymbolProviderConfig(
+        runtimeConfig = TestRuntimeConfig,
+        renameExceptions = true,
+        nullabilityCheckMode = nullabilityCheckMode,
+        moduleProvider = CodegenCoreTestModules.TestModuleProvider,
+    )
 
 fun testRustSettings(
     service: ShapeId = ShapeId.from("notrelevant#notrelevant"),
@@ -139,6 +144,7 @@ fun testRustSettings(
 )
 
 private const val SmithyVersion = "1.0"
+
 fun String.asSmithyModel(
     sourceLocation: String? = null,
     smithyVersion: String = SmithyVersion,
@@ -158,18 +164,19 @@ internal fun testSymbolProvider(
     model: Model,
     rustReservedWordConfig: RustReservedWordConfig? = null,
     nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
-): RustSymbolProvider = SymbolVisitor(
-    testRustSettings(),
-    model,
-    ServiceShape.builder().version("test").id("test#Service").build(),
-    testRustSymbolProviderConfig(nullabilityCheckMode),
-).let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(Attribute.NonExhaustive)) }
-    .let {
-        RustReservedWordSymbolProvider(
-            it,
-            rustReservedWordConfig ?: RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap()),
-        )
-    }
+): RustSymbolProvider =
+    SymbolVisitor(
+        testRustSettings(),
+        model,
+        ServiceShape.builder().version("test").id("test#Service").build(),
+        testRustSymbolProviderConfig(nullabilityCheckMode),
+    ).let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf(Attribute.NonExhaustive)) }
+        .let {
+            RustReservedWordSymbolProvider(
+                it,
+                rustReservedWordConfig ?: RustReservedWordConfig(emptyMap(), emptyMap(), emptyMap()),
+            )
+        }
 
 // Intentionally only visible to codegen-core since the other modules have their own contexts
 internal fun testCodegenContext(
@@ -178,21 +185,22 @@ internal fun testCodegenContext(
     settings: CoreRustSettings = testRustSettings(),
     codegenTarget: CodegenTarget = CodegenTarget.CLIENT,
     nullabilityCheckMode: NullableIndex.CheckMode = NullableIndex.CheckMode.CLIENT,
-): CodegenContext = object : CodegenContext(
-    model,
-    testSymbolProvider(model, nullabilityCheckMode = nullabilityCheckMode),
-    TestModuleDocProvider,
-    serviceShape
-        ?: model.serviceShapes.firstOrNull()
-        ?: ServiceShape.builder().version("test").id("test#Service").build(),
-    ShapeId.from("test#Protocol"),
-    settings,
-    codegenTarget,
-) {
-    override fun builderInstantiator(): BuilderInstantiator {
-        return DefaultBuilderInstantiator(codegenTarget == CodegenTarget.CLIENT, symbolProvider)
+): CodegenContext =
+    object : CodegenContext(
+        model,
+        testSymbolProvider(model, nullabilityCheckMode = nullabilityCheckMode),
+        TestModuleDocProvider,
+        serviceShape
+            ?: model.serviceShapes.firstOrNull()
+            ?: ServiceShape.builder().version("test").id("test#Service").build(),
+        ShapeId.from("test#Protocol"),
+        settings,
+        codegenTarget,
+    ) {
+        override fun builderInstantiator(): BuilderInstantiator {
+            return DefaultBuilderInstantiator(codegenTarget == CodegenTarget.CLIENT, symbolProvider)
+        }
     }
-}
 
 /**
  * In tests, we frequently need to generate a struct, a builder, and an impl block to access said builder.
@@ -214,7 +222,10 @@ fun StructureShape.renderWithModelBuilder(
     }
 }
 
-fun RustCrate.unitTest(name: String? = null, test: Writable) {
+fun RustCrate.unitTest(
+    name: String? = null,
+    test: Writable,
+) {
     lib {
         val testName = name ?: safeName("test")
         unitTest(testName, block = test)

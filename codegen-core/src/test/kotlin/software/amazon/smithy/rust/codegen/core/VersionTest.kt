@@ -26,26 +26,25 @@ class VersionTest {
 
     @ParameterizedTest()
     @MethodSource("invalidVersionProvider")
-    fun `fails to parse version`(
-        content: String,
-    ) {
+    fun `fails to parse version`(content: String) {
         shouldThrowAny { Version.parse(content) }
     }
 
     companion object {
         @JvmStatic
-        fun versionProvider() = listOf(
-            Arguments.of(
-                """{ "stableVersion": "1.0.1", "unstableVersion": "0.60.1","githash": "0198d26096eb1af510ce24766c921ffc5e4c191e", "runtimeCrates": {} }""",
-                "1.0.1-0198d26096eb1af510ce24766c921ffc5e4c191e",
-                "1.0.1",
-            ),
-            Arguments.of(
-                """{ "unstableVersion": "0.60.1", "stableVersion": "release-2022-08-04", "githash": "db48039065bec890ef387385773b37154b555b14", "runtimeCrates": {} }""",
-                "release-2022-08-04-db48039065bec890ef387385773b37154b555b14",
-                "release-2022-08-04",
-            ),
-        )
+        fun versionProvider() =
+            listOf(
+                Arguments.of(
+                    """{ "stableVersion": "1.0.1", "unstableVersion": "0.60.1","githash": "0198d26096eb1af510ce24766c921ffc5e4c191e", "runtimeCrates": {} }""",
+                    "1.0.1-0198d26096eb1af510ce24766c921ffc5e4c191e",
+                    "1.0.1",
+                ),
+                Arguments.of(
+                    """{ "unstableVersion": "0.60.1", "stableVersion": "release-2022-08-04", "githash": "db48039065bec890ef387385773b37154b555b14", "runtimeCrates": {} }""",
+                    "release-2022-08-04-db48039065bec890ef387385773b37154b555b14",
+                    "release-2022-08-04",
+                ),
+            )
 
         @JvmStatic
         fun invalidVersionProvider() = listOf("0.0.0", "")

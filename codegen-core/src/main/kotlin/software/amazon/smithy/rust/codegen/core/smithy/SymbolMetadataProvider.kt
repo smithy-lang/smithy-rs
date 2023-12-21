@@ -34,34 +34,43 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 abstract class SymbolMetadataProvider(private val base: RustSymbolProvider) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val baseSymbol = base.toSymbol(shape)
-        val meta = when (shape) {
-            is MemberShape -> memberMeta(shape)
-            is StructureShape -> structureMeta(shape)
-            is UnionShape -> unionMeta(shape)
-            is ListShape -> listMeta(shape)
-            is MapShape -> mapMeta(shape)
-            is NumberShape -> numberMeta(shape)
-            is BlobShape -> blobMeta(shape)
-            is StringShape -> if (shape.hasTrait<EnumTrait>()) {
-                enumMeta(shape)
-            } else {
-                stringMeta(shape)
-            }
+        val meta =
+            when (shape) {
+                is MemberShape -> memberMeta(shape)
+                is StructureShape -> structureMeta(shape)
+                is UnionShape -> unionMeta(shape)
+                is ListShape -> listMeta(shape)
+                is MapShape -> mapMeta(shape)
+                is NumberShape -> numberMeta(shape)
+                is BlobShape -> blobMeta(shape)
+                is StringShape ->
+                    if (shape.hasTrait<EnumTrait>()) {
+                        enumMeta(shape)
+                    } else {
+                        stringMeta(shape)
+                    }
 
-            else -> null
-        }
+                else -> null
+            }
         return baseSymbol.toBuilder().meta(meta).build()
     }
 
     abstract fun memberMeta(memberShape: MemberShape): RustMetadata
+
     abstract fun structureMeta(structureShape: StructureShape): RustMetadata
+
     abstract fun unionMeta(unionShape: UnionShape): RustMetadata
+
     abstract fun enumMeta(stringShape: StringShape): RustMetadata
 
     abstract fun listMeta(listShape: ListShape): RustMetadata
+
     abstract fun mapMeta(mapShape: MapShape): RustMetadata
+
     abstract fun stringMeta(stringShape: StringShape): RustMetadata
+
     abstract fun numberMeta(numberShape: NumberShape): RustMetadata
+
     abstract fun blobMeta(blobShape: BlobShape): RustMetadata
 }
 
@@ -72,12 +81,13 @@ fun containerDefaultMetadata(
 ): RustMetadata {
     val derives = mutableSetOf(RuntimeType.Debug, RuntimeType.PartialEq, RuntimeType.Clone)
 
-    val isSensitive = shape.hasTrait<SensitiveTrait>() ||
-        // Checking the shape's direct members for the sensitive trait should suffice.
-        // Whether their descendants, i.e. a member's member, is sensitive does not
-        // affect the inclusion/exclusion of the derived `Debug` trait of _this_ container
-        // shape; any sensitive descendant should still be printed as redacted.
-        shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
+    val isSensitive =
+        shape.hasTrait<SensitiveTrait>() ||
+            // Checking the shape's direct members for the sensitive trait should suffice.
+            // Whether their descendants, i.e. a member's member, is sensitive does not
+            // affect the inclusion/exclusion of the derived `Debug` trait of _this_ container
+            // shape; any sensitive descendant should still be printed as redacted.
+            shape.members().any { it.getMemberTrait(model, SensitiveTrait::class.java).isPresent }
 
     if (isSensitive) {
         derives.remove(RuntimeType.Debug)
@@ -96,7 +106,6 @@ class BaseSymbolMetadataProvider(
     base: RustSymbolProvider,
     private val additionalAttributes: List<Attribute>,
 ) : SymbolMetadataProvider(base) {
-
     override fun memberMeta(memberShape: MemberShape): RustMetadata =
         when (val container = model.expectShape(memberShape.container)) {
             is StructureShape -> RustMetadata(visibility = Visibility.PUBLIC)
@@ -111,7 +120,9 @@ class BaseSymbolMetadataProvider(
             else -> TODO("Unrecognized container type: $container")
         }
 
-    override fun structureMeta(structureShape: StructureShape) = containerDefaultMetadata(structureShape, model, additionalAttributes)
+    override fun structureMeta(structureShape: StructureShape) =
+        containerDefaultMetadata(structureShape, model, additionalAttributes)
+
     override fun unionMeta(unionShape: UnionShape) = containerDefaultMetadata(unionShape, model, additionalAttributes)
 
     override fun enumMeta(stringShape: StringShape): RustMetadata =
@@ -129,17 +140,23 @@ class BaseSymbolMetadataProvider(
     private fun defaultRustMetadata() = RustMetadata(visibility = Visibility.PRIVATE)
 
     override fun listMeta(listShape: ListShape) = defaultRustMetadata()
+
     override fun mapMeta(mapShape: MapShape) = defaultRustMetadata()
+
     override fun stringMeta(stringShape: StringShape) = defaultRustMetadata()
+
     override fun numberMeta(numberShape: NumberShape) = defaultRustMetadata()
+
     override fun blobMeta(blobShape: BlobShape) = defaultRustMetadata()
 }
 
 private const val META_KEY = "meta"
+
 fun Symbol.Builder.meta(rustMetadata: RustMetadata?): Symbol.Builder = this.putProperty(META_KEY, rustMetadata)
 
-fun Symbol.expectRustMetadata(): RustMetadata = this.getProperty(META_KEY, RustMetadata::class.java).orElseThrow {
-    CodegenException(
-        "Expected `$this` to have metadata attached but it did not.",
-    )
-}
+fun Symbol.expectRustMetadata(): RustMetadata =
+    this.getProperty(META_KEY, RustMetadata::class.java).orElseThrow {
+        CodegenException(
+            "Expected `$this` to have metadata attached but it did not.",
+        )
+    }

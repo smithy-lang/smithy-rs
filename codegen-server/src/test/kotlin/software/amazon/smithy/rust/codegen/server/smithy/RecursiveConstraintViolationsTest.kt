@@ -16,7 +16,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
 import java.util.stream.Stream
 
 internal class RecursiveConstraintViolationsTest {
-
     data class TestCase(
         /** The test name is only used in the generated report, to easily identify a failing test. **/
         val testName: String,
@@ -49,7 +48,10 @@ internal class RecursiveConstraintViolationsTest {
             }
             """
 
-        private fun recursiveListModel(sparse: Boolean, listPrefix: String = ""): Pair<Model, String> =
+        private fun recursiveListModel(
+            sparse: Boolean,
+            listPrefix: String = "",
+        ): Pair<Model, String> =
             """
             $baseModel
 
@@ -57,18 +59,26 @@ internal class RecursiveConstraintViolationsTest {
                 list: ${listPrefix}List
             }
 
-            ${ if (sparse) { "@sparse" } else { "" } }
+            ${ if (sparse) {
+                "@sparse"
+            } else {
+                ""
+            } }
             @length(min: 69)
             list ${listPrefix}List {
                 member: Recursive
             }
-            """.asSmithyModel() to if ("${listPrefix}List" < "Recursive") {
-                "com.amazonaws.recursiveconstraintviolations#${listPrefix}List\$member"
-            } else {
-                "com.amazonaws.recursiveconstraintviolations#Recursive\$list"
-            }
+            """.asSmithyModel() to
+                if ("${listPrefix}List" < "Recursive") {
+                    "com.amazonaws.recursiveconstraintviolations#${listPrefix}List\$member"
+                } else {
+                    "com.amazonaws.recursiveconstraintviolations#Recursive\$list"
+                }
 
-        private fun recursiveMapModel(sparse: Boolean, mapPrefix: String = ""): Pair<Model, String> =
+        private fun recursiveMapModel(
+            sparse: Boolean,
+            mapPrefix: String = "",
+        ): Pair<Model, String> =
             """
             $baseModel
 
@@ -76,17 +86,22 @@ internal class RecursiveConstraintViolationsTest {
                 map: ${mapPrefix}Map
             }
 
-            ${ if (sparse) { "@sparse" } else { "" } }
+            ${ if (sparse) {
+                "@sparse"
+            } else {
+                ""
+            } }
             @length(min: 69)
             map ${mapPrefix}Map {
                 key: String,
                 value: Recursive
             }
-            """.asSmithyModel() to if ("${mapPrefix}Map" < "Recursive") {
-                "com.amazonaws.recursiveconstraintviolations#${mapPrefix}Map\$value"
-            } else {
-                "com.amazonaws.recursiveconstraintviolations#Recursive\$map"
-            }
+            """.asSmithyModel() to
+                if ("${mapPrefix}Map" < "Recursive") {
+                    "com.amazonaws.recursiveconstraintviolations#${mapPrefix}Map\$value"
+                } else {
+                    "com.amazonaws.recursiveconstraintviolations#Recursive\$map"
+                }
 
         private fun recursiveUnionModel(unionPrefix: String = ""): Pair<Model, String> =
             """
@@ -137,34 +152,37 @@ internal class RecursiveConstraintViolationsTest {
                 }
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> {
-            val listModels = listOf(false, true).flatMap { isSparse ->
-                listOf("", "ZZZ").map { listPrefix ->
-                    val (model, shapeIdWithConstraintViolationRustBoxTrait) = recursiveListModel(isSparse, listPrefix)
-                    var testName = "${ if (isSparse) "sparse" else "non-sparse" } recursive list"
-                    if (listPrefix.isNotEmpty()) {
-                        testName += " with shape name prefix $listPrefix"
+            val listModels =
+                listOf(false, true).flatMap { isSparse ->
+                    listOf("", "ZZZ").map { listPrefix ->
+                        val (model, shapeIdWithConstraintViolationRustBoxTrait) = recursiveListModel(isSparse, listPrefix)
+                        var testName = "${ if (isSparse) "sparse" else "non-sparse" } recursive list"
+                        if (listPrefix.isNotEmpty()) {
+                            testName += " with shape name prefix $listPrefix"
+                        }
+                        TestCase(testName, model, shapeIdWithConstraintViolationRustBoxTrait)
+                    }
+                }
+            val mapModels =
+                listOf(false, true).flatMap { isSparse ->
+                    listOf("", "ZZZ").map { mapPrefix ->
+                        val (model, shapeIdWithConstraintViolationRustBoxTrait) = recursiveMapModel(isSparse, mapPrefix)
+                        var testName = "${ if (isSparse) "sparse" else "non-sparse" } recursive map"
+                        if (mapPrefix.isNotEmpty()) {
+                            testName += " with shape name prefix $mapPrefix"
+                        }
+                        TestCase(testName, model, shapeIdWithConstraintViolationRustBoxTrait)
+                    }
+                }
+            val unionModels =
+                listOf("", "ZZZ").map { unionPrefix ->
+                    val (model, shapeIdWithConstraintViolationRustBoxTrait) = recursiveUnionModel(unionPrefix)
+                    var testName = "recursive union"
+                    if (unionPrefix.isNotEmpty()) {
+                        testName += " with shape name prefix $unionPrefix"
                     }
                     TestCase(testName, model, shapeIdWithConstraintViolationRustBoxTrait)
                 }
-            }
-            val mapModels = listOf(false, true).flatMap { isSparse ->
-                listOf("", "ZZZ").map { mapPrefix ->
-                    val (model, shapeIdWithConstraintViolationRustBoxTrait) = recursiveMapModel(isSparse, mapPrefix)
-                    var testName = "${ if (isSparse) "sparse" else "non-sparse" } recursive map"
-                    if (mapPrefix.isNotEmpty()) {
-                        testName += " with shape name prefix $mapPrefix"
-                    }
-                    TestCase(testName, model, shapeIdWithConstraintViolationRustBoxTrait)
-                }
-            }
-            val unionModels = listOf("", "ZZZ").map { unionPrefix ->
-                val (model, shapeIdWithConstraintViolationRustBoxTrait) = recursiveUnionModel(unionPrefix)
-                var testName = "recursive union"
-                if (unionPrefix.isNotEmpty()) {
-                    testName += " with shape name prefix $unionPrefix"
-                }
-                TestCase(testName, model, shapeIdWithConstraintViolationRustBoxTrait)
-            }
             return listOf(listModels, mapModels, unionModels)
                 .flatten()
                 .map { Arguments.of(it) }.stream()

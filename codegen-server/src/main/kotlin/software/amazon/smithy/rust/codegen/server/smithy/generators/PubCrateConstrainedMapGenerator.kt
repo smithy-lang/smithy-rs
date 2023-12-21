@@ -59,20 +59,22 @@ class PubCrateConstrainedMapGenerator(
         val keyShape = model.expectShape(shape.key.target, StringShape::class.java)
         val valueShape = model.expectShape(shape.value.target)
         val keySymbol = constrainedShapeSymbolProvider.toSymbol(keyShape)
-        val valueMemberSymbol = if (valueShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
-            pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.value)
-        } else {
-            constrainedShapeSymbolProvider.toSymbol(shape.value)
-        }
+        val valueMemberSymbol =
+            if (valueShape.isTransitivelyButNotDirectlyConstrained(model, symbolProvider)) {
+                pubCrateConstrainedShapeSymbolProvider.toSymbol(shape.value)
+            } else {
+                constrainedShapeSymbolProvider.toSymbol(shape.value)
+            }
 
-        val codegenScope = arrayOf(
-            "KeySymbol" to keySymbol,
-            "ValueMemberSymbol" to valueMemberSymbol,
-            "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
-            "UnconstrainedSymbol" to unconstrainedSymbol,
-            "Symbol" to symbol,
-            "From" to RuntimeType.From,
-        )
+        val codegenScope =
+            arrayOf(
+                "KeySymbol" to keySymbol,
+                "ValueMemberSymbol" to valueMemberSymbol,
+                "ConstrainedTrait" to RuntimeType.ConstrainedTrait,
+                "UnconstrainedSymbol" to unconstrainedSymbol,
+                "Symbol" to symbol,
+                "From" to RuntimeType.From,
+            )
 
         inlineModuleCreator(constrainedSymbol) {
             rustTemplate(

@@ -50,7 +50,10 @@ class ServiceSpecificDecorator(
     /** Decorator order */
     override val order: Byte = 0,
 ) : ClientCodegenDecorator {
-    private fun <T> T.maybeApply(serviceId: ToShapeId, delegatedValue: () -> T): T =
+    private fun <T> T.maybeApply(
+        serviceId: ToShapeId,
+        delegatedValue: () -> T,
+    ): T =
         if (appliesToServiceId == serviceId.toShapeId()) {
             delegatedValue()
         } else {
@@ -64,23 +67,26 @@ class ServiceSpecificDecorator(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> = baseAuthSchemeOptions.maybeApply(codegenContext.serviceShape) {
-        delegateTo.authOptions(codegenContext, operationShape, baseAuthSchemeOptions)
-    }
+    ): List<AuthSchemeOption> =
+        baseAuthSchemeOptions.maybeApply(codegenContext.serviceShape) {
+            delegateTo.authOptions(codegenContext, operationShape, baseAuthSchemeOptions)
+        }
 
     override fun builderCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<BuilderCustomization>,
-    ): List<BuilderCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.builderCustomizations(codegenContext, baseCustomizations)
-    }
+    ): List<BuilderCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.builderCustomizations(codegenContext, baseCustomizations)
+        }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.configCustomizations(codegenContext, baseCustomizations)
-    }
+    ): List<ConfigCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.configCustomizations(codegenContext, baseCustomizations)
+        }
 
     override fun crateManifestCustomizations(codegenContext: ClientCodegenContext): ManifestCustomizations =
         emptyMap<String, Any?>().maybeApply(codegenContext.serviceShape) {
@@ -95,18 +101,23 @@ class ServiceSpecificDecorator(
     override fun errorCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ErrorCustomization>,
-    ): List<ErrorCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.errorCustomizations(codegenContext, baseCustomizations)
-    }
+    ): List<ErrorCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.errorCustomizations(codegenContext, baseCustomizations)
+        }
 
     override fun errorImplCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ErrorImplCustomization>,
-    ): List<ErrorImplCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.errorImplCustomizations(codegenContext, baseCustomizations)
-    }
+    ): List<ErrorImplCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.errorImplCustomizations(codegenContext, baseCustomizations)
+        }
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         maybeApply(codegenContext.serviceShape) {
             delegateTo.extras(codegenContext, rustCrate)
         }
@@ -115,19 +126,24 @@ class ServiceSpecificDecorator(
     override fun libRsCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.libRsCustomizations(codegenContext, baseCustomizations)
-    }
+    ): List<LibRsCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.libRsCustomizations(codegenContext, baseCustomizations)
+        }
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.operationCustomizations(codegenContext, operation, baseCustomizations)
-    }
+    ): List<OperationCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.operationCustomizations(codegenContext, operation, baseCustomizations)
+        }
 
-    override fun protocols(serviceId: ShapeId, currentProtocols: ClientProtocolMap): ClientProtocolMap =
+    override fun protocols(
+        serviceId: ShapeId,
+        currentProtocols: ClientProtocolMap,
+    ): ClientProtocolMap =
         currentProtocols.maybeApply(serviceId) {
             delegateTo.protocols(serviceId, currentProtocols)
         }
@@ -135,11 +151,16 @@ class ServiceSpecificDecorator(
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.structureCustomizations(codegenContext, baseCustomizations)
-    }
+    ): List<StructureCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.structureCustomizations(codegenContext, baseCustomizations)
+        }
 
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model =
         model.maybeApply(service) {
             delegateTo.transformModel(service, model, settings)
         }
@@ -147,16 +168,18 @@ class ServiceSpecificDecorator(
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> = baseCustomizations.maybeApply(codegenContext.serviceShape) {
-        delegateTo.serviceRuntimePluginCustomizations(codegenContext, baseCustomizations)
-    }
+    ): List<ServiceRuntimePluginCustomization> =
+        baseCustomizations.maybeApply(codegenContext.serviceShape) {
+            delegateTo.serviceRuntimePluginCustomizations(codegenContext, baseCustomizations)
+        }
 
     override fun protocolTestGenerator(
         codegenContext: ClientCodegenContext,
         baseGenerator: ProtocolTestGenerator,
-    ): ProtocolTestGenerator = baseGenerator.maybeApply(codegenContext.serviceShape) {
-        delegateTo.protocolTestGenerator(codegenContext, baseGenerator)
-    }
+    ): ProtocolTestGenerator =
+        baseGenerator.maybeApply(codegenContext.serviceShape) {
+            delegateTo.protocolTestGenerator(codegenContext, baseGenerator)
+        }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         listOf<AdHocCustomization>().maybeApply(codegenContext.serviceShape) {

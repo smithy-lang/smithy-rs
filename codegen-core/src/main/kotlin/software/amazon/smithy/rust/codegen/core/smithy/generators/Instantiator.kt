@@ -122,6 +122,7 @@ open class Instantiator(
         // in the structure field's type. The latter's method name is the field's name, whereas the former is prefixed
         // with `set_`. Client instantiators call the `set_*` builder setters.
         fun setterName(memberShape: MemberShape): String
+
         fun doesSetterTakeInOption(memberShape: MemberShape): Boolean
     }
 
@@ -137,7 +138,12 @@ open class Instantiator(
         override fun generate(shape: Shape): Writable? = null
     }
 
-    fun generate(shape: Shape, data: Node, headers: Map<String, String> = mapOf(), ctx: Ctx = Ctx()) = writable {
+    fun generate(
+        shape: Shape,
+        data: Node,
+        headers: Map<String, String> = mapOf(),
+        ctx: Ctx = Ctx(),
+    ) = writable {
         render(this, shape, data, headers, ctx)
     }
 
@@ -164,11 +170,12 @@ open class Instantiator(
                     // Members, supporting potentially optional members
                     is MemberShape -> renderMember(writer, shape, data, ctx)
 
-                    is SimpleShape -> PrimitiveInstantiator(runtimeConfig, symbolProvider).instantiate(
-                        shape,
-                        data,
-                        customWritable,
-                    )(writer)
+                    is SimpleShape ->
+                        PrimitiveInstantiator(runtimeConfig, symbolProvider).instantiate(
+                            shape,
+                            data,
+                            customWritable,
+                        )(writer)
 
                     else -> writer.writeWithNoFormatting("todo!() /* $shape $data */")
                 }
@@ -179,7 +186,12 @@ open class Instantiator(
      * If the shape is optional: `Some(inner)` or `None`.
      * Otherwise: `inner`.
      */
-    private fun renderMember(writer: RustWriter, memberShape: MemberShape, data: Node, ctx: Ctx) {
+    private fun renderMember(
+        writer: RustWriter,
+        memberShape: MemberShape,
+        data: Node,
+        ctx: Ctx,
+    ) {
         val targetShape = model.expectShape(memberShape.target)
         val symbol = symbolProvider.toSymbol(memberShape)
         customWritable.generate(memberShape)
@@ -197,11 +209,13 @@ open class Instantiator(
                         "#{Some}(",
                         ")",
                         // The conditions are not commutative: note client builders always take in `Option<T>`.
-                        conditional = symbol.isOptional() ||
-                            (
-                                model.expectShape(memberShape.container) is StructureShape && builderKindBehavior.doesSetterTakeInOption(
-                                    memberShape,
-                                )
+                        conditional =
+                            symbol.isOptional() ||
+                                (
+                                    model.expectShape(memberShape.container) is StructureShape &&
+                                        builderKindBehavior.doesSetterTakeInOption(
+                                            memberShape,
+                                        )
                                 ),
                         *preludeScope,
                     ) {
@@ -227,8 +241,12 @@ open class Instantiator(
             }
     }
 
-    private fun renderSet(writer: RustWriter, shape: SetShape, data: ArrayNode, ctx: Ctx) =
-        renderList(writer, shape, data, ctx)
+    private fun renderSet(
+        writer: RustWriter,
+        shape: SetShape,
+        data: ArrayNode,
+        ctx: Ctx,
+    ) = renderList(writer, shape, data, ctx)
 
     /**
      * ```rust
@@ -240,7 +258,12 @@ open class Instantiator(
      * }
      * ```
      */
-    private fun renderMap(writer: RustWriter, shape: MapShape, data: ObjectNode, ctx: Ctx) {
+    private fun renderMap(
+        writer: RustWriter,
+        shape: MapShape,
+        data: ObjectNode,
+        ctx: Ctx,
+    ) {
         if (data.members.isEmpty()) {
             writer.rust("#T::new()", RuntimeType.HashMap)
         } else {
@@ -266,18 +289,24 @@ open class Instantiator(
      * MyUnion::Variant(...)
      * ```
      */
-    private fun renderUnion(writer: RustWriter, shape: UnionShape, data: ObjectNode, ctx: Ctx) {
+    private fun renderUnion(
+        writer: RustWriter,
+        shape: UnionShape,
+        data: ObjectNode,
+        ctx: Ctx,
+    ) {
         val unionSymbol = symbolProvider.toSymbol(shape)
 
-        val variant = if (defaultsForRequiredFields && data.members.isEmpty()) {
-            val (name, memberShape) = shape.allMembers.entries.first()
-            val targetShape = model.expectShape(memberShape.target)
-            Node.from(name) to fillDefaultValue(targetShape)
-        } else {
-            check(data.members.size == 1)
-            val entry = data.members.iterator().next()
-            entry.key to entry.value
-        }
+        val variant =
+            if (defaultsForRequiredFields && data.members.isEmpty()) {
+                val (name, memberShape) = shape.allMembers.entries.first()
+                val targetShape = model.expectShape(memberShape.target)
+                Node.from(name) to fillDefaultValue(targetShape)
+            } else {
+                check(data.members.size == 1)
+                val entry = data.members.iterator().next()
+                entry.key to entry.value
+            }
 
         val memberName = variant.first.value
         val member = shape.expectMember(memberName)
@@ -295,7 +324,12 @@ open class Instantiator(
      * vec![..., ..., ...]
      * ```
      */
-    private fun renderList(writer: RustWriter, shape: CollectionShape, data: ArrayNode, ctx: Ctx) {
+    private fun renderList(
+        writer: RustWriter,
+        shape: CollectionShape,
+        data: ArrayNode,
+        ctx: Ctx,
+    ) {
         writer.withBlock("vec![", "]") {
             data.elements.forEach { v ->
                 renderMember(this, shape.member, v, ctx)
@@ -346,7 +380,11 @@ open class Instantiator(
         ctx: Ctx,
     ) {
         val renderedMembers = mutableSetOf<MemberShape>()
-        fun renderMemberHelper(memberShape: MemberShape, value: Node) {
+
+        fun renderMemberHelper(
+            memberShape: MemberShape,
+            value: Node,
+        ) {
             renderedMembers.add(memberShape)
             when (constructPattern) {
                 InstantiatorConstructPattern.DIRECT -> {
@@ -412,24 +450,25 @@ open class Instantiator(
      *
      * Warning: this method does not take into account any constraint traits attached to the shape.
      */
-    private fun fillDefaultValue(shape: Shape): Node = when (shape) {
-        is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
+    private fun fillDefaultValue(shape: Shape): Node =
+        when (shape) {
+            is MemberShape -> fillDefaultValue(model.expectShape(shape.target))
 
-        // Aggregate shapes.
-        is StructureShape -> Node.objectNode()
-        is UnionShape -> Node.objectNode()
-        is CollectionShape -> Node.arrayNode()
-        is MapShape -> Node.objectNode()
+            // Aggregate shapes.
+            is StructureShape -> Node.objectNode()
+            is UnionShape -> Node.objectNode()
+            is CollectionShape -> Node.arrayNode()
+            is MapShape -> Node.objectNode()
 
-        // Simple Shapes
-        is TimestampShape -> Node.from(0) // Number node for timestamp
-        is BlobShape -> Node.from("") // String node for bytes
-        is StringShape -> Node.from("")
-        is NumberShape -> Node.from(0)
-        is BooleanShape -> Node.from(false)
-        is DocumentShape -> Node.objectNode()
-        else -> throw CodegenException("Unrecognized shape `$shape`")
-    }
+            // Simple Shapes
+            is TimestampShape -> Node.from(0) // Number node for timestamp
+            is BlobShape -> Node.from("") // String node for bytes
+            is StringShape -> Node.from("")
+            is NumberShape -> Node.from(0)
+            is BooleanShape -> Node.from(false)
+            is DocumentShape -> Node.objectNode()
+            else -> throw CodegenException("Unrecognized shape `$shape`")
+        }
 }
 
 class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private val symbolProvider: SymbolProvider) {
@@ -504,13 +543,17 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
             }
         }
 
-    private fun renderString(shape: StringShape, arg: StringNode): Writable = {
-        val data = escape(arg.value).dq()
-        if (shape.hasTrait<EnumTrait>() || shape is EnumShape) {
-            val enumSymbol = symbolProvider.toSymbol(shape)
-            rust("""$data.parse::<#T>().expect("static value validated to member")""", enumSymbol)
-        } else {
-            rust("$data.to_owned()")
+    private fun renderString(
+        shape: StringShape,
+        arg: StringNode,
+    ): Writable =
+        {
+            val data = escape(arg.value).dq()
+            if (shape.hasTrait<EnumTrait>() || shape is EnumShape) {
+                val enumSymbol = symbolProvider.toSymbol(shape)
+                rust("""$data.parse::<#T>().expect("static value validated to member")""", enumSymbol)
+            } else {
+                rust("$data.to_owned()")
+            }
         }
-    }
 }

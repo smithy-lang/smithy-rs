@@ -34,10 +34,11 @@ import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-fun CodegenTarget.renderUnknownVariant() = when (this) {
-    CodegenTarget.SERVER -> false
-    CodegenTarget.CLIENT -> true
-}
+fun CodegenTarget.renderUnknownVariant() =
+    when (this) {
+        CodegenTarget.SERVER -> false
+        CodegenTarget.CLIENT -> true
+    }
 
 /**
  * Generate an `enum` for a Smithy Union Shape
@@ -177,7 +178,11 @@ fun unknownVariantError(union: String) =
         "The `Unknown` variant is intended for responses only. " +
         "It occurs when an outdated client is used after a new enum variant was added on the server side."
 
-private fun RustWriter.renderVariant(symbolProvider: SymbolProvider, member: MemberShape, memberSymbol: Symbol) {
+private fun RustWriter.renderVariant(
+    symbolProvider: SymbolProvider,
+    member: MemberShape,
+    memberSymbol: Symbol,
+) {
     if (member.isTargetUnit()) {
         write("${symbolProvider.toMemberName(member)},")
     } else {

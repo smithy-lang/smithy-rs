@@ -13,7 +13,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class OperationErrorGeneratorTest {
-    private val model = """
+    private val model =
+        """
         namespace error
 
         @aws.protocols#awsJson1_0
@@ -43,7 +44,7 @@ class OperationErrorGeneratorTest {
         @error("server")
         @deprecated
         structure Deprecated { }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generates combined error enums`() {

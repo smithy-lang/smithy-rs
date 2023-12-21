@@ -8,11 +8,13 @@ package software.amazon.smithy.rust.codegen.core.util
 /**
  * Deep merges two maps, with the properties of `other` taking priority over the properties of `this`.
  */
-fun Map<String, Any?>.deepMergeWith(other: Map<String, Any?>): Map<String, Any?> =
-    deepMergeMaps(this, other)
+fun Map<String, Any?>.deepMergeWith(other: Map<String, Any?>): Map<String, Any?> = deepMergeMaps(this, other)
 
 @Suppress("UNCHECKED_CAST")
-private fun deepMergeMaps(left: Map<String, Any?>, right: Map<String, Any?>): Map<String, Any?> {
+private fun deepMergeMaps(
+    left: Map<String, Any?>,
+    right: Map<String, Any?>,
+): Map<String, Any?> {
     val result = mutableMapOf<String, Any?>()
     for (leftEntry in left.entries) {
         val rightValue = right[leftEntry.key]

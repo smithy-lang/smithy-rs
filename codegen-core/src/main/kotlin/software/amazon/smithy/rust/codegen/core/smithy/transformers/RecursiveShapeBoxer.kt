@@ -77,13 +77,14 @@ class RecursiveShapeBoxer(
         // (External to this function) Go back to 1.
         val index = TopologicalIndex.of(model)
         val recursiveShapes = index.recursiveShapes
-        val loops = recursiveShapes.map { shapeId ->
-            // Get all the shapes in the closure (represented as `Path`s).
-            index.getRecursiveClosure(shapeId)
-        }.flatMap { loops ->
-            // Flatten the connections into shapes.
-            loops.map { it.shapes }
-        }
+        val loops =
+            recursiveShapes.map { shapeId ->
+                // Get all the shapes in the closure (represented as `Path`s).
+                index.getRecursiveClosure(shapeId)
+            }.flatMap { loops ->
+                // Flatten the connections into shapes.
+                loops.map { it.shapes }
+            }
         val loopToFix = loops.firstOrNull { !containsIndirectionPredicate(it) }
 
         return loopToFix?.let { loop: List<Shape> ->
@@ -111,11 +112,12 @@ class RecursiveShapeBoxer(
  * indirection artificially ourselves using `Box`.
  *
  */
-private fun containsIndirection(loop: Collection<Shape>): Boolean = loop.find {
-    when (it) {
-        is CollectionShape, is MapShape -> true
-        else -> it.hasTrait<RustBoxTrait>()
-    }
-} != null
+private fun containsIndirection(loop: Collection<Shape>): Boolean =
+    loop.find {
+        when (it) {
+            is CollectionShape, is MapShape -> true
+            else -> it.hasTrait<RustBoxTrait>()
+        }
+    } != null
 
 private fun addRustBoxTrait(shape: MemberShape): MemberShape = shape.toBuilder().addTrait(RustBoxTrait()).build()

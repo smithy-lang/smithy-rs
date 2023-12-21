@@ -20,9 +20,10 @@ internal class RecursiveConstraintViolationBoxerTest {
     fun `recursive constraint violation boxer test`(testCase: RecursiveConstraintViolationsTest.TestCase) {
         val transformed = RecursiveConstraintViolationBoxer.transform(testCase.model)
 
-        val shapesWithConstraintViolationRustBoxTrait = transformed.shapes().filter {
-            it.hasTrait<ConstraintViolationRustBoxTrait>()
-        }.toList()
+        val shapesWithConstraintViolationRustBoxTrait =
+            transformed.shapes().filter {
+                it.hasTrait<ConstraintViolationRustBoxTrait>()
+            }.toList()
 
         // Only the provided member shape should have the trait attached.
         shapesWithConstraintViolationRustBoxTrait shouldBe
