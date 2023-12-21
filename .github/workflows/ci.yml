@@ -322,8 +322,8 @@ jobs:
     name: Run Compiletime Benchmark
     needs: generate
     permissions:
-      id-token: write
       contents: read
+      id-token: write
       pull-requests: write
     outputs:
       compiletime-benchmark: ${{ steps.compiletime-benchmark.outputs.compiletime-benchmark }}
@@ -336,9 +336,10 @@ jobs:
     - uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
+
     - name: run benchmark
       id: run-compiletime-benchmark
-      run: bash smithy-rs/tools/compiletime-benchmark/script && cat /tmp/compiletime-benchmark.md >> "$GITHUB_OUTPUT"
+      run: bash smithy-rs/tools/compiletime-benchmark/script
 
   # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules

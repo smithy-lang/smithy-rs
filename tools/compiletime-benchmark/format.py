@@ -8,7 +8,7 @@ import itertools
 
 def main():
     markdown = parser()
-    print(markdown)
+
     # write file
     with open("/tmp/compiletime-benchmark.md", "w") as f:
         f.write(markdown)
@@ -23,11 +23,11 @@ def parser() -> str:
     iter = itertools.chain.from_iterable(iter)
 
     # I could've used a dataframe like pandas but this works.
-    markdown = "| sdk name | dev | release | dev all features | release all features |"
-    markdown += "\n"
-    markdown += "| -------- | --- | ------- | ---------------- | -------------------- |"
+    markdown_rows = [
+        "| sdk name | dev | release | dev all features | release all features |",
+        "| -------- | --- | ------- | ---------------- | -------------------- |",
 
-    markdown += "\n"
+    ]
     for i in iter:
         outputs = []
         print(i)
@@ -38,13 +38,11 @@ def parser() -> str:
         if len(outputs) != 6:
             continue
 
-        outputs = outputs[1:]
-        sdk_name = outputs[0]
-        row = f"|{sdk_name}|" + \
-            "|".join(outputs[1:]) + "|"
+        row = f"|{'|'.join(outputs)}|"
+        markdown_rows.append(row)
 
-        markdown += row
-        markdown += "\n"
+    markdown = "\n".join(markdown_rows)
+    print(markdown)
 
     return markdown
 
