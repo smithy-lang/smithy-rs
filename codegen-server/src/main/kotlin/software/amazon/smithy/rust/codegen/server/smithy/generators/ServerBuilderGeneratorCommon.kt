@@ -134,7 +134,20 @@ fun defaultValue(
         is DoubleShape -> rust(node.expectNumberNode().value.toDouble().toString() + "f64")
         is BooleanShape -> rust(node.expectBooleanNode().value.toString())
         is StringShape -> rust("String::from(${node.expectStringNode().value.dq()})")
-        is TimestampShape -> PrimitiveInstantiator(runtimeConfig, symbolProvider).instantiate(target, node)(this)
+        is TimestampShape -> when (node) {
+            is NumberNode -> PrimitiveInstantiator(runtimeConfig, symbolProvider).instantiate(target, node)(this)
+            is StringNode -> {
+                val value = node.expectStringNode().value
+                rustTemplate(
+                    """
+                    #{SmithyTypes}::DateTime::from_str("$value", #{SmithyTypes}::date_time::Format::DateTime)
+                            .expect("default value `$value` cannot be parsed into a valid date time; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                    """,
+                    "SmithyTypes" to types,
+                )
+            }
+            else -> throw unsupportedDefaultValueException
+        }
         is ListShape -> {
             check(node is ArrayNode && node.isEmpty)
             rust("Vec::new()")
