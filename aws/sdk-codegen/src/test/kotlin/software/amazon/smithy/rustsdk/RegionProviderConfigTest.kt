@@ -13,7 +13,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 internal class RegionProviderConfigTest {
     @Test
     fun `generates a valid config`() {
-        awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { _ctx, crate ->
+        awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { _, crate ->
             crate.unitTest {
                 rustTemplate("let conf: Option<crate::Config> = None; let _reg: Option<crate::config::Region> = conf.and_then(|c|c.region().cloned());")
             }
