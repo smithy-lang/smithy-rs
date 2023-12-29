@@ -10,10 +10,9 @@
 //! **Note**: This requires `http0-compat` to be enabled.
 //!
 //! ```rust
-//! # use aws_credential_types::Credentials;
+//! use aws_credential_types::Credentials;
 //! use aws_smithy_runtime_api::client::identity::Identity;
-//! # use aws_sigv4::http_request::SignableBody;
-//! #[cfg(feature = "http0-compat")]
+//! use aws_sigv4::http_request::SignableBody;
 //! fn test() -> Result<(), aws_sigv4::http_request::SigningError> {
 //! use aws_sigv4::http_request::{sign, SigningSettings, SigningParams, SignableRequest};
 //! use aws_sigv4::sign::v4;
@@ -50,8 +49,8 @@
 //! // Sign and then apply the signature to the request
 //! let (signing_instructions, _signature) = sign(signable_request, &signing_params)?.into_parts();
 //! signing_instructions.apply_to_request_http0x(&mut my_req);
-//! # Ok(())
-//! # }
+//! Ok(())
+//! }
 //! ```
 
 mod canonical_request;
