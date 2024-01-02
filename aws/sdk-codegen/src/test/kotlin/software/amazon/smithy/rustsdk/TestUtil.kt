@@ -45,7 +45,7 @@ fun awsSdkIntegrationTest(
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) = clientIntegrationTest(
     model,
-    awsIntegrationTestParams(),
+    params,
     test = test,
 )
 
@@ -60,8 +60,10 @@ fun awsIntegrationTestParams() =
                     .withMember(
                         "awsSdk",
                         ObjectNode.builder()
-                            .withMember("generateReadme", false)
+                            .withMember("awsSdkBuild", true)
+                            .withMember("suppressReadme", true)
                             .withMember("integrationTestPath", "../sdk/integration-tests")
+                            .withMember("partitionsConfigPath", "../sdk/aws-models/sdk-partitions.json")
                             .build(),
                     ).build(),
             )
