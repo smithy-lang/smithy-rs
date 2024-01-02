@@ -18,7 +18,9 @@ import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DocumentShape
+import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -520,7 +522,12 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                             )
                         }
 
-                        is NumberNode -> write(data.value)
+                        is NumberNode ->
+                            when (shape) {
+                                is FloatShape -> rust("${data.value}_f32")
+                                is DoubleShape -> rust("${data.value}_f64")
+                                else -> rust(data.value.toString())
+                            }
                     }
 
                 is BooleanShape -> rust(data.asBooleanNode().get().toString())

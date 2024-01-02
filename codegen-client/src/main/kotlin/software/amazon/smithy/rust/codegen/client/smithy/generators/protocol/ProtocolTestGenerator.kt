@@ -581,7 +581,13 @@ class DefaultProtocolTestGenerator(
         private val RestXml = "aws.protocoltests.restxml#RestXml"
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
-        private val ExpectFail = setOf<FailingTest>()
+        private val ExpectFail =
+            setOf<FailingTest>(
+                // Failing because we don't serialize default values if they match the default
+                FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", Action.Request),
+                FailingTest(JsonRpc10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
+                FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultValuesInInput", Action.Request),
+            )
         private val RunOnly: Set<String>? = null
 
         // These tests are not even attempted to be generated, either because they will not compile
