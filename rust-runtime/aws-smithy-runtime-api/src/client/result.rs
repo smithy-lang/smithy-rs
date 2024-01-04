@@ -423,7 +423,7 @@ impl<E, R> SdkError<E, R> {
     /// # }
     /// # impl std::error::Error for GetObjectError {}
     /// # impl GetObjectError {
-    /// #   fn is_not_found(&self) -> boolean { true }
+    /// #   fn is_not_found(&self) -> bool { true }
     /// # }
     /// # fn example() -> Result<(), GetObjectError> {
     /// # let sdk_err = SdkError::service_error(GetObjectError::NoSuchKey(()), ());
