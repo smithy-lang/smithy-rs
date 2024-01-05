@@ -82,6 +82,7 @@ pub fn subcommand_new(args: &NewArgs) -> Result<()> {
             format!("\"{repo}#{number}\"")
         })
         .collect::<Vec<_>>();
+    eprintln!("{}", &pr.body);
 
     let shortcode_issues = Regex::new("(smithy-rs|aws-sdk-rust)#[0-9]+").unwrap();
     for m in shortcode_issues.find_iter(&pr.body) {
