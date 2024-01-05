@@ -108,7 +108,7 @@ impl FromStr for Reference {
             ),
             Some((repo, number)) => {
                 let number = number.parse::<usize>()?;
-                if !matches!(repo, "smithy-rs" | "aws-sdk-rust") {
+                if !matches!(repo, "smithy-rs" | "aws-sdk-rust" | "aws-sdk") {
                     bail!("unexpected repo: {}", repo);
                 }
                 Ok(Reference {
