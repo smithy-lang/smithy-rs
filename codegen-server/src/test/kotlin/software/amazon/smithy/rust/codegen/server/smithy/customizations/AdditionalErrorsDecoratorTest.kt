@@ -15,7 +15,8 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestRustSettings
 
 class AdditionalErrorsDecoratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
 
         operation Infallible {
@@ -33,7 +34,7 @@ class AdditionalErrorsDecoratorTest {
 
         @error("client")
         structure AnError { }
-    """.asSmithyModel()
+        """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val service = ServiceShape.builder().id("smithy.test#Test").build()
     private val settings = serverTestRustSettings()

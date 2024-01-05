@@ -27,7 +27,8 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class ResponseBindingGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace smithy.example
 
         @idempotent
@@ -64,7 +65,7 @@ class ResponseBindingGeneratorTest {
             // Sent in the body
             additional: String,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val operationShape: OperationShape = model.lookup("smithy.example#PutObject")
     private val outputShape: StructureShape = operationShape.outputShape(model)
@@ -75,15 +76,17 @@ class ResponseBindingGeneratorTest {
         operationShape.outputShape(model).renderWithModelBuilder(model, symbolProvider, this)
         withModule(symbolProvider.moduleForShape(outputShape)) {
             rustBlock("impl PutObjectOutput") {
-                val bindings = HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
-                    .responseBindings(operationShape)
-                    .filter { it.location == HttpLocation.HEADER }
+                val bindings =
+                    HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("dont-care"))
+                        .responseBindings(operationShape)
+                        .filter { it.location == HttpLocation.HEADER }
                 bindings.forEach { binding ->
-                    val runtimeType = ResponseBindingGenerator(
-                        RestJson(codegenContext),
-                        codegenContext,
-                        operationShape,
-                    ).generateDeserializeHeaderFn(binding)
+                    val runtimeType =
+                        ResponseBindingGenerator(
+                            RestJson(codegenContext),
+                            codegenContext,
+                            operationShape,
+                        ).generateDeserializeHeaderFn(binding)
                     // little hack to force these functions to be generated
                     rust("// use #T;", runtimeType)
                 }

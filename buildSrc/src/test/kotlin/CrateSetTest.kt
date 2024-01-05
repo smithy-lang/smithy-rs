@@ -22,7 +22,11 @@ class CrateSetTest {
      * matches what `package.metadata.smithy-rs-release-tooling` says in the `Cargo.toml`
      * for the corresponding crate.
      */
-    private fun sutStabilityMatchesManifestStability(versionPropertyName: String, stabilityInManifest: Boolean, crate: String) {
+    private fun sutStabilityMatchesManifestStability(
+        versionPropertyName: String,
+        stabilityInManifest: Boolean,
+        crate: String,
+    ) {
         when (stabilityInManifest) {
             true -> assertEquals(STABLE_VERSION_PROP_NAME, versionPropertyName, "Crate: $crate")
             false -> assertEquals(UNSTABLE_VERSION_PROP_NAME, versionPropertyName, "Crate: $crate")
@@ -37,16 +41,20 @@ class CrateSetTest {
      * If `package.metadata.smithy-rs-release-tooling` does not exist in a `Cargo.toml`, the implementation
      * will treat that crate as unstable.
      */
-    private fun crateSetStabilitiesMatchManifestStabilities(crateSet: List<Crate>, relativePathToRustRuntime: String) {
+    private fun crateSetStabilitiesMatchManifestStabilities(
+        crateSet: List<Crate>,
+        relativePathToRustRuntime: String,
+    ) {
         crateSet.forEach {
             val path = "$relativePathToRustRuntime/${it.name}/Cargo.toml"
             val contents = File(path).readText()
-            val isStable = try {
-                Toml().read(contents).getTable("package.metadata.smithy-rs-release-tooling")?.getBoolean("stable") ?: false
-            } catch (e: java.lang.IllegalStateException) {
-                // sigv4 doesn't parse but it's stable now, hax hax hax
-                contents.trim().endsWith("[package.metadata.smithy-rs-release-tooling]\nstable = true")
-            }
+            val isStable =
+                try {
+                    Toml().read(contents).getTable("package.metadata.smithy-rs-release-tooling")?.getBoolean("stable") ?: false
+                } catch (e: java.lang.IllegalStateException) {
+                    // sigv4 doesn't parse but it's stable now, hax hax hax
+                    contents.trim().endsWith("[package.metadata.smithy-rs-release-tooling]\nstable = true")
+                }
             sutStabilityMatchesManifestStability(it.versionPropertyName, isStable, it.name)
         }
     }

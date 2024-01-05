@@ -77,13 +77,13 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "DataInput" to conditionalBuilderInput(
-                    """
-                    Blob::new(&b"hello, world!"[..])
-                    """,
-                    conditional = optionalBuilderInputs,
-                ),
-
+                "DataInput" to
+                    conditionalBuilderInput(
+                        """
+                        Blob::new(&b"hello, world!"[..])
+                        """,
+                        conditional = optionalBuilderInputs,
+                    ),
             )
         }
 
@@ -118,18 +118,18 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "StructInput" to conditionalBuilderInput(
-                    """
-                    TestStruct::builder()
-                        .some_string(#{StringInput})
-                        .some_int(#{IntInput})
-                        .build()
-                    """,
-                    conditional = optionalBuilderInputs,
-                    "StringInput" to conditionalBuilderInput("\"hello\"", conditional = optionalBuilderInputs),
-                    "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
-                ),
-
+                "StructInput" to
+                    conditionalBuilderInput(
+                        """
+                        TestStruct::builder()
+                            .some_string(#{StringInput})
+                            .some_int(#{IntInput})
+                            .build()
+                        """,
+                        conditional = optionalBuilderInputs,
+                        "StringInput" to conditionalBuilderInput("\"hello\"", conditional = optionalBuilderInputs),
+                        "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
+                    ),
             )
         }
 

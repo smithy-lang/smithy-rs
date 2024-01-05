@@ -64,7 +64,7 @@ def starts_or_ends_block_quote(line, inside_block_quotes):
 
 # Returns the indentation of a line
 def line_indent(line):
-    indent = re.search("[^\s]", line)
+    indent = re.search(r"[^\s]", line)
     if indent != None:
         return indent.start(0)
     else:
@@ -72,7 +72,7 @@ def line_indent(line):
 
 # Changes the indentation of a line
 def adjust_indent(line, indent):
-    old_indent = re.search("[^\s]", line)
+    old_indent = re.search(r"[^\s]", line)
     if old_indent == None:
         return line
     line = line[old_indent.start(0):]
@@ -168,7 +168,8 @@ def fix_file(file_name):
             print("INFO: Fixed indentation in `" + file_name + "`.")
             return True
     else:
-        print("INFO: `" + file_name + "` is fine.")
+        # This print is useful when debugging this script, but spammy otherwise. Leave it commented.
+        # print("INFO: `" + file_name + "` is fine.")
         return False
 
 class SelfTest(unittest.TestCase):

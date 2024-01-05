@@ -37,7 +37,8 @@ internal class EndpointTraitBindingsTest {
 
     @Test
     fun `generate endpoint prefixes`() {
-        val model = """
+        val model =
+            """
             namespace test
             @readonly
             @endpoint(hostPrefix: "{foo}a.data.")
@@ -49,16 +50,17 @@ internal class EndpointTraitBindingsTest {
                 @hostLabel
                 foo: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operationShape: OperationShape = model.lookup("test#GetStatus")
         val symbolProvider = testSymbolProvider(model)
-        val endpointBindingGenerator = EndpointTraitBindings(
-            model,
-            symbolProvider,
-            TestRuntimeConfig,
-            operationShape,
-            operationShape.expectTrait(EndpointTrait::class.java),
-        )
+        val endpointBindingGenerator =
+            EndpointTraitBindings(
+                model,
+                symbolProvider,
+                TestRuntimeConfig,
+                operationShape,
+                operationShape.expectTrait(EndpointTrait::class.java),
+            )
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.private("test")) {
             rust(
@@ -118,7 +120,8 @@ internal class EndpointTraitBindingsTest {
     @ExperimentalPathApi
     @Test
     fun `endpoint integration test`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             use aws.protocols#awsJson1_0
             use smithy.rules#endpointRuleSet
@@ -150,7 +153,7 @@ internal class EndpointTraitBindingsTest {
                 @hostLabel
                 greeting: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("test_endpoint_prefix") {
@@ -244,8 +247,9 @@ internal class EndpointTraitBindingsTest {
                         );
                     }
                     """,
-                    "capture_request" to CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
-                        .toType().resolve("client::http::test_util::capture_request"),
+                    "capture_request" to
+                        CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
+                            .toType().resolve("client::http::test_util::capture_request"),
                 )
             }
         }

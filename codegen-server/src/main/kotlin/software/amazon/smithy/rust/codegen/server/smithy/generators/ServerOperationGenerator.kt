@@ -34,14 +34,15 @@ class ServerOperationGenerator(
     private val operationId = operation.id
 
     /** Returns `std::convert::Infallible` if the model provides no errors. */
-    private fun operationError(): Writable = writable {
-        if (operation.errors.isEmpty()) {
-            rust("std::convert::Infallible")
-        } else {
-            // Name comes from [ServerOperationErrorGenerator].
-            rust("crate::error::${symbolProvider.toSymbol(operation).name}Error")
+    private fun operationError(): Writable =
+        writable {
+            if (operation.errors.isEmpty()) {
+                rust("std::convert::Infallible")
+            } else {
+                // Name comes from [ServerOperationErrorGenerator].
+                rust("crate::error::${symbolProvider.toSymbol(operation).name}Error")
+            }
         }
-    }
 
     fun render(writer: RustWriter) {
         writer.documentShape(operation, model)

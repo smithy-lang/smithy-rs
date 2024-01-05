@@ -12,6 +12,11 @@ plugins {
     id("software.amazon.smithy")
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
@@ -48,14 +53,6 @@ fun baseTest(service: String, module: String, imports: List<String> = listOf()):
         extraCodegenConfig = """
             "includeFluentClient": false,
             "nullabilityCheckMode": "${getNullabilityCheckMode()}"
-        """,
-        extraConfig = """
-            , "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false,
-                    "requireEndpointResolver": false
-                }
-            }
         """,
     )
 }

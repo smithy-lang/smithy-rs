@@ -17,7 +17,7 @@ use super::{
 };
 
 /// Allows the modification the requests URIs [`Display`](std::fmt::Display) and headers
-/// [`Debug`](std::fmt::Debug) to accommodate sensitivity.
+/// [`Debug`] to accommodate sensitivity.
 ///
 /// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`&Uri`](http::Uri).
 #[derive(Clone)]

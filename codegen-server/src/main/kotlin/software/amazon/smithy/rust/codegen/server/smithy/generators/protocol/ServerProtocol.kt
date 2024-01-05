@@ -126,10 +126,11 @@ class ServerAwsJsonProtocol(
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolModulePath: String
-        get() = when (version) {
-            is AwsJsonVersion.Json10 -> "aws_json_10"
-            is AwsJsonVersion.Json11 -> "aws_json_11"
-        }
+        get() =
+            when (version) {
+                is AwsJsonVersion.Json10 -> "aws_json_10"
+                is AwsJsonVersion.Json11 -> "aws_json_11"
+            }
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
         jsonParserGenerator(
@@ -149,8 +150,9 @@ class ServerAwsJsonProtocol(
         }
     }
 
-    override fun routerType() = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
-        .resolve("protocol::aws_json::router::AwsJsonRouter")
+    override fun routerType() =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("protocol::aws_json::router::AwsJsonRouter")
 
     /**
      * Returns the operation name as required by the awsJson1.x protocols.
@@ -164,14 +166,13 @@ class ServerAwsJsonProtocol(
         rust("""String::from("$serviceName.$operationName")""")
     }
 
-    override fun serverRouterRequestSpecType(
-        requestSpecModule: RuntimeType,
-    ): RuntimeType = RuntimeType.String
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.String
 
-    override fun serverRouterRuntimeConstructor() = when (version) {
-        AwsJsonVersion.Json10 -> "new_aws_json_10_router"
-        AwsJsonVersion.Json11 -> "new_aws_json_11_router"
-    }
+    override fun serverRouterRuntimeConstructor() =
+        when (version) {
+            AwsJsonVersion.Json10 -> "new_aws_json_10_router"
+            AwsJsonVersion.Json11 -> "new_aws_json_11_router"
+        }
 
     override fun requestRejection(runtimeConfig: RuntimeConfig): RuntimeType =
         ServerCargoDependency.smithyHttpServer(runtimeConfig)
@@ -259,17 +260,19 @@ class ServerRestXmlProtocol(
  */
 class ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(val codegenContext: ServerCodegenContext) :
     JsonParserCustomization() {
-    override fun section(section: JsonParserSection): Writable = when (section) {
-        is JsonParserSection.BeforeBoxingDeserializedMember -> writable {
-            // We're only interested in _structure_ member shapes that can reach constrained shapes.
-            if (
-                codegenContext.model.expectShape(section.shape.container) is StructureShape &&
-                section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
-            ) {
-                rust(".map(|x| x.into())")
-            }
-        }
+    override fun section(section: JsonParserSection): Writable =
+        when (section) {
+            is JsonParserSection.BeforeBoxingDeserializedMember ->
+                writable {
+                    // We're only interested in _structure_ member shapes that can reach constrained shapes.
+                    if (
+                        codegenContext.model.expectShape(section.shape.container) is StructureShape &&
+                        section.shape.targetCanReachConstrainedShape(codegenContext.model, codegenContext.symbolProvider)
+                    ) {
+                        rust(".map(|x| x.into())")
+                    }
+                }
 
-        else -> emptySection
-    }
+            else -> emptySection
+        }
 }

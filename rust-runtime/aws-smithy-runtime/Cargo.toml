@@ -48,7 +48,7 @@ approx = "0.5.1"
 aws-smithy-async = { path = "../aws-smithy-async", features = ["rt-tokio", "test-util"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test-util"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["test-util"] }
-futures-util = "0.3.28"
+futures-util = "0.3.29"
 pretty_assertions = "1.4.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }

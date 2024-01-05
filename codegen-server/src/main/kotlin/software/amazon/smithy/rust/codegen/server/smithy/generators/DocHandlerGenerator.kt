@@ -36,11 +36,12 @@ class DocHandlerGenerator(
      * Returns the function signature for an operation handler implementation. Used in the documentation.
      */
     fun docSignature(): Writable {
-        val outputT = if (operation.errors.isEmpty()) {
-            "${OutputModule.name}::${outputSymbol.name}"
-        } else {
-            "Result<${OutputModule.name}::${outputSymbol.name}, ${ErrorModule.name}::${errorSymbol.name}>"
-        }
+        val outputT =
+            if (operation.errors.isEmpty()) {
+                "${OutputModule.name}::${outputSymbol.name}"
+            } else {
+                "Result<${OutputModule.name}::${outputSymbol.name}, ${ErrorModule.name}::${errorSymbol.name}>"
+            }
 
         return writable {
             rust(
@@ -58,11 +59,12 @@ class DocHandlerGenerator(
      * difference that we don't ellide the error for use in `tower::service_fn`.
      */
     fun docFixedSignature(): Writable {
-        val errorT = if (operation.errors.isEmpty()) {
-            "std::convert::Infallible"
-        } else {
-            "${ErrorModule.name}::${errorSymbol.name}"
-        }
+        val errorT =
+            if (operation.errors.isEmpty()) {
+                "std::convert::Infallible"
+            } else {
+                "${ErrorModule.name}::${errorSymbol.name}"
+            }
 
         return writable {
             rust(

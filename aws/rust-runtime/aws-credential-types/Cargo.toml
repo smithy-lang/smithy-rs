@@ -18,7 +18,7 @@ aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api"
 zeroize = "1"
 
 [dev-dependencies]
-async-trait = "0.1.51" # used to test compatibility
+async-trait = "0.1.74" # used to test compatibility
 tokio = { version = "1.23.1", features = ["full", "test-util", "rt"] }
 
 [package.metadata.docs.rs]

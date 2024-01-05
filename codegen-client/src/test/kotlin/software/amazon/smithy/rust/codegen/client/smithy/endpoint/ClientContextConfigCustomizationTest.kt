@@ -12,7 +12,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 class ClientContextConfigCustomizationTest {
-    val model = """
+    val model =
+        """
         namespace test
         use smithy.rules#clientContextParams
         use aws.protocols#awsJson1_0
@@ -27,7 +28,7 @@ class ClientContextConfigCustomizationTest {
         })
         @awsJson1_0
         service TestService { operations: [] }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `client params generate a valid customization`() {

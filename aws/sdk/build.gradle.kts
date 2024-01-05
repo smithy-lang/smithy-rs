@@ -18,6 +18,11 @@ plugins {
     id("software.amazon.smithy")
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     smithyBuildConfigs = files(layout.buildDirectory.file("smithy-build.json"))
     allowUnknownTraits = true
@@ -117,10 +122,10 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "license": "Apache-2.0",
                         "customizationConfig": {
                             "awsSdk": {
-                                "generateReadme": true,
+                                "awsSdkBuild": true,
                                 "awsConfigVersion": "$awsConfigVersion",
                                 "defaultConfigPath": "${services.defaultConfigPath}",
-                                "endpointsConfigPath": "${services.endpointsConfigPath}",
+                                "partitionsConfigPath": "${services.partitionsConfigPath}",
                                 "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
                             }
                         }

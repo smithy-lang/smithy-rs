@@ -144,8 +144,9 @@ open class ConstrainedShapeSymbolProvider(
             supportedCollectionConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
         val allConstraintTraits = allConstraintTraits.mapNotNull { shape.getTrait(it).orNull() }.toSet()
 
-        return supportedConstraintTraits.isNotEmpty() && allConstraintTraits.subtract(supportedConstraintTraits)
-            .isEmpty()
+        return supportedConstraintTraits.isNotEmpty() &&
+            allConstraintTraits.subtract(supportedConstraintTraits)
+                .isEmpty()
     }
 
     /**
@@ -160,8 +161,9 @@ open class ConstrainedShapeSymbolProvider(
         defaultModule: RustModule.LeafModule,
         pubCrateServerBuilder: Boolean,
     ): Pair<String, RustModule.LeafModule> {
-        val syntheticMemberTrait = shape.getTrait<SyntheticStructureFromConstrainedMemberTrait>()
-            ?: return Pair(shape.contextName(serviceShape), defaultModule)
+        val syntheticMemberTrait =
+            shape.getTrait<SyntheticStructureFromConstrainedMemberTrait>()
+                ?: return Pair(shape.contextName(serviceShape), defaultModule)
 
         return if (syntheticMemberTrait.container is StructureShape) {
             val builderModule = syntheticMemberTrait.container.serverBuilderModule(base, pubCrateServerBuilder)
@@ -171,19 +173,22 @@ open class ConstrainedShapeSymbolProvider(
             // For non-structure shapes, the new shape defined for a constrained member shape
             // needs to be placed in an inline module named `pub {container_name_in_snake_case}`.
             val moduleName = RustReservedWords.escapeIfNeeded(syntheticMemberTrait.container.id.name.toSnakeCase())
-            val innerModuleName = moduleName + if (pubCrateServerBuilder) {
-                "_internal"
-            } else {
-                ""
-            }
+            val innerModuleName =
+                moduleName +
+                    if (pubCrateServerBuilder) {
+                        "_internal"
+                    } else {
+                        ""
+                    }
 
-            val innerModule = RustModule.new(
-                innerModuleName,
-                visibility = Visibility.publicIf(!pubCrateServerBuilder, Visibility.PUBCRATE),
-                parent = defaultModule,
-                inline = true,
-                documentationOverride = "",
-            )
+            val innerModule =
+                RustModule.new(
+                    innerModuleName,
+                    visibility = Visibility.publicIf(!pubCrateServerBuilder, Visibility.PUBCRATE),
+                    parent = defaultModule,
+                    inline = true,
+                    documentationOverride = "",
+                )
             val renameTo = syntheticMemberTrait.member.memberName ?: syntheticMemberTrait.member.id.name
             Pair(renameTo.toPascalCase(), innerModule)
         }

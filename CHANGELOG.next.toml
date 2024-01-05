@@ -11,89 +11,78 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
-[[aws-sdk-rust]]
-message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
-references = ["smithy-rs#3262"]
-meta = { "breaking" = false, "tada" = false, "bug" = true }
-author = "jdisanti"
-
 [[smithy-rs]]
-message = "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config."
-references = ["smithy-rs#3262"]
-meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = """Client creation now takes microseconds instead of milliseconds.
-Previously, it would take 2-3 milliseconds for each client instantiation due to time spent compiling regexes.
-For applications that used several clients, this would increase start-up time in cases where it really matters,
-such as for AWS Lambda cold starts. This time was improved by both changing regex implementation and caching the
-result of the compilation."""
-references = ["aws-sdk-rust#975", "smithy-rs#3269"]
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = """Add `test_credentials` to `ConfigLoader` in `aws_config`. This allows the following pattern during tests:
-
-```rust
-async fn main() {
-    let conf = aws_config::defaults(BehaviorVersion::latest())
-        .test_credentials()
-        .await;
-}
-```
-
-This is designed for unit tests and using local mocks like DynamoDB Local and LocalStack with the SDK.
-"""
-meta = { "breaking" = false, "tada" = true, "bug" = false }
-author = "rcoh"
-references = ["smithy-rs#3279", "aws-sdk-rust#971"]
-
-[[aws-sdk-rust]]
-message = "Improve the error messages for when auth fails to select an auth scheme for a request."
-references = ["aws-sdk-rust#979", "smithy-rs#3277"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Improve the error messages for when auth fails to select an auth scheme for a request."
-references = ["smithy-rs#3277"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[aws-sdk-rust]]
-message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
-references = ["aws-sdk-rust#986", "smithy-rs#3282"]
-meta = { "breaking" = false, "tada" = false, "bug" = false }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Fix documentation and examples on HyperConnector and HyperClientBuilder."
-references = ["smithy-rs#3282"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "jdisanti"
-
-[[smithy-rs]]
-message = "Expose local socket address from ConnectionMetadata."
-references = ["aws-sdk-rust#990"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
-author = "declanvk"
-
-[[smithy-rs]]
-message = "All generated docs now include docsrs labels when features are required"
-references = ["smithy-rs#3121", "smithy-rs#3295"]
+message = "Add support for constructing [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported."
+references = ["smithy-rs#3300", "aws-sdk-rust#977"]
 meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "all" }
 author = "rcoh"
 
 [[aws-sdk-rust]]
-message = "All generated docs now include docsrs labels when features are required"
-references = ["smithy-rs#3121", "smithy-rs#3295"]
+message = "Add support for constructing [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported."
+references = ["smithy-rs#3300", "aws-sdk-rust#977"]
 meta = { "breaking" = false, "tada" = true, "bug" = false }
 author = "rcoh"
 
 [[smithy-rs]]
-message = "[`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/enum.Number.html) `TryInto` implementations now succesfully convert from `f64` to numeric types when no precision is lost. This fixes some deserialization issues where numbers like `25.0` were sent when `Byte` fields were expected."
-references = ["smithy-rs#3294"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "all" }
+message = """ Add `PaginationStreamExt` extension trait to `aws-smithy-types-convert` behind the `convert-streams` feature. This makes it possible to treat a paginator as a [`futures_core::Stream`](https://docs.rs/futures-core/latest/futures_core/stream/trait.Stream.html), allowing customers to use stream combinators like [`map`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.map) and [`filter`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.filter).
+
+Example:
+
+```rust
+use aws_smithy_types_convert::stream::PaginationStreamExt
+let stream = s3_client.list_objects_v2().bucket("...").into_paginator().send().into_stream_03x();
+```
+"""
+references = ["smithy-rs#3299"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "Ploppz"
+
+[[aws-sdk-rust]]
+message = """ Add `PaginationStreamExt` extension trait to `aws-smithy-types-convert` behind the `convert-streams` feature. This makes it possible to treat a paginator as a [`futures_core::Stream`](https://docs.rs/futures-core/latest/futures_core/stream/trait.Stream.html), allowing customers to use stream combinators like [`map`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.map) and [`filter`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.filter).
+
+Example:
+
+```rust
+use aws_smithy_types_convert::stream::PaginationStreamExt
+let stream = s3_client.list_objects_v2().bucket("...").into_paginator().send().into_stream_03x();
+```
+"""
+references = ["smithy-rs#3299"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "Ploppz"
+
+[[smithy-rs]]
+message = "Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false. See [changelog discussion](https://github.com/smithy-lang/smithy-rs/discussions/3312) for details."
+references = ["smithy-rs#3252", "smithy-rs#3312"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "milesziemer"
+
+[[aws-sdk-rust]]
+message = "Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false. See [changelog discussion](https://github.com/smithy-lang/smithy-rs/discussions/3312) for details."
+references = ["smithy-rs#3252", "smithy-rs#3312"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "milesziemer"
+
+[[smithy-rs]]
+message = "Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership."
+references = ["smithy-rs#3333", "aws-sdk-rust#998", "aws-sdk-rust#1010"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership."
+references = ["smithy-rs#3333", "aws-sdk-rust#998", "aws-sdk-rust#1010"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "rcoh"
+
+[[smithy-rs]]
+message = """`requireEndpointResolver: false` is no longer required to remove the need for an endpoint resolver. Instead, `"awsSdkBuilder"` (default false), now _removes_ that requirement."""
+references = ["smithy-rs#3292"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Fix bug in `CredentialsProcess` provider where `expiry` was incorrectly treated as a required field."
+references = ["smithy-rs#3335", "aws-sdk-rust#1021"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
