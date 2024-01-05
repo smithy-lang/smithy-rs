@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use changelogger::init::subcommand_init;
+use changelogger::new::subcommand_new;
 use changelogger::render::subcommand_render;
 use changelogger::split::subcommand_split;
 use clap::Parser;

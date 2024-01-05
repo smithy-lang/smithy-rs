@@ -25,6 +25,7 @@ smithy-rs-tool-common = { path = "../smithy-rs-tool-common" }
 time = { version = "0.3.9", features = ["local-offset"]}
 toml = "0.5.8"
 indicatif = "0.17.7"
+regex-lite = "0.1.5"
 
 [dev-dependencies]
 pretty_assertions = "1.3"
