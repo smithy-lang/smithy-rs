@@ -97,6 +97,12 @@ pub struct MockResponseInterceptor {
     must_match: bool,
 }
 
+impl Default for MockResponseInterceptor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct RuleBuilder<I, O, E> {
     _ty: PhantomData<(I, O, E)>,
     input_filter: MatchFn,
