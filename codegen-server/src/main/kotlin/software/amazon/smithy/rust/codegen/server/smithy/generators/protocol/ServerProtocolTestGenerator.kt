@@ -239,6 +239,7 @@ class ServerProtocolTestGenerator(
                     TestCase.MalformedRequestTest(fixed)
                 }
             }
+
             else -> it
         }
     }
@@ -741,6 +742,7 @@ class ServerProtocolTestGenerator(
         // it makes sense to do the simplest thing for now.
         // The test will _fail_ if these pass, so we will discover & remove if we fix them by accident
         private const val AwsJson11 = "aws.protocoltests.json#JsonProtocol"
+        private const val AwsJson10 = "aws.protocoltests.json10#JsonRpc10"
         private const val RestJson = "aws.protocoltests.restjson#RestJson"
         private const val RestJsonValidation = "aws.protocoltests.restjson.validation#RestJsonValidation"
         private val ExpectFail: Set<FailingTest> = setOf(
@@ -825,6 +827,14 @@ class ServerProtocolTestGenerator(
             // TODO(https://github.com/awslabs/smithy/issues/1737): Specs on @internal, @tags, and enum values need to be clarified
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumTraitString_case0", TestType.MalformedRequest),
             FailingTest(RestJsonValidation, "RestJsonMalformedEnumTraitString_case1", TestType.MalformedRequest),
+
+            // These tests are broken because they are missing a target header
+            FailingTest(AwsJson10, "AwsJson10ServerPopulatesNestedDefaultsWhenMissingInRequestBody", TestType.Request),
+            FailingTest(AwsJson10, "AwsJson10ServerPopulatesDefaultsWhenMissingInRequestBody", TestType.Request),
+
+            // Response defaults are not set when builders are not used https://github.com/smithy-lang/smithy-rs/issues/3339
+            FailingTest(AwsJson10, "AwsJson10ServerPopulatesDefaultsInResponseWhenMissingInParams", TestType.Response),
+            FailingTest(AwsJson10, "AwsJson10ServerPopulatesNestedDefaultValuesWhenMissingInInResponseParams", TestType.Response),
         )
         private val RunOnly: Set<String>? = null
 
@@ -848,6 +858,7 @@ class ServerProtocolTestGenerator(
             // RestXml S3 tests that fail to compile
             "S3EscapeObjectKeyInUriLabel",
             "S3EscapePathObjectKeyInUriLabel",
+
         )
 
         private fun fixRestJsonAllQueryStringTypes(
