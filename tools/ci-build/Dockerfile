@@ -167,7 +167,8 @@ RUN set -eux; \
         python3 \
         python3-devel \
         python3-pip \
-        shadow-utils; \
+        shadow-utils \
+        tar; \
     yum clean all; \
     rm -rf /var/cache/yum; \
     groupadd build; \
