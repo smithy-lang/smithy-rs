@@ -1,6 +1,6 @@
 # Why does this file exist?
 # badssl seems to be abandoned. The orginal Dockerfile was based on ubuntu 16.04 and all the bits were rotting.
-# I've updated the Dockerfile to ubuntu 22.04 which will hopefully let everything limp along a little longer.
+# I've updated the Dockerfilet l to ubuntu 22.04 which will hopefully let everything limp along a little longer.
 FROM ubuntu:22.04 as nginx
 # Install necessary packages for building NGINX
 RUN apt-get update && apt-get install -y \
@@ -79,10 +79,10 @@ RUN make inside-docker
 RUN sed -i 's/SECLEVEL=2/SECLEVEL=0/' /etc/ssl/openssl.cnf
 
 # Fix DH key that can't be generated...works in docker bug not on github. Who knows.
-RUN echo "-----BEGIN DH PARAMETERS-----" >/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
-RUN echo "MEICPQDZ/YFp3iEs3/k9iRGoC/5/To2+5pUF/C6GkO6VjXHHyRVy68I0rI0q7IAq" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
-RUN echo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
-RUN echo "-----END DH PARAMETERS-----" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
+RUN echo "-----BEGIN DH PARAMETERS-----" > /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
+RUN echo "MEICPQDZ/YFp3iEs3/k9iRGoC/5/To2+5pUF/C6GkO6VjXHHyRVy68I0rI0q7IAq" >> /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
+RUN echo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >> /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
+RUN echo "-----END DH PARAMETERS-----" >> /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
 
 RUN nginx -t
 # Start things up!
