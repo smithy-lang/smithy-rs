@@ -762,8 +762,18 @@ class RustWriter private constructor(
                         }
                     } else if (memberSymbol.defaultValue() is Default.NonZeroDefault) {
                         val default = Node.printJson((memberSymbol.defaultValue() as Default.NonZeroDefault).value)
-                        rustBlock("if ${variable.asValue()} != $default") {
-                            block(variable)
+                        when (shape) {
+                            // We know that the default is 'true' since it's the only possible non-zero default
+                            // for a boolean. Don't explicitly check against `true` to avoid a clippy lint.
+                            is BooleanShape ->
+                                rustBlock("if !${variable.asValue()}") {
+                                    block(variable)
+                                }
+
+                            else ->
+                                rustBlock("if ${variable.asValue()} != $default") {
+                                    block(variable)
+                                }
                         }
                     } else {
                         rustBlock("") {
