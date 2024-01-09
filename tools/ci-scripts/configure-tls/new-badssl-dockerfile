@@ -85,3 +85,5 @@ RUN echo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >>/var/www/badssl/_site/certs/sets/curre
 RUN echo "-----END DH PARAMETERS-----" >>/var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem \
 
 RUN nginx -t
+# Start things up!
+CMD nginx && tail -f /usr/local/nginx/logs/access.log /usr/local/nginx/logs/error.log
