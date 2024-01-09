@@ -1,7 +1,46 @@
 # What is this??
 # badssl seems to be abandoned. The orginal dockerfile was based on ubuntu 16.04 and all the bits were rotting.
 # I've updated the dockerfiel to ubuntu 22.04 which will hopefully let everything limp along a little longer.
+# Stage 2: Build Nginx using the OpenSSL built in Stage 1
+FROM ubuntu:22.04 as nginx
+# Install necessary packages for building NGINX
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpcre3 \
+    libpcre3-dev \
+    zlib1g \
+    zlib1g-dev \
+    wget
+
+# Define NGINX version
+ARG NGINX_VERSION=1.25.3
+ARG OPEN_SSL_VERSION=3.2.0
+
+RUN wget https://github.com/openssl/openssl/releases/download/openssl-${OPEN_SSL_VERSION}/openssl-${OPEN_SSL_VERSION}.tar.gz \
+    && tar -xzvf openssl-${OPEN_SSL_VERSION}.tar.gz
+
+# Download NGINX source code
+RUN wget http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz \
+    && tar -xzvf nginx-$NGINX_VERSION.tar.gz \
+    && cd nginx-$NGINX_VERSION
+
+
+# Configure NGINX before building it
+RUN cd nginx-$NGINX_VERSION \
+    && ./configure \
+        --prefix=/usr/local/nginx \
+        --with-http_ssl_module \
+        --with-openssl=../openssl-${OPEN_SSL_VERSION} \
+        --with-openssl-opt=enable-weak-ssl-ciphers \
+        --with-stream \
+        --with-threads \
+    && make \
+    && make install
+
+RUN /usr/local/nginx/sbin/nginx -V
+
 FROM ubuntu:22.04
+
 MAINTAINER April King <april@pokeinthe.io>
 EXPOSE 80 443
 RUN apt-get update && apt-get install -y apt-transport-https
@@ -11,19 +50,26 @@ RUN apt-get update && apt-get install -y \
     git \
     libffi-dev \
     make \
-    nginx \
     ruby3.0 \
     ruby3.0-dev
 #RUN gem update --system
 RUN gem install jekyll
 
+COPY --from=nginx /usr/local/nginx /usr/local/nginx
+ENV PATH="/usr/local/nginx/sbin:${PATH}"
+
 # Install badssl.com
 ADD . badssl.com
 WORKDIR badssl.com
+
+RUN sed -i 's/SECLEVEL=2/SECLEVEL=0/' /etc/ssl/openssl.cnf
+RUN tail -n10 /etc/ssl/openssl.cnf
+
+RUN nginx -V
 RUN make inside-docker
 
 RUN sed -i 's/SECLEVEL=2/SECLEVEL=0/' /etc/ssl/openssl.cnf
 RUN tail -n10 /etc/ssl/openssl.cnf
 
 # Start things up!
-CMD nginx && tail -f /var/log/nginx/access.log /var/log/nginx/error.log
+# CMD nginx && tail -f /usr/local/nginx/logs/access.log /usr/local/nginx/logs/error.log
