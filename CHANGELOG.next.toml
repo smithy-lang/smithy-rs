@@ -86,3 +86,9 @@ message = "Fix bug in `CredentialsProcess` provider where `expiry` was incorrect
 references = ["smithy-rs#3335", "aws-sdk-rust#1021"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "~/.aws/config and ~/.aws/credentials now parse keys in a case-insensitive way. This means the `AWS_SECRET_ACCESS_KEY` is supported in addition to `aws_secret_access_key`."
+references = ["aws-sdk#574", "aws-sdk-rust#1020", "smithy-rs#3344"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
