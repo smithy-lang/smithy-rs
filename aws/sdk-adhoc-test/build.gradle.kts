@@ -54,14 +54,6 @@ fun baseTest(service: String, module: String, imports: List<String> = listOf()):
             "includeFluentClient": false,
             "nullabilityCheckMode": "${getNullabilityCheckMode()}"
         """,
-        extraConfig = """
-            , "customizationConfig": {
-                "awsSdk": {
-                    "generateReadme": false,
-                    "requireEndpointResolver": false
-                }
-            }
-        """,
     )
 }
 

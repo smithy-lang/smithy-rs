@@ -57,16 +57,16 @@ internal class ServiceConfigGeneratorTest {
                                         writable {
                                             rustTemplate(
                                                 """
-                                    if authorizer != 69 {
-                                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
-                                    }
-                                    
-                                    if auth_spec.len() != 69 && generic_list.len() != 69 {
-                                        return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
-                                    }
-                                    let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
-                                    let authz_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
-                                    """,
+                                                if authorizer != 69 {
+                                                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 1"));
+                                                }
+
+                                                if auth_spec.len() != 69 && generic_list.len() != 69 {
+                                                    return Err(std::io::Error::new(std::io::ErrorKind::Other, "failure 2"));
+                                                }
+                                                let authn_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
+                                                let authz_plugin = #{SmithyHttpServer}::plugin::IdentityPlugin;
+                                                """,
                                                 *codegenScope,
                                             )
                                         },
@@ -186,10 +186,10 @@ internal class ServiceConfigGeneratorTest {
                                         writable {
                                             rustTemplate(
                                                 """
-                                    let layer1 = #{Identity}::new();
-                                    let layer2 = #{Identity}::new();
-                                    let layer3 = #{Identity}::new();
-                                    """,
+                                                let layer1 = #{Identity}::new();
+                                                let layer2 = #{Identity}::new();
+                                                let layer3 = #{Identity}::new();
+                                                """,
                                                 *codegenScope,
                                             )
                                         },

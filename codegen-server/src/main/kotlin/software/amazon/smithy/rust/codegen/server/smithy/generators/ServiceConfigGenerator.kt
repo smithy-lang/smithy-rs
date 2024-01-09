@@ -303,10 +303,10 @@ class ServiceConfigGenerator(
             writable {
                 rustTemplate(
                     """
-                if !self.${it.requiredBuilderFlagName()} {
-                    return #{Err}(${serviceName}ConfigError::${it.requiredErrorVariant()});
-                }
-                """,
+                    if !self.${it.requiredBuilderFlagName()} {
+                        return #{Err}(${serviceName}ConfigError::${it.requiredErrorVariant()});
+                    }
+                    """,
                     *codegenScope,
                 )
             }
@@ -335,19 +335,19 @@ class ServiceConfigGenerator(
                         writable {
                             rust(
                                 """
-                    ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
-                    ${it.requiredErrorVariant()},
-                    """,
+                                ##[error("service is not fully configured; invoke `${it.name}` on the config builder")]
+                                ${it.requiredErrorVariant()},
+                                """,
                             )
                         }
                     }
                 rustTemplate(
                     """
-                ##[derive(Debug, #{ThisError}::Error)]
-                pub enum ${serviceName}ConfigError {
-                    #{Variants:W}
-                }
-                """,
+                    ##[derive(Debug, #{ThisError}::Error)]
+                    pub enum ${serviceName}ConfigError {
+                        #{Variants:W}
+                    }
+                    """,
                     "ThisError" to ServerCargoDependency.ThisError.toType(),
                     "Variants" to variants.join("\n"),
                 )
@@ -406,12 +406,12 @@ class ServiceConfigGenerator(
                     writable {
                         rustTemplate(
                             """
-                    ${serviceName}ConfigBuilder<
-                        #{LayersReturnTy:W},
-                        #{HttpPluginsReturnTy:W},
-                        #{ModelPluginsReturnTy:W},
-                    >
-                    """,
+                            ${serviceName}ConfigBuilder<
+                                #{LayersReturnTy:W},
+                                #{HttpPluginsReturnTy:W},
+                                #{ModelPluginsReturnTy:W},
+                            >
+                            """,
                             "LayersReturnTy" to layersReturnTy,
                             "HttpPluginsReturnTy" to httpPluginsReturnTy,
                             "ModelPluginsReturnTy" to modelPluginsReturnTy,
@@ -435,12 +435,12 @@ class ServiceConfigGenerator(
                 docs(it.docs)
                 rustBlockTemplate(
                     """
-                pub fn ${it.name}#{ParamBindingsGenericsWritable}(
-                    ##[allow(unused_mut)]
-                    mut self,
-                    #{ParamBindings:W}
-                ) -> #{ReturnTy:W}
-                """,
+                    pub fn ${it.name}#{ParamBindingsGenericsWritable}(
+                        ##[allow(unused_mut)]
+                        mut self,
+                        #{ParamBindings:W}
+                    ) -> #{ReturnTy:W}
+                    """,
                     "ReturnTy" to returnTy,
                     "ParamBindings" to paramBindings,
                     "ParamBindingsGenericsWritable" to paramBindingsGenericsWritable,
@@ -482,9 +482,9 @@ class ServiceConfigGenerator(
         writable {
             rustBlockTemplate(
                 """
-            /// Build the configuration.
-            pub fn build(self) -> #{BuilderBuildReturnTy:W}
-            """,
+                /// Build the configuration.
+                pub fn build(self) -> #{BuilderBuildReturnTy:W}
+                """,
                 "BuilderBuildReturnTy" to builderBuildReturnType(),
             ) {
                 rustTemplate(
@@ -495,12 +495,12 @@ class ServiceConfigGenerator(
                 conditionalBlock("Ok(", ")", isBuilderFallible) {
                     rust(
                         """
-                    super::${serviceName}Config {
-                        layers: self.layers,
-                        http_plugins: self.http_plugins,
-                        model_plugins: self.model_plugins,
-                    }
-                    """,
+                        super::${serviceName}Config {
+                            layers: self.layers,
+                            http_plugins: self.http_plugins,
+                            model_plugins: self.model_plugins,
+                        }
+                        """,
                     )
                 }
             }
