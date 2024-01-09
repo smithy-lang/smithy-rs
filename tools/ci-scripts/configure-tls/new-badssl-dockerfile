@@ -40,7 +40,6 @@ RUN /usr/local/nginx/sbin/nginx -V
 
 FROM ubuntu:22.04
 
-MAINTAINER April King <april@pokeinthe.io>
 EXPOSE 80 443
 RUN apt-get update && apt-get install -y apt-transport-https
 RUN apt-get install -y software-properties-common
