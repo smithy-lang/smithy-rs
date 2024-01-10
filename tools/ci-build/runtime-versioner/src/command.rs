@@ -10,7 +10,7 @@ use std::process::Command;
 pub trait CommandExt {
     fn expect_success_output(&mut self, context: &str) -> Result<String>;
 
-    fn expect_statuses(&mut self, statuses: impl IntoIterator<Item = i32>) -> Result<i32>;
+    fn expect_status_one_of(&mut self, statuses: impl IntoIterator<Item = i32>) -> Result<i32>;
 }
 
 impl CommandExt for Command {
@@ -32,7 +32,7 @@ impl CommandExt for Command {
         Ok(stdout)
     }
 
-    fn expect_statuses(&mut self, statuses: impl IntoIterator<Item = i32>) -> Result<i32> {
+    fn expect_status_one_of(&mut self, statuses: impl IntoIterator<Item = i32>) -> Result<i32> {
         let output = self
             .output()
             .with_context(|| format!("failed to invoke {:?}", self))?;

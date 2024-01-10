@@ -98,7 +98,7 @@ fn tag_is_ancestor(repo: &Repo, tag: &ReleaseTag) -> Result<bool> {
     let commit = commit_for_tag(repo, tag)?;
     let status = repo
         .git(["merge-base", "--is-ancestor", &commit, "HEAD"])
-        .expect_statuses([0, 1])?;
+        .expect_status_one_of([0, 1])?;
     Ok(status == 0)
 }
 
