@@ -51,7 +51,7 @@ pub fn audit(args: Audit) -> Result<()> {
         for error in errors {
             eprintln!("{error}");
         }
-        Err(anyhow!("there are audit failures in the runtime crates"))
+        bail!("there are audit failures in the runtime crates")
     }
 }
 
