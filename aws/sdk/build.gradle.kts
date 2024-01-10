@@ -359,11 +359,7 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
 
     toolPath = publisherToolPath
     binaryName = "publisher"
-    arguments = mutableListOf("fix-manifests", "--location", outputDir.asFile.absolutePath).apply {
-        if (crateVersioner.independentVersioningEnabled()) {
-            add("--disable-version-number-validation")
-        }
-    }
+    arguments = mutableListOf("fix-manifests", "--location", outputDir.asFile.absolutePath)
 }
 
 tasks.register<ExecRustBuildTool>("hydrateReadme") {
