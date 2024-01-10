@@ -7,8 +7,9 @@ use anyhow::{anyhow, Context, Error, Result};
 use camino::Utf8Path;
 use crates_index::Crate;
 use reqwest::StatusCode;
-use std::collections::HashMap;
+use smithy_rs_tool_common::retry::{run_with_retry_sync, ErrorClass};
 use std::fs;
+use std::{collections::HashMap, time::Duration};
 
 pub struct CratesIndex(Inner);
 
@@ -35,42 +36,48 @@ impl CratesIndex {
     pub fn published_versions(&self, crate_name: &str) -> Result<Vec<String>> {
         match &self.0 {
             Inner::Fake(index) => Ok(index.crates.get(crate_name).cloned().unwrap_or_default()),
-            Inner::Real(index) => {
-                let url = index
-                    .crate_url(crate_name)
-                    .expect("crate name is not empty string");
-                let crate_meta: Option<Crate> = reqwest::blocking::get(url)
-                    .map_err(Error::from)
-                    .and_then(|response| {
-                        let status = response.status();
-                        response.bytes().map(|b| (status, b)).map_err(Error::from)
-                    })
-                    .and_then(|(status, bytes)| match status {
-                        status if status.is_success() => {
-                            Crate::from_slice(&bytes).map_err(Error::from).map(Some)
-                        }
-                        StatusCode::NOT_FOUND => Ok(None),
-                        status => {
-                            let body = String::from_utf8_lossy(&bytes);
-                            Err(anyhow!(
-                                "request to crates.io index failed ({status}):\n{body}"
-                            ))
-                        }
-                    })
-                    .with_context(|| {
-                        format!("failed to retrieve crates.io metadata for {crate_name}",)
-                    })?;
-                Ok(crate_meta
-                    .map(|meta| {
-                        meta.versions()
-                            .iter()
-                            .map(|v| v.version().to_string())
-                            .collect()
-                    })
-                    .unwrap_or_default())
-            }
+            Inner::Real(index) => Ok(run_with_retry_sync(
+                "retrieve published versions",
+                3,
+                Duration::from_secs(1),
+                || published_versions(index, crate_name),
+                |_err| ErrorClass::Retry,
+            )?),
         }
     }
+}
+
+fn published_versions(index: &crates_index::SparseIndex, crate_name: &str) -> Result<Vec<String>> {
+    let url = index
+        .crate_url(crate_name)
+        .expect("crate name is not empty string");
+    let crate_meta: Option<Crate> = reqwest::blocking::get(url)
+        .map_err(Error::from)
+        .and_then(|response| {
+            let status = response.status();
+            response.bytes().map(|b| (status, b)).map_err(Error::from)
+        })
+        .and_then(|(status, bytes)| match status {
+            status if status.is_success() => {
+                Crate::from_slice(&bytes).map_err(Error::from).map(Some)
+            }
+            StatusCode::NOT_FOUND => Ok(None),
+            status => {
+                let body = String::from_utf8_lossy(&bytes);
+                Err(anyhow!(
+                    "request to crates.io index failed ({status}):\n{body}"
+                ))
+            }
+        })
+        .with_context(|| format!("failed to retrieve crates.io metadata for {crate_name}"))?;
+    Ok(crate_meta
+        .map(|meta| {
+            meta.versions()
+                .iter()
+                .map(|v| v.version().to_string())
+                .collect()
+        })
+        .unwrap_or_default())
 }
 
 /// Fake crates.io index for testing
