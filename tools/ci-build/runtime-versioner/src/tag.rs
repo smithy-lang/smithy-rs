@@ -59,18 +59,7 @@ fn ancestor_tag(repo: &Repo) -> Result<ReleaseTag> {
 // Function assumes the given tag is known to be suffixed.
 fn strip_describe_tags_suffix(tag: &str) -> Option<&str> {
     // Example release tag with suffix: release-2023-12-01-42-g885048e40
-    let end_index = tag
-        .char_indices()
-        .rev()
-        .skip_while(|(_, c)| *c != '-')
-        .skip(1)
-        .find(|(_, c)| *c == '-')
-        .map(|(i, _)| i);
-    if let Some(end_index) = end_index {
-        Some(&tag[0..end_index])
-    } else {
-        None
-    }
+    tag.rsplitn(3, '-').skip(2).next()
 }
 
 /// Returns all release tags for the repo in descending order by time.
