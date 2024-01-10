@@ -92,6 +92,7 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-rust-runtimes
           runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
         - action: check-sdk-codegen-unit-tests
           runner: ubuntu-latest
         - action: check-server-codegen-integration-tests
@@ -119,6 +120,8 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
+        # Defaults to 1 if not set
+        fetch-depth: ${{ matrix.test.fetch-depth }}
     - name: Run ${{ matrix.test.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
