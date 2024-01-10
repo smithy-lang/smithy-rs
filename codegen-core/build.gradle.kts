@@ -53,47 +53,58 @@ fun gitCommitHash(): String {
 }
 
 val generateSmithyRuntimeCrateVersion by tasks.registering {
-    fun kv(key: String, value: String) = "\"$key\": \"$value\""
-    // generate the version of the runtime to use as a resource.
-    // this keeps us from having to manually change version numbers in multiple places
+    // Generate the version of the runtime to use as a resource.
+    // This keeps us from having to manually change version numbers in multiple places.
     val resourcesDir = layout.buildDirectory.dir("resources/main/software/amazon/smithy/rust/codegen/core")
-    val versionFile = resourcesDir.get().file("runtime-crate-version.txt")
-    outputs.file(versionFile)
+    val versionsFile = resourcesDir.get().file("runtime-crate-versions.json")
+    outputs.file(versionsFile)
+
     val stableCrateVersion = project.properties["smithy.rs.runtime.crate.stable.version"].toString()
     val unstableCrateVersion = project.properties["smithy.rs.runtime.crate.unstable.version"].toString()
-    inputs.property("crateVersion", stableCrateVersion)
-    // version format must be in sync with `software.amazon.smithy.rust.codegen.core.Version`
-    val version = StringBuilder().append("{")
-    version.append(kv("githash", gitCommitHash())).append(",")
-    version.append(kv("stableVersion", stableCrateVersion)).append(",")
-    version.append(kv("unstableVersion", unstableCrateVersion)).append(",")
-    // hack for internal build
-    val smithyStableCrates = listOf(
-        // AWS crates
-        "aws-config",
-        "aws-credential-types",
-        "aws-runtime",
-        "aws-runtime-api",
-        "aws-sigv4",
-        "aws-types",
-
-        // smithy crates
-        "aws-smithy-async",
-        "aws-smithy-runtime-api",
-        "aws-smithy-runtime",
-        "aws-smithy-types",
-    )
-
-    val runtimeCrates =
-        smithyStableCrates.joinToString(separator = ",", prefix = "{", postfix = "}") { crate ->
-            kv(crate, stableCrateVersion)
-        }
-
-    version.append(""""runtimeCrates": $runtimeCrates""").append("}")
+    inputs.property("stableCrateVersion", stableCrateVersion)
+    inputs.property("unstableCrateVersion", stableCrateVersion)
 
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
-        versionFile.asFile.writeText(version.toString())
+        // Version format must be kept in sync with `software.amazon.smithy.rust.codegen.core.Version`
+        versionsFile.asFile.writeText(StringBuilder().append("{\n").also { json ->
+            fun StringBuilder.keyVal(key: String, value: String) = append("\"$key\": \"$value\"")
+
+            json.append("  ").keyVal("gitHash", gitCommitHash()).append(",\n")
+            json.append("  \"runtimeCrates\": {\n")
+            var first = true
+            for (runtimePath in arrayOf("../rust-runtime", "../aws/rust-runtime")) {
+                for (path in project.projectDir.resolve(runtimePath).listFiles()!!) {
+                    if (!path.isDirectory || !path.resolve("Cargo.toml").exists()) {
+                        continue
+                    }
+
+                    val manifestLines = path.resolve("Cargo.toml").readLines()
+                    val publish = manifestLines.none { line -> line == "publish = false" }
+                    if (!publish) {
+                        continue
+                    }
+
+                    val stable = manifestLines.any { line -> line == "stable = true" }
+                    val versionLine = manifestLines.first { line -> line.startsWith("version = \"") }
+                    val maybeVersion = versionLine.slice(("version = \"".length)..(versionLine.length - 2))
+                    val version = if (maybeVersion == "0.0.0-smithy-rs-head") {
+                        when (stable) {
+                            true -> stableCrateVersion
+                            else -> unstableCrateVersion
+                        }
+                    } else {
+                        maybeVersion
+                    }
+                    if (!first) {
+                        json.append(",\n")
+                    }
+                    json.append("    ").keyVal(path.name, version)
+                    first = false
+                }
+            }
+            json.append("  }\n")
+        }.append("}").toString())
     }
 }
 
