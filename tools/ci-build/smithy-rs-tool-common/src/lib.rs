@@ -5,6 +5,7 @@
 
 pub mod changelog;
 pub mod ci;
+pub mod command;
 pub mod git;
 #[macro_use]
 pub mod macros;

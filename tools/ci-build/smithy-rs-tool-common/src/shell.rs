@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! In general, the `crate::command` module should be preferred over this one going forward.
+//!
+//! This module was an attempt to make unit testing against command-line tools easier (especially
+//! in regards to git), but over time we've been realizing it's easier to just set up fake git
+//! repositories to run real commands against, or to mock out individual pieces of functionality
+//! where needed rather than individual commands. This module requires a ton of boilerplate for
+//! what is providing.
+
 use anyhow::Result;
 use async_trait::async_trait;
 use std::process::Output;

@@ -13,7 +13,6 @@ use clap::Parser;
 use tracing_subscriber::{filter::LevelFilter, EnvFilter};
 
 mod audit;
-mod command;
 mod index;
 mod repo;
 mod tag;

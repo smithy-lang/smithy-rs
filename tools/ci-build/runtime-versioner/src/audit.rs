@@ -4,7 +4,6 @@
  */
 
 use crate::{
-    command::CommandExt,
     index::CratesIndex,
     repo::Repo,
     tag::{previous_release_tag, release_tags},
@@ -13,7 +12,7 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Context, Result};
 use camino::{Utf8Path, Utf8PathBuf};
-use smithy_rs_tool_common::release_tag::ReleaseTag;
+use smithy_rs_tool_common::{command::sync::CommandExt, release_tag::ReleaseTag};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

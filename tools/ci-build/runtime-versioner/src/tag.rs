@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::{command::CommandExt, repo::Repo};
+use crate::repo::Repo;
 use anyhow::{anyhow, bail, Context, Result};
-use smithy_rs_tool_common::release_tag::ReleaseTag;
+use smithy_rs_tool_common::{command::sync::CommandExt, release_tag::ReleaseTag};
 use std::str::FromStr;
 use tracing::warn;
 
@@ -98,7 +98,7 @@ fn tag_is_ancestor(repo: &Repo, tag: &ReleaseTag) -> Result<bool> {
     let commit = commit_for_tag(repo, tag)?;
     let status = repo
         .git(["merge-base", "--is-ancestor", &commit, "HEAD"])
-        .expect_status_one_of([0, 1])?;
+        .expect_status_one_of("determine if a tag is the ancestor to HEAD", [0, 1])?;
     Ok(status == 0)
 }
 
