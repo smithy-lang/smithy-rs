@@ -14,7 +14,7 @@ set -eux
 cd smithy-rs
 
 echo -e "# ${C_YELLOW}Auditing runtime crate version numbers...${C_RESET}"
-runtime-versioner audit
+runtime-versioner audit --no-fetch
 
 for runtime_path in \
     "rust-runtime" \
