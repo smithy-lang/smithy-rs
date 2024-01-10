@@ -13,27 +13,27 @@ use tracing::warn;
 pub fn previous_release_tag(
     repo: &Repo,
     release_tags: &[ReleaseTag],
-    hint: Option<&str>,
+    release_tag_override: Option<&str>,
 ) -> Result<ReleaseTag> {
     let ancestor_tag = ancestor_tag(repo)?;
-    let hint = hint
+    let tag_override = release_tag_override
         .map(ReleaseTag::from_str)
         .transpose()
         .context("invalid release tag given")?;
-    if let Some(hint) = hint {
-        if !release_tags.contains(&hint) {
-            bail!("specified tag '{hint}' doesn't exist");
+    if let Some(tag_override) = tag_override {
+        if !release_tags.contains(&tag_override) {
+            bail!("specified tag '{tag_override}' doesn't exist");
         }
-        if !tag_is_ancestor(repo, &hint)? {
-            bail!("specified tag '{hint}' is not an ancestor to HEAD");
+        if !tag_is_ancestor(repo, &tag_override)? {
+            bail!("specified tag '{tag_override}' is not an ancestor to HEAD");
         }
-        if hint != ancestor_tag {
+        if tag_override != ancestor_tag {
             warn!(
                 "expected previous release to be '{ancestor_tag}', \
-                 but '{hint}' was specified. Proceeding with '{hint}'.",
+                 but '{tag_override}' was specified. Proceeding with '{tag_override}'.",
             );
         }
-        Ok(hint)
+        Ok(tag_override)
     } else {
         Ok(ancestor_tag)
     }
