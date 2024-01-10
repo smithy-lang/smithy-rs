@@ -4,6 +4,7 @@
  */
 
 use crate::{
+    command::CommandExt,
     index::CratesIndex,
     repo::Repo,
     tag::{previous_release_tag, release_tags},
@@ -11,11 +12,12 @@ use crate::{
     Audit,
 };
 use anyhow::{anyhow, bail, Context, Result};
-use camino::Utf8PathBuf;
+use camino::{Utf8Path, Utf8PathBuf};
 use smithy_rs_tool_common::release_tag::ReleaseTag;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    process::Command,
 };
 
 pub fn audit(args: Audit) -> Result<()> {
@@ -32,12 +34,8 @@ pub fn audit(args: Audit) -> Result<()> {
         tracing::warn!("there are newer releases since '{previous_release_tag}'");
     }
 
-    let next_commit_hash = current_head(&repo)?;
-    let next_crates = discover_runtime_crates(&repo).context("next")?;
-
-    checkout(&repo, previous_release_tag.as_str()).context("previous")?;
-    let previous_crates = discover_runtime_crates(&repo).context("previous")?;
-    checkout(&repo, &next_commit_hash).context("next")?;
+    let next_crates = discover_runtime_crates(&repo.root).context("next")?;
+    let previous_crates = resolve_previous_crates(&repo, previous_release_tag.as_str())?;
 
     let crates = augment_runtime_crates(previous_crates, next_crates, args.fake_crates_io_index)?;
     let mut errors = Vec::new();
@@ -165,12 +163,15 @@ struct DiscoveredCrate {
 /// Discovers runtime crates that are independently versioned.
 /// For now, that just means the ones that don't have the special version number `0.0.0-smithy-rs-head`.
 /// In the future, this can be simplified to just return all the runtime crates.
-fn discover_runtime_crates(repo: &Repo) -> Result<BTreeMap<String, DiscoveredCrate>> {
+fn discover_runtime_crates(repo_root: &Utf8Path) -> Result<BTreeMap<String, DiscoveredCrate>> {
     const ROOT_PATHS: &[&str] = &["rust-runtime", "aws/rust-runtime"];
     let mut result = BTreeMap::new();
     for &root in ROOT_PATHS {
-        let root = repo.root.join(root);
-        for entry in fs::read_dir(&root).context("failed to read dir")? {
+        let root = repo_root.join(root);
+        for entry in fs::read_dir(&root)
+            .context(root)
+            .context("failed to read dir")?
+        {
             let entry = entry.context("failed to read dir entry")?;
             if !entry.path().is_dir() {
                 continue;
@@ -205,44 +206,55 @@ fn discover_runtime_crates(repo: &Repo) -> Result<BTreeMap<String, DiscoveredCra
     Ok(result)
 }
 
+fn resolve_previous_crates(
+    repo: &Repo,
+    previous_release_tag: &str,
+) -> Result<BTreeMap<String, DiscoveredCrate>> {
+    // We checkout to a temp path so that this can be run with a dirty working tree
+    // (for running in local development).
+    let tempdir = tempfile::tempdir()?;
+    let tempdir_path = Utf8Path::from_path(tempdir.path()).unwrap();
+    let clone_path = tempdir_path.join("smithy-rs");
+    fs::create_dir_all(&clone_path).context("failed to create temp smithy-rs repo")?;
+
+    checkout_runtimes_to(&repo, previous_release_tag, &clone_path)
+        .context("resolve previous crates")?;
+    discover_runtime_crates(&clone_path).context("resolve previous crates")
+}
+
 /// Fetches the latest tags from smithy-rs origin.
 fn fetch_smithy_rs_tags(repo: &Repo) -> Result<()> {
     let output = repo
         .git(["remote", "get-url", "origin"])
         .output()
         .context("failed to verify origin git remote")?;
-    let origin_url = String::from_utf8(output.stdout).expect("valid utf-8");
+    let origin_url = String::from_utf8(output.stdout)
+        .expect("valid utf-8")
+        .trim()
+        .to_string();
     if origin_url != "git@github.com:smithy-lang/smithy-rs.git" {
         bail!("smithy-rs origin must be 'git@github.com:smithy-lang/smithy-rs.git' in order to get the latest release tags");
     }
 
-    let status = repo
-        .git(["fetch", "--tags", "origin"])
-        .status()
-        .context("failed to fetch tags")?;
-    if !status.success() {
-        bail!("failed to fetch tags");
-    }
+    repo.git(["fetch", "--tags", "origin"])
+        .expect_success_output("fetch tags")?;
     Ok(())
 }
 
-/// Returns the current HEAD commit hash.
-fn current_head(repo: &Repo) -> Result<String> {
-    let output = repo
-        .git(["rev-parse", "HEAD"])
-        .output()
-        .context("failed to retrieve current commit hash")?;
-    let hash = String::from_utf8(output.stdout).expect("valid utf-8");
-    Ok(hash.trim_end_matches('\n').into())
-}
-
-fn checkout(repo: &Repo, revision: &str) -> Result<()> {
-    let output = repo
-        .git(["checkout", revision])
-        .output()
-        .context("failed to git checkout")?;
-    if !output.status.success() {
-        bail!("failed to git checkout");
-    }
+fn checkout_runtimes_to(repo: &Repo, revision: &str, into: impl AsRef<Utf8Path>) -> Result<()> {
+    Command::new("git")
+        .arg("init")
+        .current_dir(into.as_ref())
+        .expect_success_output("init")?;
+    let tmp_repo = Repo::new(Some(into.as_ref()))?;
+    tmp_repo
+        .git(["remote", "add", "origin", repo.root.as_str()])
+        .expect_success_output("remote add origin")?;
+    tmp_repo
+        .git(["fetch", "origin", revision, "--depth", "1"])
+        .expect_success_output("fetch revision")?;
+    tmp_repo
+        .git(["reset", "--hard", "FETCH_HEAD"])
+        .expect_success_output("reset")?;
     Ok(())
 }
