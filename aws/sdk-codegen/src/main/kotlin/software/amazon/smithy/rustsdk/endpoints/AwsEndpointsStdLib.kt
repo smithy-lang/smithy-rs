@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.awsStandardLib
+import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rustsdk.SdkSettings
 import kotlin.io.path.readText
 
@@ -31,11 +32,15 @@ class AwsEndpointsStdLib() : ClientCodegenDecorator {
         if (partitionsCache == null) {
             val partitionsJson =
                 when (val path = sdkSettings.partitionsConfigPath) {
-                    null ->
+                    null -> {
+                        if (sdkSettings.awsSdkBuild) {
+                            PANIC("cannot use hardcoded partitions in AWS SDK build")
+                        }
                         (
                             javaClass.getResource("/default-partitions.json")
                                 ?: throw IllegalStateException("Failed to find default-partitions.json in the JAR")
                         ).readText()
+                    }
 
                     else -> path.readText()
                 }
