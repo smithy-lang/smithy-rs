@@ -48,6 +48,11 @@ enum Command {
     /// Audit the runtime crate versions in the smithy-rs repo at HEAD
     ///
     /// Requires a full clone of smithy-rs. Will not work against shallow clones.
+    ///
+    /// This audits that any runtime crate that has been changed since the last
+    /// release has been version bumped. It's not smart enough to know if the version
+    /// bump is correct in semver terms, but verifies that there was at least a
+    /// bump. A human will still need to verify the semver correctness of that bump.
     Audit(Audit),
 
     /// Outputs the previous release tag for the revision at HEAD.
