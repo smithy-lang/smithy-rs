@@ -216,7 +216,7 @@ fn resolve_previous_crates(
     let clone_path = tempdir_path.join("smithy-rs");
     fs::create_dir_all(&clone_path).context("failed to create temp smithy-rs repo")?;
 
-    checkout_runtimes_to(&repo, previous_release_tag, &clone_path)
+    checkout_runtimes_to(repo, previous_release_tag, &clone_path)
         .context("resolve previous crates")?;
     discover_runtime_crates(&clone_path).context("resolve previous crates")
 }
