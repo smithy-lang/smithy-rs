@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
-import software.amazon.smithy.model.knowledge.NullableIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -90,13 +89,12 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
     protected val model = codegenContext.model
     protected val symbolProvider = codegenContext.symbolProvider
     protected val runtimeConfig = codegenContext.runtimeConfig
-    private val nullableIndex = NullableIndex(model)
     private val target = codegenContext.target
     private val serviceShape = codegenContext.serviceShape
     private val serializerError = runtimeConfig.serializationError()
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val smithyQuery = RuntimeType.smithyQuery(runtimeConfig)
-    private val serdeUtil = SerializerUtil(model)
+    private val serdeUtil = SerializerUtil(model, symbolProvider)
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope =
         arrayOf(
@@ -213,7 +211,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
             }
         } else {
             with(serdeUtil) {
-                ignoreZeroValues(context.shape, context.valueExpression) {
+                ignoreDefaultsForNumbersAndBools(context.shape, context.valueExpression) {
                     serializeMemberValue(context, targetShape)
                 }
             }

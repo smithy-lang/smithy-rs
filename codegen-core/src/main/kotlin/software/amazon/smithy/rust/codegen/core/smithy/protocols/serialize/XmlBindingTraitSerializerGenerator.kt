@@ -73,7 +73,7 @@ class XmlBindingTraitSerializerGenerator(
 
     private val xmlIndex = XmlNameIndex.of(model)
     private val rootNamespace = codegenContext.serviceShape.getTrait<XmlNamespaceTrait>()
-    private val util = SerializerUtil(model)
+    private val util = SerializerUtil(model, symbolProvider)
 
     sealed class Ctx {
         abstract val input: String
@@ -563,7 +563,7 @@ class XmlBindingTraitSerializerGenerator(
                     } else {
                         ValueExpression.Value(ctx.input)
                     }
-                ignoreZeroValues(member, valueExpression) {
+                ignoreDefaultsForNumbersAndBools(member, valueExpression) {
                     inner(ctx)
                 }
             }

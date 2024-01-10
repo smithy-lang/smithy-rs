@@ -443,8 +443,8 @@ class ServerBuilderGenerator(
     private fun renderFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{From}<Builder $lifetime> for #{Structure} $lifetime {
-                fn from(builder: Builder) -> Self {
+            impl$lifetime #{From}<Builder $lifetime> for #{Structure} $lifetime {
+                fn from(builder: Builder$lifetime) -> Self {
                     builder.build()
                 }
             }

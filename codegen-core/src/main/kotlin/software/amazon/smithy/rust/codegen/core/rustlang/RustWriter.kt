@@ -14,6 +14,7 @@ import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.codegen.core.SymbolWriter
 import software.amazon.smithy.codegen.core.SymbolWriter.Factory
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
 import software.amazon.smithy.model.shapes.DoubleShape
@@ -24,9 +25,11 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.DeprecatedTrait
 import software.amazon.smithy.model.traits.DocumentationTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
+import software.amazon.smithy.rust.codegen.core.smithy.Default
 import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.defaultValue
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.ValueExpression
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
@@ -729,33 +732,58 @@ class RustWriter private constructor(
 
         /**
          * Generate a wrapping if statement around a primitive field.
-         * The specified block will only be called if the field is not set to its default value - `0` for
-         * numbers, `false` for booleans.
+         * If the field is a number or boolean, the specified block is only called if the field is not equal to the
+         * member's default value.
          */
-        fun ifNotDefault(
+        fun ifNotNumberOrBoolDefault(
             shape: Shape,
+            memberSymbol: Symbol,
             variable: ValueExpression,
             block: RustWriter.(field: ValueExpression) -> Unit,
         ) {
             when (shape) {
-                is FloatShape, is DoubleShape ->
-                    rustBlock("if ${variable.asValue()} != 0.0") {
-                        block(variable)
-                    }
+                is NumberShape, is BooleanShape -> {
+                    if (memberSymbol.defaultValue() is Default.RustDefault) {
+                        when (shape) {
+                            is FloatShape, is DoubleShape ->
+                                rustBlock("if ${variable.asValue()} != 0.0") {
+                                    block(variable)
+                                }
 
-                is NumberShape ->
-                    rustBlock("if ${variable.asValue()} != 0") {
-                        block(variable)
-                    }
+                            is NumberShape ->
+                                rustBlock("if ${variable.asValue()} != 0") {
+                                    block(variable)
+                                }
 
-                is BooleanShape ->
-                    rustBlock("if ${variable.asValue()}") {
-                        block(variable)
-                    }
+                            is BooleanShape ->
+                                rustBlock("if ${variable.asValue()}") {
+                                    block(variable)
+                                }
+                        }
+                    } else if (memberSymbol.defaultValue() is Default.NonZeroDefault) {
+                        val default = Node.printJson((memberSymbol.defaultValue() as Default.NonZeroDefault).value)
+                        when (shape) {
+                            // We know that the default is 'true' since it's the only possible non-zero default
+                            // for a boolean. Don't explicitly check against `true` to avoid a clippy lint.
+                            is BooleanShape ->
+                                rustBlock("if !${variable.asValue()}") {
+                                    block(variable)
+                                }
 
+                            else ->
+                                rustBlock("if ${variable.asValue()} != $default") {
+                                    block(variable)
+                                }
+                        }
+                    } else {
+                        rustBlock("") {
+                            block(variable)
+                        }
+                    }
+                }
                 else ->
                     rustBlock("") {
-                        this.block(variable)
+                        block(variable)
                     }
             }
         }
@@ -792,7 +820,7 @@ class RustWriter private constructor(
             variable: ValueExpression,
             block: RustWriter.(field: ValueExpression) -> Unit,
         ) {
-            ifSome(member, variable) { inner -> ifNotDefault(shape, inner, block) }
+            ifSome(member, variable) { inner -> ifNotNumberOrBoolDefault(shape, member, inner, block) }
         }
 
         fun listForEach(

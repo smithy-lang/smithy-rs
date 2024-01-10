@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsSection
 import software.amazon.smithy.rust.codegen.core.testutil.testDependenciesOnly
+import software.amazon.smithy.rustsdk.AwsCargoDependency.awsConfig
 import software.amazon.smithy.rustsdk.AwsCargoDependency.awsRuntime
 import java.nio.file.Files
 import java.nio.file.Paths
@@ -143,6 +144,7 @@ class DynamoDbTestDependencies : LibRsCustomization() {
 class S3TestDependencies(private val codegenContext: ClientCodegenContext) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
+            addDependency(awsConfig(codegenContext.runtimeConfig).toDevDependency().withFeature("behavior-version-latest"))
             addDependency(AsyncStd)
             addDependency(BytesUtils.toDevDependency())
             addDependency(FastRand.toDevDependency())

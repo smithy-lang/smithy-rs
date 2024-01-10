@@ -10,6 +10,8 @@ import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.StringNode
 import software.amazon.smithy.model.shapes.BlobShape
+import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -333,6 +335,47 @@ class InstantiatorTest {
                     "assert_eq!(ts_int, #{Timestamp}::from_secs(123));",
                     "Timestamp" to RuntimeType.dateTime(runtimeConfig),
                 )
+            }
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `floating-point number instantiation`() {
+        val sut =
+            Instantiator(
+                symbolProvider,
+                model,
+                runtimeConfig,
+                BuilderKindBehavior(codegenContext),
+            )
+        val project = TestWorkspace.testProject(model)
+        project.testModule {
+            unitTest("default_number_instantiation") {
+                for ((value, node) in arrayOf(
+                    "1.0" to NumberNode.from(1),
+                    "1.5" to NumberNode.from(1.5),
+                    "1.0" to StringNode.from("1"),
+                    "1.5" to StringNode.from("1.5"),
+                )) {
+                    withBlock("let value: f32 = ", ";") {
+                        sut.render(
+                            this,
+                            FloatShape.builder().id(ShapeId.from("com.example#FloatShape")).build(),
+                            node,
+                        )
+                    }
+                    rustTemplate("assert_eq!($value, value);")
+
+                    withBlock("let value: f64 = ", ";") {
+                        sut.render(
+                            this,
+                            DoubleShape.builder().id(ShapeId.from("com.example#DoubleShape")).build(),
+                            node,
+                        )
+                    }
+                    rustTemplate("assert_eq!($value, value);")
+                }
             }
         }
         project.compileAndTest()
