@@ -23,7 +23,7 @@ pub trait ShellOperation {
     fn run(&self) -> Result<Self::Output>;
 
     /// Runs the command asynchronously.
-    #[cfg(feature = "async-shell")]
+    #[cfg(feature = "async")]
     async fn spawn(self) -> Result<Self::Output>
     where
         Self: Sized + 'static,

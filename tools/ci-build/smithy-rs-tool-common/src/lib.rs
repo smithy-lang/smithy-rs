@@ -11,5 +11,6 @@ pub mod git;
 pub mod macros;
 pub mod package;
 pub mod release_tag;
+pub mod retry;
 pub mod shell;
 pub mod versions_manifest;
