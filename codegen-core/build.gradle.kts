@@ -64,47 +64,55 @@ val generateSmithyRuntimeCrateVersion by tasks.registering {
     inputs.property("stableCrateVersion", stableCrateVersion)
     inputs.property("unstableCrateVersion", stableCrateVersion)
 
+    val cargoTomls = mutableListOf<File>()
+    for (runtimePath in arrayOf("../rust-runtime", "../aws/rust-runtime")) {
+        for (path in project.projectDir.resolve(runtimePath).listFiles()!!) {
+            val manifestPath = path.resolve("Cargo.toml")
+            if (manifestPath.exists()) {
+                cargoTomls.add(manifestPath)
+                inputs.file(manifestPath)
+            }
+        }
+    }
+
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
         // Version format must be kept in sync with `software.amazon.smithy.rust.codegen.core.Version`
-        versionsFile.asFile.writeText(StringBuilder().append("{\n").also { json ->
-            fun StringBuilder.keyVal(key: String, value: String) = append("\"$key\": \"$value\"")
+        versionsFile.asFile.writeText(
+            StringBuilder().append("{\n").also { json ->
+                fun StringBuilder.keyVal(key: String, value: String) = append("\"$key\": \"$value\"")
 
-            json.append("  ").keyVal("gitHash", gitCommitHash()).append(",\n")
-            json.append("  \"runtimeCrates\": {\n")
-            var first = true
-            for (runtimePath in arrayOf("../rust-runtime", "../aws/rust-runtime")) {
-                for (path in project.projectDir.resolve(runtimePath).listFiles()!!) {
-                    if (!path.isDirectory || !path.resolve("Cargo.toml").exists()) {
-                        continue
+                json.append("  ").keyVal("gitHash", gitCommitHash()).append(",\n")
+                json.append("  \"runtimeCrates\": {\n")
+                json.append(
+                    cargoTomls.map { path ->
+                        path.parentFile.name to path.readLines()
                     }
-
-                    val manifestLines = path.resolve("Cargo.toml").readLines()
-                    val publish = manifestLines.none { line -> line == "publish = false" }
-                    if (!publish) {
-                        continue
-                    }
-
-                    val stable = manifestLines.any { line -> line == "stable = true" }
-                    val versionLine = manifestLines.first { line -> line.startsWith("version = \"") }
-                    val maybeVersion = versionLine.slice(("version = \"".length)..(versionLine.length - 2))
-                    val version = if (maybeVersion == "0.0.0-smithy-rs-head") {
-                        when (stable) {
-                            true -> stableCrateVersion
-                            else -> unstableCrateVersion
+                        .filter { (name, manifestLines) ->
+                            val publish = manifestLines.none { line -> line == "publish = false" }
+                            // HACK: The experimental/unpublished typescript runtime crate needs
+                            // to be included since it is referenced by the code generator and tested in CI.
+                            publish || name == "aws-smithy-http-server-typescript"
                         }
-                    } else {
-                        maybeVersion
-                    }
-                    if (!first) {
-                        json.append(",\n")
-                    }
-                    json.append("    ").keyVal(path.name, version)
-                    first = false
-                }
-            }
-            json.append("  }\n")
-        }.append("}").toString())
+                        .map { (name, manifestLines) ->
+                            val stable = manifestLines.any { line -> line == "stable = true" }
+                            val versionLine = manifestLines.first { line -> line.startsWith("version = \"") }
+                            val maybeVersion = versionLine.slice(("version = \"".length)..(versionLine.length - 2))
+                            val version = if (maybeVersion == "0.0.0-smithy-rs-head") {
+                                when (stable) {
+                                    true -> stableCrateVersion
+                                    else -> unstableCrateVersion
+                                }
+                            } else {
+                                maybeVersion
+                            }
+                            "    \"$name\": \"$version\""
+                        }
+                        .joinToString(",\n"),
+                )
+                json.append("  }\n")
+            }.append("}").toString(),
+        )
     }
 }
 
