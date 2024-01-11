@@ -19,6 +19,9 @@
 /// Supporting code for authentication in the AWS SDK.
 pub mod auth;
 
+/// AWS-specific content-encoding tools
+pub mod content_encoding;
+
 /// Supporting code for recursion detection in the AWS SDK.
 pub mod recursion_detection;
 
