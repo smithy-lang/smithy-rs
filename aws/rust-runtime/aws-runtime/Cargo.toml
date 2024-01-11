@@ -9,6 +9,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 [features]
 event-stream = ["dep:aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
+http-02x = []
 test-util = []
 sigv4a = ["aws-sigv4/sigv4a"]
 
