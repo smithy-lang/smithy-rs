@@ -16,7 +16,6 @@ test-util = []
 
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-http = { path = "../../build/aws-sdk/sdk/aws-http" }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime" }
 aws-sdk-kms = { path = "../../build/aws-sdk/sdk/kms", features = ["test-util", "behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
