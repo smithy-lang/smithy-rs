@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
-aws-runtime = { path = "../aws-runtime" }
+aws-runtime = { path = "../aws-runtime", features = ["http-02x"] }
 
 [package.metadata.docs.rs]
 all-features = true
