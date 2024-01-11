@@ -6,8 +6,10 @@
 use aws_credential_types::provider::SharedCredentialsProvider;
 use aws_sdk_s3::config::{Credentials, Region};
 use aws_sdk_s3::Client;
+use aws_smithy_runtime::assert_str_contains;
 use aws_smithy_runtime::client::http::test_util::{capture_request, CaptureRequestReceiver};
 use aws_types::SdkConfig;
+use http::header::AUTHORIZATION;
 
 fn test_client() -> (CaptureRequestReceiver, Client) {
     let (http_client, captured_request) = capture_request(None);
@@ -33,6 +35,29 @@ async fn operation_overrides_force_path_style() {
     assert_eq!(
         captured_request.expect_request().uri().to_string(),
         "https://s3.us-west-2.amazonaws.com/test-bucket/?list-type=2"
+    );
+}
+
+#[tokio::test]
+async fn config_override_overrides_credentials_sdk_config() {
+    let access_key = "AOVERRIDE";
+    let (captured_request, client) = test_client();
+    let _ = client
+        .list_objects_v2()
+        .bucket("test-bucket")
+        .customize()
+        .config_override(
+            aws_sdk_s3::config::Config::builder()
+                .credentials_provider(Credentials::new(access_key, "SECRET", None, None, "other")),
+        )
+        .send()
+        .await;
+    let req = captured_request.expect_request();
+    assert_str_contains!(
+        req.headers()
+            .get(AUTHORIZATION)
+            .expect("auth header missing"),
+        access_key
     );
 }
 

@@ -1011,6 +1011,10 @@ impl GetIdentityResolver for RuntimeComponents {
     fn identity_resolver(&self, scheme_id: AuthSchemeId) -> Option<SharedIdentityResolver> {
         self.identity_resolvers
             .iter()
+            // We want the most recently added auth scheme that matches.
+            // This is so that an overriding auth scheme will be returned over one
+            // set by default
+            .rev()
             .find(|s| s.value.scheme_id() == scheme_id)
             .map(|s| s.value.identity_resolver())
     }
