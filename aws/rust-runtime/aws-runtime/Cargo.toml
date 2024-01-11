@@ -14,7 +14,6 @@ sigv4a = ["aws-sigv4/sigv4a"]
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-aws-http = { path = "../aws-http" }
 # TODO(httpRefactor): Remove the http0-compat feature
 aws-sigv4 = { path = "../aws-sigv4", features = ["http0-compat"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
@@ -23,21 +22,26 @@ aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-types = { path = "../aws-types" }
+bytes = "1.1"
 fastrand = "2.0.0"
 http = "0.2.3"
+http-body = "0.4.5"
 percent-encoding = "2.1.0"
+pin-project-lite = "0.2.9"
 tracing = "0.1"
 uuid = { version = "1" }
 
 [dev-dependencies]
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["test-util"] }
-aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["test-util"] }
 aws-smithy-protocol-test = { path = "../../../rust-runtime/aws-smithy-protocol-test" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["test-util"] }
+bytes-utils = "0.1.2"
 proptest = "1.2"
 serde = { version = "1", features = ["derive"]}
 serde_json = "1"
+tokio = { version = "1.23.1", features = ["macros", "rt", "time"] }
 tracing-test = "0.2.4"
 
 [package.metadata.docs.rs]

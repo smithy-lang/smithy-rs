@@ -8,6 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
+aws-runtime = { path = "../aws-runtime" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x"] }
 aws-types = { path = "../aws-types" }
