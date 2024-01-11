@@ -94,7 +94,7 @@ class CargoTomlGenerator(
                             listOfNotNull(
                                 "smithy" to
                                     listOfNotNull(
-                                        "codegen-version" to Version.fullVersion(),
+                                        "codegen-version" to Version.fromDefaultResource().gitHash,
                                     ).toMap(),
                             ).toMap(),
                     ).toMap(),

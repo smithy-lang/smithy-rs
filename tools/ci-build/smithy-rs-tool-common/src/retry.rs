@@ -5,7 +5,6 @@
 
 use std::error::Error;
 use std::error::Error as StdError;
-use std::future::Future;
 use std::time::Duration;
 use tracing::{error, info};
 
@@ -24,6 +23,7 @@ pub enum RetryError {
     FailedMaxAttempts(usize),
 }
 
+#[cfg(feature = "async")]
 pub async fn run_with_retry<F, Ft, C, O, E>(
     what: &str,
     max_attempts: usize,
@@ -33,7 +33,7 @@ pub async fn run_with_retry<F, Ft, C, O, E>(
 ) -> Result<O, RetryError>
 where
     F: Fn() -> Ft,
-    Ft: Future<Output = Result<O, E>> + Send,
+    Ft: std::future::Future<Output = Result<O, E>> + Send,
     C: Fn(&E) -> ErrorClass,
     E: Into<BoxError>,
 {
@@ -65,6 +65,49 @@ where
         }
         attempt += 1;
         tokio::time::sleep(backoff).await;
+    }
+}
+
+pub fn run_with_retry_sync<F, C, O, E>(
+    what: &str,
+    max_attempts: usize,
+    backoff: Duration,
+    op: F,
+    classify_error: C,
+) -> Result<O, RetryError>
+where
+    F: Fn() -> Result<O, E>,
+    C: Fn(&E) -> ErrorClass,
+    E: Into<BoxError>,
+{
+    assert!(max_attempts > 0);
+
+    let mut attempt = 1;
+    loop {
+        let result = (op)();
+        match result {
+            Ok(output) => return Ok(output),
+            Err(err) => {
+                match classify_error(&err) {
+                    ErrorClass::NoRetry => {
+                        return Err(RetryError::FailedUnretryable(err.into()));
+                    }
+                    ErrorClass::Retry => {
+                        info!(
+                            "{} failed on attempt {} with retryable error: {:?}. Will retry after {:?}",
+                            what, attempt, err.into(), backoff
+                        );
+                    }
+                }
+            }
+        }
+
+        // If we made it this far, we're retrying or failing at max retries
+        if attempt == max_attempts {
+            return Err(RetryError::FailedMaxAttempts(max_attempts));
+        }
+        attempt += 1;
+        std::thread::sleep(backoff);
     }
 }
 
@@ -169,6 +212,97 @@ mod tests {
                 },
             )
             .await
+        };
+
+        match result {
+            Err(RetryError::FailedUnretryable(err)) => {
+                assert!(err.downcast_ref::<UnretryableError>().is_some());
+            }
+            _ => panic!("should be an unretryable error"),
+        }
+        assert_eq!(2, attempt.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn fail_max_attempts_sync() {
+        let attempt = Arc::new(AtomicU8::new(1));
+        let result = {
+            let attempt = attempt.clone();
+            assert_send(run_with_retry_sync(
+                "test",
+                3,
+                Duration::from_millis(0),
+                {
+                    let attempt = attempt.clone();
+                    move || {
+                        attempt.fetch_add(1, Ordering::Relaxed);
+                        Result::<(), _>::Err(FakeError)
+                    }
+                },
+                |_err| ErrorClass::Retry,
+            ))
+        };
+
+        assert!(matches!(result, Err(RetryError::FailedMaxAttempts(3))));
+        // `attempt` holds the number of the next attempt, so 4 instead of 3 in this case
+        assert_eq!(4, attempt.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn fail_then_succeed_sync() {
+        let attempt = Arc::new(AtomicU8::new(1));
+        let result = {
+            let attempt = attempt.clone();
+            run_with_retry_sync(
+                "test",
+                3,
+                Duration::from_millis(0),
+                {
+                    let attempt = attempt.clone();
+                    move || {
+                        if attempt.fetch_add(1, Ordering::Relaxed) == 1 {
+                            Err(FakeError)
+                        } else {
+                            Ok(2)
+                        }
+                    }
+                },
+                |_err| ErrorClass::Retry,
+            )
+        };
+
+        assert!(matches!(result, Ok(2)));
+        // `attempt` holds the number of the next attempt, so 3 instead of 2 in this case
+        assert_eq!(3, attempt.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn unretryable_error_sync() {
+        let attempt = Arc::new(AtomicU8::new(1));
+        let result = {
+            let attempt = attempt.clone();
+            run_with_retry_sync(
+                "test",
+                3,
+                Duration::from_millis(0),
+                {
+                    let attempt = attempt.clone();
+                    move || {
+                        if attempt.fetch_add(1, Ordering::Relaxed) == 1 {
+                            Err(UnretryableError)
+                        } else {
+                            Ok(2)
+                        }
+                    }
+                },
+                |err| {
+                    if matches!(err, UnretryableError) {
+                        ErrorClass::NoRetry
+                    } else {
+                        ErrorClass::Retry
+                    }
+                },
+            )
         };
 
         match result {
