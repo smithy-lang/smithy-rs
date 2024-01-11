@@ -15,8 +15,11 @@ fun rewriteCrateVersion(
     )
 
 /**
- * Smithy runtime crate versions in smithy-rs are all `0.0.0-smithy-rs-head`. When copying over to the AWS SDK,
- * these should be changed to the smithy-rs version.
+ * Dependently versioned Smithy runtime crate versions in smithy-rs are all `0.0.0-smithy-rs-head`.
+ * When copying over to the AWS SDK, these should be changed to the corresponding
+ * stable/unstable runtime crate version from gradle.properties.
+ *
+ * In the future when all the runtime crates are independently versioned, this can be removed.
  */
 fun rewriteRuntimeCrateVersion(
     version: String,

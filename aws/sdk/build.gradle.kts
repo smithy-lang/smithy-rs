@@ -100,8 +100,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                 "plugins": {
                     "rust-client-codegen": {
                         "runtimeConfig": {
-                            "relativePath": "../",
-                            "version": "DEFAULT"
+                            "relativePath": "../"
                         },
                         "codegen": {
                             "includeFluentClient": false,
