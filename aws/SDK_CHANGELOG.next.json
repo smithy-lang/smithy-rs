@@ -6,35 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Retry additional classes of H2 errors (H2 GoAway & H2 ResetStream)",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "rcoh",
-      "references": [
-        "aws-sdk-rust#738",
-        "aws-sdk-rust#858"
-      ],
-      "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
-      "age": 5
-    },
-    {
-      "message": "Make some properties for IoT types optional. Previously, they defaulted to false, but that isn't how the service actual works.",
-      "meta": {
-        "bug": true,
-        "breaking": true,
-        "tada": false
-      },
-      "author": "milesziemer",
-      "references": [
-        "smithy-rs#3256"
-      ],
-      "since-commit": "88970ba88ef45266aade152c7c1da8e90b24c0d7",
-      "age": 5
-    },
-    {
       "message": "Fix `config::Builder::set_credentials_provider` to override a credentials provider previously set.",
       "meta": {
         "bug": true,
@@ -47,7 +18,7 @@
         "smithy-rs#3278"
       ],
       "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
-      "age": 4
+      "age": 5
     },
     {
       "message": "`config::Config::credentials_provider` has been broken since `release-2023-11-15` and is now marked as `deprecated` explicitly.",
@@ -62,7 +33,7 @@
         "smithy-rs#3278"
       ],
       "since-commit": "529b3f03e2b945ea2e5e879183ccfd8e74b7377c",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config.",
@@ -76,7 +47,7 @@
         "smithy-rs#3262"
       ],
       "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Client creation now takes microseconds instead of milliseconds.\nPreviously, it would take 2-3 milliseconds for each client instantiation due to time spent compiling regexes.\nFor applications that used several clients, this would increase start-up time in cases where it really matters,\nsuch as for AWS Lambda cold starts. This time was improved by both changing regex implementation and caching the\nresult of the compilation.",
@@ -91,7 +62,7 @@
         "smithy-rs#3269"
       ],
       "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add `test_credentials` to `ConfigLoader` in `aws_config`. This allows the following pattern during tests:\n\n```rust\nasync fn main() {\n    let conf = aws_config::defaults(BehaviorVersion::latest())\n        .test_credentials()\n        .await;\n}\n```\n\nThis is designed for unit tests and using local mocks like DynamoDB Local and LocalStack with the SDK.\n",
@@ -106,7 +77,7 @@
         "aws-sdk-rust#971"
       ],
       "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Improve the error messages for when auth fails to select an auth scheme for a request.",
@@ -121,7 +92,7 @@
         "smithy-rs#3277"
       ],
       "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fix documentation and examples on HyperConnector and HyperClientBuilder.",
@@ -136,7 +107,7 @@
         "smithy-rs#3282"
       ],
       "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "All generated docs now include docsrs labels when features are required",
@@ -151,7 +122,7 @@
         "smithy-rs#3295"
       ],
       "since-commit": "fc335cbc87e70aa63895828fca55b51795b94a6c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "`crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations.",
@@ -165,7 +136,98 @@
         "smithy-rs#3305"
       ],
       "since-commit": "9f0ba850e03241f657e2e40ca185780e0a5878cb",
-      "age": 2
+      "age": 3
+    },
+    {
+      "message": "Add support for constructing [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3300",
+        "aws-sdk-rust#977"
+      ],
+      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
+      "age": 1
+    },
+    {
+      "message": " Add `PaginationStreamExt` extension trait to `aws-smithy-types-convert` behind the `convert-streams` feature. This makes it possible to treat a paginator as a [`futures_core::Stream`](https://docs.rs/futures-core/latest/futures_core/stream/trait.Stream.html), allowing customers to use stream combinators like [`map`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.map) and [`filter`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.filter).\n\nExample:\n\n```rust\nuse aws_smithy_types_convert::stream::PaginationStreamExt\nlet stream = s3_client.list_objects_v2().bucket(\"...\").into_paginator().send().into_stream_03x();\n```\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "Ploppz",
+      "references": [
+        "smithy-rs#3299"
+      ],
+      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
+      "age": 1
+    },
+    {
+      "message": "Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false. See [changelog discussion](https://github.com/smithy-lang/smithy-rs/discussions/3312) for details.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "milesziemer",
+      "references": [
+        "smithy-rs#3252",
+        "smithy-rs#3312"
+      ],
+      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
+      "age": 1
+    },
+    {
+      "message": "Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership.",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3333",
+        "aws-sdk-rust#998",
+        "aws-sdk-rust#1010"
+      ],
+      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
+      "age": 1
+    },
+    {
+      "message": "Fix bug in `CredentialsProcess` provider where `expiry` was incorrectly treated as a required field.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "smithy-rs#3335",
+        "aws-sdk-rust#1021"
+      ],
+      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
+      "age": 1
+    },
+    {
+      "message": "~/.aws/config and ~/.aws/credentials now parse keys in a case-insensitive way. This means the `AWS_SECRET_ACCESS_KEY` is supported in addition to `aws_secret_access_key`.",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "rcoh",
+      "references": [
+        "aws-sdk#574",
+        "aws-sdk-rust#1020",
+        "smithy-rs#3344"
+      ],
+      "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
+      "age": 1
     }
   ],
   "aws-sdk-model": []
