@@ -21,18 +21,19 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 open class RestXml(val codegenContext: CodegenContext) : Protocol {
     private val restXml = codegenContext.serviceShape.expectTrait<RestXmlTrait>()
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.HttpHeaderMap,
-        "Response" to RuntimeType.HttpResponse,
-        "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+        )
 
-    protected val restXmlErrors: RuntimeType = when (restXml.isNoErrorWrapping) {
-        true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
-        false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
-    }
+    protected val restXmlErrors: RuntimeType =
+        when (restXml.isNoErrorWrapping) {
+            true -> RuntimeType.unwrappedXmlErrors(runtimeConfig)
+            false -> RuntimeType.wrappedXmlErrors(runtimeConfig)
+        }
 
     override val httpBindingResolver: HttpBindingResolver =
         HttpTraitHttpBindingResolver(codegenContext.model, ProtocolContentTypes("application/xml", "application/xml", "application/vnd.amazon.eventstream"))
@@ -49,7 +50,7 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_error_metadata(response_body)", restXmlErrors)

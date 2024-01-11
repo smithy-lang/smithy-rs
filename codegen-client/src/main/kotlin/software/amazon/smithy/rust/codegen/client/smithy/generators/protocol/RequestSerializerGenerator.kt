@@ -34,9 +34,8 @@ class RequestSerializerGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val symbolProvider = codegenContext.symbolProvider
     private val codegenScope by lazy {
-        val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
+        val runtimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
         val interceptorContext = runtimeApi.resolve("client::interceptors::context")
-        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
         arrayOf(
             *preludeScope,
             "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
@@ -48,17 +47,21 @@ class RequestSerializerGenerator(
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder,
             "Input" to interceptorContext.resolve("Input"),
             "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
-            "RequestSerializer" to runtimeApi.resolve("client::ser_de::RequestSerializer"),
+            "SerializeRequest" to runtimeApi.resolve("client::ser_de::SerializeRequest"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-            "HeaderSerializationSettings" to RuntimeType.forInlineDependency(
-                InlineDependency.serializationSettings(
-                    codegenContext.runtimeConfig,
-                ),
-            ).resolve("HeaderSerializationSettings"),
+            "HeaderSerializationSettings" to
+                RuntimeType.forInlineDependency(
+                    InlineDependency.serializationSettings(
+                        codegenContext.runtimeConfig,
+                    ),
+                ).resolve("HeaderSerializationSettings"),
         )
     }
 
-    fun render(writer: RustWriter, operationShape: OperationShape) {
+    fun render(
+        writer: RustWriter,
+        operationShape: OperationShape,
+    ) {
         val inputShape = operationShape.inputShape(codegenContext.model)
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputSymbol = symbolProvider.toSymbol(inputShape)
@@ -67,7 +70,7 @@ class RequestSerializerGenerator(
             """
             ##[derive(Debug)]
             struct $serializerName;
-            impl #{RequestSerializer} for $serializerName {
+            impl #{SerializeRequest} for $serializerName {
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
@@ -77,46 +80,49 @@ class RequestSerializerGenerator(
                     };
                     let body = #{generate_body};
                     #{add_content_length}
-                    #{Ok}(request_builder.body(body).expect("valid request"))
+                    #{Ok}(request_builder.body(body).expect("valid request").try_into().unwrap())
                 }
             }
             """,
             *codegenScope,
             "ConcreteInput" to inputSymbol,
             "create_http_request" to createHttpRequest(operationShape),
-            "generate_body" to writable {
-                if (bodyGenerator != null) {
-                    val body = writable {
-                        bodyGenerator.generatePayload(this, "input", operationShape)
-                    }
-                    val streamingMember = inputShape.findStreamingMember(codegenContext.model)
-                    val isBlobStreaming =
-                        streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
-                    if (isBlobStreaming) {
-                        // Consume the `ByteStream` into its inner `SdkBody`.
-                        rust("#T.into_inner()", body)
+            "generate_body" to
+                writable {
+                    if (bodyGenerator != null) {
+                        val body =
+                            writable {
+                                bodyGenerator.generatePayload(this, "input", operationShape)
+                            }
+                        val streamingMember = inputShape.findStreamingMember(codegenContext.model)
+                        val isBlobStreaming =
+                            streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
+                        if (isBlobStreaming) {
+                            // Consume the `ByteStream` into its inner `SdkBody`.
+                            rust("#T.into_inner()", body)
+                        } else {
+                            rustTemplate("#{SdkBody}::from(#{body})", *codegenScope, "body" to body)
+                        }
                     } else {
-                        rustTemplate("#{SdkBody}::from(#{body})", *codegenScope, "body" to body)
+                        rustTemplate("#{SdkBody}::empty()", *codegenScope)
+                    }
+                },
+            "add_content_length" to
+                if (needsContentLength(operationShape)) {
+                    writable {
+                        rustTemplate(
+                            """
+                            if let Some(content_length) = body.content_length() {
+                                let content_length = content_length.to_string();
+                                request_builder = _header_serialization_settings.set_default_header(request_builder, #{http}::header::CONTENT_LENGTH, &content_length);
+                            }
+                            """,
+                            *codegenScope,
+                        )
                     }
                 } else {
-                    rustTemplate("#{SdkBody}::empty()", *codegenScope)
-                }
-            },
-            "add_content_length" to if (needsContentLength(operationShape)) {
-                writable {
-                    rustTemplate(
-                        """
-                        if let Some(content_length) = body.content_length() {
-                            let content_length = content_length.to_string();
-                            request_builder = _header_serialization_settings.set_default_header(request_builder, #{http}::header::CONTENT_LENGTH, &content_length);
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
-            } else {
-                writable { }
-            },
+                    writable { }
+                },
         )
     }
 
@@ -125,34 +131,36 @@ class RequestSerializerGenerator(
             .any { it.location == HttpLocation.DOCUMENT || it.location == HttpLocation.PAYLOAD }
     }
 
-    private fun createHttpRequest(operationShape: OperationShape): Writable = writable {
-        val httpBindingGenerator = RequestBindingGenerator(
-            codegenContext,
-            protocol,
-            operationShape,
-        )
-        httpBindingGenerator.renderUpdateHttpBuilder(this)
-        val contentType = httpBindingResolver.requestContentType(operationShape)
+    private fun createHttpRequest(operationShape: OperationShape): Writable =
+        writable {
+            val httpBindingGenerator =
+                RequestBindingGenerator(
+                    codegenContext,
+                    protocol,
+                    operationShape,
+                )
+            httpBindingGenerator.renderUpdateHttpBuilder(this)
+            val contentType = httpBindingResolver.requestContentType(operationShape)
 
-        rustTemplate("let mut builder = update_http_builder(&input, #{HttpRequestBuilder}::new())?;", *codegenScope)
-        if (contentType != null) {
-            rustTemplate(
-                "builder = _header_serialization_settings.set_default_header(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
-                *codegenScope,
-            )
+            rustTemplate("let mut builder = update_http_builder(&input, #{HttpRequestBuilder}::new())?;", *codegenScope)
+            if (contentType != null) {
+                rustTemplate(
+                    "builder = _header_serialization_settings.set_default_header(builder, #{http}::header::CONTENT_TYPE, ${contentType.dq()});",
+                    *codegenScope,
+                )
+            }
+            for (header in protocol.additionalRequestHeaders(operationShape)) {
+                rustTemplate(
+                    """
+                    builder = _header_serialization_settings.set_default_header(
+                        builder,
+                        #{http}::header::HeaderName::from_static(${header.first.dq()}),
+                        ${header.second.dq()}
+                    );
+                    """,
+                    *codegenScope,
+                )
+            }
+            rust("builder")
         }
-        for (header in protocol.additionalRequestHeaders(operationShape)) {
-            rustTemplate(
-                """
-                builder = _header_serialization_settings.set_default_header(
-                    builder,
-                    #{http}::header::HeaderName::from_static(${header.first.dq()}),
-                    ${header.second.dq()}
-                );
-                """,
-                *codegenScope,
-            )
-        }
-        rust("builder")
-    }
 }

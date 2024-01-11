@@ -9,12 +9,10 @@
     feature = "connector-hyper-0-14-x",
 ))]
 
-use ::aws_smithy_runtime::client::retries::classifier::{
-    HttpStatusCodeClassifier, SmithyErrorClassifier,
+use ::aws_smithy_runtime::client::retries::classifiers::{
+    HttpStatusCodeClassifier, TransientErrorClassifier,
 };
-use ::aws_smithy_runtime_api::client::retries::RetryClassifiers;
 use aws_smithy_async::rt::sleep::TokioSleep;
-use aws_smithy_http::body::{BoxBody, SdkBody};
 use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
 use aws_smithy_runtime::client::http::test_util::wire::{
     RecordedEvent, ReplayedEvent, WireMockServer,
@@ -24,10 +22,11 @@ use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime::{ev, match_events};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryReason};
+use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, ReconnectMode, RetryConfig};
 use aws_smithy_types::timeout::TimeoutConfig;
-use hyper::client::Builder as HyperBuilder;
+use hyper_0_14::client::Builder as HyperBuilder;
 use std::fmt;
 use std::time::Duration;
 
@@ -58,22 +57,32 @@ impl std::error::Error for OperationError {}
 struct TestRetryClassifier;
 
 impl ClassifyRetry for TestRetryClassifier {
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         tracing::info!("classifying retry for {ctx:?}");
-        let classification = ctx.output_or_error().unwrap().err().and_then(|err| {
-            if let Some(err) = err.as_operation_error() {
-                tracing::info!("its an operation error: {err:?}");
-                let err = err.downcast_ref::<OperationError>().unwrap();
-                Some(RetryReason::Error(err.0))
+        // Check for a result
+        let output_or_error = ctx.output_or_error();
+        // Check for an error
+        let error = match output_or_error {
+            Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
+            Some(Err(err)) => err,
+        };
+
+        let action = if let Some(err) = error.as_operation_error() {
+            tracing::info!("its an operation error: {err:?}");
+            let err = err.downcast_ref::<OperationError>().unwrap();
+            RetryAction::retryable_error(err.0)
+        } else {
+            tracing::info!("its something else... using other classifiers");
+            let action = TransientErrorClassifier::<OperationError>::new().classify_retry(ctx);
+            if action == RetryAction::NoActionIndicated {
+                HttpStatusCodeClassifier::default().classify_retry(ctx)
             } else {
-                tracing::info!("its something else... using other classifiers");
-                SmithyErrorClassifier::<OperationError>::new()
-                    .classify_retry(ctx)
-                    .or_else(|| HttpStatusCodeClassifier::default().classify_retry(ctx))
+                action
             }
-        });
-        tracing::info!("classified as {classification:?}");
-        classification
+        };
+
+        tracing::info!("classified as {action:?}");
+        action
     }
 
     fn name(&self) -> &'static str {
@@ -110,13 +119,13 @@ async fn wire_level_test(
     reconnect_mode: ReconnectMode,
     match_clause: impl Fn(&[RecordedEvent]),
 ) {
-    let mut hyper_builder = hyper::Client::builder();
+    let mut hyper_builder = hyper_0_14::Client::builder();
     hyper_builder_settings(&mut hyper_builder);
 
     let mock = WireMockServer::start(events).await;
     let http_client = HyperClientBuilder::new()
         .hyper_builder(hyper_builder)
-        .build(hyper::client::HttpConnector::new_with_resolver(
+        .build(hyper_0_14::client::HttpConnector::new_with_resolver(
             mock.dns_resolver(),
         ));
 
@@ -132,7 +141,7 @@ async fn wire_level_test(
                 .build(),
         )
         .standard_retry(&RetryConfig::standard().with_reconnect_mode(reconnect_mode))
-        .retry_classifiers(RetryClassifiers::new().with_classifier(TestRetryClassifier))
+        .retry_classifier(TestRetryClassifier)
         .sleep_impl(TokioSleep::new())
         .with_connection_poisoning()
         .serializer({
@@ -141,7 +150,9 @@ async fn wire_level_test(
                 let request = http::Request::builder()
                     .uri(endpoint_url.clone())
                     // Make the body non-replayable since we don't actually want to retry
-                    .body(SdkBody::from_dyn(BoxBody::new(SdkBody::from("body"))))
+                    .body(SdkBody::from_body_0_4(SdkBody::from("body")))
+                    .unwrap()
+                    .try_into()
                     .unwrap();
                 tracing::info!("serializing request: {request:?}");
                 Ok(request)

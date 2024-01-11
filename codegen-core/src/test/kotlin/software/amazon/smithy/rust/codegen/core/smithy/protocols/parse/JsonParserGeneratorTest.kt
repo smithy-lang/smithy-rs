@@ -28,7 +28,8 @@ import software.amazon.smithy.rust.codegen.core.util.lookup
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class JsonParserGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
         use aws.protocols#restJson1
 
@@ -108,7 +109,7 @@ class JsonParserGeneratorTest {
             output: OpOutput,
             errors: [Error]
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generates valid deserializers`() {
@@ -116,11 +117,12 @@ class JsonParserGeneratorTest {
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
 
-        val parserGenerator = JsonParserGenerator(
-            codegenContext,
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
-            ::restJsonFieldName,
-        )
+        val parserGenerator =
+            JsonParserGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/json")),
+                ::restJsonFieldName,
+            )
         val operationGenerator = parserGenerator.operationParser(model.lookup("test#Op"))
         val payloadGenerator = parserGenerator.payloadParser(model.lookup("test#OpOutput\$top"))
         val errorParser = parserGenerator.errorParser(model.lookup("test#Error"))
@@ -167,6 +169,17 @@ class JsonParserGeneratorTest {
                 let input = br#"{ "top": { "choice": { "somenewvariant": "data" } } }"#;
                 let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).unwrap().build();
                 assert!(output.top.unwrap().choice.is_unknown());
+                """,
+            )
+
+            unitTest(
+                "dunder_type_should_be_ignored",
+                """
+                // __type field should be ignored during deserialization
+                let input = br#"{ "top": { "choice": { "int": 5, "__type": "value-should-be-ignored-anyway" } } }"#;
+                let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).unwrap().build();
+                use test_model::Choice;
+                assert_eq!(Choice::Int(5), output.top.unwrap().choice);
                 """,
             )
 

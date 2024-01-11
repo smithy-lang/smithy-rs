@@ -16,12 +16,13 @@ plugins {
 val smithyVersion: String by project
 val defaultRustDocFlags: String by project
 val properties = PropertyRetriever(rootProject, project)
+val buildDir = layout.buildDirectory.get().asFile
 
 val pluginName = "rust-server-codegen-python"
 val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
-    outputDirectory = file("$buildDir/$workingDirUnderBuildDir")
+    outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
 }
 
 buildscript {
@@ -67,12 +68,12 @@ val allCodegenTests = "../../codegen-core/common-test-models".let { commonModels
             "rest_json_extras",
             imports = listOf("$commonModels/rest-json-extras.smithy"),
         ),
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2477)
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2477)
         // CodegenTest(
         //     "aws.protocoltests.restjson.validation#RestJsonValidation",
         //     "rest_json_validation",
         //     // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
-        //     // See https://github.com/awslabs/smithy-rs/issues/1401.
+        //     // See https://github.com/smithy-lang/smithy-rs/issues/1401.
         //     extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         // ),
         CodegenTest(
@@ -111,7 +112,7 @@ tasks.register("stubs") {
 
     doLast {
         allCodegenTests.forEach { test ->
-            val crateDir = "$buildDir/$workingDirUnderBuildDir/${test.module}/$pluginName"
+            val crateDir = layout.buildDirectory.dir("$workingDirUnderBuildDir/${test.module}/$pluginName").get().asFile.path
             val moduleName = test.module.replace("-", "_")
             exec {
                 commandLine("bash", "$crateDir/stubgen.sh", moduleName, "$crateDir/Cargo.toml", "$crateDir/python/$moduleName")

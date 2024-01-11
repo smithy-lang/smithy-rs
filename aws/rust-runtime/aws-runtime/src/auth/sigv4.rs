@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::auth;
 use crate::auth::{
     extract_endpoint_auth_scheme_signing_name, extract_endpoint_auth_scheme_signing_region,
     SigV4OperationSigningConfig, SigV4SigningError,
@@ -14,7 +15,7 @@ use aws_sigv4::http_request::{
 use aws_sigv4::sign::v4;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
-    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Signer,
+    AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
 };
 use aws_smithy_runtime_api::client::identity::{Identity, SharedIdentityResolver};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -56,7 +57,7 @@ impl AuthScheme for SigV4AuthScheme {
         identity_resolvers.identity_resolver(self.scheme_id())
     }
 
-    fn signer(&self) -> &dyn Signer {
+    fn signer(&self) -> &dyn Sign {
         &self.signer
     }
 }
@@ -142,7 +143,7 @@ impl SigV4Signer {
     }
 }
 
-impl Signer for SigV4Signer {
+impl Sign for SigV4Signer {
     fn sign_http_request(
         &self,
         request: &mut HttpRequest,
@@ -182,15 +183,9 @@ impl Signer for SigV4Signer {
                 });
 
             let signable_request = SignableRequest::new(
-                request.method().as_str(),
-                request.uri().to_string(),
-                request.headers().iter().map(|(k, v)| {
-                    (
-                        k.as_str(),
-                        // use from_utf8 instead of to_str because we _do_ allow non-ascii header values
-                        std::str::from_utf8(v.as_bytes()).expect("only utf-8 headers are signable"),
-                    )
-                }),
+                request.method(),
+                request.uri(),
+                request.headers().iter(),
                 signable_body,
             )?;
             sign(signable_request, &SigningParams::V4(signing_params))?
@@ -218,7 +213,7 @@ impl Signer for SigV4Signer {
                     .expect("failed to send deferred signer");
             }
         }
-        signing_instructions.apply_to_request(request);
+        auth::apply_signing_instructions(signing_instructions, request)?;
         Ok(())
     }
 }
@@ -228,8 +223,9 @@ mod event_stream {
     use aws_sigv4::event_stream::{sign_empty_message, sign_message};
     use aws_sigv4::sign::v4;
     use aws_smithy_async::time::SharedTimeSource;
-    use aws_smithy_eventstream::frame::{Message, SignMessage, SignMessageError};
+    use aws_smithy_eventstream::frame::{SignMessage, SignMessageError};
     use aws_smithy_runtime_api::client::identity::Identity;
+    use aws_smithy_types::event_stream::Message;
     use aws_types::region::SigningRegion;
     use aws_types::SigningName;
 
@@ -298,7 +294,8 @@ mod event_stream {
         use crate::auth::sigv4::event_stream::SigV4MessageSigner;
         use aws_credential_types::Credentials;
         use aws_smithy_async::time::SharedTimeSource;
-        use aws_smithy_eventstream::frame::{HeaderValue, Message, SignMessage};
+        use aws_smithy_eventstream::frame::SignMessage;
+        use aws_smithy_types::event_stream::{HeaderValue, Message};
 
         use aws_types::region::Region;
         use aws_types::region::SigningRegion;

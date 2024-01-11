@@ -31,35 +31,38 @@ class TimestreamDecorator : ClientCodegenDecorator {
     override val name: String = "Timestream"
     override val order: Byte = -1
 
-    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> = listOf(
-        adhocCustomization<DocSection.CreateClient> {
-            addDependency(AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency())
-            rustTemplate(
-                """
-                let config = aws_config::load_from_env().await;
-                // You MUST call `with_endpoint_discovery_enabled` to produce a working client for this service.
-                let ${it.clientName} = ${it.crateName}::Client::new(&config).with_endpoint_discovery_enabled().await;
-                """.replaceIndent(it.indent),
-            )
-        },
-    )
-
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val endpointDiscovery = InlineAwsDependency.forRustFile(
-            "endpoint_discovery",
-            Visibility.PUBLIC,
-            CargoDependency.Tokio.copy(scope = DependencyScope.Compile, features = setOf("sync")),
-            CargoDependency.smithyAsync(codegenContext.runtimeConfig).toDevDependency().withFeature("test-util"),
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        listOf(
+            adhocCustomization<DocSection.CreateClient> {
+                addDependency(AwsCargoDependency.awsConfig(codegenContext.runtimeConfig).toDevDependency())
+                rustTemplate(
+                    """
+                    let config = aws_config::load_from_env().await;
+                    // You MUST call `with_endpoint_discovery_enabled` to produce a working client for this service.
+                    let ${it.clientName} = ${it.crateName}::Client::new(&config).with_endpoint_discovery_enabled().await;
+                    """.replaceIndent(it.indent),
+                )
+            },
         )
+
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        val endpointDiscovery =
+            InlineAwsDependency.forRustFile(
+                "endpoint_discovery",
+                Visibility.PUBLIC,
+                CargoDependency.Tokio.copy(scope = DependencyScope.Compile, features = setOf("sync")),
+                CargoDependency.smithyAsync(codegenContext.runtimeConfig).toDevDependency().withFeature("test-util"),
+            )
         rustCrate.withModule(ClientRustModule.client) {
             // helper function to resolve an endpoint given a base client
             rustTemplate(
                 """
-                async fn resolve_endpoint(client: &crate::Client) -> Result<(#{Endpoint}, #{SystemTime}), #{ResolveEndpointError}> {
+                async fn resolve_endpoint(client: &crate::Client) -> Result<(#{Endpoint}, #{SystemTime}), #{BoxError}> {
                     let describe_endpoints =
-                        client.describe_endpoints().send().await.map_err(|e| {
-                            #{ResolveEndpointError}::from_source("failed to call describe_endpoints", e)
-                        })?;
+                        client.describe_endpoints().send().await?;
                     let endpoint = describe_endpoints.endpoints().get(0).unwrap();
                     let expiry = client.config().time_source().expect("checked when ep discovery was enabled").now()
                         + #{Duration}::from_secs(endpoint.cache_period_in_minutes() as u64 * 60);
@@ -75,7 +78,7 @@ class TimestreamDecorator : ClientCodegenDecorator {
                     /// Enable endpoint discovery for this client
                     ///
                     /// This method MUST be called to construct a working client.
-                    pub async fn with_endpoint_discovery_enabled(self) -> #{Result}<(Self, #{endpoint_discovery}::ReloadEndpoint), #{ResolveEndpointError}> {
+                    pub async fn with_endpoint_discovery_enabled(self) -> #{Result}<(Self, #{endpoint_discovery}::ReloadEndpoint), #{BoxError}> {
                         let handle = self.handle.clone();
 
                         // The original client without endpoint discover gets moved into the endpoint discovery
@@ -92,11 +95,11 @@ class TimestreamDecorator : ClientCodegenDecorator {
                                 .expect("endpoint discovery requires the client config to have a time source"),
                         ).await?;
 
-                        let client_with_discovery = crate::Client::from_conf(
-                            handle.conf.to_builder()
-                                    .endpoint_resolver(#{SharedEndpointResolver}::new(resolver))
-                                    .build()
-                        );
+                        use #{IntoShared};
+                        let mut conf = handle.conf.to_builder();
+                        conf.set_endpoint_resolver(Some(resolver.into_shared()));
+
+                        let client_with_discovery = crate::Client::from_conf(conf.build());
                         Ok((client_with_discovery, reloader))
                     }
                 }
@@ -104,10 +107,10 @@ class TimestreamDecorator : ClientCodegenDecorator {
                 *RuntimeType.preludeScope,
                 "Arc" to RuntimeType.Arc,
                 "Duration" to RuntimeType.std.resolve("time::Duration"),
-                "SharedEndpointResolver" to RuntimeType.smithyHttp(codegenContext.runtimeConfig)
-                    .resolve("endpoint::SharedEndpointResolver"),
                 "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
                 "endpoint_discovery" to endpointDiscovery.toType(),
+                "BoxError" to RuntimeType.boxError(codegenContext.runtimeConfig),
+                "IntoShared" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("shared::IntoShared"),
                 *Types(codegenContext.runtimeConfig).toArray(),
             )
         }

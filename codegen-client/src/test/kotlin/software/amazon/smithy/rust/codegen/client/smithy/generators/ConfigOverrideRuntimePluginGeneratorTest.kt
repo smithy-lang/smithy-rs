@@ -18,7 +18,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 internal class ConfigOverrideRuntimePluginGeneratorTest {
-    private val model = """
+    private val model =
+        """
         namespace com.example
         use aws.protocols#awsJson1_0
 
@@ -33,45 +34,35 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
         structure TestInput {
            foo: String,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `operation overrides endpoint resolver`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
-            val codegenScope = arrayOf(
-                *preludeScope,
-                "EndpointResolverParams" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::endpoint::EndpointResolverParams"),
-                "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-                "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
-            )
+            val codegenScope =
+                arrayOf(
+                    *preludeScope,
+                    "EndpointResolverParams" to
+                        RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::endpoint::EndpointResolverParams"),
+                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                    "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
+                    "capture_request" to RuntimeType.captureRequest(runtimeConfig),
+                )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_operation_overrides_endpoint_resolver") {
                     rustTemplate(
                         """
-                        use #{RuntimePlugin};
-                        use ::aws_smithy_runtime_api::client::endpoint::EndpointResolver;
-
                         let expected_url = "http://localhost:1234/";
-                        let client_config = crate::config::Config::builder().build();
+                        let (http_client, req) = #{capture_request}(None);
+                        let client_config = crate::config::Config::builder().http_client(http_client).build();
                         let config_override =
-                            crate::config::Config::builder().endpoint_resolver(expected_url);
-                        let sut = crate::config::ConfigOverrideRuntimePlugin::new(
-                            config_override,
-                            client_config.config,
-                            &client_config.runtime_components,
-                        );
-                        let prev = #{RuntimeComponentsBuilder}::new("prev");
-                        let sut_components = sut.runtime_components(&prev);
-                        let endpoint_resolver = sut_components.endpoint_resolver().unwrap();
-                        let endpoint = endpoint_resolver
-                            .resolve_endpoint(&#{EndpointResolverParams}::new(crate::config::endpoint::Params {}))
-                            .await
-                            .unwrap();
-
-                        assert_eq!(expected_url, endpoint.url());
+                            crate::config::Config::builder().endpoint_url(expected_url);
+                        let client = crate::Client::from_conf(client_config);
+                        let _ = dbg!(client.say_hello().customize().config_override(config_override).send().await);
+                        assert_eq!("http://localhost:1234/", req.expect_request().uri());
                         """,
                         *codegenScope,
                     )
@@ -84,10 +75,11 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
     fun `operation overrides http connector`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
-            val codegenScope = arrayOf(
-                *preludeScope,
-                "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-            )
+            val codegenScope =
+                arrayOf(
+                    *preludeScope,
+                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                )
             rustCrate.testModule {
                 addDependency(CargoDependency.Tokio.toDevDependency().withFeature("test-util"))
                 tokioTest("test_operation_overrides_http_client") {
@@ -98,7 +90,7 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let (http_client, captured_request) = #{capture_request}(#{None});
                         let expected_url = "http://localhost:1234/";
                         let client_config = crate::config::Config::builder()
-                            .endpoint_resolver(expected_url)
+                            .endpoint_url(expected_url)
                             .http_client(#{NeverClient}::new())
                             .build();
                         let client = crate::client::Client::from_conf(client_config.clone());
@@ -118,8 +110,6 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         let customizable_send = client
                             .say_hello()
                             .customize()
-                            .await
-                            .unwrap()
                             .config_override(crate::config::Config::builder().http_client(http_client))
                             .send();
 
@@ -144,11 +134,13 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         *codegenScope,
                         "AsyncSleep" to RuntimeType.smithyAsync(runtimeConfig).resolve("rt::sleep::AsyncSleep"),
                         "capture_request" to RuntimeType.captureRequest(runtimeConfig),
-                        "NeverClient" to CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
-                            .resolve("client::http::test_util::NeverClient"),
+                        "NeverClient" to
+                            CargoDependency.smithyRuntimeTestUtil(runtimeConfig).toType()
+                                .resolve("client::http::test_util::NeverClient"),
                         "Timeout" to RuntimeType.smithyAsync(runtimeConfig).resolve("future::timeout::Timeout"),
-                        "TokioSleep" to CargoDependency.smithyAsync(runtimeConfig).withFeature("rt-tokio")
-                            .toType().resolve("rt::sleep::TokioSleep"),
+                        "TokioSleep" to
+                            CargoDependency.smithyAsync(runtimeConfig).withFeature("rt-tokio")
+                                .toType().resolve("rt::sleep::TokioSleep"),
                     )
                 }
             }
@@ -156,33 +148,43 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
     }
 
     @Test
-    fun `operation overrides retry strategy`() {
+    fun `operation overrides retry config`() {
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val runtimeConfig = clientCodegenContext.runtimeConfig
-            val codegenScope = arrayOf(
-                *preludeScope,
-                "AlwaysRetry" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::retries::AlwaysRetry"),
-                "ConfigBag" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag"),
-                "ErrorKind" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::ErrorKind"),
-                "Input" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Input"),
-                "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-                "Layer" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Layer"),
-                "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::orchestrator::OrchestratorError"),
-                "RetryConfig" to RuntimeType.smithyTypes(clientCodegenContext.runtimeConfig)
-                    .resolve("retry::RetryConfig"),
-                "RequestAttempts" to smithyRuntimeApiTestUtil(runtimeConfig).toType()
-                    .resolve("client::retries::RequestAttempts"),
-                "RetryClassifiers" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::retries::RetryClassifiers"),
-                "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
-                "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-                "ShouldAttempt" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::retries::ShouldAttempt"),
-            )
+            val codegenScope =
+                arrayOf(
+                    *preludeScope,
+                    "AlwaysRetry" to
+                        RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::retries::AlwaysRetry"),
+                    "ConfigBag" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::ConfigBag"),
+                    "ErrorKind" to RuntimeType.smithyTypes(runtimeConfig).resolve("retry::ErrorKind"),
+                    "Input" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Input"),
+                    "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
+                    "Layer" to RuntimeType.smithyTypes(runtimeConfig).resolve("config_bag::Layer"),
+                    "OrchestratorError" to
+                        RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::orchestrator::OrchestratorError"),
+                    "RetryConfig" to
+                        RuntimeType.smithyTypes(clientCodegenContext.runtimeConfig)
+                            .resolve("retry::RetryConfig"),
+                    "RequestAttempts" to
+                        smithyRuntimeApiTestUtil(runtimeConfig).toType()
+                            .resolve("client::retries::RequestAttempts"),
+                    "RetryClassifiers" to
+                        RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::retries::RetryClassifiers"),
+                    "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(runtimeConfig),
+                    "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                    "StandardRetryStrategy" to
+                        RuntimeType.smithyRuntime(runtimeConfig)
+                            .resolve("client::retries::strategy::StandardRetryStrategy"),
+                    "ShouldAttempt" to
+                        RuntimeType.smithyRuntimeApi(runtimeConfig)
+                            .resolve("client::retries::ShouldAttempt"),
+                )
             rustCrate.testModule {
-                unitTest("test_operation_overrides_retry_strategy") {
+                unitTest("test_operation_overrides_retry_config") {
                     rustTemplate(
                         """
                         use #{RuntimePlugin};
@@ -203,12 +205,12 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
                         cfg.push_shared_layer(client_config_layer.clone());
 
                         let retry_classifiers_component = #{RuntimeComponentsBuilder}::new("retry_classifier")
-                            .with_retry_classifiers(#{Some}(
-                                #{RetryClassifiers}::new().with_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError)),
-                            ));
+                            .with_retry_classifier(#{AlwaysRetry}(#{ErrorKind}::TransientError));
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
+                            // emulate the default retry config plugin by setting a retry strategy
+                            .with_retry_strategy(#{Some}(#{StandardRetryStrategy}::new()))
                             .merge_from(&client_config.runtime_components)
                             .merge_from(&retry_classifiers_component)
                             .build()
@@ -235,6 +237,8 @@ internal class ConfigOverrideRuntimePluginGeneratorTest {
 
                         // Emulate the merging of runtime components from runtime plugins that the orchestrator does
                         let runtime_components = #{RuntimeComponentsBuilder}::for_tests()
+                            // emulate the default retry config plugin by setting a retry strategy
+                            .with_retry_strategy(#{Some}(#{StandardRetryStrategy}::new()))
                             .merge_from(&client_config.runtime_components)
                             .merge_from(&retry_classifiers_component)
                             .merge_from(&config_override.runtime_components)

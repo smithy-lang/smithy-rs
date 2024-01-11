@@ -12,7 +12,7 @@ use std::env::VarError;
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::os_shim_internal::fs::Fake;
 
@@ -45,14 +45,17 @@ impl Default for Fs {
 }
 
 impl Fs {
+    /// Create `Fs` representing a real file system.
     pub fn real() -> Self {
         Fs(fs::Inner::Real)
     }
 
+    /// Create `Fs` from a map of `OsString` to `Vec<u8>`.
     pub fn from_raw_map(fs: HashMap<OsString, Vec<u8>>) -> Self {
-        Fs(fs::Inner::Fake(Arc::new(Fake::MapFs(fs))))
+        Fs(fs::Inner::Fake(Arc::new(Fake::MapFs(Mutex::new(fs)))))
     }
 
+    /// Create `Fs` from a map of `String` to `Vec<u8>`.
     pub fn from_map(data: HashMap<String, impl Into<Vec<u8>>>) -> Self {
         let fs = data
             .into_iter()
@@ -125,9 +128,12 @@ impl Fs {
         use fs::Inner;
         let path = path.as_ref();
         match &self.0 {
+            // TODO(https://github.com/awslabs/aws-sdk-rust/issues/867): Use async IO below
             Inner::Real => std::fs::read(path),
             Inner::Fake(fake) => match fake.as_ref() {
                 Fake::MapFs(fs) => fs
+                    .lock()
+                    .unwrap()
                     .get(path.as_os_str())
                     .cloned()
                     .ok_or_else(|| std::io::ErrorKind::NotFound.into()),
@@ -143,13 +149,48 @@ impl Fs {
             },
         }
     }
+
+    /// Write a slice as the entire contents of a file.
+    ///
+    /// This is equivalent to `std::fs::write`.
+    pub async fn write(
+        &self,
+        path: impl AsRef<Path>,
+        contents: impl AsRef<[u8]>,
+    ) -> std::io::Result<()> {
+        use fs::Inner;
+        match &self.0 {
+            // TODO(https://github.com/awslabs/aws-sdk-rust/issues/867): Use async IO below
+            Inner::Real => {
+                std::fs::write(path, contents)?;
+            }
+            Inner::Fake(fake) => match fake.as_ref() {
+                Fake::MapFs(fs) => {
+                    fs.lock()
+                        .unwrap()
+                        .insert(path.as_ref().as_os_str().into(), contents.as_ref().to_vec());
+                }
+                Fake::NamespacedFs {
+                    real_path,
+                    namespaced_to,
+                } => {
+                    let actual_path = path
+                        .as_ref()
+                        .strip_prefix(namespaced_to)
+                        .map_err(|_| std::io::Error::from(std::io::ErrorKind::NotFound))?;
+                    std::fs::write(real_path.join(actual_path), contents)?;
+                }
+            },
+        }
+        Ok(())
+    }
 }
 
 mod fs {
     use std::collections::HashMap;
     use std::ffi::OsString;
     use std::path::PathBuf;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Debug)]
     pub(super) enum Inner {
@@ -159,7 +200,7 @@ mod fs {
 
     #[derive(Debug)]
     pub(super) enum Fake {
-        MapFs(HashMap<OsString, Vec<u8>>),
+        MapFs(Mutex<HashMap<OsString, Vec<u8>>>),
         NamespacedFs {
             real_path: PathBuf,
             namespaced_to: PathBuf,
@@ -171,7 +212,7 @@ mod fs {
 ///
 /// Environment variables are global to a process, and, as such, are difficult to test with a multi-
 /// threaded test runner like Rust's. This enables loading environment variables either from the
-/// actual process environment ([`std::env::var`](std::env::var)) or from a hash map.
+/// actual process environment ([`std::env::var`]) or from a hash map.
 ///
 /// Process environments are cheap to clone:
 /// - Faked process environments are wrapped in an internal Arc
@@ -186,6 +227,7 @@ impl Default for Env {
 }
 
 impl Env {
+    /// Retrieve a value for the given `k` and return `VarError` is that key is not present.
     pub fn get(&self, k: &str) -> Result<String, VarError> {
         use env::Inner;
         match &self.0 {
@@ -215,7 +257,7 @@ impl Env {
 
     /// Create a process environment that uses the real process environment
     ///
-    /// Calls will be delegated to [`std::env::var`](std::env::var).
+    /// Calls will be delegated to [`std::env::var`].
     pub fn real() -> Self {
         Self(env::Inner::Real)
     }
@@ -242,8 +284,6 @@ mod env {
 mod test {
     use std::env::VarError;
 
-    use futures_util::FutureExt;
-
     use crate::os_shim_internal::{Env, Fs};
 
     #[test]
@@ -256,19 +296,33 @@ mod test {
         )
     }
 
-    #[test]
-    fn fs_works() {
+    #[tokio::test]
+    async fn fs_from_test_dir_works() {
         let fs = Fs::from_test_dir(".", "/users/test-data");
         let _ = fs
             .read_to_end("/users/test-data/Cargo.toml")
-            .now_or_never()
-            .expect("future should not poll")
+            .await
             .expect("file exists");
 
         let _ = fs
             .read_to_end("doesntexist")
-            .now_or_never()
-            .expect("future should not poll")
+            .await
             .expect_err("file doesnt exists");
+    }
+
+    #[tokio::test]
+    async fn fs_round_trip_file_with_real() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("test-file");
+
+        let fs = Fs::real();
+        fs.read_to_end(&path)
+            .await
+            .expect_err("file doesn't exist yet");
+
+        fs.write(&path, b"test").await.expect("success");
+
+        let result = fs.read_to_end(&path).await.expect("success");
+        assert_eq!(b"test", &result[..]);
     }
 }

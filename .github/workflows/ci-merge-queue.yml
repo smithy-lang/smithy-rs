@@ -84,7 +84,7 @@ jobs:
     needs:
     - save-docker-login-token
     - acquire-base-image
-    if: ${{ github.event.pull_request.head.repo.full_name == 'awslabs/smithy-rs' || toJSON(github.event.merge_group) != '{}' }}
+    if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' || toJSON(github.event.merge_group) != '{}' }}
     uses: ./.github/workflows/ci.yml
     with:
       run_sdk_examples: true

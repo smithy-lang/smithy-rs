@@ -18,7 +18,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 class ClientCodegenVisitorTest {
     @Test
     fun `baseline transform verify mixins removed`() {
-        val model = """
+        val model =
+            """
             namespace com.example
 
             use aws.protocols#awsJson1_0
@@ -43,7 +44,7 @@ class ClientCodegenVisitorTest {
             ] {
                 greeting: String
             }
-        """.asSmithyModel(smithyVersion = "2.0")
+            """.asSmithyModel(smithyVersion = "2.0")
         val (ctx, _) = generatePluginContext(model)
         val codegenDecorator =
             CombinedClientCodegenDecorator.fromClasspath(

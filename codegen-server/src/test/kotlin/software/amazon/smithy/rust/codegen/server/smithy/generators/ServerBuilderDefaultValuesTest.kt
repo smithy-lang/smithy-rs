@@ -43,52 +43,54 @@ import java.util.stream.Stream
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ServerBuilderDefaultValuesTest {
     // When defaults are used, the model will be generated with these in the `@default` trait.
-    private val defaultValues = mapOf(
-        "Boolean" to "true",
-        "String" to "foo".dq(),
-        "Byte" to "5",
-        "Short" to "55",
-        "Integer" to "555",
-        "Long" to "5555",
-        "Float" to "0.5",
-        "Double" to "0.55",
-        "Timestamp" to "1985-04-12T23:20:50.52Z".dq(),
-        // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/awslabs/smithy-rs/issues/312)
-        "StringList" to "[]",
-        "IntegerMap" to "{}",
-        "Language" to "en".dq(),
-        "DocumentBoolean" to "true",
-        "DocumentString" to "foo".dq(),
-        "DocumentNumberPosInt" to "100",
-        "DocumentNumberNegInt" to "-100",
-        "DocumentNumberFloat" to "0.1",
-        "DocumentList" to "[]",
-        "DocumentMap" to "{}",
-    )
+    private val defaultValues =
+        mapOf(
+            "Boolean" to "true",
+            "String" to "foo".dq(),
+            "Byte" to "5",
+            "Short" to "55",
+            "Integer" to "555",
+            "Long" to "5555",
+            "Float" to "0.5",
+            "Double" to "0.55",
+            "Timestamp" to "1985-04-12T23:20:50.52Z".dq(),
+            // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/smithy-lang/smithy-rs/issues/312)
+            "StringList" to "[]",
+            "IntegerMap" to "{}",
+            "Language" to "en".dq(),
+            "DocumentBoolean" to "true",
+            "DocumentString" to "foo".dq(),
+            "DocumentNumberPosInt" to "100",
+            "DocumentNumberNegInt" to "-100",
+            "DocumentNumberFloat" to "0.1",
+            "DocumentList" to "[]",
+            "DocumentMap" to "{}",
+        )
 
     // When the test applies values to validate we honor custom values, use these (different) values.
-    private val customValues = mapOf(
-        "Boolean" to "false",
-        "String" to "bar".dq(),
-        "Byte" to "6",
-        "Short" to "66",
-        "Integer" to "666",
-        "Long" to "6666",
-        "Float" to "0.6",
-        "Double" to "0.66",
-        "Timestamp" to "2022-11-25T17:30:50.00Z".dq(),
-        // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/awslabs/smithy-rs/issues/312)
-        "StringList" to "[]",
-        "IntegerMap" to "{}",
-        "Language" to "fr".dq(),
-        "DocumentBoolean" to "false",
-        "DocumentString" to "bar".dq(),
-        "DocumentNumberPosInt" to "1000",
-        "DocumentNumberNegInt" to "-1000",
-        "DocumentNumberFloat" to "0.01",
-        "DocumentList" to "[]",
-        "DocumentMap" to "{}",
-    )
+    private val customValues =
+        mapOf(
+            "Boolean" to "false",
+            "String" to "bar".dq(),
+            "Byte" to "6",
+            "Short" to "66",
+            "Integer" to "666",
+            "Long" to "6666",
+            "Float" to "0.6",
+            "Double" to "0.66",
+            "Timestamp" to "2022-11-25T17:30:50.00Z".dq(),
+            // "BigInteger" to "55555", "BigDecimal" to "0.555", // TODO(https://github.com/smithy-lang/smithy-rs/issues/312)
+            "StringList" to "[]",
+            "IntegerMap" to "{}",
+            "Language" to "fr".dq(),
+            "DocumentBoolean" to "false",
+            "DocumentString" to "bar".dq(),
+            "DocumentNumberPosInt" to "1000",
+            "DocumentNumberNegInt" to "-1000",
+            "DocumentNumberFloat" to "0.01",
+            "DocumentList" to "[]",
+            "DocumentMap" to "{}",
+        )
 
     @ParameterizedTest(name = "(#{index}) Server builders and default values. Params = requiredTrait: {0}, nullDefault: {1}, applyDefaultValues: {2}, builderGeneratorKind: {3}, assertValues: {4}")
     @MethodSource("testParameters")
@@ -116,34 +118,37 @@ class ServerBuilderDefaultValuesTest {
             }
 
             val rustValues = setupRustValuesForTest(assertValues)
-            val setters = if (applyDefaultValues) {
-                structSetters(rustValues, nullDefault && !requiredTrait)
-            } else {
-                writable { }
-            }
+            val setters =
+                if (applyDefaultValues) {
+                    structSetters(rustValues, nullDefault && !requiredTrait)
+                } else {
+                    writable { }
+                }
             val unwrapBuilder = if (nullDefault && requiredTrait && applyDefaultValues) ".unwrap()" else ""
             unitTest(
                 name = "generates_default_required_values",
-                block = writable {
-                    rustTemplate(
-                        """
-                        let my_struct = MyStruct::builder()
-                            #{Setters:W}
-                            .build()
-                            $unwrapBuilder;
+                block =
+                    writable {
+                        rustTemplate(
+                            """
+                            let my_struct = MyStruct::builder()
+                                #{Setters:W}
+                                .build()
+                                $unwrapBuilder;
 
-                        #{Assertions:W}
-                        """,
-                        "Assertions" to assertions(
-                            rustValues,
-                            applyDefaultValues,
-                            nullDefault,
-                            requiredTrait,
-                            applyDefaultValues,
-                        ),
-                        "Setters" to setters,
-                    )
-                },
+                            #{Assertions:W}
+                            """,
+                            "Assertions" to
+                                assertions(
+                                    rustValues,
+                                    applyDefaultValues,
+                                    nullDefault,
+                                    requiredTrait,
+                                    applyDefaultValues,
+                                ),
+                            "Setters" to setters,
+                        )
+                    },
             )
         }
 
@@ -153,39 +158,49 @@ class ServerBuilderDefaultValuesTest {
     }
 
     private fun setupRustValuesForTest(valuesMap: Map<String, String?>): Map<String, String?> {
-        return valuesMap + mapOf(
-            "Byte" to "${valuesMap["Byte"]}i8",
-            "Short" to "${valuesMap["Short"]}i16",
-            "Integer" to "${valuesMap["Integer"]}i32",
-            "Long" to "${valuesMap["Long"]}i64",
-            "Float" to "${valuesMap["Float"]}f32",
-            "Double" to "${valuesMap["Double"]}f64",
-            "Language" to "crate::model::Language::${valuesMap["Language"]!!.replace(""""""", "").toPascalCase()}",
-            "Timestamp" to """aws_smithy_types::DateTime::from_str(${valuesMap["Timestamp"]}, aws_smithy_types::date_time::Format::DateTime).unwrap()""",
-            // These must be empty
-            "StringList" to "Vec::<String>::new()",
-            "IntegerMap" to "std::collections::HashMap::<String, i32>::new()",
-            "DocumentList" to "Vec::<aws_smithy_types::Document>::new()",
-            "DocumentMap" to "std::collections::HashMap::<String, aws_smithy_types::Document>::new()",
-        ) + valuesMap
-            .filter { it.value?.startsWith("Document") ?: false }
-            .map { it.key to "${it.value}.into()" }
+        return valuesMap +
+            mapOf(
+                "Byte" to "${valuesMap["Byte"]}i8",
+                "Short" to "${valuesMap["Short"]}i16",
+                "Integer" to "${valuesMap["Integer"]}i32",
+                "Long" to "${valuesMap["Long"]}i64",
+                "Float" to "${valuesMap["Float"]}f32",
+                "Double" to "${valuesMap["Double"]}f64",
+                "Language" to "crate::model::Language::${valuesMap["Language"]!!.replace(""""""", "").toPascalCase()}",
+                "Timestamp" to """aws_smithy_types::DateTime::from_str(${valuesMap["Timestamp"]}, aws_smithy_types::date_time::Format::DateTime).unwrap()""",
+                // These must be empty
+                "StringList" to "Vec::<String>::new()",
+                "IntegerMap" to "std::collections::HashMap::<String, i32>::new()",
+                "DocumentList" to "Vec::<aws_smithy_types::Document>::new()",
+                "DocumentMap" to "std::collections::HashMap::<String, aws_smithy_types::Document>::new()",
+            ) +
+            valuesMap
+                .filter { it.value?.startsWith("Document") ?: false }
+                .map { it.key to "${it.value}.into()" }
     }
 
-    private fun writeServerBuilderGeneratorWithoutPublicConstrainedTypes(rustCrate: RustCrate, writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
+    private fun writeServerBuilderGeneratorWithoutPublicConstrainedTypes(
+        rustCrate: RustCrate,
+        writer: RustWriter,
+        model: Model,
+        symbolProvider: RustSymbolProvider,
+    ) {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
-        val codegenContext = serverTestCodegenContext(
-            model,
-            settings = serverTestRustSettings(
-                codegenConfig = ServerCodegenConfig(publicConstrainedTypes = false),
-            ),
-        )
-        val builderGenerator = ServerBuilderGeneratorWithoutPublicConstrainedTypes(
-            codegenContext,
-            struct,
-            SmithyValidationExceptionConversionGenerator(codegenContext),
-            ServerRestJsonProtocol(codegenContext),
-        )
+        val codegenContext =
+            serverTestCodegenContext(
+                model,
+                settings =
+                    serverTestRustSettings(
+                        codegenConfig = ServerCodegenConfig(publicConstrainedTypes = false),
+                    ),
+            )
+        val builderGenerator =
+            ServerBuilderGeneratorWithoutPublicConstrainedTypes(
+                codegenContext,
+                struct,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+                ServerRestJsonProtocol(codegenContext),
+            )
 
         writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
@@ -200,15 +215,21 @@ class ServerBuilderDefaultValuesTest {
         StructureGenerator(model, symbolProvider, writer, struct, emptyList(), codegenContext.structSettings()).render()
     }
 
-    private fun writeServerBuilderGenerator(rustCrate: RustCrate, writer: RustWriter, model: Model, symbolProvider: RustSymbolProvider) {
+    private fun writeServerBuilderGenerator(
+        rustCrate: RustCrate,
+        writer: RustWriter,
+        model: Model,
+        symbolProvider: RustSymbolProvider,
+    ) {
         val struct = model.lookup<StructureShape>("com.test#MyStruct")
         val codegenContext = serverTestCodegenContext(model)
-        val builderGenerator = ServerBuilderGenerator(
-            codegenContext,
-            struct,
-            SmithyValidationExceptionConversionGenerator(codegenContext),
-            ServerRestJsonProtocol(codegenContext),
-        )
+        val builderGenerator =
+            ServerBuilderGenerator(
+                codegenContext,
+                struct,
+                SmithyValidationExceptionConversionGenerator(codegenContext),
+                ServerRestJsonProtocol(codegenContext),
+            )
 
         writer.implBlock(symbolProvider.toSymbol(struct)) {
             builderGenerator.renderConvenienceMethod(writer)
@@ -223,7 +244,10 @@ class ServerBuilderDefaultValuesTest {
         StructureGenerator(model, symbolProvider, writer, struct, emptyList(), codegenContext.structSettings()).render()
     }
 
-    private fun structSetters(values: Map<String, String?>, optional: Boolean) = writable {
+    private fun structSetters(
+        values: Map<String, String?>,
+        optional: Boolean,
+    ) = writable {
         for ((key, value) in values) {
             withBlock(".${key.toSnakeCase()}(", ")") {
                 conditionalBlock("Some(", ")", optional) {
@@ -259,27 +283,30 @@ class ServerBuilderDefaultValuesTest {
             if (!hasSetValues) {
                 rust("assert!($member.is_none());")
             } else {
-                val actual = writable {
-                    rust(member)
-                    if (!requiredTrait && !(hasDefaults && !hasNullValues)) {
-                        rust(".unwrap()")
+                val actual =
+                    writable {
+                        rust(member)
+                        if (!requiredTrait && !(hasDefaults && !hasNullValues)) {
+                            rust(".unwrap()")
+                        }
                     }
-                }
-                val expected = writable {
-                    val expected = if (key == "DocumentNull") {
-                        "aws_smithy_types::Document::Null"
-                    } else if (key == "DocumentString") {
-                        "String::from($value).into()"
-                    } else if (key.startsWith("DocumentNumber")) {
-                        val type = key.replace("DocumentNumber", "")
-                        "aws_smithy_types::Document::Number(aws_smithy_types::Number::$type($value))"
-                    } else if (key.startsWith("Document")) {
-                        "$value.into()"
-                    } else {
-                        "$value"
+                val expected =
+                    writable {
+                        val expected =
+                            if (key == "DocumentNull") {
+                                "aws_smithy_types::Document::Null"
+                            } else if (key == "DocumentString") {
+                                "String::from($value).into()"
+                            } else if (key.startsWith("DocumentNumber")) {
+                                val type = key.replace("DocumentNumber", "")
+                                "aws_smithy_types::Document::Number(aws_smithy_types::Number::$type($value))"
+                            } else if (key.startsWith("Document")) {
+                                "$value.into()"
+                            } else {
+                                "$value"
+                            }
+                        rust(expected)
                     }
-                    rust(expected)
-                }
                 rustTemplate("assert_eq!(#{Actual:W}, #{Expected:W});", "Actual" to actual, "Expected" to expected)
             }
         }
@@ -293,19 +320,21 @@ class ServerBuilderDefaultValuesTest {
     ): Model {
         val requiredOrNot = if (requiredTrait) "@required" else ""
 
-        val members = values.entries.joinToString(", ") {
-            val value = if (applyDefaultValues) {
-                "= ${it.value}"
-            } else if (nullDefault) {
-                "= null"
-            } else {
-                ""
+        val members =
+            values.entries.joinToString(", ") {
+                val value =
+                    if (applyDefaultValues) {
+                        "= ${it.value}"
+                    } else if (nullDefault) {
+                        "= null"
+                    } else {
+                        ""
+                    }
+                """
+                $requiredOrNot
+                ${it.key.toPascalCase()}: ${it.key} $value
+                """
             }
-            """
-            $requiredOrNot
-            ${it.key.toPascalCase()}: ${it.key} $value
-            """
-        }
         val model =
             """
             namespace com.test
@@ -352,26 +381,22 @@ class ServerBuilderDefaultValuesTest {
     }
 
     private fun testParameters(): Stream<Arguments> {
-        val builderGeneratorKindList = listOf(
-            BuilderGeneratorKind.SERVER_BUILDER_GENERATOR,
-            BuilderGeneratorKind.SERVER_BUILDER_GENERATOR_WITHOUT_PUBLIC_CONSTRAINED_TYPES,
-        )
+        val builderGeneratorKindList =
+            listOf(
+                BuilderGeneratorKind.SERVER_BUILDER_GENERATOR,
+                BuilderGeneratorKind.SERVER_BUILDER_GENERATOR_WITHOUT_PUBLIC_CONSTRAINED_TYPES,
+            )
         return Stream.of(
             TestConfig(defaultValues, requiredTrait = false, nullDefault = true, applyDefaultValues = true),
             TestConfig(defaultValues, requiredTrait = false, nullDefault = true, applyDefaultValues = false),
-
             TestConfig(customValues, requiredTrait = false, nullDefault = true, applyDefaultValues = true),
             TestConfig(customValues, requiredTrait = false, nullDefault = true, applyDefaultValues = false),
-
             TestConfig(defaultValues, requiredTrait = true, nullDefault = true, applyDefaultValues = true),
             TestConfig(customValues, requiredTrait = true, nullDefault = true, applyDefaultValues = true),
-
             TestConfig(defaultValues, requiredTrait = false, nullDefault = false, applyDefaultValues = true),
             TestConfig(defaultValues, requiredTrait = false, nullDefault = false, applyDefaultValues = false),
-
             TestConfig(customValues, requiredTrait = false, nullDefault = false, applyDefaultValues = true),
             TestConfig(customValues, requiredTrait = false, nullDefault = false, applyDefaultValues = false),
-
             TestConfig(defaultValues, requiredTrait = true, nullDefault = false, applyDefaultValues = true),
             TestConfig(customValues, requiredTrait = true, nullDefault = false, applyDefaultValues = true),
         ).flatMap { (assertValues, requiredTrait, nullDefault, applyDefaultValues) ->

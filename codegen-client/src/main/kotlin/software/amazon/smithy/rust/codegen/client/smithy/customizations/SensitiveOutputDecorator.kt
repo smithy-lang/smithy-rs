@@ -33,15 +33,18 @@ private class SensitiveOutputCustomization(
     private val operation: OperationShape,
 ) : OperationCustomization() {
     private val sensitiveIndex = SensitiveIndex.of(codegenContext.model)
-    override fun section(section: OperationSection): Writable = writable {
-        if (section is OperationSection.AdditionalRuntimePluginConfig && sensitiveIndex.hasSensitiveOutput(operation)) {
-            rustTemplate(
-                """
-                ${section.newLayerName}.store_put(#{SensitiveOutput});
-                """,
-                "SensitiveOutput" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                    .resolve("client::orchestrator::SensitiveOutput"),
-            )
+
+    override fun section(section: OperationSection): Writable =
+        writable {
+            if (section is OperationSection.AdditionalRuntimePluginConfig && sensitiveIndex.hasSensitiveOutput(operation)) {
+                rustTemplate(
+                    """
+                    ${section.newLayerName}.store_put(#{SensitiveOutput});
+                    """,
+                    "SensitiveOutput" to
+                        RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                            .resolve("client::orchestrator::SensitiveOutput"),
+                )
+            }
         }
-    }
 }

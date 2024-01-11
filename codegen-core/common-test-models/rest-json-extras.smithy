@@ -65,9 +65,11 @@ service RestJsonExtras {
         NullInNonSparse,
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2968): Remove the following once these tests are included in Smithy
         // They're being added in https://github.com/smithy-lang/smithy/pull/1908
         HttpPayloadWithUnion,
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3315)
+        ZeroAndFalseQueryParams,
     ],
     errors: [ExtraError]
 }
@@ -317,7 +319,7 @@ operation CaseInsensitiveErrorOperation {
 
 @httpResponseTests([
     {
-        documentation: "Upper case error modeled lower case. See: https://github.com/awslabs/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
+        documentation: "Upper case error modeled lower case. See: https://github.com/smithy-lang/smithy-rs/blob/6c21fb0eb377c7120a8179f4537ba99a4b50ba96/rust-runtime/inlineable/src/json_errors.rs#L51-L51",
         id: "UpperErrorModeledLower",
         protocol: "aws.protocols#restJson1",
         code: 500,
@@ -350,4 +352,34 @@ structure EmptyStructWithContentOnWireOpOutput {
 ])
 operation EmptyStructWithContentOnWireOp {
     output: EmptyStructWithContentOnWireOpOutput,
+}
+@http(uri: "/zero-and-false-query-params", method: "GET")
+@httpRequestTests([
+    {
+        id: "RestJsonZeroAndFalseQueryParamsAreSerialized",
+        protocol: restJson1,
+        code: 200,
+        method: "GET",
+        uri: "/zero-and-false-query-params",
+        body: "",
+        queryParams: [
+            "Zero=0",
+            "False=false"
+        ],
+        params: {
+            zeroValue: 0,
+            falseValue: false
+        }
+    }
+])
+operation ZeroAndFalseQueryParams {
+    input: ZeroAndFalseQueryParamsInput
+}
+
+structure ZeroAndFalseQueryParamsInput {
+    @httpQuery("Zero")
+    zeroValue: Integer
+
+    @httpQuery("False")
+    falseValue: Boolean
 }

@@ -10,12 +10,13 @@
 //! version numbers in addition to the dependency path.
 
 use crate::fs::Fs;
-use crate::package::{discover_manifests, parse_version, SemVer};
+use crate::package::{discover_manifests, parse_version};
 use crate::SDK_REPO_NAME;
 use anyhow::{bail, Context, Result};
 use clap::Parser;
+use semver::Version;
 use smithy_rs_tool_common::ci::running_in_ci;
-use smithy_rs_tool_common::package::PackageCategory;
+use smithy_rs_tool_common::package::PackageStability;
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -78,9 +79,30 @@ impl Manifest {
         let value = self.metadata.get("package").and_then(|v| v.get("publish"));
         match value {
             None => Ok(true),
-            Some(value) => value
-                .as_bool()
-                .ok_or(anyhow::Error::msg("unexpected publish setting")),
+            Some(value) => value.as_bool().ok_or(anyhow::Error::msg(format!(
+                "unexpected publish setting: {value}"
+            ))),
+        }
+    }
+
+    fn stability(&self) -> Result<PackageStability> {
+        let value = self
+            .metadata
+            .get("package")
+            .and_then(|v| v.get("metadata"))
+            .and_then(|v| v.get("smithy-rs-release-tooling"))
+            .and_then(|v| v.get("stable"));
+        match value {
+            None => Ok(PackageStability::Unstable),
+            Some(value) => {
+                if value.as_bool().ok_or(anyhow::Error::msg(format!(
+                    "unexpected stable setting: {value}"
+                )))? {
+                    Ok(PackageStability::Stable)
+                } else {
+                    Ok(PackageStability::Unstable)
+                }
+            }
         }
     }
 }
@@ -93,7 +115,7 @@ enum FilterType {
 }
 struct VersionView<'a>(&'a Versions, FilterType);
 impl VersionView<'_> {
-    fn get(&self, crate_name: &str) -> Option<&semver::Version> {
+    fn get(&self, crate_name: &str) -> Option<&Version> {
         let version = match (self.1, self.0 .0.get(crate_name)) {
             (FilterType::AllCrates, version) => version,
             (FilterType::PublishedOnly, v @ Some(VersionWithMetadata { publish: true, .. })) => v,
@@ -112,21 +134,31 @@ impl Versions {
         VersionView(self, FilterType::PublishedOnly)
     }
 
-    fn published_crates(&self) -> impl Iterator<Item = (&str, &semver::Version)> + '_ {
+    fn published_crates(&self) -> impl Iterator<Item = (&str, &Version)> + '_ {
         self.0
             .iter()
             .filter(|(_, v)| v.publish)
             .map(|(k, v)| (k.as_str(), &v.version))
     }
 
-    fn get(&self, crate_name: &str) -> Option<&semver::Version> {
+    fn get(&self, crate_name: &str) -> Option<&Version> {
         self.0.get(crate_name).map(|v| &v.version)
+    }
+
+    fn stable(&self, crate_name: &str) -> Option<bool> {
+        match self.0.get(crate_name) {
+            Some(VersionWithMetadata { stability, .. }) => {
+                Some(*stability == PackageStability::Stable)
+            }
+            _ => None,
+        }
     }
 }
 
 struct VersionWithMetadata {
-    version: semver::Version,
+    version: Version,
     publish: bool,
+    stability: PackageStability,
 }
 
 async fn read_manifests(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Manifest>> {
@@ -150,6 +182,7 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
             None => continue,
         };
         let publish = manifest.publish()?;
+        let stability = manifest.stability()?;
         let name = package
             .get("name")
             .and_then(|name| name.as_str())
@@ -162,8 +195,15 @@ fn package_versions(manifests: &[Manifest]) -> Result<Versions> {
             .ok_or_else(|| {
                 anyhow::Error::msg(format!("{:?} is missing a package version", manifest.path))
             })?;
-        let version = parse_version::<SemVer>(&manifest.path, version)?;
-        versions.insert(name.into(), VersionWithMetadata { version, publish });
+        let version = parse_version(&manifest.path, version)?;
+        versions.insert(
+            name.into(),
+            VersionWithMetadata {
+                version,
+                publish,
+                stability,
+            },
+        );
     }
     Ok(Versions(versions))
 }
@@ -189,82 +229,25 @@ fn fix_dep_set(versions: &VersionView, key: &str, metadata: &mut Value) -> Resul
 }
 
 // Update a version of `dep_name` that has a path dependency to be that appearing in `versions`.
-//
-// While doing so, we will use the tilde version requirement so customers can update patch versions
-// automatically. Specifically, we use tilde versions of the form `~major.minor` (e.g. `~1.2`) so
-// it can support the range of versions `>=1.2.0, <1.3.0`. See
-// https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#tilde-requirements
 fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Result<usize> {
     if !table.contains_key("path") {
         return Ok(0);
     }
-    let package_version = versions
-        .get(dep_name)
-        .ok_or_else(|| anyhow::Error::msg(format!("version not found for crate {dep_name}")))?;
-    let package_version = if PackageCategory::from_package_name(dep_name) == PackageCategory::AwsSdk
-    {
-        // For a crate that depends on an SDK crate (e.g. `aws-config` depending on `aws-sdk-sts`),
-        // we do _not_ want to turn the version of the SDK crate into a tilde version because
-        // customers may depend on that SDK crate by themselves, causing multiple versions of it
-        // to be brought in to their crate graph.
-        package_version.to_string()
-    } else {
-        convert_to_tilde_requirement(package_version)?
+    let package_version = match versions.get(dep_name) {
+        Some(version) => version.to_string(),
+        None => bail!("version not found for crate {}", dep_name),
     };
     let previous_version = table.insert(
         "version".into(),
-        toml::Value::String(package_version.clone()),
+        toml::Value::String(package_version.to_string()),
     );
     match previous_version {
         None => Ok(1),
-        Some(prev_version) if versions_match(&prev_version, &package_version) => Ok(0),
+        Some(prev_version) if prev_version.as_str() == Some(&package_version) => Ok(0),
         Some(mismatched_version) => {
             tracing::warn!(expected = ?package_version, actual = ?mismatched_version, "version was set but it did not match");
             Ok(1)
         }
-    }
-}
-
-// Convert `package_version` into a tilde version requirement
-//
-// For instance, given `package_version` like `0.12.3`, the function returns `~0.12`.
-// The fact that this function takes a `semver::Version` means one can only convert a complete
-// semver `x.y.z` into a tilde version requirement, but not those like `0.21.0-alpha.1`.
-fn convert_to_tilde_requirement(package_version: &semver::Version) -> Result<String> {
-    // `package_version` is from the `semver` crate which requires versions to have 3 components,
-    // major, minor, and patch. So it is safe to assume its string value follows that format.
-    let package_version = package_version.to_string();
-    let package_version = match package_version.rfind('.') {
-        // Here, we're interested in the `major.minor` part.
-        Some(index) => {
-            assert_eq!(
-                2,
-                package_version.chars().filter(|&c| c == '.').count(),
-                "The number of `.` in {} is not 2",
-                package_version
-            );
-            &package_version[0..index]
-        }
-        None => bail!("{} did not have any dots in it", package_version),
-    };
-
-    Ok("~".to_string() + package_version)
-}
-
-// Determines if `prev_version` and `current_version` are considered a match
-//
-// Each input can be either a semver-compliant version or a tilde version requirement.
-fn versions_match(prev_version: &Value, current_version: &str) -> bool {
-    match prev_version.as_str() {
-        Some(prev_version) => {
-            if prev_version == current_version {
-                return true;
-            }
-            let prev_version = prev_version.strip_prefix('~').unwrap_or(prev_version);
-            let current_version = current_version.strip_prefix('~').unwrap_or(current_version);
-            prev_version.starts_with(current_version) || current_version.starts_with(prev_version)
-        }
-        _ => false,
     }
 }
 
@@ -376,16 +359,19 @@ fn fix_manifest(versions: &Versions, manifest: &mut Manifest) -> Result<usize> {
 mod tests {
     use super::*;
 
-    fn make_versions<'a>(versions: impl Iterator<Item = &'a (&'a str, &'a str, bool)>) -> Versions {
+    fn make_versions<'a>(
+        versions: impl Iterator<Item = &'a (&'a str, &'a str, bool, PackageStability)>,
+    ) -> Versions {
         let map = versions
             .into_iter()
-            .map(|(name, version, publish)| {
+            .map(|(name, version, publish, stability)| {
                 let publish = *publish;
                 (
                     name.to_string(),
                     VersionWithMetadata {
-                        version: semver::Version::parse(&version).unwrap(),
+                        version: Version::parse(version).unwrap(),
                         publish,
+                        stability: *stability,
                     },
                 )
             })
@@ -419,9 +405,19 @@ mod tests {
             metadata,
         };
         let versions = &[
-            ("local_build_something", "0.2.0", true),
-            ("local_dev_something", "0.1.0", false),
-            ("local_something", "1.1.3", false),
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", false, PackageStability::Stable),
         ];
         let versions = make_versions(versions.iter());
         fix_manifest(&versions, &mut manifest).expect_err("depends on unpublished local something");
@@ -455,9 +451,19 @@ mod tests {
             metadata,
         };
         let versions = &[
-            ("local_build_something", "0.2.0", true),
-            ("local_dev_something", "0.1.0", false),
-            ("local_something", "1.1.3", true),
+            (
+                "local_build_something",
+                "0.2.0",
+                true,
+                PackageStability::Unstable,
+            ),
+            (
+                "local_dev_something",
+                "0.1.0",
+                false,
+                PackageStability::Unstable,
+            ),
+            ("local_something", "1.1.3", true, PackageStability::Stable),
         ];
         let versions = make_versions(versions.iter());
 
@@ -470,7 +476,7 @@ mod tests {
                 \n\
                 [local_something]\n\
                 path = \"../local_something\"\n\
-                version = \"~1.1\"\n\
+                version = \"1.1.3\"\n\
             ",
             actual_deps.to_string()
         );
@@ -482,7 +488,7 @@ mod tests {
                 \n\
                 [local_dev_something]\n\
                 path = \"../local_dev_something\"\n\
-                version = \"~0.1\"\n\
+                version = \"0.1.0\"\n\
             ",
             actual_dev_deps.to_string()
         );
@@ -494,40 +500,9 @@ mod tests {
                 \n\
                 [local_build_something]\n\
                 path = \"../local_build_something\"\n\
-                version = \"~0.2\"\n\
-            ",
-            actual_build_deps.to_string()
-        );
-    }
-
-    #[test]
-    fn sdk_crate_version_should_not_be_turned_into_tilde_requirement() {
-        let manifest = br#"
-            [package]
-            name = "test"
-            version = "1.2.0-preview"
-
-            [dependencies]
-            aws-sdk-example = { path = "../aws/sdk/example" }
-        "#;
-        let metadata = toml::from_slice(manifest).unwrap();
-        let mut manifest = Manifest {
-            path: "test".into(),
-            metadata,
-        };
-        let versions = &[("aws-sdk-example", "0.2.0", true)];
-        let versions = make_versions(versions.iter());
-
-        fix_dep_sets(&versions.published(), &mut manifest.metadata).expect("success");
-
-        let actual_deps = &manifest.metadata["dependencies"];
-        assert_eq!(
-            "\
-                [aws-sdk-example]\n\
-                path = \"../aws/sdk/example\"\n\
                 version = \"0.2.0\"\n\
             ",
-            actual_deps.to_string()
+            actual_build_deps.to_string()
         );
     }
 
@@ -549,18 +524,50 @@ mod tests {
     }
 
     #[test]
-    fn test_versions_match() {
-        assert!(versions_match(&Value::String("0.56.1".to_owned()), "~0.56"));
-        assert!(versions_match(&Value::String("~0.56".to_owned()), "0.56.1"));
-        assert!(!versions_match(&Value::String("~0.56".to_owned()), "~0.57"));
-        assert!(!versions_match(&Value::String("~0.57".to_owned()), "~0.56"));
-        assert!(!versions_match(
-            &Value::String("0.56.1".to_owned()),
-            "0.56.2"
-        ));
-        assert!(!versions_match(
-            &Value::String("0.56.1".to_owned()),
-            "0.57.1"
-        ));
+    fn test_package_stability_from_manifest() {
+        fn verify_package_stability_for_manifest(
+            manifest: &[u8],
+            expected_stability: PackageStability,
+        ) {
+            let metadata = toml::from_slice(manifest).unwrap();
+            let manifest = Manifest {
+                path: "test".into(),
+                metadata,
+            };
+            assert_eq!(expected_stability, manifest.stability().unwrap());
+        }
+
+        let stable_manifest = br#"
+            [package]
+            name = "test"
+            version = "1.0.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = true
+        "#;
+        verify_package_stability_for_manifest(stable_manifest, PackageStability::Stable);
+
+        let explicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+
+            [package.metadata.smithy-rs-release-tooling]
+            stable = false
+        "#;
+        verify_package_stability_for_manifest(
+            explicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
+
+        let implicitly_unstable_manifest = br#"
+            [package]
+            name = "test"
+            version = "0.1.0"
+        "#;
+        verify_package_stability_for_manifest(
+            implicitly_unstable_manifest,
+            PackageStability::Unstable,
+        );
     }
 }

@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 //! Runtime support code for the AWS SDK. This crate isn't intended to be used directly.
 
 #![warn(
@@ -15,9 +18,6 @@
 
 /// Supporting code for authentication in the AWS SDK.
 pub mod auth;
-
-/// Supporting code for identity in the AWS SDK.
-pub mod identity;
 
 /// Supporting code for recursion detection in the AWS SDK.
 pub mod recursion_detection;

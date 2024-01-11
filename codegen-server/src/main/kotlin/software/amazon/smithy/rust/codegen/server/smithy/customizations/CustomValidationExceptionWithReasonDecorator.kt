@@ -44,7 +44,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
  * The shape definition is in [CustomValidationExceptionWithReasonDecoratorTest].
  *
  * This is just an example to showcase experimental support for custom validation exceptions.
- * TODO(https://github.com/awslabs/smithy-rs/pull/2053): this will go away once we implement the RFC, when users will be
+ * TODO(https://github.com/smithy-lang/smithy-rs/pull/2053): this will go away once we implement the RFC, when users will be
  *  able to define the converters in their Rust application code.
  */
 class CustomValidationExceptionWithReasonDecorator : ServerCodegenDecorator {
@@ -53,8 +53,9 @@ class CustomValidationExceptionWithReasonDecorator : ServerCodegenDecorator {
     override val order: Byte
         get() = -69
 
-    override fun validationExceptionConversion(codegenContext: ServerCodegenContext):
-        ValidationExceptionConversionGenerator? =
+    override fun validationExceptionConversion(
+        codegenContext: ServerCodegenContext,
+    ): ValidationExceptionConversionGenerator? =
         if (codegenContext.settings.codegenConfig.experimentalCustomValidationExceptionWithReasonPleaseDoNotUse != null) {
             ValidationExceptionWithReasonConversionGenerator(codegenContext)
         } else {
@@ -67,136 +68,141 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
     override val shapeId: ShapeId =
         ShapeId.from(codegenContext.settings.codegenConfig.experimentalCustomValidationExceptionWithReasonPleaseDoNotUse)
 
-    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable = writable {
-        rustTemplate(
-            """
-            impl #{From}<ConstraintViolation> for #{RequestRejection} {
-                fn from(constraint_violation: ConstraintViolation) -> Self {
-                    let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
-                    let validation_exception = crate::error::ValidationException {
-                        message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
-                        reason: crate::model::ValidationExceptionReason::FieldValidationFailed,
-                        fields: Some(vec![first_validation_exception_field]),
-                    };
-                    Self::ConstraintViolation(
-                        crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
-                            .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/awslabs/smithy-rs/issues")
-                    )
-                }
-            }
-            """,
-            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-            "From" to RuntimeType.From,
-        )
-    }
-
-    override fun stringShapeConstraintViolationImplBlock(stringConstraintsInfo: Collection<StringTraitInfo>): Writable = writable {
-        val validationExceptionFields =
-            stringConstraintsInfo.map {
-                writable {
-                    when (it) {
-                        is Pattern -> {
-                            rustTemplate(
-                                """
-                                Self::Pattern(_) => crate::model::ValidationExceptionField {
-                                    message: #{MessageWritable:W},
-                                    name: path,
-                                    reason: crate::model::ValidationExceptionFieldReason::PatternNotValid,
-                                },
-                                """,
-                                "MessageWritable" to it.errorMessage(),
-                            )
-                        }
-                        is Length -> {
-                            rust(
-                                """
-                                Self::Length(length) => crate::model::ValidationExceptionField {
-                                    message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
-                                    name: path,
-                                    reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
-                                },
-                                """,
-                            )
-                        }
+    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
+        writable {
+            rustTemplate(
+                """
+                impl #{From}<ConstraintViolation> for #{RequestRejection} {
+                    fn from(constraint_violation: ConstraintViolation) -> Self {
+                        let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());
+                        let validation_exception = crate::error::ValidationException {
+                            message: format!("1 validation error detected. {}", &first_validation_exception_field.message),
+                            reason: crate::model::ValidationExceptionReason::FieldValidationFailed,
+                            fields: Some(vec![first_validation_exception_field]),
+                        };
+                        Self::ConstraintViolation(
+                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                                .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                        )
                     }
                 }
-            }.join("\n")
+                """,
+                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+                "From" to RuntimeType.From,
+            )
+        }
 
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                match self {
-                    #{ValidationExceptionFields:W}
+    override fun stringShapeConstraintViolationImplBlock(stringConstraintsInfo: Collection<StringTraitInfo>): Writable =
+        writable {
+            val validationExceptionFields =
+                stringConstraintsInfo.map {
+                    writable {
+                        when (it) {
+                            is Pattern -> {
+                                rustTemplate(
+                                    """
+                                    Self::Pattern(_) => crate::model::ValidationExceptionField {
+                                        message: #{MessageWritable:W},
+                                        name: path,
+                                        reason: crate::model::ValidationExceptionFieldReason::PatternNotValid,
+                                    },
+                                    """,
+                                    "MessageWritable" to it.errorMessage(),
+                                )
+                            }
+                            is Length -> {
+                                rust(
+                                    """
+                                    Self::Length(length) => crate::model::ValidationExceptionField {
+                                        message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
+                                        name: path,
+                                        reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
+                                    },
+                                    """,
+                                )
+                            }
+                        }
+                    }
+                }.join("\n")
+
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    match self {
+                        #{ValidationExceptionFields:W}
+                    }
                 }
-            }
-            """,
-            "String" to RuntimeType.String,
-            "ValidationExceptionFields" to validationExceptionFields,
-        )
-    }
+                """,
+                "String" to RuntimeType.String,
+                "ValidationExceptionFields" to validationExceptionFields,
+            )
+        }
 
-    override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) = writable {
-        val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
-        val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                crate::model::ValidationExceptionField {
-                    message: format!(r##"$message"##, &path),
-                    name: path,
-                    reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
-                }
-            }
-            """,
-            "String" to RuntimeType.String,
-        )
-    }
-
-    override fun numberShapeConstraintViolationImplBlock(rangeInfo: Range) = writable {
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                match self {
-                    Self::Range(_) => crate::model::ValidationExceptionField {
-                        message: format!("${rangeInfo.rangeTrait.validationErrorMessage()}", &path),
+    override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) =
+        writable {
+            val enumValueSet = enumTrait.enumDefinitionValues.joinToString(", ")
+            val message = "Value at '{}' failed to satisfy constraint: Member must satisfy enum value set: [$enumValueSet]"
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    crate::model::ValidationExceptionField {
+                        message: format!(r##"$message"##, &path),
                         name: path,
                         reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
                     }
                 }
-            }
-            """,
-            "String" to RuntimeType.String,
-        )
-    }
+                """,
+                "String" to RuntimeType.String,
+            )
+        }
 
-    override fun blobShapeConstraintViolationImplBlock(blobConstraintsInfo: Collection<BlobLength>) = writable {
-        val validationExceptionFields =
-            blobConstraintsInfo.map {
-                writable {
-                    rust(
-                        """
-                        Self::Length(length) => crate::model::ValidationExceptionField {
-                            message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
+    override fun numberShapeConstraintViolationImplBlock(rangeInfo: Range) =
+        writable {
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    match self {
+                        Self::Range(_) => crate::model::ValidationExceptionField {
+                            message: format!("${rangeInfo.rangeTrait.validationErrorMessage()}", &path),
                             name: path,
-                            reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
-                        },
-                        """,
-                    )
+                            reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
+                        }
+                    }
                 }
-            }.join("\n")
+                """,
+                "String" to RuntimeType.String,
+            )
+        }
 
-        rustTemplate(
-            """
-            pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
-                match self {
-                    #{ValidationExceptionFields:W}
+    override fun blobShapeConstraintViolationImplBlock(blobConstraintsInfo: Collection<BlobLength>) =
+        writable {
+            val validationExceptionFields =
+                blobConstraintsInfo.map {
+                    writable {
+                        rust(
+                            """
+                            Self::Length(length) => crate::model::ValidationExceptionField {
+                                message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
+                                name: path,
+                                reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
+                            },
+                            """,
+                        )
+                    }
+                }.join("\n")
+
+            rustTemplate(
+                """
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {
+                    match self {
+                        #{ValidationExceptionFields:W}
+                    }
                 }
-            }
-            """,
-            "String" to RuntimeType.String,
-            "ValidationExceptionFields" to validationExceptionFields,
-        )
-    }
+                """,
+                "String" to RuntimeType.String,
+                "ValidationExceptionFields" to validationExceptionFields,
+            )
+        }
 
     override fun mapShapeConstraintViolationImplBlock(
         shape: MapShape,
@@ -231,60 +237,61 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
         }
     }
 
-    override fun builderConstraintViolationImplBlock(constraintViolations: Collection<ConstraintViolation>) = writable {
-        rustBlock("match self") {
-            constraintViolations.forEach {
-                if (it.hasInner()) {
-                    rust("""ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field(path + "/${it.forMember.memberName}"),""")
-                } else {
-                    rust(
-                        """
-                        ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
-                            message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
-                            name: path + "/${it.forMember.memberName}",
-                            reason: crate::model::ValidationExceptionFieldReason::Other,
-                        },
-                        """,
-                    )
-                }
-            }
-        }
-    }
-
-    override fun collectionShapeConstraintViolationImplBlock(
-        collectionConstraintsInfo:
-        Collection<CollectionTraitInfo>,
-        isMemberConstrained: Boolean,
-    ) = writable {
-        val validationExceptionFields = collectionConstraintsInfo.map {
-            writable {
-                when (it) {
-                    is CollectionTraitInfo.Length -> {
+    override fun builderConstraintViolationImplBlock(constraintViolations: Collection<ConstraintViolation>) =
+        writable {
+            rustBlock("match self") {
+                constraintViolations.forEach {
+                    if (it.hasInner()) {
+                        rust("""ConstraintViolation::${it.name()}(inner) => inner.as_validation_exception_field(path + "/${it.forMember.memberName}"),""")
+                    } else {
                         rust(
                             """
-                            Self::Length(length) => crate::model::ValidationExceptionField {
-                                message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
-                                name: path,
-                                reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
+                            ConstraintViolation::${it.name()} => crate::model::ValidationExceptionField {
+                                message: format!("Value at '{}/${it.forMember.memberName}' failed to satisfy constraint: Member must not be null", path),
+                                name: path + "/${it.forMember.memberName}",
+                                reason: crate::model::ValidationExceptionFieldReason::Other,
                             },
                             """,
                         )
                     }
-                    is CollectionTraitInfo.UniqueItems -> {
-                        rust(
-                            """
-                            Self::UniqueItems { duplicate_indices, .. } =>
-                                crate::model::ValidationExceptionField {
-                                    message: format!("${it.uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
-                                    name: path,
-                                    reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
-                                },
-                            """,
-                        )
-                    }
                 }
             }
-        }.toMutableList()
+        }
+
+    override fun collectionShapeConstraintViolationImplBlock(
+        collectionConstraintsInfo: Collection<CollectionTraitInfo>,
+        isMemberConstrained: Boolean,
+    ) = writable {
+        val validationExceptionFields =
+            collectionConstraintsInfo.map {
+                writable {
+                    when (it) {
+                        is CollectionTraitInfo.Length -> {
+                            rust(
+                                """
+                                Self::Length(length) => crate::model::ValidationExceptionField {
+                                    message: format!("${it.lengthTrait.validationErrorMessage()}", length, &path),
+                                    name: path,
+                                    reason: crate::model::ValidationExceptionFieldReason::LengthNotValid,
+                                },
+                                """,
+                            )
+                        }
+                        is CollectionTraitInfo.UniqueItems -> {
+                            rust(
+                                """
+                                Self::UniqueItems { duplicate_indices, .. } =>
+                                    crate::model::ValidationExceptionField {
+                                        message: format!("${it.uniqueItemsTrait.validationErrorMessage()}", &duplicate_indices, &path),
+                                        name: path,
+                                        reason: crate::model::ValidationExceptionFieldReason::ValueNotValid,
+                                    },
+                                """,
+                            )
+                        }
+                    }
+                }
+            }.toMutableList()
 
         if (isMemberConstrained) {
             validationExceptionFields += {

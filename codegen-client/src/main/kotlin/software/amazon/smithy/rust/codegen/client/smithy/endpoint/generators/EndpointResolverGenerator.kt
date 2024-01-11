@@ -18,8 +18,9 @@ import software.amazon.smithy.rulesengine.language.syntax.rule.RuleValueVisitor
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.endpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
@@ -33,11 +34,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.toType
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 
 abstract class CustomRuntimeFunction {
     abstract val id: String
@@ -78,6 +80,7 @@ abstract class CustomRuntimeFunction {
 
 class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {
     private var usedFunctions = mutableSetOf<CustomRuntimeFunction>()
+
     fun fnFor(id: String): CustomRuntimeFunction? =
         functions.firstOrNull { it.id == id }?.also { usedFunctions.add(it) }
 
@@ -127,25 +130,31 @@ internal class EndpointResolverGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val registry: FunctionRegistry = FunctionRegistry(stdlib)
     private val types = Types(runtimeConfig)
-    private val codegenScope = arrayOf(
-        "endpoint" to types.smithyHttpEndpointModule,
-        "SmithyEndpoint" to types.smithyEndpoint,
-        "EndpointError" to types.resolveEndpointError,
-        "DiagnosticCollector" to endpointsLib("diagnostic").toType().resolve("DiagnosticCollector"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "BoxError" to RuntimeType.boxError(runtimeConfig),
+            "endpoint" to types.smithyHttpEndpointModule,
+            "SmithyEndpoint" to types.smithyEndpoint,
+            "EndpointFuture" to types.endpointFuture,
+            "ResolveEndpointError" to types.resolveEndpointError,
+            "EndpointError" to types.resolveEndpointError,
+            "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
+            "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+        )
 
-    private val allowLintsForResolver = listOf(
-        // we generate if x { if y { if z { ... } } }
-        "clippy::collapsible_if",
-        // we generate `if (true) == expr { ... }`
-        "clippy::bool_comparison",
-        // we generate `if !(a == b)`
-        "clippy::nonminimal_bool",
-        // we generate `if x == "" { ... }`
-        "clippy::comparison_to_empty",
-        // we generate `if let Some(_) = ... { ... }`
-        "clippy::redundant_pattern_matching",
-    )
+    private val allowLintsForResolver =
+        listOf(
+            // we generate if x { if y { if z { ... } } }
+            "clippy::collapsible_if",
+            // we generate `if (true) == expr { ... }`
+            "clippy::bool_comparison",
+            // we generate `if !(a == b)`
+            "clippy::nonminimal_bool",
+            // we generate `if x == "" { ... }`
+            "clippy::comparison_to_empty",
+            // we generate `if let Some(_) = ... { ... }`
+            "clippy::redundant_pattern_matching",
+        )
     private val context = Context(registry, runtimeConfig)
 
     companion object {
@@ -183,13 +192,17 @@ internal class EndpointResolverGenerator(
                     pub fn new() -> Self {
                         Self { #{custom_fields_init:W} }
                     }
+
+                    fn resolve_endpoint(&self, params: &#{Params}) -> Result<#{SmithyEndpoint}, #{BoxError}> {
+                        let mut diagnostic_collector = #{DiagnosticCollector}::new();
+                        Ok(#{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
+                            .map_err(|err|err.with_source(diagnostic_collector.take_last_error()))?)
+                    }
                 }
 
-                impl #{endpoint}::ResolveEndpoint<#{Params}> for DefaultResolver {
-                    fn resolve_endpoint(&self, params: &Params) -> #{endpoint}::Result {
-                        let mut diagnostic_collector = #{DiagnosticCollector}::new();
-                        #{resolver_fn}(params, &mut diagnostic_collector, #{additional_args})
-                            .map_err(|err|err.with_source(diagnostic_collector.take_last_error()))
+                impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
+                    fn resolve_endpoint(&self, params: &#{Params}) -> #{EndpointFuture} {
+                        #{EndpointFuture}::ready(self.resolve_endpoint(params))
                     }
                 }
                 """,
@@ -207,7 +220,7 @@ internal class EndpointResolverGenerator(
         endpointRuleSet: EndpointRuleSet,
         fnsUsed: List<CustomRuntimeFunction>,
     ): RuntimeType {
-        return RuntimeType.forInlineFun("resolve_endpoint", endpointImplModule(codegenContext)) {
+        return RuntimeType.forInlineFun("resolve_endpoint", endpointImplModule()) {
             Attribute(allow(allowLintsForResolver)).render(this)
             rustTemplate(
                 """
@@ -224,36 +237,40 @@ internal class EndpointResolverGenerator(
         }
     }
 
-    private fun resolverFnBody(endpointRuleSet: EndpointRuleSet) = writable {
-        endpointRuleSet.parameters.toList().forEach {
-            Attribute.AllowUnusedVariables.render(this)
-            rust("let ${it.memberName()} = &$ParamsName.${it.memberName()};")
+    private fun resolverFnBody(endpointRuleSet: EndpointRuleSet) =
+        writable {
+            endpointRuleSet.parameters.toList().forEach {
+                Attribute.AllowUnusedVariables.render(this)
+                rust("let ${it.memberName()} = &$ParamsName.${it.memberName()};")
+            }
+            generateRulesList(endpointRuleSet.rules)(this)
         }
-        generateRulesList(endpointRuleSet.rules)(this)
-    }
 
-    private fun generateRulesList(rules: List<Rule>) = writable {
-        rules.forEach { rule ->
-            rule.documentation.orNull()?.also { comment(escape(it)) }
-            generateRule(rule)(this)
+    private fun generateRulesList(rules: List<Rule>) =
+        writable {
+            rules.forEach { rule ->
+                rule.documentation.orNull()?.also { comment(escape(it)) }
+                generateRule(rule)(this)
+            }
+            if (!isExhaustive(rules.last())) {
+                // it's hard to figure out if these are always needed or not
+                Attribute.AllowUnreachableCode.render(this)
+                rustTemplate(
+                    """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)));""",
+                    *codegenScope,
+                )
+            }
         }
-        if (!isExhaustive(rules.last())) {
-            // it's hard to figure out if these are always needed or not
-            Attribute.AllowUnreachableCode.render(this)
-            rustTemplate(
-                """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $ParamsName)));""",
-                *codegenScope,
-            )
-        }
-    }
 
-    private fun isExhaustive(rule: Rule): Boolean = rule.conditions.isEmpty() || rule.conditions.all {
-        when (it.function.type()) {
-            is BooleanType -> false
-            is OptionalType -> false
-            else -> true
-        }
-    }
+    private fun isExhaustive(rule: Rule): Boolean =
+        rule.conditions.isEmpty() ||
+            rule.conditions.all {
+                when (it.function.type()) {
+                    is BooleanType -> false
+                    is OptionalType -> false
+                    else -> true
+                }
+            }
 
     private fun generateRule(rule: Rule): Writable {
         return generateRuleInternal(rule, rule.conditions)
@@ -274,7 +291,10 @@ internal class EndpointResolverGenerator(
      *
      * The resulting generated code is a series of nested-if statements, nesting each condition inside the previous.
      */
-    private fun generateRuleInternal(rule: Rule, conditions: List<Condition>): Writable {
+    private fun generateRuleInternal(
+        rule: Rule,
+        conditions: List<Condition>,
+    ): Writable {
         if (conditions.isEmpty()) {
             return rule.accept(RuleVisitor())
         } else {
@@ -312,11 +332,12 @@ internal class EndpointResolverGenerator(
                             "target" to target,
                             "next" to next,
                             // handle the rare but possible case where we bound the name of a variable to a boolean condition
-                            "binding" to writable {
-                                if (resultName != "_") {
-                                    rust("let $resultName = true;")
-                                }
-                            },
+                            "binding" to
+                                writable {
+                                    if (resultName != "_") {
+                                        rust("let $resultName = true;")
+                                    }
+                                },
                         )
                     }
 
@@ -339,17 +360,19 @@ internal class EndpointResolverGenerator(
     inner class RuleVisitor : RuleValueVisitor<Writable> {
         override fun visitTreeRule(rules: List<Rule>) = generateRulesList(rules)
 
-        override fun visitErrorRule(error: Expression) = writable {
-            rustTemplate(
-                "return Err(#{EndpointError}::message(#{message:W}));",
-                *codegenScope,
-                "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
-            )
-        }
+        override fun visitErrorRule(error: Expression) =
+            writable {
+                rustTemplate(
+                    "return Err(#{EndpointError}::message(#{message:W}));",
+                    *codegenScope,
+                    "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
+                )
+            }
 
-        override fun visitEndpointRule(endpoint: Endpoint): Writable = writable {
-            rust("return Ok(#W);", generateEndpoint(endpoint))
-        }
+        override fun visitEndpointRule(endpoint: Endpoint): Writable =
+            writable {
+                rust("return Ok(#W);", generateEndpoint(endpoint))
+            }
     }
 
     /**
@@ -366,5 +389,49 @@ internal class EndpointResolverGenerator(
             properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
             rust(".build()")
         }
+    }
+}
+
+fun ClientCodegenContext.serviceSpecificEndpointResolver(): RuntimeType {
+    val generator = EndpointTypesGenerator.fromContext(this)
+    return RuntimeType.forInlineFun("ResolveEndpoint", ClientRustModule.Config.endpoint) {
+        val ctx =
+            arrayOf(*preludeScope, "Params" to generator.paramsStruct(), *Types(runtimeConfig).toArray(), "Debug" to RuntimeType.Debug)
+        rustTemplate(
+            """
+            /// Endpoint resolver trait specific to ${serviceShape.serviceNameOrDefault("this service")}
+            pub trait ResolveEndpoint: #{Send} + #{Sync} + #{Debug} {
+                /// Resolve an endpoint with the given parameters
+                fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a>;
+
+                /// Convert this service-specific resolver into a `SharedEndpointResolver`
+                ///
+                /// The resulting resolver will downcast `EndpointResolverParams` into `#{Params}`.
+                fn into_shared_resolver(self) -> #{SharedEndpointResolver}
+                where
+                    Self: Sized + 'static,
+                {
+                    #{SharedEndpointResolver}::new(DowncastParams(self))
+                }
+            }
+
+            ##[derive(Debug)]
+            struct DowncastParams<T>(T);
+            impl<T> #{ResolveEndpoint} for DowncastParams<T>
+            where
+                T: ResolveEndpoint,
+            {
+                fn resolve_endpoint<'a>(&'a self, params: &'a #{EndpointResolverParams}) -> #{EndpointFuture}<'a> {
+                    let ep = match params.get::<#{Params}>() {
+                        Some(params) => self.0.resolve_endpoint(params),
+                        None => #{EndpointFuture}::ready(Err("params of expected type was not present".into())),
+                    };
+                    ep
+                }
+            }
+
+            """,
+            *ctx,
+        )
     }
 }

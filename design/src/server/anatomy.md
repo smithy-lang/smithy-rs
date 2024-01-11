@@ -4,7 +4,7 @@ What is [Smithy](https://awslabs.github.io/smithy/2.0/index.html)? At a high-lev
 
 This survey is disinterested in the actual Kotlin implementation of the code generator, and instead focuses on the structure of the generated Rust code and how it relates to the Smithy model. The intended audience is new contributors and users interested in internal details.
 
-During the survey we will use the [`pokemon.smithy`](https://github.com/awslabs/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
+During the survey we will use the [`pokemon.smithy`](https://github.com/smithy-lang/smithy-rs/blob/main/codegen-core/common-test-models/pokemon.smithy) model as a reference:
 
 ```smithy
 /// A Pokémon species forms the basis for at least one Pokémon.
@@ -41,24 +41,27 @@ service PokemonService {
 
 Smithy Rust will use this model to produce the following API:
 
-```rust
+```rust,no_run
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
-# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonService};
+# use aws_smithy_http_server::protocol::rest_json_1::{RestJson1, router::RestRouter};
+# use aws_smithy_http_server::routing::{Route, RoutingService};
+# use pokemon_service_server_sdk::{input::*, output::*, error::*, operation_shape::*, PokemonServiceConfig, PokemonService};
 // A handler for the `GetPokemonSpecies` operation (the `PokemonSpecies` resource).
 async fn get_pokemon_species(input: GetPokemonSpeciesInput) -> Result<GetPokemonSpeciesOutput, GetPokemonSpeciesError> {
     todo!()
 }
 
+let config = PokemonServiceConfig::builder().build();
+
 // Use the service builder to create `PokemonService`.
-let pokemon_service = PokemonService::builder_without_plugins()
+let pokemon_service = PokemonService::builder(config)
     // Pass the handler directly to the service builder...
     .get_pokemon_species(get_pokemon_species)
     /* other operation setters */
     .build()
-    # ; Result::<(), ()>::Ok(())
     .expect("failed to create an instance of the Pokémon service");
-# let pokemon_service: Result<PokemonService<aws_smithy_http_server::routing::Route>, _> = pokemon_service;
+# let pokemon_service: PokemonService<RoutingService<RestRouter<Route>, RestJson1>>  = pokemon_service;
 ```
 
 ## Operations
@@ -225,7 +228,7 @@ To summarize a _model service_ constructed can be constructed from a `Handler` o
 
 ## Serialization and Deserialization
 
-A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html) and [`IntoResponse`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
+A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html) and [`IntoResponse`](https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
 
 ```rust
 # extern crate aws_smithy_http_server;
@@ -442,7 +445,7 @@ pub trait Plugin<Service, Operation, T> {
 # }
 ```
 
-An example `Plugin` implementation can be found in [/examples/pokemon-service/src/plugin.rs](https://github.com/awslabs/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs).
+An example `Plugin` implementation can be found in [/examples/pokemon-service/src/plugin.rs](https://github.com/smithy-lang/smithy-rs/blob/main/examples/pokemon-service/src/plugin.rs).
 
 Plugins can be applied in two places:
 
@@ -463,7 +466,9 @@ stateDiagram-v2
     S --> [*]: HTTP Response
 ```
 
-The service builder API requires plugins to be specified upfront - they must be passed as an argument to `builder_with_plugins` and cannot be modified afterwards.
+The service builder API requires plugins to be specified upfront - they must be
+registered in the config object, which is passed as an argument to `builder`.
+Plugins cannot be modified afterwards.
 
 You might find yourself wanting to apply _multiple_ plugins to your service.
 This can be accommodated via [`HttpPlugins`] and [`ModelPlugins`].
@@ -510,7 +515,7 @@ let http_plugins = HttpPlugins::new()
 The service builder is the primary public API, generated for every [Smithy Service](https://awslabs.github.io/smithy/2.0/spec/service-types.html).
 At a high-level, the service builder takes as input a function for each Smithy Operation and returns a single HTTP service. The signature of each function, also known as _handlers_, must match the constraints of the corresponding Smithy model.
 
-You can create an instance of a service builder by calling either `builder_without_plugins` or `builder_with_plugins` on the corresponding service struct.
+You can create an instance of a service builder by calling `builder` on the corresponding service struct.
 
 ```rust
 # extern crate aws_smithy_http_server;
@@ -597,7 +602,7 @@ The builder has two setter methods for each [Smithy Operation](https://awslabs.g
     }
 ```
 
-Handlers and operations are upgraded to a [`Route`](https://github.com/awslabs/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52) as soon as they are registered against the service builder. You can think of `Route` as a boxing layer in disguise.
+Handlers and operations are upgraded to a [`Route`](https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/routing/route.rs#L49-L52) as soon as they are registered against the service builder. You can think of `Route` as a boxing layer in disguise.
 
 You can transform a builder instance into a complete service (`PokemonService`) using one of the following methods:
 

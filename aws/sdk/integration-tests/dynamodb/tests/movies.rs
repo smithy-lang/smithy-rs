@@ -5,8 +5,8 @@
 
 use aws_sdk_dynamodb as dynamodb;
 use aws_smithy_async::assert_elapsed;
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
+use aws_smithy_types::body::SdkBody;
 use dynamodb::config::{Credentials, Region};
 use dynamodb::operation::query::QueryOutput;
 use dynamodb::types::{
@@ -14,7 +14,7 @@ use dynamodb::types::{
     ScalarAttributeType, TableStatus,
 };
 use dynamodb::Client;
-use http::header::{HeaderName, AUTHORIZATION};
+use http::header::AUTHORIZATION;
 use http::Uri;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -187,7 +187,7 @@ async fn movies_it() {
         ]
     );
 
-    http_client.assert_requests_match(&[AUTHORIZATION, HeaderName::from_static("x-amz-date")]);
+    http_client.assert_requests_match(&[AUTHORIZATION.as_str(), "x-amz-date"]);
 }
 
 /// Test connection for the movies IT

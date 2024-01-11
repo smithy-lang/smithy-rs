@@ -29,8 +29,9 @@ class EndpointTypesGenerator(
     val params: Parameters = rules?.parameters ?: Parameters.builder().build()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
-    private val stdlib = customizations
-        .flatMap { it.customRuntimeFunctions(codegenContext) }
+    private val stdlib =
+        customizations
+            .flatMap { it.customRuntimeFunctions(codegenContext) }
 
     companion object {
         fun fromContext(codegenContext: ClientCodegenContext): EndpointTypesGenerator {
@@ -41,7 +42,9 @@ class EndpointTypesGenerator(
     }
 
     fun paramsStruct(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsStruct()
+
     fun paramsBuilder(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsBuilder()
+
     fun defaultResolver(): RuntimeType? =
         rules?.let { EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(it) }
 
@@ -53,7 +56,6 @@ class EndpointTypesGenerator(
                 it,
                 params,
                 codegenContext = codegenContext,
-                endpointCustomizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext),
             ).generate()
         }
             ?: {}
@@ -64,9 +66,13 @@ class EndpointTypesGenerator(
      *
      * Exactly one endpoint customization must provide the value for this builtIn or null is returned.
      */
-    fun builtInFor(parameter: Parameter, config: String): Writable? {
-        val defaultProviders = customizations
-            .mapNotNull { it.loadBuiltInFromServiceConfig(parameter, config) }
+    fun builtInFor(
+        parameter: Parameter,
+        config: String,
+    ): Writable? {
+        val defaultProviders =
+            customizations
+                .mapNotNull { it.loadBuiltInFromServiceConfig(parameter, config) }
         if (defaultProviders.size > 1) {
             error("Multiple providers provided a value for the builtin $parameter")
         }

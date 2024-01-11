@@ -70,90 +70,99 @@ class ConstrainedCollectionGeneratorTest {
             }
             """.asSmithyModel().let(ShapesReachableFromOperationInputTagger::transform)
 
-        private val lengthTraitTestCases = listOf(
-            // Min and max.
-            Triple("@length(min: 11, max: 12)", 11, 13),
-            // Min equal to max.
-            Triple("@length(min: 11, max: 11)", 11, 12),
-            // Only min.
-            Triple("@length(min: 11)", 15, 10),
-            // Only max.
-            Triple("@length(max: 11)", 11, 12),
-        ).map {
-            // Generate lists of strings of the specified length with consecutive items "0", "1", ...
-            val validList = List(it.second, Int::toString)
-            val invalidList = List(it.third, Int::toString)
+        private val lengthTraitTestCases =
+            listOf(
+                // Min and max.
+                Triple("@length(min: 11, max: 12)", 11, 13),
+                // Min equal to max.
+                Triple("@length(min: 11, max: 11)", 11, 12),
+                // Only min.
+                Triple("@length(min: 11)", 15, 10),
+                // Only max.
+                Triple("@length(max: 11)", 11, 12),
+            ).map {
+                // Generate lists of strings of the specified length with consecutive items "0", "1", ...
+                val validList = List(it.second, Int::toString)
+                val invalidList = List(it.third, Int::toString)
 
-            Triple(it.first, ArrayNode.fromStrings(validList), ArrayNode.fromStrings(invalidList))
-        }.map { (trait, validList, invalidList) ->
-            TestCase(
-                model = generateModel(trait),
-                validLists = listOf(validList),
-                invalidLists = listOf(InvalidList(invalidList, expectedErrorFn = null)),
-            )
-        }
-
-        private fun constraintViolationForDuplicateIndices(duplicateIndices: List<Int>):
-            ((constraintViolation: Symbol, originalValueBindingName: String) -> Writable) {
-            fun ret(constraintViolation: Symbol, originalValueBindingName: String): Writable = writable {
-                // Public documentation for the unique items constraint violation states that callers should not
-                // rely on the order of the elements in `duplicate_indices`. However, the algorithm is deterministic,
-                // so we can internally assert the order. If the algorithm changes, the test cases will need to be
-                // adjusted.
-                rustTemplate(
-                    """
-                    #{ConstraintViolation}::UniqueItems {
-                        duplicate_indices: vec![${duplicateIndices.joinToString(", ")}],
-                        original: $originalValueBindingName,
-                    }
-                    """,
-                    "ConstraintViolation" to constraintViolation,
+                Triple(it.first, ArrayNode.fromStrings(validList), ArrayNode.fromStrings(invalidList))
+            }.map { (trait, validList, invalidList) ->
+                TestCase(
+                    model = generateModel(trait),
+                    validLists = listOf(validList),
+                    invalidLists = listOf(InvalidList(invalidList, expectedErrorFn = null)),
                 )
             }
+
+        private fun constraintViolationForDuplicateIndices(
+            duplicateIndices: List<Int>,
+        ): ((constraintViolation: Symbol, originalValueBindingName: String) -> Writable) {
+            fun ret(
+                constraintViolation: Symbol,
+                originalValueBindingName: String,
+            ): Writable =
+                writable {
+                    // Public documentation for the unique items constraint violation states that callers should not
+                    // rely on the order of the elements in `duplicate_indices`. However, the algorithm is deterministic,
+                    // so we can internally assert the order. If the algorithm changes, the test cases will need to be
+                    // adjusted.
+                    rustTemplate(
+                        """
+                        #{ConstraintViolation}::UniqueItems {
+                            duplicate_indices: vec![${duplicateIndices.joinToString(", ")}],
+                            original: $originalValueBindingName,
+                        }
+                        """,
+                        "ConstraintViolation" to constraintViolation,
+                    )
+                }
 
             return ::ret
         }
 
-        private val uniqueItemsTraitTestCases = listOf(
-            // We only need one test case, since `@uniqueItems` is not parameterizable.
-            TestCase(
-                model = generateModel("@uniqueItems"),
-                validLists = listOf(
-                    ArrayNode.fromStrings(),
-                    ArrayNode.fromStrings("0", "1"),
-                    ArrayNode.fromStrings("a", "b", "a2"),
-                    ArrayNode.fromStrings((0..69).map(Int::toString).toList()),
+        private val uniqueItemsTraitTestCases =
+            listOf(
+                // We only need one test case, since `@uniqueItems` is not parameterizable.
+                TestCase(
+                    model = generateModel("@uniqueItems"),
+                    validLists =
+                        listOf(
+                            ArrayNode.fromStrings(),
+                            ArrayNode.fromStrings("0", "1"),
+                            ArrayNode.fromStrings("a", "b", "a2"),
+                            ArrayNode.fromStrings((0..69).map(Int::toString).toList()),
+                        ),
+                    invalidLists =
+                        listOf(
+                            // Two elements, both duplicate.
+                            InvalidList(
+                                node = ArrayNode.fromStrings("0", "0"),
+                                expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 1)),
+                            ),
+                            // Two duplicate items, one at the beginning, one at the end.
+                            InvalidList(
+                                node = ArrayNode.fromStrings("0", "1", "2", "3", "4", "5", "0"),
+                                expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 6)),
+                            ),
+                            // Several duplicate items, all the same.
+                            InvalidList(
+                                node = ArrayNode.fromStrings("0", "1", "0", "0", "4", "0", "6", "7"),
+                                expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 2, 3, 5)),
+                            ),
+                            // Several equivalence classes.
+                            InvalidList(
+                                node = ArrayNode.fromStrings("0", "1", "0", "2", "1", "0", "2", "7", "2"),
+                                // Note how the duplicate indices are not ordered.
+                                expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 1, 2, 3, 6, 5, 4, 8)),
+                            ),
+                            // The worst case: a fairly large number of elements, all duplicate.
+                            InvalidList(
+                                node = ArrayNode.fromStrings(generateSequence { "69" }.take(69).toList()),
+                                expectedErrorFn = constraintViolationForDuplicateIndices((0..68).toList()),
+                            ),
+                        ),
                 ),
-                invalidLists = listOf(
-                    // Two elements, both duplicate.
-                    InvalidList(
-                        node = ArrayNode.fromStrings("0", "0"),
-                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 1)),
-                    ),
-                    // Two duplicate items, one at the beginning, one at the end.
-                    InvalidList(
-                        node = ArrayNode.fromStrings("0", "1", "2", "3", "4", "5", "0"),
-                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 6)),
-                    ),
-                    // Several duplicate items, all the same.
-                    InvalidList(
-                        node = ArrayNode.fromStrings("0", "1", "0", "0", "4", "0", "6", "7"),
-                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 2, 3, 5)),
-                    ),
-                    // Several equivalence classes.
-                    InvalidList(
-                        node = ArrayNode.fromStrings("0", "1", "0", "2", "1", "0", "2", "7", "2"),
-                        // Note how the duplicate indices are not ordered.
-                        expectedErrorFn = constraintViolationForDuplicateIndices(listOf(0, 1, 2, 3, 6, 5, 4, 8)),
-                    ),
-                    // The worst case: a fairly large number of elements, all duplicate.
-                    InvalidList(
-                        node = ArrayNode.fromStrings(generateSequence { "69" }.take(69).toList()),
-                        expectedErrorFn = constraintViolationForDuplicateIndices((0..68).toList()),
-                    ),
-                ),
-            ),
-        )
+            )
 
         override fun provideArguments(context: ExtensionContext?): Stream<out Arguments> =
             (lengthTraitTestCases + uniqueItemsTraitTestCases).map { Arguments.of(it) }.stream()
@@ -170,16 +179,17 @@ class ConstrainedCollectionGeneratorTest {
         val project = TestWorkspace.testProject(codegenContext.symbolProvider)
 
         for (shape in listOf(constrainedListShape, constrainedSetShape)) {
-            val shapeName = when (shape) {
-                is SetShape -> "set"
-                is ListShape -> "list"
-                else -> UNREACHABLE("Shape is either list or set.")
-            }
+            val shapeName =
+                when (shape) {
+                    is SetShape -> "set"
+                    is ListShape -> "list"
+                    else -> UNREACHABLE("Shape is either list or set.")
+                }
 
             project.withModule(ServerRustModule.Model) {
                 render(codegenContext, this, shape)
 
-                val instantiator = serverInstantiator(codegenContext)
+                val instantiator = ServerInstantiator(codegenContext)
                 for ((idx, validList) in testCase.validLists.withIndex()) {
                     val shapeNameIdx = "${shapeName}_$idx"
                     val buildValidFnName = "build_valid_$shapeNameIdx"
@@ -226,29 +236,31 @@ class ConstrainedCollectionGeneratorTest {
                     }
                     unitTest(
                         name = "${shapeNameIdx}_try_from_fail",
-                        block = writable {
-                            rust(
-                                """
-                                let $shapeNameIdx = $buildInvalidFnName();
-                                let constrained_res: Result <$typeName, _> = $shapeNameIdx.clone().try_into();
-                                """,
-                            )
-
-                            invalidList.expectedErrorFn?.also { expectedErrorFn ->
-                                val expectedErrorWritable = expectedErrorFn(
-                                    codegenContext.constraintViolationSymbolProvider.toSymbol(shape),
-                                    shapeNameIdx,
+                        block =
+                            writable {
+                                rust(
+                                    """
+                                    let $shapeNameIdx = $buildInvalidFnName();
+                                    let constrained_res: Result <$typeName, _> = $shapeNameIdx.clone().try_into();
+                                    """,
                                 )
 
-                                rust("let err = constrained_res.unwrap_err();")
-                                withBlock("let expected_err = ", ";") {
-                                    rustTemplate("#{ExpectedError:W}", "ExpectedError" to expectedErrorWritable)
+                                invalidList.expectedErrorFn?.also { expectedErrorFn ->
+                                    val expectedErrorWritable =
+                                        expectedErrorFn(
+                                            codegenContext.constraintViolationSymbolProvider.toSymbol(shape),
+                                            shapeNameIdx,
+                                        )
+
+                                    rust("let err = constrained_res.unwrap_err();")
+                                    withBlock("let expected_err = ", ";") {
+                                        rustTemplate("#{ExpectedError:W}", "ExpectedError" to expectedErrorWritable)
+                                    }
+                                    rust("assert_eq!(err, expected_err);")
+                                } ?: run {
+                                    rust("constrained_res.unwrap_err();")
                                 }
-                                rust("assert_eq!(err, expected_err);")
-                            } ?: run {
-                                rust("constrained_res.unwrap_err();")
-                            }
-                        },
+                            },
                     )
                 }
             }

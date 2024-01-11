@@ -67,5 +67,6 @@ data class XmlMemberIndex(val dataMembers: List<MemberShape>, val attributeMembe
     }
 
     fun isEmpty() = dataMembers.isEmpty() && attributeMembers.isEmpty()
+
     fun isNotEmpty() = !isEmpty()
 }

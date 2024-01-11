@@ -18,7 +18,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class StreamingShapeSymbolProviderTest {
-    val model = """
+    val model =
+        """
         namespace test
         operation GenerateSpeech {
             output: GenerateSpeechOutput,
@@ -32,7 +33,7 @@ internal class StreamingShapeSymbolProviderTest {
         @streaming
         blob BlobStream
 
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generates a byte stream on streaming output`() {
@@ -43,13 +44,13 @@ internal class StreamingShapeSymbolProviderTest {
         modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechOutput\$data").also { shape ->
             symbolProvider.toSymbol(shape).also { symbol ->
                 symbol.name shouldBe "data"
-                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "::aws_smithy_http::byte_stream")
+                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "::aws_smithy_types::byte_stream")
             }
         }
         modelWithOperationTraits.lookup<MemberShape>("test.synthetic#GenerateSpeechInput\$data").also { shape ->
             symbolProvider.toSymbol(shape).also { symbol ->
                 symbol.name shouldBe "data"
-                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "::aws_smithy_http::byte_stream")
+                symbol.rustType() shouldBe RustType.Opaque("ByteStream", "::aws_smithy_types::byte_stream")
             }
         }
     }

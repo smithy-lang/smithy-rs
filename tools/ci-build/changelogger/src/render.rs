@@ -161,8 +161,14 @@ fn render_model_entry(entry: &SdkModelEntry, out: &mut String) {
 }
 
 fn to_md_link(reference: &Reference) -> String {
+    let org_name = match reference.repo.as_str() {
+        "smithy-rs" => "smithy-lang",
+        "aws-sdk-rust" => "awslabs",
+        "aws-sdk" => "aws",
+        repo => panic!("unrecognized repo named {repo}"),
+    };
     format!(
-        "[{repo}#{number}](https://github.com/awslabs/{repo}/issues/{number})",
+        "[{repo}#{number}](https://github.com/{org_name}/{repo}/issues/{number})",
         repo = reference.repo,
         number = reference.number
     )
@@ -290,8 +296,8 @@ fn update_changelogs(
             tag_name: release_metadata.tag.clone(),
             name: release_metadata.title.clone(),
             body: release_notes.clone(),
-            // All releases are pre-releases for now
-            prerelease: true,
+            // stable as of release-2023-11-21
+            prerelease: false,
         };
         std::fs::write(
             output_path.join(&release_metadata.manifest_name),
@@ -391,6 +397,7 @@ fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
                     .unwrap()
                     .references
                     .iter()
+                    .filter(|r| matches!(r.repo.as_str(), "aws-sdk-rust" | "smithy-rs"))
                     .map(to_md_link)
             })
             .collect::<Vec<_>>();
@@ -502,7 +509,7 @@ references = ["smithy-rs#445"]
 author = "external-contrib"
 message = "I made a change to update the code generator"
 meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446"]
+references = ["smithy-rs#446", "aws-sdk#123"]
 
 [[smithy-rs]]
 author = "another-contrib"
@@ -562,20 +569,20 @@ message = "Some API change"
 v0.3.0 (January 4th, 2022)
 ==========================
 **Breaking Changes:**
-- :warning: (all, [smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the code generator
+- :warning: (all, [smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the code generator
 
 **New this release:**
-- :tada: (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
-- :tada: (all, [smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [aws-sdk#123](https://github.com/aws/aws-sdk/issues/123), @external-contrib) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
     **Update guide:**
     blah blah
-- (all, [smithy-rs#200](https://github.com/awslabs/smithy-rs/issues/200), @another-contrib) I made a minor change
+- (all, [smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200), @another-contrib) I made a minor change
 
 **Contributors**
 Thank you for your contributions! ❤
-- @another-contrib ([smithy-rs#200](https://github.com/awslabs/smithy-rs/issues/200))
-- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+- @another-contrib ([smithy-rs#200](https://github.com/smithy-lang/smithy-rs/issues/200))
+- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446))
 
 "#
         .trim_start();
@@ -586,10 +593,10 @@ Thank you for your contributions! ❤
 v0.1.0 (January 4th, 2022)
 ==========================
 **Breaking Changes:**
-- :warning: ([smithy-rs#445](https://github.com/awslabs/smithy-rs/issues/445)) I made a major change to update the AWS SDK
+- :warning: ([smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the AWS SDK
 
 **New this release:**
-- :tada: ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- :tada: ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
 **Service Features:**
 - `aws-sdk-ec2` (0.12.0): Some API change
@@ -600,7 +607,7 @@ v0.1.0 (January 4th, 2022)
 
 **Contributors**
 Thank you for your contributions! ❤
-- @external-contrib ([smithy-rs#446](https://github.com/awslabs/smithy-rs/issues/446))
+- @external-contrib ([smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446))
 
 "#
         .trim_start();

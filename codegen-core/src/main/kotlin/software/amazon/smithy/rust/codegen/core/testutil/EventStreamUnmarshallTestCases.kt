@@ -28,7 +28,8 @@ object EventStreamUnmarshallTestCases {
         val typesModule = codegenContext.symbolProvider.moduleForShape(codegenContext.model.lookup("test#TestStruct"))
         rust(
             """
-            use aws_smithy_eventstream::frame::{Header, HeaderValue, Message, UnmarshallMessage, UnmarshalledMessage};
+            use aws_smithy_eventstream::frame::{UnmarshallMessage, UnmarshalledMessage};
+            use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
             use aws_smithy_types::{Blob, DateTime};
             use $testStreamError;
             use ${typesModule.fullyQualifiedPath()}::*;
@@ -76,13 +77,13 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "DataInput" to conditionalBuilderInput(
-                    """
-                    Blob::new(&b"hello, world!"[..])
-                    """,
-                    conditional = optionalBuilderInputs,
-                ),
-
+                "DataInput" to
+                    conditionalBuilderInput(
+                        """
+                        Blob::new(&b"hello, world!"[..])
+                        """,
+                        conditional = optionalBuilderInputs,
+                    ),
             )
         }
 
@@ -117,18 +118,18 @@ object EventStreamUnmarshallTestCases {
                     expect_event(result.unwrap())
                 );
                 """,
-                "StructInput" to conditionalBuilderInput(
-                    """
-                    TestStruct::builder()
-                        .some_string(#{StringInput})
-                        .some_int(#{IntInput})
-                        .build()
-                    """,
-                    conditional = optionalBuilderInputs,
-                    "StringInput" to conditionalBuilderInput("\"hello\"", conditional = optionalBuilderInputs),
-                    "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
-                ),
-
+                "StructInput" to
+                    conditionalBuilderInput(
+                        """
+                        TestStruct::builder()
+                            .some_string(#{StringInput})
+                            .some_int(#{IntInput})
+                            .build()
+                        """,
+                        conditional = optionalBuilderInputs,
+                        "StringInput" to conditionalBuilderInput("\"hello\"", conditional = optionalBuilderInputs),
+                        "IntInput" to conditionalBuilderInput("5", conditional = optionalBuilderInputs),
+                    ),
             )
         }
 

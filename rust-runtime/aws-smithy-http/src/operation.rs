@@ -9,8 +9,6 @@
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::borrow::Cow;
 
-pub mod error;
-
 /// Metadata added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) that identifies the API being called.
 #[derive(Clone, Debug)]
 pub struct Metadata {

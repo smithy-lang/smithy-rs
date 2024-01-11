@@ -27,19 +27,20 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-private fun RuntimeConfig.awsInlineableHttpResponseChecksum() = RuntimeType.forInlineDependency(
-    InlineAwsDependency.forRustFile(
-        "http_response_checksum", visibility = Visibility.PUBCRATE,
-        CargoDependency.Bytes,
-        CargoDependency.Http,
-        CargoDependency.HttpBody,
-        CargoDependency.Tracing,
-        CargoDependency.smithyChecksums(this),
-        CargoDependency.smithyHttp(this),
-        CargoDependency.smithyRuntimeApi(this),
-        CargoDependency.smithyTypes(this),
-    ),
-)
+private fun RuntimeConfig.awsInlineableHttpResponseChecksum() =
+    RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile(
+            "http_response_checksum", visibility = Visibility.PUBCRATE,
+            CargoDependency.Bytes,
+            CargoDependency.Http,
+            CargoDependency.HttpBody,
+            CargoDependency.Tracing,
+            CargoDependency.smithyChecksums(this),
+            CargoDependency.smithyHttp(this),
+            CargoDependency.smithyRuntimeApiClient(this),
+            CargoDependency.smithyTypes(this),
+        ),
+    )
 
 fun HttpChecksumTrait.requestValidationModeMember(
     codegenContext: ClientCodegenContext,
@@ -60,9 +61,10 @@ class HttpResponseChecksumDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations.letIf(applies(operation)) {
-        it + HttpResponseChecksumCustomization(codegenContext, operation)
-    }
+    ): List<OperationCustomization> =
+        baseCustomizations.letIf(applies(operation)) {
+            it + HttpResponseChecksumCustomization(codegenContext, operation)
+        }
 }
 
 // This generator was implemented based on this spec:
@@ -71,50 +73,52 @@ class HttpResponseChecksumCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operationShape: OperationShape,
 ) : OperationCustomization() {
-    override fun section(section: OperationSection): Writable = writable {
-        val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
-        val requestValidationModeMember =
-            checksumTrait.requestValidationModeMember(codegenContext, operationShape) ?: return@writable
-        val requestValidationModeMemberInner = if (requestValidationModeMember.isOptional) {
-            codegenContext.model.expectShape(requestValidationModeMember.target)
-        } else {
-            requestValidationModeMember
-        }
-        val validationModeName = codegenContext.symbolProvider.toMemberName(requestValidationModeMember)
-        val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
-
-        when (section) {
-            is OperationSection.AdditionalInterceptors -> {
-                section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                    // CRC32, CRC32C, SHA256, SHA1 -> "crc32", "crc32c", "sha256", "sha1"
-                    val responseAlgorithms = checksumTrait.responseAlgorithms
-                        .map { algorithm -> algorithm.lowercase() }.joinToString(", ") { algorithm -> "\"$algorithm\"" }
-                    val runtimeApi = RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig)
-                    rustTemplate(
-                        """
-                        #{ResponseChecksumInterceptor}::new(
-                            [$responseAlgorithms].as_slice(),
-                            |input: &#{Input}| {
-                                ${""/*
-                                Per [the spec](https://smithy.io/2.0/aws/aws-core.html#http-response-checksums),
-                                we check to see if it's the `ENABLED` variant
-                                */}
-                                let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
-                                matches!(input.$validationModeName(), #{Some}(#{ValidationModeShape}::Enabled))
-                            }
-                        )
-                        """,
-                        *preludeScope,
-                        "ResponseChecksumInterceptor" to codegenContext.runtimeConfig.awsInlineableHttpResponseChecksum()
-                            .resolve("ResponseChecksumInterceptor"),
-                        "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
-                        "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
-                        "ValidationModeShape" to codegenContext.symbolProvider.toSymbol(requestValidationModeMemberInner),
-                    )
+    override fun section(section: OperationSection): Writable =
+        writable {
+            val checksumTrait = operationShape.getTrait<HttpChecksumTrait>() ?: return@writable
+            val requestValidationModeMember =
+                checksumTrait.requestValidationModeMember(codegenContext, operationShape) ?: return@writable
+            val requestValidationModeMemberInner =
+                if (requestValidationModeMember.isOptional) {
+                    codegenContext.model.expectShape(requestValidationModeMember.target)
+                } else {
+                    requestValidationModeMember
                 }
-            }
+            val validationModeName = codegenContext.symbolProvider.toMemberName(requestValidationModeMember)
+            val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
 
-            else -> {}
+            when (section) {
+                is OperationSection.AdditionalInterceptors -> {
+                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                        // CRC32, CRC32C, SHA256, SHA1 -> "crc32", "crc32c", "sha256", "sha1"
+                        val responseAlgorithms =
+                            checksumTrait.responseAlgorithms
+                                .map { algorithm -> algorithm.lowercase() }.joinToString(", ") { algorithm -> "\"$algorithm\"" }
+                        val runtimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                        rustTemplate(
+                            """
+                            #{ResponseChecksumInterceptor}::new(
+                                [$responseAlgorithms].as_slice(),
+                                |input: &#{Input}| {
+                                    ${""/* Per [the spec](https://smithy.io/2.0/aws/aws-core.html#http-response-checksums),
+                                           we check to see if it's the `ENABLED` variant */}
+                                    let input: &#{OperationInput} = input.downcast_ref().expect("correct type");
+                                    matches!(input.$validationModeName(), #{Some}(#{ValidationModeShape}::Enabled))
+                                }
+                            )
+                            """,
+                            *preludeScope,
+                            "ResponseChecksumInterceptor" to
+                                codegenContext.runtimeConfig.awsInlineableHttpResponseChecksum()
+                                    .resolve("ResponseChecksumInterceptor"),
+                            "Input" to runtimeApi.resolve("client::interceptors::context::Input"),
+                            "OperationInput" to codegenContext.symbolProvider.toSymbol(inputShape),
+                            "ValidationModeShape" to codegenContext.symbolProvider.toSymbol(requestValidationModeMemberInner),
+                        )
+                    }
+                }
+
+                else -> {}
+            }
         }
-    }
 }

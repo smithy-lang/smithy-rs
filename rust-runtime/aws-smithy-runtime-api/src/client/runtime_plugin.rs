@@ -9,7 +9,7 @@
 //! This can include:
 //! - Registering interceptors
 //! - Registering auth schemes
-//! - Adding entries to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) for orchestration
+//! - Adding entries to the [`ConfigBag`] for orchestration
 //! - Setting runtime components
 //!
 //! Runtime plugins are divided into service/operation "levels", with service runtime plugins
@@ -77,7 +77,7 @@ pub trait RuntimePlugin: Debug + Send + Sync {
         DEFAULT_ORDER
     }
 
-    /// Optionally returns additional config that should be added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag).
+    /// Optionally returns additional config that should be added to the [`ConfigBag`].
     ///
     /// As a best practice, a frozen layer should be stored on the runtime plugin instance as
     /// a member, and then cloned upon return since that clone is cheap. Constructing a new
@@ -86,7 +86,7 @@ pub trait RuntimePlugin: Debug + Send + Sync {
         None
     }
 
-    /// Returns a [`RuntimeComponentsBuilder`](RuntimeComponentsBuilder) to incorporate into the final runtime components.
+    /// Returns a [`RuntimeComponentsBuilder`] to incorporate into the final runtime components.
     ///
     /// The order of runtime plugins determines which runtime components "win". Components set by later runtime plugins will
     /// override those set by earlier runtime plugins.
@@ -228,7 +228,6 @@ macro_rules! apply_plugins {
 }
 
 /// Used internally in the orchestrator implementation and in the generated code. Not intended to be used elsewhere.
-#[doc(hidden)]
 #[derive(Default, Clone, Debug)]
 pub struct RuntimePlugins {
     client_plugins: Vec<SharedRuntimePlugin>,
@@ -236,8 +235,20 @@ pub struct RuntimePlugins {
 }
 
 impl RuntimePlugins {
+    /// Create a new empty set of runtime plugins.
     pub fn new() -> Self {
         Default::default()
+    }
+
+    /// Add several client-level runtime plugins from an iterator.
+    pub fn with_client_plugins(
+        mut self,
+        plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> Self {
+        for plugin in plugins.into_iter() {
+            self = self.with_client_plugin(plugin);
+        }
+        self
     }
 
     /// Adds a client-level runtime plugin.
@@ -246,6 +257,17 @@ impl RuntimePlugins {
             self.client_plugins,
             IntoShared::<SharedRuntimePlugin>::into_shared(plugin)
         );
+        self
+    }
+
+    /// Add several operation-level runtime plugins from an iterator.
+    pub fn with_operation_plugins(
+        mut self,
+        plugins: impl IntoIterator<Item = SharedRuntimePlugin>,
+    ) -> Self {
+        for plugin in plugins.into_iter() {
+            self = self.with_operation_plugin(plugin);
+        }
         self
     }
 
@@ -258,6 +280,7 @@ impl RuntimePlugins {
         self
     }
 
+    /// Apply the client-level runtime plugins' config to the given config bag.
     pub fn apply_client_configuration(
         &self,
         cfg: &mut ConfigBag,
@@ -265,6 +288,7 @@ impl RuntimePlugins {
         apply_plugins!(client, self.client_plugins, cfg)
     }
 
+    /// Apply the operation-level runtime plugins' config to the given config bag.
     pub fn apply_operation_configuration(
         &self,
         cfg: &mut ConfigBag,
@@ -273,7 +297,7 @@ impl RuntimePlugins {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(all(test, feature = "test-util", feature = "http-02x"))]
 mod tests {
     use super::{RuntimePlugin, RuntimePlugins};
     use crate::client::http::{
@@ -283,7 +307,7 @@ mod tests {
     use crate::client::runtime_components::RuntimeComponentsBuilder;
     use crate::client::runtime_plugin::{Order, SharedRuntimePlugin};
     use crate::shared::IntoShared;
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::ConfigBag;
     use http::HeaderValue;
     use std::borrow::Cow;
@@ -369,6 +393,8 @@ mod tests {
                         .status(200)
                         .header("rp1", "1")
                         .body(SdkBody::empty())
+                        .unwrap()
+                        .try_into()
                         .unwrap())
                 })
             }
@@ -446,13 +472,7 @@ mod tests {
             .http_client()
             .unwrap()
             .http_connector(&Default::default(), &fake_components)
-            .call(
-                http::Request::builder()
-                    .method("GET")
-                    .uri("/")
-                    .body(SdkBody::empty())
-                    .unwrap(),
-            )
+            .call(HttpRequest::empty())
             .await
             .unwrap();
         dbg!(&resp);

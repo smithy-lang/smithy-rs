@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 //! Runtime support logic and types for smithy-rs generated code.
 //!
 //! # Crate Features
@@ -21,6 +24,9 @@
 /// Runtime support logic for generated clients.
 #[cfg(feature = "client")]
 pub mod client;
+
+/// Cache for entries that have an expiration time.
+pub mod expiring_cache;
 
 /// A data structure for persisting and sharing state between multiple clients.
 pub mod static_partition_map;

@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOpt
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 val noAuthSchemeShapeId: ShapeId = ShapeId.from("aws.smithy.rs#NoAuth")
@@ -29,11 +30,17 @@ class NoAuthDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
-    ): List<AuthSchemeOption> = baseAuthSchemeOptions +
-        AuthSchemeOption.StaticAuthSchemeOption(noAuthSchemeShapeId) {
-            rustTemplate(
-                "#{NO_AUTH_SCHEME_ID},",
-                "NO_AUTH_SCHEME_ID" to noAuthModule(codegenContext).resolve("NO_AUTH_SCHEME_ID"),
+    ): List<AuthSchemeOption> =
+        baseAuthSchemeOptions +
+            AuthSchemeOption.StaticAuthSchemeOption(
+                noAuthSchemeShapeId,
+                listOf(
+                    writable {
+                        rustTemplate(
+                            "#{NO_AUTH_SCHEME_ID}",
+                            "NO_AUTH_SCHEME_ID" to noAuthModule(codegenContext).resolve("NO_AUTH_SCHEME_ID"),
+                        )
+                    },
+                ),
             )
-        }
 }

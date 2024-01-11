@@ -26,7 +26,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.allConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.SyntheticStructureFromConstrainedMemberTrait
 import software.amazon.smithy.utils.ToSmithyBuilder
 import java.lang.IllegalStateException
-import java.util.*
+import java.util.Locale
 
 /**
  * Transforms all member shapes that have constraints on them into equivalent non-constrained
@@ -69,8 +69,7 @@ object ConstrainedMemberTransform {
 
     private val memberConstraintTraitsToOverride = allConstraintTraits - RequiredTrait::class.java
 
-    private fun Shape.hasMemberConstraintTrait() =
-        memberConstraintTraitsToOverride.any(this::hasTrait)
+    private fun Shape.hasMemberConstraintTrait() = memberConstraintTraitsToOverride.any(this::hasTrait)
 
     fun transform(model: Model): Model {
         val additionalNames = HashSet<ShapeId>()
@@ -81,20 +80,21 @@ object ConstrainedMemberTransform {
         // convert them into non-constrained members and then pass them to the transformer.
         // The transformer will add new shapes, and will replace existing member shapes' target
         // with the newly added shapes.
-        val transformations = model.operationShapes
-            .flatMap { listOfNotNull(it.input.orNull(), it.output.orNull()) + it.errors }
-            .mapNotNull { model.expectShape(it).asStructureShape().orElse(null) }
-            .filter { it.hasTrait(SyntheticInputTrait.ID) || it.hasTrait(SyntheticOutputTrait.ID) }
-            .flatMap { walker.walkShapes(it) }
-            .filter { it is StructureShape || it is ListShape || it is UnionShape || it is MapShape }
-            .flatMap { it.constrainedMembers() }
-            .mapNotNull {
-                val transformation = it.makeNonConstrained(model, additionalNames)
-                // Keep record of new names that have been generated to ensure none of them regenerated.
-                additionalNames.add(transformation.newShape.id)
+        val transformations =
+            model.operationShapes
+                .flatMap { listOfNotNull(it.input.orNull(), it.output.orNull()) + it.errors }
+                .mapNotNull { model.expectShape(it).asStructureShape().orElse(null) }
+                .filter { it.hasTrait(SyntheticInputTrait.ID) || it.hasTrait(SyntheticOutputTrait.ID) }
+                .flatMap { walker.walkShapes(it) }
+                .filter { it is StructureShape || it is ListShape || it is UnionShape || it is MapShape }
+                .flatMap { it.constrainedMembers() }
+                .mapNotNull {
+                    val transformation = it.makeNonConstrained(model, additionalNames)
+                    // Keep record of new names that have been generated to ensure none of them regenerated.
+                    additionalNames.add(transformation.newShape.id)
 
-                transformation
-            }
+                    transformation
+                }
 
         return applyTransformations(model, transformations)
     }
@@ -108,15 +108,16 @@ object ConstrainedMemberTransform {
     ): Model {
         val modelBuilder = model.toBuilder()
 
-        val memberShapesToReplace = transformations.map {
-            // Add the new shape to the model.
-            modelBuilder.addShape(it.newShape)
+        val memberShapesToReplace =
+            transformations.map {
+                // Add the new shape to the model.
+                modelBuilder.addShape(it.newShape)
 
-            it.memberToChange.toBuilder()
-                .target(it.newShape.id)
-                .traits(it.traitsToKeep)
-                .build()
-        }
+                it.memberToChange.toBuilder()
+                    .target(it.newShape.id)
+                    .traits(it.traitsToKeep)
+                    .build()
+            }
 
         // Change all original constrained member shapes with the new standalone shapes.
         return ModelTransformer.create()
@@ -140,14 +141,14 @@ object ConstrainedMemberTransform {
         memberShape: ShapeId,
     ): ShapeId {
         val structName = memberShape.name
-        val memberName = memberShape.member.orElse(null)
-            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
+        val memberName =
+            memberShape.member.orElse(null)
+                .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
         fun makeStructName(suffix: String = "") =
             ShapeId.from("${memberShape.namespace}#${structName}${memberName}$suffix")
 
-        fun structNameIsUnique(newName: ShapeId) =
-            model.getShape(newName).isEmpty && !additionalNames.contains(newName)
+        fun structNameIsUnique(newName: ShapeId) = model.getShape(newName).isEmpty && !additionalNames.contains(newName)
 
         fun generateUniqueName(): ShapeId {
             // Ensure the name does not already exist in the model, else make it unique
@@ -173,10 +174,11 @@ object ConstrainedMemberTransform {
         model: Model,
         additionalNames: MutableSet<ShapeId>,
     ): MemberShapeTransformation {
-        val (memberConstraintTraits, otherTraits) = this.allTraits.values
-            .partition {
-                memberConstraintTraitsToOverride.contains(it.javaClass)
-            }
+        val (memberConstraintTraits, otherTraits) =
+            this.allTraits.values
+                .partition {
+                    memberConstraintTraitsToOverride.contains(it.javaClass)
+                }
 
         check(memberConstraintTraits.isNotEmpty()) {
             "There must at least be one member constraint on the shape"
@@ -211,9 +213,10 @@ object ConstrainedMemberTransform {
 
                 // Create a new unique standalone shape that will be added to the model later on
                 val shapeId = overriddenShapeId(model, additionalNames, this.id)
-                val standaloneShape = builder.id(shapeId)
-                    .traits(newTraits)
-                    .build()
+                val standaloneShape =
+                    builder.id(shapeId)
+                        .traits(newTraits)
+                        .build()
 
                 // Since the new shape has not been added to the model as yet, the current
                 // memberShape's target cannot be changed to the new shape.

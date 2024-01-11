@@ -11,7 +11,6 @@ import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.protocoltests.traits.AppliesTo
 import software.amazon.smithy.protocoltests.traits.HttpMessageTestCase
@@ -22,7 +21,6 @@ import software.amazon.smithy.protocoltests.traits.HttpResponseTestsTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
-import software.amazon.smithy.rust.codegen.client.smithy.generators.EndpointTraitBindings
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -69,7 +67,6 @@ class DefaultProtocolTestGenerator(
     override val codegenContext: ClientCodegenContext,
     override val protocolSupport: ProtocolSupport,
     override val operationShape: OperationShape,
-
     private val renderClientCreation: RustWriter.(ClientCreationParams) -> Unit = { params ->
         rustTemplate(
             """
@@ -93,36 +90,44 @@ class DefaultProtocolTestGenerator(
 
     private val instantiator = ClientInstantiator(codegenContext)
 
-    private val codegenScope = arrayOf(
-        "SmithyHttp" to RT.smithyHttp(rc),
-        "AssertEq" to RT.PrettyAssertions.resolve("assert_eq!"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "SmithyHttp" to RT.smithyHttp(rc),
+            "AssertEq" to RT.PrettyAssertions.resolve("assert_eq!"),
+            "Uri" to RT.Http.resolve("Uri"),
+        )
 
     sealed class TestCase {
         abstract val testCase: HttpMessageTestCase
 
         data class RequestTest(override val testCase: HttpRequestTestCase) : TestCase()
+
         data class ResponseTest(override val testCase: HttpResponseTestCase, val targetShape: StructureShape) :
             TestCase()
     }
 
     override fun render(writer: RustWriter) {
-        val requestTests = operationShape.getTrait<HttpRequestTestsTrait>()
-            ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
-        val responseTests = operationShape.getTrait<HttpResponseTestsTrait>()
-            ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
-        val errorTests = operationIndex.getErrors(operationShape).flatMap { error ->
-            val testCases = error.getTrait<HttpResponseTestsTrait>()
-                ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty()
-            testCases.map { TestCase.ResponseTest(it, error) }
-        }
+        val requestTests =
+            operationShape.getTrait<HttpRequestTestsTrait>()
+                ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.RequestTest(it) }
+        val responseTests =
+            operationShape.getTrait<HttpResponseTestsTrait>()
+                ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty().map { TestCase.ResponseTest(it, outputShape) }
+        val errorTests =
+            operationIndex.getErrors(operationShape).flatMap { error ->
+                val testCases =
+                    error.getTrait<HttpResponseTestsTrait>()
+                        ?.getTestCasesFor(AppliesTo.CLIENT).orEmpty()
+                testCases.map { TestCase.ResponseTest(it, error) }
+            }
         val allTests: List<TestCase> = (requestTests + responseTests + errorTests).filterMatching()
         if (allTests.isNotEmpty()) {
             val operationName = operationSymbol.name
             val testModuleName = "${operationName.toSnakeCase()}_request_test"
-            val additionalAttributes = listOf(
-                Attribute(allow("unreachable_code", "unused_variables")),
-            )
+            val additionalAttributes =
+                listOf(
+                    Attribute(allow("unreachable_code", "unused_variables")),
+                )
             writer.withInlineModule(
                 RustModule.inlineTests(testModuleName, additionalAttributes = additionalAttributes),
                 null,
@@ -169,50 +174,54 @@ class DefaultProtocolTestGenerator(
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
         Attribute.TokioTest.render(testModuleWriter)
-        val action = when (testCase) {
-            is HttpResponseTestCase -> Action.Response
-            is HttpRequestTestCase -> Action.Request
-            else -> throw CodegenException("unknown test case type")
-        }
+        val action =
+            when (testCase) {
+                is HttpResponseTestCase -> Action.Response
+                is HttpRequestTestCase -> Action.Request
+                else -> throw CodegenException("unknown test case type")
+            }
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
         }
-        val fnName = when (action) {
-            is Action.Response -> "_response"
-            is Action.Request -> "_request"
-        }
+        val fnName =
+            when (action) {
+                is Action.Response -> "_response"
+                is Action.Request -> "_request"
+            }
         Attribute.AllowUnusedMut.render(testModuleWriter)
         testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnName()") {
             block(this)
         }
     }
 
-    private fun RustWriter.renderHttpRequestTestCase(
-        httpRequestTestCase: HttpRequestTestCase,
-    ) {
+    private fun RustWriter.renderHttpRequestTestCase(httpRequestTestCase: HttpRequestTestCase) {
         if (!protocolSupport.requestSerialization) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
-        val customParams = httpRequestTestCase.vendorParams.getObjectMember("endpointParams").orNull()?.let { params ->
-            writable {
-                val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
-                params.getObjectMember("builtInParams").orNull()?.members?.forEach { (name, value) ->
-                    customizations.firstNotNullOf {
-                        it.setBuiltInOnServiceConfig(name.value, value, "config_builder")
-                    }(this)
+        val customParams =
+            httpRequestTestCase.vendorParams.getObjectMember("endpointParams").orNull()?.let { params ->
+                writable {
+                    val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
+                    params.getObjectMember("builtInParams").orNull()?.members?.forEach { (name, value) ->
+                        customizations.firstNotNullOf {
+                            it.setBuiltInOnServiceConfig(name.value, value, "config_builder")
+                        }(this)
+                    }
                 }
-            }
-        } ?: writable { }
+            } ?: writable { }
+        // support test cases that set the host value, e.g: https://github.com/smithy-lang/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
+        val host = "https://${httpRequestTestCase.host.orNull() ?: "example.com"}".dq()
         rustTemplate(
             """
             let (http_client, request_receiver) = #{capture_request}(None);
-            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_resolver("https://example.com");
+            let config_builder = #{config}::Config::builder().with_test_defaults().endpoint_url($host);
             #{customParams}
 
             """,
-            "capture_request" to CargoDependency.smithyRuntimeTestUtil(rc).toType()
-                .resolve("client::http::test_util::capture_request"),
+            "capture_request" to
+                CargoDependency.smithyRuntimeTestUtil(rc).toType()
+                    .resolve("client::http::test_util::capture_request"),
             "config" to ClientRustModule.config,
             "customParams" to customParams,
         )
@@ -226,60 +235,13 @@ class DefaultProtocolTestGenerator(
         rust("let _ = dbg!(result);")
         rust("""let http_request = request_receiver.expect_request();""")
 
-        with(httpRequestTestCase) {
-            // Override the endpoint for tests that set a `host`, for example:
-            // https://github.com/awslabs/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
-            host.orNull()?.also { host ->
-                val withScheme = "http://$host"
-                val bindings = operationShape.getTrait(EndpointTrait::class.java).map { epTrait ->
-                    EndpointTraitBindings(
-                        codegenContext.model,
-                        codegenContext.symbolProvider,
-                        codegenContext.runtimeConfig,
-                        operationShape,
-                        epTrait,
-                    )
-                }.orNull()
-                when (bindings) {
-                    null -> rust("let endpoint_prefix = None;")
-                    else -> {
-                        withBlock("let input = ", ";") {
-                            instantiator.render(this@renderHttpRequestTestCase, inputShape, httpRequestTestCase.params)
-                        }
-                        withBlock("let endpoint_prefix = Some({", "}.unwrap());") {
-                            bindings.render(this, "input", generateValidation = false)
-                        }
-                    }
-                }
-                rustTemplate(
-                    """
-                    let mut http_request = http_request;
-                    let ep = #{SmithyHttp}::endpoint::Endpoint::mutable(${withScheme.dq()}).expect("valid endpoint");
-                    ep.set_endpoint(http_request.uri_mut(), endpoint_prefix.as_ref()).expect("valid endpoint");
-                    """,
-                    *codegenScope,
-                )
-            }
-            rustTemplate(
-                """
-                #{AssertEq}(http_request.method(), ${method.dq()});
-                #{AssertEq}(http_request.uri().path(), ${uri.dq()});
-                """,
-                *codegenScope,
-            )
-            resolvedHost.orNull()?.also { host ->
-                rustTemplate(
-                    """#{AssertEq}(http_request.uri().host().expect("host should be set"), ${host.dq()});""",
-                    *codegenScope,
-                )
-            }
-        }
         checkQueryParams(this, httpRequestTestCase.queryParams)
         checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
         checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
         checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
         checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
         checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
+
         if (protocolSupport.requestBodySerialization) {
             // "If no request body is defined, then no assertions are made about the body of the message."
             httpRequestTestCase.body.orNull()?.also { body ->
@@ -295,28 +257,47 @@ class DefaultProtocolTestGenerator(
             if (!httpRequestTestCase.vendorParams.isEmpty) {
                 logger.warning("Test case provided vendorParams but these were ignored")
             }
+
+            rustTemplate(
+                """
+                let uri: #{Uri} = http_request.uri().parse().expect("invalid URI sent");
+                #{AssertEq}(http_request.method(), ${method.dq()}, "method was incorrect");
+                #{AssertEq}(uri.path(), ${uri.dq()}, "path was incorrect");
+                """,
+                *codegenScope,
+            )
+
+            resolvedHost.orNull()?.also { host ->
+                rustTemplate(
+                    """#{AssertEq}(uri.host().expect("host should be set"), ${host.dq()});""",
+                    *codegenScope,
+                )
+            }
         }
     }
 
-    private fun HttpMessageTestCase.action(): Action = when (this) {
-        is HttpRequestTestCase -> Action.Request
-        is HttpResponseTestCase -> Action.Response
-        else -> throw CodegenException("Unknown test case type")
-    }
+    private fun HttpMessageTestCase.action(): Action =
+        when (this) {
+            is HttpRequestTestCase -> Action.Request
+            is HttpResponseTestCase -> Action.Response
+            else -> throw CodegenException("Unknown test case type")
+        }
 
-    private fun expectFail(testCase: HttpMessageTestCase): Boolean = ExpectFail.find {
-        it.id == testCase.id && it.action == testCase.action() && it.service == codegenContext.serviceShape.id.toString()
-    } != null
+    private fun expectFail(testCase: HttpMessageTestCase): Boolean =
+        ExpectFail.find {
+            it.id == testCase.id && it.action == testCase.action() && it.service == codegenContext.serviceShape.id.toString()
+        } != null
 
     private fun RustWriter.renderHttpResponseTestCase(
         testCase: HttpResponseTestCase,
         expectedShape: StructureShape,
     ) {
         if (!protocolSupport.responseDeserialization || (
-                !protocolSupport.errorDeserialization && expectedShape.hasTrait(
-                    ErrorTrait::class.java,
-                )
-                )
+                !protocolSupport.errorDeserialization &&
+                    expectedShape.hasTrait(
+                        ErrorTrait::class.java,
+                    )
+            )
         ) {
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
@@ -324,7 +305,11 @@ class DefaultProtocolTestGenerator(
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
-        write("let mut http_response = #T::new()", RT.HttpResponseBuilder)
+        rustTemplate(
+            "let mut http_response = #{Response}::try_from(#{HttpResponseBuilder}::new()",
+            "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
+            "HttpResponseBuilder" to RT.HttpResponseBuilder,
+        )
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
         }
@@ -332,13 +317,14 @@ class DefaultProtocolTestGenerator(
             """
             .status(${testCase.code})
             .body(#T::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
-            .unwrap();
+            .unwrap()
+            ).unwrap();
             """,
             RT.sdkBody(runtimeConfig = rc),
         )
         rustTemplate(
             """
-            use #{ResponseDeserializer};
+            use #{DeserializeResponse};
             use #{RuntimePlugin};
 
             let op = #{Operation}::new();
@@ -354,9 +340,11 @@ class DefaultProtocolTestGenerator(
             });
             """,
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-            "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
+            "SharedResponseDeserializer" to
+                RT.smithyRuntimeApiClient(rc)
+                    .resolve("client::ser_de::SharedResponseDeserializer"),
             "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-            "ResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::ResponseDeserializer"),
+            "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
             "RuntimePlugin" to RT.runtimePlugin(rc),
             "SdkBody" to RT.sdkBody(rc),
         )
@@ -418,7 +406,11 @@ class DefaultProtocolTestGenerator(
         }
     }
 
-    private fun checkBody(rustWriter: RustWriter, body: String, mediaType: String?) {
+    private fun checkBody(
+        rustWriter: RustWriter,
+        body: String,
+        mediaType: String?,
+    ) {
         rustWriter.write("""let body = http_request.body().bytes().expect("body should be strict");""")
         if (body == "") {
             rustWriter.rustTemplate(
@@ -442,7 +434,11 @@ class DefaultProtocolTestGenerator(
         }
     }
 
-    private fun checkRequiredHeaders(rustWriter: RustWriter, actualExpression: String, requireHeaders: List<String>) {
+    private fun checkRequiredHeaders(
+        rustWriter: RustWriter,
+        actualExpression: String,
+        requireHeaders: List<String>,
+    ) {
         basicCheck(
             requireHeaders,
             rustWriter,
@@ -452,7 +448,11 @@ class DefaultProtocolTestGenerator(
         )
     }
 
-    private fun checkForbidHeaders(rustWriter: RustWriter, actualExpression: String, forbidHeaders: List<String>) {
+    private fun checkForbidHeaders(
+        rustWriter: RustWriter,
+        actualExpression: String,
+        forbidHeaders: List<String>,
+    ) {
         basicCheck(
             forbidHeaders,
             rustWriter,
@@ -462,7 +462,11 @@ class DefaultProtocolTestGenerator(
         )
     }
 
-    private fun checkHeaders(rustWriter: RustWriter, actualExpression: String, headers: Map<String, String>) {
+    private fun checkHeaders(
+        rustWriter: RustWriter,
+        actualExpression: String,
+        headers: Map<String, String>,
+    ) {
         if (headers.isEmpty()) {
             return
         }
@@ -540,13 +544,19 @@ class DefaultProtocolTestGenerator(
      * wraps `inner` in a call to `aws_smithy_protocol_test::assert_ok`, a convenience wrapper
      * for pretty printing protocol test helper results
      */
-    private fun assertOk(rustWriter: RustWriter, inner: Writable) {
+    private fun assertOk(
+        rustWriter: RustWriter,
+        inner: Writable,
+    ) {
         rustWriter.write("#T(", RT.protocolTest(rc, "assert_ok"))
         inner(rustWriter)
         rustWriter.write(");")
     }
 
-    private fun strSlice(writer: RustWriter, args: List<String>) {
+    private fun strSlice(
+        writer: RustWriter,
+        args: List<String>,
+    ) {
         writer.withBlock("&[", "]") {
             write(args.joinToString(",") { it.dq() })
         }
@@ -555,6 +565,7 @@ class DefaultProtocolTestGenerator(
     companion object {
         sealed class Action {
             object Request : Action()
+
             object Response : Action()
         }
 
@@ -570,28 +581,32 @@ class DefaultProtocolTestGenerator(
         private val RestXml = "aws.protocoltests.restxml#RestXml"
         private val AwsQuery = "aws.protocoltests.query#AwsQuery"
         private val Ec2Query = "aws.protocoltests.ec2#AwsEc2"
-        private val ExpectFail = setOf<FailingTest>()
+        private val ExpectFail =
+            setOf<FailingTest>(
+                // Failing because we don't serialize default values if they match the default
+                FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", Action.Request),
+                FailingTest(JsonRpc10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
+                FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultValuesInInput", Action.Request),
+            )
         private val RunOnly: Set<String>? = null
 
         // These tests are not even attempted to be generated, either because they will not compile
         // or because they are flaky
-        private val DisableTests = setOf<String>(
-            // TODO(https://github.com/awslabs/smithy-rs/issues/2891): Implement support for `@requestCompression`
-            "SDKAppendedGzipAfterProvidedEncoding_restJson1",
-            "SDKAppendedGzipAfterProvidedEncoding_restXml",
-            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_0",
-            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_1",
-            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsQuery",
-            "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_ec2Query",
-            "SDKAppliedContentEncoding_awsJson1_0",
-            "SDKAppliedContentEncoding_awsJson1_1",
-            "SDKAppliedContentEncoding_awsQuery",
-            "SDKAppliedContentEncoding_ec2Query",
-            "SDKAppliedContentEncoding_restJson1",
-            "SDKAppliedContentEncoding_restXml",
-            "AwsJson11DeserializeIgnoreType",
-            "AwsJson10DeserializeIgnoreType",
-            "RestJsonDeserializeIgnoreType",
-        )
+        private val DisableTests =
+            setOf<String>(
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2891): Implement support for `@requestCompression`
+                "SDKAppendedGzipAfterProvidedEncoding_restJson1",
+                "SDKAppendedGzipAfterProvidedEncoding_restXml",
+                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_0",
+                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsJson1_1",
+                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_awsQuery",
+                "SDKAppendsGzipAndIgnoresHttpProvidedEncoding_ec2Query",
+                "SDKAppliedContentEncoding_awsJson1_0",
+                "SDKAppliedContentEncoding_awsJson1_1",
+                "SDKAppliedContentEncoding_awsQuery",
+                "SDKAppliedContentEncoding_ec2Query",
+                "SDKAppliedContentEncoding_restJson1",
+                "SDKAppliedContentEncoding_restXml",
+            )
     }
 }

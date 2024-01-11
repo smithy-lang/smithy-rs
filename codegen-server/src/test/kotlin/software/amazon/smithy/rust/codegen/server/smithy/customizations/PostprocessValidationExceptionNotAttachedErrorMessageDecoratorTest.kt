@@ -39,33 +39,37 @@ internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTes
             }
             """.asSmithyModel()
 
-        val validationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator = object : ServerCodegenDecorator {
-            override val name: String
-                get() = "ValidationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator"
-            override val order: Byte
-                get() = 69
+        val validationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator =
+            object : ServerCodegenDecorator {
+                override val name: String
+                    get() = "ValidationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator"
+                override val order: Byte
+                    get() = 69
 
-            override fun postprocessValidationExceptionNotAttachedErrorMessage(validationResult: ValidationResult): ValidationResult {
-                check(validationResult.messages.size == 1)
+                override fun postprocessValidationExceptionNotAttachedErrorMessage(
+                    validationResult: ValidationResult,
+                ): ValidationResult {
+                    check(validationResult.messages.size == 1)
 
-                val level = validationResult.messages.first().level
-                val message =
-                    """
-                    ${validationResult.messages.first().message}
+                    val level = validationResult.messages.first().level
+                    val message =
+                        """
+                        ${validationResult.messages.first().message}
 
-                    There are three things all wise men fear: the sea in storm, a night with no moon, and the anger of a gentle man.
-                    """
+                        There are three things all wise men fear: the sea in storm, a night with no moon, and the anger of a gentle man.
+                        """
 
-                return validationResult.copy(messages = listOf(LogMessage(level, message)))
+                    return validationResult.copy(messages = listOf(LogMessage(level, message)))
+                }
             }
-        }
 
-        val exception = assertThrows<CodegenException> {
-            serverIntegrationTest(
-                model,
-                additionalDecorators = listOf(validationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator),
-            )
-        }
+        val exception =
+            assertThrows<CodegenException> {
+                serverIntegrationTest(
+                    model,
+                    additionalDecorators = listOf(validationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator),
+                )
+            }
         val exceptionCause = (exception.cause!! as ValidationResult)
         exceptionCause.messages.size shouldBe 1
         exceptionCause.messages.first().message shouldContain "There are three things all wise men fear: the sea in storm, a night with no moon, and the anger of a gentle man."

@@ -16,7 +16,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCode
 internal class PythonTypeInformationGenerationTest {
     @Test
     fun `generates python type information`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             structure Foo {
@@ -24,7 +25,7 @@ internal class PythonTypeInformationGenerationTest {
                 bar: String,
                 baz: Integer
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val foo = model.lookup<StructureShape>("test#Foo")
 
         val codegenContext = serverTestCodegenContext(model)

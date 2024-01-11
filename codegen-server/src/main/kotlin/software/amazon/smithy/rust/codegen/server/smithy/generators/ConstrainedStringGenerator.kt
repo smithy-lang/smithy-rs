@@ -147,7 +147,11 @@ class ConstrainedStringGenerator(
         renderTests(shape)
     }
 
-    private fun renderConstraintViolationEnum(writer: RustWriter, shape: StringShape, constraintViolation: Symbol) {
+    private fun renderConstraintViolationEnum(
+        writer: RustWriter,
+        shape: StringShape,
+        constraintViolation: Symbol,
+    ) {
         writer.rustTemplate(
             """
             ##[derive(Debug, PartialEq)]
@@ -186,49 +190,55 @@ class ConstrainedStringGenerator(
         }
     }
 }
+
 data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
-    override fun toTraitInfo(): TraitInfo = TraitInfo(
-        tryFromCheck = { rust("Self::check_length(&value)?;") },
-        constraintViolationVariant = {
-            docs("Error when a string doesn't satisfy its `@length` requirements.")
-            rust("Length(usize)")
-        },
-        asValidationExceptionField = {
-            rust(
-                """
-                Self::Length(length) => crate::model::ValidationExceptionField {
-                    message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
-                    path,
-                },
-                """,
-            )
-        },
-        validationFunctionDefinition = this::renderValidationFunction,
-    )
+    override fun toTraitInfo(): TraitInfo =
+        TraitInfo(
+            tryFromCheck = { rust("Self::check_length(&value)?;") },
+            constraintViolationVariant = {
+                docs("Error when a string doesn't satisfy its `@length` requirements.")
+                rust("Length(usize)")
+            },
+            asValidationExceptionField = {
+                rust(
+                    """
+                    Self::Length(length) => crate::model::ValidationExceptionField {
+                        message: format!("${lengthTrait.validationErrorMessage()}", length, &path),
+                        path,
+                    },
+                    """,
+                )
+            },
+            validationFunctionDefinition = this::renderValidationFunction,
+        )
 
     /**
      * Renders a `check_length` function to validate the string matches the
      * required length indicated by the `@length` trait.
      */
     @Suppress("UNUSED_PARAMETER")
-    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable = {
-        // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
-        // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
-        // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
-        rust(
-            """
-            fn check_length(string: &str) -> Result<(), $constraintViolation> {
-                let length = string.chars().count();
+    private fun renderValidationFunction(
+        constraintViolation: Symbol,
+        unconstrainedTypeName: String,
+    ): Writable =
+        {
+            // Note that we're using the linear time check `chars().count()` instead of `len()` on the input value, since the
+            // Smithy specification says the `length` trait counts the number of Unicode code points when applied to string shapes.
+            // https://awslabs.github.io/smithy/1.0/spec/core/constraint-traits.html#length-trait
+            rust(
+                """
+                fn check_length(string: &str) -> Result<(), $constraintViolation> {
+                    let length = string.chars().count();
 
-                if ${lengthTrait.rustCondition("length")} {
-                    Ok(())
-                } else {
-                    Err($constraintViolation::Length(length))
+                    if ${lengthTrait.rustCondition("length")} {
+                        Ok(())
+                    } else {
+                        Err($constraintViolation::Length(length))
+                    }
                 }
-            }
-            """,
-        )
-    }
+                """,
+            )
+        }
 }
 
 data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) : StringTraitInfo() {
@@ -253,16 +263,17 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
                 )
             },
             this::renderValidationFunction,
-            testCases = listOf {
-                unitTest("regex_compiles") {
-                    rustTemplate(
-                        """
-                        #{T}::compile_regex();
-                        """,
-                        "T" to symbol,
-                    )
-                }
-            },
+            testCases =
+                listOf {
+                    unitTest("regex_compiles") {
+                        rustTemplate(
+                            """
+                            #{T}::compile_regex();
+                            """,
+                            "T" to symbol,
+                        )
+                    }
+                },
         )
     }
 
@@ -282,10 +293,13 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
      * Renders a `check_pattern` function to validate the string matches the
      * supplied regex in the `@pattern` trait.
      */
-    private fun renderValidationFunction(constraintViolation: Symbol, unconstrainedTypeName: String): Writable {
+    private fun renderValidationFunction(
+        constraintViolation: Symbol,
+        unconstrainedTypeName: String,
+    ): Writable {
         val pattern = patternTrait.pattern
         val errorMessageForUnsupportedRegex =
-            """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/awslabs/smithy-rs/issues for support"""
+            """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"""
 
         return {
             rustTemplate(
@@ -317,18 +331,21 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
 
 sealed class StringTraitInfo {
     companion object {
-        fun fromTrait(symbol: Symbol, trait: Trait, isSensitive: Boolean) =
-            when (trait) {
-                is PatternTrait -> {
-                    Pattern(symbol, trait, isSensitive)
-                }
-
-                is LengthTrait -> {
-                    Length(trait)
-                }
-
-                else -> PANIC("StringTraitInfo.fromTrait called with unsupported trait $trait")
+        fun fromTrait(
+            symbol: Symbol,
+            trait: Trait,
+            isSensitive: Boolean,
+        ) = when (trait) {
+            is PatternTrait -> {
+                Pattern(symbol, trait, isSensitive)
             }
+
+            is LengthTrait -> {
+                Length(trait)
+            }
+
+            else -> PANIC("StringTraitInfo.fromTrait called with unsupported trait $trait")
+        }
     }
 
     abstract fun toTraitInfo(): TraitInfo

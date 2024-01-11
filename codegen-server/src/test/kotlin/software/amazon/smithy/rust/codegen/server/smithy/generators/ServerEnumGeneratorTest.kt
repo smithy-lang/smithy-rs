@@ -16,7 +16,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyVa
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
 class ServerEnumGeneratorTest {
-    private val model = """
+    private val model =
+        """
         namespace test
         @enum([
             {
@@ -33,7 +34,7 @@ class ServerEnumGeneratorTest {
             },
         ])
         string InstanceType
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     private val codegenContext = serverTestCodegenContext(model)
     private val writer = RustWriter.forModule("model")

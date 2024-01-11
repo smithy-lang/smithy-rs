@@ -12,9 +12,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificEndpointResolver
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
@@ -39,7 +44,10 @@ interface EndpointCustomization {
      * }
      * ```
      */
-    fun loadBuiltInFromServiceConfig(parameter: Parameter, configRef: String): Writable? = null
+    fun loadBuiltInFromServiceConfig(
+        parameter: Parameter,
+        configRef: String,
+    ): Writable? = null
 
     /**
      * Set a given builtIn value on the service config builder. If this builtIn is not recognized, return null
@@ -60,7 +68,11 @@ interface EndpointCustomization {
      * ```
      */
 
-    fun setBuiltInOnServiceConfig(name: String, value: Node, configBuilderRef: String): Writable? = null
+    fun setBuiltInOnServiceConfig(
+        name: String,
+        value: Node,
+        configBuilderRef: String,
+    ): Writable? = null
 
     /**
      * Provide a list of additional endpoints standard library functions that rules can use
@@ -104,12 +116,57 @@ class EndpointsDecorator : ClientCodegenDecorator {
             EndpointConfigCustomization(codegenContext, EndpointTypesGenerator.fromContext(codegenContext))
     }
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun serviceRuntimePluginCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ServiceRuntimePluginCustomization>,
+    ): List<ServiceRuntimePluginCustomization> {
+        return baseCustomizations +
+            object : ServiceRuntimePluginCustomization() {
+                override fun section(section: ServiceRuntimePluginSection): Writable {
+                    return when (section) {
+                        is ServiceRuntimePluginSection.RegisterRuntimeComponents ->
+                            writable {
+                                codegenContext.defaultEndpointResolver()?.also { resolver ->
+                                    section.registerEndpointResolver(this, resolver)
+                                }
+                            }
+
+                        else -> emptySection
+                    }
+                }
+            }
+    }
+
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val generator = EndpointTypesGenerator.fromContext(codegenContext)
         rustCrate.withModule(ClientRustModule.Config.endpoint) {
-            withInlineModule(endpointTestsModule(codegenContext), rustCrate.moduleDocProvider) {
+            withInlineModule(endpointTestsModule(), rustCrate.moduleDocProvider) {
                 generator.testGenerator()(this)
             }
         }
+    }
+}
+
+/**
+ * Returns the rules-generated endpoint resolver for this service
+ *
+ * If no endpoint rules are provided, `null` will be returned.
+ */
+private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
+    val generator = EndpointTypesGenerator.fromContext(this)
+    val defaultResolver = generator.defaultResolver() ?: return null
+    val ctx =
+        arrayOf("DefaultResolver" to defaultResolver, "ServiceSpecificResolver" to serviceSpecificEndpointResolver())
+    return writable {
+        rustTemplate(
+            """{
+            use #{ServiceSpecificResolver};
+            #{DefaultResolver}::new().into_shared_resolver()
+            }""",
+            *ctx,
+        )
     }
 }

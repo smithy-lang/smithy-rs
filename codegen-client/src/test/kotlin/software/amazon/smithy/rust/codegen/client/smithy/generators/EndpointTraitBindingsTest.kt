@@ -16,10 +16,9 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rust.codegen.core.smithy.generators.operationBuildError
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -38,7 +37,8 @@ internal class EndpointTraitBindingsTest {
 
     @Test
     fun `generate endpoint prefixes`() {
-        val model = """
+        val model =
+            """
             namespace test
             @readonly
             @endpoint(hostPrefix: "{foo}a.data.")
@@ -50,16 +50,17 @@ internal class EndpointTraitBindingsTest {
                 @hostLabel
                 foo: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operationShape: OperationShape = model.lookup("test#GetStatus")
         val symbolProvider = testSymbolProvider(model)
-        val endpointBindingGenerator = EndpointTraitBindings(
-            model,
-            symbolProvider,
-            TestRuntimeConfig,
-            operationShape,
-            operationShape.expectTrait(EndpointTrait::class.java),
-        )
+        val endpointBindingGenerator =
+            EndpointTraitBindings(
+                model,
+                symbolProvider,
+                TestRuntimeConfig,
+                operationShape,
+                operationShape.expectTrait(EndpointTrait::class.java),
+            )
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.private("test")) {
             rust(
@@ -70,10 +71,9 @@ internal class EndpointTraitBindingsTest {
                 """,
             )
             implBlock(symbolProvider.toSymbol(model.lookup("test#GetStatusInput"))) {
-                rustBlock(
-                    "fn endpoint_prefix(&self) -> std::result::Result<#T::endpoint::EndpointPrefix, #T>",
-                    RuntimeType.smithyHttp(TestRuntimeConfig),
-                    TestRuntimeConfig.operationBuildError(),
+                rustBlockTemplate(
+                    "fn endpoint_prefix(&self) -> std::result::Result<#{endpoint}::EndpointPrefix, #{endpoint}::error::InvalidEndpointError>",
+                    "endpoint" to RuntimeType.smithyHttp(TestRuntimeConfig).resolve("endpoint"),
                 ) {
                     endpointBindingGenerator.render(this, "self")
                 }
@@ -120,7 +120,8 @@ internal class EndpointTraitBindingsTest {
     @ExperimentalPathApi
     @Test
     fun `endpoint integration test`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             use aws.protocols#awsJson1_0
             use smithy.rules#endpointRuleSet
@@ -152,7 +153,7 @@ internal class EndpointTraitBindingsTest {
                 @hostLabel
                 greeting: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("test_endpoint_prefix") {
@@ -161,16 +162,16 @@ internal class EndpointTraitBindingsTest {
                     """
                     async fn test_endpoint_prefix() {
                         use #{capture_request};
-                        use aws_smithy_http::body::SdkBody;
                         use aws_smithy_http::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::box_error::BoxError;
                         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                        use aws_smithy_types::body::SdkBody;
                         use aws_smithy_types::config_bag::ConfigBag;
                         use std::sync::atomic::{AtomicU32, Ordering};
                         use std::sync::{Arc, Mutex};
                         use $moduleName::{
                             config::interceptors::BeforeTransmitInterceptorContextRef,
-                            config::Interceptor,
+                            config::Intercept,
                             error::DisplayErrorContext,
                             {Client, Config},
                         };
@@ -180,7 +181,7 @@ internal class EndpointTraitBindingsTest {
                             called: Arc<AtomicU32>,
                             last_endpoint_prefix: Arc<Mutex<Option<EndpointPrefix>>>,
                         }
-                        impl Interceptor for TestInterceptor {
+                        impl Intercept for TestInterceptor {
                             fn name(&self) -> &'static str {
                                 "TestInterceptor"
                             }
@@ -246,8 +247,9 @@ internal class EndpointTraitBindingsTest {
                         );
                     }
                     """,
-                    "capture_request" to CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
-                        .toType().resolve("client::http::test_util::capture_request"),
+                    "capture_request" to
+                        CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
+                            .toType().resolve("client::http::test_util::capture_request"),
                 )
             }
         }

@@ -21,7 +21,7 @@ pub mod header_value {
     pub const AWS_CHUNKED: &str = "aws-chunked";
 }
 
-/// Options used when constructing an [`AwsChunkedBody`][AwsChunkedBody].
+/// Options used when constructing an [`AwsChunkedBody`].
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct AwsChunkedBodyOptions {
@@ -35,7 +35,7 @@ pub struct AwsChunkedBodyOptions {
 }
 
 impl AwsChunkedBodyOptions {
-    /// Create a new [`AwsChunkedBodyOptions`][AwsChunkedBodyOptions]
+    /// Create a new [`AwsChunkedBodyOptions`].
     pub fn new(stream_length: u64, trailer_lengths: Vec<u64>) -> Self {
         Self {
             stream_length,
@@ -199,10 +199,10 @@ fn total_rendered_length_of_trailers(trailer_map: Option<&HeaderMap>) -> u64 {
 
 impl<Inner> Body for AwsChunkedBody<Inner>
 where
-    Inner: Body<Data = Bytes, Error = aws_smithy_http::body::Error>,
+    Inner: Body<Data = Bytes, Error = aws_smithy_types::body::Error>,
 {
     type Data = Bytes;
-    type Error = aws_smithy_http::body::Error;
+    type Error = aws_smithy_types::body::Error;
 
     fn poll_data(
         self: Pin<&mut Self>,
@@ -354,7 +354,7 @@ mod tests {
         AwsChunkedBodyOptions, CHUNK_TERMINATOR, CRLF,
     };
 
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_types::body::SdkBody;
     use bytes::{Buf, Bytes};
     use bytes_utils::SegmentedBuf;
     use http::{HeaderMap, HeaderValue};
@@ -382,7 +382,7 @@ mod tests {
 
     impl Body for SputteringBody {
         type Data = Bytes;
-        type Error = aws_smithy_http::body::Error;
+        type Error = aws_smithy_types::body::Error;
 
         fn poll_data(
             self: Pin<&mut Self>,

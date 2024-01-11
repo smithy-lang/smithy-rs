@@ -16,16 +16,20 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
  */
 object PythonServerCargoDependency {
     val PyO3: CargoDependency = CargoDependency("pyo3", CratesIo("0.18"))
-    val PyO3Asyncio: CargoDependency = CargoDependency("pyo3-asyncio", CratesIo("0.18"), features = setOf("attributes", "tokio-runtime"))
+    val PyO3Asyncio: CargoDependency =
+        CargoDependency("pyo3-asyncio", CratesIo("0.18"), features = setOf("attributes", "tokio-runtime"))
     val Tokio: CargoDependency = CargoDependency("tokio", CratesIo("1.20.1"), features = setOf("full"))
     val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.12"))
     val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TowerHttp: CargoDependency = CargoDependency("tower-http", CratesIo("0.3"), features = setOf("trace"))
-    val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), features = setOf("server", "http1", "http2", "tcp", "stream"))
+    val Hyper: CargoDependency =
+        CargoDependency("hyper", CratesIo("0.14.12"), features = setOf("server", "http1", "http2", "tcp", "stream"))
     val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
     val ParkingLot: CargoDependency = CargoDependency("parking_lot", CratesIo("0.12"))
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
-    fun smithyHttpServerPython(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server-python")
+
+    fun smithyHttpServerPython(runtimeConfig: RuntimeConfig) =
+        runtimeConfig.smithyRuntimeCrate("smithy-http-server-python")
 }

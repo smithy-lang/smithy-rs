@@ -4,11 +4,10 @@
  */
 
 use super::repr::{self, BaseProvider};
+#[cfg(feature = "credentials-process")]
 use crate::credential_process::CredentialProcessProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
-#[cfg(feature = "credentials-sso")]
-use crate::sso::{SsoCredentialsProvider, SsoProviderConfig};
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
 use aws_credential_types::provider::{
@@ -87,9 +86,22 @@ impl ProviderChain {
                     })?
             }
             BaseProvider::AccessKey(key) => Arc::new(key.clone()),
-            BaseProvider::CredentialProcess(credential_process) => Arc::new(
-                CredentialProcessProvider::new(credential_process.unredacted().into()),
-            ),
+            BaseProvider::CredentialProcess(_credential_process) => {
+                #[cfg(feature = "credentials-process")]
+                {
+                    Arc::new(CredentialProcessProvider::from_command(_credential_process))
+                }
+                #[cfg(not(feature = "credentials-process"))]
+                {
+                    Err(ProfileFileError::FeatureNotEnabled {
+                        feature: "credentials-process".into(),
+                        message: Some(
+                            "In order to spawn a subprocess, the `credentials-process` feature must be enabled."
+                                .into(),
+                        ),
+                    })?
+                }
+            }
             BaseProvider::WebIdentityTokenRole {
                 role_arn,
                 web_identity_token_file,
@@ -119,21 +131,26 @@ impl ProviderChain {
                 sso_role_name,
                 sso_start_url,
             } => {
-                #[cfg(feature = "credentials-sso")]
+                #[cfg(feature = "sso")]
                 {
+                    use crate::sso::{credentials::SsoProviderConfig, SsoCredentialsProvider};
                     use aws_types::region::Region;
+
                     let sso_config = SsoProviderConfig {
                         account_id: sso_account_id.to_string(),
                         role_name: sso_role_name.to_string(),
                         start_url: sso_start_url.to_string(),
                         region: Region::new(sso_region.to_string()),
+                        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/703): Implement sso_session_name profile property
+                        session_name: None,
                     };
                     Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
                 }
-                #[cfg(not(feature = "credentials-sso"))]
+                #[cfg(not(feature = "sso"))]
                 {
                     Err(ProfileFileError::FeatureNotEnabled {
-                        feature: "credentials-sso".into(),
+                        feature: "sso".into(),
+                        message: None,
                     })?
                 }
             }

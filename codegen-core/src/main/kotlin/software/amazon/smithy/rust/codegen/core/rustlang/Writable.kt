@@ -95,41 +95,43 @@ fun Array<Writable>.join(separator: Writable) = asIterable().join(separator)
  *     "type_params" to rustTypeParameters(
  *         symbolProvider.toSymbol(operation),
  *         RustType.Unit,
- *         runtimeConfig.smithyHttp().resolve("body::SdkBody"),
+ *         runtimeConfig.smithyTypes().resolve("body::SdkBody"),
  *         GenericsGenerator(GenericTypeArg("A"), GenericTypeArg("B")),
  *     )
  * )
  * ```
  * would write out something like:
  * ```rust
- * some_fn::<crate::operation::SomeOperation, (), aws_smithy_http::body::SdkBody, A, B>();
+ * some_fn::<crate::operation::SomeOperation, (), aws_smithy_types::body::SdkBody, A, B>();
  * ```
  */
-fun rustTypeParameters(
-    vararg typeParameters: Any,
-): Writable = writable {
-    if (typeParameters.isNotEmpty()) {
-        val items = typeParameters.map { typeParameter ->
-            writable {
-                when (typeParameter) {
-                    is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
-                    is String -> rustInlineTemplate(typeParameter)
-                    is RustGenerics -> rustInlineTemplate(
-                        "#{gg:W}",
-                        "gg" to typeParameter.declaration(withAngleBrackets = false),
-                    )
+fun rustTypeParameters(vararg typeParameters: Any): Writable =
+    writable {
+        if (typeParameters.isNotEmpty()) {
+            val items =
+                typeParameters.map { typeParameter ->
+                    writable {
+                        when (typeParameter) {
+                            is Symbol, is RuntimeType, is RustType -> rustInlineTemplate("#{it}", "it" to typeParameter)
+                            is String -> rustInlineTemplate(typeParameter)
+                            is RustGenerics ->
+                                rustInlineTemplate(
+                                    "#{gg:W}",
+                                    "gg" to typeParameter.declaration(withAngleBrackets = false),
+                                )
 
-                    else -> {
-                        // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
-                        @Suppress("UNCHECKED_CAST")
-                        val func = typeParameter as? Writable
-                            ?: throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
-                        func.invoke(this)
+                            else -> {
+                                // Check if it's a writer. If it is, invoke it; Else, throw a codegen error.
+                                @Suppress("UNCHECKED_CAST")
+                                val func =
+                                    typeParameter as? Writable
+                                        ?: throw CodegenException("Unhandled type '$typeParameter' encountered by rustTypeParameters writer")
+                                func.invoke(this)
+                            }
+                        }
                     }
                 }
-            }
-        }
 
-        rustInlineTemplate("<#{Items:W}>", "Items" to items.join(", "))
+            rustInlineTemplate("<#{Items:W}>", "Items" to items.join(", "))
+        }
     }
-}

@@ -4,7 +4,7 @@ version = "0.0.0-smithy-rs-head"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/awslabs/smithy-rs"
+repository = "https://github.com/smithy-lang/smithy-rs"
 keywords = ["smithy", "framework", "web", "api", "aws"]
 categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
@@ -16,7 +16,7 @@ publish = true
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.2"
 futures = "0.3"
@@ -43,7 +43,7 @@ tracing-appender = { version = "0.2.2"}
 
 [dev-dependencies]
 pretty_assertions = "1"
-futures-util = { version = "0.3.16", default-features = false }
+futures-util = { version = "0.3.29", default-features = false }
 tower-test = "0.4"
 tokio-test = "0.4"
 pyo3-asyncio = { version = "0.18.0", features = ["testing", "attributes", "tokio-runtime", "unstable-streams"] }
@@ -66,5 +66,6 @@ harness = false
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata

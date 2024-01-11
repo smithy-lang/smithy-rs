@@ -5,7 +5,7 @@
 
 use aws_config::retry::RetryConfig;
 use aws_credential_types::provider::SharedCredentialsProvider;
-use aws_sdk_s3::config::{Credentials, Region};
+use aws_sdk_s3::config::{Credentials, Region, StalledStreamProtectionConfig};
 use aws_sdk_s3::types::{
     CompressionType, CsvInput, CsvOutput, ExpressionType, FileHeaderInfo, InputSerialization,
     OutputSerialization,
@@ -13,9 +13,9 @@ use aws_sdk_s3::types::{
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_async::assert_elapsed;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep, Sleep};
-use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime::client::http::test_util::NeverClient;
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::fmt::Debug;
@@ -147,6 +147,7 @@ async fn retry_test(sleep_impl: SharedAsyncSleep) -> Result<(), Box<dyn std::err
         .http_client(http_client.clone())
         .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
         .retry_config(RetryConfig::standard().with_max_attempts(3))
+        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .timeout_config(
             TimeoutConfig::builder()
                 .operation_attempt_timeout(Duration::from_secs_f64(0.1))

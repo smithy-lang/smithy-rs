@@ -3,24 +3,30 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::client::http::connection_poisoning::CaptureSmithyConnection;
+use crate::client::http::hyper_014::timeout_middleware::HttpTimeoutError;
 use aws_smithy_async::future::timeout::TimedOutError;
 use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::connection::{CaptureSmithyConnection, ConnectionMetadata};
-use aws_smithy_http::result::ConnectorError;
 use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
     SharedHttpConnector,
 };
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
+use aws_smithy_runtime_api::client::result::ConnectorError;
+use aws_smithy_runtime_api::client::runtime_components::{
+    RuntimeComponents, RuntimeComponentsBuilder,
+};
 use aws_smithy_runtime_api::shared::IntoShared;
+use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::ErrorKind;
+use h2::Reason;
 use http::{Extensions, Uri};
-use hyper::client::connect::{capture_connection, CaptureConnection, Connection, HttpInfo};
-use hyper::service::Service;
+use hyper_0_14::client::connect::{capture_connection, CaptureConnection, Connection, HttpInfo};
+use hyper_0_14::service::Service;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
@@ -33,38 +39,42 @@ use tokio::io::{AsyncRead, AsyncWrite};
 mod default_connector {
     use aws_smithy_async::rt::sleep::SharedAsyncSleep;
     use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
+    use hyper_0_14::client::HttpConnector;
+    use hyper_rustls::HttpsConnector;
 
     // Creating a `with_native_roots` HTTP client takes 300ms on OS X. Cache this so that we
     // don't need to repeatedly incur that cost.
-    static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
-        hyper_rustls::HttpsConnector<hyper::client::HttpConnector>,
-    > = once_cell::sync::Lazy::new(|| {
+    pub(crate) static HTTPS_NATIVE_ROOTS: once_cell::sync::Lazy<
+        hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector>,
+    > = once_cell::sync::Lazy::new(default_tls);
+
+    fn default_tls() -> HttpsConnector<HttpConnector> {
         use hyper_rustls::ConfigBuilderExt;
         hyper_rustls::HttpsConnectorBuilder::new()
-        .with_tls_config(
-            rustls::ClientConfig::builder()
-                .with_cipher_suites(&[
-                    // TLS1.3 suites
-                    rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
-                    // TLS1.2 suites
-                    rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-                    rustls::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
-                ])
-                .with_safe_default_kx_groups()
-                .with_safe_default_protocol_versions()
-                .expect("Error with the TLS configuration. Please file a bug report under https://github.com/awslabs/smithy-rs/issues.")
-                .with_native_roots()
-                .with_no_client_auth()
-        )
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .build()
-    });
+               .with_tls_config(
+                rustls::ClientConfig::builder()
+                    .with_cipher_suites(&[
+                        // TLS1.3 suites
+                        rustls::cipher_suite::TLS13_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS13_AES_128_GCM_SHA256,
+                        // TLS1.2 suites
+                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                        rustls::cipher_suite::TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+                    ])
+                    .with_safe_default_kx_groups()
+                    .with_safe_default_protocol_versions()
+                    .expect("Error with the TLS configuration. Please file a bug report under https://github.com/smithy-lang/smithy-rs/issues.")
+                    .with_native_roots()
+                    .with_no_client_auth()
+            )
+            .https_or_http()
+            .enable_http1()
+            .enable_http2()
+            .build()
+    }
 
     pub(super) fn base(
         settings: &HttpConnectorSettings,
@@ -81,7 +91,7 @@ mod default_connector {
     ///
     /// It requires a minimum TLS version of 1.2.
     /// It allows you to connect to both `http` and `https` URLs.
-    pub(super) fn https() -> hyper_rustls::HttpsConnector<hyper::client::HttpConnector> {
+    pub(super) fn https() -> hyper_rustls::HttpsConnector<hyper_0_14::client::HttpConnector> {
         HTTPS_NATIVE_ROOTS.clone()
     }
 }
@@ -118,57 +128,13 @@ pub fn default_client() -> Option<SharedHttpClient> {
     }
 }
 
-/// [`HttpConnector`] that uses [`hyper`] to make HTTP requests.
+/// [`HttpConnector`] that uses [`hyper_0_14`] to make HTTP requests.
 ///
 /// This connector also implements socket connect and read timeouts.
 ///
-/// # Examples
-///
-/// Construct a `HyperConnector` with the default TLS implementation (rustls).
-/// This can be useful when you want to share a Hyper connector between multiple
-/// generated Smithy clients.
-///
-/// ```no_run,ignore
-/// use aws_smithy_runtime::client::connectors::hyper_connector::{DefaultHttpsTcpConnector, HyperConnector};
-///
-/// let hyper_connector = HyperConnector::builder().build(DefaultHttpsTcpConnector::new());
-///
-/// // This connector can then be given to a generated service Config
-/// let config = my_service_client::Config::builder()
-///     .endpoint_url("http://localhost:1234")
-///     .http_connector(hyper_connector)
-///     .build();
-/// let client = my_service_client::Client::from_conf(config);
-/// ```
-///
-/// ## Use a Hyper client with WebPKI roots
-///
-/// A use case for where you may want to use the [`HyperConnector`] is when setting Hyper client settings
-/// that aren't otherwise exposed by the `Config` builder interface. Some examples include changing:
-///
-/// - Hyper client settings
-/// - Allowed TLS cipher suites
-/// - Using an alternative TLS connector library (not the default, rustls)
-/// - CA trust root certificates (illustrated using WebPKI below)
-///
-/// ```no_run,ignore
-/// use aws_smithy_runtime::client::connectors::hyper_connector::HyperConnector;
-///
-/// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
-///     .with_webpki_roots()
-///     .https_only()
-///     .enable_http1()
-///     .enable_http2()
-///     .build();
-/// let hyper_connector = HyperConnector::builder().build(https_connector);
-///
-/// // This connector can then be given to a generated service Config
-/// let config = my_service_client::Config::builder()
-///     .endpoint_url("https://example.com")
-///     .http_connector(hyper_connector)
-///     .build();
-/// let client = my_service_client::Client::from_conf(config);
-/// ```
+/// This shouldn't be used directly in most cases.
+/// See the docs on [`HyperClientBuilder`] for examples of how
+/// to customize the Hyper client.
 #[derive(Debug)]
 pub struct HyperConnector {
     adapter: Box<dyn HttpConnector>,
@@ -192,7 +158,7 @@ impl HttpConnector for HyperConnector {
 pub struct HyperConnectorBuilder {
     connector_settings: Option<HttpConnectorSettings>,
     sleep_impl: Option<SharedAsyncSleep>,
-    client_builder: Option<hyper::client::Builder>,
+    client_builder: Option<hyper_0_14::client::Builder>,
 }
 
 impl HyperConnectorBuilder {
@@ -277,32 +243,32 @@ impl HyperConnectorBuilder {
         self
     }
 
-    /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
+    /// Override the Hyper client [`Builder`](hyper_0_14::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
-    pub fn hyper_builder(mut self, hyper_builder: hyper::client::Builder) -> Self {
+    pub fn hyper_builder(mut self, hyper_builder: hyper_0_14::client::Builder) -> Self {
         self.client_builder = Some(hyper_builder);
         self
     }
 
-    /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
+    /// Override the Hyper client [`Builder`](hyper_0_14::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
     pub fn set_hyper_builder(
         &mut self,
-        hyper_builder: Option<hyper::client::Builder>,
+        hyper_builder: Option<hyper_0_14::client::Builder>,
     ) -> &mut Self {
         self.client_builder = hyper_builder;
         self
     }
 }
 
-/// Adapter from a [`hyper::Client`](hyper::Client) to [`HttpConnector`].
+/// Adapter from a [`hyper_0_14::Client`] to [`HttpConnector`].
 ///
 /// This adapter also enables TCP `CONNECT` and HTTP `READ` timeouts via [`HyperConnector::builder`].
 struct Adapter<C> {
     client: timeout_middleware::HttpReadTimeout<
-        hyper::Client<timeout_middleware::ConnectTimeout<C>, SdkBody>,
+        hyper_0_14::Client<timeout_middleware::ConnectTimeout<C>, SdkBody>,
     >,
 }
 
@@ -321,14 +287,19 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
         let mut extensions = Extensions::new();
         conn.get_extras(&mut extensions);
         let http_info = extensions.get::<HttpInfo>();
-        let smithy_connection = ConnectionMetadata::new(
-            conn.is_proxied(),
-            http_info.map(|info| info.remote_addr()),
-            move || match capture_conn.connection_metadata().as_ref() {
+        let mut builder = ConnectionMetadata::builder()
+            .proxied(conn.is_proxied())
+            .poison_fn(move || match capture_conn.connection_metadata().as_ref() {
                 Some(conn) => conn.poison(),
                 None => tracing::trace!("no connection existed to poison"),
-            },
-        );
+            });
+
+        builder
+            .set_local_addr(http_info.map(|info| info.local_addr()))
+            .set_remote_addr(http_info.map(|info| info.remote_addr()));
+
+        let smithy_connection = builder.build();
+
         Some(smithy_connection)
     } else {
         None
@@ -338,12 +309,18 @@ fn extract_smithy_connection(capture_conn: &CaptureConnection) -> Option<Connect
 impl<C> HttpConnector for Adapter<C>
 where
     C: Clone + Send + Sync + 'static,
-    C: hyper::service::Service<Uri>,
+    C: hyper_0_14::service::Service<Uri>,
     C::Response: Connection + AsyncRead + AsyncWrite + Send + Unpin + 'static,
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
 {
-    fn call(&self, mut request: HttpRequest) -> HttpConnectorFuture {
+    fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        let mut request = match request.try_into_http02x() {
+            Ok(request) => request,
+            Err(err) => {
+                return HttpConnectorFuture::ready(Err(ConnectorError::other(err.into(), None)));
+            }
+        };
         let capture_connection = capture_connection(&mut request);
         if let Some(capture_smithy_connection) =
             request.extensions().get::<CaptureSmithyConnection>()
@@ -354,7 +331,14 @@ where
         let mut client = self.client.clone();
         let fut = client.call(request);
         HttpConnectorFuture::new(async move {
-            Ok(fut.await.map_err(downcast_error)?.map(SdkBody::from))
+            let response = fut
+                .await
+                .map_err(downcast_error)?
+                .map(SdkBody::from_body_0_4);
+            match HttpResponse::try_from(response) {
+                Ok(response) => Ok(response),
+                Err(err) => Err(ConnectorError::other(err.into(), None)),
+            }
         })
     }
 }
@@ -372,7 +356,7 @@ fn downcast_error(err: BoxError) -> ConnectorError {
     };
     // generally, the top of chain will probably be a hyper error. Go through a set of hyper specific
     // error classifications
-    let err = match err.downcast::<hyper::Error>() {
+    let err = match err.downcast::<hyper_0_14::Error>() {
         Ok(hyper_error) => return to_connector_error(*hyper_error),
         Err(box_error) => box_error,
     };
@@ -381,23 +365,31 @@ fn downcast_error(err: BoxError) -> ConnectorError {
     ConnectorError::other(err, None)
 }
 
-/// Convert a [`hyper::Error`] into a [`ConnectorError`]
-fn to_connector_error(err: hyper::Error) -> ConnectorError {
-    if err.is_timeout() || find_source::<timeout_middleware::HttpTimeoutError>(&err).is_some() {
-        ConnectorError::timeout(err.into())
-    } else if err.is_user() {
-        ConnectorError::user(err.into())
-    } else if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some()
-    {
-        ConnectorError::io(err.into())
+/// Convert a [`hyper_0_14::Error`] into a [`ConnectorError`]
+fn to_connector_error(err: hyper_0_14::Error) -> ConnectorError {
+    if err.is_timeout() || find_source::<HttpTimeoutError>(&err).is_some() {
+        return ConnectorError::timeout(err.into());
+    }
+    if err.is_user() {
+        return ConnectorError::user(err.into());
+    }
+    if err.is_closed() || err.is_canceled() || find_source::<std::io::Error>(&err).is_some() {
+        return ConnectorError::io(err.into());
     }
     // We sometimes receive this from S3: hyper::Error(IncompleteMessage)
-    else if err.is_incomplete_message() {
-        ConnectorError::other(err.into(), Some(ErrorKind::TransientError))
-    } else {
-        tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
-        ConnectorError::other(err.into(), None)
+    if err.is_incomplete_message() {
+        return ConnectorError::other(err.into(), Some(ErrorKind::TransientError));
     }
+    if let Some(h2_err) = find_source::<h2::Error>(&err) {
+        if h2_err.is_go_away()
+            || (h2_err.is_reset() && h2_err.reason() == Some(Reason::REFUSED_STREAM))
+        {
+            return ConnectorError::io(err.into());
+        }
+    }
+
+    tracing::warn!(err = %DisplayErrorContext(&err), "unrecognized error from Hyper. If this error should be retried, please file an issue.");
+    ConnectorError::other(err.into(), None)
 }
 
 fn find_source<'a, E: Error + 'static>(err: &'a (dyn Error + 'static)) -> Option<&'a E> {
@@ -428,7 +420,7 @@ impl From<&HttpConnectorSettings> for CacheKey {
 
 struct HyperClient<F> {
     connector_cache: RwLock<HashMap<CacheKey, SharedHttpConnector>>,
-    client_builder: hyper::client::Builder,
+    client_builder: hyper_0_14::client::Builder,
     tcp_connector_fn: F,
 }
 
@@ -450,6 +442,20 @@ where
     C::Future: Unpin + Send + 'static,
     C::Error: Into<BoxError>,
 {
+    fn validate_base_client_config(
+        &self,
+        _: &RuntimeComponentsBuilder,
+        _: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        // Initialize the TCP connector at this point so that native certs load
+        // at client initialization time instead of upon first request. We do it
+        // here rather than at construction so that it won't run if this is not
+        // the selected HTTP client for the base config (for example, if this was
+        // the default HTTP client, and it was overridden by a later plugin).
+        let _ = (self.tcp_connector_fn)();
+        Ok(())
+    }
+
     fn http_connector(
         &self,
         settings: &HttpConnectorSettings,
@@ -466,7 +472,14 @@ where
                     .connector_settings(settings.clone());
                 builder.set_sleep_impl(components.sleep_impl());
 
+                let start = components.time_source().map(|ts| ts.now());
                 let tcp_connector = (self.tcp_connector_fn)();
+                let end = components.time_source().map(|ts| ts.now());
+                if let (Some(start), Some(end)) = (start, end) {
+                    if let Ok(elapsed) = end.duration_since(start) {
+                        tracing::debug!("new TCP connector created in {:?}", elapsed);
+                    }
+                }
                 let connector = SharedHttpConnector::new(builder.build(tcp_connector));
                 cache.insert(key.clone(), connector);
             }
@@ -481,9 +494,58 @@ where
 ///
 /// This builder can be used to customize the underlying TCP connector used, as well as
 /// hyper client configuration.
+///
+/// # Examples
+///
+/// Construct a Hyper client with the default TLS implementation (rustls).
+/// This can be useful when you want to share a Hyper connector between multiple
+/// generated Smithy clients.
+///
+/// ```no_run,ignore
+/// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
+///
+/// let http_client = HyperClientBuilder::new().build_https();
+///
+/// // This connector can then be given to a generated service Config
+/// let config = my_service_client::Config::builder()
+///     .endpoint_url("http://localhost:1234")
+///     .http_client(http_client)
+///     .build();
+/// let client = my_service_client::Client::from_conf(config);
+/// ```
+///
+/// ## Use a Hyper client with WebPKI roots
+///
+/// A use case for where you may want to use the [`HyperClientBuilder`] is when
+/// setting Hyper client settings that aren't otherwise exposed by the `Config`
+/// builder interface. Some examples include changing:
+///
+/// - Hyper client settings
+/// - Allowed TLS cipher suites
+/// - Using an alternative TLS connector library (not the default, rustls)
+/// - CA trust root certificates (illustrated using WebPKI below)
+///
+/// ```no_run,ignore
+/// use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
+///
+/// let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
+///     .with_webpki_roots()
+///     .https_only()
+///     .enable_http1()
+///     .enable_http2()
+///     .build();
+/// let http_client = HyperClientBuilder::new().build(https_connector);
+///
+/// // This connector can then be given to a generated service Config
+/// let config = my_service_client::Config::builder()
+///     .endpoint_url("https://example.com")
+///     .http_client(http_client)
+///     .build();
+/// let client = my_service_client::Client::from_conf(config);
+/// ```
 #[derive(Clone, Default, Debug)]
 pub struct HyperClientBuilder {
-    client_builder: Option<hyper::client::Builder>,
+    client_builder: Option<hyper_0_14::client::Builder>,
 }
 
 impl HyperClientBuilder {
@@ -492,29 +554,32 @@ impl HyperClientBuilder {
         Self::default()
     }
 
-    /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
+    /// Override the Hyper client [`Builder`](hyper_0_14::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
-    pub fn hyper_builder(mut self, hyper_builder: hyper::client::Builder) -> Self {
+    pub fn hyper_builder(mut self, hyper_builder: hyper_0_14::client::Builder) -> Self {
         self.client_builder = Some(hyper_builder);
         self
     }
 
-    /// Override the Hyper client [`Builder`](hyper::client::Builder) used to construct this client.
+    /// Override the Hyper client [`Builder`](hyper_0_14::client::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
     pub fn set_hyper_builder(
         &mut self,
-        hyper_builder: Option<hyper::client::Builder>,
+        hyper_builder: Option<hyper_0_14::client::Builder>,
     ) -> &mut Self {
         self.client_builder = hyper_builder;
         self
     }
 
-    /// Create a [`HyperConnector`] with the default rustls HTTPS implementation.
+    /// Create a hyper client with the default rustls HTTPS implementation.
+    ///
+    /// The trusted certificates will be loaded later when this becomes the selected
+    /// HTTP client for a Smithy client.
     #[cfg(feature = "tls-rustls")]
     pub fn build_https(self) -> SharedHttpClient {
-        self.build(default_connector::https())
+        self.build_with_fn(default_connector::https)
     }
 
     /// Create a [`SharedHttpClient`] from this builder and a given connector.
@@ -531,14 +596,9 @@ impl HyperClientBuilder {
         C::Future: Unpin + Send + 'static,
         C::Error: Into<BoxError>,
     {
-        SharedHttpClient::new(HyperClient {
-            connector_cache: RwLock::new(HashMap::new()),
-            client_builder: self.client_builder.unwrap_or_default(),
-            tcp_connector_fn: move || tcp_connector.clone(),
-        })
+        self.build_with_fn(move || tcp_connector.clone())
     }
 
-    #[cfg(all(test, feature = "test-util"))]
     fn build_with_fn<C, F>(self, tcp_connector_fn: F) -> SharedHttpClient
     where
         F: Fn() -> C + Send + Sync + 'static,
@@ -608,7 +668,7 @@ mod timeout_middleware {
     impl<I> ConnectTimeout<I> {
         /// Create a new `ConnectTimeout` around `inner`.
         ///
-        /// Typically, `I` will implement [`hyper::client::connect::Connect`].
+        /// Typically, `I` will implement [`hyper_0_14::client::connect::Connect`].
         pub(crate) fn new(inner: I, sleep: SharedAsyncSleep, timeout: Duration) -> Self {
             Self {
                 inner,
@@ -633,7 +693,7 @@ mod timeout_middleware {
     impl<I> HttpReadTimeout<I> {
         /// Create a new `HttpReadTimeout` around `inner`.
         ///
-        /// Typically, `I` will implement [`hyper::service::Service<http::Request<SdkBody>>`].
+        /// Typically, `I` will implement [`hyper_0_14::service::Service<http::Request<SdkBody>>`].
         pub(crate) fn new(inner: I, sleep: SharedAsyncSleep, timeout: Duration) -> Self {
             Self {
                 inner,
@@ -697,9 +757,9 @@ mod timeout_middleware {
         }
     }
 
-    impl<I> hyper::service::Service<Uri> for ConnectTimeout<I>
+    impl<I> hyper_0_14::service::Service<Uri> for ConnectTimeout<I>
     where
-        I: hyper::service::Service<Uri>,
+        I: hyper_0_14::service::Service<Uri>,
         I::Error: Into<BoxError>,
     {
         type Response = I::Response;
@@ -727,9 +787,9 @@ mod timeout_middleware {
         }
     }
 
-    impl<I, B> hyper::service::Service<http::Request<B>> for HttpReadTimeout<I>
+    impl<I, B> hyper_0_14::service::Service<http::Request<B>> for HttpReadTimeout<I>
     where
-        I: hyper::service::Service<http::Request<B>, Error = hyper::Error>,
+        I: hyper_0_14::service::Service<http::Request<B>, Error = hyper_0_14::Error>,
     {
         type Response = I::Response;
         type Error = BoxError;
@@ -763,9 +823,8 @@ mod timeout_middleware {
         use aws_smithy_async::assert_elapsed;
         use aws_smithy_async::future::never::Never;
         use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
-        use aws_smithy_http::body::SdkBody;
         use aws_smithy_types::error::display::DisplayErrorContext;
-        use hyper::client::connect::Connected;
+        use hyper_0_14::client::connect::Connected;
         use std::time::Duration;
         use tokio::io::ReadBuf;
         use tokio::net::TcpStream;
@@ -784,7 +843,7 @@ mod timeout_middleware {
         #[non_exhaustive]
         #[derive(Clone, Default, Debug)]
         struct NeverConnects;
-        impl hyper::service::Service<Uri> for NeverConnects {
+        impl hyper_0_14::service::Service<Uri> for NeverConnects {
             type Response = TcpStream;
             type Error = ConnectorError;
             type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
@@ -804,7 +863,7 @@ mod timeout_middleware {
         /// A service that will connect but never send any data
         #[derive(Clone, Debug, Default)]
         struct NeverReplies;
-        impl hyper::service::Service<Uri> for NeverReplies {
+        impl hyper_0_14::service::Service<Uri> for NeverReplies {
             type Response = EmptyStream;
             type Error = BoxError;
             type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
@@ -874,12 +933,7 @@ mod timeout_middleware {
             let now = tokio::time::Instant::now();
             tokio::time::pause();
             let resp = hyper
-                .call(
-                    http::Request::builder()
-                        .uri("http://foo.com")
-                        .body(SdkBody::empty())
-                        .unwrap(),
-                )
+                .call(HttpRequest::get("https://static-uri.com").unwrap())
                 .await
                 .unwrap_err();
             assert!(
@@ -899,7 +953,7 @@ mod timeout_middleware {
 
         #[tokio::test]
         async fn http_read_timeout_works() {
-            let tcp_connector = NeverReplies::default();
+            let tcp_connector = NeverReplies;
             let connector_settings = HttpConnectorSettings::builder()
                 .connect_timeout(Duration::from_secs(1))
                 .read_timeout(Duration::from_secs(2))
@@ -912,12 +966,7 @@ mod timeout_middleware {
             let now = tokio::time::Instant::now();
             tokio::time::pause();
             let err = hyper
-                .call(
-                    http::Request::builder()
-                        .uri("http://foo.com")
-                        .body(SdkBody::empty())
-                        .unwrap(),
-                )
+                .call(HttpRequest::get("https://fake-uri.com").unwrap())
                 .await
                 .unwrap_err();
             assert!(
@@ -939,10 +988,10 @@ mod timeout_middleware {
 mod test {
     use super::*;
     use crate::client::http::test_util::NeverTcpConnector;
-    use aws_smithy_http::body::SdkBody;
+    use aws_smithy_async::time::SystemTimeSource;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use http::Uri;
-    use hyper::client::connect::{Connected, Connection};
+    use hyper_0_14::client::connect::{Connected, Connection};
     use std::io::{Error, ErrorKind};
     use std::pin::Pin;
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -981,7 +1030,10 @@ mod test {
         ];
 
         // Kick off thousands of parallel tasks that will try to create a connector
-        let components = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(SystemTimeSource::new()))
+            .build()
+            .unwrap();
         let mut handles = Vec::new();
         for setting in &settings {
             for _ in 0..1000 {
@@ -1010,12 +1062,7 @@ mod test {
         };
         let adapter = HyperConnector::builder().build(connector).adapter;
         let err = adapter
-            .call(
-                http::Request::builder()
-                    .uri("http://amazon.com")
-                    .body(SdkBody::empty())
-                    .unwrap(),
-            )
+            .call(HttpRequest::get("https://socket-hangup.com").unwrap())
             .await
             .expect_err("socket hangup");
         assert!(err.is_io(), "{:?}", err);
@@ -1067,7 +1114,7 @@ mod test {
         inner: T,
     }
 
-    impl<T> hyper::service::Service<Uri> for TestConnection<T>
+    impl<T> hyper_0_14::service::Service<Uri> for TestConnection<T>
     where
         T: Clone + Connection,
     {

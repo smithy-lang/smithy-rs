@@ -18,20 +18,21 @@ class ConnectionPoisoningRuntimePluginCustomization(
 ) : ServiceRuntimePluginCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        when (section) {
-            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                // This interceptor assumes that a compatible Connector is set. Otherwise, connection poisoning
-                // won't work and an error message will be logged.
-                section.registerInterceptor(runtimeConfig, this) {
-                    rust(
-                        "#T::new()",
-                        smithyRuntime(runtimeConfig).resolve("client::http::connection_poisoning::ConnectionPoisoningInterceptor"),
-                    )
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            when (section) {
+                is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
+                    // This interceptor assumes that a compatible Connector is set. Otherwise, connection poisoning
+                    // won't work and an error message will be logged.
+                    section.registerInterceptor(this) {
+                        rust(
+                            "#T::new()",
+                            smithyRuntime(runtimeConfig).resolve("client::http::connection_poisoning::ConnectionPoisoningInterceptor"),
+                        )
+                    }
                 }
-            }
 
-            else -> emptySection
+                else -> emptySection
+            }
         }
-    }
 }

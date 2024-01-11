@@ -13,23 +13,28 @@ use crate::provider_config::ProviderConfig;
 use crate::PKG_VERSION;
 use aws_http::user_agent::{ApiMetadata, AwsUserAgent};
 use aws_runtime::user_agent::UserAgentInterceptor;
-use aws_smithy_http::body::SdkBody;
-use aws_smithy_http::result::ConnectorError;
-use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::client::retries::strategy::StandardRetryStrategy;
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::AuthSchemeOptionResolverParams;
-use aws_smithy_runtime_api::client::endpoint::{EndpointResolver, EndpointResolverParams};
+use aws_smithy_runtime_api::client::endpoint::{
+    EndpointFuture, EndpointResolverParams, ResolveEndpoint,
+};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::{
-    Future, HttpResponse, OrchestratorError, SensitiveOutput,
+    HttpRequest, OrchestratorError, SensitiveOutput,
 };
-use aws_smithy_runtime_api::client::retries::{ClassifyRetry, RetryClassifiers, RetryReason};
+use aws_smithy_runtime_api::client::result::ConnectorError;
+use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_runtime_api::client::retries::classifiers::{
+    ClassifyRetry, RetryAction, SharedRetryClassifier,
+};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, SharedRuntimePlugin};
+use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{FrozenLayer, Layer};
 use aws_smithy_types::endpoint::Endpoint;
-use aws_smithy_types::retry::{ErrorKind, RetryConfig};
+use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_types::os_shim_internal::Env;
 use http::Uri;
@@ -83,10 +88,9 @@ fn user_agent() -> AwsUserAgent {
 /// 1. Explicit configuration of `Endpoint` via the [builder](Builder):
 /// ```no_run
 /// use aws_config::imds::client::Client;
-/// use http::Uri;
 /// # async fn docs() {
 /// let client = Client::builder()
-///   .endpoint(Uri::from_static("http://customidms:456/"))
+///   .endpoint("http://customidms:456/").expect("valid URI")
 ///   .build();
 /// # }
 /// ```
@@ -234,13 +238,14 @@ impl ImdsCommonRuntimePlugin {
     fn new(
         config: &ProviderConfig,
         endpoint_resolver: ImdsEndpointResolver,
-        retry_config: &RetryConfig,
+        retry_config: RetryConfig,
         timeout_config: TimeoutConfig,
     ) -> Self {
         let mut layer = Layer::new("ImdsCommonRuntimePlugin");
         layer.store_put(AuthSchemeOptionResolverParams::new(()));
         layer.store_put(EndpointResolverParams::new(()));
         layer.store_put(SensitiveOutput);
+        layer.store_put(retry_config);
         layer.store_put(timeout_config);
         layer.store_put(user_agent());
 
@@ -250,10 +255,8 @@ impl ImdsCommonRuntimePlugin {
                 .with_http_client(config.http_client())
                 .with_endpoint_resolver(Some(endpoint_resolver))
                 .with_interceptor(UserAgentInterceptor::new())
-                .with_retry_classifiers(Some(
-                    RetryClassifiers::new().with_classifier(ImdsResponseRetryClassifier),
-                ))
-                .with_retry_strategy(Some(StandardRetryStrategy::new(retry_config)))
+                .with_retry_classifier(SharedRetryClassifier::new(ImdsResponseRetryClassifier))
+                .with_retry_strategy(Some(StandardRetryStrategy::new()))
                 .with_time_source(Some(config.time_source()))
                 .with_sleep_impl(config.sleep_impl()),
         }
@@ -355,9 +358,10 @@ impl Builder {
     /// By default, the client will resolve an endpoint from the environment, AWS config, and endpoint mode.
     ///
     /// See [`Client`] for more information.
-    pub fn endpoint(mut self, endpoint: impl Into<Uri>) -> Self {
-        self.endpoint = Some(EndpointSource::Explicit(endpoint.into()));
-        self
+    pub fn endpoint(mut self, endpoint: impl AsRef<str>) -> Result<Self, BoxError> {
+        let uri: Uri = endpoint.as_ref().parse()?;
+        self.endpoint = Some(EndpointSource::Explicit(uri));
+        Ok(self)
     }
 
     /// Override the endpoint mode for [`Client`]
@@ -421,7 +425,7 @@ impl Builder {
         let common_plugin = SharedRuntimePlugin::new(ImdsCommonRuntimePlugin::new(
             &config,
             endpoint_resolver,
-            &retry_config,
+            retry_config,
             timeout_config,
         ));
         let operation = Operation::builder()
@@ -430,15 +434,17 @@ impl Builder {
             .runtime_plugin(common_plugin.clone())
             .runtime_plugin(TokenRuntimePlugin::new(
                 common_plugin,
-                config.time_source(),
                 self.token_ttl.unwrap_or(DEFAULT_TOKEN_TTL),
             ))
             .with_connection_poisoning()
             .serializer(|path| {
-                Ok(http::Request::builder()
-                    .uri(path)
-                    .body(SdkBody::empty())
-                    .expect("valid request"))
+                Ok(HttpRequest::try_from(
+                    http::Request::builder()
+                        .uri(path)
+                        .body(SdkBody::empty())
+                        .expect("valid request"),
+                )
+                .unwrap())
             })
             .deserializer(|response| {
                 if response.status().is_success() {
@@ -523,16 +529,15 @@ struct ImdsEndpointResolver {
     mode_override: Option<EndpointMode>,
 }
 
-impl EndpointResolver for ImdsEndpointResolver {
-    fn resolve_endpoint(&self, _: &EndpointResolverParams) -> Future<Endpoint> {
-        let this = self.clone();
-        Future::new(Box::pin(async move {
-            this.endpoint_source
-                .endpoint(this.mode_override)
+impl ResolveEndpoint for ImdsEndpointResolver {
+    fn resolve_endpoint<'a>(&'a self, _: &'a EndpointResolverParams) -> EndpointFuture<'a> {
+        EndpointFuture::new(async move {
+            self.endpoint_source
+                .endpoint(self.mode_override.clone())
                 .await
                 .map(|uri| Endpoint::builder().url(uri.to_string()).build())
                 .map_err(|err| err.into())
-        }))
+        })
     }
 }
 
@@ -548,32 +553,26 @@ impl EndpointResolver for ImdsEndpointResolver {
 #[derive(Clone, Debug)]
 struct ImdsResponseRetryClassifier;
 
-impl ImdsResponseRetryClassifier {
-    fn classify(response: &HttpResponse) -> Option<RetryReason> {
-        let status = response.status();
-        match status {
-            _ if status.is_server_error() => Some(RetryReason::Error(ErrorKind::ServerError)),
-            // 401 indicates that the token has expired, this is retryable
-            _ if status.as_u16() == 401 => Some(RetryReason::Error(ErrorKind::ServerError)),
-            // This catch-all includes successful responses that fail to parse. These should not be retried.
-            _ => None,
-        }
-    }
-}
-
 impl ClassifyRetry for ImdsResponseRetryClassifier {
     fn name(&self) -> &'static str {
         "ImdsResponseRetryClassifier"
     }
 
-    fn classify_retry(&self, ctx: &InterceptorContext) -> Option<RetryReason> {
+    fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         if let Some(response) = ctx.response() {
-            Self::classify(response)
+            let status = response.status();
+            match status {
+                _ if status.is_server_error() => RetryAction::server_error(),
+                // 401 indicates that the token has expired, this is retryable
+                _ if status.as_u16() == 401 => RetryAction::server_error(),
+                // This catch-all includes successful responses that fail to parse. These should not be retried.
+                _ => RetryAction::NoActionIndicated,
+            }
         } else {
             // Don't retry timeouts for IMDS, or else it will take ~30 seconds for the default
             // credentials provider chain to fail to provide credentials.
             // Also don't retry non-responses.
-            None
+            RetryAction::NoActionIndicated
         }
     }
 }
@@ -584,8 +583,6 @@ pub(crate) mod test {
     use crate::provider_config::ProviderConfig;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep};
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::result::ConnectorError;
     use aws_smithy_runtime::client::http::test_util::{
         capture_request, ReplayEvent, StaticReplayClient,
     };
@@ -596,7 +593,9 @@ pub(crate) mod test {
     use aws_smithy_runtime_api::client::orchestrator::{
         HttpRequest, HttpResponse, OrchestratorError,
     };
-    use aws_smithy_runtime_api::client::retries::ClassifyRetry;
+    use aws_smithy_runtime_api::client::result::ConnectorError;
+    use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+    use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::error::display::DisplayErrorContext;
     use aws_types::os_shim_internal::{Env, Fs};
     use http::header::USER_AGENT;
@@ -633,14 +632,19 @@ pub(crate) mod test {
             .method("PUT")
             .body(SdkBody::empty())
             .unwrap()
+            .try_into()
+            .unwrap()
     }
 
     pub(crate) fn token_response(ttl: u32, token: &'static str) -> HttpResponse {
-        http::Response::builder()
-            .status(200)
-            .header("X-aws-ec2-metadata-token-ttl-seconds", ttl)
-            .body(SdkBody::from(token))
-            .unwrap()
+        HttpResponse::try_from(
+            http::Response::builder()
+                .status(200)
+                .header("X-aws-ec2-metadata-token-ttl-seconds", ttl)
+                .body(SdkBody::from(token))
+                .unwrap(),
+        )
+        .unwrap()
     }
 
     pub(crate) fn imds_request(path: &'static str, token: &str) -> HttpRequest {
@@ -650,13 +654,18 @@ pub(crate) mod test {
             .header("x-aws-ec2-metadata-token", token)
             .body(SdkBody::empty())
             .unwrap()
+            .try_into()
+            .unwrap()
     }
 
     pub(crate) fn imds_response(body: &'static str) -> HttpResponse {
-        http::Response::builder()
-            .status(200)
-            .body(SdkBody::from(body))
-            .unwrap()
+        HttpResponse::try_from(
+            http::Response::builder()
+                .status(200)
+                .body(SdkBody::from(body))
+                .unwrap(),
+        )
+        .unwrap()
     }
 
     pub(crate) fn make_imds_client(http_client: &StaticReplayClient) -> super::Client {
@@ -745,6 +754,7 @@ pub(crate) mod test {
     /// Tokens are refreshed up to 120 seconds early to avoid using an expired token.
     #[tokio::test]
     async fn token_refresh_buffer() {
+        let _logs = capture_test_logs();
         let (_, http_client) = mock_imds_client(vec![
             ReplayEvent::new(
                 token_request("http://[fd00:ec2::254]", 600),
@@ -782,11 +792,14 @@ pub(crate) mod test {
             .token_ttl(Duration::from_secs(600))
             .build();
 
+        tracing::info!("resp1 -----------------------------------------------------------");
         let resp1 = client.get("/latest/metadata").await.expect("success");
         // now the cached credential has expired
         time_source.advance(Duration::from_secs(400));
+        tracing::info!("resp2 -----------------------------------------------------------");
         let resp2 = client.get("/latest/metadata").await.expect("success");
         time_source.advance(Duration::from_secs(150));
+        tracing::info!("resp3 -----------------------------------------------------------");
         let resp3 = client.get("/latest/metadata").await.expect("success");
         http_client.assert_requests_match(&[]);
         assert_eq!("test-imds-output1", resp1.as_ref());
@@ -915,21 +928,27 @@ pub(crate) mod test {
         http_client.assert_requests_match(&[]);
     }
 
-    /// Successful responses should classify as `RetryKind::Unnecessary`
+    /// The classifier should return `None` when classifying a successful response.
     #[test]
     fn successful_response_properly_classified() {
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Ok(Output::doesnt_matter()));
         ctx.set_response(imds_response("").map(|_| SdkBody::empty()));
         let classifier = ImdsResponseRetryClassifier;
-        assert_eq!(None, classifier.classify_retry(&ctx));
+        assert_eq!(
+            RetryAction::NoActionIndicated,
+            classifier.classify_retry(&ctx)
+        );
 
         // Emulate a failure to parse the response body (using an io error since it's easy to construct in a test)
         let mut ctx = InterceptorContext::new(Input::doesnt_matter());
         ctx.set_output_or_error(Err(OrchestratorError::connector(ConnectorError::io(
             io::Error::new(io::ErrorKind::BrokenPipe, "fail to parse").into(),
         ))));
-        assert_eq!(None, classifier.classify_retry(&ctx));
+        assert_eq!(
+            RetryAction::NoActionIndicated,
+            classifier.classify_retry(&ctx)
+        );
     }
 
     // since tokens are sent as headers, the tokens need to be valid header values
@@ -974,7 +993,8 @@ pub(crate) mod test {
 
         let client = Client::builder()
             // 240.* can never be resolved
-            .endpoint(Uri::from_static("http://240.0.0.0"))
+            .endpoint("http://240.0.0.0")
+            .expect("valid uri")
             .build();
         let now = SystemTime::now();
         let resp = client
@@ -1039,7 +1059,9 @@ pub(crate) mod test {
             .with_http_client(http_client);
         let mut imds_client = Client::builder().configure(&provider_config);
         if let Some(endpoint_override) = test_case.endpoint_override {
-            imds_client = imds_client.endpoint(endpoint_override.parse::<Uri>().unwrap());
+            imds_client = imds_client
+                .endpoint(endpoint_override)
+                .expect("invalid URI");
         }
 
         if let Some(mode_override) = test_case.mode_override {

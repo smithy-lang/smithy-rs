@@ -10,7 +10,8 @@ use std::{
     task::{Context, Poll},
 };
 
-use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, IdentityPlugin, Plugin};
+use aws_smithy_http_server::plugin::{HttpMarker, HttpPlugins, Plugin};
+use pokemon_service_server_sdk::{PokemonService, PokemonServiceConfig};
 use tower::{Layer, Service};
 
 use aws_smithy_runtime::client::http::test_util::capture_request;
@@ -26,12 +27,12 @@ async fn plugin_layers_are_executed_in_registration_order() {
     let http_plugins = HttpPlugins::new()
         .push(SentinelPlugin::new("first", output.clone()))
         .push(SentinelPlugin::new("second", output.clone()));
-    let mut app = pokemon_service_server_sdk::PokemonService::builder_with_plugins(
-        http_plugins,
-        IdentityPlugin,
-    )
-    .do_nothing(do_nothing)
-    .build_unchecked();
+    let config = PokemonServiceConfig::builder()
+        .http_plugin(http_plugins)
+        .build();
+    let mut app = PokemonService::builder(config)
+        .do_nothing(do_nothing)
+        .build_unchecked();
 
     let request = {
         let (http_client, rcvr) = capture_request(None);
@@ -43,7 +44,7 @@ async fn plugin_layers_are_executed_in_registration_order() {
         rcvr.expect_request()
     };
 
-    app.call(request).await.unwrap();
+    app.call(request.try_into_http02x().unwrap()).await.unwrap();
 
     let output_guard = output.lock().unwrap();
     assert_eq!(output_guard.deref(), &vec!["first", "second"]);
@@ -74,7 +75,6 @@ impl<Ser, Op, T> Plugin<Ser, Op, T> for SentinelPlugin {
 
 impl HttpMarker for SentinelPlugin {}
 
-/// A [`Service`] that adds a print log.
 #[derive(Clone, Debug)]
 pub struct SentinelService<S> {
     inner: S,
@@ -100,7 +100,6 @@ where
     }
 }
 
-/// A [`Layer`] which constructs the [`PrintService`].
 #[derive(Debug)]
 pub struct SentinelLayer {
     name: &'static str,

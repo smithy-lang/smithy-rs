@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::body::SdkBody;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
+use aws_smithy_types::body::SdkBody;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -27,16 +27,15 @@ pub struct CaptureRequestHandler(Arc<Mutex<Inner>>);
 impl HttpConnector for CaptureRequestHandler {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         let mut inner = self.0.lock().unwrap();
-        inner
-            .sender
-            .take()
-            .expect("already sent")
-            .send(request)
-            .expect("channel not ready");
+        if let Err(_e) = inner.sender.take().expect("already sent").send(request) {
+            tracing::trace!("The receiver was already dropped");
+        }
         HttpConnectorFuture::ready(Ok(inner
             .response
             .take()
-            .expect("could not handle second request")))
+            .expect("could not handle second request")
+            .try_into()
+            .unwrap()))
     }
 }
 
@@ -50,7 +49,7 @@ impl HttpClient for CaptureRequestHandler {
     }
 }
 
-/// Receiver for [`CaptureRequestHandler`](CaptureRequestHandler)
+/// Receiver for [`CaptureRequestHandler`].
 #[derive(Debug)]
 pub struct CaptureRequestReceiver {
     receiver: oneshot::Receiver<HttpRequest>,

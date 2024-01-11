@@ -4,21 +4,20 @@
  */
 
 use crate::cargo;
+use crate::yank::yank;
 use anyhow::{anyhow, bail, Context, Result};
 use clap::{ArgEnum, Parser};
 use dialoguer::Confirm;
 use smithy_rs_tool_common::package::PackageCategory;
 use smithy_rs_tool_common::release_tag::ReleaseTag;
-use smithy_rs_tool_common::shell::ShellOperation;
 use smithy_rs_tool_common::versions_manifest::{Release, VersionsManifest};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::sync::Arc;
-use tokio::sync::Semaphore;
+use std::time::Duration;
 use tracing::info;
 
-const MAX_CONCURRENCY: usize = 5;
+const DEFAULT_DELAY_MILLIS: usize = 1000;
 
 #[derive(Copy, Clone, Debug, ArgEnum, Eq, PartialEq, Ord, PartialOrd)]
 pub enum CrateSet {
@@ -42,6 +41,9 @@ pub struct YankReleaseArgs {
     versions_toml: Option<PathBuf>,
     #[clap(arg_enum)]
     crate_set: Option<CrateSet>,
+    /// Time delay between crate yanking to avoid crates.io throttling errors.
+    #[clap(long)]
+    delay_millis: Option<usize>,
 }
 
 pub async fn subcommand_yank_release(
@@ -49,6 +51,7 @@ pub async fn subcommand_yank_release(
         github_release_tag,
         versions_toml,
         crate_set,
+        delay_millis,
     }: &YankReleaseArgs,
 ) -> Result<()> {
     // Make sure cargo exists
@@ -75,28 +78,16 @@ pub async fn subcommand_yank_release(
     // Don't proceed unless the user confirms the plan
     confirm_plan(&tag, &crates)?;
 
-    // Use a semaphore to only allow a few concurrent yanks
-    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENCY));
-    info!(
-        "Will yank {} crates in parallel where possible.",
-        MAX_CONCURRENCY
-    );
+    let delay_millis = Duration::from_millis(delay_millis.unwrap_or(DEFAULT_DELAY_MILLIS) as _);
 
-    let mut tasks = Vec::new();
+    // Yank one crate at a time to try avoiding throttling errors
     for (crate_name, crate_version) in crates {
-        let permit = semaphore.clone().acquire_owned().await.unwrap();
-        tasks.push(tokio::spawn(async move {
-            info!("Yanking `{}-{}`...", crate_name, crate_version);
-            let result = cargo::Yank::new(&crate_name, &crate_version).spawn().await;
-            drop(permit);
-            if result.is_ok() {
-                info!("Successfully yanked `{}-{}`", crate_name, crate_version);
-            }
-            result
-        }));
-    }
-    for task in tasks {
-        task.await??;
+        yank(&crate_name, &crate_version).await?;
+
+        // Keep things slow to avoid getting throttled by crates.io
+        tokio::time::sleep(delay_millis).await;
+
+        info!("Successfully yanked `{}-{}`", crate_name, crate_version);
     }
 
     Ok(())

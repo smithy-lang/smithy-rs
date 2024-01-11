@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -106,24 +107,28 @@ class ServerBuilderGenerator(
             takeInUnconstrainedTypes: Boolean,
         ): Boolean {
             val members = structureShape.members()
+
             fun isOptional(member: MemberShape) = symbolProvider.toSymbol(member).isOptional()
+
             fun hasDefault(member: MemberShape) = member.hasNonNullDefault()
+
             fun isNotConstrained(member: MemberShape) = !member.canReachConstrainedShape(model, symbolProvider)
 
-            val notFallible = members.all {
-                if (structureShape.isReachableFromOperationInput()) {
-                    // When deserializing an input structure, constraints might not be satisfied by the data in the
-                    // incoming request.
-                    // For this builder not to be fallible, no members must be constrained (constraints in input must
-                    // always be checked) and all members must _either_ be optional (no need to set it; not required)
-                    // or have a default value.
-                    isNotConstrained(it) && (isOptional(it) || hasDefault(it))
-                } else {
-                    // This structure will be constructed manually by the user.
-                    // Constraints will have to be dealt with before members are set in the builder.
-                    isOptional(it) || hasDefault(it)
+            val notFallible =
+                members.all {
+                    if (structureShape.isReachableFromOperationInput()) {
+                        // When deserializing an input structure, constraints might not be satisfied by the data in the
+                        // incoming request.
+                        // For this builder not to be fallible, no members must be constrained (constraints in input must
+                        // always be checked) and all members must _either_ be optional (no need to set it; not required)
+                        // or have a default value.
+                        isNotConstrained(it) && (isOptional(it) || hasDefault(it))
+                    } else {
+                        // This structure will be constructed manually by the user.
+                        // Constraints will have to be dealt with before members are set in the builder.
+                        isOptional(it) || hasDefault(it)
+                    }
                 }
-            }
 
             return if (takeInUnconstrainedTypes) {
                 !notFallible && structureShape.canReachConstrainedShape(model, symbolProvider)
@@ -147,16 +152,21 @@ class ServerBuilderGenerator(
     private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
+    private val lifetime = shape.lifetimeDeclaration(symbolProvider)
 
-    private val codegenScope = arrayOf(
-        "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-        "Structure" to structureSymbol,
-        "From" to RuntimeType.From,
-        "TryFrom" to RuntimeType.TryFrom,
-        "MaybeConstrained" to RuntimeType.MaybeConstrained,
-    )
+    private val codegenScope =
+        arrayOf(
+            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+            "Structure" to structureSymbol,
+            "From" to RuntimeType.From,
+            "TryFrom" to RuntimeType.TryFrom,
+            "MaybeConstrained" to RuntimeType.MaybeConstrained,
+        )
 
-    fun render(rustCrate: RustCrate, writer: RustWriter) {
+    fun render(
+        rustCrate: RustCrate,
+        writer: RustWriter,
+    ) {
         val docWriter: () -> Unit = { writer.docs("See #D.", structureSymbol) }
         rustCrate.withInMemoryInlineModule(writer, builderSymbol.module(), docWriter) {
             renderBuilder(this)
@@ -192,15 +202,16 @@ class ServerBuilderGenerator(
         // since we are a builder and everything is optional.
         val baseDerives = structureSymbol.expectRustMetadata().derives
         // Filter out any derive that isn't Debug or Clone. Then add a Default derive
-        val builderDerives = baseDerives.filter {
-            it == RuntimeType.Debug || it == RuntimeType.Clone
-        } + RuntimeType.Default
+        val builderDerives =
+            baseDerives.filter {
+                it == RuntimeType.Debug || it == RuntimeType.Clone
+            } + RuntimeType.Default
         Attribute(derive(builderDerives)).render(writer)
-        writer.rustBlock("${visibility.toRustQualifier()} struct Builder") {
+        writer.rustBlock("${visibility.toRustQualifier()} struct Builder$lifetime") {
             members.forEach { renderBuilderMember(this, it) }
         }
 
-        writer.rustBlock("impl Builder") {
+        writer.rustBlock("impl $lifetime Builder $lifetime") {
             for (member in members) {
                 if (publicConstrainedTypes) {
                     renderBuilderMemberFn(this, member)
@@ -262,7 +273,7 @@ class ServerBuilderGenerator(
                 self.build_enforcing_all_constraints()
             }
             """,
-            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol, lifetime),
         )
         renderBuildEnforcingAllConstraintsFn(implBlockWriter)
     }
@@ -270,7 +281,7 @@ class ServerBuilderGenerator(
     private fun renderBuildEnforcingAllConstraintsFn(implBlockWriter: RustWriter) {
         implBlockWriter.rustBlockTemplate(
             "fn build_enforcing_all_constraints(self) -> #{ReturnType:W}",
-            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol),
+            "ReturnType" to buildFnReturnType(isBuilderFallible, structureSymbol, lifetime),
         ) {
             conditionalBlock("Ok(", ")", conditional = isBuilderFallible) {
                 coreBuilder(this)
@@ -280,12 +291,15 @@ class ServerBuilderGenerator(
 
     fun renderConvenienceMethod(implBlock: RustWriter) {
         implBlock.docs("Creates a new builder-style object to manufacture #D.", structureSymbol)
-        implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
+        implBlock.rustBlock("pub fn builder() -> #T $lifetime", builderSymbol) {
             write("#T::default()", builderSymbol)
         }
     }
 
-    private fun renderBuilderMember(writer: RustWriter, member: MemberShape) {
+    private fun renderBuilderMember(
+        writer: RustWriter,
+        member: MemberShape,
+    ) {
         val memberSymbol = builderMemberSymbol(member)
         val memberName = constrainedShapeSymbolProvider.toMemberName(member)
         // Builder members are crate-public to enable using them directly in serializers/deserializers.
@@ -381,14 +395,15 @@ class ServerBuilderGenerator(
         member: MemberShape,
     ) {
         val builderMemberSymbol = builderMemberSymbol(member)
-        val inputType = builderMemberSymbol.rustType().stripOuter<RustType.Option>().implInto()
-            .letIf(
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
-                //  The only reason why this condition can't simply be `member.isOptional`
-                //  is because non-`required` blob streaming members are interpreted as
-                //  `required`, so we can't use `member.isOptional` here.
-                symbolProvider.toSymbol(member).isOptional(),
-            ) { "Option<$it>" }
+        val inputType =
+            builderMemberSymbol.rustType().stripOuter<RustType.Option>().implInto()
+                .letIf(
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179):
+                    //  The only reason why this condition can't simply be `member.isOptional`
+                    //  is because non-`required` blob streaming members are interpreted as
+                    //  `required`, so we can't use `member.isOptional` here.
+                    symbolProvider.toSymbol(member).isOptional(),
+                ) { "Option<$it>" }
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
@@ -397,7 +412,7 @@ class ServerBuilderGenerator(
             rust(
                 """
                 self.$memberName = ${
-                    // TODO(https://github.com/awslabs/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
+                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302, https://github.com/awslabs/smithy/issues/1179): See above.
                     if (symbolProvider.toSymbol(member).isOptional()) {
                         "input.map(|v| v.into())"
                     } else {
@@ -413,10 +428,10 @@ class ServerBuilderGenerator(
     private fun renderTryFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{TryFrom}<Builder> for #{Structure} {
+            impl $lifetime #{TryFrom}<Builder $lifetime> for #{Structure}$lifetime {
                 type Error = ConstraintViolation;
 
-                fn try_from(builder: Builder) -> Result<Self, Self::Error> {
+                fn try_from(builder: Builder $lifetime) -> Result<Self, Self::Error> {
                     builder.build()
                 }
             }
@@ -428,8 +443,8 @@ class ServerBuilderGenerator(
     private fun renderFromBuilderImpl(writer: RustWriter) {
         writer.rustTemplate(
             """
-            impl #{From}<Builder> for #{Structure} {
-                fn from(builder: Builder) -> Self {
+            impl$lifetime #{From}<Builder $lifetime> for #{Structure} $lifetime {
+                fn from(builder: Builder$lifetime) -> Self {
                     builder.build()
                 }
             }
@@ -461,13 +476,14 @@ class ServerBuilderGenerator(
      */
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
-            val strippedOption = if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
-                constrainedShapeSymbolProvider.toSymbol(member)
-            } else {
-                pubCrateConstrainedShapeSymbolProvider.toSymbol(member)
-            }
-                // Strip the `Option` in case the member is not `required`.
-                .mapRustType { it.stripOuter<RustType.Option>() }
+            val strippedOption =
+                if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
+                    constrainedShapeSymbolProvider.toSymbol(member)
+                } else {
+                    pubCrateConstrainedShapeSymbolProvider.toSymbol(member)
+                }
+                    // Strip the `Option` in case the member is not `required`.
+                    .mapRustType { it.stripOuter<RustType.Option>() }
 
             val hadBox = strippedOption.isRustBoxed()
             strippedOption
@@ -541,13 +557,18 @@ class ServerBuilderGenerator(
         }
     }
 
-    private fun enforceConstraints(writer: RustWriter, member: MemberShape, constraintViolation: ConstraintViolation) {
+    private fun enforceConstraints(
+        writer: RustWriter,
+        member: MemberShape,
+        constraintViolation: ConstraintViolation,
+    ) {
         // This member is constrained. Enforce the constraint traits on the value set in the builder.
         // The code is slightly different in case the member is recursive, since it will be wrapped in
         // `std::boxed::Box`.
-        val hasBox = builderMemberSymbol(member)
-            .mapRustType { it.stripOuter<RustType.Option>() }
-            .isRustBoxed()
+        val hasBox =
+            builderMemberSymbol(member)
+                .mapRustType { it.stripOuter<RustType.Option>() }
+                .isRustBoxed()
         val errHasBox = member.hasTrait<ConstraintViolationRustBoxTrait>()
 
         if (hasBox) {

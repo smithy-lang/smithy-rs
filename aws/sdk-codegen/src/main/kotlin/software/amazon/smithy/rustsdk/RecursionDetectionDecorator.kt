@@ -27,15 +27,16 @@ class RecursionDetectionDecorator : ClientCodegenDecorator {
 private class RecursionDetectionRuntimePluginCustomization(
     private val codegenContext: ClientCodegenContext,
 ) : ServiceRuntimePluginCustomization() {
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                rust(
-                    "#T::new()",
-                    AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
-                        .resolve("recursion_detection::RecursionDetectionInterceptor"),
-                )
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                section.registerInterceptor(this) {
+                    rust(
+                        "#T::new()",
+                        AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)
+                            .resolve("recursion_detection::RecursionDetectionInterceptor"),
+                    )
+                }
             }
         }
-    }
 }

@@ -4,14 +4,14 @@
  */
 
 use crate::client::auth::no_auth::{NoAuthScheme, NO_AUTH_SCHEME_ID};
+use crate::client::defaults::{default_plugins, DefaultPluginParams};
 use crate::client::http::connection_poisoning::ConnectionPoisoningInterceptor;
-use crate::client::http::default_http_client_plugin;
 use crate::client::identity::no_auth::NoAuthIdentityResolver;
+use crate::client::identity::IdentityCache;
 use crate::client::orchestrator::endpoints::StaticUriEndpointResolver;
 use crate::client::retries::strategy::{NeverRetryStrategy, StandardRetryStrategy};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_async::time::TimeSource;
-use aws_smithy_http::result::SdkError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
 use aws_smithy_runtime_api::client::auth::{
@@ -21,16 +21,18 @@ use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, SharedEnd
 use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
 use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, Output};
-use aws_smithy_runtime_api::client::interceptors::Interceptor;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, OrchestratorError};
-use aws_smithy_runtime_api::client::retries::{RetryClassifiers, SharedRetryStrategy};
+use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_runtime_api::client::retries::classifiers::ClassifyRetry;
+use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_runtime_api::client::runtime_plugin::{
     RuntimePlugin, RuntimePlugins, SharedRuntimePlugin, StaticRuntimePlugin,
 };
 use aws_smithy_runtime_api::client::ser_de::{
-    RequestSerializer, ResponseDeserializer, SharedRequestSerializer, SharedResponseDeserializer,
+    DeserializeResponse, SerializeRequest, SharedRequestSerializer, SharedResponseDeserializer,
 };
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, Layer};
@@ -52,7 +54,7 @@ impl<F, I> FnSerializer<F, I> {
         }
     }
 }
-impl<F, I> RequestSerializer for FnSerializer<F, I>
+impl<F, I> SerializeRequest for FnSerializer<F, I>
 where
     F: Fn(I) -> Result<HttpRequest, BoxError> + Send + Sync,
     I: fmt::Debug + Send + Sync + 'static,
@@ -80,7 +82,7 @@ impl<F, O, E> FnDeserializer<F, O, E> {
         }
     }
 }
-impl<F, O, E> ResponseDeserializer for FnDeserializer<F, O, E>
+impl<F, O, E> DeserializeResponse for FnDeserializer<F, O, E>
 where
     F: Fn(&HttpResponse) -> Result<O, OrchestratorError<E>> + Send + Sync,
     O: fmt::Debug + Send + Sync + 'static,
@@ -102,7 +104,6 @@ impl<F, O, E> fmt::Debug for FnDeserializer<F, O, E> {
 }
 
 /// Orchestrates execution of a HTTP request without any modeled input or output.
-#[doc(hidden)]
 #[derive(Debug)]
 pub struct Operation<I, O, E> {
     service_name: Cow<'static, str>,
@@ -124,6 +125,7 @@ impl<I, O, E> Clone for Operation<I, O, E> {
 }
 
 impl Operation<(), (), ()> {
+    /// Returns a new `OperationBuilder` for the `Operation`.
     pub fn builder() -> OperationBuilder {
         OperationBuilder::new()
     }
@@ -135,6 +137,8 @@ where
     O: fmt::Debug + Send + Sync + 'static,
     E: std::error::Error + fmt::Debug + Send + Sync + 'static,
 {
+    /// Invokes this `Operation` with the given `input` and returns either an output for success
+    /// or an [`SdkError`] for failure
     pub async fn invoke(&self, input: I) -> Result<O, SdkError<E, HttpResponse>> {
         let input = Input::erase(input);
 
@@ -151,7 +155,7 @@ where
     }
 }
 
-#[doc(hidden)]
+/// Builder for [`Operation`].
 #[derive(Debug)]
 pub struct OperationBuilder<I = (), O = (), E = ()> {
     service_name: Option<Cow<'static, str>>,
@@ -169,6 +173,7 @@ impl Default for OperationBuilder<(), (), ()> {
 }
 
 impl OperationBuilder<(), (), ()> {
+    /// Creates a new [`OperationBuilder`].
     pub fn new() -> Self {
         Self {
             service_name: None,
@@ -182,21 +187,25 @@ impl OperationBuilder<(), (), ()> {
 }
 
 impl<I, O, E> OperationBuilder<I, O, E> {
+    /// Configures the service name for the builder.
     pub fn service_name(mut self, service_name: impl Into<Cow<'static, str>>) -> Self {
         self.service_name = Some(service_name.into());
         self
     }
 
+    /// Configures the operation name for the builder.
     pub fn operation_name(mut self, operation_name: impl Into<Cow<'static, str>>) -> Self {
         self.operation_name = Some(operation_name.into());
         self
     }
 
+    /// Configures the http client for the builder.
     pub fn http_client(mut self, connector: impl HttpClient + 'static) -> Self {
         self.runtime_components.set_http_client(Some(connector));
         self
     }
 
+    /// Configures the endpoint URL for the builder.
     pub fn endpoint_url(mut self, url: &str) -> Self {
         self.config.store_put(EndpointResolverParams::new(()));
         self.runtime_components
@@ -206,32 +215,35 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self
     }
 
+    /// Configures the retry classifier for the builder.
+    pub fn retry_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
+        self.runtime_components
+            .push_retry_classifier(retry_classifier);
+        self
+    }
+
+    /// Disables the retry for the operation.
     pub fn no_retry(mut self) -> Self {
         self.runtime_components
             .set_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())));
         self
     }
 
-    pub fn retry_classifiers(mut self, retry_classifiers: RetryClassifiers) -> Self {
-        self.runtime_components
-            .set_retry_classifiers(Some(retry_classifiers));
-        self
-    }
-
+    /// Configures the standard retry for the builder.
     pub fn standard_retry(mut self, retry_config: &RetryConfig) -> Self {
         self.config.store_put(retry_config.clone());
         self.runtime_components
-            .set_retry_strategy(Some(SharedRetryStrategy::new(StandardRetryStrategy::new(
-                retry_config,
-            ))));
+            .set_retry_strategy(Some(SharedRetryStrategy::new(StandardRetryStrategy::new())));
         self
     }
 
+    /// Configures the timeout configuration for the builder.
     pub fn timeout_config(mut self, timeout_config: TimeoutConfig) -> Self {
         self.config.store_put(timeout_config);
         self
     }
 
+    /// Disables auth for the operation.
     pub fn no_auth(mut self) -> Self {
         self.config
             .store_put(AuthSchemeOptionResolverParams::new(()));
@@ -241,26 +253,31 @@ impl<I, O, E> OperationBuilder<I, O, E> {
             )));
         self.runtime_components
             .push_auth_scheme(SharedAuthScheme::new(NoAuthScheme::default()));
-        self.runtime_components.push_identity_resolver(
+        self.runtime_components
+            .set_identity_cache(Some(IdentityCache::no_cache()));
+        self.runtime_components.set_identity_resolver(
             NO_AUTH_SCHEME_ID,
             SharedIdentityResolver::new(NoAuthIdentityResolver::new()),
         );
         self
     }
 
+    /// Configures the sleep for the builder.
     pub fn sleep_impl(mut self, async_sleep: impl AsyncSleep + 'static) -> Self {
         self.runtime_components
             .set_sleep_impl(Some(async_sleep.into_shared()));
         self
     }
 
+    /// Configures the time source for the builder.
     pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
         self.runtime_components
             .set_time_source(Some(time_source.into_shared()));
         self
     }
 
-    pub fn interceptor(mut self, interceptor: impl Interceptor + 'static) -> Self {
+    /// Configures the interceptor for the builder.
+    pub fn interceptor(mut self, interceptor: impl Intercept + 'static) -> Self {
         self.runtime_components.push_interceptor(interceptor);
         self
     }
@@ -270,11 +287,13 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         self.interceptor(ConnectionPoisoningInterceptor::new())
     }
 
+    /// Configures the runtime plugin for the builder.
     pub fn runtime_plugin(mut self, runtime_plugin: impl RuntimePlugin + 'static) -> Self {
         self.runtime_plugins.push(runtime_plugin.into_shared());
         self
     }
 
+    /// Configures the serializer for the builder.
     pub fn serializer<I2>(
         mut self,
         serializer: impl Fn(I2) -> Result<HttpRequest, BoxError> + Send + Sync + 'static,
@@ -294,6 +313,7 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         }
     }
 
+    /// Configures the deserializer for the builder.
     pub fn deserializer<O2, E2>(
         mut self,
         deserializer: impl Fn(&HttpResponse) -> Result<O2, OrchestratorError<E2>>
@@ -319,11 +339,15 @@ impl<I, O, E> OperationBuilder<I, O, E> {
         }
     }
 
+    /// Creates an `Operation` from the builder.
     pub fn build(self) -> Operation<I, O, E> {
         let service_name = self.service_name.expect("service_name required");
         let operation_name = self.operation_name.expect("operation_name required");
+
         let mut runtime_plugins = RuntimePlugins::new()
-            .with_client_plugin(default_http_client_plugin())
+            .with_client_plugins(default_plugins(
+                DefaultPluginParams::new().with_retry_partition_name(service_name.clone()),
+            ))
             .with_client_plugin(
                 StaticRuntimePlugin::new()
                     .with_config(self.config.freeze())
@@ -383,10 +407,10 @@ impl<I, O, E> OperationBuilder<I, O, E> {
 mod tests {
     use super::*;
     use crate::client::http::test_util::{capture_request, ReplayEvent, StaticReplayClient};
-    use crate::client::retries::classifier::HttpStatusCodeClassifier;
+    use crate::client::retries::classifiers::HttpStatusCodeClassifier;
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::result::ConnectorError;
+    use aws_smithy_runtime_api::client::result::ConnectorError;
+    use aws_smithy_types::body::SdkBody;
     use std::convert::Infallible;
 
     #[tokio::test]
@@ -405,13 +429,9 @@ mod tests {
             .no_auth()
             .no_retry()
             .timeout_config(TimeoutConfig::disabled())
-            .serializer(|input: String| {
-                Ok(http::Request::builder()
-                    .body(SdkBody::from(input.as_bytes()))
-                    .unwrap())
-            })
+            .serializer(|input: String| Ok(HttpRequest::new(SdkBody::from(input.as_bytes()))))
             .deserializer::<_, Infallible>(|response| {
-                assert_eq!(418, response.status());
+                assert_eq!(418, u16::from(response.status()));
                 Ok(std::str::from_utf8(response.body().bytes().unwrap())
                     .unwrap()
                     .to_string())
@@ -425,7 +445,7 @@ mod tests {
         assert_eq!("I'm a teapot!", output);
 
         let request = request_rx.expect_request();
-        assert_eq!("http://localhost:1234", request.uri());
+        assert_eq!("http://localhost:1234/", request.uri());
         assert_eq!(b"what are you?", request.body().bytes().unwrap());
     }
 
@@ -459,24 +479,18 @@ mod tests {
             .http_client(connector.clone())
             .endpoint_url("http://localhost:1234")
             .no_auth()
-            .retry_classifiers(
-                RetryClassifiers::new().with_classifier(HttpStatusCodeClassifier::default()),
-            )
             .standard_retry(&RetryConfig::standard())
+            .retry_classifier(HttpStatusCodeClassifier::default())
             .timeout_config(TimeoutConfig::disabled())
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-            .serializer(|input: String| {
-                Ok(http::Request::builder()
-                    .body(SdkBody::from(input.as_bytes()))
-                    .unwrap())
-            })
+            .serializer(|input: String| Ok(HttpRequest::new(SdkBody::from(input.as_bytes()))))
             .deserializer::<_, Infallible>(|response| {
-                if response.status() == 503 {
+                if u16::from(response.status()) == 503 {
                     Err(OrchestratorError::connector(ConnectorError::io(
                         "test".into(),
                     )))
                 } else {
-                    assert_eq!(418, response.status());
+                    assert_eq!(418, u16::from(response.status()));
                     Ok(std::str::from_utf8(response.body().bytes().unwrap())
                         .unwrap()
                         .to_string())

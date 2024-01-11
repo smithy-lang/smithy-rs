@@ -9,21 +9,23 @@
 //!
 //! DVR is an extremely experimental record & replay framework that supports multi-frame HTTP request / response traffic.
 
+use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
+use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::base64;
 use bytes::Bytes;
+use http::HeaderMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 mod record;
 mod replay;
 
-pub use aws_smithy_protocol_test::MediaType;
 pub use record::RecordingClient;
 pub use replay::ReplayingClient;
 
 /// A complete traffic recording
 ///
-/// A traffic recording can be replayed with [`RecordingClient`](RecordingClient)
+/// A traffic recording can be replayed with [`RecordingClient`].
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NetworkTraffic {
     events: Vec<Event>,
@@ -77,7 +79,6 @@ pub struct Request {
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Response {
     status: u16,
-    version: String,
     headers: HashMap<String, Vec<String>>,
 }
 
@@ -93,10 +94,10 @@ impl From<&Request> for http::Request<()> {
     }
 }
 
-impl<'a, B> From<&'a http::Request<B>> for Request {
-    fn from(req: &'a http::Request<B>) -> Self {
+impl<'a> From<&'a HttpRequest> for Request {
+    fn from(req: &'a HttpRequest) -> Self {
         let uri = req.uri().to_string();
-        let headers = headers_to_map(req.headers());
+        let headers = headers_to_map_http(req.headers());
         let method = req.method().to_string();
         Self {
             uri,
@@ -106,11 +107,37 @@ impl<'a, B> From<&'a http::Request<B>> for Request {
     }
 }
 
-fn headers_to_map(headers: &http::HeaderMap<http::HeaderValue>) -> HashMap<String, Vec<String>> {
+fn headers_to_map_http(headers: &Headers) -> HashMap<String, Vec<String>> {
     let mut out: HashMap<_, Vec<_>> = HashMap::new();
     for (header_name, header_value) in headers.iter() {
         let entry = out.entry(header_name.to_string()).or_default();
-        entry.push(header_value.to_str().unwrap().to_string());
+        entry.push(header_value.to_string());
+    }
+    out
+}
+
+fn headers_to_map_02x(headers: &HeaderMap) -> HashMap<String, Vec<String>> {
+    let mut out: HashMap<_, Vec<_>> = HashMap::new();
+    for (header_name, header_value) in headers.iter() {
+        let entry = out.entry(header_name.to_string()).or_default();
+        entry.push(
+            std::str::from_utf8(header_value.as_ref())
+                .unwrap()
+                .to_string(),
+        );
+    }
+    out
+}
+
+fn headers_to_map(headers: &Headers) -> HashMap<String, Vec<String>> {
+    let mut out: HashMap<_, Vec<_>> = HashMap::new();
+    for (header_name, header_value) in headers.iter() {
+        let entry = out.entry(header_name.to_string()).or_default();
+        entry.push(
+            std::str::from_utf8(header_value.as_ref())
+                .unwrap()
+                .to_string(),
+        );
     }
     out
 }
@@ -118,12 +145,16 @@ fn headers_to_map(headers: &http::HeaderMap<http::HeaderValue>) -> HashMap<Strin
 impl<'a, B> From<&'a http::Response<B>> for Response {
     fn from(resp: &'a http::Response<B>) -> Self {
         let status = resp.status().as_u16();
-        let version = format!("{:?}", resp.version());
-        let headers = headers_to_map(resp.headers());
+        let headers = headers_to_map_02x(resp.headers());
+        Self { status, headers }
+    }
+}
+
+impl From<&HttpResponse> for Response {
+    fn from(resp: &HttpResponse) -> Self {
         Self {
-            status,
-            version,
-            headers,
+            status: resp.status().into(),
+            headers: headers_to_map(resp.headers()),
         }
     }
 }
@@ -201,7 +232,7 @@ pub enum BodyData {
 }
 
 impl BodyData {
-    /// Convert [`BodyData`](BodyData) into Bytes
+    /// Convert [`BodyData`] into Bytes.
     pub fn into_bytes(self) -> Vec<u8> {
         match self {
             BodyData::Utf8(string) => string.into_bytes(),
@@ -209,7 +240,7 @@ impl BodyData {
         }
     }
 
-    /// Copy [`BodyData`](BodyData) into a `Vec<u8>`
+    /// Copy [`BodyData`] into a `Vec<u8>`.
     pub fn copy_to_vec(&self) -> Vec<u8> {
         match self {
             BodyData::Utf8(string) => string.as_bytes().into(),
@@ -230,9 +261,9 @@ impl From<Bytes> for BodyData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_http::body::SdkBody;
-    use aws_smithy_http::byte_stream::ByteStream;
     use aws_smithy_runtime_api::client::http::{HttpConnector, SharedHttpConnector};
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::byte_stream::ByteStream;
     use bytes::Bytes;
     use http::Uri;
     use std::error::Error;
@@ -249,7 +280,7 @@ mod tests {
         let req = http::Request::post("https://www.example.com")
             .body(SdkBody::from("hello world"))
             .unwrap();
-        let mut resp = connection.call(req).await.expect("ok");
+        let mut resp = connection.call(req.try_into().unwrap()).await.expect("ok");
         let body = std::mem::replace(resp.body_mut(), SdkBody::taken());
         let data = ByteStream::new(body).collect().await.unwrap().into_bytes();
         assert_eq!(

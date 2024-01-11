@@ -6,12 +6,13 @@
     "rust-sdk-ci-cdk": "bin/ci-cdk.js"
   },
   "scripts": {
+    "build": "tsc && cdk --app \"node build/bin/ci-cdk.js\" synth",
+    "cdk": "cdk",
+    "deploy": "cdk --app \"node build/bin/ci-cdk.js\" deploy --outputs-file cdk-outputs.json --all",
     "format": "prettier --write '**/*.ts'",
     "lint": "eslint --ext .ts lib",
-    "build": "tsc",
-    "watch": "tsc -w",
     "test": "jest",
-    "cdk": "cdk"
+    "watch": "tsc -w"
   },
   "devDependencies": {
     "@types/jest": "^27.0.0",

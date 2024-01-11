@@ -32,7 +32,8 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 internal class XmlBindingTraitSerializerGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
         use aws.protocols#restXml
         union Choice {
@@ -106,7 +107,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource(
@@ -120,10 +121,11 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
         val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
-        val parserGenerator = XmlBindingTraitSerializerGenerator(
-            codegenContext,
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
-        )
+        val parserGenerator =
+            XmlBindingTraitSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
+            )
         val operationSerializer = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 
         val project = TestWorkspace.testProject(testSymbolProvider(model))
@@ -171,7 +173,8 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         project.compileAndTest()
     }
 
-    private val baseModelWithRequiredTypes = """
+    private val baseModelWithRequiredTypes =
+        """
         namespace test
         use aws.protocols#restXml
         union Choice {
@@ -226,6 +229,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             member: Top
         }
 
+        @input
         structure OpInput {
             @required
             @httpPayload
@@ -236,7 +240,7 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource(
@@ -250,10 +254,11 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModelWithRequiredTypes))
         val codegenContext = testCodegenContext(model, nullabilityCheckMode = nullabilityCheckMode)
         val symbolProvider = codegenContext.symbolProvider
-        val parserGenerator = XmlBindingTraitSerializerGenerator(
-            codegenContext,
-            HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
-        )
+        val parserGenerator =
+            XmlBindingTraitSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
+            )
         val operationSerializer = parserGenerator.payloadSerializer(model.lookup("test#OpInput\$payload"))
 
         val project = TestWorkspace.testProject(symbolProvider)
@@ -262,11 +267,22 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         // add unwrap calls.
         val builderIsFallible =
             BuilderGenerator.hasFallibleBuilder(model.lookup<StructureShape>("test#Top"), symbolProvider)
-        val maybeUnwrap = if (builderIsFallible) { ".unwrap()" } else { "" }
-        val payloadIsOptional = model.lookup<MemberShape>("test#OpInput\$payload").let {
-            symbolProvider.toSymbol(it).isOptional()
-        }
-        val maybeUnwrapPayload = if (payloadIsOptional) { ".unwrap()" } else { "" }
+        val maybeUnwrap =
+            if (builderIsFallible) {
+                ".unwrap()"
+            } else {
+                ""
+            }
+        val payloadIsOptional =
+            model.lookup<MemberShape>("test#OpInput\$payload").let {
+                symbolProvider.toSymbol(it).isOptional()
+            }
+        val maybeUnwrapPayload =
+            if (payloadIsOptional) {
+                ".unwrap()"
+            } else {
+                ""
+            }
         project.lib {
             unitTest(
                 "serialize_xml",

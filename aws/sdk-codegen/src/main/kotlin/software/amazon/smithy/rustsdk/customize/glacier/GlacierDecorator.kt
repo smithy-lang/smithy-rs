@@ -64,37 +64,39 @@ class GlacierDecorator : ClientCodegenDecorator {
 /** Implements the `GlacierAccountId` trait for inputs that have an `account_id` field */
 private class GlacierAccountIdCustomization(private val codegenContext: ClientCodegenContext) :
     StructureCustomization() {
-    override fun section(section: StructureSection): Writable = writable {
-        if (section is StructureSection.AdditionalTraitImpls && section.shape.inputWithAccountId()) {
-            val inlineModule = inlineModule(codegenContext.runtimeConfig)
-            rustTemplate(
-                """
-                impl #{GlacierAccountId} for ${section.structName} {
-                    fn account_id_mut(&mut self) -> &mut Option<String> {
-                        &mut self.account_id
+    override fun section(section: StructureSection): Writable =
+        writable {
+            if (section is StructureSection.AdditionalTraitImpls && section.shape.inputWithAccountId()) {
+                val inlineModule = inlineModule(codegenContext.runtimeConfig)
+                rustTemplate(
+                    """
+                    impl #{GlacierAccountId} for ${section.structName} {
+                        fn account_id_mut(&mut self) -> &mut Option<String> {
+                            &mut self.account_id
+                        }
                     }
-                }
-                """,
-                "GlacierAccountId" to inlineModule.resolve("GlacierAccountId"),
-            )
+                    """,
+                    "GlacierAccountId" to inlineModule.resolve("GlacierAccountId"),
+                )
+            }
         }
-    }
 }
 
 /** Adds the `x-amz-glacier-version` header to all requests */
 private class GlacierApiVersionCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-            val apiVersion = codegenContext.serviceShape.version
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                rustTemplate(
-                    "#{Interceptor}::new(${apiVersion.dq()})",
-                    "Interceptor" to inlineModule(codegenContext.runtimeConfig).resolve("GlacierApiVersionInterceptor"),
-                )
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
+                val apiVersion = codegenContext.serviceShape.version
+                section.registerInterceptor(this) {
+                    rustTemplate(
+                        "#{Interceptor}::new(${apiVersion.dq()})",
+                        "Interceptor" to inlineModule(codegenContext.runtimeConfig).resolve("GlacierApiVersionInterceptor"),
+                    )
+                }
             }
         }
-    }
 }
 
 /**
@@ -105,29 +107,30 @@ private class GlacierApiVersionCustomization(private val codegenContext: ClientC
  */
 private class GlacierOperationInterceptorsCustomization(private val codegenContext: ClientCodegenContext) :
     OperationCustomization() {
-    override fun section(section: OperationSection): Writable = writable {
-        if (section is OperationSection.AdditionalInterceptors) {
-            val inputShape = codegenContext.model.expectShape(section.operationShape.inputShape) as StructureShape
-            val inlineModule = inlineModule(codegenContext.runtimeConfig)
-            if (inputShape.inputWithAccountId()) {
-                section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                    rustTemplate(
-                        "#{Interceptor}::<#{Input}>::new()",
-                        "Interceptor" to inlineModule.resolve("GlacierAccountIdAutofillInterceptor"),
-                        "Input" to codegenContext.symbolProvider.toSymbol(inputShape),
-                    )
+    override fun section(section: OperationSection): Writable =
+        writable {
+            if (section is OperationSection.AdditionalInterceptors) {
+                val inputShape = codegenContext.model.expectShape(section.operationShape.inputShape) as StructureShape
+                val inlineModule = inlineModule(codegenContext.runtimeConfig)
+                if (inputShape.inputWithAccountId()) {
+                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                        rustTemplate(
+                            "#{Interceptor}::<#{Input}>::new()",
+                            "Interceptor" to inlineModule.resolve("GlacierAccountIdAutofillInterceptor"),
+                            "Input" to codegenContext.symbolProvider.toSymbol(inputShape),
+                        )
+                    }
                 }
-            }
-            if (section.operationShape.requiresTreeHashHeader()) {
-                section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                    rustTemplate(
-                        "#{Interceptor}::default()",
-                        "Interceptor" to inlineModule.resolve("GlacierTreeHashHeaderInterceptor"),
-                    )
+                if (section.operationShape.requiresTreeHashHeader()) {
+                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                        rustTemplate(
+                            "#{Interceptor}::default()",
+                            "Interceptor" to inlineModule.resolve("GlacierTreeHashHeaderInterceptor"),
+                        )
+                    }
                 }
             }
         }
-    }
 }
 
 /** True when the operation requires tree hash headers */
@@ -138,19 +141,21 @@ private fun OperationShape.requiresTreeHashHeader(): Boolean =
 private fun StructureShape.inputWithAccountId(): Boolean =
     hasTrait<SyntheticInputTrait>() && members().any { it.memberName.lowercase() == "accountid" }
 
-private fun inlineModule(runtimeConfig: RuntimeConfig) = RuntimeType.forInlineDependency(
-    InlineAwsDependency.forRustFile(
-        "glacier_interceptors",
-        additionalDependency = glacierInterceptorDependencies(runtimeConfig).toTypedArray(),
-    ),
-)
+private fun inlineModule(runtimeConfig: RuntimeConfig) =
+    RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile(
+            "glacier_interceptors",
+            additionalDependency = glacierInterceptorDependencies(runtimeConfig).toTypedArray(),
+        ),
+    )
 
-private fun glacierInterceptorDependencies(runtimeConfig: RuntimeConfig) = listOf(
-    AwsCargoDependency.awsRuntime(runtimeConfig),
-    AwsCargoDependency.awsSigv4(runtimeConfig),
-    CargoDependency.Bytes,
-    CargoDependency.Hex,
-    CargoDependency.Ring,
-    CargoDependency.smithyHttp(runtimeConfig),
-    CargoDependency.smithyRuntimeApi(runtimeConfig),
-)
+private fun glacierInterceptorDependencies(runtimeConfig: RuntimeConfig) =
+    listOf(
+        AwsCargoDependency.awsRuntime(runtimeConfig),
+        AwsCargoDependency.awsSigv4(runtimeConfig),
+        CargoDependency.Bytes,
+        CargoDependency.Hex,
+        CargoDependency.Ring,
+        CargoDependency.smithyHttp(runtimeConfig),
+        CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+    )

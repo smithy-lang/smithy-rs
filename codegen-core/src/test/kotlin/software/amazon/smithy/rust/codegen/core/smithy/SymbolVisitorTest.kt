@@ -40,14 +40,16 @@ class SymbolVisitorTest {
     fun `creates structures`() {
         val memberBuilder = MemberShape.builder().id("foo.bar#MyStruct\$someField").target("smithy.api#String")
         val member = memberBuilder.build()
-        val struct = StructureShape.builder()
-            .id("foo.bar#MyStruct")
-            .addMember(member)
-            .build()
-        val model = Model.assembler()
-            .addShapes(struct, member)
-            .assemble()
-            .unwrap()
+        val struct =
+            StructureShape.builder()
+                .id("foo.bar#MyStruct")
+                .addMember(member)
+                .build()
+        val model =
+            Model.assembler()
+                .addShapes(struct, member)
+                .assemble()
+                .unwrap()
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "MyStruct"
@@ -59,15 +61,17 @@ class SymbolVisitorTest {
     fun `renames errors`() {
         val memberBuilder = MemberShape.builder().id("foo.bar#TerribleException\$someField").target("smithy.api#String")
         val member = memberBuilder.build()
-        val struct = StructureShape.builder()
-            .id("foo.bar#TerribleException")
-            .addMember(member)
-            .addTrait(ErrorTrait("server"))
-            .build()
-        val model = Model.assembler()
-            .addShapes(struct, member)
-            .assemble()
-            .unwrap()
+        val struct =
+            StructureShape.builder()
+                .id("foo.bar#TerribleException")
+                .addMember(member)
+                .addTrait(ErrorTrait("server"))
+                .build()
+        val model =
+            Model.assembler()
+                .addShapes(struct, member)
+                .assemble()
+                .unwrap()
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(struct)
         sym.rustType().render(false) shouldBe "TerribleError"
@@ -76,7 +80,8 @@ class SymbolVisitorTest {
 
     @Test
     fun `creates enums`() {
-        val model = """
+        val model =
+            """
             namespace test
 
             @enum([
@@ -90,7 +95,7 @@ class SymbolVisitorTest {
                 }
             ])
             string StandardUnit
-        """.asSmithyModel()
+            """.asSmithyModel()
         val shape = model.expectShape(ShapeId.from("test#StandardUnit"))
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(shape)
@@ -118,13 +123,18 @@ class SymbolVisitorTest {
         "Boolean, true, bool",
         "PrimitiveBoolean, false, bool",
     )
-    fun `creates primitives`(primitiveType: String, optional: Boolean, rustName: String) {
-        val model = """
+    fun `creates primitives`(
+        primitiveType: String,
+        optional: Boolean,
+        rustName: String,
+    ) {
+        val model =
+            """
             namespace foo.bar
             structure MyStruct {
                 quux: $primitiveType
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val member = model.expectShape(ShapeId.from("foo.bar#MyStruct\$quux"))
         val provider: SymbolProvider = testSymbolProvider(model)
         val memberSymbol = provider.toSymbol(member)
@@ -142,18 +152,20 @@ class SymbolVisitorTest {
     @Test
     fun `creates sets of strings`() {
         val stringShape = StringShape.builder().id("test#Hello").build()
-        val set = SetShape.builder()
-            .id("foo.bar#Records")
-            .member(stringShape.id)
-            .build()
-        val model = Model.assembler()
-            .addShapes(set, stringShape)
-            .assemble()
-            .unwrap()
+        val set =
+            SetShape.builder()
+                .id("foo.bar#Records")
+                .member(stringShape.id)
+                .build()
+        val model =
+            Model.assembler()
+                .addShapes(set, stringShape)
+                .assemble()
+                .unwrap()
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render(false) shouldBe "${RustType.HashSet.Type}<String>"
+        setSymbol.rustType().render(false) shouldBe "${RustType.HashSet.Type}::<String>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf(RustType.HashSet.Type, "String")
     }
 
@@ -161,18 +173,20 @@ class SymbolVisitorTest {
     fun `create vec instead for non-strings`() {
         val struct = StructureShape.builder().id("foo.bar#Record").build()
         val setMember = MemberShape.builder().id("foo.bar#Records\$member").target(struct).build()
-        val set = SetShape.builder()
-            .id("foo.bar#Records")
-            .member(setMember)
-            .build()
-        val model = Model.assembler()
-            .addShapes(set, setMember, struct)
-            .assemble()
-            .unwrap()
+        val set =
+            SetShape.builder()
+                .id("foo.bar#Records")
+                .member(setMember)
+                .build()
+        val model =
+            Model.assembler()
+                .addShapes(set, setMember, struct)
+                .assemble()
+                .unwrap()
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render(false) shouldBe "Vec<Record>"
+        setSymbol.rustType().render(false) shouldBe "Vec::<Record>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf("Vec", "Record")
     }
 
@@ -180,20 +194,22 @@ class SymbolVisitorTest {
     fun `create sparse collections`() {
         val struct = StructureShape.builder().id("foo.bar#Record").build()
         val setMember = MemberShape.builder().id("foo.bar#Records\$member").target(struct).build()
-        val set = ListShape.builder()
-            .id("foo.bar#Records")
-            .member(setMember)
-            .addTrait(SparseTrait())
-            .build()
-        val model = Model.assembler()
-            .putProperty(ModelAssembler.ALLOW_UNKNOWN_TRAITS, true)
-            .addShapes(set, setMember, struct)
-            .assemble()
-            .unwrap()
+        val set =
+            ListShape.builder()
+                .id("foo.bar#Records")
+                .member(setMember)
+                .addTrait(SparseTrait())
+                .build()
+        val model =
+            Model.assembler()
+                .putProperty(ModelAssembler.ALLOW_UNKNOWN_TRAITS, true)
+                .addShapes(set, setMember, struct)
+                .assemble()
+                .unwrap()
 
         val provider: SymbolProvider = testSymbolProvider(model)
         val setSymbol = provider.toSymbol(set)
-        setSymbol.rustType().render(false) shouldBe "Vec<Option<Record>>"
+        setSymbol.rustType().render(false) shouldBe "Vec::<Option<Record>>"
         setSymbol.referenceClosure().map { it.name } shouldBe listOf("Vec", "Option", "Record")
     }
 
@@ -201,14 +217,16 @@ class SymbolVisitorTest {
     fun `create timestamps`() {
         val memberBuilder = MemberShape.builder().id("foo.bar#MyStruct\$someField").target("smithy.api#Timestamp")
         val member = memberBuilder.build()
-        val struct = StructureShape.builder()
-            .id("foo.bar#MyStruct")
-            .addMember(member)
-            .build()
-        val model = Model.assembler()
-            .addShapes(struct, member)
-            .assemble()
-            .unwrap()
+        val struct =
+            StructureShape.builder()
+                .id("foo.bar#MyStruct")
+                .addMember(member)
+                .build()
+        val model =
+            Model.assembler()
+                .addShapes(struct, member)
+                .assemble()
+                .unwrap()
         val provider: SymbolProvider = testSymbolProvider(model)
         val sym = provider.toSymbol(member)
         sym.rustType().render(false) shouldBe "Option<DateTime>"
@@ -218,7 +236,8 @@ class SymbolVisitorTest {
 
     @Test
     fun `creates operations`() {
-        val model = """
+        val model =
+            """
             namespace smithy.example
 
             @idempotent
@@ -252,7 +271,7 @@ class SymbolVisitorTest {
                 // Sent in the body
                 additional: String,
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val symbol = testSymbolProvider(model).toSymbol(model.expectShape(ShapeId.from("smithy.example#PutObject")))
         symbol.definitionFile shouldBe "src/test_operation.rs"
         symbol.name shouldBe "PutObject"

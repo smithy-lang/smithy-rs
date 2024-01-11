@@ -8,8 +8,10 @@ package software.amazon.smithy.rust.codegen.core.smithy.customizations
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
-import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGeneratorTest.Companion.model
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.generatePluginContext
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 
 class SmithyTypesPubUseExtraTest {
@@ -21,6 +23,11 @@ class SmithyTypesPubUseExtraTest {
     ): Model {
         return """
             namespace test
+
+            service TestService {
+                version: "123"
+                operations: [SomeOperation]
+            }
 
             $additionalShape
             structure SomeStruct {
@@ -43,30 +50,65 @@ class SmithyTypesPubUseExtraTest {
         """.asSmithyModel()
     }
 
+    private fun initialize(model: Model): Pair<CodegenContext, RustCrate> {
+        val codegenContext = testCodegenContext(model)
+
+        val (context, _) =
+            generatePluginContext(
+                model,
+                runtimeConfig = codegenContext.runtimeConfig,
+            )
+        val rustCrate =
+            RustCrate(
+                context.fileManifest,
+                codegenContext.symbolProvider,
+                codegenContext.settings.codegenConfig,
+                codegenContext.expectModuleDocProvider(),
+            )
+
+        return Pair(codegenContext, rustCrate)
+    }
+
     private fun reexportsWithEmptyModel() = reexportsWithMember()
+
     private fun reexportsWithMember(
         inputMember: String = "",
         outputMember: String = "",
         unionMember: String = "",
         additionalShape: String = "",
     ) = RustWriter.root().let { writer ->
-        pubUseSmithyPrimitives(testCodegenContext(model), modelWithMember(inputMember, outputMember, unionMember, additionalShape))(writer)
+        val model = modelWithMember(inputMember, outputMember, unionMember, additionalShape)
+        val props = initialize(model)
+        val context = props.first
+        val rustCrate = props.second
+        pubUseSmithyPrimitives(context, model, rustCrate)(writer)
+        pubUseSmithyPrimitivesEventStream(context, model)(writer)
         writer.toString()
     }
 
-    private fun assertDoesntHaveReexports(reexports: String, expectedTypes: List<String>) =
-        expectedTypes.forEach { assertDoesntHaveReexports(reexports, it) }
+    private fun assertDoesntHaveReexports(
+        reexports: String,
+        expectedTypes: List<String>,
+    ) = expectedTypes.forEach { assertDoesntHaveReexports(reexports, it) }
 
-    private fun assertDoesntHaveReexports(reexports: String, type: String) {
+    private fun assertDoesntHaveReexports(
+        reexports: String,
+        type: String,
+    ) {
         if (reexports.contains(type)) {
             throw AssertionError("Expected $type to NOT be re-exported, but it was.")
         }
     }
 
-    private fun assertHasReexports(reexports: String, expectedTypes: List<String>) =
-        expectedTypes.forEach { assertHasReexport(reexports, it) }
+    private fun assertHasReexports(
+        reexports: String,
+        expectedTypes: List<String>,
+    ) = expectedTypes.forEach { assertHasReexport(reexports, it) }
 
-    private fun assertHasReexport(reexports: String, type: String) {
+    private fun assertHasReexport(
+        reexports: String,
+        type: String,
+    ) {
         if (!reexports.contains(type)) {
             throw AssertionError("Expected $type to be re-exported. Re-exported types:\n$reexports")
         }
@@ -105,7 +147,7 @@ class SmithyTypesPubUseExtraTest {
     @Test
     fun `it re-exports ByteStream and AggregatedBytes when a model has streaming`() {
         val streamingTypes =
-            listOf("::aws_smithy_http::byte_stream::ByteStream", "::aws_smithy_http::byte_stream::AggregatedBytes")
+            listOf("::aws_smithy_types::byte_stream::ByteStream", "::aws_smithy_types::byte_stream::AggregatedBytes")
         val streamingShape = "@streaming blob Streaming"
 
         this.assertDoesntHaveReexports(reexportsWithEmptyModel(), streamingTypes)
@@ -126,6 +168,28 @@ class SmithyTypesPubUseExtraTest {
                 outputMember = "m: EventStream",
             ),
             streamingTypes,
+        )
+    }
+
+    @Test
+    fun `it re-exports when a model has event stream`() {
+        val eventStreamTypes =
+            listOf(
+                "crate::event_receiver::EventReceiver",
+                "::aws_smithy_types::event_stream::Header",
+                "::aws_smithy_types::event_stream::HeaderValue",
+                "::aws_smithy_types::event_stream::Message",
+                "::aws_smithy_types::str_bytes::StrBytes",
+            )
+        val eventStreamShape = "@streaming union EventStream { foo: SomeStruct }"
+
+        assertHasReexports(
+            reexportsWithMember(additionalShape = eventStreamShape, inputMember = "m: EventStream"),
+            eventStreamTypes,
+        )
+        assertHasReexports(
+            reexportsWithMember(additionalShape = eventStreamShape, outputMember = "m: EventStream"),
+            eventStreamTypes,
         )
     }
 }

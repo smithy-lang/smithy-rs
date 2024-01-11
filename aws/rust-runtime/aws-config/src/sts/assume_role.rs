@@ -5,7 +5,6 @@
 
 //! Assume credentials for a role through the AWS Security Token Service (STS).
 
-use aws_credential_types::cache::CredentialsCache;
 use aws_credential_types::provider::{
     self, error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
 };
@@ -13,7 +12,8 @@ use aws_sdk_sts::operation::assume_role::builders::AssumeRoleFluentBuilder;
 use aws_sdk_sts::operation::assume_role::AssumeRoleError;
 use aws_sdk_sts::types::PolicyDescriptorType;
 use aws_sdk_sts::Client as StsClient;
-use aws_smithy_http::result::SdkError;
+use aws_smithy_runtime::client::identity::IdentityCache;
+use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::region::Region;
 use aws_types::SdkConfig;
@@ -100,10 +100,7 @@ pub struct AssumeRoleProviderBuilder {
     session_length: Option<Duration>,
     policy: Option<String>,
     policy_arns: Option<Vec<PolicyDescriptorType>>,
-
     region_override: Option<Region>,
-
-    credentials_cache: Option<CredentialsCache>,
     sdk_config: Option<SdkConfig>,
 }
 
@@ -118,7 +115,6 @@ impl AssumeRoleProviderBuilder {
     pub fn new(role: impl Into<String>) -> Self {
         Self {
             role_arn: role.into(),
-            credentials_cache: None,
             external_id: None,
             session_name: None,
             session_length: None,
@@ -165,8 +161,13 @@ impl AssumeRoleProviderBuilder {
     /// This parameter is optional.
     /// For more information, see
     /// [policy_arns](aws_sdk_sts::operation::assume_role::builders::AssumeRoleInputBuilder::policy_arns)
-    pub fn policy_arns(mut self, policy_arns: Vec<PolicyDescriptorType>) -> Self {
-        self.policy_arns = Some(policy_arns);
+    pub fn policy_arns(mut self, policy_arns: Vec<String>) -> Self {
+        self.policy_arns = Some(
+            policy_arns
+                .into_iter()
+                .map(|arn| PolicyDescriptorType::builder().arn(arn).build())
+                .collect::<Vec<_>>(),
+        );
         self
     }
 
@@ -193,18 +194,6 @@ impl AssumeRoleProviderBuilder {
     /// a region set from `.configure(...)`
     pub fn region(mut self, region: Region) -> Self {
         self.region_override = Some(region);
-        self
-    }
-
-    #[deprecated(
-        note = "This should not be necessary as the default, no caching, is usually what you want."
-    )]
-    /// Set the [`CredentialsCache`] for credentials retrieved from STS.
-    ///
-    /// By default, an [`AssumeRoleProvider`] internally uses `NoCredentialsCache` because the
-    /// provider itself will be wrapped by `LazyCredentialsCache` when a service client is created.
-    pub fn credentials_cache(mut self, cache: CredentialsCache) -> Self {
-        self.credentials_cache = Some(cache);
         self
     }
 
@@ -237,15 +226,12 @@ impl AssumeRoleProviderBuilder {
     pub async fn build(self) -> AssumeRoleProvider {
         let mut conf = match self.sdk_config {
             Some(conf) => conf,
-            None => crate::load_from_env().await,
+            None => crate::load_defaults(crate::BehaviorVersion::latest()).await,
         };
-        // ignore a credentials cache set from SdkConfig
+        // ignore a identity cache set from SdkConfig
         conf = conf
             .into_builder()
-            .credentials_cache(
-                self.credentials_cache
-                    .unwrap_or(CredentialsCache::no_caching()),
-            )
+            .identity_cache(IdentityCache::no_cache())
             .build();
 
         // set a region override if one exists
@@ -283,7 +269,7 @@ impl AssumeRoleProviderBuilder {
     ) -> AssumeRoleProvider {
         let conf = match self.sdk_config {
             Some(conf) => conf,
-            None => crate::load_from_env().await,
+            None => crate::load_defaults(crate::BehaviorVersion::latest()).await,
         };
         let conf = conf
             .into_builder()
@@ -349,11 +335,12 @@ mod test {
     use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
     use aws_smithy_async::test_util::instant_time_and_sleep;
     use aws_smithy_async::time::StaticTimeSource;
-    use aws_smithy_http::body::SdkBody;
     use aws_smithy_runtime::client::http::test_util::{
         capture_request, ReplayEvent, StaticReplayClient,
     };
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+    use aws_smithy_types::body::SdkBody;
     use aws_types::os_shim_internal::Env;
     use aws_types::region::Region;
     use aws_types::SdkConfig;
@@ -370,6 +357,7 @@ mod test {
             ))
             .http_client(http_client)
             .region(Region::from_static("this-will-be-overridden"))
+            .behavior_version(crate::BehaviorVersion::latest())
             .build();
         let provider = AssumeRoleProvider::builder("myrole")
             .configure(&sdk_config)
@@ -383,13 +371,14 @@ mod test {
         let req = request.expect_request();
         let str_body = std::str::from_utf8(req.body().bytes().unwrap()).unwrap();
         assert!(str_body.contains("1234567"), "{}", str_body);
-        assert_eq!(req.uri(), "https://sts.us-east-1.amazonaws.com");
+        assert_eq!(req.uri(), "https://sts.us-east-1.amazonaws.com/");
     }
 
     #[tokio::test]
     async fn loads_region_from_sdk_config() {
         let (http_client, request) = capture_request(None);
         let sdk_config = SdkConfig::builder()
+            .behavior_version(crate::BehaviorVersion::latest())
             .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
             .time_source(StaticTimeSource::new(
                 UNIX_EPOCH + Duration::from_secs(1234567890 - 120),
@@ -411,7 +400,7 @@ mod test {
             .await;
         let _ = dbg!(provider.provide_credentials().await);
         let req = request.expect_request();
-        assert_eq!(req.uri(), "https://sts.us-west-2.amazonaws.com");
+        assert_eq!(req.uri(), "https://sts.us-west-2.amazonaws.com/");
     }
 
     /// Test that `build()` where no provider is passed still works
@@ -424,7 +413,7 @@ mod test {
                 .body(SdkBody::from(""))
                 .unwrap(),
         ));
-        let conf = crate::from_env()
+        let conf = crate::defaults(BehaviorVersion::latest())
             .env(Env::from_slice(&[
                 ("AWS_ACCESS_KEY_ID", "123-key"),
                 ("AWS_SECRET_ACCESS_KEY", "456"),
@@ -440,15 +429,9 @@ mod test {
             .configure(&conf)
             .build()
             .await;
-        let _ = provider.provide_credentials().await;
+        let _ = dbg!(provider.provide_credentials().await);
         let req = request.expect_request();
-        let auth_header = req
-            .headers()
-            .get(AUTHORIZATION)
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
+        let auth_header = req.headers().get(AUTHORIZATION).unwrap().to_string();
         let expect = "Credential=123-key/20090213/us-west-17/sts/aws4_request";
         assert!(
             auth_header.contains(expect),
@@ -479,6 +462,7 @@ mod test {
             .sleep_impl(SharedAsyncSleep::new(sleep))
             .time_source(testing_time_source.clone())
             .http_client(http_client)
+            .behavior_version(crate::BehaviorVersion::latest())
             .build();
         let credentials_list = std::sync::Arc::new(std::sync::Mutex::new(vec![
             Credentials::new(

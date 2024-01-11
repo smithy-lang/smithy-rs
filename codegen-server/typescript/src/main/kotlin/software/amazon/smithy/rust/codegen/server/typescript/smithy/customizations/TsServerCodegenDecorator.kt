@@ -25,13 +25,12 @@ class CdylibManifestDecorator : ServerCodegenDecorator {
     override val name: String = "CdylibDecorator"
     override val order: Byte = 0
 
-    override fun crateManifestCustomizations(
-        codegenContext: ServerCodegenContext,
-    ): ManifestCustomizations =
+    override fun crateManifestCustomizations(codegenContext: ServerCodegenContext): ManifestCustomizations =
         mapOf(
-            "lib" to mapOf(
-                "crate-type" to listOf("cdylib"),
-            ),
+            "lib" to
+                mapOf(
+                    "crate-type" to listOf("cdylib"),
+                ),
         )
 }
 
@@ -40,7 +39,10 @@ class NapiBuildRsDecorator : ServerCodegenDecorator {
     override val order: Byte = 0
     private val napi_build = TsServerCargoDependency.NapiBuild.toType()
 
-    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ServerCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         rustCrate.withFile("build.rs") {
             rustTemplate(
                 """
@@ -58,11 +60,14 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
     override val name: String = "NapiPackageJsonDecorator"
     override val order: Byte = 0
 
-    override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ServerCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val name = codegenContext.settings.moduleName.toSnakeCase()
         val version = codegenContext.settings.moduleVersion
 
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2317): we should probably use a real JSON writer, but I did not want to add
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2317): we should probably use a real JSON writer, but I did not want to add
         //  other external libraries at this stage.
         rustCrate.withFile("package.json") {
             val content = """{
@@ -99,16 +104,17 @@ class NapiPackageJsonDecorator : ServerCodegenDecorator {
     }
 }
 
-val DECORATORS = arrayOf(
-    /**
-     * Add the [InternalServerError] error to all operations.
-     * This is done because the Typescript interpreter can raise eceptions during execution.
-     */
-    AddInternalServerErrorToAllOperationsDecorator(),
-    // Add the [lib] section to Cargo.toml to configure the generation of the shared library.
-    CdylibManifestDecorator(),
-    // Add the build.rs file needed to generate Typescript code.
-    NapiBuildRsDecorator(),
-    // Add the napi package.json.
-    NapiPackageJsonDecorator(),
-)
+val DECORATORS =
+    arrayOf(
+        /*
+         * Add the [InternalServerError] error to all operations.
+         * This is done because the Typescript interpreter can raise eceptions during execution.
+         */
+        AddInternalServerErrorToAllOperationsDecorator(),
+        // Add the [lib] section to Cargo.toml to configure the generation of the shared library.
+        CdylibManifestDecorator(),
+        // Add the build.rs file needed to generate Typescript code.
+        NapiBuildRsDecorator(),
+        // Add the napi package.json.
+        NapiPackageJsonDecorator(),
+    )

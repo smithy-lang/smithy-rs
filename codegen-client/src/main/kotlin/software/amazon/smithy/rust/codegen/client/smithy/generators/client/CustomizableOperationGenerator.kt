@@ -28,32 +28,40 @@ class CustomizableOperationGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
 
     fun render(crate: RustCrate) {
-        val codegenScope = arrayOf(
-            *preludeScope,
-            "CustomizableOperation" to ClientRustModule.Client.customize.toType()
-                .resolve("CustomizableOperation"),
-            "CustomizableSend" to ClientRustModule.Client.customize.toType()
-                .resolve("internal::CustomizableSend"),
-            "HttpRequest" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::orchestrator::HttpRequest"),
-            "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::orchestrator::HttpResponse"),
-            "Interceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::interceptors::Interceptor"),
-            "MapRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::interceptors::MapRequestInterceptor"),
-            "MutateRequestInterceptor" to RuntimeType.smithyRuntime(runtimeConfig)
-                .resolve("client::interceptors::MutateRequestInterceptor"),
-            "PhantomData" to RuntimeType.Phantom,
-            "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
-            "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
-            "SendResult" to ClientRustModule.Client.customize.toType()
-                .resolve("internal::SendResult"),
-            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            "SharedInterceptor" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                .resolve("client::interceptors::SharedInterceptor"),
-        )
+        val codegenScope =
+            arrayOf(
+                *preludeScope,
+                "CustomizableOperation" to
+                    ClientRustModule.Client.customize.toType()
+                        .resolve("CustomizableOperation"),
+                "CustomizableSend" to
+                    ClientRustModule.Client.customize.toType()
+                        .resolve("internal::CustomizableSend"),
+                "HttpRequest" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::orchestrator::HttpRequest"),
+                "HttpResponse" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::orchestrator::HttpResponse"),
+                "Intercept" to RuntimeType.intercept(runtimeConfig),
+                "MapRequestInterceptor" to
+                    RuntimeType.smithyRuntime(runtimeConfig)
+                        .resolve("client::interceptors::MapRequestInterceptor"),
+                "MutateRequestInterceptor" to
+                    RuntimeType.smithyRuntime(runtimeConfig)
+                        .resolve("client::interceptors::MutateRequestInterceptor"),
+                "PhantomData" to RuntimeType.Phantom,
+                "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
+                "SharedRuntimePlugin" to RuntimeType.sharedRuntimePlugin(runtimeConfig),
+                "SendResult" to
+                    ClientRustModule.Client.customize.toType()
+                        .resolve("internal::SendResult"),
+                "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "SharedInterceptor" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::interceptors::SharedInterceptor"),
+            )
 
         val customizeModule = ClientRustModule.Client.customize
         crate.withModule(customizeModule) {
@@ -85,13 +93,13 @@ class CustomizableOperationGenerator(
                             }
                         }
 
-                    /// Adds an [`Interceptor`](#{Interceptor}) that runs at specific stages of the request execution pipeline.
+                    /// Adds an [interceptor](#{Intercept}) that runs at specific stages of the request execution pipeline.
                     ///
                     /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
                     /// `map_request`, and `mutate_request` (the last two are implemented via interceptors under the hood).
                     /// The order in which those user-specified operation interceptors are invoked should not be relied upon
                     /// as it is an implementation detail.
-                    pub fn interceptor(mut self, interceptor: impl #{Interceptor} + 'static) -> Self {
+                    pub fn interceptor(mut self, interceptor: impl #{Intercept} + 'static) -> Self {
                         self.interceptors.push(#{SharedInterceptor}::new(interceptor));
                         self
                     }
@@ -175,17 +183,21 @@ class CustomizableOperationGenerator(
                 }
                 """,
                 *codegenScope,
-                "additional_methods" to writable {
-                    writeCustomizations(
-                        customizations,
-                        CustomizableOperationSection.CustomizableOperationImpl,
-                    )
-                },
+                "additional_methods" to
+                    writable {
+                        writeCustomizations(
+                            customizations,
+                            CustomizableOperationSection.CustomizableOperationImpl,
+                        )
+                    },
             )
         }
     }
 
-    private fun renderConvenienceAliases(parentModule: RustModule, writer: RustWriter) {
+    private fun renderConvenienceAliases(
+        parentModule: RustModule,
+        writer: RustWriter,
+    ) {
         writer.withInlineModule(RustModule.new("internal", Visibility.PUBCRATE, true, parentModule), null) {
             rustTemplate(
                 """
@@ -207,8 +219,9 @@ class CustomizableOperationGenerator(
                 }
                 """,
                 *preludeScope,
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::orchestrator::HttpResponse"),
+                "HttpResponse" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::orchestrator::HttpResponse"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
             )
         }

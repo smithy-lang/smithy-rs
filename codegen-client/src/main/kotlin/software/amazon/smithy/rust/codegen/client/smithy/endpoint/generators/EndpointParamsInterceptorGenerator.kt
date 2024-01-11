@@ -41,31 +41,35 @@ class EndpointParamsInterceptorGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-    private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-        val runtimeApi = CargoDependency.smithyRuntimeApi(rc).toType()
-        val interceptors = runtimeApi.resolve("client::interceptors")
-        val orchestrator = runtimeApi.resolve("client::orchestrator")
-        arrayOf(
-            *preludeScope,
-            "BoxError" to RuntimeType.boxError(rc),
-            "ConfigBag" to RuntimeType.configBag(rc),
-            "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
-            "EndpointResolverParams" to runtimeApi.resolve("client::endpoint::EndpointResolverParams"),
-            "HttpRequest" to orchestrator.resolve("HttpRequest"),
-            "HttpResponse" to orchestrator.resolve("HttpResponse"),
-            "Interceptor" to RuntimeType.interceptor(rc),
-            "InterceptorContext" to RuntimeType.interceptorContext(rc),
-            "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
-            "Input" to interceptors.resolve("context::Input"),
-            "Output" to interceptors.resolve("context::Output"),
-            "Error" to interceptors.resolve("context::Error"),
-            "InterceptorError" to interceptors.resolve("error::InterceptorError"),
-            "Params" to endpointTypesGenerator.paramsStruct(),
-        )
-    }
+    private val codegenScope =
+        codegenContext.runtimeConfig.let { rc ->
+            val endpointTypesGenerator = EndpointTypesGenerator.fromContext(codegenContext)
+            val runtimeApi = CargoDependency.smithyRuntimeApiClient(rc).toType()
+            val interceptors = runtimeApi.resolve("client::interceptors")
+            val orchestrator = runtimeApi.resolve("client::orchestrator")
+            arrayOf(
+                *preludeScope,
+                "BoxError" to RuntimeType.boxError(rc),
+                "ConfigBag" to RuntimeType.configBag(rc),
+                "ContextAttachedError" to interceptors.resolve("error::ContextAttachedError"),
+                "EndpointResolverParams" to runtimeApi.resolve("client::endpoint::EndpointResolverParams"),
+                "HttpRequest" to orchestrator.resolve("HttpRequest"),
+                "HttpResponse" to orchestrator.resolve("HttpResponse"),
+                "Intercept" to RuntimeType.intercept(rc),
+                "InterceptorContext" to RuntimeType.interceptorContext(rc),
+                "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
+                "Input" to interceptors.resolve("context::Input"),
+                "Output" to interceptors.resolve("context::Output"),
+                "Error" to interceptors.resolve("context::Error"),
+                "InterceptorError" to interceptors.resolve("error::InterceptorError"),
+                "Params" to endpointTypesGenerator.paramsStruct(),
+            )
+        }
 
-    fun render(writer: RustWriter, operationShape: OperationShape) {
+    fun render(
+        writer: RustWriter,
+        operationShape: OperationShape,
+    ) {
         val operationName = symbolProvider.toSymbol(operationShape).name
         val operationInput = symbolProvider.toSymbol(operationShape.inputShape(model))
         val interceptorName = "${operationName}EndpointParamsInterceptor"
@@ -74,7 +78,7 @@ class EndpointParamsInterceptorGenerator(
             ##[derive(Debug)]
             struct $interceptorName;
 
-            impl #{Interceptor} for $interceptorName {
+            impl #{Intercept} for $interceptorName {
                 fn name(&self) -> &'static str {
                     ${interceptorName.dq()}
                 }
@@ -105,7 +109,10 @@ class EndpointParamsInterceptorGenerator(
         )
     }
 
-    private fun paramSetters(operationShape: OperationShape, params: Parameters) = writable {
+    private fun paramSetters(
+        operationShape: OperationShape,
+        params: Parameters,
+    ) = writable {
         val idx = ContextIndex.of(codegenContext.model)
         val memberParams = idx.getContextParams(operationShape).toList().sortedBy { it.first.memberName }
         val builtInParams = params.toList().filter { it.isBuiltIn }
@@ -154,26 +161,28 @@ class EndpointParamsInterceptorGenerator(
         }
     }
 
-    private fun endpointPrefix(operationShape: OperationShape): Writable = writable {
-        operationShape.getTrait(EndpointTrait::class.java).map { epTrait ->
-            val endpointTraitBindings = EndpointTraitBindings(
-                codegenContext.model,
-                symbolProvider,
-                codegenContext.runtimeConfig,
-                operationShape,
-                epTrait,
-            )
-            withBlockTemplate(
-                "let endpoint_prefix = ",
-                """.map_err(|err| #{ContextAttachedError}::new("endpoint prefix could not be built", err))?;""",
-                *codegenScope,
-            ) {
-                endpointTraitBindings.render(
-                    this,
-                    "_input",
-                )
+    private fun endpointPrefix(operationShape: OperationShape): Writable =
+        writable {
+            operationShape.getTrait(EndpointTrait::class.java).map { epTrait ->
+                val endpointTraitBindings =
+                    EndpointTraitBindings(
+                        codegenContext.model,
+                        symbolProvider,
+                        codegenContext.runtimeConfig,
+                        operationShape,
+                        epTrait,
+                    )
+                withBlockTemplate(
+                    "let endpoint_prefix = ",
+                    """.map_err(|err| #{ContextAttachedError}::new("endpoint prefix could not be built", err))?;""",
+                    *codegenScope,
+                ) {
+                    endpointTraitBindings.render(
+                        this,
+                        "_input",
+                    )
+                }
+                rust("cfg.interceptor_state().store_put(endpoint_prefix);")
             }
-            rust("cfg.interceptor_state().store_put(endpoint_prefix);")
         }
-    }
 }

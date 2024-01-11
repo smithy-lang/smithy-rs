@@ -56,17 +56,18 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import kotlin.reflect.KClass
 
 /** Map from Smithy Shapes to Rust Types */
-val SimpleShapes: Map<KClass<out Shape>, RustType> = mapOf(
-    BooleanShape::class to RustType.Bool,
-    FloatShape::class to RustType.Float(32),
-    DoubleShape::class to RustType.Float(64),
-    ByteShape::class to RustType.Integer(8),
-    ShortShape::class to RustType.Integer(16),
-    IntegerShape::class to RustType.Integer(32),
-    IntEnumShape::class to RustType.Integer(32),
-    LongShape::class to RustType.Integer(64),
-    StringShape::class to RustType.String,
-)
+val SimpleShapes: Map<KClass<out Shape>, RustType> =
+    mapOf(
+        BooleanShape::class to RustType.Bool,
+        FloatShape::class to RustType.Float(32),
+        DoubleShape::class to RustType.Float(64),
+        ByteShape::class to RustType.Integer(8),
+        ShortShape::class to RustType.Integer(16),
+        IntegerShape::class to RustType.Integer(32),
+        IntEnumShape::class to RustType.Integer(32),
+        LongShape::class to RustType.Integer(64),
+        StringShape::class to RustType.String,
+    )
 
 /**
  * Track both the past and current name of a symbol
@@ -82,7 +83,10 @@ data class MaybeRenamed(val name: String, val renamedFrom: String?)
 /**
  * Make the return [value] optional if the [member] symbol is as well optional.
  */
-fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String =
+fun SymbolProvider.wrapOptional(
+    member: MemberShape,
+    value: String,
+): String =
     value.letIf(toSymbol(member).isOptional()) {
         "Some($value)"
     }
@@ -90,7 +94,10 @@ fun SymbolProvider.wrapOptional(member: MemberShape, value: String): String =
 /**
  * Make the return [value] optional if the [member] symbol is not optional.
  */
-fun SymbolProvider.toOptional(member: MemberShape, value: String): String =
+fun SymbolProvider.toOptional(
+    member: MemberShape,
+    value: String,
+): String =
     value.letIf(!toSymbol(member).isOptional()) {
         "Some($value)"
     }
@@ -139,10 +146,11 @@ open class SymbolVisitor(
             module.toType().resolve("${symbol.name}Error").toSymbol().toBuilder().locatedIn(module).build()
         }
 
-    override fun symbolForBuilder(shape: Shape): Symbol = toSymbol(shape).let { symbol ->
-        val module = moduleForBuilder(shape)
-        module.toType().resolve(config.nameBuilderFor(symbol)).toSymbol().toBuilder().locatedIn(module).build()
-    }
+    override fun symbolForBuilder(shape: Shape): Symbol =
+        toSymbol(shape).let { symbol ->
+            val module = moduleForBuilder(shape)
+            module.toType().resolve(config.nameBuilderFor(symbol)).toSymbol().toBuilder().locatedIn(module).build()
+        }
 
     override fun toMemberName(shape: MemberShape): String {
         val container = model.expectShape(shape.container)
@@ -160,7 +168,10 @@ open class SymbolVisitor(
     /**
      * Produce `Box<T>` when the shape has the `RustBoxTrait`
      */
-    private fun handleRustBoxing(symbol: Symbol, shape: Shape): Symbol {
+    private fun handleRustBoxing(
+        symbol: Symbol,
+        shape: Shape,
+    ): Symbol {
         return if (shape.hasTrait<RustBoxTrait>()) {
             val rustType = RustType.Box(symbol.rustType())
             with(Symbol.builder()) {
@@ -179,14 +190,21 @@ open class SymbolVisitor(
     }
 
     override fun booleanShape(shape: BooleanShape): Symbol = simpleShape(shape)
+
     override fun byteShape(shape: ByteShape): Symbol = simpleShape(shape)
+
     override fun shortShape(shape: ShortShape): Symbol = simpleShape(shape)
+
     override fun integerShape(shape: IntegerShape): Symbol = simpleShape(shape)
+
     override fun longShape(shape: LongShape): Symbol = simpleShape(shape)
+
     override fun floatShape(shape: FloatShape): Symbol = simpleShape(shape)
+
     override fun doubleShape(shape: DoubleShape): Symbol = simpleShape(shape)
 
     override fun intEnumShape(shape: IntEnumShape): Symbol = simpleShape(shape)
+
     override fun stringShape(shape: StringShape): Symbol {
         return if (shape.hasTrait<EnumTrait>()) {
             val rustType = RustType.Opaque(shape.contextName(serviceShape).toPascalCase())
@@ -203,12 +221,13 @@ open class SymbolVisitor(
 
     override fun setShape(shape: SetShape): Symbol {
         val inner = this.toSymbol(shape.member)
-        val builder = if (model.expectShape(shape.member.target).isStringShape) {
-            symbolBuilder(shape, RustType.HashSet(inner.rustType()))
-        } else {
-            // only strings get put into actual sets because floats are unhashable
-            symbolBuilder(shape, RustType.Vec(inner.rustType()))
-        }
+        val builder =
+            if (model.expectShape(shape.member.target).isStringShape) {
+                symbolBuilder(shape, RustType.HashSet(inner.rustType()))
+            } else {
+                // only strings get put into actual sets because floats are unhashable
+                symbolBuilder(shape, RustType.Vec(inner.rustType()))
+            }
         return builder.addReference(inner).build()
     }
 
@@ -226,11 +245,11 @@ open class SymbolVisitor(
     }
 
     override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {
-        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
+        TODO("Not yet implemented: https://github.com/smithy-lang/smithy-rs/issues/312")
     }
 
     override fun bigDecimalShape(shape: BigDecimalShape?): Symbol {
-        TODO("Not yet implemented: https://github.com/awslabs/smithy-rs/issues/312")
+        TODO("Not yet implemented: https://github.com/smithy-lang/smithy-rs/issues/312")
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
@@ -255,9 +274,10 @@ open class SymbolVisitor(
 
     override fun structureShape(shape: StructureShape): Symbol {
         val isError = shape.hasTrait<ErrorTrait>()
-        val name = shape.contextName(serviceShape).toPascalCase().letIf(isError && config.renameExceptions) {
-            it.replace("Exception", "Error")
-        }
+        val name =
+            shape.contextName(serviceShape).toPascalCase().letIf(isError && config.renameExceptions) {
+                it.replace("Exception", "Error")
+            }
         return symbolBuilder(shape, RustType.Opaque(name)).locatedIn(moduleForShape(shape)).build()
     }
 
@@ -268,13 +288,18 @@ open class SymbolVisitor(
 
     override fun memberShape(shape: MemberShape): Symbol {
         val target = model.expectShape(shape.target)
-        val defaultValue = shape.getMemberTrait(model, DefaultTrait::class.java).orNull()?.let { trait ->
-            when (val value = trait.toNode()) {
-                Node.from(""), Node.from(0), Node.from(false), Node.arrayNode(), Node.objectNode() -> Default.RustDefault
-                Node.nullNode() -> Default.NoDefault
-                else -> Default.NonZeroDefault(value)
-            }
-        } ?: Default.NoDefault
+        val defaultValue =
+            shape.getMemberTrait(model, DefaultTrait::class.java).orNull()?.let { trait ->
+                if (target.isDocumentShape || target.isTimestampShape) {
+                    Default.NonZeroDefault(trait.toNode())
+                } else {
+                    when (val value = trait.toNode()) {
+                        Node.from(""), Node.from(0), Node.from(false), Node.arrayNode(), Node.objectNode() -> Default.RustDefault
+                        Node.nullNode() -> Default.NoDefault
+                        else -> Default.NonZeroDefault(value)
+                    }
+                }
+            } ?: Default.NoDefault
         // Handle boxing first, so we end up with Option<Box<_>>, not Box<Option<_>>.
         return handleOptionality(
             handleRustBoxing(toSymbol(target), shape),
@@ -295,14 +320,20 @@ open class SymbolVisitor(
  *
  * See `RecursiveShapeBoxer.kt` for the model transformation pass that annotates model shapes with [RustBoxTrait].
  */
-fun handleRustBoxing(symbol: Symbol, shape: MemberShape): Symbol =
+fun handleRustBoxing(
+    symbol: Symbol,
+    shape: MemberShape,
+): Symbol =
     if (shape.hasTrait<RustBoxTrait>()) {
         symbol.makeRustBoxed()
     } else {
         symbol
     }
 
-fun symbolBuilder(shape: Shape?, rustType: RustType): Symbol.Builder =
+fun symbolBuilder(
+    shape: Shape?,
+    rustType: RustType,
+): Symbol.Builder =
     Symbol.builder().shape(shape).rustType(rustType)
         .name(rustType.name)
         // Every symbol that actually gets defined somewhere should set a definition file
@@ -314,8 +345,7 @@ fun handleOptionality(
     member: MemberShape,
     nullableIndex: NullableIndex,
     nullabilityCheckMode: CheckMode,
-): Symbol =
-    symbol.letIf(nullableIndex.isMemberNullable(member, nullabilityCheckMode)) { symbol.makeOptional() }
+): Symbol = symbol.letIf(nullableIndex.isMemberNullable(member, nullabilityCheckMode)) { symbol.makeOptional() }
 
 /**
  * Creates a test module for this symbol.

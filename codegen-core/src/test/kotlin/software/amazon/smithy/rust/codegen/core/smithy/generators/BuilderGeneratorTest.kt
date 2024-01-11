@@ -67,11 +67,12 @@ internal class BuilderGeneratorTest {
     @Test
     fun `generate fallible builders`() {
         val baseProvider = testSymbolProvider(StructureGeneratorTest.model)
-        val provider = object : WrappingSymbolProvider(baseProvider) {
-            override fun toSymbol(shape: Shape): Symbol {
-                return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
+        val provider =
+            object : WrappingSymbolProvider(baseProvider) {
+                override fun toSymbol(shape: Shape): Symbol {
+                    return baseProvider.toSymbol(shape).toBuilder().setDefault(Default.NoDefault).build()
+                }
             }
-        }
         val project = TestWorkspace.testProject(provider)
 
         project.moduleFor(StructureGeneratorTest.struct) {
@@ -97,7 +98,12 @@ internal class BuilderGeneratorTest {
         project.compileAndTest()
     }
 
-    private fun generator(model: Model, provider: RustSymbolProvider, writer: RustWriter, shape: StructureShape) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
+    private fun generator(
+        model: Model,
+        provider: RustSymbolProvider,
+        writer: RustWriter,
+        shape: StructureShape,
+    ) = StructureGenerator(model, provider, writer, shape, emptyList(), StructSettings(flattenVecAccessors = true))
 
     @Test
     fun `builder for a struct with sensitive fields should implement the debug trait as such`() {
@@ -153,7 +159,8 @@ internal class BuilderGeneratorTest {
 
     @Test
     fun `it supports nonzero defaults`() {
-        val model = """
+        val model =
+            """
             namespace com.test
             structure MyStruct {
               @default(0)
@@ -177,19 +184,34 @@ internal class BuilderGeneratorTest {
               @default(true)
               @required
               defaultDocument: Document
+
+              @default([])
+              @required
+              listDocument: Document
+
+              @default(0)
+              zero_timestamp: Timestamp
+
+              @default(1)
+              one_timestamp: Timestamp
+
+              @default("abc")
+              blob_abc: Blob
             }
             list StringList {
                 member: String
             }
             @default(1)
             integer OneDefault
-        """.asSmithyModel(smithyVersion = "2.0")
 
-        val provider = testSymbolProvider(
-            model,
-            rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
-            nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL,
-        )
+            """.asSmithyModel(smithyVersion = "2.0")
+
+        val provider =
+            testSymbolProvider(
+                model,
+                rustReservedWordConfig = StructureGeneratorTest.rustReservedWordConfig,
+                nullabilityCheckMode = NullableIndex.CheckMode.CLIENT_CAREFUL,
+            )
         val project = TestWorkspace.testProject(provider)
         val shape: StructureShape = model.lookup("com.test#MyStruct")
         project.useShapeWriter(shape) {
@@ -207,6 +229,10 @@ internal class BuilderGeneratorTest {
                     assert_eq!(s.an_actually_required_field(), 5);
                     assert_eq!(s.no_default(), None);
                     assert_eq!(s.default_document().as_bool().unwrap(), true);
+                    assert_eq!(s.list_document().as_array().expect("empty list"), &[]);
+                    assert_eq!(std::str::from_utf8(s.blob_abc().as_ref()).expect("invalid blob"), "abc");
+                    assert_eq!(s.zero_timestamp().secs(), 0);
+                    assert_eq!(s.one_timestamp().secs(), 1);
                     """,
                     "Struct" to provider.toSymbol(shape),
                 )

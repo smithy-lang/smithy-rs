@@ -10,77 +10,14 @@ use crate::sort::dependency_order;
 use crate::RUST_SDK_CI_OWNER;
 use anyhow::{Context, Result};
 use cargo_toml::{Dependency, DepsSet, Manifest};
+use semver::Version;
 use smithy_rs_tool_common::package::PackageCategory;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::error::Error as StdError;
 use std::fmt;
-use std::fmt::Formatter;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use tokio::fs;
-use tracing::{error, warn};
-
-/// A trait that marks a type that can be created from `&str` and turned into
-/// [`Version`]
-///
-/// This trait is purely for convenience to reduce the number of generic parameters for functions,
-/// that is, the functions only need to have a single generic parameter that implements this trait
-/// instead of having to specify `ParsedT` and `Err` separately.
-pub trait ParseIntoVersion {
-    type ParsedT: FromStr<Err = Self::Err> + Into<Version>;
-    type Err: Into<BoxError>;
-}
-
-/// A type that indicates the `SemVer` variant of [`Version`] will be created as a result of parsing
-pub struct SemVer;
-impl ParseIntoVersion for SemVer {
-    type ParsedT = semver::Version;
-    type Err = semver::Error;
-}
-
-/// A type that indicates the `Lenient` variant of [`Version`] will be created as a result of parsing
-pub struct VersionRequirement;
-impl ParseIntoVersion for VersionRequirement {
-    type ParsedT = String;
-    type Err = std::convert::Infallible;
-}
-
-/// An enum that handles both semver as well as string values that do not adhere to the semver
-/// specification.
-///
-/// Most of the time, the `SemVer` variant will be used when manifest files are parsed into an
-/// in-memory data structure. Those version strings can appear under the `[package]` section as
-/// well as the dependency table within a manifest file.
-/// The `VersionRequirement` variant is used when the `fix_manifests` subcommand and the
-/// `generate_version_manifest` subcommand are executed, allowing version strings to be parsed into
-/// tilde version requirements.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub enum Version {
-    SemVer(semver::Version),
-    VersionRequirement(String),
-}
-
-impl From<semver::Version> for Version {
-    fn from(version: semver::Version) -> Self {
-        Version::SemVer(version)
-    }
-}
-
-impl From<String> for Version {
-    fn from(s: String) -> Self {
-        Version::VersionRequirement(s)
-    }
-}
-
-impl fmt::Display for Version {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let version = match self {
-            Version::SemVer(v) => v.to_string(),
-            Version::VersionRequirement(s) => s.clone(),
-        };
-        write!(f, "{}", version)
-    }
-}
+use tracing::warn;
 
 /// Information required to identify a package (crate).
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
@@ -90,10 +27,10 @@ pub struct PackageHandle {
 }
 
 impl PackageHandle {
-    pub fn new(name: impl Into<String>, version: impl Into<Version>) -> Self {
+    pub fn new(name: impl Into<String>, version: Version) -> Self {
         Self {
             name: name.into(),
-            version: version.into(),
+            version,
         }
     }
 }
@@ -208,7 +145,7 @@ pub async fn discover_and_validate_package_batches(
     fs: Fs,
     path: impl AsRef<Path>,
 ) -> Result<(Vec<PackageBatch>, PackageStats)> {
-    let packages = discover_packages::<VersionRequirement>(fs, path.as_ref().into())
+    let packages = discover_packages(fs, path.as_ref().into())
         .await?
         .into_iter()
         .filter(|package| package.publish == Publish::Allowed)
@@ -234,8 +171,6 @@ pub enum Error {
     MissingVersion(PathBuf, String),
     #[error("crate {0} has multiple versions: {1} and {2}")]
     MultipleVersions(String, Version, Version),
-    #[error("multiple version requirements have been specified for crate {0}: {1} and {2}")]
-    MultipleVersionRequirements(String, Version, Version),
 }
 
 /// Discovers all Cargo.toml files under the given path recursively
@@ -257,24 +192,18 @@ pub async fn discover_manifests(path: PathBuf) -> Result<Vec<PathBuf>> {
 }
 
 /// Discovers and parses all Cargo.toml files that are packages (as opposed to being exclusively workspaces)
-pub async fn discover_packages<P: ParseIntoVersion>(fs: Fs, path: PathBuf) -> Result<Vec<Package>> {
+pub async fn discover_packages(fs: Fs, path: PathBuf) -> Result<Vec<Package>> {
     let manifest_paths = discover_manifests(path).await?;
-    read_packages::<P>(fs, manifest_paths).await
+    read_packages(fs, manifest_paths).await
 }
 
-/// Parses `version` into [`Version`] and adds additional error context when parsing fails.
-pub fn parse_version<P: ParseIntoVersion>(
-    manifest_path: &Path,
-    version: &str,
-) -> Result<P::ParsedT, Error> {
-    P::ParsedT::from_str(version)
+/// Parses a semver version number and adds additional error context when parsing fails.
+pub fn parse_version(manifest_path: &Path, version: &str) -> Result<Version, Error> {
+    Version::parse(version)
         .map_err(|err| Error::InvalidCrateVersion(manifest_path.into(), version.into(), err.into()))
 }
 
-fn read_dependencies<P: ParseIntoVersion>(
-    path: &Path,
-    dependencies: &DepsSet,
-) -> Result<Vec<PackageHandle>> {
+fn read_dependencies(path: &Path, dependencies: &DepsSet) -> Result<Vec<PackageHandle>> {
     let mut result = Vec::new();
     for (name, metadata) in dependencies {
         match metadata {
@@ -284,39 +213,35 @@ fn read_dependencies<P: ParseIntoVersion>(
                     let version = detailed
                         .version
                         .as_ref()
-                        .map(|version| parse_version::<P>(path, version))
+                        .map(|version| parse_version(path, version))
                         .ok_or_else(|| Error::MissingVersion(path.into(), name.into()))??;
                     result.push(PackageHandle::new(name, version));
                 }
             }
+            Dependency::Inherited(_) => panic!("workspace deps are unsupported"),
         }
     }
     Ok(result)
 }
 
 /// Returns `Ok(None)` when the Cargo.toml is a workspace rather than a package
-fn read_package<P: ParseIntoVersion>(
-    path: &Path,
-    manifest_bytes: &[u8],
-) -> Result<Option<Package>> {
-    let manifest = Manifest::from_slice(manifest_bytes)
+fn read_package(path: &Path, manifest_bytes: &[u8]) -> Result<Option<Package>> {
+    let mut manifest = Manifest::from_slice(manifest_bytes)
         .with_context(|| format!("failed to load package manifest for {:?}", path))?;
+    manifest.complete_from_path(path)?;
     if let Some(package) = manifest.package {
         let name = package.name;
-        let version = parse_version::<P>(path, &package.version)?;
-        let handle = PackageHandle::new(name, version);
-        let publish = match package.publish {
+        let version = parse_version(path, &package.version.unwrap())?;
+        let handle = PackageHandle { name, version };
+        let publish = match package.publish.unwrap() {
             cargo_toml::Publish::Flag(true) => Publish::Allowed,
             _ => Publish::NotAllowed,
         };
 
         let mut local_dependencies = BTreeSet::new();
-        local_dependencies
-            .extend(read_dependencies::<P>(path, &manifest.dependencies)?.into_iter());
-        local_dependencies
-            .extend(read_dependencies::<P>(path, &manifest.dev_dependencies)?.into_iter());
-        local_dependencies
-            .extend(read_dependencies::<P>(path, &manifest.build_dependencies)?.into_iter());
+        local_dependencies.extend(read_dependencies(path, &manifest.dependencies)?);
+        local_dependencies.extend(read_dependencies(path, &manifest.dev_dependencies)?);
+        local_dependencies.extend(read_dependencies(path, &manifest.build_dependencies)?);
         Ok(Some(Package::new(
             handle,
             path,
@@ -331,63 +256,38 @@ fn read_package<P: ParseIntoVersion>(
 /// Validates that all of the publishable crates use consistent version numbers
 /// across all of their local dependencies.
 fn validate_packages(packages: &[Package]) -> Result<()> {
-    fn track_version<F>(
-        handle: &PackageHandle,
-        map: &mut BTreeMap<String, Version>,
-        error_generator: F,
-    ) -> Result<(), Error>
-    where
-        F: FnOnce(String, Version, Version) -> Result<(), Error>,
-    {
-        if let Some(version) = map.get(&handle.name) {
+    let mut versions: BTreeMap<String, Version> = BTreeMap::new();
+    let track_version = &mut |handle: &PackageHandle| -> Result<(), Error> {
+        if let Some(version) = versions.get(&handle.name) {
             if *version != handle.version {
-                error_generator(
+                Err(Error::MultipleVersions(
                     (&handle.name).into(),
-                    map[&handle.name].clone(),
+                    versions[&handle.name].clone(),
                     handle.version.clone(),
-                )
+                ))
             } else {
                 Ok(())
             }
         } else {
-            map.insert(handle.name.clone(), handle.version.clone());
+            versions.insert(handle.name.clone(), handle.version.clone());
             Ok(())
         }
-    }
-    let mut versions: BTreeMap<String, Version> = BTreeMap::new();
-    let mut version_requirements: BTreeMap<String, Version> = BTreeMap::new();
+    };
     for package in packages {
-        track_version(
-            &package.handle,
-            &mut versions,
-            |crate_name, version_a, version_b| {
-                Err(Error::MultipleVersions(crate_name, version_a, version_b))
-            },
-        )?;
+        track_version(&package.handle)?;
         for dependency in &package.local_dependencies {
-            track_version(
-                dependency,
-                &mut version_requirements,
-                |crate_name, version_a, version_b| {
-                    Err(Error::MultipleVersionRequirements(
-                        crate_name, version_a, version_b,
-                    ))
-                },
-            )?;
+            track_version(dependency)?;
         }
     }
 
     Ok(())
 }
 
-pub async fn read_packages<P: ParseIntoVersion>(
-    fs: Fs,
-    manifest_paths: Vec<PathBuf>,
-) -> Result<Vec<Package>> {
+pub async fn read_packages(fs: Fs, manifest_paths: Vec<PathBuf>) -> Result<Vec<Package>> {
     let mut result = Vec::new();
     for path in &manifest_paths {
         let contents: Vec<u8> = fs.read_file(path).await?;
-        if let Some(package) = read_package::<P>(path, &contents)? {
+        if let Some(package) = read_package(path, &contents)? {
             result.push(package);
         }
     }
@@ -436,10 +336,11 @@ fn batch_packages(packages: Vec<Package>) -> Result<Vec<PackageBatch>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use semver::Version;
     use std::path::PathBuf;
 
     fn version(version: &str) -> Version {
-        semver::Version::parse(version).unwrap().into()
+        Version::parse(version).unwrap()
     }
 
     #[test]
@@ -463,7 +364,7 @@ mod tests {
         "#;
         let path: PathBuf = "test/Cargo.toml".into();
 
-        let package = read_package::<SemVer>(&path, manifest)
+        let package = read_package(&path, manifest)
             .expect("parse success")
             .expect("is a package");
         assert_eq!("test", package.handle.name);
@@ -493,7 +394,7 @@ mod tests {
 
         let error = format!(
             "{}",
-            read_package::<SemVer>(&path, manifest).expect_err("should fail")
+            read_package(&path, manifest).expect_err("should fail")
         );
         assert!(
             error.contains("Invalid crate version"),
@@ -504,11 +405,11 @@ mod tests {
 
     fn package(name: &str, dependencies: &[&str]) -> Package {
         Package::new(
-            PackageHandle::new(name, semver::Version::parse("1.0.0").unwrap()),
+            PackageHandle::new(name, Version::parse("1.0.0").unwrap()),
             format!("{}/Cargo.toml", name),
             dependencies
                 .iter()
-                .map(|d| PackageHandle::new(*d, semver::Version::parse("1.0.0").unwrap()))
+                .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").unwrap()))
                 .collect(),
             Publish::Allowed,
         )
@@ -586,11 +487,11 @@ mod tests {
 
     fn pkg_ver(name: &str, version: &str, dependencies: &[(&str, &str)]) -> Package {
         Package::new(
-            PackageHandle::new(name, semver::Version::parse(version).unwrap()),
+            PackageHandle::new(name, Version::parse(version).unwrap()),
             format!("{}/Cargo.toml", name),
             dependencies
                 .iter()
-                .map(|p| PackageHandle::new(p.0, semver::Version::parse(p.1).unwrap()))
+                .map(|p| PackageHandle::new(p.0, Version::parse(p.1).unwrap()))
                 .collect(),
             Publish::Allowed,
         )
@@ -626,7 +527,7 @@ mod tests {
         ])
         .expect_err("fail");
         assert_eq!(
-            "multiple version requirements have been specified for crate A: 1.1.0 and 1.0.0",
+            "crate A has multiple versions: 1.1.0 and 1.0.0",
             format!("{}", error)
         );
     }

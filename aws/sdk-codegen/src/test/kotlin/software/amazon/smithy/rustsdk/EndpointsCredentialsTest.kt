@@ -21,7 +21,8 @@ class EndpointsCredentialsTest {
     // 1. A rule that sets no authentication scheme—in this case, we should be using the default from the service
     // 2. A rule that sets a custom authentication scheme and that configures signing
     // The chosen path is controlled by static context parameters set on the operation
-    private val model = """
+    private val model =
+        """
         namespace aws.fooBaz
 
         use aws.api#service
@@ -73,7 +74,7 @@ class EndpointsCredentialsTest {
         @http(uri: "/custom", method: "GET")
         @staticContextParams({ AuthMode: { value: "custom-auth" } })
         operation CustomAuth { }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `endpoint rules configure auth in default and non-default case`() {
@@ -93,12 +94,13 @@ class EndpointsCredentialsTest {
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = client.default_auth().send().await;
                         let req = rcvr.expect_request();
-                        let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
+                        let auth_header = req.headers().get("AUTHORIZATION").unwrap();
                         assert!(auth_header.contains("/us-west-2/foobaz/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
-                        "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
-                            .resolve("Credentials"),
+                        "Credentials" to
+                            AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
+                                .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
@@ -116,12 +118,13 @@ class EndpointsCredentialsTest {
                         let client = $moduleName::Client::from_conf(conf);
                         let _ = dbg!(client.custom_auth().send().await);
                         let req = rcvr.expect_request();
-                        let auth_header = req.headers().get("AUTHORIZATION").unwrap().to_str().unwrap();
+                        let auth_header = req.headers().get("AUTHORIZATION").unwrap();
                         assert!(auth_header.contains("/region-custom-auth/name-custom-auth/aws4_request"), "{}", auth_header);
                         """,
                         "capture_request" to RuntimeType.captureRequest(context.runtimeConfig),
-                        "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
-                            .resolve("Credentials"),
+                        "Credentials" to
+                            AwsRuntimeType.awsCredentialTypesTestUtil(context.runtimeConfig)
+                                .resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(context.runtimeConfig).resolve("region::Region"),
                     )
                 }
