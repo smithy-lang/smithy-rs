@@ -53,7 +53,7 @@ mod tests {
         assert_eq!("some-tag", tag);
     }
 
-    #[cfg(feature = "async-shell")]
+    #[cfg(feature = "async")]
     #[tokio::test]
     async fn get_current_tag_success_async() {
         let tag = GetCurrentTag {
