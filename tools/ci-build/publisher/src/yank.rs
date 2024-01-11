@@ -4,7 +4,7 @@
  */
 
 use crate::cargo;
-use crate::retry::{run_with_retry, BoxError, ErrorClass};
+use smithy_rs_tool_common::retry::{run_with_retry, BoxError, ErrorClass};
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::time::Duration;
 use tracing::info;

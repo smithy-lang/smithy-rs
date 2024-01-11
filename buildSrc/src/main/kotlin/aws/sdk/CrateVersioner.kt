@@ -40,8 +40,6 @@ interface VersionCrate {
         moduleName: String,
         service: AwsService,
     ): String
-
-    fun independentVersioningEnabled(): Boolean
 }
 
 class SynchronizedCrateVersioner(
@@ -58,8 +56,6 @@ class SynchronizedCrateVersioner(
         moduleName: String,
         service: AwsService,
     ): String = sdkVersion
-
-    override fun independentVersioningEnabled(): Boolean = sdkVersion == LOCAL_DEV_VERSION
 }
 
 private data class SemVer(
@@ -129,8 +125,6 @@ class IndependentCrateVersioner(
                 "Code generator changed: $smithyRsChanged",
         )
     }
-
-    override fun independentVersioningEnabled(): Boolean = true
 
     override fun decideCrateVersion(
         moduleName: String,
