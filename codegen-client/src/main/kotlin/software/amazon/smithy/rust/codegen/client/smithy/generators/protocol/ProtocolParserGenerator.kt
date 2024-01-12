@@ -56,7 +56,6 @@ class ProtocolParserGenerator(
             "Headers" to RuntimeType.headers(codegenContext.runtimeConfig),
             "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
             "http" to RuntimeType.Http,
-            "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
         )
 
