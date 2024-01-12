@@ -72,8 +72,9 @@ internal class EndpointTraitBindingsTest {
             )
             implBlock(symbolProvider.toSymbol(model.lookup("test#GetStatusInput"))) {
                 rustBlockTemplate(
-                    "fn endpoint_prefix(&self) -> std::result::Result<#{endpoint}::EndpointPrefix, #{endpoint}::error::InvalidEndpointError>",
-                    "endpoint" to RuntimeType.smithyHttp(TestRuntimeConfig).resolve("endpoint"),
+                    "fn endpoint_prefix(&self) -> std::result::Result<#{EndpointPrefix}, #{InvalidEndpointError}>",
+                    "EndpointPrefix" to RuntimeType.smithyRuntimeApiClient(TestRuntimeConfig).resolve("client::endpoint::EndpointPrefix"),
+                    "InvalidEndpointError" to RuntimeType.smithyRuntimeApiClient(TestRuntimeConfig).resolve("client::endpoint::error::InvalidEndpointError"),
                 ) {
                     endpointBindingGenerator.render(this, "self")
                 }
@@ -162,8 +163,8 @@ internal class EndpointTraitBindingsTest {
                     """
                     async fn test_endpoint_prefix() {
                         use #{capture_request};
-                        use aws_smithy_http::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::box_error::BoxError;
+                        use aws_smithy_runtime_api::client::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                         use aws_smithy_types::body::SdkBody;
                         use aws_smithy_types::config_bag::ConfigBag;

@@ -11,6 +11,18 @@
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location."
+references = ["smithy-rs#3318"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location."
+references = ["smithy-rs#3318"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
 [[smithy-rs]]
 message = "The `Metadata` storable was moved from aws_smithy_http into aws_smithy_runtime_api. A deprecated type alias was left in place with a note showing where the new location is."
 references = ["smithy-rs#3325"]
