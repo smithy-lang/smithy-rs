@@ -14,6 +14,7 @@
 ///
 use std::{collections::HashMap, time::Duration};
 
+use aws_smithy_runtime_api::client::orchestrator::Metadata;
 use pokemon_service_client::config::{ConfigBag, Intercept};
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client::{
@@ -77,9 +78,7 @@ impl Intercept for TtlHeaderInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         // Metadata in the ConfigBag has the operation name.
-        let metadata = cfg
-            .load::<aws_smithy_http::operation::Metadata>()
-            .expect("metadata should exist");
+        let metadata = cfg.load::<Metadata>().expect("metadata should exist");
         let operation_name = metadata.name();
 
         // Get operation specific or default HeaderValue to set for the header key.
