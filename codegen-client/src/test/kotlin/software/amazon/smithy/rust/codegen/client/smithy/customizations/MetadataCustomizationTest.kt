@@ -27,7 +27,7 @@ class MetadataCustomizationTest {
                     "BoxError" to RuntimeType.boxError(runtimeConfig),
                     "ConfigBag" to RuntimeType.configBag(runtimeConfig),
                     "Intercept" to RuntimeType.intercept(runtimeConfig),
-                    "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
+                    "Metadata" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::Metadata"),
                     "capture_request" to RuntimeType.captureRequest(runtimeConfig),
                     "RuntimeComponents" to
                         RuntimeType.smithyRuntimeApiClient(runtimeConfig)
