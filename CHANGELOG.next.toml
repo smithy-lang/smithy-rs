@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "The `Metadata` storable was moved from aws_smithy_http into aws_smithy_runtime_api. A deprecated type alias was left in place with a note showing where the new location is."
+references = ["smithy-rs#3325"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
