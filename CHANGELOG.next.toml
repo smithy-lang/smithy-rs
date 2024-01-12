@@ -28,3 +28,9 @@ message = "The `Metadata` storable was moved from aws_smithy_http into aws_smith
 references = ["smithy-rs#3325"]
 meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fix bug where overriding the credentials at the operation level failed if credentials were already set."
+references = ["aws-sdk-rust#901", "smithy-rs#3363"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
