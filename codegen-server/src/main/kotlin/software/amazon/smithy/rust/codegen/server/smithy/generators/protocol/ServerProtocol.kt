@@ -32,12 +32,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeEncodingMapOrCollectionCborCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJsonSerializerGenerator
@@ -315,6 +317,14 @@ class ServerRpcV2Protocol(
                 ),
             ),
         )
+
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator {
+        return CborSerializerGenerator(
+            codegenContext,
+            httpBindingResolver,
+            listOf(BeforeEncodingMapOrCollectionCborCustomization(serverCodegenContext)),
+        )
+    }
 
     override fun markerStruct() = ServerRuntimeType.protocol("RpcV2", "rpc_v2", runtimeConfig)
 

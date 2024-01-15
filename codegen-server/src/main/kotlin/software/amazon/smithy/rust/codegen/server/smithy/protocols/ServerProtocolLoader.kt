@@ -9,7 +9,7 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
-import software.amazon.smithy.protocols.traits.Rpcv2Trait
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -73,7 +73,7 @@ class ServerProtocolLoader(supportedProtocols: ProtocolMap<ServerProtocolGenerat
                 additionalServerHttpBoundProtocolCustomizations = listOf(StreamPayloadSerializerCustomization()),
             ),
             // TODO `StreamPayloadSerializerCustomization`
-            Rpcv2Trait.ID to ServerRpcV2Factory(),
+            Rpcv2CborTrait.ID to ServerRpcV2Factory(),
         )
     }
 }

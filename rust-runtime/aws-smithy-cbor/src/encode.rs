@@ -91,6 +91,11 @@ impl Encoder {
         self
     }
 
+    pub fn null(&mut self) -> &mut Self {
+        self.encoder.null().expect(INFALLIBLE_WRITE);
+        self
+    }
+
     pub fn end(&mut self) -> &mut Self {
         self.encoder.end().expect(INFALLIBLE_WRITE);
         self

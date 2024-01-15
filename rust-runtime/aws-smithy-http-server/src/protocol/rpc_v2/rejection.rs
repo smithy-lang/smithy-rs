@@ -13,7 +13,7 @@ pub enum ResponseRejection {
     #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]
     InvalidHttpStatusCode(TryFromIntError),
     #[error("error serializing CBOR-encoded body: {0}")]
-    Serialization(#[from] aws_smithy_http::operation::error::SerializationError),
+    Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
     HttpBuild(#[from] http::Error),
 }

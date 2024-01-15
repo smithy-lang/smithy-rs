@@ -136,6 +136,10 @@ impl<'b> Decoder<'b> {
         }
     }
 
+    pub fn null(&mut self) -> Result<(), DeserializeError> {
+        self.decoder.null().map_err(DeserializeError::new)
+    }
+
     pub fn list(&mut self) -> Result<Option<u64>, DeserializeError> {
         self.decoder.array().map_err(DeserializeError::new)
     }

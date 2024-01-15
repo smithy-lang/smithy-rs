@@ -87,7 +87,12 @@ class CborParserGenerator(
         "Vec" to RuntimeType.Vec,
     )
 
-    private fun listMemberParserFn(listSymbol: Symbol, memberShape: MemberShape, returnUnconstrainedType: Boolean) = writable {
+    private fun listMemberParserFn(
+        listSymbol: Symbol,
+        isSparseList: Boolean,
+        memberShape: MemberShape,
+        returnUnconstrainedType: Boolean,
+    ) = writable {
         rustBlockTemplate(
             """
             fn member(
@@ -98,8 +103,25 @@ class CborParserGenerator(
             *codegenScope,
             "ListSymbol" to listSymbol,
         ) {
-            withBlock("let value = ", ";") {
-                deserializeMember(memberShape)
+            if (isSparseList) {
+                withBlock("let res = ", ";") {
+                    deserializeMember(memberShape, bubbleUp = false)
+                }
+                rust(
+                    """
+                    let value = match res {
+                        Ok(value) => Some(value),
+                        Err(_e) => {
+                            let _v = decoder.null()?;
+                            None
+                        }
+                    };
+                    """
+                )
+            } else {
+                withBlock("let value = ", ";") {
+                    deserializeMember(memberShape)
+                }
             }
 
             if (returnUnconstrainedType) {
@@ -112,7 +134,14 @@ class CborParserGenerator(
         }
     }
 
-    private fun mapPairParserFnWritable(keyTarget: StringShape, valueShape: MemberShape, mapSymbol: Symbol, returnUnconstrainedType: Boolean) = writable {
+    // TODO DRY out with lists
+    private fun mapPairParserFnWritable(
+        keyTarget: StringShape,
+        valueShape: MemberShape,
+        isSparseMap: Boolean,
+        mapSymbol: Symbol,
+        returnUnconstrainedType: Boolean,
+    ) = writable {
         rustBlockTemplate(
             """
             fn pair(
@@ -126,8 +155,25 @@ class CborParserGenerator(
             withBlock("let key = ", ";") {
                 deserializeString(keyTarget)
             }
-            withBlock("let value = ", ";") {
-                deserializeMember(valueShape)
+            if (isSparseMap) {
+                withBlock("let res = ", ";") {
+                    deserializeMember(valueShape, bubbleUp = false)
+                }
+                rust(
+                    """
+                    let value = match res {
+                        Ok(value) => Some(value),
+                        Err(e) => {
+                            let _v = decoder.null()?;
+                            None
+                        }
+                    };
+                    """
+                )
+            } else {
+                withBlock("let value = ", ";") {
+                    deserializeMember(valueShape)
+                }
             }
 
             if (returnUnconstrainedType) {
@@ -367,32 +413,34 @@ class CborParserGenerator(
         return structureParser(operationShape, symbolProvider.symbolForBuilder(inputShape), includedMembers)
     }
 
-    private fun RustWriter.deserializeMember(memberShape: MemberShape) {
+    // TODO We definitely need to put the responsibility of bubbling up at the callsite.
+    private fun RustWriter.deserializeMember(memberShape: MemberShape, bubbleUp: Boolean = true) {
+        val questionMark = if (bubbleUp) { "?" } else ""
         when (val target = model.expectShape(memberShape.target)) {
             // Simple shapes: https://smithy.io/2.0/spec/simple-types.html
-            is BlobShape -> rust("decoder.blob()?")
-            is BooleanShape -> rust("decoder.boolean()?")
+            is BlobShape -> rust("decoder.blob()$questionMark")
+            is BooleanShape -> rust("decoder.boolean()$questionMark")
 
-            is StringShape -> deserializeString(target)
+            is StringShape -> deserializeString(target, bubbleUp)
 
-            is ByteShape -> rust("decoder.byte()?")
-            is ShortShape -> rust("decoder.short()?")
-            is IntegerShape -> rust("decoder.integer()?")
-            is LongShape -> rust("decoder.long()?")
+            is ByteShape -> rust("decoder.byte()$questionMark")
+            is ShortShape -> rust("decoder.short()$questionMark")
+            is IntegerShape -> rust("decoder.integer()$questionMark")
+            is LongShape -> rust("decoder.long()$questionMark")
 
-            is FloatShape -> rust("decoder.float()?")
-            is DoubleShape -> rust("decoder.double()?")
+            is FloatShape -> rust("decoder.float()$questionMark")
+            is DoubleShape -> rust("decoder.double()$questionMark")
 
-            is TimestampShape -> rust("decoder.timestamp()?")
+            is TimestampShape -> rust("decoder.timestamp()$questionMark")
 
             // TODO Document shapes have not been specced out yet.
             // is DocumentShape -> rustTemplate("Some(#{expect_document}(tokens)?)", *codegenScope)
 
             // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
-            is StructureShape -> deserializeStruct(target)
-            is CollectionShape -> deserializeCollection(target)
-            is MapShape -> deserializeMap(target)
-            is UnionShape -> deserializeUnion(target)
+            is StructureShape -> withBlock("", questionMark) { deserializeStruct(target) }
+            is CollectionShape -> withBlock("", questionMark) { deserializeCollection(target) }
+            is MapShape -> withBlock("", questionMark) { deserializeMap(target) }
+            is UnionShape -> withBlock("", questionMark) { deserializeUnion(target) }
             else -> PANIC("unexpected shape: $target")
         }
         // TODO Boxing
@@ -405,13 +453,13 @@ class CborParserGenerator(
 //        }
     }
 
-    private fun RustWriter.deserializeString(target: StringShape) {
+    private fun RustWriter.deserializeString(target: StringShape, bubbleUp: Boolean = true) {
+        val questionMark = if (bubbleUp) { "?" } else { "" }
         // TODO Handle enum shapes
-        rust("decoder.string()?")
+        rust("decoder.string()$questionMark")
     }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
-        val isSparse = shape.hasTrait<SparseTrait>()
         val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
 
         // TODO Test `@sparse` and non-@sparse lists.
@@ -441,18 +489,22 @@ class CborParserGenerator(
                 }
                 """,
                 "ReturnType" to returnSymbol,
-                "ListMemberParserFn" to listMemberParserFn(returnSymbol, shape.member, returnUnconstrainedType = returnUnconstrainedType),
+                "ListMemberParserFn" to listMemberParserFn(
+                    returnSymbol,
+                    isSparseList = shape.hasTrait<SparseTrait>(),
+                    shape.member,
+                    returnUnconstrainedType = returnUnconstrainedType,
+                ),
                 "InitContainerWritable" to initContainerWritable,
                 "DecodeListLoop" to decodeListLoop(),
                 *codegenScope,
             )
         }
-        rust("#T(decoder)?", parser)
+        rust("#T(decoder)", parser)
     }
 
     private fun RustWriter.deserializeMap(shape: MapShape) {
         val keyTarget = model.expectShape(shape.key.target, StringShape::class.java)
-        val isSparse = shape.hasTrait<SparseTrait>()
         val (returnSymbol, returnUnconstrainedType) = returnSymbolToParse(shape)
 
         // TODO Test `@sparse` and non-@sparse maps.
@@ -482,13 +534,19 @@ class CborParserGenerator(
                 }
                 """,
                 "ReturnType" to returnSymbol,
-                "MapPairParserFn" to mapPairParserFnWritable(keyTarget, shape.value, returnSymbol, returnUnconstrainedType = returnUnconstrainedType),
+                "MapPairParserFn" to mapPairParserFnWritable(
+                    keyTarget,
+                    shape.value,
+                    isSparseMap = shape.hasTrait<SparseTrait>(),
+                    returnSymbol,
+                    returnUnconstrainedType = returnUnconstrainedType,
+                ),
                 "InitContainerWritable" to initContainerWritable,
                 "DecodeMapLoop" to decodeMapLoopWritable(),
                 *codegenScope,
             )
         }
-        rust("#T(decoder)?", parser)
+        rust("#T(decoder)", parser)
     }
 
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
@@ -524,7 +582,7 @@ class CborParserGenerator(
                 }
             }
         }
-        rust("#T(decoder)?", parser)
+        rust("#T(decoder)", parser)
     }
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
@@ -561,6 +619,6 @@ class CborParserGenerator(
                 *codegenScope,
             )
         }
-        rust("#T(decoder)?", parser)
+        rust("#T(decoder)", parser)
     }
 }

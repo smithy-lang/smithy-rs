@@ -31,6 +31,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
+import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.serializationError
@@ -48,9 +50,24 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 // TODO Cleanup commented and unused code.
 
+/**
+ * Class describing a JSON serializer section that can be used in a customization.
+ */
+sealed class CborSerializerSection(name: String) : Section(name) {
+    /** Manipulate the serializer context for a map prior to it being serialized. **/
+    data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
+        CborSerializerSection("BeforeIteratingOverMapOrCollection")
+}
+
+/**
+ * Customization for the CBOR serializer.
+ */
+typealias CborSerializerCustomization = NamedCustomization<CborSerializerSection>
+
 class CborSerializerGenerator(
     codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
+    private val customizations: List<CborSerializerCustomization> = listOf(),
 ) : StructuredDataSerializerGenerator {
     data class Context<out T : Shape>(
         /** Expression representing the value to write to the encoder */
@@ -368,6 +385,9 @@ class CborSerializerGenerator(
         // infallible (unless we ever have 128-bit machines I guess).
         // See https://users.rust-lang.org/t/cant-convert-usize-to-u64/6243.
         // TODO Point to a `static` to not inflate the binary.
+        for (customization in customizations) {
+            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+        }
         rust(
             """
             encoder.array(
@@ -384,6 +404,9 @@ class CborSerializerGenerator(
     private fun RustWriter.serializeMap(context: Context<MapShape>) {
         val keyName = safeName("key")
         val valueName = safeName("value")
+        for (customization in customizations) {
+            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+        }
         rust(
             """
             encoder.map(
