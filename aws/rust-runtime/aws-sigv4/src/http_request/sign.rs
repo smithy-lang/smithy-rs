@@ -178,6 +178,34 @@ impl SigningInstructions {
             *request.uri_mut() = query.build_uri();
         }
     }
+
+    #[cfg(any(feature = "http", test))]
+    /// Applies the instructions to the given `request`.
+    pub fn apply_to_request_http1x<B>(self, request: &mut http1::Request<B>) {
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3367): Update query writer to reduce
+        // allocations
+        let (new_headers, new_query) = self.into_parts();
+        for header in new_headers.into_iter() {
+            let mut value = http1::HeaderValue::from_str(&header.value).unwrap();
+            value.set_sensitive(header.sensitive);
+            request.headers_mut().insert(header.key, value);
+        }
+
+        if !new_query.is_empty() {
+            let mut query = aws_smithy_http::query_writer::QueryWriter::new_from_string(
+                &request.uri().to_string(),
+            )
+            .expect("unreachable: URI is valid");
+            for (name, value) in new_query {
+                query.insert(name, &value);
+            }
+            *request.uri_mut() = query
+                .build_uri()
+                .to_string()
+                .parse()
+                .expect("unreachable: URI is valid");
+        }
+    }
 }
 
 /// Produces a signature for the given `request` and returns instructions
@@ -1053,6 +1081,27 @@ mod tests {
             .unwrap();
 
         instructions.apply_to_request_http0x(&mut request);
+
+        assert_eq!(
+            "/some/path?some-param=f%26o%3Fo&some-other-param%3F=bar",
+            request.uri().path_and_query().unwrap().to_string()
+        );
+    }
+
+    #[test]
+    fn apply_signing_instructions_query_params_http_1x() {
+        let params = vec![
+            ("some-param", Cow::Borrowed("f&o?o")),
+            ("some-other-param?", Cow::Borrowed("bar")),
+        ];
+        let instructions = SigningInstructions::new(vec![], params);
+
+        let mut request = http1::Request::builder()
+            .uri("https://some-endpoint.some-region.amazonaws.com/some/path")
+            .body("")
+            .unwrap();
+
+        instructions.apply_to_request_http1x(&mut request);
 
         assert_eq!(
             "/some/path?some-param=f%26o%3Fo&some-other-param%3F=bar",

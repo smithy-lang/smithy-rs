@@ -21,6 +21,7 @@ aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll
 bytes = "1"
 bytes-utils = "0.1"
 http = "0.2.3"
+http1 = { package = "http", version = "1" }
 http-body = "0.4.4"
 once_cell = "1.10"
 percent-encoding = "2.1.0"
