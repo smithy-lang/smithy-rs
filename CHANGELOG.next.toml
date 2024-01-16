@@ -34,3 +34,15 @@ message = "Fix bug where overriding the credentials at the operation level faile
 references = ["aws-sdk-rust#901", "smithy-rs#3363"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Add `try_into_http1x` and `try_from_http1x` to Request and Response container types."
+references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
+meta = { "breaking" = false, "bug" = false, "tada" = false, "target" = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add `try_into_http1x` and `try_from_http1x` to Request and Response container types."
+references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
+meta = { "breaking" = false, "bug" = false, "tada" = false }
+author = "rcoh"
