@@ -75,7 +75,7 @@ class CborParserGenerator(
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
-    // TODO Use
+    // TODO Use?
     private val codegenTarget = codegenContext.target
     private val smithyCbor = CargoDependency.smithyCbor(runtimeConfig).toType()
     private val protocolFunctions = ProtocolFunctions(codegenContext)
@@ -105,7 +105,7 @@ class CborParserGenerator(
         ) {
             if (isSparseList) {
                 withBlock("let res = ", ";") {
-                    deserializeMember(memberShape, bubbleUp = false)
+                    deserializeMember(memberShape)
                 }
                 rust(
                     """
@@ -119,7 +119,7 @@ class CborParserGenerator(
                     """
                 )
             } else {
-                withBlock("let value = ", ";") {
+                withBlock("let value = ", "?;") {
                     deserializeMember(memberShape)
                 }
             }
@@ -152,12 +152,12 @@ class CborParserGenerator(
             *codegenScope,
             "MapSymbol" to mapSymbol,
         ) {
-            withBlock("let key = ", ";") {
+            withBlock("let key = ", "?;") {
                 deserializeString(keyTarget)
             }
             if (isSparseMap) {
                 withBlock("let res = ", ";") {
-                    deserializeMember(valueShape, bubbleUp = false)
+                    deserializeMember(valueShape)
                 }
                 rust(
                     """
@@ -171,7 +171,7 @@ class CborParserGenerator(
                     """
                 )
             } else {
-                withBlock("let value = ", ";") {
+                withBlock("let value = ", "?;") {
                     deserializeMember(valueShape)
                 }
             }
@@ -205,7 +205,7 @@ class CborParserGenerator(
                                 val symbol = symbolProvider.toSymbol(member)
                                 if (symbol.isRustBoxed()) {
                                     rustBlock("") {
-                                        withBlock("let v = ", ";") {
+                                        withBlock("let v = ", "?;") {
                                             deserializeMember(member)
                                         }
                                         for (customization in customizations) {
@@ -215,6 +215,7 @@ class CborParserGenerator(
                                     }
                                 } else {
                                     deserializeMember(member)
+                                    rust("?")
                                 }
                             }
                         }
@@ -245,7 +246,7 @@ class CborParserGenerator(
                 for (member in shape.members()) {
                     val variantName = symbolProvider.toMemberName(member)
 
-                    withBlock("${member.memberName.dq()} => #T::$variantName(", "),", returnSymbolToParse.symbol) {
+                    withBlock("${member.memberName.dq()} => #T::$variantName(", "?),", returnSymbolToParse.symbol) {
                         deserializeMember(member)
                     }
                 }
@@ -413,34 +414,32 @@ class CborParserGenerator(
         return structureParser(operationShape, symbolProvider.symbolForBuilder(inputShape), includedMembers)
     }
 
-    // TODO We definitely need to put the responsibility of bubbling up at the callsite.
-    private fun RustWriter.deserializeMember(memberShape: MemberShape, bubbleUp: Boolean = true) {
-        val questionMark = if (bubbleUp) { "?" } else ""
+    private fun RustWriter.deserializeMember(memberShape: MemberShape) {
         when (val target = model.expectShape(memberShape.target)) {
             // Simple shapes: https://smithy.io/2.0/spec/simple-types.html
-            is BlobShape -> rust("decoder.blob()$questionMark")
-            is BooleanShape -> rust("decoder.boolean()$questionMark")
+            is BlobShape -> rust("decoder.blob()")
+            is BooleanShape -> rust("decoder.boolean()")
 
-            is StringShape -> deserializeString(target, bubbleUp)
+            is StringShape -> deserializeString(target)
 
-            is ByteShape -> rust("decoder.byte()$questionMark")
-            is ShortShape -> rust("decoder.short()$questionMark")
-            is IntegerShape -> rust("decoder.integer()$questionMark")
-            is LongShape -> rust("decoder.long()$questionMark")
+            is ByteShape -> rust("decoder.byte()")
+            is ShortShape -> rust("decoder.short()")
+            is IntegerShape -> rust("decoder.integer()")
+            is LongShape -> rust("decoder.long()")
 
-            is FloatShape -> rust("decoder.float()$questionMark")
-            is DoubleShape -> rust("decoder.double()$questionMark")
+            is FloatShape -> rust("decoder.float()")
+            is DoubleShape -> rust("decoder.double()")
 
-            is TimestampShape -> rust("decoder.timestamp()$questionMark")
+            is TimestampShape -> rust("decoder.timestamp()")
 
             // TODO Document shapes have not been specced out yet.
             // is DocumentShape -> rustTemplate("Some(#{expect_document}(tokens)?)", *codegenScope)
 
             // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
-            is StructureShape -> withBlock("", questionMark) { deserializeStruct(target) }
-            is CollectionShape -> withBlock("", questionMark) { deserializeCollection(target) }
-            is MapShape -> withBlock("", questionMark) { deserializeMap(target) }
-            is UnionShape -> withBlock("", questionMark) { deserializeUnion(target) }
+            is StructureShape -> deserializeStruct(target)
+            is CollectionShape -> deserializeCollection(target)
+            is MapShape -> deserializeMap(target)
+            is UnionShape -> deserializeUnion(target)
             else -> PANIC("unexpected shape: $target")
         }
         // TODO Boxing
@@ -454,9 +453,8 @@ class CborParserGenerator(
     }
 
     private fun RustWriter.deserializeString(target: StringShape, bubbleUp: Boolean = true) {
-        val questionMark = if (bubbleUp) { "?" } else { "" }
         // TODO Handle enum shapes
-        rust("decoder.string()$questionMark")
+        rust("decoder.string()")
     }
 
     private fun RustWriter.deserializeCollection(shape: CollectionShape) {
