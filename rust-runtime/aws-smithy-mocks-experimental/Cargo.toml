@@ -6,7 +6,6 @@ description = "Experimental testing utilities for smithy-rs generated clients"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-publish = false
 
 [dependencies]
 aws-smithy-types = "1"
