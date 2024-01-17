@@ -18,6 +18,8 @@ anyhow = "1.0.75"
 camino = "1.1.6"
 clap = { version = "4.4.11", features = ["derive"] }
 crates-index = "2.3.0"
+fs_extra = "1.3.0"
+indicatif = "0.17.7"
 reqwest = { version = "0.11.22", features = ["blocking"] }
 smithy-rs-tool-common = { version = "0.1", path = "../smithy-rs-tool-common" }
 tempfile = "3.9.0"

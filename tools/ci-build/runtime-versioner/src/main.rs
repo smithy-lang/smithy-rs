@@ -12,7 +12,14 @@ use camino::Utf8PathBuf;
 use clap::Parser;
 use tracing_subscriber::{filter::LevelFilter, EnvFilter};
 
-mod audit;
+mod command {
+    mod audit;
+    pub use audit::audit;
+
+    mod patch;
+    pub use patch::patch;
+}
+
 mod index;
 mod repo;
 mod tag;
@@ -41,6 +48,25 @@ pub struct PreviousReleaseTag {
     smithy_rs_path: Option<Utf8PathBuf>,
 }
 
+#[derive(clap::Args, Clone)]
+pub struct PatchRuntime {
+    /// Path to aws-sdk-rust.
+    #[arg(long)]
+    sdk_path: Utf8PathBuf,
+    /// Path to smithy-rs. Defaults to current working directory.
+    #[arg(long)]
+    smithy_rs_path: Option<Utf8PathBuf>,
+    /// Explicitly state the previous release's tag. Discovers it if not provided.
+    #[arg(long)]
+    previous_release_tag: Option<String>,
+    /// Version number for stable crates.
+    #[arg(long)]
+    stable_crate_version: String,
+    /// Version number for unstable crates.
+    #[arg(long)]
+    unstable_crate_version: String,
+}
+
 #[derive(clap::Parser, Clone)]
 #[clap(author, version, about)]
 enum Command {
@@ -56,6 +82,9 @@ enum Command {
 
     /// Outputs the previous release tag for the revision at HEAD.
     PreviousReleaseTag(PreviousReleaseTag),
+
+    /// Patch a previous SDK release with the latest to-be-released runtime crates.
+    PatchRuntime(PatchRuntime),
 }
 
 fn main() -> Result<()> {
@@ -70,7 +99,7 @@ fn main() -> Result<()> {
 
     let command = Command::parse();
     match command {
-        Command::Audit(args) => audit::audit(args),
+        Command::Audit(args) => command::audit(args),
         Command::PreviousReleaseTag(args) => {
             let repo = Repo::new(args.smithy_rs_path.as_deref())?;
             let tags = release_tags(&repo)?;
@@ -78,5 +107,6 @@ fn main() -> Result<()> {
             println!("{tag}");
             Ok(())
         }
+        Command::PatchRuntime(args) => command::patch(args),
     }
 }
