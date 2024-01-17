@@ -10,3 +10,33 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location."
+references = ["smithy-rs#3318"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location."
+references = ["smithy-rs#3318"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "The `Metadata` storable was moved from aws_smithy_http into aws_smithy_runtime_api. A deprecated type alias was left in place with a note showing where the new location is."
+references = ["smithy-rs#3325"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
+author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Fix bug where overriding the credentials at the operation level failed if credentials were already set."
+references = ["aws-sdk-rust#901", "smithy-rs#3363"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add `apply_to_request_http1x` to `aws-sigv4` to enable signing http = 1.0 requests."
+references = ["aws-sdk-rust#1041", "smithy-rs#3366"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "rcoh"

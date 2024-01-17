@@ -24,7 +24,7 @@ class MetadataCustomization(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         arrayOf(
-            "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
+            "Metadata" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::Metadata"),
         )
     }
 
