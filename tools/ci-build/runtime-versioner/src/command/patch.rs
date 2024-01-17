@@ -6,9 +6,10 @@
 use crate::{
     repo::Repo,
     tag::{previous_release_tag, release_tags},
-    PatchRuntime,
+    PatchRuntime, PatchRuntimeWith,
 };
 use anyhow::{bail, Context, Result};
+use camino::Utf8Path;
 use indicatif::{ProgressBar, ProgressStyle};
 use smithy_rs_tool_common::command::sync::CommandExt;
 use std::{fs, time::Duration};
@@ -17,12 +18,8 @@ pub fn patch(args: PatchRuntime) -> Result<()> {
     let smithy_rs = step("Resolving smithy-rs", || {
         Repo::new(args.smithy_rs_path.as_deref())
     })?;
-    let aws_sdk_rust = step("Resolving aws-sdk-rust", || Repo::new(Some(&args.sdk_path)))?;
     if is_dirty(&smithy_rs)? {
         bail!("smithy-rs has a dirty working tree. Aborting.");
-    }
-    if is_dirty(&aws_sdk_rust)? {
-        bail!("aws-sdk-rust has a dirty working tree. Aborting.");
     }
 
     step(
@@ -41,6 +38,21 @@ pub fn patch(args: PatchRuntime) -> Result<()> {
             )
             .expect_success_output("assemble SDK")
     })?;
+
+    patch_with(PatchRuntimeWith {
+        sdk_path: args.sdk_path,
+        runtime_crate_path: smithy_rs.root.join("aws/sdk/build/aws-sdk/sdk"),
+        previous_release_tag: args.previous_release_tag,
+    })?;
+
+    Ok(())
+}
+
+pub fn patch_with(args: PatchRuntimeWith) -> Result<()> {
+    let aws_sdk_rust = step("Resolving aws-sdk-rust", || Repo::new(Some(&args.sdk_path)))?;
+    if is_dirty(&aws_sdk_rust)? {
+        bail!("aws-sdk-rust has a dirty working tree. Aborting.");
+    }
 
     // Make sure the aws-sdk-rust repo is on the correct release tag
     let release_tags = step("Resolving aws-sdk-rust release tags", || {
@@ -64,7 +76,7 @@ pub fn patch(args: PatchRuntime) -> Result<()> {
         apply_version_only_dependencies(&aws_sdk_rust)
     })?;
     step("Patching aws-sdk-rust root Cargo.toml", || {
-        patch_workspace_cargo_toml(&aws_sdk_rust, &smithy_rs)
+        patch_workspace_cargo_toml(&aws_sdk_rust, &args.runtime_crate_path)
     })?;
     step("Running cargo update", || {
         aws_sdk_rust
@@ -115,10 +127,12 @@ fn apply_version_only_dependencies(aws_sdk_rust: &Repo) -> Result<()> {
     Ok(())
 }
 
-fn patch_workspace_cargo_toml(aws_sdk_rust: &Repo, smithy_rs: &Repo) -> Result<()> {
-    let path = smithy_rs.root.join("aws/sdk/build/aws-sdk/sdk");
-    let crates_to_patch = fs::read_dir(&path)
-        .context(format!("could list crates in directory {:?}", path))?
+fn patch_workspace_cargo_toml(aws_sdk_rust: &Repo, runtime_crate_path: &Utf8Path) -> Result<()> {
+    let crates_to_patch = fs::read_dir(runtime_crate_path)
+        .context(format!(
+            "could list crates in directory {:?}",
+            runtime_crate_path
+        ))?
         .map(|dir| dir.unwrap().file_name())
         .map(|osstr| osstr.into_string().expect("invalid utf-8 directory"))
         .filter(|name| name.starts_with("aws-"))
@@ -127,7 +141,7 @@ fn patch_workspace_cargo_toml(aws_sdk_rust: &Repo, smithy_rs: &Repo) -> Result<(
     let patch_sections = crates_to_patch
         .iter()
         .map(|crte| {
-            let path = path.join(crte);
+            let path = runtime_crate_path.join(crte);
             assert!(
                 path.exists(),
                 "tried to reference a crate that did not exist!"

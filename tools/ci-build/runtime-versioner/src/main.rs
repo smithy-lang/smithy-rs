@@ -17,7 +17,7 @@ mod command {
     pub use audit::audit;
 
     mod patch;
-    pub use patch::patch;
+    pub use patch::{patch, patch_with};
 }
 
 mod index;
@@ -67,6 +67,22 @@ pub struct PatchRuntime {
     unstable_crate_version: String,
 }
 
+#[derive(clap::Args, Clone)]
+pub struct PatchRuntimeWith {
+    /// Path to aws-sdk-rust.
+    #[arg(long)]
+    sdk_path: Utf8PathBuf,
+    /// Path to runtime crates to patch in.
+    ///
+    /// Note: this doesn't need to be a complete set of runtime crates. It will
+    /// only patch the crates included in the provided path.
+    #[arg(long)]
+    runtime_crate_path: Utf8PathBuf,
+    /// Explicitly state the previous release's tag. Discovers it if not provided.
+    #[arg(long)]
+    previous_release_tag: Option<String>,
+}
+
 #[derive(clap::Parser, Clone)]
 #[clap(author, version, about)]
 enum Command {
@@ -84,7 +100,15 @@ enum Command {
     PreviousReleaseTag(PreviousReleaseTag),
 
     /// Patch a previous SDK release with the latest to-be-released runtime crates.
+    ///
+    /// This will generate a runtime with the given smithy-rs repo.
     PatchRuntime(PatchRuntime),
+
+    /// Patch a previous SDK release with a given runtime.
+    ///
+    /// This will use an existing runtime at the path provided. For example,
+    /// if you want to try a runtime from a GitHub Actions workflow.
+    PatchRuntimeWith(PatchRuntimeWith),
 }
 
 fn main() -> Result<()> {
@@ -108,5 +132,6 @@ fn main() -> Result<()> {
             Ok(())
         }
         Command::PatchRuntime(args) => command::patch(args),
+        Command::PatchRuntimeWith(args) => command::patch_with(args),
     }
 }
