@@ -34,3 +34,9 @@ message = "Fix bug where overriding the credentials at the operation level faile
 references = ["aws-sdk-rust#901", "smithy-rs#3363"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add `apply_to_request_http1x` to `aws-sigv4` to enable signing http = 1.0 requests."
+references = ["aws-sdk-rust#1041", "smithy-rs#3366"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "rcoh"
