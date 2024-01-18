@@ -420,18 +420,43 @@ fn try_cbor_eq<T: AsRef<[u8]>>(
         .expect("smithy protocol test `body` property is not properly base64 encoded");
     let expected_cbor_value: serde_cbor::Value =
         serde_cbor::from_slice(decoded.as_slice()).unwrap();
-    // dbg!(&expected_cbor_value);
     let actual_cbor_value: serde_cbor::Value =
         serde_cbor::from_slice(actual_body.as_ref()).unwrap(); // TODO Don't panic
                                                                // dbg!(&actual_cbor_value);
                                                                // TODO This only works because `serde_cbor::Value` uses `BTreeMap` internally.
     if expected_cbor_value != actual_cbor_value {
+        let expected_body_annotated_hex: String = cbor_diag::parse_bytes(&decoded)
+            .expect("smithy protocol test `body` property is not valid CBOR")
+            .to_hex();
+        let expected_body_diag: String = cbor_diag::parse_bytes(&decoded)
+            .expect("smithy protocol test `body` property is not valid CBOR")
+            .to_diag_pretty();
+        let actual_body_annotated_hex: String = cbor_diag::parse_bytes(&actual_body)
+            .expect("actual body is not valid CBOR")
+            .to_hex();
+        let actual_body_diag: String = cbor_diag::parse_bytes(&actual_body)
+            .expect("actual body is not valid CBOR")
+            .to_diag_pretty();
+
         Err(ProtocolTestFailure::BodyDidNotMatch {
             comparison: PrettyString(format!(
                 "{}",
                 Comparison::new(&expected_cbor_value, &actual_cbor_value)
             )),
-            hint: "TODO: Perhaps point to a CBOR diagnostic playground?".to_owned(),
+            hint: format!(
+                "expected body in diagnostic format:
+{}
+actual body in diagnostic format:
+{}
+expected body in annotated hex:
+{}
+actual body in annotated hex:
+{}",
+                expected_body_diag,
+                actual_body_diag,
+                expected_body_annotated_hex,
+                actual_body_annotated_hex,
+            ),
         })
     } else {
         Ok(())
