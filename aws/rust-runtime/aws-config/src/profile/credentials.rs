@@ -497,4 +497,6 @@ mod test {
     make_test!(credential_process_failure);
     #[cfg(feature = "credentials-process")]
     make_test!(credential_process_invalid);
+    #[cfg(feature = "sso")]
+    make_test!(sso_credentials);
 }

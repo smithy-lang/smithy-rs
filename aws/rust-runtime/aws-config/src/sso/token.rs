@@ -38,7 +38,7 @@ const MIN_TIME_BETWEEN_REFRESH: Duration = Duration::from_secs(30);
 /// SSO Token Provider
 ///
 /// This token provider will use cached SSO tokens stored in `~/.aws/sso/cache/<hash>.json`.
-/// `<hash>` is computed based on the configured [`session_namej`](Builder::session_name).
+/// `<hash>` is computed based on the configured [`session_name`](Builder::session_name).
 ///
 /// If possible, the cached token will be refreshed when it gets close to expiring.
 #[derive(Debug)]
