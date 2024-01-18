@@ -111,10 +111,11 @@ class CborParserGenerator(
                     """
                     let value = match res {
                         Ok(value) => Some(value),
-                        Err(_e) => {
+                        Err(e) if e.is_type_mismatch() => {
                             let _v = decoder.null()?;
                             None
                         }
+                        Err(e) => return Err(e),
                     };
                     """
                 )
@@ -163,10 +164,11 @@ class CborParserGenerator(
                     """
                     let value = match res {
                         Ok(value) => Some(value),
-                        Err(e) => {
+                        Err(e) if e.is_type_mismatch() => {
                             let _v = decoder.null()?;
                             None
                         }
+                        Err(e) => return Err(e),
                     };
                     """
                 )

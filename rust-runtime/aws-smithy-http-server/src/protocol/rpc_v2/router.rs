@@ -63,17 +63,28 @@ const IDENTIFIER_PATTERN: &'static str = r#"((_+([A-Za-z]|[0-9]))|[A-Za-z])[A-Za
 
 impl<S> RpcV2Router<S> {
     // TODO Consider building a nom parser
-    fn uri_regex() -> &'static Regex {
-        // Every request for the `rpcv2` protocol MUST be sent to a URL with the following form: ``{prefix?}/service/{serviceName}/operation/{operationName}`.
-        // The optional `prefix` slug may span multiple path segments and is ignored by Smithy RPC v2.
-        // The `serviceName` slug MUST be replaced by the shape name of the service's Shape ID in
-        // the Smithy model. The `serviceName` MUST NOT contain the namespace of the service shape.
-        // <https://smithy.io/2.0/spec/model.html#shape-id-abnf>
+    fn uri_path_regex() -> &'static Regex {
+        // Every request for the `rpcv2Cbor` protocol MUST be sent to a URL with the
+        // following form: `{prefix?}/service/{serviceName}/operation/{operationName}`
+        //
+        // * The optional `prefix` segment may span multiple path segments and is not
+        //   utilized by the Smithy RPC v2 CBOR protocol. For example, a service could
+        //   use a `v1` prefix for the following URL path: `v1/service/FooService/operation/BarOperation`
+        // * The `serviceName` segment MUST be replaced by the [`shape
+        //   name`](https://smithy.io/2.0/spec/model.html#grammar-token-smithy-Identifier)
+        //   of the service's [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id)
+        //   in the Smithy model. The `serviceName` produced by client implementations
+        //   MUST NOT contain the namespace of the `service` shape. Service
+        //   implementations SHOULD accept an absolute shape ID as the content of this
+        //   segment with the `#` character replaced with a `.` character, routing it
+        //   the same as if only the name was specified. For example, if the `service`'s
+        //   absolute shape ID is `com.example#TheService`, a service should accept both
+        //   `TheService` and `com.example.TheService` as values for the `serviceName`
+        //   segment.
         static PATH_REGEX: Lazy<Regex> = Lazy::new(|| {
             Regex::new(&format!(
-                r#"/service/(?P<service>{})/operation/(?P<operation>{})$"#,
-                IDENTIFIER_PATTERN,
-                IDENTIFIER_PATTERN,
+                r#"/service/({}\.)*(?P<service>{})/operation/(?P<operation>{})$"#,
+                IDENTIFIER_PATTERN, IDENTIFIER_PATTERN, IDENTIFIER_PATTERN,
             ))
             .unwrap()
         });
@@ -217,7 +228,7 @@ impl<S: Clone, B> Router<B> for RpcV2Router<S> {
 
         // Extract the service name and the operation name from the request URI.
         let request_path = request.uri().path();
-        let regex = Self::uri_regex();
+        let regex = Self::uri_path_regex();
 
         tracing::trace!(%request_path, "capturing service and operation from URI");
         let captures = regex.captures(request_path).ok_or(Error::NotFound)?;
@@ -272,6 +283,7 @@ mod tests {
             " space_in_identifier",
             "invalid-character",
             "invalid@character",
+            "no#hashes",
         ];
 
         for id in &invalid_identifiers {
@@ -281,26 +293,44 @@ mod tests {
 
     #[test]
     fn uri_regex_works_accepts() {
-        let regex = RpcV2Router::<()>::uri_regex();
+        let regex = RpcV2Router::<()>::uri_path_regex();
 
         for uri in [
             "/service/Service/operation/Operation",
             "prefix/69/service/Service/operation/Operation",
             // Here the prefix is up to the last occurence of the string `/service`.
             "prefix/69/service/Service/operation/Operation/service/Service/operation/Operation",
+            // Service implementations SHOULD accept an absolute shape ID as the content of this
+            // segment with the `#` character replaced with a `.` character, routing it the same as
+            // if only the name was specified. For example, if the `service`'s absolute shape ID is
+            // `com.example#TheService`, a service should accept both `TheService` and
+            // `com.example.TheService` as values for the `serviceName` segment.
+            "/service/aws.protocoltests.rpcv2.Service/operation/Operation",
+            "/service/namespace.Service/operation/Operation",
         ] {
             let captures = regex.captures(uri).unwrap();
-            assert_eq!("Service", &captures["service"]);
-            assert_eq!("Operation", &captures["operation"]);
+            assert_eq!("Service", &captures["service"], "uri: {}", uri);
+            assert_eq!("Operation", &captures["operation"], "uri: {}", uri);
         }
     }
 
     #[test]
     fn uri_regex_works_rejects() {
-        let regex = RpcV2Router::<()>::uri_regex();
+        let regex = RpcV2Router::<()>::uri_path_regex();
 
-        for uri in ["/service/aws.protocoltests.rpcv2.RpcV2Protocol/operation/NoInputOutput"] {
-            assert!(regex.captures(uri).is_none());
+        for uri in [
+            "",
+            "foo",
+            "/servicee/Service/operation/Operation",
+            "/service/Service",
+            "/service/Service/operation/",
+            "/service/Service/operation/Operation/",
+            "/service/Service/operation/Operation/invalid-suffix",
+            "/service/namespace.foo#Service/operation/Operation",
+            "/service/namespace-Service/operation/Operation",
+            "/service/.Service/operation/Operation",
+        ] {
+            assert!(regex.captures(uri).is_none(), "uri: {}", uri);
         }
     }
 

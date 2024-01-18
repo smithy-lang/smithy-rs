@@ -416,9 +416,7 @@ class ServerProtocolTestGenerator(
                     // We also escape to avoid interactions with templating in the case where the body contains `#`.
                     val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
                     
-                    val encodedBody = if (bodyMediaType == "application/cbor") {
-                        "#{Bytes}::from_static($sanitizedBody.as_bytes())"
-                    } else {
+                    val encodedBody = 
                         """
                         #{Bytes}::from(
                             #{Base64SimdDev}::STANDARD.decode_to_vec($sanitizedBody).expect(
@@ -426,7 +424,6 @@ class ServerProtocolTestGenerator(
                             )
                         )
                         """
-                    }
 
                     "#{SmithyHttpServer}::body::Body::from($encodedBody)"
                 } else {

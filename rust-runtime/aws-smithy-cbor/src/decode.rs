@@ -28,7 +28,7 @@ impl DeserializeError {
         Self { _inner: inner }
     }
 
-    // More than one union variant was detected: `unexpected_type` was unexpected.
+    /// More than one union variant was detected: `unexpected_type` was unexpected.
     pub fn unexpected_union_variant(unexpected_type: Type, at: usize) -> Self {
         Self {
             _inner: Error::type_mismatch(unexpected_type.into_minicbor_type())
@@ -37,12 +37,19 @@ impl DeserializeError {
         }
     }
 
-    // More than one union variant was detected, but we never even got to parse the first one.
+    /// More than one union variant was detected, but we never even got to parse the first one.
     pub fn mixed_union_variants(at: usize) -> Self {
         Self {
             _inner: Error::message("encountered mixed variants in union; expected end of union")
                 .at(at),
         }
+    }
+
+    /// An unexpected type was encountered.
+    // We handle this one when decoding sparse collections: we have to expect either a `null` or an
+    // item, so we try decoding both.
+    pub fn is_type_mismatch(&self) -> bool {
+        self._inner.is_type_mismatch()
     }
 }
 

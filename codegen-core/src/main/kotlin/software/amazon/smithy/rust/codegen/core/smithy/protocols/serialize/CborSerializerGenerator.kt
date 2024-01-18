@@ -295,7 +295,7 @@ class CborSerializerGenerator(
     ) {
         val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(encoder: &mut #{Encoder}, input: &#{StructureSymbol}) -> Result<(), #{Error}>",
+                "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
                 "StructureSymbol" to symbolProvider.toSymbol(context.shape),
                 *codegenScope,
             ) {
