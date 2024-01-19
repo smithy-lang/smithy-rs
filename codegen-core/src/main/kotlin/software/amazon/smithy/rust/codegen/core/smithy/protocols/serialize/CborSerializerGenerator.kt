@@ -293,6 +293,7 @@ class CborSerializerGenerator(
         context: StructContext,
         includedMembers: List<MemberShape>? = null,
     ) {
+        // TODO Need to inject `__type` when serializing errors.
         val structureSerializer = protocolFunctions.serializeFn(context.shape) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(encoder: &mut #{Encoder}, ##[allow(unused)] input: &#{StructureSymbol}) -> Result<(), #{Error}>",
