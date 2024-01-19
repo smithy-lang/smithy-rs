@@ -33,12 +33,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParse
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerSection
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddTypeFieldToServerErrorsCborCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeEncodingMapOrCollectionCborCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.RestRequestSpecGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerAwsJsonSerializerGenerator
@@ -322,7 +324,10 @@ class ServerRpcV2Protocol(
         return CborSerializerGenerator(
             codegenContext,
             httpBindingResolver,
-            listOf(BeforeEncodingMapOrCollectionCborCustomization(serverCodegenContext)),
+            listOf(
+                BeforeEncodingMapOrCollectionCborCustomization(serverCodegenContext),
+                AddTypeFieldToServerErrorsCborCustomization(),
+            ),
         )
     }
 

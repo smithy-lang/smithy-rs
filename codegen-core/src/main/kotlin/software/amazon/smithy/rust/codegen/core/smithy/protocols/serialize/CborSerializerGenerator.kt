@@ -54,6 +54,13 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
  * Class describing a JSON serializer section that can be used in a customization.
  */
 sealed class CborSerializerSection(name: String) : Section(name) {
+    /**
+     * Mutate the serializer prior to serializing any structure members. Eg: this can be used to inject `__type`
+     * to record the error type in the case of an error structure.
+     */
+    data class BeforeSerializingStructureMembers(val structureShape: StructureShape, val encoderBindingName: String) :
+        CborSerializerSection("ServerError")
+
     /** Manipulate the serializer context for a map prior to it being serialized. **/
     data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
         CborSerializerSection("BeforeIteratingOverMapOrCollection")
@@ -77,8 +84,8 @@ class CborSerializerGenerator(
     )
 
     data class MemberContext(
-        /** Expression that encodes the member's name **/
-        val encoderExpression: String,
+        /** Name for the variable bound to the encoder object **/
+        val encoderBindingName: String,
         /** Expression representing the value to write to the `Encoder` */
         var valueExpression: ValueExpression,
         val shape: MemberShape,
@@ -223,7 +230,7 @@ class CborSerializerGenerator(
     }
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType? {
-        // Don't generate an operation JSON serializer if there is no JSON body.
+        // Don't generate an operation CBOR serializer if there is no CBOR body.
         val httpDocumentMembers = httpBindingResolver.requestMembers(operationShape, HttpLocation.DOCUMENT)
         if (httpDocumentMembers.isEmpty()) {
             return null
@@ -303,6 +310,9 @@ class CborSerializerGenerator(
                 // TODO If all members are non-`Option`-al, we know AOT the map's size and can use `.map()`
                 //  instead of `.begin_map()` for efficiency. Add test.
                 rust("encoder.begin_map();")
+                for (customization in customizations) {
+                    customization.section(CborSerializerSection.BeforeSerializingStructureMembers(context.shape, "encoder"))(this)
+                }
                 context.copy(localName = "input").also { inner ->
                     val members = includedMembers ?: inner.shape.members()
                     for (member in members) {
@@ -326,7 +336,7 @@ class CborSerializerGenerator(
                 }
                 if (context.writeNulls) {
                     rustBlock("else") {
-                        rust("${context.encoderExpression}.null();")
+                        rust("${context.encoderBindingName}.null();")
                     }
                 }
             }
@@ -340,7 +350,7 @@ class CborSerializerGenerator(
     }
 
     private fun RustWriter.serializeMemberValue(context: MemberContext, target: Shape) {
-        val encoder = context.encoderExpression
+        val encoder = context.encoderBindingName
         val value = context.valueExpression
         val containerShape = model.expectShape(context.shape.container)
 
