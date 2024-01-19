@@ -81,7 +81,7 @@ fn internal_server_error() -> http::Response<BoxBody> {
 /// [`FromRequest`] which consumes the entire [`http::Request`] including the body.
 pub trait FromParts<Protocol>: Sized {
     /// The type of the extraction failures.
-    type Rejection: IntoResponse<Protocol>;
+    type Rejection: IntoResponse<Protocol> + std::error::Error;
 
     /// Extracts `self` from a [`Parts`] synchronously.
     fn from_parts(parts: &mut Parts) -> Result<Self, Self::Rejection>;
@@ -139,7 +139,7 @@ impl_from_parts!(Eight, A, B, C, D, E, F, G, H);
 /// items from a HTTP request [`FromParts`] should be used.
 pub trait FromRequest<Protocol, B>: Sized {
     /// The type of the extraction failures.
-    type Rejection: IntoResponse<Protocol>;
+    type Rejection: IntoResponse<Protocol> + std::error::Error;
     /// The type of the extraction [`Future`].
     type Future: Future<Output = Result<Self, Self::Rejection>>;
 
@@ -169,9 +169,24 @@ where
 
     fn from_request(request: Request<B>) -> Self::Future {
         let (mut parts, body) = request.into_parts();
-        let t2_result = T2::from_parts(&mut parts).map_err(any_rejections::Two::B);
+        let t2_result: Result<T2, any_rejections::Two<T1::Rejection, T2::Rejection>> = T2::from_parts(&mut parts)
+            .map_err(|e| {
+                // The error is likely caused by a failure to construct a parameter from the
+                // `Request` required by the user handler. This typically occurs when the
+                // user handler expects a specific type, such as `Extension<State>`, but
+                // either the `ExtensionLayer` has not been added, or it adds a different
+                // type to the extension bag, such as `Extension<Arc<State>>`.
+                tracing::error!(error = %e, "additional parameter for the handler function could not be constructed");
+                any_rejections::Two::B(e)
+            });
         try_join(
-            T1::from_request(Request::from_parts(parts, body)).map_err(any_rejections::Two::A),
+            T1::from_request(Request::from_parts(parts, body)).map_err(|e| {
+                // `T1`, the first parameter of a handler function, represents the input parameter
+                // defined in the Smithy model. An error at this stage suggests that `T1` could not
+                // be constructed from the `Request`.
+                tracing::debug!(error = %e, "failed to deserialize request into operation's input");
+                any_rejections::Two::A(e)
+            }),
             ready(t2_result),
         )
     }
