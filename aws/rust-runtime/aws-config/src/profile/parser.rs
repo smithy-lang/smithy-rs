@@ -74,6 +74,7 @@ pub async fn load(
 pub struct ProfileSet {
     profiles: HashMap<String, Profile>,
     selected_profile: Cow<'static, str>,
+    sso_sessions: HashMap<String, SsoSession>,
 }
 
 impl ProfileSet {
@@ -143,7 +144,50 @@ impl ProfileSet {
         Self {
             profiles: Default::default(),
             selected_profile: "default".into(),
+            sso_sessions: Default::default(),
         }
+    }
+}
+
+/// Represents a top-level section (e.g., `[profile name]`) in a config file.
+pub(crate) trait Section {
+    /// The name of this section
+    fn name(&self) -> &str;
+
+    /// Returns a reference to the property named `name`
+    fn get(&self, name: &str) -> Option<&str>;
+
+    /// True if there are no properties in this section.
+    fn is_empty(&self) -> bool;
+
+    /// Insert a property into a section
+    fn insert(&mut self, name: String, value: Property);
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct SectionInner {
+    name: String,
+    properties: HashMap<String, Property>,
+}
+
+impl Section for SectionInner {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn get(&self, name: &str) -> Option<&str> {
+        self.properties
+            .get(to_ascii_lowercase(name).as_ref())
+            .map(|prop| prop.value())
+    }
+
+    fn is_empty(&self) -> bool {
+        self.properties.is_empty()
+    }
+
+    fn insert(&mut self, name: String, value: Property) {
+        self.properties
+            .insert(to_ascii_lowercase(&name).into(), value);
     }
 }
 
@@ -151,27 +195,85 @@ impl ProfileSet {
 ///
 /// An AWS config may be composed of a multiple named profiles within a [`ProfileSet`].
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct Profile {
-    name: String,
-    properties: HashMap<String, Property>,
-}
+pub struct Profile(SectionInner);
 
 impl Profile {
     /// Create a new profile
-    pub fn new(name: String, properties: HashMap<String, Property>) -> Self {
-        Self { name, properties }
+    pub fn new(name: impl Into<String>, properties: HashMap<String, Property>) -> Self {
+        Self(SectionInner {
+            name: name.into(),
+            properties,
+        })
     }
 
     /// The name of this profile
     pub fn name(&self) -> &str {
-        &self.name
+        self.0.name()
     }
 
     /// Returns a reference to the property named `name`
     pub fn get(&self, name: &str) -> Option<&str> {
-        self.properties
-            .get(to_ascii_lowercase(name).as_ref())
-            .map(|prop| prop.value())
+        self.0.get(name)
+    }
+}
+
+impl Section for Profile {
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn insert(&mut self, name: String, value: Property) {
+        self.0.insert(name, value)
+    }
+}
+
+/// A `[sso-session name]` section in the config.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SsoSession(SectionInner);
+
+impl SsoSession {
+    /// Create a new SSO session section.
+    pub fn new(name: impl Into<String>, properties: HashMap<String, Property>) -> Self {
+        Self(SectionInner {
+            name: name.into(),
+            properties,
+        })
+    }
+
+    /// The name of this profile
+    pub fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    /// Returns a reference to the property named `name`
+    pub fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name)
+    }
+}
+
+impl Section for SsoSession {
+    fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    fn get(&self, name: &str) -> Option<&str> {
+        self.0.get(name)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn insert(&mut self, name: String, value: Property) {
+        self.0.insert(name, value)
     }
 }
 
@@ -339,8 +441,9 @@ mod test {
             .into_values()
             .map(|profile| {
                 (
-                    profile.name,
+                    profile.0.name,
                     profile
+                        .0
                         .properties
                         .into_values()
                         .map(|prop| (prop.key, prop.value))
