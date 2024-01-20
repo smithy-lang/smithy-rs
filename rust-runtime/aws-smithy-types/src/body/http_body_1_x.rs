@@ -23,6 +23,50 @@ impl SdkBody {
     {
         SdkBody::from_body_0_4_internal(Http1toHttp04::new(body.map_err(Into::into)))
     }
+
+    /// Construct an `SdkBody` from a type that implements [`hyper_1_0::body::Body<Data = Bytes>`](hyper_1_0::body::Body)
+    pub fn from_hyper_1_x<T, E>(body: T) -> Self
+    where
+        T: hyper_1_0::body::Body<Data = Bytes, Error = E> + Send + Sync + 'static,
+        E: Into<Error> + 'static,
+    {
+        SdkBody {
+            bytes_contents: None,
+            inner: super::Inner::Dyn {
+                inner: super::BoxBody::HttpBody10(http_body_util::combinators::BoxBody::new(
+                    body.map_err(Into::into),
+                )),
+            },
+            rebuild: None,
+        }
+    }
+}
+
+#[cfg(feature = "http-body-1-x")]
+impl http_body_1_0::Body for SdkBody {
+    type Data = Bytes;
+    type Error = Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body_1_0::Frame<Self::Data>, Self::Error>>> {
+        self.poll_next_frame(cx)
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.is_end_stream()
+    }
+
+    fn size_hint(&self) -> http_body_1_0::SizeHint {
+        let mut hint = http_body_1_0::SizeHint::default();
+        let (lower, upper) = self.bounds_on_remaining_length();
+        hint.set_lower(lower);
+        if let Some(upper) = upper {
+            hint.set_upper(upper);
+        }
+        hint
+    }
 }
 
 pin_project! {
@@ -235,6 +279,7 @@ mod test {
         let body = ByteStream::new(body);
         body.collect().await.expect_err("body returned an error");
     }
+
     #[tokio::test]
     async fn test_no_trailers() {
         let body = TestBody {
@@ -263,5 +308,20 @@ mod test {
         expect.insert(CL0, http::HeaderValue::from_static("1234"));
 
         assert_eq!(convert_header_map(http1_headermap), expect);
+    }
+
+    #[test]
+    fn sdkbody_debug_dyn() {
+        let body = TestBody {
+            chunks: vec![
+                Chunk::Data("123"),
+                Chunk::Data("456"),
+                Chunk::Data("789"),
+                Chunk::Trailers(trailers()),
+            ]
+            .into(),
+        };
+        let body = SdkBody::from_hyper_1_x(body);
+        assert!(format!("{:?}", body).contains("BoxBody"));
     }
 }

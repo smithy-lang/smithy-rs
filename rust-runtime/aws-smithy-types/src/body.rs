@@ -65,6 +65,9 @@ enum BoxBody {
         feature = "rt-tokio"
     ))]
     HttpBody04(http_body_0_4::combinators::BoxBody<Bytes, Error>),
+
+    #[cfg(feature = "http-body-1-x")]
+    HttpBody10(http_body_util::combinators::BoxBody<Bytes, Error>),
 }
 
 pin_project! {
@@ -139,6 +142,24 @@ impl SdkBody {
         poll_fn(|cx| me.as_mut().poll_next(cx)).await
     }
 
+    #[cfg(feature = "http-body-1-x")]
+    pub(crate) fn poll_next_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<http_body_1_0::Frame<Bytes>, Error>>> {
+        // There has got to be a way to simplify this matching matchy match
+        match self.poll_next(cx) {
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(maybe_ready) => match maybe_ready {
+                None => return Poll::Ready(None),
+                Some(result) => match result {
+                    Err(err) => return Poll::Ready(Some(Err(err))),
+                    Ok(bytes) => return Poll::Ready(Some(Ok(http_body_1_0::Frame::data(bytes)))),
+                },
+            },
+        }
+    }
+
     pub(crate) fn poll_next(
         self: Pin<&mut Self>,
         #[allow(unused)] cx: &mut Context<'_>,
@@ -204,6 +225,10 @@ impl SdkBody {
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_trailers(cx)
                 }
+                #[allow(unreachable_patterns)]
+                _ => unreachable!(
+                    "Polling for trailers via this function is not supported with http-body-1-0-x, use poll_frame"
+                ),
             },
             InnerProj::Taken => Poll::Ready(Err(
                 "A `Taken` body should never be polled for trailers".into(),
