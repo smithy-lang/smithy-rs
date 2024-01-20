@@ -85,6 +85,7 @@ impl ProfileSet {
     pub(crate) fn new(
         profiles: HashMap<String, HashMap<String, String>>,
         selected_profile: impl Into<Cow<'static, str>>,
+        sso_sessions: HashMap<String, HashMap<String, String>>,
     ) -> Self {
         let mut base = ProfileSet::empty();
         base.selected_profile = selected_profile.into();
@@ -94,6 +95,18 @@ impl ProfileSet {
                 Profile::new(
                     name,
                     profile
+                        .into_iter()
+                        .map(|(k, v)| (k.clone(), Property::new(k, v)))
+                        .collect(),
+                ),
+            );
+        }
+        for (name, session) in sso_sessions {
+            base.sso_sessions.insert(
+                name.clone(),
+                SsoSession::new(
+                    name.clone(),
+                    session
                         .into_iter()
                         .map(|(k, v)| (k.clone(), Property::new(k, v)))
                         .collect(),
@@ -125,9 +138,19 @@ impl ProfileSet {
         self.profiles.is_empty()
     }
 
-    /// Returns the names of the profiles in this profile set
+    /// Returns the names of the profiles in this config
     pub fn profiles(&self) -> impl Iterator<Item = &str> {
         self.profiles.keys().map(String::as_ref)
+    }
+
+    /// Returns the names of the SSO sessions in this config
+    pub fn sso_sessions(&self) -> impl Iterator<Item = &str> {
+        self.sso_sessions.keys().map(String::as_ref)
+    }
+
+    /// Retrieves a named SSO session from the config
+    pub fn sso_session(&self, name: &str) -> Option<&SsoSession> {
+        self.sso_sessions.get(name)
     }
 
     fn parse(source: Source) -> Result<Self, ProfileParseError> {
@@ -154,6 +177,9 @@ pub(crate) trait Section {
     /// The name of this section
     fn name(&self) -> &str;
 
+    /// Returns all the properties in this section
+    fn properties(&self) -> &HashMap<String, Property>;
+
     /// Returns a reference to the property named `name`
     fn get(&self, name: &str) -> Option<&str>;
 
@@ -173,6 +199,10 @@ struct SectionInner {
 impl Section for SectionInner {
     fn name(&self) -> &str {
         &self.name
+    }
+
+    fn properties(&self) -> &HashMap<String, Property> {
+        &self.properties
     }
 
     fn get(&self, name: &str) -> Option<&str> {
@@ -222,6 +252,10 @@ impl Section for Profile {
         self.0.name()
     }
 
+    fn properties(&self) -> &HashMap<String, Property> {
+        self.0.properties()
+    }
+
     fn get(&self, name: &str) -> Option<&str> {
         self.0.get(name)
     }
@@ -262,6 +296,10 @@ impl SsoSession {
 impl Section for SsoSession {
     fn name(&self) -> &str {
         self.0.name()
+    }
+
+    fn properties(&self) -> &HashMap<String, Property> {
+        self.0.properties()
     }
 
     fn get(&self, name: &str) -> Option<&str> {
@@ -350,7 +388,10 @@ pub struct CouldNotReadProfileFile {
 
 #[cfg(test)]
 mod test {
-    use crate::profile::parser::source::{File, Source};
+    use crate::profile::parser::{
+        source::{File, Source},
+        Section,
+    };
     use crate::profile::profile_file::ProfileFileKind;
     use crate::profile::ProfileSet;
     use arbitrary::{Arbitrary, Unstructured};
@@ -435,18 +476,28 @@ mod test {
     }
 
     // for test comparison purposes, flatten a profile into a hashmap
-    fn flatten(profile: ProfileSet) -> HashMap<String, HashMap<String, String>> {
-        profile
-            .profiles
-            .into_values()
-            .map(|profile| {
+    #[derive(Debug)]
+    struct FlattenedProfileSet {
+        profiles: HashMap<String, HashMap<String, String>>,
+        sso_sessions: HashMap<String, HashMap<String, String>>,
+    }
+    fn flatten(config: ProfileSet) -> FlattenedProfileSet {
+        FlattenedProfileSet {
+            profiles: flatten_sections(config.profiles.values().map(|p| p as _)),
+            sso_sessions: flatten_sections(config.sso_sessions.values().map(|s| s as _)),
+        }
+    }
+    fn flatten_sections<'a>(
+        sections: impl Iterator<Item = &'a dyn Section>,
+    ) -> HashMap<String, HashMap<String, String>> {
+        sections
+            .map(|section| {
                 (
-                    profile.0.name,
-                    profile
-                        .0
-                        .properties
-                        .into_values()
-                        .map(|prop| (prop.key, prop.value))
+                    section.name().to_string(),
+                    section
+                        .properties()
+                        .values()
+                        .map(|prop| (prop.key.clone(), prop.value.clone()))
                         .collect(),
                 )
             })
@@ -476,11 +527,28 @@ mod test {
         let copy = test_case.clone();
         let parsed = ProfileSet::parse(make_source(test_case.input));
         let res = match (parsed.map(flatten), &test_case.output) {
-            (Ok(actual), ParserOutput::Profiles(expected)) if &actual != expected => Err(format!(
-                "mismatch:\nExpected: {:#?}\nActual: {:#?}",
-                expected, actual
-            )),
-            (Ok(_), ParserOutput::Profiles(_)) => Ok(()),
+            (
+                Ok(FlattenedProfileSet {
+                    profiles: actual_profiles,
+                    sso_sessions: actual_sso_sessions,
+                }),
+                ParserOutput::Config {
+                    profiles,
+                    sso_sessions,
+                },
+            ) => {
+                if profiles != &actual_profiles {
+                    Err(format!(
+                        "mismatched profiles:\nExpected: {profiles:#?}\nActual: {actual_profiles:#?}",
+                    ))
+                } else if sso_sessions != &actual_sso_sessions {
+                    Err(format!(
+                        "mismatched sso_sessions:\nExpected: {actual_profiles:#?}\nActual: {actual_sso_sessions:#?}",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
             (Err(msg), ParserOutput::ErrorContaining(substr)) => {
                 if format!("{}", msg).contains(substr) {
                     Ok(())
@@ -489,10 +557,9 @@ mod test {
                 }
             }
             (Ok(output), ParserOutput::ErrorContaining(err)) => Err(format!(
-                "expected an error: {} but parse succeeded:\n{:#?}",
-                err, output
+                "expected an error: {err} but parse succeeded:\n{output:#?}",
             )),
-            (Err(err), ParserOutput::Profiles(_expected)) => {
+            (Err(err), ParserOutput::Config { .. }) => {
                 Err(format!("Expected to succeed but got: {}", err))
             }
         };
@@ -520,7 +587,11 @@ mod test {
     #[derive(Deserialize, Debug, Clone)]
     #[serde(rename_all = "camelCase")]
     enum ParserOutput {
-        Profiles(HashMap<String, HashMap<String, String>>),
+        Config {
+            profiles: HashMap<String, HashMap<String, String>>,
+            #[serde(default)]
+            sso_sessions: HashMap<String, HashMap<String, String>>,
+        },
         ErrorContaining(String),
     }
 

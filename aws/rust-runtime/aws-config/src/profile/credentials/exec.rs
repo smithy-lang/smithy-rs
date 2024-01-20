@@ -130,21 +130,33 @@ impl ProviderChain {
                 sso_region,
                 sso_role_name,
                 sso_start_url,
+                sso_session_name,
             } => {
                 #[cfg(feature = "sso")]
                 {
                     use crate::sso::{credentials::SsoProviderConfig, SsoCredentialsProvider};
                     use aws_types::region::Region;
 
-                    let sso_config = SsoProviderConfig {
-                        account_id: sso_account_id.to_string(),
-                        role_name: sso_role_name.to_string(),
-                        start_url: sso_start_url.to_string(),
-                        region: Region::new(sso_region.to_string()),
-                        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/703): Implement sso_session_name profile property
-                        session_name: None,
-                    };
-                    Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                    if sso_account_id.is_some() && sso_role_name.is_some() {
+                        let sso_config = SsoProviderConfig {
+                            account_id: sso_account_id.unwrap().to_string(),
+                            role_name: sso_role_name.unwrap().to_string(),
+                            start_url: sso_start_url.to_string(),
+                            region: Region::new(sso_region.to_string()),
+                            session_name: sso_session_name.map(|s| s.to_string()),
+                        };
+                        Arc::new(SsoCredentialsProvider::new(provider_config, sso_config))
+                    } else {
+                        // TODO(https://github.com/awslabs/aws-sdk-rust/issues/703): implement token provider support
+                        unimplemented!(
+                            "Using SSO tokens auth without resolving credentials via \
+                             assuming a role from a config file hasn't been implemented yet. \
+                             You can work around this for now by setting `sso_role_name` and \
+                             `sso_account_id`, but this won't work for services that use a \
+                             Builder ID, such as Code Catalyst. \
+                             Tracking in https://github.com/awslabs/aws-sdk-rust/issues/703"
+                        )
+                    }
                 }
                 #[cfg(not(feature = "sso"))]
                 {

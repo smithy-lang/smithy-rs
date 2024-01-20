@@ -265,6 +265,24 @@ pub enum ProfileFileError {
         /// Additional information about the missing feature
         message: Option<Cow<'static, str>>,
     },
+
+    /// Missing sso-session section in config
+    #[non_exhaustive]
+    MissingSsoSession {
+        /// The name of the profile that specified `sso_session`
+        profile: String,
+        /// SSO session name
+        sso_session: String,
+    },
+
+    /// Invalid SSO configuration
+    #[non_exhaustive]
+    InvalidSsoConfig {
+        /// The name of the profile that the error originates in
+        profile: String,
+        /// Error message
+        message: Cow<'static, str>,
+    },
 }
 
 impl ProfileFileError {
@@ -323,6 +341,15 @@ impl Display for ProfileFileError {
                     f,
                     "This behavior requires following cargo feature(s) enabled: {feature}. {message}",
                 )
+            }
+            ProfileFileError::MissingSsoSession {
+                profile,
+                sso_session,
+            } => {
+                write!(f, "sso-session named `{sso_session}` (referenced by profile `{profile}`) was not found")
+            }
+            ProfileFileError::InvalidSsoConfig { profile, message } => {
+                write!(f, "profile `{profile}` has invalid SSO config: {message}")
             }
         }
     }
