@@ -422,8 +422,8 @@ fn try_cbor_eq<T: AsRef<[u8]>>(
         serde_cbor::from_slice(decoded.as_slice()).unwrap();
     let actual_cbor_value: serde_cbor::Value =
         serde_cbor::from_slice(actual_body.as_ref()).unwrap(); // TODO Don't panic
-                                                               // dbg!(&actual_cbor_value);
-                                                               // TODO This only works because `serde_cbor::Value` uses `BTreeMap` internally.
+    let actual_body_base64 = base64_simd::STANDARD.encode_to_string(&actual_body);
+
     if expected_cbor_value != actual_cbor_value {
         let expected_body_annotated_hex: String = cbor_diag::parse_bytes(&decoded)
             .expect("smithy protocol test `body` property is not valid CBOR")
@@ -443,6 +443,7 @@ fn try_cbor_eq<T: AsRef<[u8]>>(
                 "{}",
                 Comparison::new(&expected_cbor_value, &actual_cbor_value)
             )),
+            // The last newline is important because the panic message ends with a `.`
             hint: format!(
                 "expected body in diagnostic format:
 {}
@@ -451,11 +452,15 @@ actual body in diagnostic format:
 expected body in annotated hex:
 {}
 actual body in annotated hex:
-{}",
+{}
+actual body in base64 (useful to update the protocol test):
+{}
+",
                 expected_body_diag,
                 actual_body_diag,
                 expected_body_annotated_hex,
                 actual_body_annotated_hex,
+                actual_body_base64,
             ),
         })
     } else {
