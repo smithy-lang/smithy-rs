@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy
 
-import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.node.ObjectNode
@@ -26,8 +25,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustInlineTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.Optional
-
-private const val DEFAULT_KEY = "DEFAULT"
 
 /**
  * Location of the runtime crates (aws-smithy-http, aws-smithy-types etc.)
@@ -50,14 +47,6 @@ fun RuntimeCrateLocation.crateLocation(crateName: String): DependencyLocation {
         // provide a detected version unless the user explicitly sets one via the `versions` map.
         null -> CratesIo(version)
         else -> Local(this.path)
-    }
-}
-
-fun defaultRuntimeCrateVersion(): String {
-    try {
-        return Version.stableCrateVersion()
-    } catch (ex: Exception) {
-        throw CodegenException("failed to get crate version which sets the default client-runtime version", ex)
     }
 }
 
@@ -458,8 +447,6 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         ) = smithyHttp(runtimeConfig).resolve("label::$func")
 
         fun operation(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation::Operation")
-
-        fun operationModule(runtimeConfig: RuntimeConfig) = smithyHttp(runtimeConfig).resolve("operation")
 
         fun protocolTest(
             runtimeConfig: RuntimeConfig,

@@ -31,7 +31,7 @@ class EndpointTraitBindings(
     private val endpointTrait: EndpointTrait,
 ) {
     private val inputShape = operationShape.inputShape(model)
-    private val endpointPrefix = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint::EndpointPrefix")
+    private val endpointPrefix = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint::EndpointPrefix")
 
     /**
      * Render the `EndpointPrefix` struct. [input] refers to the symbol referring to the input of this operation.
@@ -82,8 +82,8 @@ class EndpointTraitBindings(
                             rustTemplate(
                                 contents,
                                 "InvalidEndpointError" to
-                                    RuntimeType.smithyHttp(runtimeConfig)
-                                        .resolve("endpoint::error::InvalidEndpointError"),
+                                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                                        .resolve("client::endpoint::error::InvalidEndpointError"),
                             )
                         }
                         "${label.content} = $field"

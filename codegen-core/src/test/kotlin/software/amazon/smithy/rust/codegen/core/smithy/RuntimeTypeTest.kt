@@ -44,9 +44,9 @@ class RuntimeTypesTest {
 
         val crateLocVersioned =
             RuntimeCrateLocation(null, CrateVersionMap(mapOf("aws-smithy-runtime-api" to "999.999")))
-        crateLocVersioned.crateLocation("aws-smithy-runtime") shouldBe CratesIo(Version.stableCrateVersion())
+        crateLocVersioned.crateLocation("aws-smithy-runtime") shouldBe CratesIo(Version.crateVersion("aws-smithy-runtime"))
         crateLocVersioned.crateLocation("aws-smithy-runtime-api") shouldBe CratesIo("999.999")
-        crateLocVersioned.crateLocation("aws-smithy-http") shouldBe CratesIo(Version.unstableCrateVersion())
+        crateLocVersioned.crateLocation("aws-smithy-http") shouldBe CratesIo(Version.crateVersion("aws-smithy-http"))
     }
 
     companion object {

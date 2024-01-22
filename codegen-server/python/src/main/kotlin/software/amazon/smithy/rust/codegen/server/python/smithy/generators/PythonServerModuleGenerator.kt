@@ -240,7 +240,7 @@ class PythonServerModuleGenerator(
 
     // Render the codegeneration version as module attribute.
     private fun RustWriter.renderCodegenVersion() {
-        rust("""m.add("CODEGEN_VERSION", "${Version.stableCrateVersion()}")?;""")
+        rust("""m.add("CODEGEN_VERSION", "${Version.fromDefaultResource().gitHash}")?;""")
     }
 
     // Convert to symbol and check the namespace to figure out where they should be imported from.

@@ -64,3 +64,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+# aws-smithy-http is used by the http-auth feature, which is not turned on by the SDK at all.
+# Without ignoring it, the `check-aws-sdk-smoketest-docs-clippy-udeps` CI script fails.
+[package.metadata.cargo-udeps.ignore]
+normal = ["aws-smithy-http"]

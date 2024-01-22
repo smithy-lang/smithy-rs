@@ -9,7 +9,6 @@ use crate::package::{
     PackageHandle, PackageStats,
 };
 use crate::publish::{publish, CRATES_IO_CLIENT};
-use crate::retry::{run_with_retry, BoxError, ErrorClass};
 use crate::{cargo, SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -17,6 +16,7 @@ use crates_io_api::Error;
 use dialoguer::Confirm;
 use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::package::PackageCategory;
+use smithy_rs_tool_common::retry::{run_with_retry, BoxError, ErrorClass};
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
