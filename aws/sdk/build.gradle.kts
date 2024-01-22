@@ -100,8 +100,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                 "plugins": {
                     "rust-client-codegen": {
                         "runtimeConfig": {
-                            "relativePath": "../",
-                            "version": "DEFAULT"
+                            "relativePath": "../"
                         },
                         "codegen": {
                             "includeFluentClient": false,
@@ -359,11 +358,7 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
 
     toolPath = publisherToolPath
     binaryName = "publisher"
-    arguments = mutableListOf("fix-manifests", "--location", outputDir.asFile.absolutePath).apply {
-        if (crateVersioner.independentVersioningEnabled()) {
-            add("--disable-version-number-validation")
-        }
-    }
+    arguments = mutableListOf("fix-manifests", "--location", outputDir.asFile.absolutePath)
 }
 
 tasks.register<ExecRustBuildTool>("hydrateReadme") {

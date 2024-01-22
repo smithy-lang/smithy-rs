@@ -12,7 +12,7 @@ opt-level = 0
 
 [dependencies]
 anyhow = "1"
-cargo_toml = "0.10.1"
+cargo_toml = "0.18.0"
 clap = { version = "~3.1.18", features = ["derive"]}
 lazy_static = "1.4.0"
 serde = { version = "1", features = ["derive"]}
