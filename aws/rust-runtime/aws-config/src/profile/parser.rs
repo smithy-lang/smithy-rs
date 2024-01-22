@@ -105,7 +105,7 @@ impl ProfileSet {
             base.sso_sessions.insert(
                 name.clone(),
                 SsoSession::new(
-                    name.clone(),
+                    name,
                     session
                         .into_iter()
                         .map(|(k, v)| (k.clone(), Property::new(k, v)))
@@ -543,7 +543,7 @@ mod test {
                     ))
                 } else if sso_sessions != &actual_sso_sessions {
                     Err(format!(
-                        "mismatched sso_sessions:\nExpected: {actual_profiles:#?}\nActual: {actual_sso_sessions:#?}",
+                        "mismatched sso_sessions:\nExpected: {sso_sessions:#?}\nActual: {actual_sso_sessions:#?}",
                     ))
                 } else {
                     Ok(())
