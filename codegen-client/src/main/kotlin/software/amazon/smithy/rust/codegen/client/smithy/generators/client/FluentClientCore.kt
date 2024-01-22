@@ -20,7 +20,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 
 class FluentClientCore(private val model: Model) {
     /** Generate and write Rust code for a builder method that sets a Vec<T> */
-    fun RustWriter.renderVecHelper(member: MemberShape, memberName: String, coreType: RustType.Vec) {
+    fun RustWriter.renderVecHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType.Vec,
+    ) {
         docs("Appends an item to `${member.memberName}`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
@@ -36,7 +40,11 @@ class FluentClientCore(private val model: Model) {
     }
 
     /** Generate and write Rust code for a builder method that sets a HashMap<K,V> */
-    fun RustWriter.renderMapHelper(member: MemberShape, memberName: String, coreType: RustType.HashMap) {
+    fun RustWriter.renderMapHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType.HashMap,
+    ) {
         docs("Adds a key-value pair to `${member.memberName}`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
@@ -58,7 +66,11 @@ class FluentClientCore(private val model: Model) {
      * `renderInputHelper(memberShape, "foo", RustType.String)` -> `pub fn foo(mut self, input: impl Into<String>) -> Self { ... }`
      * `renderInputHelper(memberShape, "set_bar", RustType.Option)` -> `pub fn set_bar(mut self, input: Option<String>) -> Self { ... }`
      */
-    fun RustWriter.renderInputHelper(member: MemberShape, memberName: String, coreType: RustType) {
+    fun RustWriter.renderInputHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType,
+    ) {
         val functionInput = coreType.asArgument("input")
 
         documentShape(member, model)
@@ -72,7 +84,11 @@ class FluentClientCore(private val model: Model) {
     /**
      * Generate and write Rust code for a getter method that returns a reference to the inner data.
      */
-    fun RustWriter.renderGetterHelper(member: MemberShape, memberName: String, coreType: RustType) {
+    fun RustWriter.renderGetterHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType,
+    ) {
         documentShape(member, model)
         deprecatedShape(member)
         withBlockTemplate("pub fn $memberName(&self) -> &#{CoreType} {", "}", "CoreType" to coreType) {

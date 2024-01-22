@@ -8,7 +8,8 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 class SigV4AuthDecoratorTest {
-    private val modelWithSigV4AuthScheme = """
+    private val modelWithSigV4AuthScheme =
+        """
         namespace test
 
         use aws.auth#sigv4
@@ -55,7 +56,7 @@ class SigV4AuthDecoratorTest {
         @unsignedPayload
         @http(uri: "/", method: "POST")
         operation SomeOperation { input: SomeInput, output: SomeOutput }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun unsignedPayloadSetsCorrectHeader() {

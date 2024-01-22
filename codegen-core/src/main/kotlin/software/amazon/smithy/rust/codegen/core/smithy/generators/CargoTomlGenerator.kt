@@ -79,33 +79,40 @@ class CargoTomlGenerator(
             cargoFeatures.add("default" to features.filter { it.default }.map { it.name })
         }
 
-        val cargoToml = mapOf(
-            "package" to listOfNotNull(
-                "name" to moduleName,
-                "version" to moduleVersion,
-                "authors" to moduleAuthors,
-                moduleDescription?.let { "description" to it },
-                "edition" to "2021",
-                "license" to moduleLicense,
-                "repository" to moduleRepository,
-                "metadata" to listOfNotNull(
-                    "smithy" to listOfNotNull(
-                        "codegen-version" to Version.fullVersion(),
+        val cargoToml =
+            mapOf(
+                "package" to
+                    listOfNotNull(
+                        "name" to moduleName,
+                        "version" to moduleVersion,
+                        "authors" to moduleAuthors,
+                        moduleDescription?.let { "description" to it },
+                        "edition" to "2021",
+                        "license" to moduleLicense,
+                        "repository" to moduleRepository,
+                        "metadata" to
+                            listOfNotNull(
+                                "smithy" to
+                                    listOfNotNull(
+                                        "codegen-version" to Version.fromDefaultResource().gitHash,
+                                    ).toMap(),
+                            ).toMap(),
                     ).toMap(),
-                ).toMap(),
-            ).toMap(),
-            "dependencies" to dependencies.filter { it.scope == DependencyScope.Compile }
+                "dependencies" to
+                    dependencies.filter { it.scope == DependencyScope.Compile }
+                        .associate { it.name to it.toMap() },
+                "build-dependencies" to
+                    dependencies.filter { it.scope == DependencyScope.Build }
+                        .associate { it.name to it.toMap() },
+                "dev-dependencies" to
+                    dependencies.filter { it.scope == DependencyScope.Dev }
+                        .associate { it.name to it.toMap() },
+                "target.'cfg(aws_sdk_unstable)'.dependencies" to dependencies.filter {
+                    it.scope == DependencyScope.CfgUnstable
+                }
                 .associate { it.name to it.toMap() },
-            "build-dependencies" to dependencies.filter { it.scope == DependencyScope.Build }
-                .associate { it.name to it.toMap() },
-            "dev-dependencies" to dependencies.filter { it.scope == DependencyScope.Dev }
-                .associate { it.name to it.toMap() },
-            "target.'cfg(aws_sdk_unstable)'.dependencies" to dependencies.filter {
-                it.scope == DependencyScope.CfgUnstable
-            }
-                .associate { it.name to it.toMap() },
-            "features" to cargoFeatures.toMap(),
-        ).deepMergeWith(manifestCustomizations)
+                "features" to cargoFeatures.toMap(),
+            ).deepMergeWith(manifestCustomizations)
 
         // NOTE: without this it will produce ["target.'cfg(aws_sdk_unstable)'.dependencies"]
         // In JSON, this is an equivalent of: {"target.'cfg(aws_sdk_unstable)'.dependencies" : ...}

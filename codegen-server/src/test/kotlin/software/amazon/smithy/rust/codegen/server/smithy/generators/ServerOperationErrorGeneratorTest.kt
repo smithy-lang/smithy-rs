@@ -19,7 +19,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverRenderWi
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
 class ServerOperationErrorGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace error
 
         use aws.protocols#restJson1
@@ -52,7 +53,7 @@ class ServerOperationErrorGeneratorTest {
         @error("server")
         @deprecated
         structure Deprecated { }
-    """.asSmithyModel()
+        """.asSmithyModel()
     private val model = OperationNormalizer.transform(baseModel)
     private val symbolProvider = serverTestSymbolProvider(model)
 

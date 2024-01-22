@@ -14,7 +14,10 @@ class CrateLicenseDecorator : ClientCodegenDecorator {
     override val name: String = "CrateLicense"
     override val order: Byte = 0
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         rustCrate.withFile("LICENSE") {
             val license = this::class.java.getResource("/LICENSE").readText()
             raw(license)

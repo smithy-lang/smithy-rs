@@ -29,7 +29,8 @@ import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class Ec2QuerySerializerGeneratorTest {
-    private val baseModel = """
+    private val baseModel =
+        """
         namespace test
 
         union Choice {
@@ -85,7 +86,7 @@ class Ec2QuerySerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource(
@@ -152,7 +153,8 @@ class Ec2QuerySerializerGeneratorTest {
         project.compileAndTest()
     }
 
-    private val baseModelWithRequiredTypes = """
+    private val baseModelWithRequiredTypes =
+        """
         namespace test
 
         union Choice {
@@ -215,7 +217,7 @@ class Ec2QuerySerializerGeneratorTest {
         operation Op {
             input: OpInput,
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @ParameterizedTest
     @CsvSource(
@@ -239,7 +241,12 @@ class Ec2QuerySerializerGeneratorTest {
         // add unwrap calls.
         val builderIsFallible =
             BuilderGenerator.hasFallibleBuilder(model.lookup<StructureShape>("test#Top"), symbolProvider)
-        val maybeUnwrap = if (builderIsFallible) { ".unwrap()" } else { "" }
+        val maybeUnwrap =
+            if (builderIsFallible) {
+                ".unwrap()"
+            } else {
+                ""
+            }
         project.lib {
             unitTest(
                 "ec2query_serializer",

@@ -28,17 +28,21 @@ import software.amazon.smithy.rust.codegen.core.util.outputShape
  * place that does codegen with the unions.
  */
 object EventStreamNormalizer {
-    fun transform(model: Model): Model = ModelTransformer.create().mapShapes(model) { shape ->
-        if (shape is OperationShape && shape.isEventStream(model)) {
-            addStreamErrorsToOperationErrors(model, shape)
-        } else if (shape is UnionShape && shape.isEventStream()) {
-            syntheticEquivalentEventStreamUnion(model, shape)
-        } else {
-            shape
+    fun transform(model: Model): Model =
+        ModelTransformer.create().mapShapes(model) { shape ->
+            if (shape is OperationShape && shape.isEventStream(model)) {
+                addStreamErrorsToOperationErrors(model, shape)
+            } else if (shape is UnionShape && shape.isEventStream()) {
+                syntheticEquivalentEventStreamUnion(model, shape)
+            } else {
+                shape
+            }
         }
-    }
 
-    private fun addStreamErrorsToOperationErrors(model: Model, operation: OperationShape): OperationShape {
+    private fun addStreamErrorsToOperationErrors(
+        model: Model,
+        operation: OperationShape,
+    ): OperationShape {
         if (!operation.isEventStream(model)) {
             return operation
         }
@@ -57,10 +61,14 @@ object EventStreamNormalizer {
             .build()
     }
 
-    private fun syntheticEquivalentEventStreamUnion(model: Model, union: UnionShape): UnionShape {
-        val (errorMembers, eventMembers) = union.members().partition { member ->
-            model.expectShape(member.target).hasTrait<ErrorTrait>()
-        }
+    private fun syntheticEquivalentEventStreamUnion(
+        model: Model,
+        union: UnionShape,
+    ): UnionShape {
+        val (errorMembers, eventMembers) =
+            union.members().partition { member ->
+                model.expectShape(member.target).hasTrait<ErrorTrait>()
+            }
         return union.toBuilder()
             .members(eventMembers)
             .addTrait(SyntheticEventStreamUnionTrait(errorMembers))
@@ -73,7 +81,10 @@ fun OperationShape.operationErrors(model: Model): List<Shape> {
     return operationIndex.getErrors(this)
 }
 
-fun eventStreamErrors(model: Model, shape: Shape): Map<UnionShape, List<StructureShape>> {
+fun eventStreamErrors(
+    model: Model,
+    shape: Shape,
+): Map<UnionShape, List<StructureShape>> {
     return DirectedWalker(model)
         .walkShapes(shape)
         .filter { it is UnionShape && it.isEventStream() }

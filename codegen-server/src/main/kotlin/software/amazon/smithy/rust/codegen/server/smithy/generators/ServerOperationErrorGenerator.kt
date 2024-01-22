@@ -39,23 +39,26 @@ open class ServerOperationErrorGenerator(
 
     private fun operationErrors(): List<StructureShape> =
         (operationOrEventStream as OperationShape).operationErrors(model).map { it.asStructureShape().get() }
+
     private fun eventStreamErrors(): List<StructureShape> =
         (operationOrEventStream as UnionShape).eventStreamErrors()
             .map { model.expectShape(it.asMemberShape().get().target, StructureShape::class.java) }
 
     open fun render(writer: RustWriter) {
-        val (errorSymbol, errors) = when (operationOrEventStream) {
-            is OperationShape -> symbolProvider.symbolForOperationError(operationOrEventStream) to operationErrors()
-            is UnionShape -> symbolProvider.symbolForEventStreamError(operationOrEventStream) to eventStreamErrors()
-            else -> UNREACHABLE("OperationErrorGenerator only supports operation or event stream shapes")
-        }
+        val (errorSymbol, errors) =
+            when (operationOrEventStream) {
+                is OperationShape -> symbolProvider.symbolForOperationError(operationOrEventStream) to operationErrors()
+                is UnionShape -> symbolProvider.symbolForEventStreamError(operationOrEventStream) to eventStreamErrors()
+                else -> UNREACHABLE("OperationErrorGenerator only supports operation or event stream shapes")
+            }
         if (errors.isEmpty()) {
             return
         }
-        val meta = RustMetadata(
-            derives = setOf(RuntimeType.Debug),
-            visibility = Visibility.PUBLIC,
-        )
+        val meta =
+            RustMetadata(
+                derives = setOf(RuntimeType.Debug),
+                visibility = Visibility.PUBLIC,
+            )
 
         writer.rust("/// Error type for the `${symbol.name}` operation.")
         writer.rust("/// Each variant represents an error that can occur for the `${symbol.name}` operation.")

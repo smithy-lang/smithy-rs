@@ -62,14 +62,18 @@ interface HttpBindingResolver {
     /**
      * Returns a list of member shapes bound to a given request [location] for a given [operationShape]
      */
-    fun requestMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
-        requestBindings(operationShape).filter { it.location == location }.map { it.member }
+    fun requestMembers(
+        operationShape: OperationShape,
+        location: HttpLocation,
+    ): List<MemberShape> = requestBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
      * Returns a list of member shapes bound to a given response [location] for a given [operationShape]
      */
-    fun responseMembers(operationShape: OperationShape, location: HttpLocation): List<MemberShape> =
-        responseBindings(operationShape).filter { it.location == location }.map { it.member }
+    fun responseMembers(
+        operationShape: OperationShape,
+        location: HttpLocation,
+    ): List<MemberShape> = responseBindings(operationShape).filter { it.location == location }.map { it.member }
 
     /**
      * Determine the timestamp format based on the input parameters.
@@ -138,8 +142,7 @@ open class HttpTraitHttpBindingResolver(
         location: HttpLocation,
         defaultTimestampFormat: TimestampFormatTrait.Format,
         model: Model,
-    ): TimestampFormatTrait.Format =
-        httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
+    ): TimestampFormatTrait.Format = httpIndex.determineTimestampFormat(memberShape, location, defaultTimestampFormat)
 
     override fun requestContentType(operationShape: OperationShape): String? =
         httpIndex.determineRequestContentType(
@@ -184,8 +187,7 @@ open class StaticHttpBindingResolver(
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
         bindings(operationShape.output.orNull())
 
-    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        bindings(errorShape)
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> = bindings(errorShape)
 
     override fun requestContentType(operationShape: OperationShape): String = requestContentType
 

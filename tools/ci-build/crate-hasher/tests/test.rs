@@ -44,9 +44,9 @@ fn test_against_aws_smithy_async_with_ignored_files() -> Result<()> {
     let mut archive = Archive::new(tar);
     archive.unpack(&dir)?;
 
-    std::fs::create_dir(&dir.as_path().join("target"))?;
+    std::fs::create_dir(dir.as_path().join("target"))?;
     std::fs::write(
-        &dir.as_path().join("target/something"),
+        dir.as_path().join("target/something"),
         b"some data that should be excluded",
     )?;
 

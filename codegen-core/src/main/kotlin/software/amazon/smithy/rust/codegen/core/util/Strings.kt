@@ -32,21 +32,25 @@ private fun String.splitOnWordBoundaries(): List<String> {
         if (currentWord.isNotEmpty()) {
             out += currentWord.lowercase()
         }
-        currentWord = if (next.isLetterOrDigit()) {
-            next.toString()
-        } else {
-            ""
-        }
+        currentWord =
+            if (next.isLetterOrDigit()) {
+                next.toString()
+            } else {
+                ""
+            }
     }
     val allLowerCase = this.lowercase() == this
     this.forEachIndexed { index, nextCharacter ->
         val computeWordInProgress = {
-            val result = completeWordInProgress && currentWord.isNotEmpty() && completeWords.any {
-                it.startsWith(currentWord, ignoreCase = true) && (currentWord + this.substring(index)).startsWith(
-                    it,
-                    ignoreCase = true,
-                ) && !it.equals(currentWord, ignoreCase = true)
-            }
+            val result =
+                completeWordInProgress && currentWord.isNotEmpty() &&
+                    completeWords.any {
+                        it.startsWith(currentWord, ignoreCase = true) &&
+                            (currentWord + this.substring(index)).startsWith(
+                                it,
+                                ignoreCase = true,
+                            ) && !it.equals(currentWord, ignoreCase = true)
+                    }
 
             completeWordInProgress = result
             result
@@ -63,9 +67,10 @@ private fun String.splitOnWordBoundaries(): List<String> {
             !computeWordInProgress() && loweredFollowedByUpper(currentWord, nextCharacter) -> emit(nextCharacter)
 
             // s3[k]ey
-            !computeWordInProgress() && allLowerCase && digitFollowedByLower(currentWord, nextCharacter) -> emit(
-                nextCharacter,
-            )
+            !computeWordInProgress() && allLowerCase && digitFollowedByLower(currentWord, nextCharacter) ->
+                emit(
+                    nextCharacter,
+                )
 
             // DB[P]roxy, or `IAM[U]ser` but not AC[L]s
             endOfAcronym(currentWord, nextCharacter, this.getOrNull(index + 1), this.getOrNull(index + 2)) -> emit(nextCharacter)
@@ -83,7 +88,12 @@ private fun String.splitOnWordBoundaries(): List<String> {
 /**
  * Handle cases like `DB[P]roxy`, `ARN[S]upport`, `AC[L]s`
  */
-private fun endOfAcronym(current: String, nextChar: Char, peek: Char?, doublePeek: Char?): Boolean {
+private fun endOfAcronym(
+    current: String,
+    nextChar: Char,
+    peek: Char?,
+    doublePeek: Char?,
+): Boolean {
     if (!current.last().isUpperCase()) {
         // Not an acronym in progress
         return false
@@ -109,14 +119,20 @@ private fun endOfAcronym(current: String, nextChar: Char, peek: Char?, doublePee
     return true
 }
 
-private fun loweredFollowedByUpper(current: String, nextChar: Char): Boolean {
+private fun loweredFollowedByUpper(
+    current: String,
+    nextChar: Char,
+): Boolean {
     if (!nextChar.isUpperCase()) {
         return false
     }
     return current.last().isLowerCase() || current.last().isDigit()
 }
 
-private fun digitFollowedByLower(current: String, nextChar: Char): Boolean {
+private fun digitFollowedByLower(
+    current: String,
+    nextChar: Char,
+): Boolean {
     return (current.last().isDigit() && nextChar.isLowerCase())
 }
 

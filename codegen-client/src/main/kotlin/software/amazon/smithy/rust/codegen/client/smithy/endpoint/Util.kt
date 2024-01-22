@@ -49,7 +49,8 @@ fun Identifier.rustName(): String {
  */
 object EndpointsLib {
     val DiagnosticCollector = endpointsLib("diagnostic").toType().resolve("DiagnosticCollector")
-    fun PartitionResolver(runtimeConfig: RuntimeConfig) =
+
+    fun partitionResolver(runtimeConfig: RuntimeConfig) =
         endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
             .resolve("PartitionResolver")
 
@@ -63,7 +64,10 @@ object EndpointsLib {
         endpointsLib("s3", endpointsLib("host"), CargoDependency.OnceCell, CargoDependency.RegexLite).toType()
             .resolve("is_virtual_hostable_s3_bucket")
 
-    private fun endpointsLib(name: String, vararg additionalDependency: RustDependency) = InlineDependency.forRustFile(
+    private fun endpointsLib(
+        name: String,
+        vararg additionalDependency: RustDependency,
+    ) = InlineDependency.forRustFile(
         RustModule.pubCrate(
             name,
             parent = EndpointStdLib,
@@ -81,13 +85,14 @@ class Types(runtimeConfig: RuntimeConfig) {
     private val endpointRtApi = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint")
     val resolveEndpointError = smithyHttpEndpointModule.resolve("ResolveEndpointError")
 
-    fun toArray() = arrayOf(
-        "Endpoint" to smithyEndpoint,
-        "EndpointFuture" to endpointFuture,
-        "SharedEndpointResolver" to endpointRtApi.resolve("SharedEndpointResolver"),
-        "EndpointResolverParams" to endpointRtApi.resolve("EndpointResolverParams"),
-        "ResolveEndpoint" to endpointRtApi.resolve("ResolveEndpoint"),
-    )
+    fun toArray() =
+        arrayOf(
+            "Endpoint" to smithyEndpoint,
+            "EndpointFuture" to endpointFuture,
+            "SharedEndpointResolver" to endpointRtApi.resolve("SharedEndpointResolver"),
+            "EndpointResolverParams" to endpointRtApi.resolve("EndpointResolverParams"),
+            "ResolveEndpoint" to endpointRtApi.resolve("ResolveEndpoint"),
+        )
 }
 
 /**
@@ -103,11 +108,12 @@ fun ContextParamTrait.memberName(): String = this.name.unsafeToRustName()
  * Returns the symbol for a given parameter. This enables [software.amazon.smithy.rust.codegen.core.rustlang.RustWriter] to generate the correct [RustType].
  */
 fun Parameter.symbol(): Symbol {
-    val rustType = when (this.type) {
-        ParameterType.STRING -> RustType.String
-        ParameterType.BOOLEAN -> RustType.Bool
-        else -> TODO("unexpected type: ${this.type}")
-    }
+    val rustType =
+        when (this.type) {
+            ParameterType.STRING -> RustType.String
+            ParameterType.BOOLEAN -> RustType.Bool
+            else -> TODO("unexpected type: ${this.type}")
+        }
     // Parameter return types are always optional
     return Symbol.builder().rustType(rustType).build().letIf(!this.isRequired) { it.makeOptional() }
 }
@@ -126,10 +132,10 @@ class AuthSchemeLister : RuleValueVisitor<Set<String>> {
         return endpoint.properties.getOrDefault(Identifier.of("authSchemes"), Literal.tupleLiteral(listOf()))
             .asTupleLiteral()
             .orNull()?.let {
-            it.map { authScheme ->
-                authScheme.asRecordLiteral().get()[Identifier.of("name")]!!.asStringLiteral().get().expectLiteral()
-            }
-        }?.toHashSet() ?: hashSetOf()
+                it.map { authScheme ->
+                    authScheme.asRecordLiteral().get()[Identifier.of("name")]!!.asStringLiteral().get().expectLiteral()
+                }
+            }?.toHashSet() ?: hashSetOf()
     }
 
     override fun visitTreeRule(rules: MutableList<Rule>): Set<String> {

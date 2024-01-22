@@ -1,4 +1,57 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 18th, 2024
+==================
+**New this release:**
+- (client, [smithy-rs#3318](https://github.com/smithy-lang/smithy-rs/issues/3318)) `EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location.
+- (client, [smithy-rs#3325](https://github.com/smithy-lang/smithy-rs/issues/3325)) The `Metadata` storable was moved from aws_smithy_http into aws_smithy_runtime_api. A deprecated type alias was left in place with a note showing where the new location is.
+
+
+January 10th, 2024
+==================
+**New this release:**
+- :tada: (all, [smithy-rs#3300](https://github.com/smithy-lang/smithy-rs/issues/3300), [aws-sdk-rust#977](https://github.com/awslabs/aws-sdk-rust/issues/977)) Add support for constructing [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported.
+- :tada: (all, [smithy-rs#3333](https://github.com/smithy-lang/smithy-rs/issues/3333), [aws-sdk-rust#998](https://github.com/awslabs/aws-sdk-rust/issues/998), [aws-sdk-rust#1010](https://github.com/awslabs/aws-sdk-rust/issues/1010)) Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership.
+- (client, [smithy-rs#3299](https://github.com/smithy-lang/smithy-rs/issues/3299), @Ploppz)  Add `PaginationStreamExt` extension trait to `aws-smithy-types-convert` behind the `convert-streams` feature. This makes it possible to treat a paginator as a [`futures_core::Stream`](https://docs.rs/futures-core/latest/futures_core/stream/trait.Stream.html), allowing customers to use stream combinators like [`map`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.map) and [`filter`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.filter).
+
+    Example:
+
+    ```rust
+    use aws_smithy_types_convert::stream::PaginationStreamExt
+    let stream = s3_client.list_objects_v2().bucket("...").into_paginator().send().into_stream_03x();
+    ```
+- :bug: (client, [smithy-rs#3252](https://github.com/smithy-lang/smithy-rs/issues/3252), [smithy-rs#3312](https://github.com/smithy-lang/smithy-rs/issues/3312), @milesziemer) Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false. See [changelog discussion](https://github.com/smithy-lang/smithy-rs/discussions/3312) for details.
+- (all, [smithy-rs#3292](https://github.com/smithy-lang/smithy-rs/issues/3292)) `requireEndpointResolver: false` is no longer required to remove the need for an endpoint resolver. Instead, `"awsSdkBuilder"` (default false), now _removes_ that requirement.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @Ploppz ([smithy-rs#3299](https://github.com/smithy-lang/smithy-rs/issues/3299))
+- @milesziemer ([smithy-rs#3252](https://github.com/smithy-lang/smithy-rs/issues/3252), [smithy-rs#3312](https://github.com/smithy-lang/smithy-rs/issues/3312))
+
+
+December 13th, 2023
+===================
+
+December 11th, 2023
+===================
+**New this release:**
+- :bug: (client, [smithy-rs#3305](https://github.com/smithy-lang/smithy-rs/issues/3305)) `crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations.
+
+
+December 8th, 2023
+==================
+**New this release:**
+- :tada: (all, [smithy-rs#3121](https://github.com/smithy-lang/smithy-rs/issues/3121), [smithy-rs#3295](https://github.com/smithy-lang/smithy-rs/issues/3295)) All generated docs now include docsrs labels when features are required
+- :bug: (client, [smithy-rs#3262](https://github.com/smithy-lang/smithy-rs/issues/3262)) Loading native TLS trusted certs for the default HTTP client now only occurs if the default HTTP client is not overridden in config.
+- (client, [smithy-rs#3277](https://github.com/smithy-lang/smithy-rs/issues/3277)) Improve the error messages for when auth fails to select an auth scheme for a request.
+- (client, [smithy-rs#3282](https://github.com/smithy-lang/smithy-rs/issues/3282)) Fix documentation and examples on HyperConnector and HyperClientBuilder.
+- (client, [aws-sdk-rust#990](https://github.com/awslabs/aws-sdk-rust/issues/990), @declanvk) Expose local socket address from ConnectionMetadata.
+- (all, [smithy-rs#3294](https://github.com/smithy-lang/smithy-rs/issues/3294)) [`Number`](https://docs.rs/aws-smithy-types/latest/aws_smithy_types/enum.Number.html) `TryInto` implementations now succesfully convert from `f64` to numeric types when no precision is lost. This fixes some deserialization issues where numbers like `25.0` were sent when `Byte` fields were expected.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @declanvk ([aws-sdk-rust#990](https://github.com/awslabs/aws-sdk-rust/issues/990))
+
+
 December 1st, 2023
 ==================
 **New this release:**

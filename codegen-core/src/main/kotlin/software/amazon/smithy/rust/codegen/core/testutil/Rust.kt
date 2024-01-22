@@ -122,8 +122,13 @@ private object Commands {
     // ```
     fun cargoCheck(variation: TestVariation): String {
         return decorateCmd("cargo check", variation)
+val TestModuleDocProvider =
+    object : ModuleDocProvider {
+        override fun docsWriter(module: RustModule.LeafModule): Writable =
+            writable {
+                docs("Some test documentation\n\nSome more details...")
+            }
     }
-}
 
 val TestModuleDocProvider =
     object : ModuleDocProvider {
@@ -170,39 +175,33 @@ object TestWorkspace {
     private fun generate() {
         val cargoToml = baseDir.resolve("Cargo.toml")
         val workspaceToml =
-            TomlWriter()
-                .write(
-                    mapOf(
-                        "workspace" to
-                            mapOf(
-                                "members" to subprojects,
-                            ),
-                    ),
-                )
+            TomlWriter().write(
+                mapOf(
+                    "workspace" to
+                        mapOf(
+                            "members" to subprojects,
+                        ),
+                ),
+            )
         cargoToml.writeText(workspaceToml)
     }
 
     fun subproject(): File {
         synchronized(subprojects) {
             val newProject = tempDir(directory = baseDir)
-            newProject
-                .resolve("Cargo.toml")
-                .writeText(
-                    """
-                    [package]
-                    name = "stub-${newProject.name}"
-                    version = "0.0.1"
-                    """.trimIndent(),
-                )
-            newProject
-                .resolve("rust-toolchain.toml")
-                .writeText(
-                    // help rust select the right version when we run cargo test
-                    // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this
-                    // from the msrv property using a
-                    //  method as we do for runtime crate versions
-                    "[toolchain]\nchannel = \"1.70.0\"\n",
-                )
+            newProject.resolve("Cargo.toml").writeText(
+                """
+                [package]
+                name = "stub-${newProject.name}"
+                version = "0.0.1"
+                """.trimIndent(),
+            )
+            newProject.resolve("rust-toolchain.toml").writeText(
+                // help rust select the right version when we run cargo test
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/2048): load this from the msrv property using a
+                //  method as we do for runtime crate versions
+                "[toolchain]\nchannel = \"1.72.1\"\n",
+            )
             // ensure there at least an empty lib.rs file to avoid broken crates
             newProject.resolve("src").mkdirs()
             newProject.resolve("src/lib.rs").writeText("")
@@ -275,30 +274,20 @@ fun generatePluginContext(
             .letIf(service != null) { it.withMember("service", service) }
             .withMember(
                 "runtimeConfig",
-                Node.objectNodeBuilder()
-                    .withMember(
-                        "relativePath",
-                        Node.from(
-                            (
-                                (runtimeConfig ?: TestRuntimeConfig)
-                                    .runtimeCrateLocation
-                                )
-                                .path,
-                        ),
-                    )
-                    .build(),
+                Node.objectNodeBuilder().withMember(
+                    "relativePath",
+                    Node.from(((runtimeConfig ?: TestRuntimeConfig).runtimeCrateLocation).path),
+                ).build(),
             )
 
     if (addModuleToEventStreamAllowList) {
         settingsBuilder =
             settingsBuilder.withMember(
                 "codegen",
-                Node.objectNodeBuilder()
-                    .withMember(
-                        "eventStreamAllowList",
-                        Node.fromStrings(moduleName),
-                    )
-                    .build(),
+                Node.objectNodeBuilder().withMember(
+                    "eventStreamAllowList",
+                    Node.fromStrings(moduleName),
+                ).build(),
             )
     }
 
@@ -337,10 +326,8 @@ fun RustWriter.unitTest(
 }
 
 fun RustWriter.cargoDependencies() =
-    dependencies
-        .map { RustDependency.fromSymbolDependency(it) }
-        .filterIsInstance<CargoDependency>()
-        .distinct()
+    dependencies.map { RustDependency.fromSymbolDependency(it) }
+        .filterIsInstance<CargoDependency>().distinct()
 
 fun RustWriter.assertNoNewDependencies(
     block: Writable,
@@ -381,9 +368,16 @@ fun RustWriter.testDependenciesOnly(block: Writable) =
         }
     }
 
-fun testDependenciesOnly(block: Writable): Writable = { testDependenciesOnly(block) }
+fun testDependenciesOnly(block: Writable): Writable =
+    {
+        testDependenciesOnly(block)
+    }
 
-fun RustWriter.tokioTest(name: String, vararg args: Any, block: Writable) {
+fun RustWriter.tokioTest(
+    name: String,
+    vararg args: Any,
+    block: Writable,
+) {
     unitTest(name, attribute = Attribute.TokioTest, async = true, block = block, args = args)
 }
 
@@ -413,13 +407,14 @@ class TestWriterDelegator(
  * This should only be used in test code—the generated module name will be something like
  * `tests_123`
  */
-fun RustCrate.testModule(block: Writable) = lib {
-    withInlineModule(
-        RustModule.inlineTests(safeName("tests")),
-        TestModuleDocProvider,
-        block,
-    )
-}
+fun RustCrate.testModule(block: Writable) =
+    lib {
+        withInlineModule(
+            RustModule.inlineTests(safeName("tests")),
+            TestModuleDocProvider,
+            block,
+        )
+    }
 
 fun FileManifest.printGeneratedFiles() {
     this.files.forEach { path -> println("file:///$path") }
@@ -563,21 +558,18 @@ private fun String.intoCrate(
     this.shouldParseAsRust()
     val tempDir = TestWorkspace.subproject()
     val cargoToml =
-        RustWriter.toml("Cargo.toml")
-            .apply {
-                CargoTomlGenerator(
-                    moduleName = tempDir.nameWithoutExtension,
-                    moduleVersion = "0.0.1",
-                    moduleAuthors = listOf("Testy McTesterson"),
-                    moduleDescription = null,
-                    moduleLicense = null,
-                    moduleRepository = null,
-                    writer = this,
-                    dependencies = deps,
-                )
-                    .render()
-            }
-            .toString()
+        RustWriter.toml("Cargo.toml").apply {
+            CargoTomlGenerator(
+                moduleName = tempDir.nameWithoutExtension,
+                moduleVersion = "0.0.1",
+                moduleAuthors = listOf("Testy McTesterson"),
+                moduleDescription = null,
+                moduleLicense = null,
+                moduleRepository = null,
+                writer = this,
+                dependencies = deps,
+            ).render()
+        }.toString()
     tempDir.resolve("Cargo.toml").writeText(cargoToml)
     tempDir.resolve("src").mkdirs()
     val mainRs = tempDir.resolve("src/main.rs")
@@ -639,8 +631,10 @@ fun String.compileAndRun(vararg strings: String) {
     binary.absolutePath.runCommand()
 }
 
-fun RustCrate.integrationTest(name: String, writable: Writable) =
-    this.withFile("tests/$name.rs", writable)
+fun RustCrate.integrationTest(
+    name: String,
+    writable: Writable,
+) = this.withFile("tests/$name.rs", writable)
 
 fun TestWriterDelegator.unitTest(test: Writable): TestWriterDelegator {
     lib {

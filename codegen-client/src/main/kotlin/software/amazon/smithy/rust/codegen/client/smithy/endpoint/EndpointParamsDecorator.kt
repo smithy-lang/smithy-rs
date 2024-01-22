@@ -37,13 +37,14 @@ private class EndpointParametersCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operation: OperationShape,
 ) : OperationCustomization() {
-    override fun section(section: OperationSection): Writable = writable {
-        val symbolProvider = codegenContext.symbolProvider
-        val operationName = symbolProvider.toSymbol(operation).name
-        if (section is OperationSection.AdditionalInterceptors) {
-            section.registerInterceptor(codegenContext.runtimeConfig, this) {
-                rust("${operationName}EndpointParamsInterceptor")
+    override fun section(section: OperationSection): Writable =
+        writable {
+            val symbolProvider = codegenContext.symbolProvider
+            val operationName = symbolProvider.toSymbol(operation).name
+            if (section is OperationSection.AdditionalInterceptors) {
+                section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    rust("${operationName}EndpointParamsInterceptor")
+                }
             }
         }
-    }
 }

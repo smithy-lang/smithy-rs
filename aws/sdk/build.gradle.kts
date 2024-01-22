@@ -18,6 +18,11 @@ plugins {
     id("software.amazon.smithy")
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     smithyBuildConfigs = files(layout.buildDirectory.file("smithy-build.json"))
     allowUnknownTraits = true
@@ -95,8 +100,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                 "plugins": {
                     "rust-client-codegen": {
                         "runtimeConfig": {
-                            "relativePath": "../",
-                            "version": "DEFAULT"
+                            "relativePath": "../"
                         },
                         "codegen": {
                             "includeFluentClient": false,
@@ -117,10 +121,10 @@ fun generateSmithyBuild(services: AwsServices): String {
                         "license": "Apache-2.0",
                         "customizationConfig": {
                             "awsSdk": {
-                                "generateReadme": true,
+                                "awsSdkBuild": true,
                                 "awsConfigVersion": "$awsConfigVersion",
                                 "defaultConfigPath": "${services.defaultConfigPath}",
-                                "endpointsConfigPath": "${services.endpointsConfigPath}",
+                                "partitionsConfigPath": "${services.partitionsConfigPath}",
                                 "integrationTestPath": "${project.projectDir.resolve("integration-tests")}"
                             }
                         }
@@ -354,11 +358,7 @@ tasks.register<ExecRustBuildTool>("fixManifests") {
 
     toolPath = publisherToolPath
     binaryName = "publisher"
-    arguments = mutableListOf("fix-manifests", "--location", outputDir.asFile.absolutePath).apply {
-        if (crateVersioner.independentVersioningEnabled()) {
-            add("--disable-version-number-validation")
-        }
-    }
+    arguments = mutableListOf("fix-manifests", "--location", outputDir.asFile.absolutePath)
 }
 
 tasks.register<ExecRustBuildTool>("hydrateReadme") {

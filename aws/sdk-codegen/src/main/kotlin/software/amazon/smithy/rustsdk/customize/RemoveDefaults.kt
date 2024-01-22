@@ -24,15 +24,19 @@ import java.util.logging.Logger
 object RemoveDefaults {
     private val logger: Logger = Logger.getLogger(javaClass.name)
 
-    fun processModel(model: Model, removeDefaultsFrom: Set<ShapeId>): Model {
+    fun processModel(
+        model: Model,
+        removeDefaultsFrom: Set<ShapeId>,
+    ): Model {
         val removedRootDefaults: MutableSet<ShapeId> = HashSet()
-        val removedRootDefaultsModel = ModelTransformer.create().mapShapes(model) { shape ->
-            shape.letIf(shouldRemoveRootDefault(shape, removeDefaultsFrom)) {
-                logger.info("Removing default trait from root $shape")
-                removedRootDefaults.add(shape.id)
-                removeDefault(shape)
+        val removedRootDefaultsModel =
+            ModelTransformer.create().mapShapes(model) { shape ->
+                shape.letIf(shouldRemoveRootDefault(shape, removeDefaultsFrom)) {
+                    logger.info("Removing default trait from root $shape")
+                    removedRootDefaults.add(shape.id)
+                    removeDefault(shape)
+                }
             }
-        }
 
         return ModelTransformer.create().mapShapes(removedRootDefaultsModel) { shape ->
             shape.letIf(shouldRemoveMemberDefault(shape, removedRootDefaults, removeDefaultsFrom)) {
@@ -42,7 +46,10 @@ object RemoveDefaults {
         }
     }
 
-    private fun shouldRemoveRootDefault(shape: Shape, removeDefaultsFrom: Set<ShapeId>): Boolean {
+    private fun shouldRemoveRootDefault(
+        shape: Shape,
+        removeDefaultsFrom: Set<ShapeId>,
+    ): Boolean {
         return shape !is MemberShape && removeDefaultsFrom.contains(shape.id) && shape.hasTrait<DefaultTrait>()
     }
 

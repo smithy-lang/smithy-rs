@@ -37,7 +37,8 @@ internal class EndpointTraitBindingsTest {
 
     @Test
     fun `generate endpoint prefixes`() {
-        val model = """
+        val model =
+            """
             namespace test
             @readonly
             @endpoint(hostPrefix: "{foo}a.data.")
@@ -49,16 +50,17 @@ internal class EndpointTraitBindingsTest {
                 @hostLabel
                 foo: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         val operationShape: OperationShape = model.lookup("test#GetStatus")
         val symbolProvider = testSymbolProvider(model)
-        val endpointBindingGenerator = EndpointTraitBindings(
-            model,
-            symbolProvider,
-            TestRuntimeConfig,
-            operationShape,
-            operationShape.expectTrait(EndpointTrait::class.java),
-        )
+        val endpointBindingGenerator =
+            EndpointTraitBindings(
+                model,
+                symbolProvider,
+                TestRuntimeConfig,
+                operationShape,
+                operationShape.expectTrait(EndpointTrait::class.java),
+            )
         val project = TestWorkspace.testProject()
         project.withModule(RustModule.private("test")) {
             rust(
@@ -70,8 +72,9 @@ internal class EndpointTraitBindingsTest {
             )
             implBlock(symbolProvider.toSymbol(model.lookup("test#GetStatusInput"))) {
                 rustBlockTemplate(
-                    "fn endpoint_prefix(&self) -> std::result::Result<#{endpoint}::EndpointPrefix, #{endpoint}::error::InvalidEndpointError>",
-                    "endpoint" to RuntimeType.smithyHttp(TestRuntimeConfig).resolve("endpoint"),
+                    "fn endpoint_prefix(&self) -> std::result::Result<#{EndpointPrefix}, #{InvalidEndpointError}>",
+                    "EndpointPrefix" to RuntimeType.smithyRuntimeApiClient(TestRuntimeConfig).resolve("client::endpoint::EndpointPrefix"),
+                    "InvalidEndpointError" to RuntimeType.smithyRuntimeApiClient(TestRuntimeConfig).resolve("client::endpoint::error::InvalidEndpointError"),
                 ) {
                     endpointBindingGenerator.render(this, "self")
                 }
@@ -118,7 +121,8 @@ internal class EndpointTraitBindingsTest {
     @ExperimentalPathApi
     @Test
     fun `endpoint integration test`() {
-        val model = """
+        val model =
+            """
             namespace com.example
             use aws.protocols#awsJson1_0
             use smithy.rules#endpointRuleSet
@@ -150,7 +154,7 @@ internal class EndpointTraitBindingsTest {
                 @hostLabel
                 greeting: String
             }
-        """.asSmithyModel()
+            """.asSmithyModel()
         clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
             val moduleName = clientCodegenContext.moduleUseName()
             rustCrate.integrationTest("test_endpoint_prefix") {
@@ -159,8 +163,8 @@ internal class EndpointTraitBindingsTest {
                     """
                     async fn test_endpoint_prefix() {
                         use #{capture_request};
-                        use aws_smithy_http::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::box_error::BoxError;
+                        use aws_smithy_runtime_api::client::endpoint::EndpointPrefix;
                         use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                         use aws_smithy_types::body::SdkBody;
                         use aws_smithy_types::config_bag::ConfigBag;
@@ -244,8 +248,9 @@ internal class EndpointTraitBindingsTest {
                         );
                     }
                     """,
-                    "capture_request" to CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
-                        .toType().resolve("client::http::test_util::capture_request"),
+                    "capture_request" to
+                        CargoDependency.smithyRuntimeTestUtil(clientCodegenContext.runtimeConfig)
+                            .toType().resolve("client::http::test_util::capture_request"),
                 )
             }
         }

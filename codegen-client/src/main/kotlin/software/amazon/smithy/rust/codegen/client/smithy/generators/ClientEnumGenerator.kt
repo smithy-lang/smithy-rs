@@ -38,84 +38,91 @@ data class InfallibleEnumType(
         const val UnknownVariantValue = "UnknownVariantValue"
     }
 
-    override fun implFromForStr(context: EnumGeneratorContext): Writable = writable {
-        rustTemplate(
-            """
-            impl #{From}<&str> for ${context.enumName} {
-                fn from(s: &str) -> Self {
-                    match s {
-                        #{matchArms}
-                    }
-                }
-            }
-            """,
-            "From" to RuntimeType.From,
-            "matchArms" to writable {
-                context.sortedMembers.forEach { member ->
-                    rust("${member.value.dq()} => ${context.enumName}::${member.derivedName()},")
-                }
-                rust(
-                    "other => ${context.enumName}::$UnknownVariant(#T(other.to_owned()))",
-                    unknownVariantValue(context),
-                )
-            },
-        )
-    }
-
-    override fun implFromStr(context: EnumGeneratorContext): Writable = writable {
-        rustTemplate(
-            """
-            impl ::std::str::FromStr for ${context.enumName} {
-                type Err = ::std::convert::Infallible;
-
-                fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
-                    #{Ok}(${context.enumName}::from(s))
-                }
-            }
-            """,
-            *preludeScope,
-        )
-    }
-
-    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable = writable {
-        // `try_parse` isn't needed for unnamed enums
-        if (context.enumTrait.hasNames()) {
+    override fun implFromForStr(context: EnumGeneratorContext): Writable =
+        writable {
             rustTemplate(
                 """
-                impl ${context.enumName} {
-                    /// Parses the enum value while disallowing unknown variants.
-                    ///
-                    /// Unknown variants will result in an error.
-                    pub fn try_parse(value: &str) -> #{Result}<Self, #{UnknownVariantError}> {
-                        match Self::from(value) {
-                            ##[allow(deprecated)]
-                            Self::Unknown(_) => #{Err}(#{UnknownVariantError}::new(value)),
-                            known => Ok(known),
+                impl #{From}<&str> for ${context.enumName} {
+                    fn from(s: &str) -> Self {
+                        match s {
+                            #{matchArms}
                         }
                     }
                 }
                 """,
-                *preludeScope,
-                "UnknownVariantError" to unknownVariantError(),
+                "From" to RuntimeType.From,
+                "matchArms" to
+                    writable {
+                        context.sortedMembers.forEach { member ->
+                            rust("${member.value.dq()} => ${context.enumName}::${member.derivedName()},")
+                        }
+                        rust(
+                            "other => ${context.enumName}::$UnknownVariant(#T(other.to_owned()))",
+                            unknownVariantValue(context),
+                        )
+                    },
             )
         }
-    }
 
-    override fun additionalDocs(context: EnumGeneratorContext): Writable = writable {
-        renderForwardCompatibilityNote(context.enumName, context.sortedMembers, UnknownVariant, UnknownVariantValue)
-    }
+    override fun implFromStr(context: EnumGeneratorContext): Writable =
+        writable {
+            rustTemplate(
+                """
+                impl ::std::str::FromStr for ${context.enumName} {
+                    type Err = ::std::convert::Infallible;
 
-    override fun additionalEnumMembers(context: EnumGeneratorContext): Writable = writable {
-        docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
-        rust(
-            """##[deprecated(note = "Don't directly match on `$UnknownVariant`. See the docs on this enum for the correct way to handle unknown variants.")]""",
-        )
-        rust("$UnknownVariant(#T)", unknownVariantValue(context))
-    }
+                    fn from_str(s: &str) -> #{Result}<Self, <Self as ::std::str::FromStr>::Err> {
+                        #{Ok}(${context.enumName}::from(s))
+                    }
+                }
+                """,
+                *preludeScope,
+            )
+        }
 
-    override fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable = writable {
-        rust("${context.enumName}::$UnknownVariant(value) => value.as_str()")
-    }
+    override fun additionalEnumImpls(context: EnumGeneratorContext): Writable =
+        writable {
+            // `try_parse` isn't needed for unnamed enums
+            if (context.enumTrait.hasNames()) {
+                rustTemplate(
+                    """
+                    impl ${context.enumName} {
+                        /// Parses the enum value while disallowing unknown variants.
+                        ///
+                        /// Unknown variants will result in an error.
+                        pub fn try_parse(value: &str) -> #{Result}<Self, #{UnknownVariantError}> {
+                            match Self::from(value) {
+                                ##[allow(deprecated)]
+                                Self::Unknown(_) => #{Err}(#{UnknownVariantError}::new(value)),
+                                known => Ok(known),
+                            }
+                        }
+                    }
+                    """,
+                    *preludeScope,
+                    "UnknownVariantError" to unknownVariantError(),
+                )
+            }
+        }
+
+    override fun additionalDocs(context: EnumGeneratorContext): Writable =
+        writable {
+            renderForwardCompatibilityNote(context.enumName, context.sortedMembers, UnknownVariant, UnknownVariantValue)
+        }
+
+    override fun additionalEnumMembers(context: EnumGeneratorContext): Writable =
+        writable {
+            docs("`$UnknownVariant` contains new variants that have been added since this code was generated.")
+            rust(
+                """##[deprecated(note = "Don't directly match on `$UnknownVariant`. See the docs on this enum for the correct way to handle unknown variants.")]""",
+            )
+            rust("$UnknownVariant(#T)", unknownVariantValue(context))
+        }
+
+    override fun additionalAsStrMatchArms(context: EnumGeneratorContext): Writable =
+        writable {
+            rust("${context.enumName}::$UnknownVariant(value) => value.as_str()")
+        }
 
     private fun unknownVariantValue(context: EnumGeneratorContext): RuntimeType {
         return RuntimeType.forInlineFun(UnknownVariantValue, unknownVariantModule) {
@@ -145,8 +152,10 @@ data class InfallibleEnumType(
      * forward-compatible way.
      */
     private fun RustWriter.renderForwardCompatibilityNote(
-        enumName: String, sortedMembers: List<EnumMemberModel>,
-        unknownVariant: String, unknownVariantValue: String,
+        enumName: String,
+        sortedMembers: List<EnumMemberModel>,
+        unknownVariant: String,
+        unknownVariantValue: String,
     ) {
         docs(
             """
@@ -213,26 +222,27 @@ class ClientEnumGenerator(codegenContext: ClientCodegenContext, shape: StringSha
         ),
     )
 
-private fun unknownVariantError(): RuntimeType = RuntimeType.forInlineFun("UnknownVariantError", ClientRustModule.Error) {
-    rustTemplate(
-        """
-        /// The given enum value failed to parse since it is not a known value.
-        ##[derive(Debug)]
-        pub struct UnknownVariantError {
-            value: #{String},
-        }
-        impl UnknownVariantError {
-            pub(crate) fn new(value: impl #{Into}<#{String}>) -> Self {
-                Self { value: value.into() }
+private fun unknownVariantError(): RuntimeType =
+    RuntimeType.forInlineFun("UnknownVariantError", ClientRustModule.Error) {
+        rustTemplate(
+            """
+            /// The given enum value failed to parse since it is not a known value.
+            ##[derive(Debug)]
+            pub struct UnknownVariantError {
+                value: #{String},
             }
-        }
-        impl ::std::fmt::Display for UnknownVariantError {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> #{Result}<(), ::std::fmt::Error> {
-                write!(f, "unknown enum variant: '{}'", self.value)
+            impl UnknownVariantError {
+                pub(crate) fn new(value: impl #{Into}<#{String}>) -> Self {
+                    Self { value: value.into() }
+                }
             }
-        }
-        impl ::std::error::Error for UnknownVariantError {}
-        """,
-        *preludeScope,
-    )
-}
+            impl ::std::fmt::Display for UnknownVariantError {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> #{Result}<(), ::std::fmt::Error> {
+                    write!(f, "unknown enum variant: '{}'", self.value)
+                }
+            }
+            impl ::std::error::Error for UnknownVariantError {}
+            """,
+            *preludeScope,
+        )
+    }

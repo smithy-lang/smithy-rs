@@ -43,15 +43,19 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
     // Must run after the AwsPresigningDecorator so that the presignable trait is correctly added to operations
     override val order: Byte = (AwsPresigningDecorator.ORDER + 1).toByte()
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         val runtimeConfig = codegenContext.runtimeConfig
         val types = Types(runtimeConfig)
         FluentClientGenerator(
             codegenContext,
-            customizations = listOf(
-                AwsPresignedFluentBuilderMethod(codegenContext),
-                AwsFluentClientDocs(codegenContext),
-            ),
+            customizations =
+                listOf(
+                    AwsPresignedFluentBuilderMethod(codegenContext),
+                    AwsFluentClientDocs(codegenContext),
+                ),
         ).render(rustCrate, emptyList())
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)
@@ -63,47 +67,52 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
     ): List<LibRsCustomization> {
-        return baseCustomizations + object : LibRsCustomization() {
-            override fun section(section: LibRsSection) = when (section) {
-                is LibRsSection.Body -> writable {
-                    Attribute.DocInline.render(this)
-                    rust("pub use client::Client;")
-                }
+        return baseCustomizations +
+            object : LibRsCustomization() {
+                override fun section(section: LibRsSection) =
+                    when (section) {
+                        is LibRsSection.Body ->
+                            writable {
+                                Attribute.DocInline.render(this)
+                                rust("pub use client::Client;")
+                            }
 
-                else -> emptySection
+                        else -> emptySection
+                    }
             }
-        }
     }
 
     override fun protocolTestGenerator(
         codegenContext: ClientCodegenContext,
         baseGenerator: ProtocolTestGenerator,
-    ): ProtocolTestGenerator = DefaultProtocolTestGenerator(
-        codegenContext,
-        baseGenerator.protocolSupport,
-        baseGenerator.operationShape,
-        renderClientCreation = { params ->
-            rustTemplate(
-                """
-                let mut ${params.configBuilderName} = ${params.configBuilderName};
-                ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
+    ): ProtocolTestGenerator =
+        DefaultProtocolTestGenerator(
+            codegenContext,
+            baseGenerator.protocolSupport,
+            baseGenerator.operationShape,
+            renderClientCreation = { params ->
+                rustTemplate(
+                    """
+                    let mut ${params.configBuilderName} = ${params.configBuilderName};
+                    ${params.configBuilderName}.set_region(Some(crate::config::Region::new("us-east-1")));
 
-                let config = ${params.configBuilderName}.http_client(${params.httpClientName}).build();
-                let ${params.clientName} = #{Client}::from_conf(config);
-                """,
-                "Client" to ClientRustModule.root.toType().resolve("Client"),
-            )
-        },
-    )
+                    let config = ${params.configBuilderName}.http_client(${params.httpClientName}).build();
+                    let ${params.clientName} = #{Client}::from_conf(config);
+                    """,
+                    "Client" to ClientRustModule.root.toType().resolve("Client"),
+                )
+            },
+        )
 }
 
 private class AwsFluentClientExtensions(private val codegenContext: ClientCodegenContext, private val types: Types) {
-    private val codegenScope = arrayOf(
-        "Arc" to RuntimeType.Arc,
-        "RetryConfig" to types.retryConfig,
-        "TimeoutConfig" to types.timeoutConfig,
-        "aws_types" to types.awsTypes,
-    )
+    private val codegenScope =
+        arrayOf(
+            "Arc" to RuntimeType.Arc,
+            "RetryConfig" to types.retryConfig,
+            "TimeoutConfig" to types.timeoutConfig,
+            "aws_types" to types.awsTypes,
+        )
 
     fun render(writer: RustWriter) {
         writer.rustBlockTemplate("impl Client", *codegenScope) {
@@ -134,17 +143,18 @@ private class AwsFluentClientDocs(private val codegenContext: ClientCodegenConte
 
     override fun section(section: FluentClientSection): Writable {
         return when (section) {
-            is FluentClientSection.FluentClientDocs -> writable {
-                rustTemplate(
-                    """
-                    /// Client for $serviceName
-                    ///
-                    /// Client for invoking operations on $serviceName. Each operation on $serviceName is a method on this
+            is FluentClientSection.FluentClientDocs ->
+                writable {
+                    rustTemplate(
+                        """
+                        /// Client for $serviceName
+                        ///
+                        /// Client for invoking operations on $serviceName. Each operation on $serviceName is a method on this
                     /// this struct. `.send()` MUST be invoked on the generated operations to dispatch the request to the service.""",
-                )
-                AwsDocs.clientConstructionDocs(codegenContext)(this)
-                FluentClientDocs.clientUsageDocs(codegenContext)(this)
-            }
+                    )
+                    AwsDocs.clientConstructionDocs(codegenContext)(this)
+                    FluentClientDocs.clientUsageDocs(codegenContext)(this)
+                }
 
             else -> emptySection
         }

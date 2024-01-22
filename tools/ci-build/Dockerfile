@@ -6,8 +6,8 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.70.0
-ARG rust_nightly_version=nightly-2023-05-31
+ARG rust_stable_version=1.72.1
+ARG rust_nightly_version=nightly-2023-10-10
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo
@@ -82,10 +82,11 @@ RUN set -eux; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
-    cargo install --locked --path tools/ci-build/publisher; \
     cargo install --locked --path tools/ci-build/changelogger; \
     cargo install --locked --path tools/ci-build/crate-hasher; \
     cargo install --locked --path tools/ci-build/difftags; \
+    cargo install --locked --path tools/ci-build/publisher; \
+    cargo install --locked --path tools/ci-build/runtime-versioner; \
     cargo install --locked --path tools/ci-build/sdk-lints; \
     cargo install --locked --path tools/ci-build/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
@@ -95,7 +96,7 @@ ARG cargo_deny_version=0.13.5
 RUN cargo install cargo-deny --locked --version ${cargo_deny_version}
 
 FROM install_rust AS cargo_udeps
-ARG cargo_udeps_version=0.1.35
+ARG cargo_udeps_version=0.1.42
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install cargo-udeps --locked --version ${cargo_udeps_version}
 
@@ -104,11 +105,11 @@ ARG cargo_hack_version=0.5.23
 RUN cargo install cargo-hack --locked --version ${cargo_hack_version}
 
 FROM install_rust AS cargo_minimal_versions
-ARG cargo_minimal_versions_version=0.1.8
+ARG cargo_minimal_versions_version=0.1.19
 RUN cargo install cargo-minimal-versions --locked --version ${cargo_minimal_versions_version}
 
 FROM install_rust AS cargo_check_external_types
-ARG cargo_check_external_types_version=0.1.7
+ARG cargo_check_external_types_version=0.1.8
 RUN cargo install cargo-check-external-types --locked --version ${cargo_check_external_types_version}
 
 FROM install_rust AS maturin
@@ -138,13 +139,11 @@ RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_v
 
 FROM install_rust AS cargo_mdbook
 ARG cargo_mdbook_version=0.4.30
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook --locked --version ${cargo_mdbook_version}
+RUN cargo install mdbook --locked --version ${cargo_mdbook_version}
 
 FROM install_rust AS cargo_mdbook_mermaid
 ARG cargo_mdbook_mermaid_version=0.12.6
-ARG rust_nightly_version
-RUN cargo +${rust_nightly_version} -Z sparse-registry install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
+RUN cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version}
 
 #
 # Final image
@@ -168,7 +167,8 @@ RUN set -eux; \
         python3 \
         python3-devel \
         python3-pip \
-        shadow-utils; \
+        shadow-utils \
+        tar; \
     yum clean all; \
     rm -rf /var/cache/yum; \
     groupadd build; \

@@ -20,18 +20,20 @@ fun Model.Builder.cloneOperation(
     idTransform: (ShapeId) -> ShapeId,
 ): Model.Builder {
     val operationShape = model.expectShape(oldOperation.toShapeId(), OperationShape::class.java)
-    val inputShape = model.expectShape(
-        checkNotNull(operationShape.input.orNull()) {
-            "cloneOperation expects OperationNormalizer to be run first to add input shapes to all operations"
-        },
-        StructureShape::class.java,
-    )
-    val outputShape = model.expectShape(
-        checkNotNull(operationShape.output.orNull()) {
-            "cloneOperation expects OperationNormalizer to be run first to add output shapes to all operations"
-        },
-        StructureShape::class.java,
-    )
+    val inputShape =
+        model.expectShape(
+            checkNotNull(operationShape.input.orNull()) {
+                "cloneOperation expects OperationNormalizer to be run first to add input shapes to all operations"
+            },
+            StructureShape::class.java,
+        )
+    val outputShape =
+        model.expectShape(
+            checkNotNull(operationShape.output.orNull()) {
+                "cloneOperation expects OperationNormalizer to be run first to add output shapes to all operations"
+            },
+            StructureShape::class.java,
+        )
 
     val inputId = idTransform(inputShape.id)
     addShape(inputShape.toBuilder().rename(inputId).build())
@@ -54,8 +56,9 @@ fun Model.Builder.cloneOperation(
  * Renames a StructureShape builder and automatically fixes all the members.
  */
 fun StructureShape.Builder.rename(newId: ShapeId): StructureShape.Builder {
-    val renamedMembers = this.build().members().map {
-        it.toBuilder().id(newId.withMember(it.memberName)).build()
-    }
+    val renamedMembers =
+        this.build().members().map {
+            it.toBuilder().id(newId.withMember(it.memberName)).build()
+        }
     return this.id(newId).members(renamedMembers)
 }

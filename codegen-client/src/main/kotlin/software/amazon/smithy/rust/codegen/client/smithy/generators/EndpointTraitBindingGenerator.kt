@@ -31,7 +31,7 @@ class EndpointTraitBindings(
     private val endpointTrait: EndpointTrait,
 ) {
     private val inputShape = operationShape.inputShape(model)
-    private val endpointPrefix = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint::EndpointPrefix")
+    private val endpointPrefix = RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::endpoint::EndpointPrefix")
 
     /**
      * Render the `EndpointPrefix` struct. [input] refers to the symbol referring to the input of this operation.
@@ -61,31 +61,33 @@ class EndpointTraitBindings(
                 // build a list of args: `labelname = "field"`
                 // these eventually end up in the format! macro invocation:
                 // ```format!("some.{endpoint}", endpoint = endpoint);```
-                val args = endpointTrait.hostPrefix.labels.map { label ->
-                    val memberShape = inputShape.getMember(label.content).get()
-                    val field = symbolProvider.toMemberName(memberShape)
-                    if (symbolProvider.toSymbol(memberShape).isOptional()) {
-                        rust("let $field = $input.$field.as_deref().unwrap_or_default();")
-                    } else {
-                        // NOTE: this is dead code until we start respecting @required
-                        rust("let $field = &$input.$field;")
+                val args =
+                    endpointTrait.hostPrefix.labels.map { label ->
+                        val memberShape = inputShape.getMember(label.content).get()
+                        val field = symbolProvider.toMemberName(memberShape)
+                        if (symbolProvider.toSymbol(memberShape).isOptional()) {
+                            rust("let $field = $input.$field.as_deref().unwrap_or_default();")
+                        } else {
+                            // NOTE: this is dead code until we start respecting @required
+                            rust("let $field = &$input.$field;")
+                        }
+                        if (generateValidation) {
+                            val errorString = "$field was unset or empty but must be set as part of the endpoint prefix"
+                            val contents =
+                                """
+                                if $field.is_empty() {
+                                    return Err(#{InvalidEndpointError}::failed_to_construct_uri("$errorString").into());
+                                }
+                                """
+                            rustTemplate(
+                                contents,
+                                "InvalidEndpointError" to
+                                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                                        .resolve("client::endpoint::error::InvalidEndpointError"),
+                            )
+                        }
+                        "${label.content} = $field"
                     }
-                    if (generateValidation) {
-                        val errorString = "$field was unset or empty but must be set as part of the endpoint prefix"
-                        val contents =
-                            """
-                            if $field.is_empty() {
-                                return Err(#{InvalidEndpointError}::failed_to_construct_uri("$errorString").into());
-                            }
-                            """
-                        rustTemplate(
-                            contents,
-                            "InvalidEndpointError" to RuntimeType.smithyHttp(runtimeConfig)
-                                .resolve("endpoint::error::InvalidEndpointError"),
-                        )
-                    }
-                    "${label.content} = $field"
-                }
                 rustTemplate(
                     "#{EndpointPrefix}::new(format!($formatLiteral, ${args.joinToString()}))",
                     "EndpointPrefix" to endpointPrefix,

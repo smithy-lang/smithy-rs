@@ -27,16 +27,20 @@ fun serverIntegrationTest(
     test: (ServerCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ): Path {
     fun invokeRustCodegenPlugin(ctx: PluginContext) {
-        val codegenDecorator = object : ServerCodegenDecorator {
-            override val name: String = "Add tests"
-            override val order: Byte = 0
+        val codegenDecorator =
+            object : ServerCodegenDecorator {
+                override val name: String = "Add tests"
+                override val order: Byte = 0
 
-            override fun classpathDiscoverable(): Boolean = false
+                override fun classpathDiscoverable(): Boolean = false
 
-            override fun extras(codegenContext: ServerCodegenContext, rustCrate: RustCrate) {
-                test(codegenContext, rustCrate)
+                override fun extras(
+                    codegenContext: ServerCodegenContext,
+                    rustCrate: RustCrate,
+                ) {
+                    test(codegenContext, rustCrate)
+                }
             }
-        }
         RustServerCodegenPlugin().executeWithDecorator(ctx, codegenDecorator, *additionalDecorators.toTypedArray())
     }
     return codegenIntegrationTest(model, params, invokePlugin = ::invokeRustCodegenPlugin)
