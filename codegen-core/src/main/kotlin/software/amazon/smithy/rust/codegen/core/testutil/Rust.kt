@@ -60,6 +60,13 @@ private object Commands {
         NO_FEATURES_WITHOUT_UNSTABLE,
         ALL_FEATURES_WITH_UNSTABLE,
         NO_FEATURES_WITH_UNSTABLE,
+
+      val TestModuleDocProvider =
+    object : ModuleDocProvider {
+        override fun docsWriter(module: RustModule.LeafModule): Writable =
+            writable {
+                docs("Some test documentation\n\nSome more details...")
+            }
     }
 
     val ALL_VARIATIONS = listOf(
@@ -521,6 +528,21 @@ fun RustWriter.compileAndTest(
             this.namespace.split("::")[1]
         } else {
             "lib"
+        }
+    val tempDir =
+        this.toString()
+            .intoCrate(deps, module = module, main = main, strict = clippy)
+    val mainRs = tempDir.resolve("src/main.rs")
+    val testModule = tempDir.resolve("src/$module.rs")
+    try {
+        val testOutput =
+            if ((mainRs.readText() + testModule.readText()).contains("#[test]")) {
+                "cargo test".runCommand(tempDir.toPath())
+            } else {
+                "cargo check".runCommand(tempDir.toPath())
+            }
+        if (expectFailure) {
+            println("Test sources for debugging: file://${testModule.absolutePath}")
         }
     val tempDir = this.toString().intoCrate(deps, module = module, main = main, strict = clippy)
     val mainRs = tempDir.resolve("src/main.rs")
