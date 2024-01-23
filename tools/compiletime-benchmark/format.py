@@ -38,7 +38,7 @@ def parser() -> str:
         if len(outputs) != 6:
             continue
 
-        row = f"|{'|'.join(outputs)}|"
+        row = f"|{'|'.join(outputs)}|".replace("||", "|")
         markdown_rows.append(row)
 
     markdown = "\n".join(markdown_rows)
