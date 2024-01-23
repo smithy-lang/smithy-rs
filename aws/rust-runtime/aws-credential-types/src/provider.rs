@@ -19,7 +19,7 @@
 #![cfg_attr(
     feature = "hardcoded-credentials",
     doc = r##"
-See [`Credentials::from_keys`] for an example on how to use static credentials.
+See [`Credentials::from_keys`](crate::Credentials::from_keys) for an example on how to use static credentials.
     "##
 )]
 #![cfg_attr(
