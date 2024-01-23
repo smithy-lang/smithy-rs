@@ -10,3 +10,9 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The types in the aws-http crate were moved into aws-runtime. Deprecated type aliases were put in place to point to the new locations."
+references = ["smithy-rs#3355"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
