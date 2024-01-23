@@ -9,8 +9,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
 aws-smithy-types = "1"
-aws-smithy-runtime-api = { version = "1", features = ["http-02x"] }
-aws-smithy-runtime = { version = "1", features = ["test-util"] }
+aws-smithy-runtime-api = { version = "1", features = ["client", "http-02x"] }
 
 [dev-dependencies]
 aws-sdk-s3 = { version = "1", features = ["test-util"] }
