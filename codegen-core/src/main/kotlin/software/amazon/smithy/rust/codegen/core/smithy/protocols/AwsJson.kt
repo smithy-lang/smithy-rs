@@ -42,19 +42,20 @@ class AwsJsonHttpBindingResolver(
     private val model: Model,
     private val awsJsonVersion: AwsJsonVersion,
 ) : HttpBindingResolver {
-    private val httpTrait = HttpTrait.builder()
-        .code(200)
-        .method("POST")
-        .uri(UriPattern.parse("/"))
-        .build()
+    private val httpTrait =
+        HttpTrait.builder()
+            .code(200)
+            .method("POST")
+            .uri(UriPattern.parse("/"))
+            .build()
 
     private fun bindings(shape: ToShapeId): List<HttpBindingDescriptor> {
         val members = shape.let { model.expectShape(it.toShapeId()) }.members()
-        // TODO(https://github.com/awslabs/smithy-rs/issues/2237): support non-streaming members too
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2237): support non-streaming members too
         if (members.size > 1 && members.any { it.isStreaming(model) }) {
             throw CodegenException(
                 "We only support one payload member if that payload contains a streaming member." +
-                    "Tracking issue to relax this constraint: https://github.com/awslabs/smithy-rs/issues/2237",
+                    "Tracking issue to relax this constraint: https://github.com/smithy-lang/smithy-rs/issues/2237",
             )
         }
 
@@ -76,8 +77,7 @@ class AwsJsonHttpBindingResolver(
     override fun responseBindings(operationShape: OperationShape): List<HttpBindingDescriptor> =
         bindings(operationShape.outputShape)
 
-    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
-        bindings(errorShape)
+    override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> = bindings(errorShape)
 
     // TODO This won't set the correct `Content-Type` for event streaming operations!
     override fun requestContentType(operationShape: OperationShape): String =
@@ -97,24 +97,26 @@ class AwsJsonSerializerGenerator(
         JsonSerializerGenerator(codegenContext, httpBindingResolver, ::awsJsonFieldName),
 ) : StructuredDataSerializerGenerator by jsonSerializerGenerator {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope = arrayOf(
-        "Error" to runtimeConfig.serializationError(),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-    )
+    private val codegenScope =
+        arrayOf(
+            "Error" to runtimeConfig.serializationError(),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        )
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     override fun operationInputSerializer(operationShape: OperationShape): RuntimeType {
         var serializer = jsonSerializerGenerator.operationInputSerializer(operationShape)
         if (serializer == null) {
             val inputShape = operationShape.inputShape(codegenContext.model)
-            serializer = protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
-                rustBlockTemplate(
-                    "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
-                    *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
-                ) {
-                    rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
+            serializer =
+                protocolFunctions.serializeFn(operationShape, fnNameSuffix = "input") { fnName ->
+                    rustBlockTemplate(
+                        "pub fn $fnName(_input: &#{target}) -> Result<#{SdkBody}, #{Error}>",
+                        *codegenScope, "target" to codegenContext.symbolProvider.toSymbol(inputShape),
+                    ) {
+                        rustTemplate("""Ok(#{SdkBody}::from("{}"))""", *codegenScope)
+                    }
                 }
-            }
         }
         return serializer
     }
@@ -125,14 +127,16 @@ open class AwsJson(
     val awsJsonVersion: AwsJsonVersion,
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.Http.resolve("HeaderMap"),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
-            .resolve("deserialize::error::DeserializeError"),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "JsonError" to
+                CargoDependency.smithyJson(runtimeConfig).toType()
+                    .resolve("deserialize::error::DeserializeError"),
+            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+        )
 
     val version: AwsJsonVersion get() = awsJsonVersion
 
@@ -158,7 +162,7 @@ open class AwsJson(
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(_response_status: u16, response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
+                pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{JsonError}> {
                     #{json_errors}::parse_error_metadata(response_body, response_headers)
                 }
                 """,

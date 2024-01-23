@@ -70,28 +70,29 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
             constrainedTypes: Boolean = true,
             includeConstrainedShapeProvider: Boolean = true,
             codegenDecorator: ServerCodegenDecorator,
-        ) =
-            SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
-                // Generate public constrained types for directly constrained shapes.
-                .let {
-                    if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
-                }
-                // Generate different types for EventStream shapes (e.g. transcribe streaming)
-                .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
-                // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
-                .let { StreamingShapeSymbolProvider(it) }
-                // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
-                .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
-                // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
-                .let { ConstrainedShapeSymbolMetadataProvider(it, constrainedTypes) }
-                // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
-                .let { StreamingShapeMetadataProvider(it) }
-                // Derive `Eq` and `Hash` if possible.
-                .let { DeriveEqAndHashSymbolMetadataProvider(it) }
-                // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
-                // be the name of an operation input
-                .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
-                // Allows decorators to inject a custom symbol provider
-                .let { codegenDecorator.symbolProvider(it) }
+        ) = SymbolVisitor(settings, model, serviceShape = serviceShape, config = rustSymbolProviderConfig)
+            // Generate public constrained types for directly constrained shapes.
+            .let {
+                if (includeConstrainedShapeProvider) ConstrainedShapeSymbolProvider(it, serviceShape, constrainedTypes) else it
+            }
+            // Generate different types for EventStream shapes (e.g. transcribe streaming)
+            .let { EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER) }
+            // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)
+            .let { StreamingShapeSymbolProvider(it) }
+            // Add Rust attributes (like `#[derive(PartialEq)]`) to generated shapes
+            .let { BaseSymbolMetadataProvider(it, additionalAttributes = listOf()) }
+            // Constrained shapes generate newtypes that need the same derives we place on types generated from aggregate shapes.
+            .let { ConstrainedShapeSymbolMetadataProvider(it, constrainedTypes) }
+            // Streaming shapes need different derives (e.g. they cannot derive `PartialEq`)
+            .let { StreamingShapeMetadataProvider(it) }
+            // Derive `Eq` and `Hash` if possible.
+            .let { DeriveEqAndHashSymbolMetadataProvider(it) }
+            // Rename shapes that clash with Rust reserved words & and other SDK specific features e.g. `send()` cannot
+            // be the name of an operation input
+            .let { RustReservedWordSymbolProvider(it, ServerReservedWords) }
+            // Allows decorators to inject a custom symbol provider
+            .let { codegenDecorator.symbolProvider(it) }
+            // Inject custom symbols.
+            .let { CustomShapeSymbolProvider(it) }
     }
 }

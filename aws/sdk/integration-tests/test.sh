@@ -11,6 +11,6 @@ for f in *; do
       echo
       echo "Testing ${f}..."
       echo "###############"
-      cargo test --manifest-path "${f}/Cargo.toml"
+      cargo test --manifest-path "${f}/Cargo.toml" --all-features
    fi
 done

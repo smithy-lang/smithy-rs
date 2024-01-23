@@ -179,6 +179,8 @@ async def check_content_type_header(request: Request, next: Next) -> Response:
     if content_type in ["application/json", "application/vnd.amazon.eventstream"]:
         logging.debug("found valid `%s` content type", content_type)
     else:
+        # Note that dumping all headers may log sensitive information! You
+        # probably don't want to do this in production.
         logging.warning(
             "invalid content type %s, dumping headers: %s",
             content_type,

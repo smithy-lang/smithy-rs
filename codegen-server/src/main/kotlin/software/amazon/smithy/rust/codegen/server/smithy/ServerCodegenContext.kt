@@ -37,8 +37,8 @@ data class ServerCodegenContext(
     val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
 ) : CodegenContext(
-    model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
-) {
+        model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
+    ) {
     override fun builderInstantiator(): BuilderInstantiator {
         return ServerBuilderInstantiator(symbolProvider, returnSymbolToParseFn(this))
     }

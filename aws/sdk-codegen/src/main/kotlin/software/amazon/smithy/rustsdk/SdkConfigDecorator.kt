@@ -49,14 +49,16 @@ object SdkConfigCustomization {
      * SdkConfigCustomization.copyField("some_string_field") { rust("|s|s.to_to_string()") }
      * ```
      */
-    fun copyField(fieldName: String, map: Writable?) =
-        adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
-            val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
-            rustTemplate(
-                "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
-                "map" to mapBlock,
-            )
-        }
+    fun copyField(
+        fieldName: String,
+        map: Writable?,
+    ) = adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+        val mapBlock = map?.let { writable { rust(".map(#W)", it) } } ?: writable { }
+        rustTemplate(
+            "${section.serviceConfigBuilder}.set_$fieldName(${section.sdkConfig}.$fieldName()#{map});",
+            "map" to mapBlock,
+        )
+    }
 }
 
 /**
@@ -78,6 +80,11 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
 
                     ${section.serviceConfigBuilder}.set_http_client(${section.sdkConfig}.http_client());
                     ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
+                    ${section.serviceConfigBuilder}.set_behavior_version(${section.sdkConfig}.behavior_version());
+                    // setting `None` here removes the default
+                    if let Some(config) = ${section.sdkConfig}.stalled_stream_protection() {
+                        ${section.serviceConfigBuilder}.set_stalled_stream_protection(Some(config));
+                    }
 
                     if let Some(cache) = ${section.sdkConfig}.identity_cache() {
                         ${section.serviceConfigBuilder}.set_identity_cache(cache);
@@ -105,10 +112,14 @@ class SdkConfigDecorator : ClientCodegenDecorator {
         return baseCustomizations + NewFromShared(codegenContext.runtimeConfig)
     }
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
-        val codegenScope = arrayOf(
-            "SdkConfig" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("sdk_config::SdkConfig"),
-        )
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
+        val codegenScope =
+            arrayOf(
+                "SdkConfig" to AwsRuntimeType.awsTypes(codegenContext.runtimeConfig).resolve("sdk_config::SdkConfig"),
+            )
 
         rustCrate.withModule(ClientRustModule.config) {
             rustTemplate(
@@ -128,15 +139,16 @@ class SdkConfigDecorator : ClientCodegenDecorator {
                     }
                 }
                 """,
-                "augmentBuilder" to writable {
-                    writeCustomizations(
-                        codegenContext.rootDecorator.extraSections(codegenContext),
-                        SdkConfigSection.CopySdkConfigToClientConfig(
-                            sdkConfig = "input",
-                            serviceConfigBuilder = "builder",
-                        ),
-                    )
-                },
+                "augmentBuilder" to
+                    writable {
+                        writeCustomizations(
+                            codegenContext.rootDecorator.extraSections(codegenContext),
+                            SdkConfigSection.CopySdkConfigToClientConfig(
+                                sdkConfig = "input",
+                                serviceConfigBuilder = "builder",
+                            ),
+                        )
+                    },
                 *codegenScope,
             )
         }
@@ -144,23 +156,25 @@ class SdkConfigDecorator : ClientCodegenDecorator {
 }
 
 class NewFromShared(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
-    private val codegenScope = arrayOf(
-        "SdkConfig" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("sdk_config::SdkConfig"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "SdkConfig" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("sdk_config::SdkConfig"),
+        )
 
     override fun section(section: ServiceConfig): Writable {
         return when (section) {
-            ServiceConfig.ConfigImpl -> writable {
-                rustTemplate(
-                    """
-                    /// Creates a new [service config](crate::Config) from a [shared `config`](#{SdkConfig}).
-                    pub fn new(config: &#{SdkConfig}) -> Self {
-                        Builder::from(config).build()
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
+            ServiceConfig.ConfigImpl ->
+                writable {
+                    rustTemplate(
+                        """
+                        /// Creates a new [service config](crate::Config) from a [shared `config`](#{SdkConfig}).
+                        pub fn new(config: &#{SdkConfig}) -> Self {
+                            Builder::from(config).build()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
 
             else -> emptySection
         }

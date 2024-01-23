@@ -82,7 +82,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "aws.protocoltests.restjson.validation#RestJsonValidation",
             "rest_json_validation",
             // `@range` trait is used on floating point shapes, which we deliberately don't want to support.
-            // See https://github.com/awslabs/smithy-rs/issues/1401.
+            // See https://github.com/smithy-lang/smithy-rs/issues/1401.
             extraConfig = """, "codegen": { "ignoreUnsupportedConstraints": true } """,
         ),
         CodegenTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),
@@ -109,13 +109,13 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
-project.registerGenerateCargoConfigTomlTask(buildDir.resolve(workingDirUnderBuildDir))
+project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
 tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()
-project.registerCargoCommandsTasks(buildDir.resolve(workingDirUnderBuildDir), defaultRustDocFlags)
+project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile, defaultRustDocFlags)
 
 tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
 

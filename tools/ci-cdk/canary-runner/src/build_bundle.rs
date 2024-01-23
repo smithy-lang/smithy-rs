@@ -66,7 +66,8 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
 // The elements in this `Vec` should be sorted in an ascending order by the release date.
 lazy_static! {
     static ref NOTABLE_SDK_RELEASE_TAGS: Vec<ReleaseTag> = vec![
-        ReleaseTag::from_str("release-2023-10-26").unwrap(), // last version before addition of Sigv4a MRAP test
+        // last version before addition of Sigv4a MRAP test
+        ReleaseTag::from_str("release-2023-10-26").unwrap(),
     ];
 }
 
@@ -162,23 +163,38 @@ fn write_dependencies(
                     None => required_crate,
                 };
                 let crate_path = path.join(path_name);
-                writeln!(
+                write!(
                     output,
-                    r#"{required_crate} = {{ path = "{path}" }}"#,
+                    r#"{required_crate} = {{ path = "{path}""#,
                     path = crate_path.to_string_lossy()
                 )
-                .unwrap()
+                .unwrap();
+                if required_crate == "aws-config" {
+                    write!(output, r#", features = ["behavior-version-latest"]"#).unwrap();
+                }
+                writeln!(output, " }}").unwrap();
             }
             CrateSource::VersionsManifest {
                 versions,
                 release_tag,
             } => match versions.crates.get(required_crate) {
-                Some(version) => writeln!(
-                    output,
-                    r#"{required_crate} = "{version}""#,
-                    version = version.version
-                )
-                .unwrap(),
+                Some(version) => {
+                    if required_crate == "aws-config" {
+                        writeln!(
+                            output,
+                            r#"{required_crate} = {{ version = "{version}", features = ["behavior-version-latest"] }}"#,
+                            version = version.version
+                        )
+                        .unwrap();
+                    } else {
+                        writeln!(
+                            output,
+                            r#"{required_crate} = "{version}""#,
+                            version = version.version
+                        )
+                        .unwrap();
+                    }
+                }
                 None => {
                     bail!("Couldn't find `{required_crate}` in versions.toml for `{release_tag}`")
                 }
@@ -214,7 +230,7 @@ fn name_hashed_bundle(
     // Lambda function names can't have periods in them
     let rust_version = rust_version.map(|s| s.replace('.', ""));
     let rust_version = rust_version.as_deref().unwrap_or("unknown");
-    let sdk_release_tag = sdk_release_tag.map(|s| s.to_string().replace('-', ""));
+    let sdk_release_tag = sdk_release_tag.map(|s| s.to_string().replace(['-', '.'], ""));
     let sdk_release_tag = sdk_release_tag.as_deref().unwrap_or("untagged");
     Ok(format!(
         "canary-{sdk_release_tag}-{rust_version}-{bin_hash}.zip"
@@ -435,7 +451,7 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
-aws-config = { path = "some/sdk/path/aws-config" }
+aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
 aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
@@ -499,7 +515,7 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
-aws-config = "0.46.0"
+aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"
 aws-sdk-transcribestreaming = "0.16.0"
@@ -545,6 +561,15 @@ default = ["latest"]
                 "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
                 Some("1.62.1"),
                 Some(&ReleaseTag::from_str("release-2022-12-16").unwrap()),
+            )
+            .unwrap(),
+        );
+        check(
+            "canary-release202212162-1621-7ae6085d2105d5d1e13b10f8.zip",
+            &name_hashed_bundle(
+                "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
+                Some("1.62.1"),
+                Some(&ReleaseTag::from_str("release-2022-12-16.2").unwrap()),
             )
             .unwrap(),
         );

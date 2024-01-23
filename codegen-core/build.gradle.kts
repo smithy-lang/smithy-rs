@@ -23,7 +23,7 @@ val smithyVersion: String by project
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jsoup:jsoup:1.14.3")
+    implementation("org.jsoup:jsoup:1.16.2")
     api("software.amazon.smithy:smithy-codegen-core:$smithyVersion")
     api("com.moandjiezana.toml:toml4j:0.7.2")
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
@@ -54,23 +54,76 @@ fun gitCommitHash(): String {
 }
 
 val generateSmithyRuntimeCrateVersion by tasks.registering {
-    // generate the version of the runtime to use as a resource.
-    // this keeps us from having to manually change version numbers in multiple places
-    val resourcesDir = "$buildDir/resources/main/software/amazon/smithy/rust/codegen/core"
-    val versionFile = file("$resourcesDir/runtime-crate-version.txt")
-    outputs.file(versionFile)
-    val crateVersion = project.properties["smithy.rs.runtime.crate.version"].toString()
-    inputs.property("crateVersion", crateVersion)
-    // version format must be in sync with `software.amazon.smithy.rust.codegen.core.Version`
-    val version = "$crateVersion\n${gitCommitHash()}"
+    // Generate the version of the runtime to use as a resource.
+    // This keeps us from having to manually change version numbers in multiple places.
+    val resourcesDir = layout.buildDirectory.dir("resources/main/software/amazon/smithy/rust/codegen/core")
+    val versionsFile = resourcesDir.get().file("runtime-crate-versions.json")
+    outputs.file(versionsFile)
+
+    val stableCrateVersion = project.properties["smithy.rs.runtime.crate.stable.version"].toString()
+    val unstableCrateVersion = project.properties["smithy.rs.runtime.crate.unstable.version"].toString()
+    inputs.property("stableCrateVersion", stableCrateVersion)
+    inputs.property("unstableCrateVersion", stableCrateVersion)
+
+    val cargoTomls = mutableListOf<File>()
+    for (runtimePath in arrayOf("../rust-runtime", "../aws/rust-runtime")) {
+        for (path in project.projectDir.resolve(runtimePath).listFiles()!!) {
+            val manifestPath = path.resolve("Cargo.toml")
+            if (manifestPath.exists()) {
+                cargoTomls.add(manifestPath)
+                inputs.file(manifestPath)
+            }
+        }
+    }
+
     sourceSets.main.get().output.dir(resourcesDir)
     doLast {
-        versionFile.writeText(version)
+        // Version format must be kept in sync with `software.amazon.smithy.rust.codegen.core.Version`
+        versionsFile.asFile.writeText(
+            StringBuilder().append("{\n").also { json ->
+                fun StringBuilder.keyVal(key: String, value: String) = append("\"$key\": \"$value\"")
+
+                json.append("  ").keyVal("gitHash", gitCommitHash()).append(",\n")
+                json.append("  \"runtimeCrates\": {\n")
+                json.append(
+                    cargoTomls.map { path ->
+                        path.parentFile.name to path.readLines()
+                    }
+                        .filter { (name, manifestLines) ->
+                            val publish = manifestLines.none { line -> line == "publish = false" }
+                            // HACK: The experimental/unpublished typescript runtime crate needs
+                            // to be included since it is referenced by the code generator and tested in CI.
+                            publish || name == "aws-smithy-http-server-typescript"
+                        }
+                        .map { (name, manifestLines) ->
+                            val stable = manifestLines.any { line -> line == "stable = true" }
+                            val versionLine = manifestLines.first { line -> line.startsWith("version = \"") }
+                            val maybeVersion = versionLine.slice(("version = \"".length)..(versionLine.length - 2))
+                            val version = if (maybeVersion == "0.0.0-smithy-rs-head") {
+                                when (stable) {
+                                    true -> stableCrateVersion
+                                    else -> unstableCrateVersion
+                                }
+                            } else {
+                                maybeVersion
+                            }
+                            "    \"$name\": \"$version\""
+                        }
+                        .joinToString(",\n"),
+                )
+                json.append("  }\n")
+            }.append("}").toString(),
+        )
     }
 }
 
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}
+
 tasks.compileKotlin {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
     dependsOn(generateSmithyRuntimeCrateVersion)
 }
 
@@ -107,7 +160,7 @@ if (isTestingEnabled.toBoolean()) {
     }
 
     tasks.compileTestKotlin {
-        kotlinOptions.jvmTarget = "1.8"
+        kotlinOptions.jvmTarget = "11"
     }
 
     tasks.test {
@@ -126,7 +179,7 @@ if (isTestingEnabled.toBoolean()) {
         reports {
             xml.required.set(false)
             csv.required.set(false)
-            html.outputLocation.set(file("$buildDir/reports/jacoco"))
+            html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
         }
     }
 
@@ -141,5 +194,5 @@ publishing {
             artifact(sourcesJar)
         }
     }
-    repositories { maven { url = uri("$buildDir/repository") } }
+    repositories { maven { url = uri(layout.buildDirectory.dir("repository")) } }
 }

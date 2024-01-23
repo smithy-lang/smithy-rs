@@ -7,6 +7,7 @@
 
 use crate::client::connection::ConnectionMetadata;
 use aws_smithy_types::error::metadata::{ProvideErrorMetadata, EMPTY_ERROR_METADATA};
+use aws_smithy_types::error::operation::BuildError;
 use aws_smithy_types::error::ErrorMetadata;
 use aws_smithy_types::retry::ErrorKind;
 use std::error::Error;
@@ -55,7 +56,7 @@ pub mod builders {
     source_only_error_builder!(TimeoutError, TimeoutErrorBuilder, BoxError);
     source_only_error_builder!(DispatchFailure, DispatchFailureBuilder, ConnectorError);
 
-    /// Builder for [`ResponseError`](super::ResponseError).
+    /// Builder for [`ResponseError`].
     #[derive(Debug)]
     pub struct ResponseErrorBuilder<R> {
         source: Option<BoxError>,
@@ -110,7 +111,7 @@ pub mod builders {
         }
     }
 
-    /// Builder for [`ServiceError`](super::ServiceError).
+    /// Builder for [`ServiceError`].
     #[derive(Debug)]
     pub struct ServiceErrorBuilder<E, R> {
         source: Option<E>,
@@ -313,7 +314,7 @@ pub trait CreateUnhandledError {
 /// When logging an error from the SDK, it is recommended that you either wrap the error in
 /// [`DisplayErrorContext`](aws_smithy_types::error::display::DisplayErrorContext), use another
 /// error reporter library that visits the error's cause/source chain, or call
-/// [`Error::source`](std::error::Error::source) for more details about the underlying cause.
+/// [`Error::source`] for more details about the underlying cause.
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum SdkError<E, R> {
@@ -411,6 +412,36 @@ impl<E, R> SdkError<E, R> {
         }
     }
 
+    /// Returns a reference underlying service error `E` if there is one
+    ///
+    /// # Examples
+    /// ```no_run
+    /// # use aws_smithy_runtime_api::client::result::SdkError;
+    /// # #[derive(Debug)] enum GetObjectError { NoSuchKey(()), Other(()) }
+    /// # impl std::fmt::Display for GetObjectError {
+    /// #     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { unimplemented!() }
+    /// # }
+    /// # impl std::error::Error for GetObjectError {}
+    /// # impl GetObjectError {
+    /// #   fn is_not_found(&self) -> bool { true }
+    /// # }
+    /// # fn example() -> Result<(), GetObjectError> {
+    /// # let sdk_err = SdkError::service_error(GetObjectError::NoSuchKey(()), ());
+    /// if sdk_err.as_service_error().map(|e|e.is_not_found()) == Some(true) {
+    ///     println!("the object doesn't exist");
+    ///     // return None, or handle this error specifically
+    /// }
+    /// // ... handle other error cases, happy path, etc.
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn as_service_error(&self) -> Option<&E> {
+        match self {
+            Self::ServiceError(err) => Some(&err.source),
+            _ => None,
+        }
+    }
+
     /// Converts this error into its error source.
     ///
     /// If there is no error source, then `Err(Self)` is returned.
@@ -437,7 +468,6 @@ impl<E, R> SdkError<E, R> {
     }
 
     /// Maps the service error type in `SdkError::ServiceError`
-    #[doc(hidden)]
     pub fn map_service_error<E2>(self, map: impl FnOnce(E) -> E2) -> SdkError<E2, R> {
         match self {
             SdkError::ServiceError(context) => SdkError::<E2, R>::ServiceError(ServiceError {
@@ -482,11 +512,17 @@ where
     }
 }
 
+impl<E, R> From<BuildError> for SdkError<E, R> {
+    fn from(value: BuildError) -> Self {
+        SdkError::ConstructionFailure(ConstructionFailure::builder().source(value).build())
+    }
+}
+
 impl<E, R> ProvideErrorMetadata for SdkError<E, R>
 where
     E: ProvideErrorMetadata,
 {
-    fn meta(&self) -> &aws_smithy_types::Error {
+    fn meta(&self) -> &aws_smithy_types::error::ErrorMetadata {
         match self {
             SdkError::ConstructionFailure(_) => &EMPTY_ERROR_METADATA,
             SdkError::TimeoutError(_) => &EMPTY_ERROR_METADATA,

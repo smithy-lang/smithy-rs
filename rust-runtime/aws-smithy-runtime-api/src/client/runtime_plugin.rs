@@ -86,7 +86,7 @@ pub trait RuntimePlugin: Debug + Send + Sync {
         None
     }
 
-    /// Returns a [`RuntimeComponentsBuilder`](RuntimeComponentsBuilder) to incorporate into the final runtime components.
+    /// Returns a [`RuntimeComponentsBuilder`] to incorporate into the final runtime components.
     ///
     /// The order of runtime plugins determines which runtime components "win". Components set by later runtime plugins will
     /// override those set by earlier runtime plugins.
@@ -228,7 +228,6 @@ macro_rules! apply_plugins {
 }
 
 /// Used internally in the orchestrator implementation and in the generated code. Not intended to be used elsewhere.
-#[doc(hidden)]
 #[derive(Default, Clone, Debug)]
 pub struct RuntimePlugins {
     client_plugins: Vec<SharedRuntimePlugin>,
@@ -298,7 +297,7 @@ impl RuntimePlugins {
     }
 }
 
-#[cfg(all(test, feature = "test-util"))]
+#[cfg(all(test, feature = "test-util", feature = "http-02x"))]
 mod tests {
     use super::{RuntimePlugin, RuntimePlugins};
     use crate::client::http::{
@@ -394,6 +393,8 @@ mod tests {
                         .status(200)
                         .header("rp1", "1")
                         .body(SdkBody::empty())
+                        .unwrap()
+                        .try_into()
                         .unwrap())
                 })
             }

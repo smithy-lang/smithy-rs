@@ -5,7 +5,7 @@
 
 // This is the code used by CI to run the canary Lambda.
 //
-// If running this locally, you'll need to make a clone of awslabs/smithy-rs in
+// If running this locally, you'll need to make a clone of smithy-lang/smithy-rs in
 // the aws-sdk-rust project root.
 //
 // Also consider using the `AWS_PROFILE` and `AWS_REGION` environment variables
@@ -47,10 +47,10 @@ lazy_static::lazy_static! {
     static ref PINNED_SMITHY_RS_VERSIONS: Vec<(ReleaseTag, &'static str)> = {
         let mut pinned = vec![
             // Versions <= 0.6.0 no longer compile against the canary after this commit in smithy-rs
-            // due to the breaking change in https://github.com/awslabs/smithy-rs/pull/1085
+            // due to the breaking change in https://github.com/smithy-lang/smithy-rs/pull/1085
             (ReleaseTag::from_str("v0.6.0").unwrap(), "d48c234796a16d518ca9e1dda5c7a1da4904318c"),
             // Versions <= release-2022-10-26 no longer compile against the canary after this commit in smithy-rs
-            // due to the s3 canary update in https://github.com/awslabs/smithy-rs/pull/1974
+            // due to the s3 canary update in https://github.com/smithy-lang/smithy-rs/pull/1974
             (ReleaseTag::from_str("release-2022-10-26").unwrap(), "3e24477ae7a0a2b3853962a064bc8333a016af54")
         ];
         pinned.sort();

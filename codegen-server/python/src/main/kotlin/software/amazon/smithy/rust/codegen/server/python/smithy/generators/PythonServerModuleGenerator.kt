@@ -28,10 +28,11 @@ class PythonServerModuleGenerator(
     private val rustCrate: RustCrate,
     private val serviceShapes: Set<Shape>,
 ) {
-    private val codegenScope = arrayOf(
-        "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(codegenContext.runtimeConfig).toType(),
-        "pyo3" to PythonServerCargoDependency.PyO3.toType(),
-    )
+    private val codegenScope =
+        arrayOf(
+            "SmithyPython" to PythonServerCargoDependency.smithyHttpServerPython(codegenContext.runtimeConfig).toType(),
+            "pyo3" to PythonServerCargoDependency.PyO3.toType(),
+        )
     private val symbolProvider = codegenContext.symbolProvider
     private val libName = codegenContext.settings.moduleName.toSnakeCase()
 
@@ -84,18 +85,20 @@ class PythonServerModuleGenerator(
                     visitedModelType = true
                 }
                 when (shape) {
-                    is UnionShape -> rustTemplate(
-                        """
-                        $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name.toPascalCase()}>()?;
-                        """,
-                        *codegenScope,
-                    )
-                    else -> rustTemplate(
-                        """
-                        $moduleType.add_class::<crate::$moduleType::${shape.id.name.toPascalCase()}>()?;
-                        """,
-                        *codegenScope,
-                    )
+                    is UnionShape ->
+                        rustTemplate(
+                            """
+                            $moduleType.add_class::<crate::$moduleType::PyUnionMarker${shape.id.name.toPascalCase()}>()?;
+                            """,
+                            *codegenScope,
+                        )
+                    else ->
+                        rustTemplate(
+                            """
+                            $moduleType.add_class::<crate::$moduleType::${shape.id.name.toPascalCase()}>()?;
+                            """,
+                            *codegenScope,
+                        )
                 }
             }
         }
@@ -237,7 +240,7 @@ class PythonServerModuleGenerator(
 
     // Render the codegeneration version as module attribute.
     private fun RustWriter.renderCodegenVersion() {
-        rust("""m.add("CODEGEN_VERSION", "${Version.crateVersion()}")?;""")
+        rust("""m.add("CODEGEN_VERSION", "${Version.fromDefaultResource().gitHash}")?;""")
     }
 
     // Convert to symbol and check the namespace to figure out where they should be imported from.

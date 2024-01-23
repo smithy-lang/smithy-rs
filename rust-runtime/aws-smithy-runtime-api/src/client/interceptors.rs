@@ -55,9 +55,6 @@ macro_rules! interceptor_trait_fn {
     };
 }
 
-#[deprecated(note = "Renamed to Intercept.")]
-pub use Intercept as Interceptor;
-
 /// An interceptor allows injecting code into the SDK ’s request execution pipeline.
 ///
 /// ## Terminology:
@@ -841,7 +838,7 @@ where
 /// Disable an interceptor with a given cause
 pub fn disable_interceptor<T: Intercept>(cause: &'static str) -> DisableInterceptor<T> {
     DisableInterceptor {
-        _t: PhantomData::default(),
+        _t: PhantomData,
         cause,
     }
 }

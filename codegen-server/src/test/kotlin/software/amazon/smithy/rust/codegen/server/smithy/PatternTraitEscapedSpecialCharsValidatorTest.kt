@@ -17,84 +17,90 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 class PatternTraitEscapedSpecialCharsValidatorTest {
     @Test
     fun `should error out with a suggestion if non-escaped special chars used inside @pattern`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
 
-            @pattern("\t")
-            string MyString
-            """.asSmithyModel(smithyVersion = "2")
-        }
+                @pattern("\t")
+                string MyString
+                """.asSmithyModel(smithyVersion = "2")
+            }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
 
         events shouldHaveSize 1
         events[0].shapeId.get() shouldBe ShapeId.from("test#MyString")
-        events[0].message shouldBe """
+        events[0].message shouldBe
+            """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern("\\t")`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
-        """.trimIndent()
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
+            """.trimIndent()
     }
 
     @Test
     fun `should suggest escaping spacial characters properly`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
 
-            @pattern("[.\n\\r]+")
-            string MyString
-            """.asSmithyModel(smithyVersion = "2")
-        }
+                @pattern("[.\n\\r]+")
+                string MyString
+                """.asSmithyModel(smithyVersion = "2")
+            }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
 
         events shouldHaveSize 1
         events[0].shapeId.get() shouldBe ShapeId.from("test#MyString")
-        events[0].message shouldBe """
+        events[0].message shouldBe
+            """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern("[.\\n\\r]+")`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
-        """.trimIndent()
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
+            """.trimIndent()
     }
 
     @Test
     fun `should report all non-escaped special characters`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
 
-            @pattern("\b")
-            string MyString
+                @pattern("\b")
+                string MyString
 
-            @pattern("^\n$")
-            string MyString2
+                @pattern("^\n$")
+                string MyString2
 
-            @pattern("^[\n]+$")
-            string MyString3
+                @pattern("^[\n]+$")
+                string MyString3
 
-            @pattern("^[\r\t]$")
-            string MyString4
-            """.asSmithyModel(smithyVersion = "2")
-        }
+                @pattern("^[\r\t]$")
+                string MyString4
+                """.asSmithyModel(smithyVersion = "2")
+            }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
         events shouldHaveSize 4
     }
 
     @Test
     fun `should report errors on string members`() {
-        val exception = shouldThrow<ValidatedResultException> {
-            """
-            namespace test
+        val exception =
+            shouldThrow<ValidatedResultException> {
+                """
+                namespace test
 
-            @pattern("\t")
-            string MyString
+                @pattern("\t")
+                string MyString
 
-            structure MyStructure {
-                @pattern("\b")
-                field: String
+                structure MyStructure {
+                    @pattern("\b")
+                    field: String
+                }
+                """.asSmithyModel(smithyVersion = "2")
             }
-            """.asSmithyModel(smithyVersion = "2")
-        }
         val events = exception.validationEvents.filter { it.severity == Severity.ERROR }
 
         events shouldHaveSize 2

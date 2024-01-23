@@ -16,7 +16,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import java.util.Optional
 
 internal class RemoveEventStreamOperationsTest {
-    private val model = """
+    private val model =
+        """
         namespace test
         operation EventStream {
             input: StreamingInput,
@@ -43,28 +44,30 @@ internal class RemoveEventStreamOperationsTest {
         }
 
         structure Foo {}
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `remove event stream ops from services that are not in the allow list`() {
-        val transformed = RemoveEventStreamOperations.transform(
-            model,
-            testClientRustSettings(
-                codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("not-test-module")),
-            ),
-        )
+        val transformed =
+            RemoveEventStreamOperations.transform(
+                model,
+                testClientRustSettings(
+                    codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("not-test-module")),
+                ),
+            )
         transformed.expectShape(ShapeId.from("test#BlobStream"))
         transformed.getShape(ShapeId.from("test#EventStream")) shouldBe Optional.empty()
     }
 
     @Test
     fun `keep event stream ops from services that are in the allow list`() {
-        val transformed = RemoveEventStreamOperations.transform(
-            model,
-            testClientRustSettings(
-                codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("test-module")),
-            ),
-        )
+        val transformed =
+            RemoveEventStreamOperations.transform(
+                model,
+                testClientRustSettings(
+                    codegenConfig = ClientCodegenConfig(eventStreamAllowList = setOf("test-module")),
+                ),
+            )
         transformed.expectShape(ShapeId.from("test#BlobStream"))
         transformed.getShape(ShapeId.from("test#EventStream")) shouldNotBe Optional.empty<Shape>()
     }

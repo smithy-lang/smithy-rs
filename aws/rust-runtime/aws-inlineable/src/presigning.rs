@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/2902): Code generate this documentation so that service-specific examples can be added.
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/2902): Code generate this documentation so that service-specific examples can be added.
 //! Presigned request types and configuration.
 //!
 //! The [`Client`](crate::Client) is used to create presigned requests. They are made
@@ -203,7 +203,7 @@ impl PresignedRequest {
         let _ = http_request
             .try_clone()
             .expect("must be cloneable, body is empty")
-            .into_http02x()?;
+            .try_into_http02x()?;
         Ok(Self { http_request })
     }
 
@@ -232,7 +232,7 @@ impl PresignedRequest {
     /// Converts this `PresignedRequest` directly into an `http` request.
     pub fn into_http_02x_request<B>(self, body: B) -> http::Request<B> {
         self.http_request
-            .into_http02x()
+            .try_into_http02x()
             .expect("constructor validated convertibility")
             .map(|_req| body)
     }

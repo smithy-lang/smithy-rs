@@ -31,7 +31,7 @@ use tracing::{debug, error};
 /// will call a `.poison` method on it, signalling that the connection should be dropped. It is
 /// up to the connection implementer to handle this.
 ///
-/// [`HyperConnector`]: https://github.com/awslabs/smithy-rs/blob/26a914ece072bba2dd9b5b49003204b70e7666ac/rust-runtime/aws-smithy-runtime/src/client/http/hyper_014.rs#L347
+/// [`HyperConnector`]: https://github.com/smithy-lang/smithy-rs/blob/26a914ece072bba2dd9b5b49003204b70e7666ac/rust-runtime/aws-smithy-runtime/src/client/http/hyper_014.rs#L347
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct ConnectionPoisoningInterceptor {}
@@ -100,7 +100,6 @@ impl Intercept for ConnectionPoisoningInterceptor {
 type LoaderFn = dyn Fn() -> Option<ConnectionMetadata> + Send + Sync;
 
 /// State for a middleware that will monitor and manage connections.
-#[allow(missing_debug_implementations)]
 #[derive(Clone, Default)]
 pub struct CaptureSmithyConnection {
     loader: Arc<Mutex<Option<Box<LoaderFn>>>>,
@@ -154,7 +153,14 @@ mod test {
         let retriever = CaptureSmithyConnection::new();
         let retriever_clone = retriever.clone();
         assert!(retriever.get().is_none());
-        retriever.set_connection_retriever(|| Some(ConnectionMetadata::new(true, None, || {})));
+        retriever.set_connection_retriever(|| {
+            Some(
+                ConnectionMetadata::builder()
+                    .proxied(true)
+                    .poison_fn(|| {})
+                    .build(),
+            )
+        });
 
         assert!(retriever.get().is_some());
         assert!(retriever_clone.get().is_some());

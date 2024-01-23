@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientHttpBou
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -35,9 +36,10 @@ import software.amazon.smithy.rust.codegen.core.util.sdkId
 open class OperationGenerator(
     private val codegenContext: ClientCodegenContext,
     private val protocol: Protocol,
-    private val bodyGenerator: ProtocolPayloadGenerator = ClientHttpBoundProtocolPayloadGenerator(
-        codegenContext, protocol,
-    ),
+    private val bodyGenerator: ProtocolPayloadGenerator =
+        ClientHttpBoundProtocolPayloadGenerator(
+            codegenContext, protocol,
+        ),
 ) {
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -77,41 +79,44 @@ open class OperationGenerator(
         )
         Attribute(derive(RuntimeType.Clone, RuntimeType.Default, RuntimeType.Debug)).render(operationWriter)
         Attribute.NonExhaustive.render(operationWriter)
-        Attribute.DocHidden.render(operationWriter)
         operationWriter.rust("pub struct $operationName;")
         operationWriter.implBlock(symbolProvider.toSymbol(operationShape)) {
-            Attribute.DocHidden.render(operationWriter)
+            docs("Creates a new `$operationName`")
             rustBlock("pub fn new() -> Self") {
                 rust("Self")
             }
 
             val outputType = symbolProvider.toSymbol(operationShape.outputShape(model))
             val errorType = symbolProvider.symbolForOperationError(operationShape)
-            val codegenScope = arrayOf(
-                *preludeScope,
-                "Arc" to RuntimeType.Arc,
-                "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
-                "Input" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Input"),
-                "Operation" to symbolProvider.toSymbol(operationShape),
-                "OperationError" to errorType,
-                "OperationOutput" to outputType,
-                "HttpResponse" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::orchestrator::HttpResponse"),
-                "SdkError" to RuntimeType.sdkError(runtimeConfig),
-            )
-            val additionalPlugins = writable {
-                writeCustomizations(
-                    operationCustomizations,
-                    OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
+            val codegenScope =
+                arrayOf(
+                    *preludeScope,
+                    "Arc" to RuntimeType.Arc,
+                    "ConcreteInput" to symbolProvider.toSymbol(operationShape.inputShape(model)),
+                    "Input" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Input"),
+                    "Operation" to symbolProvider.toSymbol(operationShape),
+                    "OperationError" to errorType,
+                    "OperationOutput" to outputType,
+                    "HttpResponse" to
+                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                            .resolve("client::orchestrator::HttpResponse"),
+                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
                 )
-                rustTemplate(
-                    ".with_client_plugin(#{auth_plugin})",
-                    "auth_plugin" to AuthOptionsPluginGenerator(codegenContext).authPlugin(
-                        operationShape,
-                        authSchemeOptions,
-                    ),
-                )
-            }
+            val additionalPlugins =
+                writable {
+                    writeCustomizations(
+                        operationCustomizations,
+                        OperationSection.AdditionalRuntimePlugins(operationCustomizations, operationShape),
+                    )
+                    rustTemplate(
+                        ".with_client_plugin(#{auth_plugin})",
+                        "auth_plugin" to
+                            AuthOptionsPluginGenerator(codegenContext).authPlugin(
+                                operationShape,
+                                authSchemeOptions,
+                            ),
+                    )
+                }
             rustTemplate(
                 """
                 pub(crate) async fn orchestrate(
@@ -164,26 +169,29 @@ open class OperationGenerator(
                 }
                 """,
                 *codegenScope,
-                "Error" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::interceptors::context::Error"),
+                "Error" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::context::Error"),
                 "InterceptorContext" to RuntimeType.interceptorContext(runtimeConfig),
-                "OrchestratorError" to RuntimeType.smithyRuntimeApi(runtimeConfig)
-                    .resolve("client::orchestrator::error::OrchestratorError"),
+                "OrchestratorError" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::orchestrator::error::OrchestratorError"),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(runtimeConfig),
                 "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
                 "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
-                "invoke_with_stop_point" to RuntimeType.smithyRuntime(runtimeConfig)
-                    .resolve("client::orchestrator::invoke_with_stop_point"),
-                "additional_runtime_plugins" to writable {
-                    if (additionalPlugins.isNotEmpty()) {
-                        rustTemplate(
-                            """
-                            runtime_plugins = runtime_plugins
-                                #{additional_runtime_plugins};
-                            """,
-                            "additional_runtime_plugins" to additionalPlugins,
-                        )
-                    }
-                },
+                "invoke_with_stop_point" to
+                    RuntimeType.smithyRuntime(runtimeConfig)
+                        .resolve("client::orchestrator::invoke_with_stop_point"),
+                "additional_runtime_plugins" to
+                    writable {
+                        if (additionalPlugins.isNotEmpty()) {
+                            rustTemplate(
+                                """
+                                runtime_plugins = runtime_plugins
+                                    #{additional_runtime_plugins};
+                                """,
+                                "additional_runtime_plugins" to additionalPlugins,
+                            )
+                        }
+                    },
             )
 
             writeCustomizations(operationCustomizations, OperationSection.OperationImplBlock(operationCustomizations))

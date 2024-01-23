@@ -15,7 +15,11 @@ import software.amazon.smithy.rustsdk.sdkSettings
 class RequireEndpointRules : ClientCodegenDecorator {
     override val name: String = "RequireEndpointRules"
     override val order: Byte = 100
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         if (!codegenContext.sdkSettings().requireEndpointResolver) {
             return
         }

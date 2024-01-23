@@ -26,8 +26,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCode
 import java.util.stream.Stream
 
 class ConstrainedNumberGeneratorTest {
-
     data class TestCaseInputs(val constraintAnnotation: String, val validValue: Int, val invalidValue: Int)
+
     data class TestCase(val model: Model, val validValue: Int, val invalidValue: Int, val shapeName: String)
 
     class ConstrainedNumberGeneratorTestProvider : ArgumentsProvider {
@@ -129,12 +129,13 @@ class ConstrainedNumberGeneratorTest {
     @ArgumentsSource(NoStructuralConstructorTestProvider::class)
     fun `type should not be constructable without using a constructor`(args: Triple<String, String, String>) {
         val (smithyType, shapeName, rustType) = args
-        val model = """
+        val model =
+            """
             namespace test
 
             @range(min: -1, max: 5)
             $smithyType $shapeName
-        """.asSmithyModel()
+            """.asSmithyModel()
         val constrainedShape = model.lookup<NumberShape>("test#$shapeName")
 
         val codegenContext = serverTestCodegenContext(model)

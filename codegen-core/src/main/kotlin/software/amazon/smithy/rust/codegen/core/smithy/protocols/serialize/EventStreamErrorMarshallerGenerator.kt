@@ -44,21 +44,24 @@ class EventStreamErrorMarshallerGenerator(
     payloadContentType: String,
 ) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
+    private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
 
-    private val operationErrorSymbol = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-        RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
-    } else {
-        symbolProvider.symbolForEventStreamError(unionShape)
-    }
+    private val operationErrorSymbol =
+        if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
+            RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
+        } else {
+            symbolProvider.symbolForEventStreamError(unionShape)
+        }
     private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
-    private val codegenScope = arrayOf(
-        "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
-        "Message" to smithyEventStream.resolve("frame::Message"),
-        "Header" to smithyEventStream.resolve("frame::Header"),
-        "HeaderValue" to smithyEventStream.resolve("frame::HeaderValue"),
-        "Error" to smithyEventStream.resolve("error::Error"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
+            "Message" to smithyTypes.resolve("event_stream::Message"),
+            "Header" to smithyTypes.resolve("event_stream::Header"),
+            "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
+            "Error" to smithyEventStream.resolve("error::Error"),
+        )
 
     override fun render(): RuntimeType {
         val marshallerType = unionShape.eventStreamMarshallerType()
@@ -69,7 +72,10 @@ class EventStreamErrorMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.renderMarshaller(marshallerType: RuntimeType, unionSymbol: Symbol) {
+    private fun RustWriter.renderMarshaller(
+        marshallerType: RuntimeType,
+        unionSymbol: Symbol,
+    ) {
         rust(
             """
             ##[non_exhaustive]
@@ -127,7 +133,10 @@ class EventStreamErrorMarshallerGenerator(
         }
     }
 
-    private fun RustWriter.renderMarshallEvent(unionMember: MemberShape, eventStruct: StructureShape) {
+    private fun RustWriter.renderMarshallEvent(
+        unionMember: MemberShape,
+        eventStruct: StructureShape,
+    ) {
         val headerMembers = eventStruct.members().filter { it.hasTrait<EventHeaderTrait>() }
         val payloadMember = eventStruct.members().firstOrNull { it.hasTrait<EventPayloadTrait>() }
         for (member in headerMembers) {

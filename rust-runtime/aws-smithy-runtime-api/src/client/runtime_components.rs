@@ -8,8 +8,7 @@
 //! Runtime components are trait implementations that are _always_ used by the orchestrator.
 //! There are other trait implementations that can be configured for a client, but if they
 //! aren't directly and always used by the orchestrator, then they are placed in the
-//! [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) instead of in
-//! [`RuntimeComponents`](RuntimeComponents).
+//! [`ConfigBag`] instead of in [`RuntimeComponents`].
 
 use crate::box_error::BoxError;
 use crate::client::auth::{
@@ -19,8 +18,7 @@ use crate::client::auth::{
 use crate::client::endpoint::{ResolveEndpoint, SharedEndpointResolver};
 use crate::client::http::{HttpClient, SharedHttpClient};
 use crate::client::identity::{
-    ConfiguredIdentityResolver, ResolveCachedIdentity, ResolveIdentity, SharedIdentityCache,
-    SharedIdentityResolver,
+    ResolveCachedIdentity, ResolveIdentity, SharedIdentityCache, SharedIdentityResolver,
 };
 use crate::client::interceptors::{Intercept, SharedInterceptor};
 use crate::client::retries::classifiers::{ClassifyRetry, SharedRetryClassifier};
@@ -30,6 +28,7 @@ use crate::shared::IntoShared;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_types::config_bag::ConfigBag;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -44,12 +43,7 @@ pub(crate) mod sealed {
     /// This trait can be used to validate that certain required components or config values
     /// are available, and provide an error with helpful instructions if they are not.
     pub trait ValidateConfig: fmt::Debug + Send + Sync {
-        /// Validate the base client configuration.
-        ///
-        /// This gets called upon client construction. The full config may not be available at
-        /// this time (hence why it has [`RuntimeComponentsBuilder`] as an argument rather
-        /// than [`RuntimeComponents`]). Any error returned here will become a panic
-        /// in the client constructor.
+        #[doc = include_str!("../../rustdoc/validate_base_client_config.md")]
         fn validate_base_client_config(
             &self,
             runtime_components: &RuntimeComponentsBuilder,
@@ -59,11 +53,7 @@ pub(crate) mod sealed {
             Ok(())
         }
 
-        /// Validate the final client configuration.
-        ///
-        /// This gets called immediately after the [`Intercept::read_before_execution`] trait hook
-        /// when the final configuration has been resolved. Any error returned here will
-        /// cause the operation to return that error.
+        #[doc = include_str!("../../rustdoc/validate_final_config.md")]
         fn validate_final_config(
             &self,
             runtime_components: &RuntimeComponents,
@@ -187,6 +177,13 @@ macro_rules! merge {
             $self.$name.extend($other.$name.iter().cloned());
         }
     };
+    (OptionalAuthSchemeMap $other:ident . $name:ident => $self:ident ) => {
+        if let Some(m) = &$other.$name {
+            let mut us = $self.$name.unwrap_or_default();
+            us.extend(m.iter().map(|(k, v)| (k.clone(), v.clone())));
+            $self.$name = Some(us);
+        }
+    };
 }
 /// Internal to `declare_runtime_components!`.
 ///
@@ -207,6 +204,18 @@ macro_rules! builder_field_value {
     (Vec $self:ident . $name:ident) => {
         $self.$name
     };
+    (OptionalAuthSchemeMap $self:ident . $name:ident atLeastOneRequired) => {{
+        match $self.$name {
+            Some(map) => map,
+            None => {
+                return Err(BuildError(concat!(
+                    "at least one `",
+                    stringify!($name),
+                    "` runtime component is required"
+                )));
+            }
+        }
+    }};
     (Vec $self:ident . $name:ident atLeastOneRequired) => {{
         if $self.$name.is_empty() {
             return Err(BuildError(concat!(
@@ -235,6 +244,7 @@ macro_rules! runtime_component_field_type {
     (Vec $inner_type:ident atLeastOneRequired) => {
         Vec<Tracked<$inner_type>>
     };
+    (OptionalAuthSchemeMap $inner_type: ident atLeastOneRequired) => { AuthSchemeMap<Tracked<$inner_type>> };
 }
 /// Internal to `declare_runtime_components!`.
 ///
@@ -248,7 +258,13 @@ macro_rules! empty_builder_value {
     (Vec) => {
         Vec::new()
     };
+    (OptionalAuthSchemeMap) => {
+        None
+    };
 }
+
+type OptionalAuthSchemeMap<V> = Option<AuthSchemeMap<V>>;
+type AuthSchemeMap<V> = HashMap<AuthSchemeId, V>;
 
 /// Macro to define the structs for both `RuntimeComponents` and `RuntimeComponentsBuilder`.
 ///
@@ -344,7 +360,7 @@ declare_runtime_components! {
         identity_cache: Option<SharedIdentityCache>,
 
         #[atLeastOneRequired]
-        identity_resolvers: Vec<ConfiguredIdentityResolver>,
+        identity_resolvers: OptionalAuthSchemeMap<SharedIdentityResolver>,
 
         interceptors: Vec<SharedInterceptor>,
 
@@ -439,7 +455,12 @@ impl RuntimeComponents {
                 }
             };
             (Vec: $field:expr) => {
-                for entry in &$field {
+                for entry in $field {
+                    ValidateConfig::validate_final_config(&entry.value, self, cfg)?;
+                }
+            };
+            (Map: $field:expr) => {
+                for entry in $field.values() {
                     ValidateConfig::validate_final_config(&entry.value, self, cfg)?;
                 }
             };
@@ -451,10 +472,10 @@ impl RuntimeComponents {
         }
         validate!(Option: self.http_client);
         validate!(Required: self.endpoint_resolver);
-        validate!(Vec: self.auth_schemes);
+        validate!(Vec: &self.auth_schemes);
         validate!(Required: self.identity_cache);
-        validate!(Vec: self.identity_resolvers);
-        validate!(Vec: self.interceptors);
+        validate!(Map: self.identity_resolvers);
+        validate!(Vec: &self.interceptors);
         validate!(Required: self.retry_strategy);
         Ok(())
     }
@@ -474,7 +495,7 @@ impl RuntimeComponentsBuilder {
         auth_scheme_option_resolver: Option<impl ResolveAuthSchemeOptions + 'static>,
     ) -> &mut Self {
         self.auth_scheme_option_resolver =
-            auth_scheme_option_resolver.map(|r| Tracked::new(self.builder_name, r.into_shared()));
+            self.tracked(auth_scheme_option_resolver.map(IntoShared::into_shared));
         self
     }
 
@@ -494,7 +515,7 @@ impl RuntimeComponentsBuilder {
 
     /// Sets the HTTP client.
     pub fn set_http_client(&mut self, connector: Option<impl HttpClient + 'static>) -> &mut Self {
-        self.http_client = connector.map(|c| Tracked::new(self.builder_name, c.into_shared()));
+        self.http_client = self.tracked(connector.map(IntoShared::into_shared));
         self
     }
 
@@ -570,16 +591,34 @@ impl RuntimeComponentsBuilder {
         self
     }
 
-    /// Adds an identity resolver.
+    /// This method is broken since it does not replace an existing identity resolver of the given auth scheme ID.
+    /// Use `set_identity_resolver` instead.
+    #[deprecated(
+        note = "This method is broken since it does not replace an existing identity resolver of the given auth scheme ID. Use `set_identity_resolver` instead."
+    )]
     pub fn push_identity_resolver(
         &mut self,
         scheme_id: AuthSchemeId,
         identity_resolver: impl ResolveIdentity + 'static,
     ) -> &mut Self {
-        self.identity_resolvers.push(Tracked::new(
-            self.builder_name,
-            ConfiguredIdentityResolver::new(scheme_id, identity_resolver.into_shared()),
-        ));
+        self.set_identity_resolver(scheme_id, identity_resolver)
+    }
+
+    /// Sets the identity resolver for a given `scheme_id`.
+    ///
+    /// If there is already an identity resolver for that `scheme_id`, this method will replace
+    /// the existing one with the passed-in `identity_resolver`.
+    pub fn set_identity_resolver(
+        &mut self,
+        scheme_id: AuthSchemeId,
+        identity_resolver: impl ResolveIdentity + 'static,
+    ) -> &mut Self {
+        let mut resolvers = self.identity_resolvers.take().unwrap_or_default();
+        resolvers.insert(
+            scheme_id,
+            Tracked::new(self.builder_name, identity_resolver.into_shared()),
+        );
+        self.identity_resolvers = Some(resolvers);
         self
     }
 
@@ -589,7 +628,7 @@ impl RuntimeComponentsBuilder {
         scheme_id: AuthSchemeId,
         identity_resolver: impl ResolveIdentity + 'static,
     ) -> Self {
-        self.push_identity_resolver(scheme_id, identity_resolver);
+        self.set_identity_resolver(scheme_id, identity_resolver);
         self
     }
 
@@ -717,13 +756,13 @@ impl RuntimeComponentsBuilder {
 
     /// Sets the async sleep implementation.
     pub fn set_sleep_impl(&mut self, sleep_impl: Option<SharedAsyncSleep>) -> &mut Self {
-        self.sleep_impl = sleep_impl.map(|s| Tracked::new(self.builder_name, s));
+        self.sleep_impl = self.tracked(sleep_impl);
         self
     }
 
     /// Sets the async sleep implementation.
     pub fn with_sleep_impl(mut self, sleep_impl: Option<impl AsyncSleep + 'static>) -> Self {
-        self.sleep_impl = sleep_impl.map(|s| Tracked::new(self.builder_name, s.into_shared()));
+        self.set_sleep_impl(sleep_impl.map(IntoShared::into_shared));
         self
     }
 
@@ -734,13 +773,13 @@ impl RuntimeComponentsBuilder {
 
     /// Sets the time source.
     pub fn set_time_source(&mut self, time_source: Option<SharedTimeSource>) -> &mut Self {
-        self.time_source = time_source.map(|s| Tracked::new(self.builder_name, s));
+        self.time_source = self.tracked(time_source);
         self
     }
 
     /// Sets the time source.
     pub fn with_time_source(mut self, time_source: Option<impl TimeSource + 'static>) -> Self {
-        self.time_source = time_source.map(|s| Tracked::new(self.builder_name, s.into_shared()));
+        self.set_time_source(time_source.map(IntoShared::into_shared));
         self
     }
 
@@ -786,7 +825,7 @@ impl RuntimeComponentsBuilder {
     pub fn validate_base_client_config(&self, cfg: &ConfigBag) -> Result<(), BoxError> {
         macro_rules! validate {
             ($field:expr) => {
-                for entry in &$field {
+                for entry in $field {
                     ValidateConfig::validate_base_client_config(&entry.value, self, cfg)?;
                 }
             };
@@ -796,14 +835,21 @@ impl RuntimeComponentsBuilder {
         for validator in self.config_validators() {
             validator.validate_base_client_config(self, cfg)?;
         }
-        validate!(self.http_client);
-        validate!(self.endpoint_resolver);
-        validate!(self.auth_schemes);
-        validate!(self.identity_cache);
-        validate!(self.identity_resolvers);
-        validate!(self.interceptors);
-        validate!(self.retry_strategy);
+        validate!(&self.http_client);
+        validate!(&self.endpoint_resolver);
+        validate!(&self.auth_schemes);
+        validate!(&self.identity_cache);
+        if let Some(resolvers) = &self.identity_resolvers {
+            validate!(resolvers.values())
+        }
+        validate!(&self.interceptors);
+        validate!(&self.retry_strategy);
         Ok(())
+    }
+
+    /// Wraps `v` in tracking associated with this builder
+    fn tracked<T>(&self, v: Option<T>) -> Option<Tracked<T>> {
+        v.map(|v| Tracked::new(self.builder_name, v))
     }
 }
 
@@ -984,9 +1030,8 @@ pub trait GetIdentityResolver: Send + Sync {
 impl GetIdentityResolver for RuntimeComponents {
     fn identity_resolver(&self, scheme_id: AuthSchemeId) -> Option<SharedIdentityResolver> {
         self.identity_resolvers
-            .iter()
-            .find(|s| s.value.scheme_id() == scheme_id)
-            .map(|s| s.value.identity_resolver())
+            .get(&scheme_id)
+            .map(|s| s.value.clone())
     }
 }
 
@@ -1138,5 +1183,46 @@ mod tests {
     #[test]
     fn building_test_builder_should_not_panic() {
         let _ = RuntimeComponentsBuilder::for_tests().build(); // should not panic
+    }
+
+    #[test]
+    fn set_identity_resolver_should_replace_existing_resolver_for_given_auth_scheme() {
+        use crate::client::auth::AuthSchemeId;
+        use crate::client::identity::{Identity, IdentityFuture, ResolveIdentity};
+        use crate::client::runtime_components::{GetIdentityResolver, RuntimeComponents};
+        use aws_smithy_types::config_bag::ConfigBag;
+        use tokio::runtime::Runtime;
+
+        #[derive(Debug)]
+        struct AnotherFakeIdentityResolver;
+        impl ResolveIdentity for AnotherFakeIdentityResolver {
+            fn resolve_identity<'a>(
+                &'a self,
+                _: &'a RuntimeComponents,
+                _: &'a ConfigBag,
+            ) -> IdentityFuture<'a> {
+                IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))
+            }
+        }
+
+        // Set a different `IdentityResolver` for the `fake` auth scheme already configured in
+        // a test runtime components builder
+        let rc = RuntimeComponentsBuilder::for_tests()
+            .with_identity_resolver(AuthSchemeId::new("fake"), AnotherFakeIdentityResolver)
+            .build()
+            .expect("should build RuntimeComponents");
+
+        let resolver = rc
+            .identity_resolver(AuthSchemeId::new("fake"))
+            .expect("identity resolver should be found");
+
+        let identity = Runtime::new().unwrap().block_on(async {
+            resolver
+                .resolve_identity(&rc, &ConfigBag::base())
+                .await
+                .expect("identity should be resolved")
+        });
+
+        assert_eq!(Some(&"doesntmatter"), identity.data::<&str>());
     }
 }

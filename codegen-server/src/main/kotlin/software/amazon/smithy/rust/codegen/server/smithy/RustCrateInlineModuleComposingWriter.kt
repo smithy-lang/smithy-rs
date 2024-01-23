@@ -147,7 +147,8 @@ private val crateToInlineModule: ConcurrentHashMap<RustCrate, InnerModule> =
 class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: Boolean) {
     // Holds the root modules to start rendering the descendents from.
     private val topLevelModuleWriters: ConcurrentHashMap<RustWriter, Unit> = ConcurrentHashMap()
-    private val inlineModuleWriters: ConcurrentHashMap<RustWriter, MutableList<InlineModuleWithWriter>> = ConcurrentHashMap()
+    private val inlineModuleWriters: ConcurrentHashMap<RustWriter, MutableList<InlineModuleWithWriter>> =
+        ConcurrentHashMap()
     private val docWriters: ConcurrentHashMap<RustModule.LeafModule, MutableList<DocWriter>> = ConcurrentHashMap()
     private val writerCreator = RustWriter.factory(debugMode)
 
@@ -155,13 +156,19 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
     // indicating that it contains generated code and should not be manually edited. This comment
     // appears on each descendent inline module. To remove those comments, each time an inline
     // module is rendered, first `emptyLineCount` characters are removed from it.
-    private val emptyLineCount: Int = writerCreator
-        .apply("lines-it-always-writes.rs", "crate")
-        .toString()
-        .split("\n")[0]
-        .length
+    private val emptyLineCount: Int =
+        writerCreator
+            .apply("lines-it-always-writes.rs", "crate")
+            .toString()
+            .split("\n")[0]
+            .length
 
-    fun withInlineModule(outerWriter: RustWriter, innerModule: RustModule.LeafModule, docWriter: DocWriter? = null, writable: Writable) {
+    fun withInlineModule(
+        outerWriter: RustWriter,
+        innerModule: RustModule.LeafModule,
+        docWriter: DocWriter? = null,
+        writable: Writable,
+    ) {
         if (docWriter != null) {
             val moduleDocWriterList = docWriters.getOrPut(innerModule) { mutableListOf() }
             moduleDocWriterList.add(docWriter)
@@ -172,7 +179,12 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
     /**
      * Given a `RustCrate` and a `RustModule.LeafModule()`, it creates a writer to that module and calls the writable.
      */
-    fun withInlineModuleHierarchyUsingCrate(rustCrate: RustCrate, inlineModule: RustModule.LeafModule, docWriter: DocWriter? = null, writable: Writable) {
+    fun withInlineModuleHierarchyUsingCrate(
+        rustCrate: RustCrate,
+        inlineModule: RustModule.LeafModule,
+        docWriter: DocWriter? = null,
+        writable: Writable,
+    ) {
         val hierarchy = getHierarchy(inlineModule).toMutableList()
         check(!hierarchy.first().isInline()) {
             "When adding a `RustModule.LeafModule` to the crate, the topmost module in the hierarchy cannot be an inline module."
@@ -211,7 +223,12 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
      * Given a `Writer` to a module and an inline `RustModule.LeafModule()`, it creates a writer to that module and calls the writable.
      * It registers the complete hierarchy including the `outerWriter` if that is not already registrered.
      */
-    fun withInlineModuleHierarchy(outerWriter: RustWriter, inlineModule: RustModule.LeafModule, docWriter: DocWriter? = null, writable: Writable) {
+    fun withInlineModuleHierarchy(
+        outerWriter: RustWriter,
+        inlineModule: RustModule.LeafModule,
+        docWriter: DocWriter? = null,
+        writable: Writable,
+    ) {
         val hierarchy = getHierarchy(inlineModule).toMutableList()
         if (!hierarchy.first().isInline()) {
             hierarchy.removeFirst()
@@ -263,12 +280,18 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
     fun render() {
         var writerToAddDependencies: RustWriter? = null
 
-        fun writeInlineCode(rustWriter: RustWriter, code: String) {
+        fun writeInlineCode(
+            rustWriter: RustWriter,
+            code: String,
+        ) {
             val inlineCode = code.drop(emptyLineCount)
             rustWriter.writeWithNoFormatting(inlineCode)
         }
 
-        fun renderDescendents(topLevelWriter: RustWriter, inMemoryWriter: RustWriter) {
+        fun renderDescendents(
+            topLevelWriter: RustWriter,
+            inMemoryWriter: RustWriter,
+        ) {
             // Traverse all descendent inline modules and render them.
             inlineModuleWriters[inMemoryWriter]!!.forEach {
                 writeDocs(it.inlineModule)
@@ -300,7 +323,10 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
      * Given the inline-module returns an existing `RustWriter`, or if that inline module
      * has never been registered before then a new `RustWriter` is created and returned.
      */
-    private fun getWriter(outerWriter: RustWriter, inlineModule: RustModule.LeafModule): RustWriter {
+    private fun getWriter(
+        outerWriter: RustWriter,
+        inlineModule: RustModule.LeafModule,
+    ): RustWriter {
         val nestedModuleWriter = inlineModuleWriters[outerWriter]
         if (nestedModuleWriter != null) {
             return findOrAddToList(nestedModuleWriter, inlineModule)
@@ -326,9 +352,10 @@ class InnerModule(private val moduleDocProvider: ModuleDocProvider, debugMode: B
         inlineModuleList: MutableList<InlineModuleWithWriter>,
         lookForModule: RustModule.LeafModule,
     ): RustWriter {
-        val inlineModuleAndWriter = inlineModuleList.firstOrNull() {
-            it.inlineModule.name == lookForModule.name
-        }
+        val inlineModuleAndWriter =
+            inlineModuleList.firstOrNull {
+                it.inlineModule.name == lookForModule.name
+            }
         return if (inlineModuleAndWriter == null) {
             val inlineWriter = createNewInlineModule()
             inlineModuleList.add(InlineModuleWithWriter(lookForModule, inlineWriter))

@@ -17,15 +17,18 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 
 class HttpAuthDecoratorTest {
-    private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> = arrayOf(
-        "ReplayEvent" to CargoDependency.smithyRuntime(runtimeConfig)
-            .toDevDependency().withFeature("test-util").toType()
-            .resolve("client::http::test_util::ReplayEvent"),
-        "StaticReplayClient" to CargoDependency.smithyRuntime(runtimeConfig)
-            .toDevDependency().withFeature("test-util").toType()
-            .resolve("client::http::test_util::StaticReplayClient"),
-        "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-    )
+    private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> =
+        arrayOf(
+            "ReplayEvent" to
+                CargoDependency.smithyRuntime(runtimeConfig)
+                    .toDevDependency().withFeature("test-util").toType()
+                    .resolve("client::http::test_util::ReplayEvent"),
+            "StaticReplayClient" to
+                CargoDependency.smithyRuntime(runtimeConfig)
+                    .toDevDependency().withFeature("test-util").toType()
+                    .resolve("client::http::test_util::StaticReplayClient"),
+            "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+        )
 
     @Test
     fun multipleAuthSchemesSchemeSelection() {
@@ -113,7 +116,6 @@ class HttpAuthDecoratorTest {
                         IdentityFuture, ResolveIdentity, SharedIdentityResolver,
                     };
                     use aws_smithy_runtime_api::box_error::BoxError;
-                    use aws_smithy_runtime_api::client::auth::Signer;
                     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
                     use aws_smithy_runtime_api::client::runtime_components::{
                         GetIdentityResolver, RuntimeComponentsBuilder,
@@ -164,7 +166,7 @@ class HttpAuthDecoratorTest {
                     #[derive(Debug)]
                     struct CustomIdentity(String);
 
-                    impl Signer for CustomSigner {
+                    impl Sign for CustomSigner {
                         fn sign_http_request(
                             &self,
                             request: &mut HttpRequest,
@@ -226,7 +228,6 @@ class HttpAuthDecoratorTest {
                     fn compile() {}
 
                     """,
-
                 )
                 Attribute.TokioTest.render(this)
                 rustTemplate(
@@ -256,8 +257,9 @@ class HttpAuthDecoratorTest {
                         http_client.assert_requests_match(&[]);
                     }
                     """,
-                    "capture_test_logs" to CargoDependency.smithyRuntimeTestUtil(ctx.runtimeConfig).toType()
-                        .resolve("test_util::capture_test_logs::capture_test_logs"),
+                    "capture_test_logs" to
+                        CargoDependency.smithyRuntimeTestUtil(ctx.runtimeConfig).toType()
+                            .resolve("test_util::capture_test_logs::capture_test_logs"),
                     *codegenScope(ctx.runtimeConfig),
                 )
             }
@@ -466,7 +468,8 @@ class HttpAuthDecoratorTest {
 }
 
 private object TestModels {
-    val allSchemes = """
+    val allSchemes =
+        """
         namespace test
 
         use aws.api#service
@@ -493,9 +496,10 @@ private object TestModels {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    val noSchemes = """
+    val noSchemes =
+        """
         namespace test
 
         use aws.api#service
@@ -518,7 +522,8 @@ private object TestModels {
             output: SomeOutput
         }""".asSmithyModel()
 
-    val apiKeyInQueryString = """
+    val apiKeyInQueryString =
+        """
         namespace test
 
         use aws.api#service
@@ -542,9 +547,10 @@ private object TestModels {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    val apiKeyInHeaders = """
+    val apiKeyInHeaders =
+        """
         namespace test
 
         use aws.api#service
@@ -568,9 +574,10 @@ private object TestModels {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    val basicAuth = """
+    val basicAuth =
+        """
         namespace test
 
         use aws.api#service
@@ -594,9 +601,10 @@ private object TestModels {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    val bearerAuth = """
+    val bearerAuth =
+        """
         namespace test
 
         use aws.api#service
@@ -620,9 +628,10 @@ private object TestModels {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    val optionalAuth = """
+    val optionalAuth =
+        """
         namespace test
 
         use aws.api#service
@@ -647,5 +656,5 @@ private object TestModels {
         operation SomeOperation {
             output: SomeOutput
         }
-    """.asSmithyModel()
+        """.asSmithyModel()
 }

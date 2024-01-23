@@ -26,7 +26,7 @@ def running_in_docker_build():
     return os.environ.get("SMITHY_RS_DOCKER_BUILD_IMAGE") == "1"
 
 
-def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
+def checkout_commit_and_generate(revision_sha, branch_name, targets=None, preserve_aws_sdk_build=False):
     if running_in_docker_build():
         eprint(f"Fetching base revision {revision_sha} from GitHub...")
         run(f"git fetch --no-tags --progress --no-recurse-submodules --depth=1 origin {revision_sha}")
@@ -34,10 +34,10 @@ def checkout_commit_and_generate(revision_sha, branch_name, targets=None):
     # Generate code for HEAD
     eprint(f"Creating temporary branch {branch_name} with generated code for {revision_sha}")
     run(f"git checkout {revision_sha} -B {branch_name}")
-    generate_and_commit_generated_code(revision_sha, targets)
+    generate_and_commit_generated_code(revision_sha, targets, preserve_aws_sdk_build)
 
 
-def generate_and_commit_generated_code(revision_sha, targets=None):
+def generate_and_commit_generated_code(revision_sha, targets=None, preserve_aws_sdk_build=False):
     targets = targets or [
         target_codegen_client,
         target_codegen_server,
@@ -56,7 +56,11 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
     get_cmd_output(f"rm -rf {OUTPUT_PATH}")
     get_cmd_output(f"mkdir {OUTPUT_PATH}")
     if target_aws_sdk in targets:
-        get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+        # Compiling aws-config for semver checks baseline requires build artifacts to exist under aws/sdk/build
+        if preserve_aws_sdk_build:
+            get_cmd_output(f"cp -r aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
+        else:
+            get_cmd_output(f"mv aws/sdk/build/aws-sdk {OUTPUT_PATH}/")
     for target in [target_codegen_client, target_codegen_server]:
         if target in targets:
             get_cmd_output(f"mv {target}/build/smithyprojections/{target} {OUTPUT_PATH}/")
@@ -89,6 +93,9 @@ def generate_and_commit_generated_code(revision_sha, targets=None):
         f"xargs rm -f", shell=True)
 
     get_cmd_output(f"git add -f {OUTPUT_PATH}")
+    if preserve_aws_sdk_build:
+        get_cmd_output(f"git add -f aws/sdk/build")
+
     get_cmd_output(f"git -c 'user.name=GitHub Action (generated code preview)' "
                    f"-c 'user.name={COMMIT_AUTHOR_NAME}' "
                    f"-c 'user.email={COMMIT_AUTHOR_EMAIL}' "

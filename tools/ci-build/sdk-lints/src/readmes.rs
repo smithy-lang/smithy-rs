@@ -8,7 +8,12 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const CRATES_TO_BE_USED_DIRECTLY: &[&str] = ["aws-config"].as_slice();
+const CRATES_TO_BE_USED_DIRECTLY: &[&str] = [
+    "aws-config",
+    "aws-smithy-types-convert",
+    "aws-smithy-mocks-experimental",
+]
+.as_slice();
 
 pub(crate) struct ReadmesExist;
 impl Lint for ReadmesExist {
@@ -66,7 +71,7 @@ impl Fix for ReadmesHaveFooters {
 
 const README_FOOTER: &str =
     "\nThis crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) \
-and the [smithy-rs](https://github.com/awslabs/smithy-rs) code generator.";
+and the [smithy-rs](https://github.com/smithy-lang/smithy-rs) code generator.";
 const NOT_TO_BE_USED_DIRECTLY: &str = " In most cases, it should not be used directly.";
 
 fn fix_readme(path: impl AsRef<Path>, to_be_used_directly: bool) -> Result<(bool, String)> {
@@ -78,7 +83,11 @@ fn fix_readme(path: impl AsRef<Path>, to_be_used_directly: bool) -> Result<(bool
 
     let mut contents = fs::read_to_string(path.as_ref())
         .with_context(|| format!("failure to read readme: {:?}", path.as_ref()))?;
-    let updated =
-        anchor::replace_anchor(&mut contents, &anchor::anchors("footer"), &footer_contents)?;
+    let updated = anchor::replace_anchor(
+        &mut contents,
+        &anchor::anchors("footer"),
+        &footer_contents,
+        None,
+    )?;
     Ok((updated, contents))
 }

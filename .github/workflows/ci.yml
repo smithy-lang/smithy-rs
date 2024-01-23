@@ -29,7 +29,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.70.0
+  rust_version: 1.72.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -92,6 +92,7 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-rust-runtimes
           runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
         - action: check-sdk-codegen-unit-tests
           runner: ubuntu-latest
         - action: check-server-codegen-integration-tests
@@ -119,6 +120,8 @@ jobs:
       with:
         path: smithy-rs
         ref: ${{ inputs.git_ref }}
+        # Defaults to 1 if not set
+        fetch-depth: ${{ matrix.test.fetch-depth }}
     - name: Run ${{ matrix.test.action }}
       uses: ./smithy-rs/.github/actions/docker-build
       with:
@@ -202,9 +205,10 @@ jobs:
           popd &>/dev/null
         done
 
-  # We make sure that Smithy-rs can be compiled on platforms that are not natively supported by GitHub actions.
-  # We run as many tests we can on those platforms because they require a more complicated setup involving architecture
-  # emulation.
+  # We make sure that smithy-rs can be compiled on platforms that are not
+  # natively supported by GitHub actions. We run as many tests as we can on
+  # those platforms, but not all of them, because they require a more
+  # complicated setup involving architecture emulation.
   test-exotic-platform-support:
     name: Exotic platform support
     runs-on: ubuntu-latest
@@ -212,7 +216,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        # We always exclude aws-smithy-http-server-python since the Python framework is experimental.
+        # We always exclude `aws-smithy-http-server-python` and
+        # `aws-smithy-http-server-typescript` since they are experimental.
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''

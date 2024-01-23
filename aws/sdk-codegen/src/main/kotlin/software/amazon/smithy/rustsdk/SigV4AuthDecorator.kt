@@ -43,29 +43,33 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
 
     private val sigv4a = "sigv4a"
 
-    private fun sigv4(runtimeConfig: RuntimeConfig) = writable {
-        val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
-        rust("#T", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
-    }
-
-    private fun sigv4a(runtimeConfig: RuntimeConfig) = writable {
-        val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
-        featureGateBlock(sigv4a) {
-            rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
+    private fun sigv4(runtimeConfig: RuntimeConfig) =
+        writable {
+            val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
+            rust("#T", awsRuntimeAuthModule.resolve("sigv4::SCHEME_ID"))
         }
-    }
+
+    private fun sigv4a(runtimeConfig: RuntimeConfig) =
+        writable {
+            val awsRuntimeAuthModule = AwsRuntimeType.awsRuntime(runtimeConfig).resolve("auth")
+            featureGateBlock(sigv4a) {
+                rust("#T", awsRuntimeAuthModule.resolve("sigv4a::SCHEME_ID"))
+            }
+        }
 
     override fun authOptions(
         codegenContext: ClientCodegenContext,
         operationShape: OperationShape,
         baseAuthSchemeOptions: List<AuthSchemeOption>,
     ): List<AuthSchemeOption> {
-        val supportsSigV4a = codegenContext.serviceShape.supportedAuthSchemes().contains(sigv4a)
-            .thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
-        return baseAuthSchemeOptions + AuthSchemeOption.StaticAuthSchemeOption(
-            SigV4Trait.ID,
-            listOf(sigv4(codegenContext.runtimeConfig)) + supportsSigV4a,
-        )
+        val supportsSigV4a =
+            codegenContext.serviceShape.supportedAuthSchemes().contains(sigv4a)
+                .thenSingletonListOf { sigv4a(codegenContext.runtimeConfig) }
+        return baseAuthSchemeOptions +
+            AuthSchemeOption.StaticAuthSchemeOption(
+                SigV4Trait.ID,
+                listOf(sigv4(codegenContext.runtimeConfig)) + supportsSigV4a,
+            )
     }
 
     override fun serviceRuntimePluginCustomizations(
@@ -86,7 +90,10 @@ class SigV4AuthDecorator : ClientCodegenDecorator {
     ): List<ConfigCustomization> =
         baseCustomizations + SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait())
 
-    override fun extras(codegenContext: ClientCodegenContext, rustCrate: RustCrate) {
+    override fun extras(
+        codegenContext: ClientCodegenContext,
+        rustCrate: RustCrate,
+    ) {
         if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
             // Add optional feature for SigV4a support
             rustCrate.mergeFeature(Feature("sigv4a", true, listOf("aws-runtime/sigv4a")))
@@ -98,55 +105,57 @@ private class SigV4SigningConfig(
     runtimeConfig: RuntimeConfig,
     private val sigV4Trait: SigV4Trait?,
 ) : ConfigCustomization() {
-    private val codegenScope = arrayOf(
-        "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
-        "SigningName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningName"),
-        "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
-    )
+    private val codegenScope =
+        arrayOf(
+            "Region" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::Region"),
+            "SigningName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("SigningName"),
+            "SigningRegion" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegion"),
+        )
 
-    override fun section(section: ServiceConfig): Writable = writable {
-        if (sigV4Trait != null) {
-            when (section) {
-                ServiceConfig.ConfigImpl -> {
-                    rust(
-                        """
-                        /// The signature version 4 service signing name to use in the credential scope when signing requests.
-                        ///
-                        /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
-                        /// [`SigningName`](aws_types::SigningName) during operation construction
-                        pub fn signing_name(&self) -> &'static str {
-                            ${sigV4Trait.name.dq()}
-                        }
-                        """,
-                    )
+    override fun section(section: ServiceConfig): Writable =
+        writable {
+            if (sigV4Trait != null) {
+                when (section) {
+                    ServiceConfig.ConfigImpl -> {
+                        rust(
+                            """
+                            /// The signature version 4 service signing name to use in the credential scope when signing requests.
+                            ///
+                            /// The signing service may be overridden by the `Endpoint`, or by specifying a custom
+                            /// [`SigningName`](aws_types::SigningName) during operation construction
+                            pub fn signing_name(&self) -> &'static str {
+                                ${sigV4Trait.name.dq()}
+                            }
+                            """,
+                        )
+                    }
+
+                    ServiceConfig.BuilderBuild -> {
+                        rustTemplate(
+                            """
+                            layer.store_put(#{SigningName}::from_static(${sigV4Trait.name.dq()}));
+                            layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
+                            """,
+                            *codegenScope,
+                        )
+                    }
+
+                    is ServiceConfig.OperationConfigOverride -> {
+                        rustTemplate(
+                            """
+                            resolver.config_mut()
+                                .load::<#{Region}>()
+                                .cloned()
+                                .map(|r| resolver.config_mut().store_put(#{SigningRegion}::from(r)));
+                            """,
+                            *codegenScope,
+                        )
+                    }
+
+                    else -> {}
                 }
-
-                ServiceConfig.BuilderBuild -> {
-                    rustTemplate(
-                        """
-                        layer.store_put(#{SigningName}::from_static(${sigV4Trait.name.dq()}));
-                        layer.load::<#{Region}>().cloned().map(|r| layer.store_put(#{SigningRegion}::from(r)));
-                        """,
-                        *codegenScope,
-                    )
-                }
-
-                is ServiceConfig.OperationConfigOverride -> {
-                    rustTemplate(
-                        """
-                        resolver.config_mut()
-                            .load::<#{Region}>()
-                            .cloned()
-                            .map(|r| resolver.config_mut().store_put(#{SigningRegion}::from(r)));
-                        """,
-                        *codegenScope,
-                    )
-                }
-
-                else -> {}
             }
         }
-    }
 }
 
 private class AuthServiceRuntimePluginCustomization(private val codegenContext: ClientCodegenContext) :
@@ -157,53 +166,57 @@ private class AuthServiceRuntimePluginCustomization(private val codegenContext: 
         arrayOf(
             "SigV4AuthScheme" to awsRuntime.resolve("auth::sigv4::SigV4AuthScheme"),
             "SigV4aAuthScheme" to awsRuntime.resolve("auth::sigv4a::SigV4aAuthScheme"),
-            "SharedAuthScheme" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
+            "SharedAuthScheme" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::auth::SharedAuthScheme"),
         )
     }
 
-    override fun section(section: ServiceRuntimePluginSection): Writable = writable {
-        when (section) {
-            is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
-                if (serviceHasEventStream) {
-                    // enable the aws-runtime `sign-eventstream` feature
-                    addDependency(
-                        AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol(),
-                    )
-                }
-                section.registerAuthScheme(this) {
-                    rustTemplate("#{SharedAuthScheme}::new(#{SigV4AuthScheme}::new())", *codegenScope)
-                }
+    override fun section(section: ServiceRuntimePluginSection): Writable =
+        writable {
+            when (section) {
+                is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
+                    val serviceHasEventStream = codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)
+                    if (serviceHasEventStream) {
+                        // enable the aws-runtime `sign-eventstream` feature
+                        addDependency(
+                            AwsCargoDependency.awsRuntime(runtimeConfig).withFeature("event-stream").toType().toSymbol(),
+                        )
+                    }
+                    section.registerAuthScheme(this) {
+                        rustTemplate("#{SharedAuthScheme}::new(#{SigV4AuthScheme}::new())", *codegenScope)
+                    }
 
-                if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
-                    featureGateBlock("sigv4a") {
-                        section.registerAuthScheme(this) {
-                            rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)
+                    if (codegenContext.serviceShape.supportedAuthSchemes().contains("sigv4a")) {
+                        featureGateBlock("sigv4a") {
+                            section.registerAuthScheme(this) {
+                                rustTemplate("#{SharedAuthScheme}::new(#{SigV4aAuthScheme}::new())", *codegenScope)
+                            }
                         }
                     }
                 }
+
+                else -> {}
             }
-
-            else -> {}
         }
+}
+
+fun needsAmzSha256(service: ServiceShape) =
+    when (service.id) {
+        ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+        ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820") -> true
+        else -> false
     }
-}
 
-fun needsAmzSha256(service: ServiceShape) = when (service.id) {
-    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
-    ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820") -> true
-    else -> false
-}
+fun disableDoubleEncode(service: ServiceShape) =
+    when (service.id) {
+        ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+        else -> false
+    }
 
-fun disableDoubleEncode(service: ServiceShape) = when (service.id) {
-    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
-    else -> false
-}
-
-fun disableUriPathNormalization(service: ServiceShape) = when (service.id) {
-    ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
-    else -> false
-}
+fun disableUriPathNormalization(service: ServiceShape) =
+    when (service.id) {
+        ShapeId.from("com.amazonaws.s3#AmazonS3") -> true
+        else -> false
+    }
 
 private class AuthOperationCustomization(private val codegenContext: ClientCodegenContext) : OperationCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
@@ -218,45 +231,47 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
     }
     private val serviceIndex = ServiceIndex.of(codegenContext.model)
 
-    override fun section(section: OperationSection): Writable = writable {
-        when (section) {
-            is OperationSection.AdditionalRuntimePluginConfig -> {
-                val authSchemes =
-                    serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, section.operationShape)
-                if (authSchemes.containsKey(SigV4Trait.ID)) {
-                    val unsignedPayload = section.operationShape.hasTrait<UnsignedPayloadTrait>()
-                    val doubleUriEncode = unsignedPayload || !disableDoubleEncode(codegenContext.serviceShape)
-                    val contentSha256Header = needsAmzSha256(codegenContext.serviceShape)
-                    val normalizeUrlPath = !disableUriPathNormalization(codegenContext.serviceShape)
-                    rustTemplate(
-                        """
-                        let mut signing_options = #{SigningOptions}::default();
-                        signing_options.double_uri_encode = $doubleUriEncode;
-                        signing_options.content_sha256_header = $contentSha256Header;
-                        signing_options.normalize_uri_path = $normalizeUrlPath;
-                        signing_options.payload_override = #{payload_override};
+    override fun section(section: OperationSection): Writable =
+        writable {
+            when (section) {
+                is OperationSection.AdditionalRuntimePluginConfig -> {
+                    val authSchemes =
+                        serviceIndex.getEffectiveAuthSchemes(codegenContext.serviceShape, section.operationShape)
+                    if (authSchemes.containsKey(SigV4Trait.ID)) {
+                        val unsignedPayload = section.operationShape.hasTrait<UnsignedPayloadTrait>()
+                        val doubleUriEncode = unsignedPayload || !disableDoubleEncode(codegenContext.serviceShape)
+                        val contentSha256Header = needsAmzSha256(codegenContext.serviceShape) || unsignedPayload
+                        val normalizeUrlPath = !disableUriPathNormalization(codegenContext.serviceShape)
+                        rustTemplate(
+                            """
+                            let mut signing_options = #{SigningOptions}::default();
+                            signing_options.double_uri_encode = $doubleUriEncode;
+                            signing_options.content_sha256_header = $contentSha256Header;
+                            signing_options.normalize_uri_path = $normalizeUrlPath;
+                            signing_options.payload_override = #{payload_override};
 
-                        ${section.newLayerName}.store_put(#{SigV4OperationSigningConfig} {
-                            signing_options,
-                            ..#{Default}::default()
-                        });
-                        """,
-                        *codegenScope,
-                        "payload_override" to writable {
-                            if (unsignedPayload) {
-                                rustTemplate("Some(#{SignableBody}::UnsignedPayload)", *codegenScope)
-                            } else if (section.operationShape.isInputEventStream(codegenContext.model)) {
-                                // TODO(EventStream): Is this actually correct for all Event Stream operations?
-                                rustTemplate("Some(#{SignableBody}::Bytes(&[]))", *codegenScope)
-                            } else {
-                                rust("None")
-                            }
-                        },
-                    )
+                            ${section.newLayerName}.store_put(#{SigV4OperationSigningConfig} {
+                                signing_options,
+                                ..#{Default}::default()
+                            });
+                            """,
+                            *codegenScope,
+                            "payload_override" to
+                                writable {
+                                    if (unsignedPayload) {
+                                        rustTemplate("Some(#{SignableBody}::UnsignedPayload)", *codegenScope)
+                                    } else if (section.operationShape.isInputEventStream(codegenContext.model)) {
+                                        // TODO(EventStream): Is this actually correct for all Event Stream operations?
+                                        rustTemplate("Some(#{SignableBody}::Bytes(&[]))", *codegenScope)
+                                    } else {
+                                        rust("None")
+                                    }
+                                },
+                        )
+                    }
                 }
-            }
 
-            else -> {}
+                else -> {}
+            }
         }
-    }
 }

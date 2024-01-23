@@ -2,6 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+use aws_smithy_runtime::client::http::connection_poisoning::CaptureSmithyConnection;
 /// This example demonstrates how an interceptor can be written to trace what is being
 /// serialized / deserialized on the wire.
 ///
@@ -9,7 +10,7 @@
 /// purposes and may be useful in debugging scenarios. Please don't use this as-is in production.
 ///
 /// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
-/// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
+/// Refer to the [README.md](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example trace-serialize`.
@@ -59,15 +60,27 @@ impl Intercept for WireFormatInterceptor {
         &self,
         context: &BeforeDeserializationInterceptorContextRef<'_>,
         _runtime_components: &RuntimeComponents,
-        _cfg: &mut ConfigBag,
+        cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         // Get the response type from the context.
         let response = context.response();
         // Print the response.
-        if response.status() == StatusCode::OK {
+        if response.status().as_u16() == StatusCode::OK.as_u16() {
             tracing::info!(?response, "Response received:");
         } else {
             tracing::error!(?response);
+        }
+
+        // Print the connection information
+        let captured_connection = cfg.load::<CaptureSmithyConnection>().cloned();
+        if let Some(captured_connection) = captured_connection.and_then(|conn| conn.get()) {
+            tracing::info!(
+                remote_addr = ?captured_connection.remote_addr(),
+                local_addr = ?captured_connection.local_addr(),
+                "Captured connection info"
+            );
+        } else {
+            tracing::warn!("Connection info is missing!");
         }
 
         Ok(())

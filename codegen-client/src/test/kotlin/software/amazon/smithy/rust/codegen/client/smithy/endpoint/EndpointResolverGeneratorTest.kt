@@ -11,24 +11,23 @@ import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.rust.codegen.client.testutil.EndpointTestDiscovery
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
-import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
-import software.amazon.smithy.rust.codegen.core.util.runCommand
 
 class EndpointResolverGeneratorTest {
     companion object {
-        val testCases = listOf(
-            "default-values.smithy",
-            "deprecated-param.smithy",
-            "duplicate-param.smithy",
-            "get-attr-type-inference.smithy",
-            "headers.smithy",
-            "minimal-ruleset.smithy",
-            "parse-url.smithy",
-            "substring.smithy",
-            "uri-encode.smithy",
-            "valid-hostlabel.smithy",
-            "valid-model.smithy",
-        )
+        val testCases =
+            listOf(
+                "default-values.smithy",
+                "deprecated-param.smithy",
+                "duplicate-param.smithy",
+                "get-attr-type-inference.smithy",
+                "headers.smithy",
+                "minimal-ruleset.smithy",
+                "parse-url.smithy",
+                "substring.smithy",
+                "uri-encode.smithy",
+                "valid-hostlabel.smithy",
+                "valid-model.smithy",
+            )
 
         @JvmStatic
         fun testSuites(): List<Model> {
@@ -42,11 +41,12 @@ class EndpointResolverGeneratorTest {
     }
 
     // for tests, load partitions.json from smithy—for real usage, this file will be inserted at codegen time
-    /*private val partitionsJson =
-        Node.parse(
-            this::class.java.getResource("/software/amazon/smithy/rulesengine/language/partitions.json")?.readText()
-                ?: throw CodegenException("partitions.json was not present in smithy bundle"),
-        )*/
+    //
+    // private val partitionsJson =
+    //     Node.parse(
+    //         this::class.java.getResource("/software/amazon/smithy/rulesengine/language/partitions.json")?.readText()
+    //             ?: throw CodegenException("partitions.json was not present in smithy bundle"),
+    //     )
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("testSuites")
@@ -55,7 +55,7 @@ class EndpointResolverGeneratorTest {
         // if (!suite.toString().contains("hostable")) {
         // return
         // }
-        clientIntegrationTest(suite, params = IntegrationTestParams(command = { it -> "cargo test".runCommand(it, mapOf("RUSTFLAGS" to "")) }))
+        clientIntegrationTest(suite)
     }
 
     /*

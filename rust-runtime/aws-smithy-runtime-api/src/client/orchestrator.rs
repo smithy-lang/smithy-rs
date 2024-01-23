@@ -21,17 +21,17 @@ use crate::client::interceptors::context::phase::Phase;
 use crate::client::interceptors::context::Error;
 use crate::client::interceptors::InterceptorError;
 use crate::client::result::{ConnectorError, SdkError};
-use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use bytes::Bytes;
+use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
 
 /// Type alias for the HTTP request type that the orchestrator uses.
-pub type HttpRequest = crate::client::http::request::Request;
+pub type HttpRequest = crate::http::Request;
 
 /// Type alias for the HTTP response type that the orchestrator uses.
-pub type HttpResponse = http::Response<SdkBody>;
+pub type HttpResponse = crate::http::Response;
 
 /// Informs the orchestrator on whether or not the request body needs to be loaded into memory before transmit.
 ///
@@ -216,7 +216,6 @@ impl<E> OrchestratorError<E> {
     }
 
     /// Maps the error type in `ErrorKind::Operation`
-    #[doc(hidden)]
     pub fn map_operation_error<E2>(self, map: impl FnOnce(E) -> E2) -> OrchestratorError<E2> {
         let kind = match self.kind {
             ErrorKind::Connector { source } => ErrorKind::Connector { source },
@@ -288,4 +287,38 @@ impl From<Error> for OrchestratorError<Error> {
     fn from(err: Error) -> Self {
         Self::operation(err)
     }
+}
+
+/// Metadata added to the [`ConfigBag`](aws_smithy_types::config_bag::ConfigBag) that identifies the API being called.
+#[derive(Clone, Debug)]
+pub struct Metadata {
+    operation: Cow<'static, str>,
+    service: Cow<'static, str>,
+}
+
+impl Metadata {
+    /// Returns the operation name.
+    pub fn name(&self) -> &str {
+        &self.operation
+    }
+
+    /// Returns the service name.
+    pub fn service(&self) -> &str {
+        &self.service
+    }
+
+    /// Creates [`Metadata`].
+    pub fn new(
+        operation: impl Into<Cow<'static, str>>,
+        service: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        Metadata {
+            operation: operation.into(),
+            service: service.into(),
+        }
+    }
+}
+
+impl Storable for Metadata {
+    type Storer = StoreReplace<Self>;
 }

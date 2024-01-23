@@ -84,6 +84,8 @@ typealias ProtocolMap<T, C> = Map<ShapeId, ProtocolGeneratorFactory<T, C>>
 
 interface ProtocolGeneratorFactory<out T, C : CodegenContext> {
     fun protocol(codegenContext: C): Protocol
+
     fun buildProtocolGenerator(codegenContext: C): T
+
     fun support(): ProtocolSupport
 }

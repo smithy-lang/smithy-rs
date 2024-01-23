@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
+/* End of automatically managed default lints */
 #![allow(clippy::derive_partial_eq_without_eq)]
 #![warn(
     // missing_docs,
@@ -328,7 +331,7 @@ mod tests {
     }
 
     // TODO(https://github.com/zowens/crc32c/issues/34)
-    // TODO(https://github.com/awslabs/smithy-rs/issues/1857)
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/1857)
     #[cfg(not(any(target_arch = "powerpc", target_arch = "powerpc64")))]
     #[test]
     fn test_crc32c_checksum() {

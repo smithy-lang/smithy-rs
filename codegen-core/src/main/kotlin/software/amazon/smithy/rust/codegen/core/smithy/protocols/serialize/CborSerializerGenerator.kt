@@ -156,7 +156,7 @@ class CborSerializerGenerator(
         "Encoder" to RuntimeType.smithyCbor(runtimeConfig).resolve("Encoder"),
         "ByteSlab" to RuntimeType.ByteSlab,
     )
-    private val serializerUtil = SerializerUtil(model)
+    private val serializerUtil = SerializerUtil(model, symbolProvider)
 
     /**
      * Reusable structure serializer implementation that can be used to generate serializing code for
@@ -342,7 +342,7 @@ class CborSerializerGenerator(
             }
         } else {
             with(serializerUtil) {
-                ignoreZeroValues(context.shape, context.valueExpression) {
+                ignoreDefaultsForNumbersAndBools(context.shape, context.valueExpression) {
                     serializeMemberValue(context, targetShape)
                 }
             }

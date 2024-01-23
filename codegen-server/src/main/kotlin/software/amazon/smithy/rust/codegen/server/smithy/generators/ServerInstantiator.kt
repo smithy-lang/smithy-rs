@@ -26,14 +26,15 @@ import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromO
 
 class ServerAfterInstantiatingValueConstrainItIfNecessary(val codegenContext: CodegenContext) :
     InstantiatorCustomization() {
-
-    override fun section(section: InstantiatorSection): Writable = when (section) {
-        is InstantiatorSection.AfterInstantiatingValue -> writable {
-            if (section.shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
-                rust(""".try_into().expect("this is only used in tests")""")
-            }
+    override fun section(section: InstantiatorSection): Writable =
+        when (section) {
+            is InstantiatorSection.AfterInstantiatingValue ->
+                writable {
+                    if (section.shape.isDirectlyConstrained(codegenContext.symbolProvider)) {
+                        rust(""".try_into().expect("this is only used in tests")""")
+                    }
+                }
         }
-    }
 }
 
 class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiator.BuilderKindBehavior {
@@ -41,11 +42,12 @@ class ServerBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
         // Only operation input builders take in unconstrained types.
         val takesInUnconstrainedTypes = shape.isReachableFromOperationInput()
 
-        val publicConstrainedTypes = if (codegenContext is ServerCodegenContext) {
-            codegenContext.settings.codegenConfig.publicConstrainedTypes
-        } else {
-            true
-        }
+        val publicConstrainedTypes =
+            if (codegenContext is ServerCodegenContext) {
+                codegenContext.settings.codegenConfig.publicConstrainedTypes
+            } else {
+                true
+            }
 
         return if (publicConstrainedTypes) {
             ServerBuilderGenerator.hasFallibleBuilder(
@@ -76,6 +78,7 @@ class ServerInstantiator(codegenContext: CodegenContext, customWritable: CustomW
         ServerBuilderKindBehavior(codegenContext),
         defaultsForRequiredFields = true,
         customizations = listOf(ServerAfterInstantiatingValueConstrainItIfNecessary(codegenContext)),
+        // Construct with direct pattern to more closely replicate actual server customer usage
         constructPattern = InstantiatorConstructPattern.DIRECT,
         customWritable = customWritable,
     )
@@ -84,7 +87,11 @@ class ServerBuilderInstantiator(
     private val symbolProvider: RustSymbolProvider,
     private val symbolParseFn: (Shape) -> ReturnSymbolToParse,
 ) : BuilderInstantiator {
-    override fun setField(builder: String, value: Writable, field: MemberShape): Writable {
+    override fun setField(
+        builder: String,
+        value: Writable,
+        field: MemberShape,
+    ): Writable {
         // Server builders have the ability to have non-optional fields. When one of these fields is used,
         // we need to use `if let(...)` to only set the field when it is present.
         return if (!symbolProvider.toSymbol(field).isOptional()) {
@@ -104,12 +111,17 @@ class ServerBuilderInstantiator(
         }
     }
 
-    override fun finalizeBuilder(builder: String, shape: StructureShape, mapErr: Writable?): Writable = writable {
-        val returnSymbolToParse = symbolParseFn(shape)
-        if (returnSymbolToParse.isUnconstrained) {
-            rust(builder)
-        } else {
-            rust("$builder.build()")
+    override fun finalizeBuilder(
+        builder: String,
+        shape: StructureShape,
+        mapErr: Writable?,
+    ): Writable =
+        writable {
+            val returnSymbolToParse = symbolParseFn(shape)
+            if (returnSymbolToParse.isUnconstrained) {
+                rust(builder)
+            } else {
+                rust("$builder.build()")
+            }
         }
-    }
 }

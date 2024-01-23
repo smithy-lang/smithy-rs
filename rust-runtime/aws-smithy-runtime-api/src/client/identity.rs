@@ -4,7 +4,6 @@
  */
 
 use crate::box_error::BoxError;
-use crate::client::auth::AuthSchemeId;
 use crate::client::runtime_components::sealed::ValidateConfig;
 use crate::client::runtime_components::{RuntimeComponents, RuntimeComponentsBuilder};
 use crate::impl_shared_conversions;
@@ -64,12 +63,7 @@ pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a>;
 
-    /// Validate the base client configuration for this implementation.
-    ///
-    /// This gets called upon client construction. The full config may not be available at
-    /// this time (hence why it has [`RuntimeComponentsBuilder`] as an argument rather
-    /// than [`RuntimeComponents`]). Any error returned here will become a panic
-    /// in the client constructor.
+    #[doc = include_str!("../../rustdoc/validate_base_client_config.md")]
     fn validate_base_client_config(
         &self,
         runtime_components: &RuntimeComponentsBuilder,
@@ -79,13 +73,7 @@ pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
         Ok(())
     }
 
-    /// Validate the final client configuration for this implementation.
-    ///
-    /// This gets called immediately after the [`Intercept::read_before_execution`] trait hook
-    /// when the final configuration has been resolved. Any error returned here will
-    /// cause the operation to return that error.
-    ///
-    /// [`Intercept::read_before_execution`]: crate::client::interceptors::Intercept::read_before_execution
+    #[doc = include_str!("../../rustdoc/validate_final_config.md")]
     fn validate_final_config(
         &self,
         runtime_components: &RuntimeComponents,
@@ -119,6 +107,8 @@ impl ResolveCachedIdentity for SharedIdentityCache {
     }
 }
 
+impl ValidateConfig for SharedIdentityResolver {}
+
 impl ValidateConfig for SharedIdentityCache {
     fn validate_base_client_config(
         &self,
@@ -138,9 +128,6 @@ impl ValidateConfig for SharedIdentityCache {
 }
 
 impl_shared_conversions!(convert SharedIdentityCache from ResolveCachedIdentity using SharedIdentityCache::new);
-
-#[deprecated(note = "Renamed to ResolveIdentity.")]
-pub use ResolveIdentity as IdentityResolver;
 
 /// Resolver for identities.
 ///
@@ -210,38 +197,6 @@ impl ResolveIdentity for SharedIdentityResolver {
 }
 
 impl_shared_conversions!(convert SharedIdentityResolver from ResolveIdentity using SharedIdentityResolver::new);
-
-/// An identity resolver paired with an auth scheme ID that it resolves for.
-#[derive(Clone, Debug)]
-pub(crate) struct ConfiguredIdentityResolver {
-    auth_scheme: AuthSchemeId,
-    identity_resolver: SharedIdentityResolver,
-}
-
-impl ConfiguredIdentityResolver {
-    /// Creates a new [`ConfiguredIdentityResolver`] from the given auth scheme and identity resolver.
-    pub(crate) fn new(
-        auth_scheme: AuthSchemeId,
-        identity_resolver: SharedIdentityResolver,
-    ) -> Self {
-        Self {
-            auth_scheme,
-            identity_resolver,
-        }
-    }
-
-    /// Returns the auth scheme ID.
-    pub(crate) fn scheme_id(&self) -> AuthSchemeId {
-        self.auth_scheme
-    }
-
-    /// Returns the identity resolver.
-    pub(crate) fn identity_resolver(&self) -> SharedIdentityResolver {
-        self.identity_resolver.clone()
-    }
-}
-
-impl ValidateConfig for ConfiguredIdentityResolver {}
 
 /// An identity that can be used for authentication.
 ///

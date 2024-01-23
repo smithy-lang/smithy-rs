@@ -6,6 +6,7 @@
 use std::num::TryFromIntError;
 
 use crate::rejection::MissingContentTypeReason;
+use aws_smithy_runtime_api::http::HttpError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -32,6 +33,10 @@ pub enum RequestRejection {
     // `Vec<u8>` here instead of `String`.
     #[error("request does not adhere to modeled constraints")]
     ConstraintViolation(Vec<u8>),
+
+    /// Typically happens when the request has headers that are not valid UTF-8.
+    #[error("failed to convert request: {0}")]
+    HttpConversion(#[from] HttpError),
 }
 
 impl From<std::convert::Infallible> for RequestRejection {

@@ -28,7 +28,7 @@ def main(skip_generation=False):
 
     if not skip_generation:
         checkout_commit_and_generate(head_commit_sha, CURRENT_BRANCH, targets=['aws:sdk'])
-        checkout_commit_and_generate(base_commit_sha, BASE_BRANCH, targets=['aws:sdk'])
+        checkout_commit_and_generate(base_commit_sha, BASE_BRANCH, targets=['aws:sdk'], preserve_aws_sdk_build=True)
     get_cmd_output(f'git checkout {CURRENT_BRANCH}')
     sdk_directory = os.path.join(OUTPUT_PATH, 'aws-sdk', 'sdk')
     os.chdir(sdk_directory)
@@ -37,9 +37,13 @@ def main(skip_generation=False):
     deny_list = [
         # add crate names here to exclude them from the semver checks
     ]
-    for path in list(os.listdir())[:10]:
+    for path in os.listdir():
         eprint(f'checking {path}...', end='')
-        if path not in deny_list and get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') == 0:
+        if path in deny_list:
+            eprint(f"skipping {path} because it is in 'deny_list'")
+        elif get_cmd_status(f'git cat-file -e base:{sdk_directory}/{path}/Cargo.toml') != 0:
+            eprint(f'skipping {path} because it does not exist in base')
+        else:
             get_cmd_output('cargo generate-lockfile', quiet=True)
             (_, out, _) = get_cmd_output('cargo pkgid', cwd=path, quiet=True)
             pkgid = parse_package_id(out)
@@ -59,8 +63,6 @@ def main(skip_generation=False):
                 if out:
                     eprint(out)
                 eprint(err)
-        else:
-            eprint(f'skipping {path} because it does not exist in base')
     if failures:
         eprint('One or more crates failed semver checks!')
         eprint("\n".join(failures))

@@ -11,7 +11,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import kotlin.io.path.readText
 
 class RegionDecoratorTest {
-    private val modelWithoutRegionParamOrSigV4AuthScheme = """
+    private val modelWithoutRegionParamOrSigV4AuthScheme =
+        """
         namespace test
 
         use aws.api#service
@@ -28,9 +29,10 @@ class RegionDecoratorTest {
         service TestService { version: "2023-01-01", operations: [SomeOperation] }
         structure SomeOutput { something: String }
         operation SomeOperation { output: SomeOutput }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    private val modelWithRegionParam = """
+    private val modelWithRegionParam =
+        """
         namespace test
 
         use aws.api#service
@@ -49,9 +51,10 @@ class RegionDecoratorTest {
         service TestService { version: "2023-01-01", operations: [SomeOperation] }
         structure SomeOutput { something: String }
         operation SomeOperation { output: SomeOutput }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
-    private val modelWithSigV4AuthScheme = """
+    private val modelWithSigV4AuthScheme =
+        """
         namespace test
 
         use aws.auth#sigv4
@@ -71,31 +74,34 @@ class RegionDecoratorTest {
         service TestService { version: "2023-01-01", operations: [SomeOperation] }
         structure SomeOutput { something: String }
         operation SomeOperation { output: SomeOutput }
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `models without region built-in params or SigV4 should not have configurable regions`() {
-        val path = awsSdkIntegrationTest(modelWithoutRegionParamOrSigV4AuthScheme) { _, _ ->
-            // it should generate and compile successfully
-        }
+        val path =
+            awsSdkIntegrationTest(modelWithoutRegionParamOrSigV4AuthScheme) { _, _ ->
+                // it should generate and compile successfully
+            }
         val configContents = path.resolve("src/config.rs").readText()
         assertFalse(configContents.contains("fn set_region("))
     }
 
     @Test
     fun `models with region built-in params should have configurable regions`() {
-        val path = awsSdkIntegrationTest(modelWithRegionParam) { _, _ ->
-            // it should generate and compile successfully
-        }
+        val path =
+            awsSdkIntegrationTest(modelWithRegionParam) { _, _ ->
+                // it should generate and compile successfully
+            }
         val configContents = path.resolve("src/config.rs").readText()
         assertTrue(configContents.contains("fn set_region("))
     }
 
     @Test
     fun `models with SigV4 should have configurable regions`() {
-        val path = awsSdkIntegrationTest(modelWithSigV4AuthScheme) { _, _ ->
-            // it should generate and compile successfully
-        }
+        val path =
+            awsSdkIntegrationTest(modelWithSigV4AuthScheme) { _, _ ->
+                // it should generate and compile successfully
+            }
         val configContents = path.resolve("src/config.rs").readText()
         assertTrue(configContents.contains("fn set_region("))
     }

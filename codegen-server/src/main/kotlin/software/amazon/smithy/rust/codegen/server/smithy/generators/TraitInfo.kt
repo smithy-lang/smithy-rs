@@ -44,13 +44,14 @@ fun RustWriter.renderTryFrom(
             #{ValidationFunctions:W}
         }
         """,
-        "ValidationFunctions" to constraintsInfo.map {
-            it.validationFunctionDefinition(
-                constraintViolationError,
-                unconstrainedTypeName,
-            )
-        }
-            .join("\n"),
+        "ValidationFunctions" to
+            constraintsInfo.map {
+                it.validationFunctionDefinition(
+                    constraintViolationError,
+                    unconstrainedTypeName,
+                )
+            }
+                .join("\n"),
     )
 
     this.rustTemplate(

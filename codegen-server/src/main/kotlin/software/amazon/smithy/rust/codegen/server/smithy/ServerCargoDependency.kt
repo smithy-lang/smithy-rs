@@ -15,7 +15,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
  * For a dependency that is used in the client, or in both the client and the server, use [CargoDependency] directly.
  */
 object ServerCargoDependency {
-    val AsyncTrait: CargoDependency = CargoDependency("async-trait", CratesIo("0.1"))
+    val AsyncTrait: CargoDependency = CargoDependency("async-trait", CratesIo("0.1.74"))
     val Base64SimdDev: CargoDependency = CargoDependency("base64-simd", CratesIo("0.8"), scope = DependencyScope.Dev)
     val FormUrlEncoded: CargoDependency = CargoDependency("form_urlencoded", CratesIo("1"))
     val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
@@ -30,5 +30,6 @@ object ServerCargoDependency {
     val HyperDev: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), scope = DependencyScope.Dev)
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+
     fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
 }

@@ -100,12 +100,13 @@ class UnconstrainedShapeSymbolProvider(
         val name = unconstrainedTypeNameForCollectionOrMapOrUnionShape(shape)
         val parent = shape.getParentAndInlineModuleForConstrainedMember(this, publicConstrainedTypes)?.second ?: ServerRustModule.UnconstrainedModule
 
-        val module = RustModule.new(
-            RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
-            visibility = Visibility.PUBCRATE,
-            parent = parent,
-            inline = true,
-        )
+        val module =
+            RustModule.new(
+                RustReservedWords.escapeIfNeeded(name.toSnakeCase()),
+                visibility = Visibility.PUBCRATE,
+                parent = parent,
+                inline = true,
+            )
         val rustType = RustType.Opaque(name, module.fullyQualifiedPath())
         return Symbol.builder()
             .rustType(rustType)
@@ -171,7 +172,7 @@ class UnconstrainedShapeSymbolProvider(
                 } else {
                     base.toSymbol(shape)
                 }
-                // TODO(https://github.com/awslabs/smithy-rs/issues/1401) Constraint traits on member shapes are not
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) Constraint traits on member shapes are not
                 //  implemented yet.
             }
 

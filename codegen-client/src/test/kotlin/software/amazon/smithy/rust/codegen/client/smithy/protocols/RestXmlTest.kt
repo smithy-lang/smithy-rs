@@ -10,8 +10,8 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 internal class RestXmlTest {
-
-    private val model = """
+    private val model =
+        """
         namespace test
         use aws.protocols#restXml
         use aws.api#service
@@ -81,7 +81,7 @@ internal class RestXmlTest {
             renamedWithPrefix: String
         }
 
-    """.asSmithyModel()
+        """.asSmithyModel()
 
     @Test
     fun `generate a rest xml service that compiles`() {

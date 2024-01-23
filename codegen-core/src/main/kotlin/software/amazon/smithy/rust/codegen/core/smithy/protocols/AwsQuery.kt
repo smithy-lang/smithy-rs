@@ -22,11 +22,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.AwsQu
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 
-private val awsQueryHttpTrait = HttpTrait.builder()
-    .code(200)
-    .method("POST")
-    .uri(UriPattern.parse("/"))
-    .build()
+private val awsQueryHttpTrait =
+    HttpTrait.builder()
+        .code(200)
+        .method("POST")
+        .uri(UriPattern.parse("/"))
+        .build()
 
 class AwsQueryBindingResolver(private val model: Model) :
     StaticHttpBindingResolver(model, awsQueryHttpTrait, "application/x-www-form-urlencoded", "text/xml") {
@@ -39,13 +40,13 @@ class AwsQueryBindingResolver(private val model: Model) :
 class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val awsQueryErrors: RuntimeType = RuntimeType.wrappedXmlErrors(runtimeConfig)
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "HeaderMap" to RuntimeType.HttpHeaderMap,
-        "Response" to RuntimeType.HttpResponse,
-        "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+        )
 
     override val httpBindingResolver: HttpBindingResolver = AwsQueryBindingResolver(codegenContext.model)
 
@@ -60,7 +61,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(_response_status: u16, _response_headers: &#{HeaderMap}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
+                "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> Result<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
             ) {
                 rust("#T::parse_error_metadata(response_body)", awsQueryErrors)

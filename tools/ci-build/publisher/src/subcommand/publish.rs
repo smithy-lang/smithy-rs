@@ -9,7 +9,6 @@ use crate::package::{
     PackageHandle, PackageStats,
 };
 use crate::publish::{publish, CRATES_IO_CLIENT};
-use crate::retry::{run_with_retry, BoxError, ErrorClass};
 use crate::{cargo, SDK_REPO_CRATE_PATH, SDK_REPO_NAME};
 use anyhow::{bail, Context, Result};
 use clap::Parser;
@@ -17,11 +16,14 @@ use crates_io_api::Error;
 use dialoguer::Confirm;
 use smithy_rs_tool_common::git;
 use smithy_rs_tool_common::package::PackageCategory;
+use smithy_rs_tool_common::retry::{run_with_retry, BoxError, ErrorClass};
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tracing::info;
+
+const DEFAULT_DELAY_MILLIS: usize = 1000;
 
 #[derive(Parser, Debug)]
 pub struct PublishArgs {
@@ -32,18 +34,24 @@ pub struct PublishArgs {
     /// Don't prompt for confirmation before publishing
     #[clap(short('y'))]
     skip_confirmation: bool,
+
+    /// Time delay between crate publishes to avoid crates.io throttling errors.
+    #[clap(long)]
+    delay_millis: Option<usize>,
 }
 
 pub async fn subcommand_publish(
     PublishArgs {
         location,
         skip_confirmation,
+        delay_millis,
     }: &PublishArgs,
 ) -> Result<()> {
     // Make sure cargo exists
     cargo::confirm_installed_on_path()?;
 
     let location = resolve_publish_location(location);
+    let delay_millis = Duration::from_millis(delay_millis.unwrap_or(DEFAULT_DELAY_MILLIS) as _);
 
     info!("Discovering crates to publish...");
     let (batches, stats) = discover_and_validate_package_batches(Fs::Real, &location).await?;
@@ -60,7 +68,7 @@ pub async fn subcommand_publish(
                 publish(&package.handle, &package.crate_path).await?;
 
                 // Keep things slow to avoid getting throttled by crates.io
-                tokio::time::sleep(Duration::from_secs(5)).await;
+                tokio::time::sleep(delay_millis).await;
 
                 // Sometimes it takes a little bit of time for the new package version
                 // to become available after publish. If we proceed too quickly, then

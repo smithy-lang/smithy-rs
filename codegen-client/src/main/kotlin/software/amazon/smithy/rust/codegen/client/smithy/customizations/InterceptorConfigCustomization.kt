@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -16,23 +17,25 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
     private val moduleUseName = codegenContext.moduleUseName()
     private val runtimeConfig = codegenContext.runtimeConfig
 
-    private val codegenScope = arrayOf(
-        "Intercept" to RuntimeType.intercept(runtimeConfig),
-        "SharedInterceptor" to RuntimeType.sharedInterceptor(runtimeConfig),
-    )
+    private val codegenScope =
+        arrayOf(
+            "Intercept" to configReexport(RuntimeType.intercept(runtimeConfig)),
+            "SharedInterceptor" to configReexport(RuntimeType.sharedInterceptor(runtimeConfig)),
+        )
 
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
-                ServiceConfig.ConfigImpl -> rustTemplate(
-                    """
-                    /// Returns interceptors currently registered by the user.
-                    pub fn interceptors(&self) -> impl Iterator<Item = #{SharedInterceptor}> + '_ {
-                        self.runtime_components.interceptors()
-                    }
-                    """,
-                    *codegenScope,
-                )
+                ServiceConfig.ConfigImpl ->
+                    rustTemplate(
+                        """
+                        /// Returns interceptors currently registered by the user.
+                        pub fn interceptors(&self) -> impl Iterator<Item = #{SharedInterceptor}> + '_ {
+                            self.runtime_components.interceptors()
+                        }
+                        """,
+                        *codegenScope,
+                    )
 
                 ServiceConfig.BuilderImpl ->
                     rustTemplate(

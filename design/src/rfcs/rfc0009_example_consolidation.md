@@ -5,7 +5,7 @@ RFC: Examples Consolidation
 
 Currently, the AWS Rust SDK's examples are duplicated across
 [`awslabs/aws-sdk-rust`](https://github.com/awslabs/aws-sdk-rust),
-[`awslabs/smithy-rs`](https://github.com/awslabs/smithy-rs),
+[`smithy-lang/smithy-rs`](https://github.com/smithy-lang/smithy-rs),
 and [`awsdocs/aws-doc-sdk-examples`](https://github.com/awsdocs/aws-doc-sdk-examples).
 The `smithy-rs` repository was formerly the source of truth for examples,
 with the examples being copied over to `aws-sdk-rust` as part of the release

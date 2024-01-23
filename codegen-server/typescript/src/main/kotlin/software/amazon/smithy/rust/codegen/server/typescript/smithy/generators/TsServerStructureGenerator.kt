@@ -29,15 +29,15 @@ class TsServerStructureGenerator(
     private val writer: RustWriter,
     private val shape: StructureShape,
 ) : StructureGenerator(model, symbolProvider, writer, shape, listOf(), StructSettings(flattenVecAccessors = false)) {
-
     private val napiDerive = TsServerCargoDependency.NapiDerive.toType()
 
     override fun renderStructure() {
-        val flavour = if (shape.hasTrait<ErrorTrait>()) {
-            "constructor"
-        } else {
-            "object"
-        }
+        val flavour =
+            if (shape.hasTrait<ErrorTrait>()) {
+                "constructor"
+            } else {
+                "object"
+            }
         Attribute(
             writable {
                 rustInlineTemplate(

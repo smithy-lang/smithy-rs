@@ -39,17 +39,15 @@ pub struct FixManifestsArgs {
     /// Checks manifests rather than fixing them
     #[clap(long)]
     check: bool,
-    /// Disable expected version number validation. This should only be used
-    /// when SDK crates are being generated with independent version numbers.
+    /// UNUSED. Kept for backwards compatibility. Can be removed in the future when
+    /// the older commits that rely on it have been synced over in a SDK release.
     #[clap(long)]
     disable_version_number_validation: bool,
 }
 
 pub async fn subcommand_fix_manifests(
     FixManifestsArgs {
-        location,
-        check,
-        disable_version_number_validation,
+        location, check, ..
     }: &FixManifestsArgs,
 ) -> Result<()> {
     let mode = match check {
@@ -60,7 +58,6 @@ pub async fn subcommand_fix_manifests(
     let mut manifests = read_manifests(Fs::Real, manifest_paths).await?;
     let versions = package_versions(&manifests)?;
 
-    validate::validate_before_fixes(&versions, *disable_version_number_validation)?;
     fix_manifests(Fs::Real, &versions, &mut manifests, mode).await?;
     validate::validate_after_fixes(location).await?;
     info!("Successfully fixed manifests!");
@@ -78,9 +75,9 @@ impl Manifest {
         let value = self.metadata.get("package").and_then(|v| v.get("publish"));
         match value {
             None => Ok(true),
-            Some(value) => value
-                .as_bool()
-                .ok_or(anyhow::Error::msg("unexpected publish setting")),
+            Some(value) => value.as_bool().ok_or(anyhow::Error::msg(format!(
+                "unexpected publish setting: {value}"
+            ))),
         }
     }
 }
@@ -110,17 +107,6 @@ impl VersionView<'_> {
 impl Versions {
     fn published(&self) -> VersionView {
         VersionView(self, FilterType::PublishedOnly)
-    }
-
-    fn published_crates(&self) -> impl Iterator<Item = (&str, &Version)> + '_ {
-        self.0
-            .iter()
-            .filter(|(_, v)| v.publish)
-            .map(|(k, v)| (k.as_str(), &v.version))
-    }
-
-    fn get(&self, crate_name: &str) -> Option<&Version> {
-        self.0.get(crate_name).map(|v| &v.version)
     }
 }
 
@@ -327,7 +313,7 @@ mod tests {
                 (
                     name.to_string(),
                     VersionWithMetadata {
-                        version: Version::parse(&version).unwrap(),
+                        version: Version::parse(version).unwrap(),
                         publish,
                     },
                 )

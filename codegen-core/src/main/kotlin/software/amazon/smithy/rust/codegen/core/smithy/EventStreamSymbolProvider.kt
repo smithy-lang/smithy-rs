@@ -34,27 +34,38 @@ class EventStreamSymbolProvider(
         // We only want to wrap with Event Stream types when dealing with member shapes
         if (shape is MemberShape && shape.isEventStream(model)) {
             // Determine if the member has a container that is a synthetic input or output
-            val operationShape = model.expectShape(shape.container).let { maybeInputOutput ->
-                val operationId = maybeInputOutput.getTrait<SyntheticInputTrait>()?.operation
-                    ?: maybeInputOutput.getTrait<SyntheticOutputTrait>()?.operation
-                operationId?.let { model.expectShape(it, OperationShape::class.java) }
-            }
+            val operationShape =
+                model.expectShape(shape.container).let { maybeInputOutput ->
+                    val operationId =
+                        maybeInputOutput.getTrait<SyntheticInputTrait>()?.operation
+                            ?: maybeInputOutput.getTrait<SyntheticOutputTrait>()?.operation
+                    operationId?.let { model.expectShape(it, OperationShape::class.java) }
+                }
             // If we find an operation shape, then we can wrap the type
             if (operationShape != null) {
                 val unionShape = model.expectShape(shape.target).asUnionShape().get()
-                val error = if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
-                    RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
-                } else {
-                    symbolForEventStreamError(unionShape)
-                }
+                val error =
+                    if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
+                        RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream::MessageStreamError").toSymbol()
+                    } else {
+                        symbolForEventStreamError(unionShape)
+                    }
                 val errorT = error.rustType()
                 val innerT = initial.rustType().stripOuter<RustType.Option>()
-                val isSender = (shape.isInputEventStream(model) && target == CodegenTarget.CLIENT) ||
-                    (shape.isOutputEventStream(model) && target == CodegenTarget.SERVER)
-                val outer = when (isSender) {
-                    true -> RuntimeType.eventStreamSender(runtimeConfig).toSymbol().rustType()
-                    else -> RuntimeType.eventStreamReceiver(runtimeConfig).toSymbol().rustType()
-                }
+                val isSender =
+                    (shape.isInputEventStream(model) && target == CodegenTarget.CLIENT) ||
+                        (shape.isOutputEventStream(model) && target == CodegenTarget.SERVER)
+                val outer =
+                    when (isSender) {
+                        true -> RuntimeType.eventStreamSender(runtimeConfig).toSymbol().rustType()
+                        else -> {
+                            if (target == CodegenTarget.SERVER) {
+                                RuntimeType.eventStreamReceiver(runtimeConfig).toSymbol().rustType()
+                            } else {
+                                RuntimeType.eventReceiver(runtimeConfig).toSymbol().rustType()
+                            }
+                        }
+                    }
                 val rustType = RustType.Application(outer, listOf(innerT, errorT))
                 return initial.toBuilder()
                     .name(rustType.name)

@@ -51,7 +51,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
-// TODO(https://github.com/awslabs/smithy-rs/issues/1401) This builder generator is only used by the client.
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/1401) This builder generator is only used by the client.
 //  Move this entire file, and its tests, to `codegen-client`.
 
 /** BuilderGenerator customization sections */
@@ -76,6 +76,7 @@ sealed class BuilderSection(name: String) : Section(name) {
 abstract class BuilderCustomization : NamedCustomization<BuilderSection>()
 
 fun RuntimeConfig.operationBuildError() = RuntimeType.smithyTypes(this).resolve("error::operation::BuildError")
+
 fun RuntimeConfig.serializationError() = RuntimeType.smithyTypes(this).resolve("error::operation::SerializationError")
 
 fun MemberShape.enforceRequired(
@@ -89,30 +90,42 @@ fun MemberShape.enforceRequired(
     val shape = this
     val isOptional = codegenContext.symbolProvider.toSymbol(shape).isOptional()
     val field = field.letIf(!isOptional) { field.map { rust("Some(#T)", it) } }
-    val error = OperationBuildError(codegenContext.runtimeConfig).missingField(
-        codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
-    )
-    val unwrapped = when (codegenContext.model.expectShape(this.target)) {
-        is StringShape -> writable {
-            rustTemplate(
-                "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
-                "field" to field,
-            )
-        }
+    val error =
+        OperationBuildError(codegenContext.runtimeConfig).missingField(
+            codegenContext.symbolProvider.toMemberName(shape), "A required field was not set",
+        )
+    val unwrapped =
+        when (codegenContext.model.expectShape(this.target)) {
+            is StringShape ->
+                writable {
+                    rustTemplate(
+                        "#{field}.filter(|f|!AsRef::<str>::as_ref(f).trim().is_empty())",
+                        "field" to field,
+                    )
+                }
 
-        else -> field
-    }.map { base -> rustTemplate("#{base}.ok_or_else(||#{error})?", "base" to base, "error" to error) }
+            else -> field
+        }.map { base -> rustTemplate("#{base}.ok_or_else(||#{error})?", "base" to base, "error" to error) }
     return unwrapped.letIf(produceOption) { w -> w.map { rust("Some(#T)", it) } }
 }
 
 class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
-
-    fun missingField(field: String, details: String) = writable {
+    fun missingField(
+        field: String,
+        details: String,
+    ) = writable {
         rust("#T::missing_field(${field.dq()}, ${details.dq()})", runtimeConfig.operationBuildError())
     }
 
-    fun invalidField(field: String, details: String) = invalidField(field) { rust(details.dq()) }
-    fun invalidField(field: String, details: Writable) = writable {
+    fun invalidField(
+        field: String,
+        details: String,
+    ) = invalidField(field) { rust(details.dq()) }
+
+    fun invalidField(
+        field: String,
+        details: Writable,
+    ) = writable {
         rustTemplate(
             "#{error}::invalid_field(${field.dq()}, #{details:W})",
             "error" to runtimeConfig.operationBuildError(),
@@ -138,7 +151,10 @@ class BuilderGenerator(
          * Returns whether a structure shape, whose builder has been generated with [BuilderGenerator], requires a
          * fallible builder to be constructed.
          */
-        fun hasFallibleBuilder(structureShape: StructureShape, symbolProvider: SymbolProvider): Boolean =
+        fun hasFallibleBuilder(
+            structureShape: StructureShape,
+            symbolProvider: SymbolProvider,
+        ): Boolean =
             // All operation inputs should have fallible builders in case a new required field is added in the future.
             structureShape.hasTrait<SyntheticInputTrait>() ||
                 structureShape
@@ -149,7 +165,11 @@ class BuilderGenerator(
                         !it.isOptional() && !it.canUseDefault()
                     }
 
-        fun renderConvenienceMethod(implBlock: RustWriter, symbolProvider: RustSymbolProvider, shape: StructureShape) {
+        fun renderConvenienceMethod(
+            implBlock: RustWriter,
+            symbolProvider: RustSymbolProvider,
+            shape: StructureShape,
+        ) {
             implBlock.docs("Creates a new builder-style object to manufacture #D.", symbolProvider.toSymbol(shape))
             symbolProvider.symbolForBuilder(shape).also { builderSymbol ->
                 implBlock.rustBlock("pub fn builder() -> #T", builderSymbol) {
@@ -165,9 +185,10 @@ class BuilderGenerator(
     private val metadata = structureSymbol.expectRustMetadata()
 
     // Filter out any derive that isn't Debug, PartialEq, or Clone. Then add a Default derive
-    private val builderDerives = metadata.derives.filter {
-        it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone
-    } + RuntimeType.Default
+    private val builderDerives =
+        metadata.derives.filter {
+            it == RuntimeType.Debug || it == RuntimeType.PartialEq || it == RuntimeType.Clone
+        } + RuntimeType.Default
     private val builderName = symbolProvider.symbolForBuilder(shape).name
 
     fun render(writer: RustWriter) {
@@ -181,10 +202,11 @@ class BuilderGenerator(
     private fun renderBuildFn(implBlockWriter: RustWriter) {
         val fallibleBuilder = hasFallibleBuilder(shape, symbolProvider)
         val outputSymbol = symbolProvider.toSymbol(shape)
-        val returnType = when (fallibleBuilder) {
-            true -> "#{Result}<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
-            false -> implBlockWriter.format(outputSymbol)
-        }
+        val returnType =
+            when (fallibleBuilder) {
+                true -> "#{Result}<${implBlockWriter.format(outputSymbol)}, ${implBlockWriter.format(runtimeConfig.operationBuildError())}>"
+                false -> implBlockWriter.format(outputSymbol)
+            }
         implBlockWriter.docs("Consumes the builder and constructs a #D.", outputSymbol)
         val trulyRequiredMembers = members.filter { trulyRequired(it) }
         if (trulyRequiredMembers.isNotEmpty()) {
@@ -209,7 +231,11 @@ class BuilderGenerator(
     }
 
     // TODO(EventStream): [DX] Consider updating builders to take EventInputStream as Into<EventInputStream>
-    private fun renderBuilderMember(writer: RustWriter, memberName: String, memberSymbol: Symbol) {
+    private fun renderBuilderMember(
+        writer: RustWriter,
+        memberName: String,
+        memberSymbol: Symbol,
+    ) {
         // Builder members are crate-public to enable using them directly in serializers/deserializers.
         // During XML deserialization, `builder.<field>.take` is used to append to lists and maps.
         writer.write("pub(crate) $memberName: #T,", memberSymbol)
@@ -244,7 +270,7 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String,
     ) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
         //  a non `Option`al target type: in all other cases the client generates `Option`al types.
         val inputType = outerType.asOptional()
@@ -266,7 +292,7 @@ class BuilderGenerator(
         member: MemberShape,
         memberName: String,
     ) {
-        // TODO(https://github.com/awslabs/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/1302): This `asOptional()` call is superfluous except in
         //  the case where the shape is a `@streaming` blob, because [StreamingTraitSymbolProvider] always generates
         //  a non `Option`al target type: in all other cases the client generates `Option`al types.
         val inputType = outerType.asOptional()
@@ -333,7 +359,11 @@ class BuilderGenerator(
         }
     }
 
-    private fun RustWriter.renderVecHelper(member: MemberShape, memberName: String, coreType: RustType.Vec) {
+    private fun RustWriter.renderVecHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType.Vec,
+    ) {
         docs("Appends an item to `$memberName`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
@@ -355,7 +385,11 @@ class BuilderGenerator(
         }
     }
 
-    private fun RustWriter.renderMapHelper(member: MemberShape, memberName: String, coreType: RustType.HashMap) {
+    private fun RustWriter.renderMapHelper(
+        member: MemberShape,
+        memberName: String,
+        coreType: RustType.HashMap,
+    ) {
         docs("Adds a key-value pair to `$memberName`.")
         rust("///")
         docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
@@ -380,9 +414,10 @@ class BuilderGenerator(
         }
     }
 
-    private fun trulyRequired(member: MemberShape) = symbolProvider.toSymbol(member).let {
-        !it.isOptional() && !it.canUseDefault()
-    }
+    private fun trulyRequired(member: MemberShape) =
+        symbolProvider.toSymbol(member).let {
+            !it.isOptional() && !it.canUseDefault()
+        }
 
     /**
      * The core builder of the inner type. If the structure requires a fallible builder, this may use `?` to return
@@ -407,8 +442,10 @@ class BuilderGenerator(
                         if (default != null) {
                             if (default.isRustDefault) {
                                 rust(".unwrap_or_default()")
+                            } else if (default.complexType) {
+                                rust(".unwrap_or_else(|| #T)", default.expr)
                             } else {
-                                rust(".unwrap_or_else(#T)", default.expr)
+                                rust(".unwrap_or(#T)", default.expr)
                             }
                         } else {
                             withBlock(

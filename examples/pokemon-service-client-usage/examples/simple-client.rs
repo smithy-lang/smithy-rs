@@ -6,7 +6,7 @@
 /// [operation](https://smithy.io/2.0/spec/idl.html?highlight=operation#operation-shape).
 ///
 /// The example assumes that the Pokémon service is running on the localhost on TCP port 13734.
-/// Refer to the [README.md](https://github.com/awslabs/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
+/// Refer to the [README.md](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service-client-usage/README.md)
 /// file for instructions on how to launch the service locally.
 ///
 /// The example can be run using `cargo run --example simple-client`.

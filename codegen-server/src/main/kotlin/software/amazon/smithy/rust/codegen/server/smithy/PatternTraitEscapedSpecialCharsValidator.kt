@@ -14,18 +14,20 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 class PatternTraitEscapedSpecialCharsValidator : AbstractValidator() {
-    private val specialCharsWithEscapes = mapOf(
-        '\b' to "\\b",
-        '\u000C' to "\\f",
-        '\n' to "\\n",
-        '\r' to "\\r",
-        '\t' to "\\t",
-    )
+    private val specialCharsWithEscapes =
+        mapOf(
+            '\b' to "\\b",
+            '\u000C' to "\\f",
+            '\n' to "\\n",
+            '\r' to "\\r",
+            '\t' to "\\t",
+        )
     private val specialChars = specialCharsWithEscapes.keys
 
     override fun validate(model: Model): List<ValidationEvent> {
-        val shapes = model.getStringShapesWithTrait(PatternTrait::class.java) +
-            model.getMemberShapesWithTrait(PatternTrait::class.java)
+        val shapes =
+            model.getStringShapesWithTrait(PatternTrait::class.java) +
+                model.getMemberShapesWithTrait(PatternTrait::class.java)
         return shapes
             .filter { shape -> checkMisuse(shape) }
             .map { shape -> makeError(shape) }
@@ -34,15 +36,16 @@ class PatternTraitEscapedSpecialCharsValidator : AbstractValidator() {
 
     private fun makeError(shape: Shape): ValidationEvent {
         val pattern = shape.expectTrait<PatternTrait>()
-        val replacement = pattern.pattern.toString()
-            .map { specialCharsWithEscapes.getOrElse(it) { it.toString() } }
-            .joinToString("")
-            .dq()
+        val replacement =
+            pattern.pattern.toString()
+                .map { specialCharsWithEscapes.getOrElse(it) { it.toString() } }
+                .joinToString("")
+                .dq()
         val message =
             """
             Non-escaped special characters used inside `@pattern`.
             You must escape them: `@pattern($replacement)`.
-            See https://github.com/awslabs/smithy-rs/issues/2508 for more details.
+            See https://github.com/smithy-lang/smithy-rs/issues/2508 for more details.
             """.trimIndent()
         return error(shape, pattern, message)
     }

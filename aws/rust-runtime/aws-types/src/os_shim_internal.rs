@@ -45,14 +45,17 @@ impl Default for Fs {
 }
 
 impl Fs {
+    /// Create `Fs` representing a real file system.
     pub fn real() -> Self {
         Fs(fs::Inner::Real)
     }
 
+    /// Create `Fs` from a map of `OsString` to `Vec<u8>`.
     pub fn from_raw_map(fs: HashMap<OsString, Vec<u8>>) -> Self {
         Fs(fs::Inner::Fake(Arc::new(Fake::MapFs(Mutex::new(fs)))))
     }
 
+    /// Create `Fs` from a map of `String` to `Vec<u8>`.
     pub fn from_map(data: HashMap<String, impl Into<Vec<u8>>>) -> Self {
         let fs = data
             .into_iter()
@@ -209,7 +212,7 @@ mod fs {
 ///
 /// Environment variables are global to a process, and, as such, are difficult to test with a multi-
 /// threaded test runner like Rust's. This enables loading environment variables either from the
-/// actual process environment ([`std::env::var`](std::env::var)) or from a hash map.
+/// actual process environment ([`std::env::var`]) or from a hash map.
 ///
 /// Process environments are cheap to clone:
 /// - Faked process environments are wrapped in an internal Arc
@@ -224,6 +227,7 @@ impl Default for Env {
 }
 
 impl Env {
+    /// Retrieve a value for the given `k` and return `VarError` is that key is not present.
     pub fn get(&self, k: &str) -> Result<String, VarError> {
         use env::Inner;
         match &self.0 {
@@ -253,7 +257,7 @@ impl Env {
 
     /// Create a process environment that uses the real process environment
     ///
-    /// Calls will be delegated to [`std::env::var`](std::env::var).
+    /// Calls will be delegated to [`std::env::var`].
     pub fn real() -> Self {
         Self(env::Inner::Real)
     }

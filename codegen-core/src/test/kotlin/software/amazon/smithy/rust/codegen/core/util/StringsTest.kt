@@ -17,14 +17,14 @@ import java.io.File
 import java.util.stream.Stream
 
 internal class StringsTest {
-
     @Test
     fun doubleQuote() {
         "abc".doubleQuote() shouldBe "\"abc\""
         """{"some": "json"}""".doubleQuote() shouldBe """"{\"some\": \"json\"}""""
-        """{"nested": "{\"nested\": 5}"}"}""".doubleQuote() shouldBe """
-        "{\"nested\": \"{\\\"nested\\\": 5}\"}\"}"
-        """.trimIndent().trim()
+        """{"nested": "{\"nested\": 5}"}"}""".doubleQuote() shouldBe
+            """
+            "{\"nested\": \"{\\\"nested\\\": 5}\"}\"}"
+            """.trimIndent().trim()
     }
 
     @Test
@@ -59,7 +59,10 @@ internal class StringsTest {
 
     @ParameterizedTest
     @ArgumentsSource(TestCasesProvider::class)
-    fun testSnakeCase(input: String, output: String) {
+    fun testSnakeCase(
+        input: String,
+        output: String,
+    ) {
         input.toSnakeCase() shouldBe output
     }
 }
