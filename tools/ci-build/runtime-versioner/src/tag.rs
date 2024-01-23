@@ -43,10 +43,11 @@ fn ancestor_tag(repo: &Repo) -> Result<ReleaseTag> {
     let tag = repo
         .git(["describe", "--tags"])
         .expect_success_output("find the current ancestor release tag")?;
-    let maybe_release_tag = ReleaseTag::from_str(&tag);
+    let tag = tag.trim();
+    let maybe_release_tag = ReleaseTag::from_str(tag);
     let release_tag = match maybe_release_tag {
         Ok(tag) => Some(tag),
-        Err(_) => strip_describe_tags_suffix(&tag)
+        Err(_) => strip_describe_tags_suffix(tag)
             .map(ReleaseTag::from_str)
             .transpose()
             .context("failed to find ancestor release tag")?,
