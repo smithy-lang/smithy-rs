@@ -103,26 +103,28 @@ class CborParserGenerator(
             *codegenScope,
             "ListSymbol" to listSymbol,
         ) {
+            val deserializeMemberWritable = writable { deserializeMember(memberShape) }
             if (isSparseList) {
-                withBlock("let res = ", ";") {
-                    deserializeMember(memberShape)
-                }
-                rust(
+                rustTemplate(
                     """
-                    let value = match res {
-                        Ok(value) => Some(value),
-                        Err(e) if e.is_type_mismatch() => {
+                    let value = match decoder.datatype()? {
+                        #{SmithyCbor}::data::Type::Null => {
                             let _v = decoder.null()?;
                             None
                         }
-                        Err(e) => return Err(e),
+                        _ => Some(#{DeserializeMember:W}?),
                     };
-                    """
+                    """,
+                    *codegenScope,
+                    "DeserializeMember" to deserializeMemberWritable,
                 )
             } else {
-                withBlock("let value = ", "?;") {
-                    deserializeMember(memberShape)
-                }
+                rustTemplate(
+                    """
+                    let value = #{DeserializeMember:W}?;
+                    """,
+                    "DeserializeMember" to deserializeMemberWritable,
+                )
             }
 
             if (returnUnconstrainedType) {
@@ -135,7 +137,6 @@ class CborParserGenerator(
         }
     }
 
-    // TODO DRY out with lists
     private fun mapPairParserFnWritable(
         keyTarget: StringShape,
         valueShape: MemberShape,
@@ -153,29 +154,35 @@ class CborParserGenerator(
             *codegenScope,
             "MapSymbol" to mapSymbol,
         ) {
-            withBlock("let key = ", "?;") {
-                deserializeString(keyTarget)
-            }
+            val deserializeKeyWritable = writable { deserializeString(keyTarget) }
+            rustTemplate(
+                """
+                let key = #{DeserializeKey:W}?;
+                """,
+                "DeserializeKey" to deserializeKeyWritable,
+            )
+            val deserializeValueWritable = writable { deserializeMember(valueShape) }
             if (isSparseMap) {
-                withBlock("let res = ", ";") {
-                    deserializeMember(valueShape)
-                }
-                rust(
+                rustTemplate(
                     """
-                    let value = match res {
-                        Ok(value) => Some(value),
-                        Err(e) if e.is_type_mismatch() => {
+                    let value = match decoder.datatype()? {
+                        #{SmithyCbor}::data::Type::Null => {
                             let _v = decoder.null()?;
                             None
                         }
-                        Err(e) => return Err(e),
+                        _ => Some(#{DeserializeValue:W}?),
                     };
-                    """
+                    """,
+                    *codegenScope,
+                    "DeserializeValue" to deserializeValueWritable,
                 )
             } else {
-                withBlock("let value = ", "?;") {
-                    deserializeMember(valueShape)
-                }
+                rustTemplate(
+                    """
+                    let value = #{DeserializeValue:W}?;
+                    """,
+                    "DeserializeValue" to deserializeValueWritable,
+                )
             }
 
             if (returnUnconstrainedType) {

@@ -66,7 +66,7 @@ class RpcV2HttpBindingResolver(
      * > Responses for operations with no defined output type MUST NOT contain bodies in their HTTP responses.
      * > The `Content-Type` for the serialization format MUST NOT be set.
      *
-     * TODO But the problem is we _always_ add input/output types in OperationNormalizer!
+     * TODO But the problem is we _always_ add input/output types in OperationNormalizer! This makes the `no_output_response` test fail.
      */
     override fun responseContentType(operationShape: OperationShape): String = requestContentType(operationShape)
 }
