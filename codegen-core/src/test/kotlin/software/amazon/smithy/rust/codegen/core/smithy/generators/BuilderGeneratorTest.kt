@@ -184,7 +184,7 @@ internal class BuilderGeneratorTest {
                 Assertions.assertFalse(file.contains("serde::"))
             }
         }
-        
+
     @Test
     fun `it supports nonzero defaults`() {
         val model =
