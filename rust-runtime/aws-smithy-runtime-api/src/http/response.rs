@@ -223,7 +223,7 @@ impl<B> TryFrom<http1::Response<B>> for Response<B> {
         let (parts, body) = value.into_parts();
         let headers = Headers::try_from(parts.headers)?;
         Ok(Self {
-            status: StatusCode::try_from(parts.status.as_u16()).expect("validated by http 0.x"),
+            status: StatusCode::try_from(parts.status.as_u16()).expect("validated by http 1.x"),
             body,
             extensions_0x: http0::Extensions::new(),
             extensions_1x: parts.extensions,

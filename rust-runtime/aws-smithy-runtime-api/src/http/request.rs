@@ -362,7 +362,6 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
     fn try_from(value: http::Request<B>) -> Result<Self, Self::Error> {
         let (parts, body) = value.into_parts();
         let headers = Headers::try_from(parts.headers)?;
-        // we need to do this eventually.
         if !parts.extensions.is_empty() {
             return Err(HttpError::new(
                 "Cannot convert non-empty extensions. Clear extensions before converting",
@@ -386,7 +385,6 @@ impl<B> TryFrom<http1::Request<B>> for Request<B> {
     fn try_from(value: http1::Request<B>) -> Result<Self, Self::Error> {
         let (parts, body) = value.into_parts();
         let headers = Headers::try_from(parts.headers)?;
-        // we need to do this eventually.
         if !parts.extensions.is_empty() {
             return Err(HttpError::new(
                 "Cannot convert non-empty extensions. Clear extensions before converting",
