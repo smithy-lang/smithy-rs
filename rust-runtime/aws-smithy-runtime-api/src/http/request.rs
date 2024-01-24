@@ -5,12 +5,13 @@
 
 //! Http Request Types
 
+use crate::http::extensions::Extensions;
 use crate::http::Headers;
 use crate::http::HttpError;
 use aws_smithy_types::body::SdkBody;
 use http as http0;
 use http0::uri::PathAndQuery;
-use http0::{Extensions, Method};
+use http0::Method;
 use std::borrow::Cow;
 
 /// Parts struct useful for structural decomposition that the [`Request`] type can be converted into.
@@ -30,8 +31,7 @@ pub struct Request<B = SdkBody> {
     body: B,
     uri: Uri,
     method: Method,
-    extensions_02x: Extensions,
-    extensions_1x: http1::Extensions,
+    extensions: Extensions,
     headers: Headers,
 }
 
@@ -210,7 +210,7 @@ impl<B> Request<B> {
             .body(self.body)
             .expect("known valid");
         *req.headers_mut() = self.headers.http0_headermap();
-        *req.extensions_mut() = self.extensions_02x;
+        *req.extensions_mut() = self.extensions.try_into()?;
         Ok(req)
     }
 
@@ -226,7 +226,7 @@ impl<B> Request<B> {
             .body(self.body)
             .expect("known valid");
         *req.headers_mut() = self.headers.http1_headermap();
-        *req.extensions_mut() = self.extensions_1x;
+        *req.extensions_mut() = self.extensions.try_into()?;
         Ok(req)
     }
 
@@ -236,8 +236,7 @@ impl<B> Request<B> {
             body: f(self.body),
             uri: self.uri,
             method: self.method,
-            extensions_02x: self.extensions_02x,
-            extensions_1x: self.extensions_1x,
+            extensions: self.extensions,
             headers: self.headers,
         }
     }
@@ -248,8 +247,7 @@ impl<B> Request<B> {
             body,
             uri: Uri::from_http0x_uri(http0::Uri::from_static("/")),
             method: Method::GET,
-            extensions_02x: Default::default(),
-            extensions_1x: Default::default(),
+            extensions: Default::default(),
             headers: Default::default(),
         }
     }
@@ -315,8 +313,7 @@ impl<B> Request<B> {
 
     /// Adds an extension to the request extensions
     pub fn add_extension<T: Send + Sync + Clone + 'static>(&mut self, extension: T) {
-        self.extensions_02x.insert(extension.clone());
-        self.extensions_1x.insert(extension);
+        self.extensions.insert(extension.clone());
     }
 }
 
@@ -332,8 +329,7 @@ impl Request<SdkBody> {
             body,
             uri: self.uri.clone(),
             method: self.method.clone(),
-            extensions_02x: Extensions::new(),
-            extensions_1x: Default::default(),
+            extensions: Extensions::new(),
             headers: self.headers.clone(),
         })
     }
@@ -363,17 +359,11 @@ impl<B> TryFrom<http0::Request<B>> for Request<B> {
     fn try_from(value: http::Request<B>) -> Result<Self, Self::Error> {
         let (parts, body) = value.into_parts();
         let headers = Headers::try_from(parts.headers)?;
-        if !parts.extensions.is_empty() {
-            return Err(HttpError::new(
-                "Cannot convert non-empty extensions. Clear extensions before converting",
-            ));
-        }
         Ok(Self {
             body,
             uri: parts.uri.into(),
             method: parts.method,
-            extensions_02x: Default::default(),
-            extensions_1x: Default::default(),
+            extensions: parts.extensions.into(),
             headers,
         })
     }
@@ -386,17 +376,11 @@ impl<B> TryFrom<http1::Request<B>> for Request<B> {
     fn try_from(value: http1::Request<B>) -> Result<Self, Self::Error> {
         let (parts, body) = value.into_parts();
         let headers = Headers::try_from(parts.headers)?;
-        if !parts.extensions.is_empty() {
-            return Err(HttpError::new(
-                "Cannot convert non-empty extensions. Clear extensions before converting",
-            ));
-        }
         Ok(Self {
             body,
             uri: Uri::from_http1x_uri(parts.uri),
             method: Method::from_bytes(parts.method.as_str().as_bytes()).expect("valid"),
-            extensions_02x: Default::default(),
-            extensions_1x: Default::default(),
+            extensions: parts.extensions.into(),
             headers,
         })
     }

@@ -5,6 +5,7 @@
 
 //! Http Response Types
 
+use crate::http::extensions::Extensions;
 use crate::http::{Headers, HttpError};
 use aws_smithy_types::body::SdkBody;
 use http as http0;
@@ -80,8 +81,7 @@ pub struct Response<B = SdkBody> {
     status: StatusCode,
     headers: Headers,
     body: B,
-    extensions_0x: http0::Extensions,
-    extensions_1x: http1::Extensions,
+    extensions: Extensions,
 }
 
 impl<B> Response<B> {
@@ -98,11 +98,8 @@ impl<B> Response<B> {
             )
             .body(self.body)
             .expect("known valid");
-        if self.extensions_0x.len() < self.extensions_1x.len() {
-            return Err(HttpError::invalid_extensions());
-        }
         *res.headers_mut() = self.headers.http0_headermap();
-        *res.extensions_mut() = self.extensions_0x;
+        *res.extensions_mut() = self.extensions.try_into()?;
         Ok(res)
     }
 
@@ -119,11 +116,8 @@ impl<B> Response<B> {
             )
             .body(self.body)
             .expect("known valid");
-        if self.extensions_1x.len() < self.extensions_0x.len() {
-            return Err(HttpError::invalid_extensions());
-        }
         *res.headers_mut() = self.headers.http1_headermap();
-        *res.extensions_mut() = self.extensions_1x;
+        *res.extensions_mut() = self.extensions.try_into()?;
         Ok(res)
     }
 
@@ -132,8 +126,7 @@ impl<B> Response<B> {
         Response {
             status: self.status,
             body: f(self.body),
-            extensions_0x: self.extensions_0x,
-            extensions_1x: self.extensions_1x,
+            extensions: self.extensions,
             headers: self.headers,
         }
     }
@@ -143,8 +136,7 @@ impl<B> Response<B> {
         Self {
             status,
             body,
-            extensions_0x: Default::default(),
-            extensions_1x: Default::default(),
+            extensions: Default::default(),
             headers: Default::default(),
         }
     }
@@ -186,8 +178,7 @@ impl<B> Response<B> {
 
     /// Adds an extension to the response extensions
     pub fn add_extension<T: Send + Sync + Clone + 'static>(&mut self, extension: T) {
-        self.extensions_0x.insert(extension.clone());
-        self.extensions_1x.insert(extension.clone());
+        self.extensions.insert(extension);
     }
 }
 
@@ -208,8 +199,7 @@ impl<B> TryFrom<http0::Response<B>> for Response<B> {
         Ok(Self {
             status: StatusCode::try_from(parts.status.as_u16()).expect("validated by http 0.x"),
             body,
-            extensions_0x: parts.extensions,
-            extensions_1x: http1::Extensions::new(),
+            extensions: parts.extensions.into(),
             headers,
         })
     }
@@ -225,8 +215,7 @@ impl<B> TryFrom<http1::Response<B>> for Response<B> {
         Ok(Self {
             status: StatusCode::try_from(parts.status.as_u16()).expect("validated by http 1.x"),
             body,
-            extensions_0x: http0::Extensions::new(),
-            extensions_1x: parts.extensions,
+            extensions: parts.extensions.into(),
             headers,
         })
     }
