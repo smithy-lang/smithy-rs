@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 24th, 2024
+==================
+
 January 18th, 2024
 ==================
 **New this release:**
