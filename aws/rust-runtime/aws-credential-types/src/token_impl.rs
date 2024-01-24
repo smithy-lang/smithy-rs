@@ -64,6 +64,8 @@ impl fmt::Debug for Inner {
             } else {
                 dbg.field("expires_after", &expires_after);
             }
+        } else {
+            dbg.field("expires_after", &"never");
         }
         dbg.finish()
     }
