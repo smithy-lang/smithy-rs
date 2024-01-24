@@ -335,6 +335,7 @@ mod header_value {
     }
 
     impl HeaderValue {
+        #[allow(dead_code)]
         pub(crate) fn from_http02x(value: http0::HeaderValue) -> Result<Self, Utf8Error> {
             let _ = std::str::from_utf8(value.as_bytes())?;
             Ok(Self {
@@ -342,6 +343,7 @@ mod header_value {
             })
         }
 
+        #[allow(dead_code)]
         pub(crate) fn from_http1x(value: http1::HeaderValue) -> Result<Self, Utf8Error> {
             let _ = std::str::from_utf8(value.as_bytes())?;
             Ok(Self {

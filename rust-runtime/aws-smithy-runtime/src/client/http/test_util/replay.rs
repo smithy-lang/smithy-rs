@@ -268,7 +268,7 @@ mod test {
 
     #[test]
     fn create_from_either_http_type() {
-        let client = StaticReplayClient::new(vec![ReplayEvent::new(
+        let _client = StaticReplayClient::new(vec![ReplayEvent::new(
             http1::Request::builder()
                 .uri("test")
                 .body(SdkBody::from("hello"))

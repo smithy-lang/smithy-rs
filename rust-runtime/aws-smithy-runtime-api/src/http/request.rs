@@ -123,6 +123,7 @@ impl Uri {
         }
     }
 
+    #[allow(dead_code)]
     fn into_h0(self) -> http0::Uri {
         match self.parsed {
             ParsedUri::H0(uri) => uri,
