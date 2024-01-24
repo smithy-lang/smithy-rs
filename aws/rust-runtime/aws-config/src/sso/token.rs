@@ -321,10 +321,10 @@ impl Builder {
         if self.sdk_config.is_none() {
             self.sdk_config = Some(crate::load_defaults(crate::BehaviorVersion::latest()).await);
         }
-        self.build_sync(Env::real(), Fs::real())
+        self.build_with(Env::real(), Fs::real())
     }
 
-    pub(crate) fn build_sync(self, env: Env, fs: Fs) -> SsoTokenProvider {
+    pub(crate) fn build_with(self, env: Env, fs: Fs) -> SsoTokenProvider {
         SsoTokenProvider {
             inner: Arc::new(Inner {
                 env,
@@ -432,7 +432,7 @@ mod tests {
                     .session_name("test")
                     .region(Region::new("us-west-2"))
                     .start_url("https://d-123.awsapps.com/start")
-                    .build_sync(env.clone(), fs.clone()),
+                    .build_with(env.clone(), fs.clone()),
                 env,
                 fs,
             }

@@ -246,7 +246,7 @@ fn base_provider<'a>(
     match profile.get(role::CREDENTIAL_SOURCE) {
         Some(source) => Ok(BaseProvider::NamedSource(source)),
         None => web_identity_token_from_profile(profile)
-            .or_else(|| sso_from_profile(profile_set, profile))
+            .or_else(|| sso_from_profile(profile_set, profile).transpose())
             .or_else(|| credential_process_from_profile(profile))
             .unwrap_or_else(|| Ok(BaseProvider::AccessKey(static_creds_from_profile(profile)?))),
     }
@@ -302,7 +302,7 @@ fn role_arn_from_profile(profile: &Profile) -> Option<RoleArn<'_>> {
 fn sso_from_profile<'a>(
     profile_set: &'a ProfileSet,
     profile: &'a Profile,
-) -> Option<Result<BaseProvider<'a>, ProfileFileError>> {
+) -> Result<Option<BaseProvider<'a>>, ProfileFileError> {
     /*
     -- Sample without sso-session: --
 
@@ -338,7 +338,7 @@ fn sso_from_profile<'a>(
     .iter()
     .all(Option::is_none)
     {
-        return None;
+        return Ok(None);
     }
 
     let invalid_sso_config = |s: &str| ProfileFileError::InvalidSsoConfig {
@@ -348,47 +348,44 @@ fn sso_from_profile<'a>(
         )
         .into(),
     };
-    let mut parse_profile = || {
-        if let Some(sso_session_name) = sso_session_name {
-            if sso_start_url.is_some() {
-                return Err(invalid_sso_config(sso::START_URL));
-            }
-            if sso_region.is_some() {
-                return Err(invalid_sso_config(sso::REGION));
-            }
-            if let Some(session) = profile_set.sso_session(sso_session_name) {
-                sso_start_url = session.get(sso::START_URL);
-                sso_region = session.get(sso::REGION);
-            } else {
-                return Err(ProfileFileError::MissingSsoSession {
-                    profile: profile.name().into(),
-                    sso_session: sso_session_name.into(),
-                });
-            }
+    if let Some(sso_session_name) = sso_session_name {
+        if sso_start_url.is_some() {
+            return Err(invalid_sso_config(sso::START_URL));
         }
-
-        let invalid_sso_creds = |left: &str, right: &str| ProfileFileError::InvalidSsoConfig {
-            profile: profile.name().into(),
-            message: format!("if `{left}` is set, then `{right}` must also be set").into(),
-        };
-        match (sso_account_id, sso_role_name) {
-            (Some(_), Some(_)) | (None, None) => { /* good */ }
-            (Some(_), None) => return Err(invalid_sso_creds(sso::ACCOUNT_ID, sso::ROLE_NAME)),
-            (None, Some(_)) => return Err(invalid_sso_creds(sso::ROLE_NAME, sso::ACCOUNT_ID)),
+        if sso_region.is_some() {
+            return Err(invalid_sso_config(sso::REGION));
         }
+        if let Some(session) = profile_set.sso_session(sso_session_name) {
+            sso_start_url = session.get(sso::START_URL);
+            sso_region = session.get(sso::REGION);
+        } else {
+            return Err(ProfileFileError::MissingSsoSession {
+                profile: profile.name().into(),
+                sso_session: sso_session_name.into(),
+            });
+        }
+    }
 
-        let missing_field = |s| move || ProfileFileError::missing_field(profile, s);
-        let sso_region = sso_region.ok_or_else(missing_field(sso::REGION))?;
-        let sso_start_url = sso_start_url.ok_or_else(missing_field(sso::START_URL))?;
-        Ok(BaseProvider::Sso {
-            sso_account_id,
-            sso_region,
-            sso_role_name,
-            sso_start_url,
-            sso_session_name,
-        })
+    let invalid_sso_creds = |left: &str, right: &str| ProfileFileError::InvalidSsoConfig {
+        profile: profile.name().into(),
+        message: format!("if `{left}` is set, then `{right}` must also be set").into(),
     };
-    Some(parse_profile())
+    match (sso_account_id, sso_role_name) {
+        (Some(_), Some(_)) | (None, None) => { /* good */ }
+        (Some(_), None) => return Err(invalid_sso_creds(sso::ACCOUNT_ID, sso::ROLE_NAME)),
+        (None, Some(_)) => return Err(invalid_sso_creds(sso::ROLE_NAME, sso::ACCOUNT_ID)),
+    }
+
+    let missing_field = |s| move || ProfileFileError::missing_field(profile, s);
+    let sso_region = sso_region.ok_or_else(missing_field(sso::REGION))?;
+    let sso_start_url = sso_start_url.ok_or_else(missing_field(sso::START_URL))?;
+    Ok(Some(BaseProvider::Sso {
+        sso_account_id,
+        sso_region,
+        sso_role_name,
+        sso_start_url,
+        sso_session_name,
+    }))
 }
 
 fn web_identity_token_from_profile(

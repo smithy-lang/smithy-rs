@@ -895,6 +895,21 @@
           }
         }
       }
+    },
+    {
+      "name": "A typo'd sso-session will be ignored",
+      "input": {
+        "configFile": "[sso-sesion foo]\nname = value\n[profile bar]"
+      },
+      "output": {
+        "config": {
+          "profiles": {
+            "bar": {}
+          },
+          "sso_sessions": {
+          }
+        }
+      }
     }
   ]
 }

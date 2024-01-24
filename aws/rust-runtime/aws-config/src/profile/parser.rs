@@ -149,7 +149,7 @@ impl ProfileSet {
     }
 
     /// Retrieves a named SSO session from the config
-    pub fn sso_session(&self, name: &str) -> Option<&SsoSession> {
+    pub(crate) fn sso_session(&self, name: &str) -> Option<&SsoSession> {
         self.sso_sessions.get(name)
     }
 
@@ -271,24 +271,19 @@ impl Section for Profile {
 
 /// A `[sso-session name]` section in the config.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SsoSession(SectionInner);
+pub(crate) struct SsoSession(SectionInner);
 
 impl SsoSession {
     /// Create a new SSO session section.
-    pub fn new(name: impl Into<String>, properties: HashMap<String, Property>) -> Self {
+    pub(crate) fn new(name: impl Into<String>, properties: HashMap<String, Property>) -> Self {
         Self(SectionInner {
             name: name.into(),
             properties,
         })
     }
 
-    /// The name of this profile
-    pub fn name(&self) -> &str {
-        self.0.name()
-    }
-
     /// Returns a reference to the property named `name`
-    pub fn get(&self, name: &str) -> Option<&str> {
+    pub(crate) fn get(&self, name: &str) -> Option<&str> {
         self.0.get(name)
     }
 }
