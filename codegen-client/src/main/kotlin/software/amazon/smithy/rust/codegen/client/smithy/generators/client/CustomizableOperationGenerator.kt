@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
-import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -21,11 +20,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizat
  * Generates the code required to add the `.customize()` function to the
  * fluent client builders.
  */
+
+val InternalTraitsModule = RustModule.new("internal", Visibility.PUBCRATE, false, ClientRustModule.Client.customize)
+
 class CustomizableOperationGenerator(
     codegenContext: ClientCodegenContext,
-    private val customizations: List<CustomizableOperationCustomization>,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val customizations = codegenContext.rootDecorator.extraSections(codegenContext)
 
     fun render(crate: RustCrate) {
         val codegenScope =
@@ -65,7 +67,7 @@ class CustomizableOperationGenerator(
 
         val customizeModule = ClientRustModule.Client.customize
         crate.withModule(customizeModule) {
-            renderConvenienceAliases(customizeModule, this)
+            renderInternalTraits(crate)
 
             rustTemplate(
                 """
@@ -194,11 +196,8 @@ class CustomizableOperationGenerator(
         }
     }
 
-    private fun renderConvenienceAliases(
-        parentModule: RustModule,
-        writer: RustWriter,
-    ) {
-        writer.withInlineModule(RustModule.new("internal", Visibility.PUBCRATE, true, parentModule), null) {
+    private fun renderInternalTraits(crate: RustCrate) {
+        crate.withModule(InternalTraitsModule) {
             rustTemplate(
                 """
                 pub type BoxFuture<T> = ::std::pin::Pin<#{Box}<dyn ::std::future::Future<Output = T> + #{Send}>>;

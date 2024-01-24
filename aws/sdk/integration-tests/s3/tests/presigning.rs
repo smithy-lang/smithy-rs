@@ -195,3 +195,32 @@ async fn test_presigned_head_object() {
         presigned.uri().to_string(),
     );
 }
+
+#[tokio::test]
+async fn customized_presigning() {
+    let creds = Credentials::for_tests_with_session_token();
+    let config = s3::Config::builder()
+        .credentials_provider(creds)
+        .region(Region::new("us-east-1"))
+        .build();
+    let client = s3::Client::from_conf(config);
+    let static_ps_config = PresigningConfig::builder()
+        .start_time(SystemTime::UNIX_EPOCH + Duration::from_secs(1234567891))
+        .expires_in(Duration::from_secs(30))
+        .build()
+        .unwrap();
+    let req = client
+        .get_object()
+        .bucket("foo")
+        .key("bar")
+        .customize()
+        .mutate_request(|req| {
+            req.set_uri(req.uri().to_string() + "&a=b")
+                .expect("failed to update URI")
+        })
+        .presigned(static_ps_config)
+        .await
+        .unwrap();
+    let expect = "https://foo.s3.us-east-1.amazonaws.com/bar?x-id=GetObject&a=b&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ANOTREAL%2F20090213%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20090213T233131Z&X-Amz-Expires=30&X-Amz-SignedHeaders=host&X-Amz-Signature=2e1a459c206932ce53beb07028c711cf70f3a61dc876c6f9ce0aed5823f60234&X-Amz-Security-Token=notarealsessiontoken";
+    assert_eq!(req.uri(), expect);
+}
