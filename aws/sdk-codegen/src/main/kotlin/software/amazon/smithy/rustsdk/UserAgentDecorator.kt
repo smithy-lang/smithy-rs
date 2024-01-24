@@ -71,7 +71,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
                 pub(crate) static API_METADATA: #{user_agent}::ApiMetadata =
                     #{user_agent}::ApiMetadata::new(${serviceId.dq()}, #{PKG_VERSION});
                 """,
-                "user_agent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent"),
+                "user_agent" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("user_agent"),
                 "PKG_VERSION" to CrateVersionCustomization.pkgVersion(ClientRustModule.Meta),
             )
         }
@@ -109,7 +109,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
             arrayOf(
                 *preludeScope,
                 "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
-                "AwsUserAgent" to AwsRuntimeType.awsHttp(runtimeConfig).resolve("user_agent::AwsUserAgent"),
+                "AwsUserAgent" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("user_agent::AwsUserAgent"),
             )
 
         override fun section(section: ServiceConfig): Writable =
