@@ -23,7 +23,6 @@ allow-compilation = []
 
 [dependencies]
 aws-credential-types = { path = "../../sdk/build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-http = { path = "../../sdk/build/aws-sdk/sdk/aws-http" }
 aws-sdk-sts = { path = "../../sdk/build/aws-sdk/sdk/sts", default-features = false }
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async" }
 aws-smithy-http = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-http" }
