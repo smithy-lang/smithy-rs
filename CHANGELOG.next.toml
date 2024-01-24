@@ -16,3 +16,9 @@ message = "The types in the aws-http crate were moved into aws-runtime. Deprecat
 references = ["smithy-rs#3355"]
 meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "jdisanti"
+
+[[aws-sdk-rust]]
+message = "Add support for `[sso-session]` in AWS config file for AWS Identity Center SSO credentials. Note that this does not include support for AWS Builder ID SSO sessions for services such as Code Catalyst (these lack the `sso_account_id` and `sso_role_name` fields in the profile config). Support for AWS Builder IDs is still being tracked in https://github.com/awslabs/aws-sdk-rust/issues/703."
+references = ["aws-sdk-rust#703", "smithy-rs#3379"]
+meta = { "breaking" = false, "tada" = true, "bug" = false }
+author = "jdisanti"
