@@ -7,7 +7,6 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.OperationShape
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
@@ -30,14 +29,15 @@ class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
     override val order: Byte = 0
 
-    private fun sigv4S3Express() = writable {
-        rust(
-            "#T",
-            RuntimeType.forInlineDependency(
-                InlineAwsDependency.forRustFile("s3_express"),
-            ).resolve("auth::SCHEME_ID"),
-        )
-    }
+    private fun sigv4S3Express() =
+        writable {
+            rust(
+                "#T",
+                RuntimeType.forInlineDependency(
+                    InlineAwsDependency.forRustFile("s3_express"),
+                ).resolve("auth::SCHEME_ID"),
+            )
+        }
 
     override fun authOptions(
         codegenContext: ClientCodegenContext,
@@ -59,8 +59,7 @@ class S3ExpressDecorator : ClientCodegenDecorator {
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> =
-        baseCustomizations + listOf(S3ExpressIdentityProviderConfig(codegenContext))
+    ): List<ConfigCustomization> = baseCustomizations + listOf(S3ExpressIdentityProviderConfig(codegenContext))
 }
 
 private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
@@ -83,15 +82,17 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                 RuntimeType.forInlineDependency(
                     InlineAwsDependency.forRustFile("s3_express"),
                 ).resolve("auth::SCHEME_ID"),
-            "SharedAuthScheme" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                .resolve("client::auth::SharedAuthScheme"),
+            "SharedAuthScheme" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                    .resolve("client::auth::SharedAuthScheme"),
             "SharedCredentialsProvider" to
                 configReexport(
                     AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                         .resolve("provider::SharedCredentialsProvider"),
                 ),
-            "SharedIdentityResolver" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                .resolve("client::identity::SharedIdentityResolver"),
+            "SharedIdentityResolver" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                    .resolve("client::identity::SharedIdentityResolver"),
         )
     }
 
@@ -114,13 +115,13 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                         writable {
                             rustTemplate(
                                 """
-                                    #{SharedIdentityResolver}::new_with_cache_location(
-                                            #{SharedCredentialsProvider}::new(
-                                                #{DefaultS3ExpressIdentityProvider}::builder().build()
-                                            ),
-                                            #{IdentityCacheLocation}::IdentityResolver,
-                                    )
-                                    """,
+                                #{SharedIdentityResolver}::new_with_cache_location(
+                                        #{SharedCredentialsProvider}::new(
+                                            #{DefaultS3ExpressIdentityProvider}::builder().build()
+                                        ),
+                                        #{IdentityCacheLocation}::IdentityResolver,
+                                )
+                                """,
                                 *codegenScope,
                             )
                         },
@@ -150,8 +151,9 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                     AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                         .resolve("provider::SharedCredentialsProvider"),
                 ),
-            "SharedIdentityResolver" to RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                .resolve("client::identity::SharedIdentityResolver"),
+            "SharedIdentityResolver" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                    .resolve("client::identity::SharedIdentityResolver"),
             "S3_EXPRESS_SCHEME_ID" to
                 RuntimeType.forInlineDependency(
                     InlineAwsDependency.forRustFile("s3_express"),
@@ -188,13 +190,13 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                         ) {
                             rustTemplate(
                                 """
-                                    self.runtime_components.set_shared_identity_resolver(
-                                        #{S3_EXPRESS_SCHEME_ID},
-                                        #{SharedIdentityResolver}::new_with_cache_location(
-                                            credentials_provider,
-                                            #{IdentityCacheLocation}::IdentityResolver),
-                                    );
-                                    """,
+                                self.runtime_components.set_shared_identity_resolver(
+                                    #{S3_EXPRESS_SCHEME_ID},
+                                    #{SharedIdentityResolver}::new_with_cache_location(
+                                        credentials_provider,
+                                        #{IdentityCacheLocation}::IdentityResolver),
+                                );
+                                """,
                                 *codegenScope,
                             )
                         }

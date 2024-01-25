@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/// Supporting code for S3 Express auth
 pub mod auth {
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::auth::{
@@ -26,7 +27,7 @@ pub mod auth {
 
     impl S3ExpressAuthScheme {
         /// Creates a new `S3ExpressAuthScheme`.
-        pub fn new() -> Self {
+        pub(crate) fn new() -> Self {
             Default::default()
         }
     }
@@ -66,6 +67,7 @@ pub mod auth {
     }
 }
 
+/// Supporting code for S3 Express identity cache
 pub mod identity_cache {
     /// The caching implementation for S3 Express identity.
     ///
@@ -76,6 +78,7 @@ pub mod identity_cache {
     pub(crate) struct S3ExpressIdentityCache;
 }
 
+/// Supporting code for S3 Express identity provider
 pub mod identity_provider {
     use crate::s3_express::identity_cache::S3ExpressIdentityCache;
     use aws_credential_types::provider::ProvideCredentials;
