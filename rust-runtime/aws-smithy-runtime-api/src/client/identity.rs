@@ -161,19 +161,45 @@ pub trait ResolveIdentity: Send + Sync + Debug {
     }
 }
 
+/// Cache location for identity caching.
+///
+/// Identities are usually cached in the identity cache owned by [`RuntimeComponents`]. However,
+/// we do have identities whose caching mechanism is internally managed by their identity resolver,
+/// in which case we want to avoid the `RuntimeComponents`-owned identity cache interfering with
+/// the internal caching policy.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum IdentityCacheLocation {
+    /// Indicates the identity cache is owned by [`RuntimeComponents`].
+    RuntimeComponents,
+    /// Indicates the identity cache is internally managed by the identity resolver.
+    IdentityResolver,
+}
+
 /// Container for a shared identity resolver.
 #[derive(Clone, Debug)]
 pub struct SharedIdentityResolver {
     inner: Arc<dyn ResolveIdentity>,
     cache_partition: IdentityCachePartition,
+    cache_location: IdentityCacheLocation,
 }
 
 impl SharedIdentityResolver {
     /// Creates a new [`SharedIdentityResolver`] from the given resolver.
     pub fn new(resolver: impl ResolveIdentity + 'static) -> Self {
+        Self::new_with_cache_location(resolver, IdentityCacheLocation::RuntimeComponents)
+    }
+
+    /// Creates a new [`SharedIdentityResolver`] from the given resolver with the additional argument
+    /// specifying where the identity cache location is.
+    pub fn new_with_cache_location(
+        resolver: impl ResolveIdentity + 'static,
+        cache_location: IdentityCacheLocation,
+    ) -> Self {
         Self {
             inner: Arc::new(resolver),
             cache_partition: IdentityCachePartition::new(),
+            cache_location,
         }
     }
 
@@ -183,6 +209,11 @@ impl SharedIdentityResolver {
     /// and why.
     pub fn cache_partition(&self) -> IdentityCachePartition {
         self.cache_partition
+    }
+
+    /// Returns where identities retrieved by this resolver are cached.
+    pub fn cache_location(&self) -> IdentityCacheLocation {
+        self.cache_location
     }
 }
 

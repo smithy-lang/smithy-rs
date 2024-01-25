@@ -69,6 +69,14 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
         ) {
             writer.rust("runtime_components.push_retry_classifier(#T);", classifier)
         }
+
+        fun registerSharedIdentityResolver(
+            writer: RustWriter,
+            schemeId: Writable,
+            identityResolver: Writable,
+        ) {
+            writer.rust("runtime_components.set_shared_identity_resolver(#T, #T);", schemeId, identityResolver)
+        }
     }
 }
 typealias ServiceRuntimePluginCustomization = NamedCustomization<ServiceRuntimePluginSection>

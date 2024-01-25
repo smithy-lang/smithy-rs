@@ -31,6 +31,10 @@ pub mod presigning;
 /// Presigning interceptors
 pub mod presigning_interceptors;
 
+/// Supporting types for S3 Express.
+#[allow(dead_code)]
+pub mod s3_express;
+
 /// Special logic for extracting request IDs from S3's responses.
 #[allow(dead_code)]
 pub mod s3_request_id;
