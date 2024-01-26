@@ -22,11 +22,14 @@
 //! - `exec` which contains a chain representation of providers to implement passing bootstrapped credentials
 //! through a series of providers.
 
-use crate::profile::parser::ProfileFileLoadError;
 use crate::profile::profile_file::ProfileFiles;
 use crate::profile::Profile;
+use crate::profile::{cell::ErrorTakingOnceCell, parser::ProfileFileLoadError};
 use crate::provider_config::ProviderConfig;
-use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
+use aws_credential_types::{
+    provider::{self, error::CredentialsError, future, ProvideCredentials},
+    Credentials,
+};
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_types::SdkConfig;
 use std::borrow::Cow;
@@ -38,15 +41,6 @@ use tracing::Instrument;
 
 mod exec;
 mod repr;
-
-impl ProvideCredentials for ProfileFileCredentialsProvider {
-    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
-    where
-        Self: 'a,
-    {
-        future::ProvideCredentials::new(self.load_credentials())
-    }
-}
 
 /// AWS Profile based credentials provider
 ///
@@ -139,6 +133,12 @@ impl ProvideCredentials for ProfileFileCredentialsProvider {
 #[doc = include_str!("location_of_profile_files.md")]
 #[derive(Debug)]
 pub struct ProfileFileCredentialsProvider {
+    config: Arc<Config>,
+    inner_provider: ErrorTakingOnceCell<ChainProvider, CredentialsError>,
+}
+
+#[derive(Debug)]
+struct Config {
     factory: exec::named::NamedProviderFactory,
     sdk_config: SdkConfig,
     provider_config: ProviderConfig,
@@ -151,50 +151,51 @@ impl ProfileFileCredentialsProvider {
     }
 
     async fn load_credentials(&self) -> provider::Result {
-        let inner_provider = build_provider_chain(&self.provider_config, &self.factory)
-            .await
-            .map_err(|err| match err {
-                ProfileFileError::NoProfilesDefined
-                | ProfileFileError::ProfileDidNotContainCredentials { .. } => {
-                    CredentialsError::not_loaded(err)
-                }
-                _ => CredentialsError::invalid_configuration(format!(
-                    "ProfileFile provider could not be built: {}",
-                    &err
-                )),
-            })?;
-        let mut creds = match inner_provider
-            .base()
-            .provide_credentials()
-            .instrument(tracing::debug_span!("load_base_credentials"))
-            .await
-        {
-            Ok(creds) => {
-                tracing::info!(creds = ?creds, "loaded base credentials");
-                creds
-            }
-            Err(e) => {
-                tracing::warn!(error = %DisplayErrorContext(&e), "failed to load base credentials");
-                return Err(CredentialsError::provider_error(e));
-            }
-        };
-        for provider in inner_provider.chain().iter() {
-            let next_creds = provider
-                .credentials(creds, &self.sdk_config)
-                .instrument(tracing::debug_span!("load_assume_role", provider = ?provider))
-                .await;
-            match next_creds {
-                Ok(next_creds) => {
-                    tracing::info!(creds = ?next_creds, "loaded assume role credentials");
-                    creds = next_creds
-                }
-                Err(e) => {
-                    tracing::warn!(provider = ?provider, "failed to load assume role credentials");
-                    return Err(CredentialsError::provider_error(e));
-                }
-            }
-        }
-        Ok(creds)
+        // The inner provider needs to be cached across successive calls to load_credentials
+        // since the base providers can potentially have information cached in their instances.
+        // For example, the SsoCredentialsProvider maintains an in-memory expiring token cache.
+        let inner_provider = self
+            .inner_provider
+            .get_or_init(
+                {
+                    let config = self.config.clone();
+                    move || async move {
+                        match build_provider_chain(config.clone()).await {
+                            Ok(chain) => Ok(ChainProvider {
+                                config: config.clone(),
+                                chain: Some(Arc::new(chain)),
+                            }),
+                            Err(err) => match err {
+                                ProfileFileError::NoProfilesDefined
+                                | ProfileFileError::ProfileDidNotContainCredentials { .. } => {
+                                    Ok(ChainProvider {
+                                        config: config.clone(),
+                                        chain: None,
+                                    })
+                                }
+                                _ => Err(CredentialsError::invalid_configuration(format!(
+                                    "ProfileFile provider could not be built: {}",
+                                    &err
+                                ))),
+                            },
+                        }
+                    }
+                },
+                CredentialsError::unhandled(
+                    "profile file credentials provider initialization error already taken",
+                ),
+            )
+            .await?;
+        inner_provider.provide_credentials().await
+    }
+}
+
+impl ProvideCredentials for ProfileFileCredentialsProvider {
+    fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        future::ProvideCredentials::new(self.load_credentials())
     }
 }
 
@@ -486,24 +487,78 @@ impl Builder {
         let factory = exec::named::NamedProviderFactory::new(named_providers);
 
         ProfileFileCredentialsProvider {
-            factory,
-            sdk_config: conf.client_config(),
-            provider_config: conf,
+            config: Arc::new(Config {
+                factory,
+                sdk_config: conf.client_config(),
+                provider_config: conf,
+            }),
+            inner_provider: ErrorTakingOnceCell::new(),
         }
     }
 }
 
 async fn build_provider_chain(
-    provider_config: &ProviderConfig,
-    factory: &exec::named::NamedProviderFactory,
+    config: Arc<Config>,
 ) -> Result<exec::ProviderChain, ProfileFileError> {
-    let profile_set = provider_config
+    let profile_set = config
+        .provider_config
         .try_profile()
         .await
         .map_err(|parse_err| ProfileFileError::InvalidProfile(parse_err.clone()))?;
     let repr = repr::resolve_chain(profile_set)?;
     tracing::info!(chain = ?repr, "constructed abstract provider from config file");
-    exec::ProviderChain::from_repr(provider_config, repr, factory)
+    exec::ProviderChain::from_repr(&config.provider_config, repr, &config.factory)
+}
+
+#[derive(Debug)]
+struct ChainProvider {
+    config: Arc<Config>,
+    chain: Option<Arc<exec::ProviderChain>>,
+}
+
+impl ChainProvider {
+    async fn provide_credentials(&self) -> Result<Credentials, CredentialsError> {
+        // Can't borrow `self` across an await point, or else we lose `Send` on the returned future
+        let config = self.config.clone();
+        let chain = self.chain.clone();
+
+        if let Some(chain) = chain {
+            let mut creds = match chain
+                .base()
+                .provide_credentials()
+                .instrument(tracing::debug_span!("load_base_credentials"))
+                .await
+            {
+                Ok(creds) => {
+                    tracing::info!(creds = ?creds, "loaded base credentials");
+                    creds
+                }
+                Err(e) => {
+                    tracing::warn!(error = %DisplayErrorContext(&e), "failed to load base credentials");
+                    return Err(CredentialsError::provider_error(e));
+                }
+            };
+            for provider in chain.chain().iter() {
+                let next_creds = provider
+                    .credentials(creds, &config.sdk_config)
+                    .instrument(tracing::debug_span!("load_assume_role", provider = ?provider))
+                    .await;
+                match next_creds {
+                    Ok(next_creds) => {
+                        tracing::info!(creds = ?next_creds, "loaded assume role credentials");
+                        creds = next_creds
+                    }
+                    Err(e) => {
+                        tracing::warn!(provider = ?provider, "failed to load assume role credentials");
+                        return Err(CredentialsError::provider_error(e));
+                    }
+                }
+            }
+            Ok(creds)
+        } else {
+            Err(CredentialsError::not_loaded_no_source())
+        }
+    }
 }
 
 #[cfg(test)]

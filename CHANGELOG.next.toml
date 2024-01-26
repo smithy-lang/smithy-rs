@@ -28,3 +28,9 @@ message = "Add `try_into_http1x` and `try_from_http1x` to Request and Response c
 references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
 meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Retain the SSO token cache between calls to `provide_credentials` when using IAM Identity Center SSO via the AWS config file."
+references = ["smithy-rs#3387"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "jdisanti"
