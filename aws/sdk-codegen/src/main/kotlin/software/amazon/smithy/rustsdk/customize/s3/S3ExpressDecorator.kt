@@ -107,7 +107,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                         )
                     }
 
-                    section.registerSharedIdentityResolver(
+                    section.registerIdentityResolver(
                         this,
                         writable {
                             rustTemplate("#{S3_EXPRESS_SCHEME_ID}", *codegenScope)
@@ -190,7 +190,7 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                         ) {
                             rustTemplate(
                                 """
-                                self.runtime_components.set_shared_identity_resolver(
+                                self.runtime_components.set_identity_resolver(
                                     #{S3_EXPRESS_SCHEME_ID},
                                     #{SharedIdentityResolver}::new_with_cache_location(
                                         credentials_provider,

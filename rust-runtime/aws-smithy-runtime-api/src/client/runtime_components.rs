@@ -613,22 +613,10 @@ impl RuntimeComponentsBuilder {
         scheme_id: AuthSchemeId,
         identity_resolver: impl ResolveIdentity + 'static,
     ) -> &mut Self {
-        self.set_shared_identity_resolver(scheme_id, identity_resolver.into_shared())
-    }
-
-    /// Sets the identity resolver for a given `scheme_id`.
-    ///
-    /// This is effectively the same as [`Self::set_identity_resolver`] but takes a [`SharedIdentityResolver`]
-    /// instead.
-    pub fn set_shared_identity_resolver(
-        &mut self,
-        scheme_id: AuthSchemeId,
-        shared_identity_resolver: SharedIdentityResolver,
-    ) -> &mut Self {
         let mut resolvers = self.identity_resolvers.take().unwrap_or_default();
         resolvers.insert(
             scheme_id,
-            Tracked::new(self.builder_name, shared_identity_resolver),
+            Tracked::new(self.builder_name, identity_resolver.into_shared()),
         );
         self.identity_resolvers = Some(resolvers);
         self
