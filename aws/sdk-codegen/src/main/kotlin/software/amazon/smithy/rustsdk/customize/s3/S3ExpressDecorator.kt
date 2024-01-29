@@ -85,11 +85,6 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
             "SharedAuthScheme" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::auth::SharedAuthScheme"),
-            "SharedCredentialsProvider" to
-                configReexport(
-                    AwsRuntimeType.awsCredentialTypes(runtimeConfig)
-                        .resolve("provider::SharedCredentialsProvider"),
-                ),
             "SharedIdentityResolver" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::SharedIdentityResolver"),
@@ -116,9 +111,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                             rustTemplate(
                                 """
                                 #{SharedIdentityResolver}::new_with_cache_location(
-                                        #{SharedCredentialsProvider}::new(
-                                            #{DefaultS3ExpressIdentityProvider}::builder().build()
-                                        ),
+                                        #{DefaultS3ExpressIdentityProvider}::builder().build(),
                                         #{IdentityCacheLocation}::IdentityResolver,
                                 )
                                 """,

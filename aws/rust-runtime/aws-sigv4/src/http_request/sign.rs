@@ -366,12 +366,23 @@ fn calculate_signing_headers<'a>(
             }
 
             if let Some(security_token) = creds.session_token() {
-                add_header(
-                    &mut headers,
-                    header::X_AMZ_SECURITY_TOKEN,
-                    security_token,
-                    true,
-                );
+                if !params
+                    .settings
+                    .excluded_headers
+                    .as_ref()
+                    .is_some_and(|headers| {
+                        headers
+                            .iter()
+                            .any(|header| header == header::X_AMZ_SECURITY_TOKEN)
+                    })
+                {
+                    add_header(
+                        &mut headers,
+                        header::X_AMZ_SECURITY_TOKEN,
+                        security_token,
+                        true,
+                    );
+                }
             }
             signature
         }

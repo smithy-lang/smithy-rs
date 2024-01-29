@@ -53,6 +53,7 @@ class S3Decorator : ClientCodegenDecorator {
     private val invalidXmlRootAllowList =
         setOf(
             // API returns GetObjectAttributes_Response_ instead of Output
+            ShapeId.from("com.amazonaws.s3#CreateSessionOutput"),
             ShapeId.from("com.amazonaws.s3#GetObjectAttributesOutput"),
         )
 

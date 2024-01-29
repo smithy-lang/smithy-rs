@@ -5,6 +5,10 @@
 
 /// Supporting code for S3 Express auth
 pub(crate) mod auth {
+    use std::borrow::Cow;
+
+    use aws_credential_types::Credentials;
+    use aws_runtime::auth::sigv4::SigV4Signer;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -56,13 +60,43 @@ pub(crate) mod auth {
     impl Sign for S3ExpressSigner {
         fn sign_http_request(
             &self,
-            _request: &mut HttpRequest,
-            _identity: &Identity,
-            _auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
-            _runtime_components: &RuntimeComponents,
-            _config_bag: &ConfigBag,
+            request: &mut HttpRequest,
+            identity: &Identity,
+            auth_scheme_endpoint_config: AuthSchemeEndpointConfig<'_>,
+            runtime_components: &RuntimeComponents,
+            config_bag: &ConfigBag,
         ) -> Result<(), BoxError> {
-            todo!()
+            let operation_config =
+                SigV4Signer::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
+
+            let mut settings = SigV4Signer::signing_settings(&operation_config);
+            if let Some(excluded) = settings.excluded_headers.as_mut() {
+                excluded.push(Cow::Borrowed("x-amz-security-token"));
+            }
+
+            let express_credentials = identity.data::<Credentials>().ok_or(
+                "wrong identity type for SigV4. Expected AWS credentials but got `{identity:?}",
+            )?;
+            let mut value = http::HeaderValue::from_str(
+                express_credentials
+                    .session_token()
+                    .expect("S3 session token should be set"),
+            )
+            .unwrap();
+            value.set_sensitive(true);
+            request.headers_mut().insert(
+                http::HeaderName::from_static("x-amz-s3session-token"),
+                value,
+            );
+
+            SigV4Signer.sign_http_request(
+                request,
+                identity,
+                settings,
+                &operation_config,
+                runtime_components,
+                config_bag,
+            )
         }
     }
 }
@@ -80,8 +114,22 @@ pub(crate) mod identity_cache {
 
 /// Supporting code for S3 Express identity provider
 pub(crate) mod identity_provider {
+    use std::time::SystemTime;
+
     use crate::s3_express::identity_cache::S3ExpressIdentityCache;
-    use aws_credential_types::provider::ProvideCredentials;
+    use crate::types::SessionCredentials;
+    use aws_credential_types::provider::error::CredentialsError;
+    use aws_credential_types::Credentials;
+    use aws_smithy_runtime_api::box_error::BoxError;
+    use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
+    use aws_smithy_runtime_api::client::identity::{
+        Identity, IdentityFuture, ResolveCachedIdentity, ResolveIdentity,
+    };
+    use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
+    use aws_smithy_runtime_api::client::runtime_components::{
+        GetIdentityResolver, RuntimeComponents,
+    };
+    use aws_smithy_types::config_bag::ConfigBag;
 
     #[derive(Debug)]
     pub(crate) struct DefaultS3ExpressIdentityProvider {
@@ -91,9 +139,90 @@ pub(crate) mod identity_provider {
     #[derive(Default)]
     pub(crate) struct Builder;
 
+    impl TryFrom<SessionCredentials> for Credentials {
+        type Error = BoxError;
+
+        fn try_from(session_creds: SessionCredentials) -> Result<Self, Self::Error> {
+            Ok(Credentials::new(
+                session_creds.access_key_id,
+                session_creds.secret_access_key,
+                Some(session_creds.session_token),
+                Some(SystemTime::try_from(session_creds.expiration).map_err(|_| {
+                    CredentialsError::unhandled(
+                        "credential expiration time cannot be represented by a SystemTime",
+                    )
+                })?),
+                "s3express",
+            ))
+        }
+    }
+
     impl DefaultS3ExpressIdentityProvider {
         pub(crate) fn builder() -> Builder {
             Builder
+        }
+
+        async fn identity<'a>(
+            &'a self,
+            runtime_components: &'a RuntimeComponents,
+            config_bag: &'a ConfigBag,
+        ) -> Result<Identity, BoxError> {
+            let bucket_name = self.bucket_name(config_bag);
+
+            let sigv4_identity_resolver = runtime_components
+                .identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID)
+                .ok_or("identity resolver for sigv4 should be set for S3")?;
+            let _aws_identity = runtime_components
+                .identity_cache()
+                .resolve_cached_identity(sigv4_identity_resolver, runtime_components, config_bag)
+                .await?;
+
+            // TODO(S3Express): use both `bucket_name` and `aws_identity` as part of `S3ExpressIdentityCache` implementation
+
+            let express_session_credentials = self
+                .express_session_credentials(bucket_name, runtime_components, config_bag)
+                .await?;
+
+            let data = Credentials::try_from(express_session_credentials)?;
+
+            Ok(Identity::new(data.clone(), data.expiry()))
+        }
+
+        fn bucket_name<'a>(&'a self, config_bag: &'a ConfigBag) -> &'a str {
+            let params = config_bag
+                .load::<EndpointResolverParams>()
+                .expect("endpoint resolver params must be set");
+            let params = params
+                .get::<crate::config::endpoint::Params>()
+                .expect("`Params` should be wrapped in `EndpointResolverParams`");
+            params.bucket().expect("bucket name must be set")
+        }
+
+        async fn express_session_credentials<'a>(
+            &'a self,
+            bucket_name: &'a str,
+            runtime_components: &'a RuntimeComponents,
+            config_bag: &'a ConfigBag,
+        ) -> Result<SessionCredentials, BoxError> {
+            let mut config_builder = crate::Config::builder()
+                .region(config_bag.load::<aws_types::region::Region>().cloned());
+            // inherits all runtime components from a current S3 operation but clears out
+            // out interceptors configured for that operation
+            let mut builder = runtime_components.to_builder();
+            builder.set_interceptors(std::iter::empty::<SharedInterceptor>());
+            config_builder.runtime_components = builder;
+
+            let client = crate::Client::from_conf(config_builder.build());
+            let response = client
+                .create_session()
+                .bucket(bucket_name)
+                .session_mode(crate::types::SessionMode::ReadWrite)
+                .send()
+                .await?;
+
+            response
+                .credentials
+                .ok_or("no session credentials in response".into())
         }
     }
 
@@ -105,14 +234,13 @@ pub(crate) mod identity_provider {
         }
     }
 
-    impl ProvideCredentials for DefaultS3ExpressIdentityProvider {
-        fn provide_credentials<'a>(
+    impl ResolveIdentity for DefaultS3ExpressIdentityProvider {
+        fn resolve_identity<'a>(
             &'a self,
-        ) -> aws_credential_types::provider::future::ProvideCredentials<'a>
-        where
-            Self: 'a,
-        {
-            todo!()
+            runtime_components: &'a RuntimeComponents,
+            config_bag: &'a ConfigBag,
+        ) -> IdentityFuture<'a> {
+            IdentityFuture::new(async move { self.identity(runtime_components, config_bag).await })
         }
     }
 }
