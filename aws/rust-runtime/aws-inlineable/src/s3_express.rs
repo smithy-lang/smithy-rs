@@ -4,7 +4,7 @@
  */
 
 /// Supporting code for S3 Express auth
-pub mod auth {
+pub(crate) mod auth {
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -68,7 +68,7 @@ pub mod auth {
 }
 
 /// Supporting code for S3 Express identity cache
-pub mod identity_cache {
+pub(crate) mod identity_cache {
     /// The caching implementation for S3 Express identity.
     ///
     /// While customers can either disable S3 Express itself or provide a custom S3 Express identity
@@ -79,7 +79,7 @@ pub mod identity_cache {
 }
 
 /// Supporting code for S3 Express identity provider
-pub mod identity_provider {
+pub(crate) mod identity_provider {
     use crate::s3_express::identity_cache::S3ExpressIdentityCache;
     use aws_credential_types::provider::ProvideCredentials;
 
