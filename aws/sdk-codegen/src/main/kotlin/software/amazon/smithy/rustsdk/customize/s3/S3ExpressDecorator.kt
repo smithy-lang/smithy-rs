@@ -15,13 +15,16 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
 
@@ -29,13 +32,11 @@ class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
     override val order: Byte = 0
 
-    private fun sigv4S3Express() =
+    private fun sigv4S3Express(runtimeConfig: RuntimeConfig) =
         writable {
             rust(
                 "#T",
-                RuntimeType.forInlineDependency(
-                    InlineAwsDependency.forRustFile("s3_express"),
-                ).resolve("auth::SCHEME_ID"),
+                inlineModule(runtimeConfig).resolve("auth::SCHEME_ID"),
             )
         }
 
@@ -47,7 +48,7 @@ class S3ExpressDecorator : ClientCodegenDecorator {
         baseAuthSchemeOptions +
             AuthSchemeOption.StaticAuthSchemeOption(
                 SigV4Trait.ID,
-                listOf(sigv4S3Express()),
+                listOf(sigv4S3Express(codegenContext.runtimeConfig)),
             )
 
     override fun serviceRuntimePluginCustomizations(
@@ -68,20 +69,14 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
     private val codegenScope by lazy {
         arrayOf(
             "DefaultS3ExpressIdentityProvider" to
-                RuntimeType.forInlineDependency(
-                    InlineAwsDependency.forRustFile("s3_express"),
-                ).resolve("identity_provider::DefaultS3ExpressIdentityProvider"),
+                inlineModule(runtimeConfig).resolve("identity_provider::DefaultS3ExpressIdentityProvider"),
             "IdentityCacheLocation" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::IdentityCacheLocation"),
             "S3ExpressAuthScheme" to
-                RuntimeType.forInlineDependency(
-                    InlineAwsDependency.forRustFile("s3_express"),
-                ).resolve("auth::S3ExpressAuthScheme"),
+                inlineModule(runtimeConfig).resolve("auth::S3ExpressAuthScheme"),
             "S3_EXPRESS_SCHEME_ID" to
-                RuntimeType.forInlineDependency(
-                    InlineAwsDependency.forRustFile("s3_express"),
-                ).resolve("auth::SCHEME_ID"),
+                inlineModule(runtimeConfig).resolve("auth::SCHEME_ID"),
             "SharedAuthScheme" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::auth::SharedAuthScheme"),
@@ -111,7 +106,10 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                             rustTemplate(
                                 """
                                 #{SharedIdentityResolver}::new_with_cache_location(
-                                        #{DefaultS3ExpressIdentityProvider}::builder().build(),
+                                        #{DefaultS3ExpressIdentityProvider}::builder()
+                                            .time_source(${section.serviceConfigName}.time_source().unwrap_or_default())
+
+                                            .build(),
                                         #{IdentityCacheLocation}::IdentityResolver,
                                 )
                                 """,
@@ -148,9 +146,7 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::SharedIdentityResolver"),
             "S3_EXPRESS_SCHEME_ID" to
-                RuntimeType.forInlineDependency(
-                    InlineAwsDependency.forRustFile("s3_express"),
-                ).resolve("auth::SCHEME_ID"),
+                inlineModule(runtimeConfig).resolve("auth::SCHEME_ID"),
         )
 
     override fun section(section: ServiceConfig) =
@@ -201,3 +197,25 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
             }
         }
 }
+
+private fun inlineModule(runtimeConfig: RuntimeConfig) =
+    RuntimeType.forInlineDependency(
+        InlineAwsDependency.forRustFile(
+            "s3_express",
+            additionalDependency = s3ExpressDependencies(runtimeConfig).toTypedArray(),
+        ),
+    )
+
+private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
+    listOf(
+        AwsCargoDependency.awsCredentialTypes(runtimeConfig),
+        AwsCargoDependency.awsRuntime(runtimeConfig),
+        AwsCargoDependency.awsSigv4(runtimeConfig),
+        CargoDependency.Hex,
+        CargoDependency.Hmac,
+        CargoDependency.Lru,
+        CargoDependency.Sha2,
+        CargoDependency.smithyAsync(runtimeConfig),
+        CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+        CargoDependency.smithyTypes(runtimeConfig),
+    )
