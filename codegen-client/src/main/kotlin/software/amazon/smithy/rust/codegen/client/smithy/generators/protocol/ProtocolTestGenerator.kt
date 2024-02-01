@@ -174,12 +174,12 @@ class DefaultProtocolTestGenerator(
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
         Attribute.TokioTest.render(testModuleWriter)
-        val action =
-            when (testCase) {
-                is HttpResponseTestCase -> Action.Response
-                is HttpRequestTestCase -> Action.Request
-                else -> throw CodegenException("unknown test case type")
-            }
+        Attribute.TracedTest.render(testModuleWriter)
+        val action = when (testCase) {
+            is HttpResponseTestCase -> Action.Response
+            is HttpRequestTestCase -> Action.Request
+            else -> throw CodegenException("unknown test case type")
+        }
         if (expectFail(testCase)) {
             testModuleWriter.writeWithNoFormatting("#[should_panic]")
         }
@@ -415,8 +415,8 @@ class DefaultProtocolTestGenerator(
         if (body == "") {
             rustWriter.rustTemplate(
                 """
-                // No body
-                #{AssertEq}(::std::str::from_utf8(body).unwrap(), "");
+                // No body.
+                #{AssertEq}(&body, &bytes::Bytes::new());
                 """,
                 *codegenScope,
             )

@@ -114,7 +114,7 @@ typealias ServerHttpBoundProtocolCustomization = NamedCustomization<ServerHttpBo
 /**
  * Implement operations' input parsing and output serialization. Protocols can plug their own implementations
  * and overrides by creating a protocol factory inheriting from this class and feeding it to the [ServerProtocolLoader].
- * See `ServerRestJson.kt` for more info.
+ * See [ServerRestJsonFactory] for more info.
  */
 class ServerHttpBoundProtocolGenerator(
     codegenContext: ServerCodegenContext,
@@ -122,9 +122,10 @@ class ServerHttpBoundProtocolGenerator(
     customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
     additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
 ) : ServerProtocolGenerator(
-        protocol,
-        ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
-    ) {
+    protocol,
+    ServerHttpBoundProtocolTraitImplGenerator(codegenContext, protocol, customizations, additionalHttpBindingCustomizations),
+) {
+    // TODO Delete, unused
     // Define suffixes for operation input / output / error wrappers
     companion object {
         const val OPERATION_INPUT_WRAPPER_SUFFIX = "OperationInputWrapper"
@@ -604,13 +605,35 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         )
     }
 
+    private fun setResponseHeaderIfAbsent(writer: RustWriter, headerName: String, headerValue: String) {
+        // We can be a tad more efficient if there's a `const` `HeaderName` in the `http` crate that matches.
+        // https://docs.rs/http/latest/http/header/index.html#constants
+        val headerNameExpr = if (headerName == "content-type") {
+            "#{http}::header::CONTENT_TYPE"
+        } else {
+            "#{http}::header::HeaderName::from_static(\"$headerName\")"
+        }
+
+        writer.rustTemplate(
+            """
+            builder = #{header_util}::set_response_header_if_absent(
+                builder,
+                $headerNameExpr,
+                "${writer.escape(headerValue)}",
+            );
+            """,
+            *codegenScope,
+        )
+    }
+
+
     /**
      * Sets HTTP response headers for the operation's output shape or the operation's error shape.
      * It will generate response headers for the operation's output shape, unless [errorShape] is non-null, in which
      * case it will generate response headers for the given error shape.
      *
      * It sets three groups of headers in order. Headers from one group take precedence over headers in a later group.
-     *     1. Headers bound by the `httpHeader` and `httpPrefixHeader` traits. = null
+     *     1. Headers bound by the `httpHeader` and `httpPrefixHeader` traits.
      *     2. The protocol-specific `Content-Type` header for the operation.
      *     3. Additional protocol-specific headers for errors, if [errorShape] is non-null.
      */
@@ -626,7 +649,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             rust(
                 """
                 builder = #{T}($outputOwnedOrBorrowed, builder)?;
-                """.trimIndent(),
+                """,
                 addHeadersFn,
             )
         }
@@ -635,32 +658,17 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         // to allow operations that bind a member to `Content-Type` (which we set earlier) to take precedence (this is
         // because we always use `set_response_header_if_absent`, so the _first_ header value we set for a given
         // header name is the one that takes precedence).
-        val contentType = httpBindingResolver.responseContentType(operationShape)
-        if (contentType != null) {
-            rustTemplate(
-                """
-                builder = #{header_util}::set_response_header_if_absent(
-                    builder,
-                    #{http}::header::CONTENT_TYPE,
-                    "$contentType"
-                );
-                """,
-                *codegenScope,
-            )
+        httpBindingResolver.responseContentType(operationShape)?.let { contentTypeValue ->
+            setResponseHeaderIfAbsent(this, "content-type", contentTypeValue)
+        }
+
+        for ((headerName, headerValue) in protocol.additionalResponseHeaders(operationShape)) {
+            setResponseHeaderIfAbsent(this, headerName, headerValue)
         }
 
         if (errorShape != null) {
             for ((headerName, headerValue) in protocol.additionalErrorResponseHeaders(errorShape)) {
-                rustTemplate(
-                    """
-                    builder = #{header_util}::set_response_header_if_absent(
-                        builder,
-                        http::header::HeaderName::from_static("$headerName"),
-                        "${escape(headerValue)}"
-                    );
-                    """,
-                    *codegenScope,
-                )
+                setResponseHeaderIfAbsent(this, headerName, headerValue)
             }
         }
     }
@@ -747,13 +755,14 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "RequestParts" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::RequestParts"),
         )
         val parser = structuredDataParser.serverInputParser(operationShape)
-        val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
 
         if (parser != null) {
             // `null` is only returned by Smithy when there are no members, but we know there's at least one, since
             // there's something to parse (i.e. `parser != null`), so `!!` is safe here.
             val expectedRequestContentType = httpBindingResolver.requestContentType(operationShape)!!
             rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+            // TODO Isn't this VERY wrong? If there's modeled operation input, we must reject if there's no payload!
+            //   We currently accept and silently build empty input!
             rustBlock("if !bytes.is_empty()") {
                 rustTemplate(
                     """
@@ -793,6 +802,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         serverRenderUriPathParser(this, operationShape)
         serverRenderQueryStringParser(this, operationShape)
 
+        val noInputs = model.expectShape(operationShape.inputShape).expectTrait<SyntheticInputTrait>().originalId == null
         if (noInputs && protocol.serverContentTypeCheckNoModeledInput()) {
             conditionalBlock("if body.is_empty() {", "}", conditional = parser != null) {
                 rustTemplate(
@@ -1300,6 +1310,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
      * Returns the error type of the function that deserializes a non-streaming HTTP payload (a byte slab) into the
      * shape targeted by the `httpPayload` trait.
      */
+    // TODO This should not live here. Plus, only some protocols support `@httpPayload`.
     private fun getDeserializePayloadErrorSymbol(binding: HttpBindingDescriptor): Symbol {
         check(binding.location == HttpLocation.PAYLOAD)
 

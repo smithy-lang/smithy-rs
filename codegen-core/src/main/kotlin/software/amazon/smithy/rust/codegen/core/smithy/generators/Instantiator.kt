@@ -38,6 +38,7 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpPrefixHeadersTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -487,7 +488,9 @@ class PrimitiveInstantiator(private val runtimeConfig: RuntimeConfig, private va
                     val fractionalPart = num.remainder(BigDecimal.ONE)
                     rust(
                         "#T::from_fractional_secs($wholePart, ${fractionalPart}_f64)",
-                        RuntimeType.dateTime(runtimeConfig),
+//                RuntimeType.dateTime(runtimeConfig),
+                        // TODO
+                        runtimeConfig.smithyRuntimeCrate("smithy-types", scope = DependencyScope.Dev).toType().resolve("DateTime"),
                     )
                 }
 

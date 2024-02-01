@@ -212,12 +212,21 @@ class JsonSerializerGenerator(
                 *codegenScope,
                 "target" to symbolProvider.toSymbol(structureShape),
             ) {
-                rust("let mut out = String::new();")
-                rustTemplate("let mut object = #{JsonObjectWriter}::new(&mut out);", *codegenScope)
+                rustTemplate(
+                    """
+                    let mut out = String::new();
+                    let mut object = #{JsonObjectWriter}::new(&mut out);
+                    """,
+                    *codegenScope,
+                )
                 serializeStructure(StructContext("object", "value", structureShape), includedMembers)
                 customizations.forEach { it.section(makeSection(structureShape, "object"))(this) }
-                rust("object.finish();")
-                rustTemplate("Ok(out)", *codegenScope)
+                rust(
+                    """
+                    object.finish();
+                    Ok(out)
+                    """
+                )
             }
         }
     }

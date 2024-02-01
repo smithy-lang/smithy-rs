@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
  */
 object ServerCargoDependency {
     val AsyncTrait: CargoDependency = CargoDependency("async-trait", CratesIo("0.1.74"))
+    val Base64SimdDev: CargoDependency = CargoDependency("base64-simd", CratesIo("0.8"), scope = DependencyScope.Dev)
     val FormUrlEncoded: CargoDependency = CargoDependency("form_urlencoded", CratesIo("1"))
     val FuturesUtil: CargoDependency = CargoDependency("futures-util", CratesIo("0.3"))
     val Mime: CargoDependency = CargoDependency("mime", CratesIo("0.3"))
@@ -26,7 +27,7 @@ object ServerCargoDependency {
     val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
     val TokioDev: CargoDependency = CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
-    val HyperDev: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), DependencyScope.Dev)
+    val HyperDev: CargoDependency = CargoDependency("hyper", CratesIo("0.14.12"), scope = DependencyScope.Dev)
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
 
