@@ -94,6 +94,8 @@ class ClientEnumGeneratorTest {
                 """
                 assert_eq!(format!("{:?}", SomeEnum::Foo), "Foo");
                 assert_eq!(format!("{:?}", SomeEnum::Bar), "Bar");
+                assert_eq!(format!("{}", SomeEnum::Foo), "Foo");
+                assert_eq!(SomeEnum::Bar.to_string(), "Bar");
                 assert_eq!(
                     format!("{:?}", SomeEnum::from("Baz")),
                     "Unknown(UnknownVariantValue(\"Baz\"))"
@@ -161,12 +163,14 @@ class ClientEnumGeneratorTest {
                 let instance = InstanceType::T2Micro;
                 assert_eq!(instance.as_str(), "t2.micro");
                 assert_eq!(InstanceType::from("t2.nano"), InstanceType::T2Nano);
+                assert_eq!(instance.to_string(), "t2.micro");
                 // round trip unknown variants:
                 assert_eq!(
                     InstanceType::from("other"),
                     InstanceType::Unknown(crate::primitives::sealed_enum_unknown::UnknownVariantValue("other".to_owned()))
                 );
                 assert_eq!(InstanceType::from("other").as_str(), "other");
+                assert_eq!(InstanceType::from("other").to_string(), "other");
                 """,
             )
         }
