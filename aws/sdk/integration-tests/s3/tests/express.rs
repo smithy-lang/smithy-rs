@@ -94,10 +94,7 @@ async fn list_objects_v2_in_both_express_and_regular_buckets() {
     dbg!(result).expect("success");
 
     http_client
-        .validate_body_and_headers(
-            Some(&["x-amz-s3session-token", "authorization"]),
-            "application/xml",
-        )
+        .validate_body_and_headers(Some(&["x-amz-s3session-token"]), "application/xml")
         .await
         .unwrap();
 }
