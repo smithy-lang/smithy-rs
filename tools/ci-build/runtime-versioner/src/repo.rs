@@ -27,7 +27,16 @@ impl Repo {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        let mut cmd = Command::new("git");
+        self.cmd("git", args)
+    }
+
+    /// Returns a `std::process::Command` set to run a shell command in this repo with the given args
+    pub fn cmd<I, S>(&self, cmd: &str, args: I) -> Command
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<OsStr>,
+    {
+        let mut cmd = Command::new(cmd);
         cmd.current_dir(&self.root);
         cmd.args(args);
         cmd

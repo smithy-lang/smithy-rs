@@ -12,7 +12,6 @@ publish = false
 
 [dev-dependencies]
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
-aws-http = { path = "../../build/aws-sdk/sdk/aws-http"}
 aws-sdk-iam = { path = "../../build/aws-sdk/sdk/iam", features = ["behavior-version-latest"] }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
