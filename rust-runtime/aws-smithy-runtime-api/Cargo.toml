@@ -13,14 +13,16 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 default = []
 client = []
 http-auth = ["dep:zeroize"]
-test-util = ["aws-smithy-types/test-util"]
+test-util = ["aws-smithy-types/test-util", "http-1x"]
 http-02x = []
+http-1x = []
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
 http = "0.2.9"
+http1 = { package = "http", version = "1" }
 pin-project-lite = "0.2"
 tokio = { version = "1.25", features = ["sync"] }
 tracing = "0.1"
@@ -33,6 +35,7 @@ tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread"] }
 [package.metadata.docs.rs]
 all-features = true
 targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
 

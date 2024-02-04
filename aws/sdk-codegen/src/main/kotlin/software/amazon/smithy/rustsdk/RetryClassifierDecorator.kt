@@ -21,8 +21,9 @@ class RetryClassifierDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> = baseCustomizations +
-        OperationRetryClassifiersFeature(codegenContext, operation)
+    ): List<OperationCustomization> =
+        baseCustomizations +
+            OperationRetryClassifiersFeature(codegenContext, operation)
 }
 
 class OperationRetryClassifiersFeature(
@@ -32,17 +33,19 @@ class OperationRetryClassifiersFeature(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val symbolProvider = codegenContext.symbolProvider
 
-    override fun section(section: OperationSection) = when (section) {
-        is OperationSection.RetryClassifiers -> writable {
-            section.registerRetryClassifier(this) {
-                rustTemplate(
-                    "#{AwsErrorCodeClassifier}::<#{OperationError}>::new()",
-                    "AwsErrorCodeClassifier" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("retries::classifiers::AwsErrorCodeClassifier"),
-                    "OperationError" to symbolProvider.symbolForOperationError(operation),
-                )
-            }
-        }
+    override fun section(section: OperationSection) =
+        when (section) {
+            is OperationSection.RetryClassifiers ->
+                writable {
+                    section.registerRetryClassifier(this) {
+                        rustTemplate(
+                            "#{AwsErrorCodeClassifier}::<#{OperationError}>::new()",
+                            "AwsErrorCodeClassifier" to AwsRuntimeType.awsRuntime(runtimeConfig).resolve("retries::classifiers::AwsErrorCodeClassifier"),
+                            "OperationError" to symbolProvider.symbolForOperationError(operation),
+                        )
+                    }
+                }
 
-        else -> emptySection
-    }
+            else -> emptySection
+        }
 }

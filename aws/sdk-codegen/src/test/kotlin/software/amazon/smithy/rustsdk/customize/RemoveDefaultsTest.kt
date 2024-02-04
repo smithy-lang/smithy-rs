@@ -18,11 +18,13 @@ import software.amazon.smithy.rust.codegen.core.util.shapeId
 internal class RemoveDefaultsTest {
     @Test
     fun `defaults should be removed`() {
-        val removeDefaults = setOf(
-            "test#Bar".shapeId(),
-            "test#Foo\$baz".shapeId(),
-        )
-        val baseModel = """
+        val removeDefaults =
+            setOf(
+                "test#Bar".shapeId(),
+                "test#Foo\$baz".shapeId(),
+            )
+        val baseModel =
+            """
             namespace test
 
             structure Foo {
@@ -33,7 +35,7 @@ internal class RemoveDefaultsTest {
             @default(0)
             integer Bar
 
-        """.asSmithyModel(smithyVersion = "2.0")
+            """.asSmithyModel(smithyVersion = "2.0")
         val model = RemoveDefaults.processModel(baseModel, removeDefaults)
         val barMember = model.lookup<MemberShape>("test#Foo\$bar")
         barMember.hasTrait<DefaultTrait>() shouldBe false

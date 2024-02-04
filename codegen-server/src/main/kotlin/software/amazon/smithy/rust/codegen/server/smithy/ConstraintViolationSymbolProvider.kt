@@ -72,31 +72,34 @@ class ConstraintViolationSymbolProvider(
     private val serviceShape: ServiceShape,
 ) : WrappingSymbolProvider(base) {
     private val constraintViolationName = "ConstraintViolation"
-    private val visibility = when (publicConstrainedTypes) {
-        true -> Visibility.PUBLIC
-        false -> Visibility.PUBCRATE
-    }
+    private val visibility =
+        when (publicConstrainedTypes) {
+            true -> Visibility.PUBLIC
+            false -> Visibility.PUBCRATE
+        }
 
     private fun Shape.shapeModule(): RustModule.LeafModule {
-        val documentation = if (publicConstrainedTypes && this.isDirectlyConstrained(base)) {
-            val symbol = base.toSymbol(this)
-            "See [`${this.contextName(serviceShape)}`]($symbol)."
-        } else {
-            ""
-        }
+        val documentation =
+            if (publicConstrainedTypes && this.isDirectlyConstrained(base)) {
+                val symbol = base.toSymbol(this)
+                "See [`${this.contextName(serviceShape)}`]($symbol)."
+            } else {
+                ""
+            }
 
         val syntheticTrait = getTrait<SyntheticStructureFromConstrainedMemberTrait>()
 
-        val (module, name) = if (syntheticTrait != null) {
-            // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
-            // that is a descendant of the module that contains the extracted shape itself.
-            val overriddenMemberModule = this.getParentAndInlineModuleForConstrainedMember(base, publicConstrainedTypes)!!
-            val name = syntheticTrait.member.memberName
-            Pair(overriddenMemberModule.second, RustReservedWords.escapeIfNeeded(name).toSnakeCase())
-        } else {
-            // Need to use the context name so we get the correct name for maps.
-            Pair(ServerRustModule.Model, RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase())
-        }
+        val (module, name) =
+            if (syntheticTrait != null) {
+                // For constrained member shapes, the ConstraintViolation code needs to go in an inline rust module
+                // that is a descendant of the module that contains the extracted shape itself.
+                val overriddenMemberModule = this.getParentAndInlineModuleForConstrainedMember(base, publicConstrainedTypes)!!
+                val name = syntheticTrait.member.memberName
+                Pair(overriddenMemberModule.second, RustReservedWords.escapeIfNeeded(name).toSnakeCase())
+            } else {
+                // Need to use the context name so we get the correct name for maps.
+                Pair(ServerRustModule.Model, RustReservedWords.escapeIfNeeded(this.contextName(serviceShape)).toSnakeCase())
+            }
 
         return RustModule.new(
             name = name,

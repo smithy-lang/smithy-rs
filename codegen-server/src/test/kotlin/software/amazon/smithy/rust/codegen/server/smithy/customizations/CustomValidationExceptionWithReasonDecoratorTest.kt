@@ -75,16 +75,18 @@ fun swapOutSmithyValidationExceptionForCustomOne(model: Model): Model {
         """.asSmithyModel(smithyVersion = "2.0")
 
     // Remove Smithy's `ValidationException`.
-    var model = ModelTransformer.create().removeShapes(
-        model,
-        listOf(model.expectShape(SmithyValidationExceptionConversionGenerator.SHAPE_ID)),
-    )
+    var model =
+        ModelTransformer.create().removeShapes(
+            model,
+            listOf(model.expectShape(SmithyValidationExceptionConversionGenerator.SHAPE_ID)),
+        )
     // Add our custom one.
     model = ModelTransformer.create().replaceShapes(model, customValidationExceptionModel.shapes().toList<Shape>())
     // Make all operations use our custom one.
-    val newOperationShapes = model.operationShapes.map { operationShape ->
-        operationShape.toBuilder().addError(ShapeId.from("com.amazonaws.constraints#ValidationException")).build()
-    }
+    val newOperationShapes =
+        model.operationShapes.map { operationShape ->
+            operationShape.toBuilder().addError(ShapeId.from("com.amazonaws.constraints#ValidationException")).build()
+        }
     return ModelTransformer.create().replaceShapes(model, newOperationShapes)
 }
 
@@ -97,12 +99,13 @@ internal class CustomValidationExceptionWithReasonDecoratorTest {
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = Node.objectNodeBuilder().withMember(
-                    "codegen",
-                    Node.objectNodeBuilder()
-                        .withMember("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", "com.amazonaws.constraints#ValidationException")
-                        .build(),
-                ).build(),
+                additionalSettings =
+                    Node.objectNodeBuilder().withMember(
+                        "codegen",
+                        Node.objectNodeBuilder()
+                            .withMember("experimentalCustomValidationExceptionWithReasonPleaseDoNotUse", "com.amazonaws.constraints#ValidationException")
+                            .build(),
+                    ).build(),
             ),
         )
     }

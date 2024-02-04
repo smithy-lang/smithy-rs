@@ -34,11 +34,12 @@ open class ServerRootGenerator(
     private val isConfigBuilderFallible: Boolean,
 ) {
     private val index = TopDownIndex.of(codegenContext.model)
-    private val operations = index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
-        compareBy {
-            it.id
-        },
-    ).toList()
+    private val operations =
+        index.getContainedOperations(codegenContext.serviceShape).toSortedSet(
+            compareBy {
+                it.id
+            },
+        ).toList()
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
 
     fun documentation(writer: RustWriter) {
@@ -52,11 +53,12 @@ open class ServerRootGenerator(
         val crateName = codegenContext.moduleUseName()
         val builderName = "${serviceName}Builder"
         val hasErrors = operations.any { it.errors.isNotEmpty() }
-        val handlers: Writable = operations
-            .map { operation ->
-                DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature()
-            }
-            .join("//!\n")
+        val handlers: Writable =
+            operations
+                .map { operation ->
+                    DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature()
+                }
+                .join("//!\n")
 
         val unwrapConfigBuilder = if (isConfigBuilderFallible) ".expect(\"config failed to build\")" else ""
 
@@ -246,11 +248,12 @@ open class ServerRootGenerator(
         documentation(rustWriter)
 
         // Only export config builder error if fallible.
-        val configErrorReExport = if (isConfigBuilderFallible) {
-            "${serviceName}ConfigError,"
-        } else {
-            ""
-        }
+        val configErrorReExport =
+            if (isConfigBuilderFallible) {
+                "${serviceName}ConfigError,"
+            } else {
+                ""
+            }
         rustWriter.rust(
             """
             pub use crate::service::{

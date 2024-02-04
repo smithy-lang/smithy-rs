@@ -19,7 +19,10 @@ internal class TemplateGeneratorTest {
     /**
      * helper to assert that a template string is templated to the expected result
      */
-    private fun assertTemplateEquals(template: String, result: String) {
+    private fun assertTemplateEquals(
+        template: String,
+        result: String,
+    ) {
         val literalTemplate = Template.fromString(template)
         // For testing,
         val exprFn = { expr: Expression, ownership: Ownership ->

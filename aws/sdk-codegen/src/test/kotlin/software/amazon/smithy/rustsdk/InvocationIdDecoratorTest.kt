@@ -48,10 +48,12 @@ class InvocationIdDecoratorTest {
                     """,
                     *preludeScope,
                     "tokio" to CargoDependency.Tokio.toType(),
-                    "InvocationIdGenerator" to AwsRuntimeType.awsRuntime(rc)
-                        .resolve("invocation_id::InvocationIdGenerator"),
-                    "InvocationId" to AwsRuntimeType.awsRuntime(rc)
-                        .resolve("invocation_id::InvocationId"),
+                    "InvocationIdGenerator" to
+                        AwsRuntimeType.awsRuntime(rc)
+                            .resolve("invocation_id::InvocationIdGenerator"),
+                    "InvocationId" to
+                        AwsRuntimeType.awsRuntime(rc)
+                            .resolve("invocation_id::InvocationId"),
                     "BoxError" to RuntimeType.boxError(rc),
                     "capture_request" to RuntimeType.captureRequest(rc),
                 )

@@ -16,7 +16,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 private fun fillInBaseModel(
     protocolName: String,
     extraServiceAnnotations: String = "",
-): String = """
+): String =
+    """
     namespace test
 
     use smithy.framework#ValidationException
@@ -87,14 +88,18 @@ private fun fillInBaseModel(
     $extraServiceAnnotations
     @$protocolName
     service TestService { version: "123", operations: [TestStreamOp] }
-"""
+    """
 
 object EventStreamTestModels {
     private fun restJson1(): Model = fillInBaseModel("restJson1").asSmithyModel()
+
     private fun restXml(): Model = fillInBaseModel("restXml").asSmithyModel()
+
     private fun awsJson11(): Model = fillInBaseModel("awsJson1_1").asSmithyModel()
+
     private fun awsQuery(): Model =
         fillInBaseModel("awsQuery", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
+
     private fun ec2Query(): Model =
         fillInBaseModel("ec2Query", "@xmlNamespace(uri: \"https://example.com\")").asSmithyModel()
 
@@ -114,79 +119,82 @@ object EventStreamTestModels {
         override fun toString(): String = protocolShapeId
     }
 
-    val TEST_CASES = listOf(
-        //
-        // restJson1
-        //
-        TestCase(
-            protocolShapeId = "aws.protocols#restJson1",
-            model = restJson1(),
-            mediaType = "application/json",
-            requestContentType = "application/vnd.amazon.eventstream",
-            responseContentType = "application/json",
-            validTestStruct = """{"someString":"hello","someInt":5}""",
-            validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
-            validTestUnion = """{"Foo":"hello"}""",
-            validSomeError = """{"Message":"some error"}""",
-            validUnmodeledError = """{"Message":"unmodeled error"}""",
-        ) { RestJson(it) },
-
-        //
-        // awsJson1_1
-        //
-        TestCase(
-            protocolShapeId = "aws.protocols#awsJson1_1",
-            model = awsJson11(),
-            mediaType = "application/x-amz-json-1.1",
-            requestContentType = "application/x-amz-json-1.1",
-            responseContentType = "application/x-amz-json-1.1",
-            validTestStruct = """{"someString":"hello","someInt":5}""",
-            validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
-            validTestUnion = """{"Foo":"hello"}""",
-            validSomeError = """{"Message":"some error"}""",
-            validUnmodeledError = """{"Message":"unmodeled error"}""",
-        ) { AwsJson(it, AwsJsonVersion.Json11) },
-
-        //
-        // restXml
-        //
-        TestCase(
-            protocolShapeId = "aws.protocols#restXml",
-            model = restXml(),
-            mediaType = "application/xml",
-            requestContentType = "application/vnd.amazon.eventstream",
-            responseContentType = "application/xml",
-            validTestStruct = """
-                <TestStruct>
-                    <someString>hello</someString>
-                    <someInt>5</someInt>
-                </TestStruct>
-            """.trimIndent(),
-            validMessageWithNoHeaderPayloadTraits = """
-                <MessageWithNoHeaderPayloadTraits>
-                    <someString>hello</someString>
-                    <someInt>5</someInt>
-                </MessageWithNoHeaderPayloadTraits>
-            """.trimIndent(),
-            validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
-            validSomeError = """
-                <ErrorResponse>
-                    <Error>
-                        <Type>SomeError</Type>
-                        <Code>SomeError</Code>
-                        <Message>some error</Message>
-                    </Error>
-                </ErrorResponse>
-            """.trimIndent(),
-            validUnmodeledError = """
-                <ErrorResponse>
-                    <Error>
-                        <Type>UnmodeledError</Type>
-                        <Code>UnmodeledError</Code>
-                        <Message>unmodeled error</Message>
-                    </Error>
-                </ErrorResponse>
-            """.trimIndent(),
-        ) { RestXml(it) },
-    )
+    val TEST_CASES =
+        listOf(
+            //
+            // restJson1
+            //
+            TestCase(
+                protocolShapeId = "aws.protocols#restJson1",
+                model = restJson1(),
+                mediaType = "application/json",
+                requestContentType = "application/vnd.amazon.eventstream",
+                responseContentType = "application/json",
+                validTestStruct = """{"someString":"hello","someInt":5}""",
+                validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
+                validTestUnion = """{"Foo":"hello"}""",
+                validSomeError = """{"Message":"some error"}""",
+                validUnmodeledError = """{"Message":"unmodeled error"}""",
+            ) { RestJson(it) },
+            //
+            // awsJson1_1
+            //
+            TestCase(
+                protocolShapeId = "aws.protocols#awsJson1_1",
+                model = awsJson11(),
+                mediaType = "application/x-amz-json-1.1",
+                requestContentType = "application/x-amz-json-1.1",
+                responseContentType = "application/x-amz-json-1.1",
+                validTestStruct = """{"someString":"hello","someInt":5}""",
+                validMessageWithNoHeaderPayloadTraits = """{"someString":"hello","someInt":5}""",
+                validTestUnion = """{"Foo":"hello"}""",
+                validSomeError = """{"Message":"some error"}""",
+                validUnmodeledError = """{"Message":"unmodeled error"}""",
+            ) { AwsJson(it, AwsJsonVersion.Json11) },
+            //
+            // restXml
+            //
+            TestCase(
+                protocolShapeId = "aws.protocols#restXml",
+                model = restXml(),
+                mediaType = "application/xml",
+                requestContentType = "application/vnd.amazon.eventstream",
+                responseContentType = "application/xml",
+                validTestStruct =
+                    """
+                    <TestStruct>
+                        <someString>hello</someString>
+                        <someInt>5</someInt>
+                    </TestStruct>
+                    """.trimIndent(),
+                validMessageWithNoHeaderPayloadTraits =
+                    """
+                    <MessageWithNoHeaderPayloadTraits>
+                        <someString>hello</someString>
+                        <someInt>5</someInt>
+                    </MessageWithNoHeaderPayloadTraits>
+                    """.trimIndent(),
+                validTestUnion = "<TestUnion><Foo>hello</Foo></TestUnion>",
+                validSomeError =
+                    """
+                    <ErrorResponse>
+                        <Error>
+                            <Type>SomeError</Type>
+                            <Code>SomeError</Code>
+                            <Message>some error</Message>
+                        </Error>
+                    </ErrorResponse>
+                    """.trimIndent(),
+                validUnmodeledError =
+                    """
+                    <ErrorResponse>
+                        <Error>
+                            <Type>UnmodeledError</Type>
+                            <Code>UnmodeledError</Code>
+                            <Message>unmodeled error</Message>
+                        </Error>
+                    </ErrorResponse>
+                    """.trimIndent(),
+            ) { RestXml(it) },
+        )
 }

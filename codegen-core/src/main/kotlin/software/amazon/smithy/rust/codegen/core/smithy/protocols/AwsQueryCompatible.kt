@@ -31,8 +31,7 @@ class AwsQueryCompatibleHttpBindingResolver(
     override fun errorResponseBindings(errorShape: ToShapeId): List<HttpBindingDescriptor> =
         awsJsonHttpBindingResolver.errorResponseBindings(errorShape)
 
-    override fun errorCode(errorShape: ToShapeId): String =
-        awsQueryBindingResolver.errorCode(errorShape)
+    override fun errorCode(errorShape: ToShapeId): String = awsQueryBindingResolver.errorCode(errorShape)
 
     override fun requestContentType(operationShape: OperationShape): String =
         awsJsonHttpBindingResolver.requestContentType(operationShape)
@@ -46,15 +45,17 @@ class AwsQueryCompatible(
     private val awsJson: AwsJson,
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val errorScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
-        "Headers" to RuntimeType.headers(runtimeConfig),
-        "JsonError" to CargoDependency.smithyJson(runtimeConfig).toType()
-            .resolve("deserialize::error::DeserializeError"),
-        "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
-        "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
-    )
+    private val errorScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "ErrorMetadataBuilder" to RuntimeType.errorMetadataBuilder(runtimeConfig),
+            "Headers" to RuntimeType.headers(runtimeConfig),
+            "JsonError" to
+                CargoDependency.smithyJson(runtimeConfig).toType()
+                    .resolve("deserialize::error::DeserializeError"),
+            "aws_query_compatible_errors" to RuntimeType.awsQueryCompatibleErrors(runtimeConfig),
+            "json_errors" to RuntimeType.jsonErrors(runtimeConfig),
+        )
 
     override val httpBindingResolver: HttpBindingResolver =
         AwsQueryCompatibleHttpBindingResolver(
@@ -64,11 +65,9 @@ class AwsQueryCompatible(
 
     override val defaultTimestampFormat = awsJson.defaultTimestampFormat
 
-    override fun structuredDataParser(): StructuredDataParserGenerator =
-        awsJson.structuredDataParser()
+    override fun structuredDataParser(): StructuredDataParserGenerator = awsJson.structuredDataParser()
 
-    override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
-        awsJson.structuredDataSerializer()
+    override fun structuredDataSerializer(): StructuredDataSerializerGenerator = awsJson.structuredDataSerializer()
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->

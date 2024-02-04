@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  *  Although it is not always possible to use this, this is the preferred method for using types in config customizations
  *  and ensures that your type will be re-exported if it is used.
  */
-fun configReexport(type: RuntimeType): RuntimeType = RuntimeType.forInlineFun(type.name, module = ClientRustModule.config) {
-    rustTemplate("pub use #{type};", "type" to type)
-}
+fun configReexport(type: RuntimeType): RuntimeType =
+    RuntimeType.forInlineFun(type.name, module = ClientRustModule.config) {
+        rustTemplate("pub use #{type};", "type" to type)
+    }

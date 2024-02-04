@@ -120,43 +120,47 @@ class AwsCrateDocsDecoratorTest {
     fun warningBanner() {
         val context = { version: String ->
             testClientCodegenContext(
-                model = """
+                model =
+                    """
                     namespace test
 
                     service Foobaz {
                     }
-                """.asSmithyModel(),
-                settings = testClientRustSettings(
-                    moduleVersion = version,
-                    service = ShapeId.from("test#Foobaz"),
-                    runtimeConfig = AwsTestRuntimeConfig,
-                    customizationConfig =
-                    ObjectNode.parse(
-                        """
-                        { "awsSdk": {
-                            "awsConfigVersion": "dontcare" } }
-                        """,
-                    ) as ObjectNode,
-                ),
+                    """.asSmithyModel(),
+                settings =
+                    testClientRustSettings(
+                        moduleVersion = version,
+                        service = ShapeId.from("test#Foobaz"),
+                        runtimeConfig = AwsTestRuntimeConfig,
+                        customizationConfig =
+                            ObjectNode.parse(
+                                """
+                                { "awsSdk": {
+                                    "awsConfigVersion": "dontcare" } }
+                                """,
+                            ) as ObjectNode,
+                    ),
             )
         }
 
         // Test unstable versions first
         var codegenContext = context("0.36.0")
-        var result = AwsCrateDocGenerator(codegenContext).docText(includeHeader = false, includeLicense = false, asComments = true).let { writable ->
-            val writer = RustWriter.root()
-            writable(writer)
-            writer.toString()
-        }
+        var result =
+            AwsCrateDocGenerator(codegenContext).docText(includeHeader = false, includeLicense = false, asComments = true).let { writable ->
+                val writer = RustWriter.root()
+                writable(writer)
+                writer.toString()
+            }
         assertTrue(result.contains("The SDK is currently released as a developer preview"))
 
         // And now stable versions
         codegenContext = context("1.0.0")
-        result = AwsCrateDocGenerator(codegenContext).docText(includeHeader = false, includeLicense = false, asComments = true).let { writable ->
-            val writer = RustWriter.root()
-            writable(writer)
-            writer.toString()
-        }
+        result =
+            AwsCrateDocGenerator(codegenContext).docText(includeHeader = false, includeLicense = false, asComments = true).let { writable ->
+                val writer = RustWriter.root()
+                writable(writer)
+                writer.toString()
+            }
         assertFalse(result.contains("The SDK is currently released as a developer preview"))
     }
 }

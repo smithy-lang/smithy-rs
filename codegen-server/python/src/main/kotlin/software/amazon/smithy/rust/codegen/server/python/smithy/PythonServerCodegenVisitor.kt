@@ -60,7 +60,6 @@ class PythonServerCodegenVisitor(
     context: PluginContext,
     private val codegenDecorator: ServerCodegenDecorator,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
-
     init {
         val rustSymbolProviderConfig =
             RustSymbolProviderConfig(
@@ -95,23 +94,26 @@ class PythonServerCodegenVisitor(
             publicConstrainedTypes: Boolean,
             includeConstraintShapeProvider: Boolean,
             codegenDecorator: ServerCodegenDecorator,
-        ) = RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
+        ) =
+            RustServerCodegenPythonPlugin.baseSymbolProvider(settings, model, serviceShape, rustSymbolProviderConfig, publicConstrainedTypes, includeConstraintShapeProvider, codegenDecorator)
 
-        val serverSymbolProviders = ServerSymbolProviders.from(
-            settings,
-            model,
-            service,
-            rustSymbolProviderConfig,
-            settings.codegenConfig.publicConstrainedTypes,
-            codegenDecorator,
-            ::baseSymbolProviderFactory,
-        )
+        val serverSymbolProviders =
+            ServerSymbolProviders.from(
+                settings,
+                model,
+                service,
+                rustSymbolProviderConfig,
+                settings.codegenConfig.publicConstrainedTypes,
+                codegenDecorator,
+                ::baseSymbolProviderFactory,
+            )
 
         // Override `codegenContext` which carries the various symbol providers.
-        val moduleDocProvider = codegenDecorator.moduleDocumentationCustomization(
-            codegenContext,
-            PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
-        )
+        val moduleDocProvider =
+            codegenDecorator.moduleDocumentationCustomization(
+                codegenContext,
+                PythonServerModuleDocProvider(ServerModuleDocProvider(codegenContext)),
+            )
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -127,12 +129,13 @@ class PythonServerCodegenVisitor(
             )
 
         // Override `rustCrate` which carries the symbolProvider.
-        rustCrate = RustCrate(
-            context.fileManifest,
-            codegenContext.symbolProvider,
-            settings.codegenConfig,
-            codegenContext.expectModuleDocProvider(),
-        )
+        rustCrate =
+            RustCrate(
+                context.fileManifest,
+                codegenContext.symbolProvider,
+                settings.codegenConfig,
+                codegenContext.expectModuleDocProvider(),
+            )
         // Override `protocolGenerator` which carries the symbolProvider.
         protocolGenerator = protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
     }
@@ -175,8 +178,10 @@ class PythonServerCodegenVisitor(
      * Although raw strings require no code generation, enums are actually [EnumTrait] applied to string shapes.
      */
     override fun stringShape(shape: StringShape) {
-        fun pythonServerEnumGeneratorFactory(codegenContext: ServerCodegenContext, shape: StringShape) =
-            PythonServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
+        fun pythonServerEnumGeneratorFactory(
+            codegenContext: ServerCodegenContext,
+            shape: StringShape,
+        ) = PythonServerEnumGenerator(codegenContext, shape, validationExceptionConversionGenerator)
         stringShape(shape, ::pythonServerEnumGeneratorFactory)
     }
 
@@ -193,7 +198,8 @@ class PythonServerCodegenVisitor(
             PythonServerUnionGenerator(model, codegenContext, this, shape, renderUnknownVariant = false).render()
         }
 
-        if (shape.isReachableFromOperationInput() && shape.canReachConstrainedShape(
+        if (shape.isReachableFromOperationInput() &&
+            shape.canReachConstrainedShape(
                 model,
                 codegenContext.symbolProvider,
             )

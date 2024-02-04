@@ -18,23 +18,27 @@ class ConfigOverrideRuntimePluginGenerator(
     codegenContext: ClientCodegenContext,
 ) {
     private val moduleUseName = codegenContext.moduleUseName()
-    private val codegenScope = codegenContext.runtimeConfig.let { rc ->
-        val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
-        val smithyTypes = RuntimeType.smithyTypes(rc)
-        arrayOf(
-            *RuntimeType.preludeScope,
-            "Cow" to RuntimeType.Cow,
-            "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
-            "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-            "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
-            "Layer" to smithyTypes.resolve("config_bag::Layer"),
-            "Resolver" to RuntimeType.smithyRuntime(rc).resolve("client::config_override::Resolver"),
-            "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
-            "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
-        )
-    }
+    private val codegenScope =
+        codegenContext.runtimeConfig.let { rc ->
+            val runtimeApi = RuntimeType.smithyRuntimeApiClient(rc)
+            val smithyTypes = RuntimeType.smithyTypes(rc)
+            arrayOf(
+                *RuntimeType.preludeScope,
+                "Cow" to RuntimeType.Cow,
+                "CloneableLayer" to smithyTypes.resolve("config_bag::CloneableLayer"),
+                "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+                "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
+                "Layer" to smithyTypes.resolve("config_bag::Layer"),
+                "Resolver" to RuntimeType.smithyRuntime(rc).resolve("client::config_override::Resolver"),
+                "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
+                "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
+            )
+        }
 
-    fun render(writer: RustWriter, customizations: List<ConfigCustomization>) {
+    fun render(
+        writer: RustWriter,
+        customizations: List<ConfigCustomization>,
+    ) {
         writer.rustTemplate(
             """
             /// A plugin that enables configuration for a single operation invocation
@@ -81,12 +85,13 @@ class ConfigOverrideRuntimePluginGenerator(
             }
             """,
             *codegenScope,
-            "config" to writable {
-                writeCustomizations(
-                    customizations,
-                    ServiceConfig.OperationConfigOverride("layer"),
-                )
-            },
+            "config" to
+                writable {
+                    writeCustomizations(
+                        customizations,
+                        ServiceConfig.OperationConfigOverride("layer"),
+                    )
+                },
         )
     }
 }

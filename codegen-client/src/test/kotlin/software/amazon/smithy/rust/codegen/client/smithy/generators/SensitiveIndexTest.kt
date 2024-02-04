@@ -11,7 +11,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class SensitiveIndexTest {
-    val model = """
+    val model =
+        """
         namespace com.example
         service TestService {
             operations: [
@@ -58,7 +59,7 @@ class SensitiveIndexTest {
         structure Inner {
             credentials: Credentials
         }
-    """.asSmithyModel(smithyVersion = "2.0")
+        """.asSmithyModel(smithyVersion = "2.0")
 
     @Test
     fun `correctly identify operations`() {
@@ -66,13 +67,14 @@ class SensitiveIndexTest {
 
         data class TestCase(val shape: String, val sensitiveInput: Boolean, val sensitiveOutput: Boolean)
 
-        val testCases = listOf(
-            TestCase("NotSensitive", sensitiveInput = false, sensitiveOutput = false),
-            TestCase("SensitiveInput", sensitiveInput = true, sensitiveOutput = false),
-            TestCase("SensitiveOutput", sensitiveInput = false, sensitiveOutput = true),
-            TestCase("NestedSensitiveInput", sensitiveInput = true, sensitiveOutput = false),
-            TestCase("NestedSensitiveOutput", sensitiveInput = false, sensitiveOutput = true),
-        )
+        val testCases =
+            listOf(
+                TestCase("NotSensitive", sensitiveInput = false, sensitiveOutput = false),
+                TestCase("SensitiveInput", sensitiveInput = true, sensitiveOutput = false),
+                TestCase("SensitiveOutput", sensitiveInput = false, sensitiveOutput = true),
+                TestCase("NestedSensitiveInput", sensitiveInput = true, sensitiveOutput = false),
+                TestCase("NestedSensitiveOutput", sensitiveInput = false, sensitiveOutput = true),
+            )
         testCases.forEach { tc ->
             assertEquals(tc.sensitiveInput, index.hasSensitiveInput(model.lookup("com.example#${tc.shape}")), "input: $tc")
             assertEquals(tc.sensitiveOutput, index.hasSensitiveOutput(model.lookup("com.example#${tc.shape}")), "output: $tc ")

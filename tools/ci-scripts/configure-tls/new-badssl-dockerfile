@@ -1,0 +1,88 @@
+# Why does this file exist?
+# badssl seems to be abandoned. The orginal Dockerfile was based on ubuntu 16.04 and all the bits were rotting.
+# I've updated the Dockerfilet l to ubuntu 22.04 which will hopefully let everything limp along a little longer.
+FROM ubuntu:22.04 as nginx
+# Install necessary packages for building NGINX
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpcre3 \
+    libpcre3-dev \
+    zlib1g \
+    zlib1g-dev \
+    wget
+
+# Define NGINX version (this is the old version from ubuntu 16.04 to match)
+ARG NGINX_VERSION=1.14.2
+ARG OPEN_SSL_VERSION=1.0.2g
+
+RUN wget https://www.openssl.org/source/openssl-${OPEN_SSL_VERSION}.tar.gz \
+    && tar -xzvf openssl-${OPEN_SSL_VERSION}.tar.gz
+
+# Download NGINX source code
+RUN wget http://nginx.org/download/nginx-$NGINX_VERSION.tar.gz \
+    && tar -xzvf nginx-$NGINX_VERSION.tar.gz \
+    && cd nginx-$NGINX_VERSION
+
+
+# Configure NGINX before building it
+RUN cd nginx-$NGINX_VERSION \
+    && ./configure \
+        --prefix=/usr/local/nginx \
+        --with-http_ssl_module \
+        --with-openssl=../openssl-${OPEN_SSL_VERSION} \
+        --with-openssl-opt=enable-weak-ssl-ciphers \
+        --with-stream \
+        --with-threads \
+    && make -j 6 \
+    && make install -j 6
+
+RUN /usr/local/nginx/sbin/nginx -V
+
+FROM ubuntu:22.04
+
+EXPOSE 80 443
+RUN apt-get update && apt-get install -y apt-transport-https
+RUN apt-get install -y software-properties-common
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    git \
+    libffi-dev \
+    make \
+    ruby3.0 \
+    ruby3.0-dev
+#RUN gem update --system
+RUN gem install jekyll
+
+COPY --from=nginx /usr/local/nginx /usr/local/nginx
+ENV PATH="/usr/local/nginx/sbin:${PATH}"
+
+# Install badssl.com
+ADD . badssl.com
+WORKDIR badssl.com
+
+RUN sed -i 's/SECLEVEL=2/SECLEVEL=0/' /etc/ssl/openssl.cnf
+RUN tail -n10 /etc/ssl/openssl.cnf
+
+RUN nginx -V
+RUN mkdir /etc/nginx
+# `make-in-docker` requires this file to exist.
+RUN ln -s /usr/local/nginx/conf/nginx.conf /etc/nginx/nginx.conf
+
+# Update the nginx config to include the badssl configs.
+RUN head -n-1 /etc/nginx/nginx.conf > wip.conf
+RUN echo "# Virtual Host Configs\ninclude /var/www/badssl/_site/nginx.conf;\n}" >> wip.conf
+RUN mv wip.conf /usr/local/nginx/conf/nginx.conf
+RUN make inside-docker
+
+# Allow unsecure certs
+RUN sed -i 's/SECLEVEL=2/SECLEVEL=0/' /etc/ssl/openssl.cnf
+
+# Fix DH key that can't be generated...works in docker bug not on github. Who knows.
+RUN echo "-----BEGIN DH PARAMETERS-----" > /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
+RUN echo "MEICPQDZ/YFp3iEs3/k9iRGoC/5/To2+5pUF/C6GkO6VjXHHyRVy68I0rI0q7IAq" >> /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
+RUN echo "VyyGQ7/5Q/Iu0QQnHT4X9uMCAQI=" >> /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
+RUN echo "-----END DH PARAMETERS-----" >> /var/www/badssl/_site/certs/sets/current/gen/dhparam/dh480.pem
+
+RUN nginx -t
+# Start things up!
+CMD nginx && tail -f /usr/local/nginx/logs/access.log /usr/local/nginx/logs/error.log

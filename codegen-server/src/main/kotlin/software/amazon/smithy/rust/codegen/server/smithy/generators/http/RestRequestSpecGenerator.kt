@@ -36,34 +36,38 @@ class RestRequestSpecGenerator(
             }.toTypedArray()
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/950): Support the `endpoint` trait.
-        val pathSegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (segment in httpTrait.uri.segments) {
-                    val variant = when {
-                        segment.isGreedyLabel -> "Greedy"
-                        segment.isLabel -> "Label"
-                        else -> """Literal(String::from("${segment.content}"))"""
+        val pathSegmentsVec =
+            writable {
+                withBlock("vec![", "]") {
+                    for (segment in httpTrait.uri.segments) {
+                        val variant =
+                            when {
+                                segment.isGreedyLabel -> "Greedy"
+                                segment.isLabel -> "Label"
+                                else -> """Literal(String::from("${segment.content}"))"""
+                            }
+                        rustTemplate(
+                            "#{PathSegment}::$variant,",
+                            *extraCodegenScope,
+                        )
                     }
-                    rustTemplate(
-                        "#{PathSegment}::$variant,",
-                        *extraCodegenScope,
-                    )
                 }
             }
-        }
 
-        val querySegmentsVec = writable {
-            withBlock("vec![", "]") {
-                for (queryLiteral in httpTrait.uri.queryLiterals) {
-                    val variant = if (queryLiteral.value == "") {
-                        """Key(String::from("${queryLiteral.key}"))"""
-                    } else {
-                        """KeyValue(String::from("${queryLiteral.key}"), String::from("${queryLiteral.value}"))"""
+        val querySegmentsVec =
+            writable {
+                withBlock("vec![", "]") {
+                    for (queryLiteral in httpTrait.uri.queryLiterals) {
+                        val variant =
+                            if (queryLiteral.value == "") {
+                                """Key(String::from("${queryLiteral.key}"))"""
+                            } else {
+                                """KeyValue(String::from("${queryLiteral.key}"), String::from("${queryLiteral.value}"))"""
+                            }
+                        rustTemplate("#{QuerySegment}::$variant,", *extraCodegenScope)
                     }
-                    rustTemplate("#{QuerySegment}::$variant,", *extraCodegenScope)
                 }
             }
-        }
 
         return writable {
             rustTemplate(

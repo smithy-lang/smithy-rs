@@ -164,6 +164,7 @@ fn to_md_link(reference: &Reference) -> String {
     let org_name = match reference.repo.as_str() {
         "smithy-rs" => "smithy-lang",
         "aws-sdk-rust" => "awslabs",
+        "aws-sdk" => "aws",
         repo => panic!("unrecognized repo named {repo}"),
     };
     format!(
@@ -396,6 +397,7 @@ fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
                     .unwrap()
                     .references
                     .iter()
+                    .filter(|r| matches!(r.repo.as_str(), "aws-sdk-rust" | "smithy-rs"))
                     .map(to_md_link)
             })
             .collect::<Vec<_>>();
@@ -507,7 +509,7 @@ references = ["smithy-rs#445"]
 author = "external-contrib"
 message = "I made a change to update the code generator"
 meta = { breaking = false, tada = true, bug = false }
-references = ["smithy-rs#446"]
+references = ["smithy-rs#446", "aws-sdk#123"]
 
 [[smithy-rs]]
 author = "another-contrib"
@@ -570,7 +572,7 @@ v0.3.0 (January 4th, 2022)
 - :warning: (all, [smithy-rs#445](https://github.com/smithy-lang/smithy-rs/issues/445)) I made a major change to update the code generator
 
 **New this release:**
-- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
+- :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), [aws-sdk#123](https://github.com/aws/aws-sdk/issues/123), @external-contrib) I made a change to update the code generator
 - :tada: (all, [smithy-rs#446](https://github.com/smithy-lang/smithy-rs/issues/446), @external-contrib) I made a change to update the code generator
 
     **Update guide:**

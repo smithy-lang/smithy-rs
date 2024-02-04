@@ -179,11 +179,12 @@ class PythonServerUnionGenerator(
             )
             writer.rust("/// :rtype ${pythonType.renderAsDocstring()}:")
             writer.rustBlockTemplate("pub fn as_$funcNamePart(&self) -> #{pyo3}::PyResult<${rustType.render()}>", "pyo3" to pyo3) {
-                val variantType = if (rustType.isCopy()) {
-                    "*variant"
-                } else {
-                    "variant.clone()"
-                }
+                val variantType =
+                    if (rustType.isCopy()) {
+                        "*variant"
+                    } else {
+                        "variant.clone()"
+                    }
                 val errorVariant = memberSymbol.rustType().pythonType(libName).renderAsDocstring()
                 rustTemplate(
                     """

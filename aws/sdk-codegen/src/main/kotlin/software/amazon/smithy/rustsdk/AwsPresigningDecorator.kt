@@ -38,10 +38,11 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
 
-private val presigningTypes: List<Pair<String, Any>> = listOf(
-    "PresignedRequest" to AwsRuntimeType.presigning().resolve("PresignedRequest"),
-    "PresigningConfig" to AwsRuntimeType.presigning().resolve("PresigningConfig"),
-)
+private val presigningTypes: List<Pair<String, Any>> =
+    listOf(
+        "PresignedRequest" to AwsRuntimeType.presigning().resolve("PresignedRequest"),
+        "PresigningConfig" to AwsRuntimeType.presigning().resolve("PresigningConfig"),
+    )
 
 internal enum class PayloadSigningType {
     EMPTY,
@@ -68,17 +69,18 @@ internal val PRESIGNABLE_OPERATIONS by lazy {
         ShapeId.from("com.amazonaws.s3#PutObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#UploadPart") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
         ShapeId.from("com.amazonaws.s3#DeleteObject") to PresignableOperation(PayloadSigningType.UNSIGNED_PAYLOAD),
-
         // Polly
-        SYNTHESIZE_SPEECH_OP to PresignableOperation(
-            PayloadSigningType.EMPTY,
-            // Polly's SynthesizeSpeech operation has the HTTP method overridden to GET,
-            // and the document members changed to query param members.
-            modelTransforms = listOf(
-                OverrideHttpMethodTransform(mapOf(SYNTHESIZE_SPEECH_OP to "GET")),
-                MoveDocumentMembersToQueryParamsTransform(listOf(SYNTHESIZE_SPEECH_OP)),
+        SYNTHESIZE_SPEECH_OP to
+            PresignableOperation(
+                PayloadSigningType.EMPTY,
+                // Polly's SynthesizeSpeech operation has the HTTP method overridden to GET,
+                // and the document members changed to query param members.
+                modelTransforms =
+                    listOf(
+                        OverrideHttpMethodTransform(mapOf(SYNTHESIZE_SPEECH_OP to "GET")),
+                        MoveDocumentMembersToQueryParamsTransform(listOf(SYNTHESIZE_SPEECH_OP)),
+                    ),
             ),
-        ),
     )
 }
 
@@ -95,25 +97,31 @@ class AwsPresigningDecorator internal constructor(
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
      */
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model {
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model {
         val modelWithSynthetics = addSyntheticOperations(model)
         val presignableTransforms = mutableListOf<PresignModelTransform>()
-        val intermediate = ModelTransformer.create().mapShapes(modelWithSynthetics) { shape ->
-            if (shape is OperationShape && presignableOperations.containsKey(shape.id)) {
-                presignableTransforms.addAll(presignableOperations.getValue(shape.id).modelTransforms)
-                shape.toBuilder().addTrait(PresignableTrait(syntheticShapeId(shape))).build()
-            } else {
-                shape
+        val intermediate =
+            ModelTransformer.create().mapShapes(modelWithSynthetics) { shape ->
+                if (shape is OperationShape && presignableOperations.containsKey(shape.id)) {
+                    presignableTransforms.addAll(presignableOperations.getValue(shape.id).modelTransforms)
+                    shape.toBuilder().addTrait(PresignableTrait(syntheticShapeId(shape))).build()
+                } else {
+                    shape
+                }
             }
-        }
         // Apply operation-specific model transformations
         return presignableTransforms.fold(intermediate) { m, t -> t.transform(m) }
     }
 
     private fun addSyntheticOperations(model: Model): Model {
-        val presignableOps = model.shapes()
-            .filter { shape -> shape is OperationShape && presignableOperations.containsKey(shape.id) }
-            .toList()
+        val presignableOps =
+            model.shapes()
+                .filter { shape -> shape is OperationShape && presignableOperations.containsKey(shape.id) }
+                .toList()
         return model.toBuilder().also { builder ->
             for (op in presignableOps) {
                 builder.cloneOperation(model, op, ::syntheticShapeId)
@@ -126,12 +134,14 @@ class AwsPresignedFluentBuilderMethod(
     private val codegenContext: ClientCodegenContext,
 ) : FluentClientCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val codegenScope = (
-        presigningTypes + arrayOf(
-            *RuntimeType.preludeScope,
-            "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
-            "SdkError" to RuntimeType.sdkError(runtimeConfig),
-        )
+    private val codegenScope =
+        (
+            presigningTypes +
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
+                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                )
         ).toTypedArray()
 
     override fun section(section: FluentClientSection): Writable =
@@ -158,11 +168,12 @@ class AwsPresignedFluentBuilderMethod(
 
     private fun RustWriter.renderPresignedMethodBody(section: FluentClientSection.FluentBuilderImpl) {
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(section.operationShape.id)
-        val operationShape = if (presignableOp.hasModelTransforms()) {
-            codegenContext.model.expectShape(syntheticShapeId(section.operationShape.id), OperationShape::class.java)
-        } else {
-            section.operationShape
-        }
+        val operationShape =
+            if (presignableOp.hasModelTransforms()) {
+                codegenContext.model.expectShape(syntheticShapeId(section.operationShape.id), OperationShape::class.java)
+            } else {
+                section.operationShape
+            }
 
         rustTemplate(
             """
@@ -191,52 +202,58 @@ class AwsPresignedFluentBuilderMethod(
             "Operation" to codegenContext.symbolProvider.toSymbol(section.operationShape),
             "OperationError" to section.operationErrorType,
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
-            "SharedInterceptor" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors")
-                .resolve("SharedInterceptor"),
-            "SigV4PresigningRuntimePlugin" to AwsRuntimeType.presigningInterceptor(runtimeConfig)
-                .resolve("SigV4PresigningRuntimePlugin"),
+            "SharedInterceptor" to
+                RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors")
+                    .resolve("SharedInterceptor"),
+            "SigV4PresigningRuntimePlugin" to
+                AwsRuntimeType.presigningInterceptor(runtimeConfig)
+                    .resolve("SigV4PresigningRuntimePlugin"),
             "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
             "USER_AGENT" to CargoDependency.Http.toType().resolve("header::USER_AGENT"),
-            "alternate_presigning_serializer" to writable {
-                if (presignableOp.hasModelTransforms()) {
-                    val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
-                    rustTemplate(
-                        """
-                        ##[derive(::std::fmt::Debug)]
-                        struct AlternatePresigningSerializerRuntimePlugin;
-                        impl #{RuntimePlugin} for AlternatePresigningSerializerRuntimePlugin {
-                            fn config(&self) -> #{Option}<#{FrozenLayer}> {
-                                let mut cfg = #{Layer}::new("presigning_serializer");
-                                cfg.store_put(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
-                                #{Some}(cfg.freeze())
+            "alternate_presigning_serializer" to
+                writable {
+                    if (presignableOp.hasModelTransforms()) {
+                        val smithyTypes = RuntimeType.smithyTypes(codegenContext.runtimeConfig)
+                        rustTemplate(
+                            """
+                            ##[derive(::std::fmt::Debug)]
+                            struct AlternatePresigningSerializerRuntimePlugin;
+                            impl #{RuntimePlugin} for AlternatePresigningSerializerRuntimePlugin {
+                                fn config(&self) -> #{Option}<#{FrozenLayer}> {
+                                    let mut cfg = #{Layer}::new("presigning_serializer");
+                                    cfg.store_put(#{SharedRequestSerializer}::new(#{AlternateSerializer}));
+                                    #{Some}(cfg.freeze())
+                                }
                             }
-                        }
-                        """,
-                        *preludeScope,
-                        "AlternateSerializer" to alternateSerializer(operationShape),
-                        "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
-                        "Layer" to smithyTypes.resolve("config_bag::Layer"),
-                        "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
-                        "SharedRequestSerializer" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
-                            .resolve("client::ser_de::SharedRequestSerializer"),
+                            """,
+                            *preludeScope,
+                            "AlternateSerializer" to alternateSerializer(operationShape),
+                            "FrozenLayer" to smithyTypes.resolve("config_bag::FrozenLayer"),
+                            "Layer" to smithyTypes.resolve("config_bag::Layer"),
+                            "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
+                            "SharedRequestSerializer" to
+                                RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                                    .resolve("client::ser_de::SharedRequestSerializer"),
+                        )
+                    }
+                },
+            "alternate_presigning_serializer_registration" to
+                writable {
+                    if (presignableOp.hasModelTransforms()) {
+                        rust(".with_operation_plugin(AlternatePresigningSerializerRuntimePlugin)")
+                    }
+                },
+            "payload_override" to
+                writable {
+                    rustTemplate(
+                        "#{aws_sigv4}::http_request::SignableBody::" +
+                            when (presignableOp.payloadSigningType) {
+                                PayloadSigningType.EMPTY -> "Bytes(b\"\")"
+                                PayloadSigningType.UNSIGNED_PAYLOAD -> "UnsignedPayload"
+                            },
+                        "aws_sigv4" to AwsRuntimeType.awsSigv4(runtimeConfig),
                     )
-                }
-            },
-            "alternate_presigning_serializer_registration" to writable {
-                if (presignableOp.hasModelTransforms()) {
-                    rust(".with_operation_plugin(AlternatePresigningSerializerRuntimePlugin)")
-                }
-            },
-            "payload_override" to writable {
-                rustTemplate(
-                    "#{aws_sigv4}::http_request::SignableBody::" +
-                        when (presignableOp.payloadSigningType) {
-                            PayloadSigningType.EMPTY -> "Bytes(b\"\")"
-                            PayloadSigningType.UNSIGNED_PAYLOAD -> "UnsignedPayload"
-                        },
-                    "aws_sigv4" to AwsRuntimeType.awsSigv4(runtimeConfig),
-                )
-            },
+                },
         )
     }
 
@@ -305,19 +322,21 @@ class MoveDocumentMembersToQueryParamsTransform(
 ) : PresignModelTransform {
     override fun transform(model: Model): Model {
         val index = HttpBindingIndex(model)
-        val operations = presignableOperations.map { id ->
-            model.expectShape(syntheticShapeId(id), OperationShape::class.java).also { shape ->
-                check(shape.hasTrait(HttpTrait.ID)) {
-                    "MoveDocumentMembersToQueryParamsTransform can only be used with REST protocols"
+        val operations =
+            presignableOperations.map { id ->
+                model.expectShape(syntheticShapeId(id), OperationShape::class.java).also { shape ->
+                    check(shape.hasTrait(HttpTrait.ID)) {
+                        "MoveDocumentMembersToQueryParamsTransform can only be used with REST protocols"
+                    }
                 }
             }
-        }
 
         // Find document members of the presignable operations
-        val membersToUpdate = operations.map { operation ->
-            val payloadBindings = index.getRequestBindings(operation, HttpBinding.Location.DOCUMENT)
-            payloadBindings.map { binding -> binding.member }
-        }.flatten()
+        val membersToUpdate =
+            operations.map { operation ->
+                val payloadBindings = index.getRequestBindings(operation, HttpBinding.Location.DOCUMENT)
+                payloadBindings.map { binding -> binding.member }
+            }.flatten()
 
         // Transform found shapes for presigning
         return ModelTransformer.create().mapShapes(model) { shape ->
@@ -331,11 +350,12 @@ class MoveDocumentMembersToQueryParamsTransform(
 }
 
 private fun RustWriter.documentPresignedMethod(hasConfigArg: Boolean) {
-    val configBlurb = if (hasConfigArg) {
-        "The credentials provider from the `config` will be used to generate the request's signature.\n"
-    } else {
-        ""
-    }
+    val configBlurb =
+        if (hasConfigArg) {
+            "The credentials provider from the `config` will be used to generate the request's signature.\n"
+        } else {
+            ""
+        }
     docs(
         """
         Creates a presigned request for this operation.

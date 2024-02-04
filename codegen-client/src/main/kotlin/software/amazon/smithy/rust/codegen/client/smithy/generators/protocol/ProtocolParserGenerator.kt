@@ -50,14 +50,14 @@ class ProtocolParserGenerator(
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val symbolProvider: RustSymbolProvider = codegenContext.symbolProvider
 
-    private val codegenScope = arrayOf(
-        "Bytes" to RuntimeType.Bytes,
-        "Headers" to RuntimeType.headers(codegenContext.runtimeConfig),
-        "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
-        "http" to RuntimeType.Http,
-        "operation" to RuntimeType.operationModule(codegenContext.runtimeConfig),
-        "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
-    )
+    private val codegenScope =
+        arrayOf(
+            "Bytes" to RuntimeType.Bytes,
+            "Headers" to RuntimeType.headers(codegenContext.runtimeConfig),
+            "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
+            "http" to RuntimeType.Http,
+            "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
+        )
 
     fun parseResponseFn(
         operationShape: OperationShape,
@@ -151,11 +151,12 @@ class ProtocolParserGenerator(
                                             errorSymbol,
                                             listOf(
                                                 object : OperationCustomization() {
-                                                    override fun section(section: OperationSection): Writable = {
-                                                        if (section is OperationSection.MutateOutput) {
-                                                            rust("let output = output.meta(generic);")
+                                                    override fun section(section: OperationSection): Writable =
+                                                        {
+                                                            if (section is OperationSection.MutateOutput) {
+                                                                rust("let output = output.meta(generic);")
+                                                            }
                                                         }
-                                                    }
                                                 },
                                             ),
                                         )
@@ -264,9 +265,10 @@ class ProtocolParserGenerator(
             }
         }
 
-        val mapErr = writable {
-            rust("#T::unhandled", errorSymbol)
-        }
+        val mapErr =
+            writable {
+                rust("#T::unhandled", errorSymbol)
+            }
 
         writeCustomizations(
             customizations,
@@ -289,16 +291,17 @@ class ProtocolParserGenerator(
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         val member = binding.member
         return when (binding.location) {
-            HttpLocation.HEADER -> writable {
-                val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
-                rust(
-                    """
-                    #T(_response_headers)
-                        .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
-                    """,
-                    fnName, errorSymbol,
-                )
-            }
+            HttpLocation.HEADER ->
+                writable {
+                    val fnName = httpBindingGenerator.generateDeserializeHeaderFn(binding)
+                    rust(
+                        """
+                        #T(_response_headers)
+                            .map_err(|_|#T::unhandled("Failed to parse ${member.memberName} from header `${binding.locationName}"))?
+                        """,
+                        fnName, errorSymbol,
+                    )
+                }
             HttpLocation.DOCUMENT -> {
                 // document is handled separately
                 null
@@ -307,20 +310,22 @@ class ProtocolParserGenerator(
                 val payloadParser: RustWriter.(String) -> Unit = { body ->
                     rust("#T($body).map_err(#T::unhandled)", structuredDataParser.payloadParser(member), errorSymbol)
                 }
-                val deserializer = httpBindingGenerator.generateDeserializePayloadFn(
-                    binding,
-                    errorSymbol,
-                    payloadParser = payloadParser,
-                )
+                val deserializer =
+                    httpBindingGenerator.generateDeserializePayloadFn(
+                        binding,
+                        errorSymbol,
+                        payloadParser = payloadParser,
+                    )
                 return if (binding.member.isStreaming(model)) {
                     writable { rust("Some(#T(_response_body)?)", deserializer) }
                 } else {
                     writable { rust("#T(_response_body)?", deserializer) }
                 }
             }
-            HttpLocation.RESPONSE_CODE -> writable {
-                rust("Some(_response_status as _)")
-            }
+            HttpLocation.RESPONSE_CODE ->
+                writable {
+                    rust("Some(_response_status as _)")
+                }
             HttpLocation.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
                 writable {

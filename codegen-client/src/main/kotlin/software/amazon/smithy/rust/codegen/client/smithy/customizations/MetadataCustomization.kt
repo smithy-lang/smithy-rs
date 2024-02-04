@@ -24,25 +24,26 @@ class MetadataCustomization(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         arrayOf(
-            "Metadata" to RuntimeType.operationModule(runtimeConfig).resolve("Metadata"),
+            "Metadata" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::Metadata"),
         )
     }
 
-    override fun section(section: OperationSection): Writable = writable {
-        when (section) {
-            is OperationSection.AdditionalRuntimePluginConfig -> {
-                rustTemplate(
-                    """
-                    ${section.newLayerName}.store_put(#{Metadata}::new(
-                        ${operationName.dq()},
-                        ${codegenContext.serviceShape.sdkId().dq()},
-                    ));
-                    """,
-                    *codegenScope,
-                )
-            }
+    override fun section(section: OperationSection): Writable =
+        writable {
+            when (section) {
+                is OperationSection.AdditionalRuntimePluginConfig -> {
+                    rustTemplate(
+                        """
+                        ${section.newLayerName}.store_put(#{Metadata}::new(
+                            ${operationName.dq()},
+                            ${codegenContext.serviceShape.sdkId().dq()},
+                        ));
+                        """,
+                        *codegenScope,
+                    )
+                }
 
-            else -> {}
+                else -> {}
+            }
         }
-    }
 }

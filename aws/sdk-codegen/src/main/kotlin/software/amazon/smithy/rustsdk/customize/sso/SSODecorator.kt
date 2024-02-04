@@ -24,7 +24,11 @@ class SSODecorator : ClientCodegenDecorator {
 
     private fun isAwsCredentials(shape: Shape): Boolean = shape.id == ShapeId.from("com.amazonaws.sso#RoleCredentials")
 
-    override fun transformModel(service: ServiceShape, model: Model, settings: ClientRustSettings): Model =
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ClientRustSettings,
+    ): Model =
         ModelTransformer.create().mapShapes(model) { shape ->
             shape.letIf(isAwsCredentials(shape)) {
                 (shape as StructureShape).toBuilder().addTrait(SensitiveTrait()).build()
