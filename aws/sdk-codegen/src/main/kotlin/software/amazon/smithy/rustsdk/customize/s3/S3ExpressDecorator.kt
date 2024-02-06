@@ -7,10 +7,13 @@ package software.amazon.smithy.rustsdk.customize.s3
 
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.AuthSchemeOption
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -26,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
+import software.amazon.smithy.rustsdk.awsInlineableHttpRequestChecksum
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
@@ -60,6 +64,16 @@ class S3ExpressDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations + listOf(S3ExpressIdentityProviderConfig(codegenContext))
+
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> =
+        baseCustomizations +
+            S3ExpressRequestChecksumCustomization(
+                codegenContext, operation,
+            )
 }
 
 private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
@@ -183,6 +197,67 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
         }
 }
 
+class S3ExpressRequestChecksumCustomization(
+    private val codegenContext: ClientCodegenContext,
+    private val operationShape: OperationShape,
+) : OperationCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+    private val inputShape = codegenContext.model.expectShape(operationShape.inputShape)
+
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "ChecksumAlgorithm" to RuntimeType.smithyChecksums(runtimeConfig).resolve("ChecksumAlgorithm"),
+            "ConfigBag" to RuntimeType.configBag(runtimeConfig),
+            "DefaultRequestChecksumOverride" to
+                runtimeConfig.awsInlineableHttpRequestChecksum()
+                    .resolve("DefaultRequestChecksumOverride"),
+            "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
+        )
+
+    override fun section(section: OperationSection): Writable =
+        writable {
+            when (section) {
+                is OperationSection.AdditionalRuntimePluginConfig -> {
+                    rustTemplate(
+                        """
+                        ${section.newLayerName}.store_put(#{DefaultRequestChecksumOverride}::new(
+                            |original: #{Option}<#{ChecksumAlgorithm}>,
+                            cfg: &#{ConfigBag}| {
+                                if original != #{Some}(#{ChecksumAlgorithm}::Md5) {
+                                    return original;
+                                }
+
+                                let endpoint = cfg
+                                    .load::<crate::config::endpoint::Endpoint>()
+                                    .expect("endpoint added to config bag by endpoint orchestrator");
+
+                                match endpoint.properties().get("backend") {
+                                    Some(#{Document}::String(backend)) if backend.as_str() == "S3Express" => {
+                                       #{customDefault:W}
+                                    }
+                                    _ => original
+                                }
+                            }
+                        ));
+                        """,
+                        *codegenScope,
+                        "customDefault" to
+                            writable {
+                                if (operationShape.id == ShapeId.from("com.amazonaws.s3#UploadPart")) {
+                                    rustTemplate("#{None}", *codegenScope)
+                                } else {
+                                    rustTemplate("#{Some}(#{ChecksumAlgorithm}::Crc32)", *codegenScope)
+                                }
+                            },
+                    )
+                }
+
+                else -> { }
+            }
+        }
+}
+
 private fun s3ExpressModule(runtimeConfig: RuntimeConfig) =
     RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
@@ -202,6 +277,7 @@ private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
         CargoDependency.Lru,
         CargoDependency.Sha2,
         CargoDependency.smithyAsync(runtimeConfig),
+        CargoDependency.smithyChecksums(runtimeConfig),
         CargoDependency.smithyRuntimeApiClient(runtimeConfig),
         CargoDependency.smithyTypes(runtimeConfig),
     )
