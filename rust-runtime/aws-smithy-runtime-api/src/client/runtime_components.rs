@@ -142,7 +142,7 @@ impl ValidateConfig for SharedConfigValidator {
         cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
         match &self.inner {
-            ValidatorInner::BaseConfigStaticFn(validator) => (validator)(runtime_components, cfg),
+            ValidatorInner::BaseConfigStaticFn(validator) => validator(runtime_components, cfg),
             ValidatorInner::Shared(validator) => {
                 validator.validate_base_client_config(runtime_components, cfg)
             }
@@ -441,6 +441,13 @@ impl RuntimeComponents {
         self.config_validators.iter().map(|s| s.value.clone())
     }
 
+    /// Sort all collection-based runtime components that have a priority order.
+    ///
+    /// This is intended to be called internally by the client.
+    pub fn sort(&mut self) {
+        self.retry_classifiers.sort();
+    }
+
     /// Validate the final client configuration.
     ///
     /// This is intended to be called internally by the client.
@@ -695,7 +702,7 @@ impl RuntimeComponentsBuilder {
         self
     }
 
-    /// Adds an retry_classifier.
+    /// Adds a retry_classifier.
     pub fn push_retry_classifier(
         &mut self,
         retry_classifier: impl ClassifyRetry + 'static,
@@ -707,7 +714,7 @@ impl RuntimeComponentsBuilder {
         self
     }
 
-    /// Adds an retry_classifier.
+    /// Adds a retry_classifier.
     pub fn with_retry_classifier(mut self, retry_classifier: impl ClassifyRetry + 'static) -> Self {
         self.push_retry_classifier(retry_classifier);
         self
@@ -853,8 +860,7 @@ impl RuntimeComponentsBuilder {
     }
 }
 
-#[derive(Clone, Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 struct Tracked<T> {
     _origin: &'static str,
     value: T,
@@ -882,8 +888,7 @@ impl RuntimeComponentsBuilder {
             fn resolve_auth_scheme_options(
                 &self,
                 _: &crate::client::auth::AuthSchemeOptionResolverParams,
-            ) -> Result<std::borrow::Cow<'_, [AuthSchemeId]>, crate::box_error::BoxError>
-            {
+            ) -> Result<std::borrow::Cow<'_, [AuthSchemeId]>, BoxError> {
                 unreachable!("fake auth scheme option resolver must be overridden for this test")
             }
         }
@@ -946,8 +951,7 @@ impl RuntimeComponentsBuilder {
                 &self,
                 _: &RuntimeComponents,
                 _: &ConfigBag,
-            ) -> Result<crate::client::retries::ShouldAttempt, crate::box_error::BoxError>
-            {
+            ) -> Result<crate::client::retries::ShouldAttempt, BoxError> {
                 unreachable!("fake retry strategy must be overridden for this test")
             }
 
@@ -956,8 +960,7 @@ impl RuntimeComponentsBuilder {
                 _: &crate::client::interceptors::context::InterceptorContext,
                 _: &RuntimeComponents,
                 _: &ConfigBag,
-            ) -> Result<crate::client::retries::ShouldAttempt, crate::box_error::BoxError>
-            {
+            ) -> Result<crate::client::retries::ShouldAttempt, BoxError> {
                 unreachable!("fake retry strategy must be overridden for this test")
             }
         }
@@ -1201,7 +1204,7 @@ mod tests {
                 _: &'a RuntimeComponents,
                 _: &'a ConfigBag,
             ) -> IdentityFuture<'a> {
-                IdentityFuture::ready(Ok(Identity::new("doesntmatter", None)))
+                IdentityFuture::ready(Ok(Identity::new("doesn't matter", None)))
             }
         }
 
@@ -1223,6 +1226,6 @@ mod tests {
                 .expect("identity should be resolved")
         });
 
-        assert_eq!(Some(&"doesntmatter"), identity.data::<&str>());
+        assert_eq!(Some(&"doesn't matter"), identity.data::<&str>());
     }
 }
