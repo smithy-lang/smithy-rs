@@ -157,15 +157,7 @@ class AwsPresigningDecorator internal constructor(
                         E: std::error::Error + #{Send} + #{Sync} + 'static,
                         B: #{CustomizablePresigned}<E>
                     {
-                        let mut config_override = self.config_override.unwrap_or_default();
-                        self.interceptors.into_iter().for_each(|interceptor| {
-                            config_override.push_interceptor(interceptor);
-                        });
-                        self.runtime_plugins.into_iter().for_each(|plugin| {
-                            config_override.push_runtime_plugin(plugin);
-                        });
-
-                        self.customizable_send.presign(config_override, presigning_config).await
+                        self.execute(move |sender, conf|sender.presign(conf, presigning_config)).await
                     }
                     """,
                     *codegenScope,
@@ -178,7 +170,7 @@ class AwsPresigningDecorator internal constructor(
         RuntimeType.forInlineFun("CustomizablePresigned", InternalTraitsModule) {
             rustTemplate(
                 """
-                pub trait CustomizablePresigned<E> {
+                pub trait CustomizablePresigned<E>: #{Send} + #{Sync} {
                     fn presign(self, config_override: crate::config::Builder, presigning_config: #{PresigningConfig}) -> BoxFuture<SendResult<#{PresignedRequest}, E>>;
                 }
 

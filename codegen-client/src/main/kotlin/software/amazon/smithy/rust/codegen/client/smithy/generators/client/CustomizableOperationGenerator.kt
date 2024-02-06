@@ -95,6 +95,17 @@ class CustomizableOperationGenerator(
                             }
                         }
 
+                        pub(crate) fn execute<U>(self, f: impl #{FnOnce}(B, crate::config::Builder) -> U) -> U {
+                            let mut config_override = self.config_override.unwrap_or_default();
+                            self.interceptors.into_iter().for_each(|interceptor| {
+                                config_override.push_interceptor(interceptor);
+                            });
+                            self.runtime_plugins.into_iter().for_each(|plugin| {
+                                config_override.push_runtime_plugin(plugin);
+                            });
+                            f(self.customizable_send, config_override)
+                        }
+
                     /// Adds an [interceptor](#{Intercept}) that runs at specific stages of the request execution pipeline.
                     ///
                     /// Note that interceptors can also be added to `CustomizableOperation` by `config_override`,
@@ -170,15 +181,7 @@ class CustomizableOperationGenerator(
                         E: std::error::Error + #{Send} + #{Sync} + 'static,
                         B: #{CustomizableSend}<T, E>,
                     {
-                        let mut config_override = self.config_override.unwrap_or_default();
-                        self.interceptors.into_iter().for_each(|interceptor| {
-                            config_override.push_interceptor(interceptor);
-                        });
-                        self.runtime_plugins.into_iter().for_each(|plugin| {
-                            config_override.push_runtime_plugin(plugin);
-                        });
-
-                        self.customizable_send.send(config_override).await
+                        self.execute(|sender, config|sender.send(config)).await
                     }
 
                     #{additional_methods}
