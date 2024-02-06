@@ -222,7 +222,7 @@ pub(crate) mod identity_cache {
             SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
         }
 
-        fn test_identity(expired_secs: u64) -> Identity {
+        fn identity_expiring_in(expired_secs: u64) -> Identity {
             let expiration = Some(epoch_secs(expired_secs));
             Identity::new(Token::new("test", expiration), expiration)
         }
