@@ -28,3 +28,9 @@ message = "Add `try_into_http1x` and `try_from_http1x` to Request and Response c
 references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
 meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Retry classifiers will now be sorted by priority"
+references = ["smithy-rs#3322"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "Velfi"
