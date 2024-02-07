@@ -177,7 +177,7 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
 
                     rustBlockTemplate(
                         """
-                        /// Sets the credentials provider for S3 Express
+                        /// Sets the credentials provider for S3 Express One Zone
                         pub fn set_express_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self
                         """,
                         *codegenScope,
