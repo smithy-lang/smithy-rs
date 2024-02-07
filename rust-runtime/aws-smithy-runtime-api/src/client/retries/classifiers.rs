@@ -279,34 +279,12 @@ impl ClassifyRetry for SharedRetryClassifier {
     }
 }
 
-impl PartialEq for SharedRetryClassifier {
-    fn eq(&self, other: &Self) -> bool {
-        self.priority() == other.priority()
-    }
-}
-
-impl Eq for SharedRetryClassifier {}
-
-impl PartialOrd for SharedRetryClassifier {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.priority().cmp(&other.priority()))
-    }
-}
-
-impl Ord for SharedRetryClassifier {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.priority().cmp(&other.priority())
-    }
-}
-
 impl ValidateConfig for SharedRetryClassifier {
     fn validate_final_config(
         &self,
         runtime_components: &RuntimeComponents,
         _cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
-        use std::cmp::Ordering;
-
         let retry_classifiers = runtime_components.retry_classifiers();
         let mut previous_classifier_priority = None;
 
@@ -317,6 +295,7 @@ impl ValidateConfig for SharedRetryClassifier {
                     continue;
                 }
                 Some(previous_classifier_priority) => {
+                    use std::cmp::Ordering;
                     match previous_classifier_priority.cmp(&classifier.priority()) {
                         Ordering::Less | Ordering::Equal => { /* All good */ }
                         Ordering::Greater => {

@@ -335,9 +335,12 @@ macro_rules! declare_runtime_components {
 
             /// Builds [`RuntimeComponents`] from this builder.
             pub fn build(self) -> Result<$rc_name, BuildError> {
-                Ok($rc_name {
+                let mut rcs = $rc_name {
                     $($field_name: builder_field_value!($outer_type self.$field_name $($option)?),)+
-                })
+                };
+                rcs.sort();
+
+                Ok(rcs)
             }
         }
     };
@@ -442,13 +445,6 @@ impl RuntimeComponents {
         self.config_validators.iter().map(|s| s.value.clone())
     }
 
-    /// Sort all collection-based runtime components that have a priority order.
-    ///
-    /// This is intended to be called internally by the client.
-    pub fn sort(&mut self) {
-        self.retry_classifiers.sort();
-    }
-
     /// Validate the final client configuration.
     ///
     /// This is intended to be called internally by the client.
@@ -489,6 +485,10 @@ impl RuntimeComponents {
         validate!(Vec: &self.retry_classifiers);
 
         Ok(())
+    }
+
+    fn sort(&mut self) {
+        self.retry_classifiers.sort_by_key(|rc| rc.value.priority());
     }
 }
 
