@@ -20,13 +20,6 @@ allprojects {
         mavenCentral()
         google()
     }
-
-    apply(plugin = "jacoco")
-
-    the<JacocoPluginExtension>().apply {
-        toolVersion = "0.8.8"
-        reportsDirectory.set(layout.buildDirectory.dir("jacoco-reports"))
-    }
 }
 
 val ktlint by configurations.creating
