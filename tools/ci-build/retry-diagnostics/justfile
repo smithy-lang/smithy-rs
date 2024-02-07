@@ -1,0 +1,11 @@
+build-target target:
+  cargo build --target {{target}} --release
+  cp ../../target/{{target}}/release/retry-diagnostics dist/{{target}}-retry-diagnostics || echo "ok"
+  cp ../../target/{{target}}/release/retry-diagnostics.exe dist/{{target}}-retry-diagnostics.exe || echo "ok"
+
+clean-dist:
+  rm -rf dist
+  mkdir -p dist
+
+
+build: clean-dist (build-target "x86_64-apple-darwin") (build-target "aarch64-apple-darwin") (build-target "x86_64-pc-windows-gnu")
