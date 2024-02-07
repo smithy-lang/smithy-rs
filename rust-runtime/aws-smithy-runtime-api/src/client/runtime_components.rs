@@ -28,7 +28,6 @@ use crate::shared::IntoShared;
 use aws_smithy_async::rt::sleep::{AsyncSleep, SharedAsyncSleep};
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_types::config_bag::ConfigBag;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
@@ -868,26 +867,6 @@ impl RuntimeComponentsBuilder {
 struct Tracked<T> {
     _origin: &'static str,
     value: T,
-}
-
-impl<T: PartialEq> PartialEq for Tracked<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl<T: Eq> Eq for Tracked<T> {}
-
-impl<T: PartialOrd> PartialOrd for Tracked<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.value.partial_cmp(&other.value)
-    }
-}
-
-impl<T: Ord> Ord for Tracked<T> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.value.cmp(&other.value)
-    }
 }
 
 impl<T> Tracked<T> {
