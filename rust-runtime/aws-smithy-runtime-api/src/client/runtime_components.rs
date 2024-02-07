@@ -424,6 +424,11 @@ impl RuntimeComponents {
         self.retry_classifiers.iter().map(|s| s.value.clone())
     }
 
+    // Needed for `impl ValidateConfig for SharedRetryClassifier {`
+    pub(crate) fn retry_classifiers_slice(&self) -> &[Tracked<SharedRetryClassifier>] {
+        self.retry_classifiers.as_slice()
+    }
+
     /// Returns the retry strategy.
     pub fn retry_strategy(&self) -> SharedRetryStrategy {
         self.retry_strategy.value.clone()
@@ -865,7 +870,7 @@ impl RuntimeComponentsBuilder {
 
 #[derive(Clone, Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-struct Tracked<T> {
+pub(crate) struct Tracked<T> {
     _origin: &'static str,
     value: T,
 }
@@ -876,6 +881,10 @@ impl<T> Tracked<T> {
             _origin: origin,
             value,
         }
+    }
+
+    pub(crate) fn value(&self) -> &T {
+        &self.value
     }
 }
 
