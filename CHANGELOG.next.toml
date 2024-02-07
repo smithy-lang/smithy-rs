@@ -34,3 +34,15 @@ message = "It is now possible to send customized presigned requests. You can now
 references = ["smithy-rs#3385", "aws-sdk-rust#1031"]
 meta = { "breaking" = false, "bug" = false, "tada" = true }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336","smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false , "target" = "client" }
+author = "iampkmone"
+
+[[aws-sdk-rust]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336", "smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false}
+author = "iampkmone"
