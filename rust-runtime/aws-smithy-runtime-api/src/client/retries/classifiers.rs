@@ -428,7 +428,7 @@ mod tests {
             wrap("high", high_priority_classifier),
             wrap("low", low_priority_classifier),
         ];
-        list.sort();
+        list.sort_by_key(|rc| rc.priority());
 
         let actual: Vec<_> = list.iter().map(|it| it.name()).collect();
         assert_eq!(vec!["low", "mid", "high"], actual);
@@ -447,7 +447,7 @@ mod tests {
             wrap("high", high_priority_classifier),
             wrap("low", low_priority_classifier),
         ];
-        list.sort();
+        list.sort_by_key(|rc| rc.priority());
 
         let actual: Vec<_> = list.iter().map(|it| it.name()).collect();
         assert_eq!(vec!["low", "mid", "high"], actual);
@@ -473,7 +473,7 @@ mod tests {
             ),
             wrap("before 'modeled as retryable'", before_modeled_as_retryable),
         ];
-        list.sort();
+        list.sort_by_key(|rc| rc.priority());
 
         let actual: Vec<_> = list.iter().map(|it| it.name()).collect();
         assert_eq!(

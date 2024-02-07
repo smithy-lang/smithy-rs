@@ -864,6 +864,7 @@ impl RuntimeComponentsBuilder {
 }
 
 #[derive(Clone, Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
 struct Tracked<T> {
     _origin: &'static str,
     value: T,
@@ -1073,6 +1074,10 @@ mod tests {
             }
         }
 
+        impl TestRc {
+            fn sort(&mut self) {}
+        }
+
         let builder1 = TestRcBuilder {
             builder_name: "builder1",
             some_required_component: Some(Tracked::new("builder1", "override_me".into())),
@@ -1144,6 +1149,10 @@ mod tests {
             }
         }
 
+        impl TestRc {
+            fn sort(&mut self) {}
+        }
+
         let rc = TestRcBuilder::new("test").build().unwrap();
 
         // Ensure the correct types were used
@@ -1162,6 +1171,10 @@ mod tests {
             }
         }
 
+        impl TestRc {
+            fn sort(&mut self) {}
+        }
+
         let rc = TestRcBuilder::new("test").build().unwrap();
 
         // Ensure the correct types were used
@@ -1177,6 +1190,10 @@ mod tests {
                 _some_optional_component: Option<TestComponent>,
                 _some_optional_vec: Vec<TestComponent>,
             }
+        }
+
+        impl TestRc {
+            fn sort(&mut self) {}
         }
 
         let rc = TestRcBuilder::new("test").build().unwrap();
