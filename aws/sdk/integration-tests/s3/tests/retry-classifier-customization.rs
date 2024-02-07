@@ -180,26 +180,26 @@ async fn test_retry_classifier_customization_ordering() {
         ReplayEvent::new(req(), ok()),
     ]);
 
-    let classifier_a = OrderingTestClassifier::new("1", RetryClassifierPriority::default());
+    let classifier_a = OrderingTestClassifier::new("6", RetryClassifierPriority::default());
     let classifier_b = OrderingTestClassifier::new(
-        "2",
-        RetryClassifierPriority::with_lower_priority_than(classifier_a.priority()),
+        "5",
+        RetryClassifierPriority::run_before(classifier_a.priority()),
     );
     let classifier_c = OrderingTestClassifier::new(
-        "3",
-        RetryClassifierPriority::with_lower_priority_than(classifier_b.priority()),
+        "4",
+        RetryClassifierPriority::run_before(classifier_b.priority()),
     );
     let classifier_d = OrderingTestClassifier::new(
-        "4",
-        RetryClassifierPriority::with_lower_priority_than(classifier_c.priority()),
+        "3",
+        RetryClassifierPriority::run_before(classifier_c.priority()),
     );
     let classifier_e = OrderingTestClassifier::new(
-        "5",
-        RetryClassifierPriority::with_lower_priority_than(classifier_d.priority()),
+        "2",
+        RetryClassifierPriority::run_before(classifier_d.priority()),
     );
     let classifier_f = OrderingTestClassifier::new(
-        "6",
-        RetryClassifierPriority::with_lower_priority_than(classifier_e.priority()),
+        "1",
+        RetryClassifierPriority::run_before(classifier_e.priority()),
     );
 
     let config = aws_sdk_s3::Config::builder()

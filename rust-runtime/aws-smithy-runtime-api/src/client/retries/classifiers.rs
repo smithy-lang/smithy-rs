@@ -3,11 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Classifier for determining if a retry is necessary and related code.
+//! Classifiers for determining if a retry is necessary and related code.
+//!
+//! When a request fails, a retry strategy should inspect the result with retry
+//! classifiers to understand if and how the request should be retried.
+//!
+//! Because multiple classifiers are often used, and because some are more
+//! specific than others in what they identify as retryable, classifiers are
+//! run in a sequence that is determined by their priority.
+//!
+//! Classifiers that are higher priority should be run **after** classifiers
+//! with a lower priority. The intention is that:
+//!
+//! 1. Generic classifiers that look at things like the HTTP error code run
+//!     first.
+//! 2. More specific classifiers such as ones that check for certain error
+//!     messages are run **after** the generic classifiers. This gives them the
+//!     ability to override the actions set by the generic retry classifiers.
+//!
+//! Put another way:
+//!
+//!
+//!
+//! | large nets target common failures with basic behavior | run before            | small nets target specific failures with special behavior|
+//! |-------------------------------------------------------|-----------------------|----------------------------------------------------------|
+//! | low priority classifiers                              | results overridden by | high priority classifiers                                |
+//! ```
 
+use crate::box_error::BoxError;
 use crate::client::interceptors::context::InterceptorContext;
 use crate::client::runtime_components::sealed::ValidateConfig;
+use crate::client::runtime_components::RuntimeComponents;
 use crate::impl_shared_conversions;
+use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::retry::ErrorKind;
 use std::fmt;
 use std::sync::Arc;
@@ -88,7 +116,7 @@ pub enum RetryReason {
     RetryableError {
         /// The kind of error.
         kind: ErrorKind,
-        /// A server may tells us to retry only after a specific time has elapsed.
+        /// A server may tell us to retry only after a specific time has elapsed.
         retry_after: Option<Duration>,
     },
 }
@@ -106,9 +134,10 @@ impl fmt::Display for RetryReason {
     }
 }
 
-/// The priority of a retry classifier. Classifiers with a higher priority will run before
-/// classifiers with a lower priority. Classifiers with equal priorities make no guarantees
-/// about which will run first.
+/// The priority of a retry classifier. Classifiers with a higher priority will
+/// run **after** classifiers with a lower priority and may override their
+/// result. Classifiers with equal priorities make no guarantees about which
+/// will run first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetryClassifierPriority {
     inner: Inner,
@@ -116,25 +145,25 @@ pub struct RetryClassifierPriority {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Inner {
-    // The default priority for the `HttpStatusCodeClassifier`.
+    /// The default priority for the `HttpStatusCodeClassifier`.
     HttpStatusCodeClassifier,
-    // The default priority for the `ModeledAsRetryableClassifier`.
+    /// The default priority for the `ModeledAsRetryableClassifier`.
     ModeledAsRetryableClassifier,
-    // The default priority for the `TransientErrorClassifier`.
+    /// The default priority for the `TransientErrorClassifier`.
     TransientErrorClassifier,
-    // The priority of some other classifier.
+    /// The priority of some other classifier.
     Other(i8),
 }
 
 impl PartialOrd for RetryClassifierPriority {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(other.as_i8().cmp(&self.as_i8()))
+        Some(self.as_i8().cmp(&other.as_i8()))
     }
 }
 
 impl Ord for RetryClassifierPriority {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.as_i8().cmp(&self.as_i8())
+        self.as_i8().cmp(&other.as_i8())
     }
 }
 
@@ -160,17 +189,29 @@ impl RetryClassifierPriority {
         }
     }
 
+    #[deprecated = "use the less-confusingly-named `RetryClassifierPriority::run_before` instead"]
     /// Create a new `RetryClassifierPriority` with lower priority than the given priority.
     pub fn with_lower_priority_than(other: Self) -> Self {
+        Self::run_before(other)
+    }
+
+    /// Create a new `RetryClassifierPriority` that can be overridden by the given priority.
+    pub fn run_before(other: Self) -> Self {
         Self {
-            inner: Inner::Other(other.as_i8() + 1),
+            inner: Inner::Other(other.as_i8() - 1),
         }
     }
 
+    #[deprecated = "use the less-confusingly-named `RetryClassifierPriority::run_after` instead"]
     /// Create a new `RetryClassifierPriority` with higher priority than the given priority.
     pub fn with_higher_priority_than(other: Self) -> Self {
+        Self::run_after(other)
+    }
+
+    /// Create a new `RetryClassifierPriority` that can override the given priority.
+    pub fn run_after(other: Self) -> Self {
         Self {
-            inner: Inner::Other(other.as_i8() - 1),
+            inner: Inner::Other(other.as_i8() + 1),
         }
     }
 
@@ -248,43 +289,222 @@ impl Eq for SharedRetryClassifier {}
 
 impl PartialOrd for SharedRetryClassifier {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(other.priority().cmp(&self.priority()))
+        Some(self.priority().cmp(&other.priority()))
     }
 }
 
 impl Ord for SharedRetryClassifier {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        other.priority().cmp(&self.priority())
+        self.priority().cmp(&other.priority())
     }
 }
 
-impl ValidateConfig for SharedRetryClassifier {}
+impl ValidateConfig for SharedRetryClassifier {
+    fn validate_final_config(
+        &self,
+        runtime_components: &RuntimeComponents,
+        _cfg: &ConfigBag,
+    ) -> Result<(), BoxError> {
+        use std::cmp::Ordering;
+
+        let retry_classifiers = runtime_components.retry_classifiers();
+        let mut previous_classifier_priority = None;
+
+        for classifier in retry_classifiers {
+            match previous_classifier_priority {
+                None => {
+                    previous_classifier_priority = Some(classifier.priority());
+                    continue;
+                }
+                Some(previous_classifier_priority) => {
+                    match previous_classifier_priority.cmp(&classifier.priority()) {
+                        Ordering::Less | Ordering::Equal => { /* All good */ }
+                        Ordering::Greater => {
+                            tracing::trace!(
+                                "the '{}' retry classifier appears to be out of place",
+                                classifier.name()
+                            );
+                            return Err("retry classifiers are incorrectly ordered".into());
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::RetryClassifierPriority;
+    use super::{ClassifyRetry, RetryAction, RetryClassifierPriority, SharedRetryClassifier};
+    use crate::client::interceptors::context::InterceptorContext;
 
     #[test]
-    fn test_classifier_lower_priority_than() {
-        let classifier_a = RetryClassifierPriority::default();
-        let classifier_b = RetryClassifierPriority::with_lower_priority_than(classifier_a);
-        let classifier_c = RetryClassifierPriority::with_lower_priority_than(classifier_b);
-
-        let mut list = vec![classifier_b, classifier_a, classifier_c];
+    fn test_preset_priorities() {
+        let before_modeled_as_retryable = RetryClassifierPriority::run_before(
+            RetryClassifierPriority::modeled_as_retryable_classifier(),
+        );
+        let mut list = vec![
+            RetryClassifierPriority::modeled_as_retryable_classifier(),
+            RetryClassifierPriority::http_status_code_classifier(),
+            RetryClassifierPriority::transient_error_classifier(),
+            before_modeled_as_retryable,
+        ];
         list.sort();
 
-        assert_eq!(vec![classifier_c, classifier_b, classifier_a], list);
+        assert_eq!(
+            vec![
+                RetryClassifierPriority::http_status_code_classifier(),
+                before_modeled_as_retryable,
+                RetryClassifierPriority::modeled_as_retryable_classifier(),
+                RetryClassifierPriority::transient_error_classifier(),
+            ],
+            list
+        );
     }
 
     #[test]
-    fn test_classifier_higher_priority_than() {
-        let classifier_c = RetryClassifierPriority::default();
-        let classifier_b = RetryClassifierPriority::with_higher_priority_than(classifier_c);
-        let classifier_a = RetryClassifierPriority::with_higher_priority_than(classifier_b);
+    fn test_classifier_run_before() {
+        // Ensure low-priority classifiers run *before* high-priority classifiers.
+        let high_priority_classifier = RetryClassifierPriority::default();
+        let mid_priority_classifier = RetryClassifierPriority::run_before(high_priority_classifier);
+        let low_priority_classifier = RetryClassifierPriority::run_before(mid_priority_classifier);
 
-        let mut list = vec![classifier_b, classifier_c, classifier_a];
+        let mut list = vec![
+            mid_priority_classifier,
+            high_priority_classifier,
+            low_priority_classifier,
+        ];
         list.sort();
 
-        assert_eq!(vec![classifier_c, classifier_b, classifier_a], list);
+        assert_eq!(
+            vec![
+                low_priority_classifier,
+                mid_priority_classifier,
+                high_priority_classifier
+            ],
+            list
+        );
+    }
+
+    #[test]
+    fn test_classifier_run_after() {
+        // Ensure high-priority classifiers run *after* low-priority classifiers.
+        let low_priority_classifier = RetryClassifierPriority::default();
+        let mid_priority_classifier = RetryClassifierPriority::run_after(low_priority_classifier);
+        let high_priority_classifier = RetryClassifierPriority::run_after(mid_priority_classifier);
+
+        let mut list = vec![
+            mid_priority_classifier,
+            low_priority_classifier,
+            high_priority_classifier,
+        ];
+        list.sort();
+
+        assert_eq!(
+            vec![
+                low_priority_classifier,
+                mid_priority_classifier,
+                high_priority_classifier
+            ],
+            list
+        );
+    }
+
+    #[derive(Debug)]
+    struct ClassifierStub {
+        name: &'static str,
+        priority: RetryClassifierPriority,
+    }
+
+    impl ClassifyRetry for ClassifierStub {
+        fn classify_retry(&self, _ctx: &InterceptorContext) -> RetryAction {
+            todo!()
+        }
+
+        fn name(&self) -> &'static str {
+            self.name
+        }
+
+        fn priority(&self) -> RetryClassifierPriority {
+            self.priority
+        }
+    }
+
+    fn wrap(name: &'static str, priority: RetryClassifierPriority) -> SharedRetryClassifier {
+        SharedRetryClassifier::new(ClassifierStub { name, priority })
+    }
+
+    #[test]
+    fn test_shared_classifier_run_before() {
+        // Ensure low-priority classifiers run *before* high-priority classifiers,
+        // even after wrapping.
+        let high_priority_classifier = RetryClassifierPriority::default();
+        let mid_priority_classifier = RetryClassifierPriority::run_before(high_priority_classifier);
+        let low_priority_classifier = RetryClassifierPriority::run_before(mid_priority_classifier);
+
+        let mut list = vec![
+            wrap("mid", mid_priority_classifier),
+            wrap("high", high_priority_classifier),
+            wrap("low", low_priority_classifier),
+        ];
+        list.sort();
+
+        let actual: Vec<_> = list.iter().map(|it| it.name()).collect();
+        assert_eq!(vec!["low", "mid", "high"], actual);
+    }
+
+    #[test]
+    fn test_shared_classifier_run_after() {
+        // Ensure high-priority classifiers run *after* low-priority classifiers,
+        // even after wrapping.
+        let low_priority_classifier = RetryClassifierPriority::default();
+        let mid_priority_classifier = RetryClassifierPriority::run_after(low_priority_classifier);
+        let high_priority_classifier = RetryClassifierPriority::run_after(mid_priority_classifier);
+
+        let mut list = vec![
+            wrap("mid", mid_priority_classifier),
+            wrap("high", high_priority_classifier),
+            wrap("low", low_priority_classifier),
+        ];
+        list.sort();
+
+        let actual: Vec<_> = list.iter().map(|it| it.name()).collect();
+        assert_eq!(vec!["low", "mid", "high"], actual);
+    }
+
+    #[test]
+    fn test_shared_preset_priorities() {
+        let before_modeled_as_retryable = RetryClassifierPriority::run_before(
+            RetryClassifierPriority::modeled_as_retryable_classifier(),
+        );
+        let mut list = vec![
+            wrap(
+                "modeled as retryable",
+                RetryClassifierPriority::modeled_as_retryable_classifier(),
+            ),
+            wrap(
+                "http status code",
+                RetryClassifierPriority::http_status_code_classifier(),
+            ),
+            wrap(
+                "transient error",
+                RetryClassifierPriority::transient_error_classifier(),
+            ),
+            wrap("before 'modeled as retryable'", before_modeled_as_retryable),
+        ];
+        list.sort();
+
+        let actual: Vec<_> = list.iter().map(|it| it.name()).collect();
+        assert_eq!(
+            vec![
+                "http status code",
+                "before 'modeled as retryable'",
+                "modeled as retryable",
+                "transient error"
+            ],
+            actual
+        );
     }
 }
