@@ -82,6 +82,13 @@ pub(crate) mod dynamodb {
         set_connection_close(dynamo_scenario(503, Some("ThrottlingException")))
     }
 
+    pub(crate) fn timeout() -> Scenario {
+        Scenario {
+            name: "timeout".into(),
+            response: ScenarioResponse::Timeout,
+        }
+    }
+
     pub(crate) fn empty_body_400() -> Scenario {
         dynamo_scenario(400, None)
     }
@@ -93,6 +100,15 @@ pub(crate) fn set_connection_close(mut resp: Scenario) -> Scenario {
     };
     headers.insert("Connection".into(), "close".into());
     resp.name += "(close header set)";
+    resp
+}
+
+pub(crate) fn set_keepalive(mut resp: Scenario) -> Scenario {
+    let ScenarioResponse::Response { headers, .. } = &mut resp.response else {
+        return resp;
+    };
+    headers.insert("Connection".into(), "Keep-Alive".into());
+    resp.name += "(keep-alive header set)";
     resp
 }
 
