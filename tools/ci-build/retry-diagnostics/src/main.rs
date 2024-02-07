@@ -43,6 +43,9 @@ struct Args {
 
     #[arg(short, long)]
     verbose: bool,
+
+    #[arg(long)]
+    port: Option<u16>,
 }
 
 #[tokio::main]
@@ -74,7 +77,7 @@ async fn main() {
             s3::s3_scenario(500, None),
         ],
     };
-    if let Some(run_only) = args.scenario {
+    if let Some(run_only) = &args.scenario {
         scenarios.retain(|scen| scen.name.eq_ignore_ascii_case(&run_only) || scen.name == "setup")
     }
     let progress_bar = ProgressBar::new(scenarios.len() as u64);
@@ -87,7 +90,7 @@ async fn main() {
     if args.verbose {
         progress_bar.set_draw_target(ProgressDrawTarget::hidden());
     }
-    let result = server::start_server(scenarios, Arc::new(progress_bar.clone())).await;
+    let result = server::start_server(scenarios, Arc::new(progress_bar.clone()), &args).await;
     progress_bar.finish_and_clear();
     println!("Run complete:\n{}", result.unwrap());
 }

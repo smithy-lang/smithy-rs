@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use anyhow::{bail, Context};
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use crate::Args;
 use aws_smithy_async::future::never::Never;
 use bytes::Bytes;
 use http::Uri;
@@ -275,21 +277,31 @@ impl Log {
 pub(crate) async fn start_server(
     scenarios: Vec<Scenario>,
     progress: SharedProgress,
+    args: &Args,
 ) -> anyhow::Result<Report> {
     let (tx, cancellation) = DiagnosticServer::new(scenarios, progress);
-
-    // We start a loop to continuously accept incoming connections
-    task::spawn(main_loop(tx));
-    Ok(cancellation.await?)
-}
-
-async fn main_loop(tx: DiagnosticServer) -> anyhow::Result<()> {
     // Use an adapter to access something implementing `tokio::io` traits as if they implement
     // `hyper::rt` IO traits.
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
+    let addr = SocketAddr::from(([127, 0, 0, 1], args.port.unwrap_or(3000)));
 
     // We create a TcpListener and bind it to 127.0.0.1:3000
-    let listener = TcpListener::bind(addr).await?;
+    let listener = TcpListener::bind(addr)
+        .await
+        .context("failed to bind to address")?;
+
+    // We start a loop to continuously accept incoming connections
+    let main_loop = task::spawn(main_loop(tx, listener));
+    match cancellation.await {
+        Ok(report) => Ok(report),
+        Err(_recv_error) => {
+            eprintln!("An error occured, looking for the cause...");
+            main_loop.await.expect("failed to join")?;
+            bail!("Unknown error—try running with RUST_LOG=trace")
+        }
+    }
+}
+
+async fn main_loop(tx: DiagnosticServer, listener: TcpListener) -> anyhow::Result<()> {
     loop {
         debug!("waiting for new connections");
         let (stream, _) = listener.accept().await?;
