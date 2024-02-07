@@ -8,6 +8,7 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
+import software.amazon.smithy.model.knowledge.TopDownIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
@@ -19,8 +20,11 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.InternalTraitsModule
+import software.amazon.smithy.rust.codegen.client.smithy.generators.client.fluentBuilderType
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -33,13 +37,16 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
 import kotlin.streams.toList
 
-private val presigningTypes: List<Pair<String, Any>> =
-    listOf(
+private val presigningTypes: Array<Pair<String, Any>> =
+    arrayOf(
         "PresignedRequest" to AwsRuntimeType.presigning().resolve("PresignedRequest"),
         "PresigningConfig" to AwsRuntimeType.presigning().resolve("PresigningConfig"),
     )
@@ -94,6 +101,12 @@ class AwsPresigningDecorator internal constructor(
     override val name: String = "AwsPresigning"
     override val order: Byte = ORDER
 
+    private val codegenScope =
+        arrayOf(
+            *presigningTypes,
+            *preludeScope,
+        )
+
     /**
      * Adds presignable trait to known presignable operations and creates synthetic presignable shapes for codegen
      */
@@ -128,6 +141,43 @@ class AwsPresigningDecorator internal constructor(
             }
         }.build()
     }
+
+    private fun anyPresignedShapes(ctx: ClientCodegenContext) =
+        TopDownIndex.of(ctx.model).getContainedOperations(ctx.serviceShape)
+            .any { presignableOperations.containsKey(it.id) }
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+        anyPresignedShapes(codegenContext).thenSingletonListOf {
+            adhocCustomization<CustomizableOperationSection.CustomizableOperationImpl> {
+                rustTemplate(
+                    """
+                    /// Sends the request and returns the response.
+                    ##[allow(unused_mut)]
+                    pub async fn presigned(mut self, presigning_config: #{PresigningConfig}) -> #{Result}<#{PresignedRequest}, crate::error::SdkError<E>> where
+                        E: std::error::Error + #{Send} + #{Sync} + 'static,
+                        B: #{CustomizablePresigned}<E>
+                    {
+                        self.execute(move |sender, conf|sender.presign(conf, presigning_config)).await
+                    }
+                    """,
+                    *codegenScope,
+                    "CustomizablePresigned" to CustomizablePresigned,
+                )
+            }
+        }
+
+    private val CustomizablePresigned =
+        RuntimeType.forInlineFun("CustomizablePresigned", InternalTraitsModule) {
+            rustTemplate(
+                """
+                pub trait CustomizablePresigned<E>: #{Send} + #{Sync} {
+                    fn presign(self, config_override: crate::config::Builder, presigning_config: #{PresigningConfig}) -> BoxFuture<SendResult<#{PresignedRequest}, E>>;
+                }
+
+                """,
+                *codegenScope,
+            )
+        }
 }
 
 class AwsPresignedFluentBuilderMethod(
@@ -135,14 +185,12 @@ class AwsPresignedFluentBuilderMethod(
 ) : FluentClientCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope =
-        (
-            presigningTypes +
-                arrayOf(
-                    *RuntimeType.preludeScope,
-                    "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
-                    "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                )
-        ).toTypedArray()
+        arrayOf(
+            *presigningTypes,
+            *preludeScope,
+            "Error" to AwsRuntimeType.presigning().resolve("config::Error"),
+            "SdkError" to RuntimeType.sdkError(runtimeConfig),
+        )
 
     override fun section(section: FluentClientSection): Writable =
         writable {
@@ -159,18 +207,61 @@ class AwsPresignedFluentBuilderMethod(
                     *codegenScope,
                     "OpError" to section.operationErrorType,
                     "RawResponseType" to
-                        RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::orchestrator::HttpResponse"),
+                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                            .resolve("client::orchestrator::HttpResponse"),
                 ) {
                     renderPresignedMethodBody(section)
+                    val builderName = section.operationShape.fluentBuilderType(codegenContext.symbolProvider).name
+                    addDependency(implementPresignedTrait(section, builderName).dependency!!)
                 }
             }
         }
+
+    private fun implementPresignedTrait(
+        section: FluentClientSection.FluentBuilderImpl,
+        builderName: String,
+    ): RuntimeType {
+        return RuntimeType.forInlineFun(
+            "TraitImplementation",
+            codegenContext.symbolProvider.moduleForBuilder(section.operationShape),
+        ) {
+            rustTemplate(
+                """
+                impl
+                    crate::client::customize::internal::CustomizablePresigned<
+                        #{OperationError},
+                    > for $builderName
+                {
+                    fn presign(
+                        self,
+                        config_override: crate::config::Builder,
+                        presigning_config: #{PresigningConfig}
+                    ) -> crate::client::customize::internal::BoxFuture<
+                        crate::client::customize::internal::SendResult<
+                            #{PresignedRequest},
+                            #{OperationError},
+                        >,
+                    > {
+                        #{Box}::pin(async move { self.config_override(config_override).presigned(presigning_config).await })
+                    }
+                }
+                """,
+                *preludeScope,
+                *presigningTypes,
+                "OperationError" to section.operationErrorType,
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+            )
+        }
+    }
 
     private fun RustWriter.renderPresignedMethodBody(section: FluentClientSection.FluentBuilderImpl) {
         val presignableOp = PRESIGNABLE_OPERATIONS.getValue(section.operationShape.id)
         val operationShape =
             if (presignableOp.hasModelTransforms()) {
-                codegenContext.model.expectShape(syntheticShapeId(section.operationShape.id), OperationShape::class.java)
+                codegenContext.model.expectShape(
+                    syntheticShapeId(section.operationShape.id),
+                    OperationShape::class.java,
+                )
             } else {
                 section.operationShape
             }
@@ -262,7 +353,10 @@ class AwsPresignedFluentBuilderMethod(
             it.uppercase()
         }.let { baseName ->
             "${baseName}PresigningRequestSerializer".let { name ->
-                RuntimeType.forInlineFun(name, codegenContext.symbolProvider.moduleForShape(transformedOperationShape)) {
+                RuntimeType.forInlineFun(
+                    name,
+                    codegenContext.symbolProvider.moduleForShape(transformedOperationShape),
+                ) {
                     RequestSerializerGenerator(
                         codegenContext,
                         codegenContext.protocolImpl!!,
