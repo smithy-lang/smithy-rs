@@ -28,3 +28,15 @@ message = "Add `try_into_http1x` and `try_from_http1x` to Request and Response c
 references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
 meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "rcoh"
+
+[[smithy-rs]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336","smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false , "target" = "client" }
+author = "iampkmone"
+
+[[aws-sdk-rust]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336", "smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false}
+author = "iampkmone"
