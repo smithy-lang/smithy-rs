@@ -10,7 +10,9 @@ extra["moduleName"] = "software.amazon.smithy.rust.kotlin.codegen.server.python.
 tasks["jar"].enabled = false
 
 plugins {
-    id("software.amazon.smithy")
+    java
+    id("software.amazon.smithy.gradle.smithy-base")
+    id("software.amazon.smithy.gradle.smithy-jar")
 }
 
 val smithyVersion: String by project
@@ -23,13 +25,6 @@ val workingDirUnderBuildDir = "smithyprojections/codegen-server-test-python/"
 
 configure<software.amazon.smithy.gradle.SmithyExtension> {
     outputDirectory = layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile
-}
-
-buildscript {
-    val smithyVersion: String by project
-    dependencies {
-        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
-    }
 }
 
 dependencies {
@@ -121,7 +116,7 @@ tasks.register("stubs") {
     }
 }
 
-tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["jar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
