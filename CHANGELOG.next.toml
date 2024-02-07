@@ -29,6 +29,12 @@ references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
 meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "rcoh"
 
+[[aws-sdk-rust]]
+message = "It is now possible to send customized presigned requests. You can now call `.customize().<customizations>.presigned(...).await`. Previously, only normal requests supported customization."
+references = ["smithy-rs#3385", "aws-sdk-rust#1031"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "rcoh"
+
 [[smithy-rs]]
 message = "Added impl `Display` to Enums."
 references = ["smithy-rs#3336","smithy-rs#3391"]
