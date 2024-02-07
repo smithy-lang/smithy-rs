@@ -14,20 +14,16 @@ buildscript {
     }
 }
 
-plugins { }
-
 allprojects {
     repositories {
         // mavenLocal()
         mavenCentral()
         google()
     }
-}
 
-allprojects.forEach {
-    it.apply(plugin = "jacoco")
+    apply(plugin = "jacoco")
 
-    it.the<JacocoPluginExtension>().apply {
+    the<JacocoPluginExtension>().apply {
         toolVersion = "0.8.8"
         reportsDirectory.set(layout.buildDirectory.dir("jacoco-reports"))
     }
