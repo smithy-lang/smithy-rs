@@ -30,6 +30,24 @@ meta = { "breaking" = false, "bug" = false, "tada" = false }
 author = "rcoh"
 
 [[aws-sdk-rust]]
+message = "It is now possible to send customized presigned requests. You can now call `.customize().<customizations>.presigned(...).await`. Previously, only normal requests supported customization."
+references = ["smithy-rs#3385", "aws-sdk-rust#1031"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336","smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false , "target" = "client" }
+author = "iampkmone"
+
+[[aws-sdk-rust]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336", "smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false}
+author = "iampkmone"
+
+[[aws-sdk-rust]]
 message = "Retry classifiers will now be sorted by priority"
 references = ["smithy-rs#3322"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
