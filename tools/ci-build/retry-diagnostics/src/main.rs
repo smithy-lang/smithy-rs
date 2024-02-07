@@ -93,14 +93,18 @@ async fn main() {
 }
 
 impl server::Progress for ProgressBar {
-    fn scenarios_remaining(&self, num_remaining: usize) {
+    fn scenarios_remaining(&self, scenario: Option<&str>, num_remaining: usize) {
+        let scenario = scenario.unwrap_or("done!").to_string();
         self.set_style(
             ProgressStyle::with_template(
-                "{spinner:.green} {pos}/{len} scenarios [{elapsed_precise}] [{bar:.cyan/blue}] ({eta})",
+                "{spinner:.green} {pos}/{len} [{elapsed_precise}] [{bar:.cyan/blue}] (eta: {eta}) scenario: {scenario}",
             )
             .unwrap()
             .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
                 write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
+            })
+            .with_key("scenario", move |_state: &ProgressState, w: &mut dyn Write| {
+                write!(w, "{}", scenario).unwrap()
             })
             .progress_chars("#>-"),
         );

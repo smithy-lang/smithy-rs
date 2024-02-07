@@ -25,7 +25,7 @@ use tracing::debug;
 use crate::scenario::{Scenario, ScenarioResponse};
 
 pub(crate) trait Progress: Send + Sync + 'static {
-    fn scenarios_remaining(&self, num_remaining: usize);
+    fn scenarios_remaining(&self, in_progress: Option<&str>, num_remaining: usize);
 }
 
 type SharedProgress = Arc<dyn Progress>;
@@ -190,8 +190,6 @@ impl Log {
             active.end_time = Some(SystemTime::now());
             self.finished.push(active);
         }
-        self.progress
-            .scenarios_remaining(self.scenarios_to_run.len());
         let Some(next_scenario) = self.scenarios_to_run.pop() else {
             debug!("no more scenarios available to run {:?}", ev);
             self.active = None;
@@ -211,6 +209,10 @@ impl Log {
             start_time: SystemTime::now(),
             end_time: None,
         });
+        self.progress.scenarios_remaining(
+            self.active.as_ref().map(|tr| tr.response.name.as_str()),
+            self.scenarios_to_run.len(),
+        );
     }
 
     pub async fn new_connection(&mut self) {
