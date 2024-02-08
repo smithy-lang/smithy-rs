@@ -6,20 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "`crate::event_receiver::EventReceiver` is now re-exported as `crate::primitives::event_stream::EventReceiver` when a service supports event stream operations.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#3305"
-      ],
-      "since-commit": "9f0ba850e03241f657e2e40ca185780e0a5878cb",
-      "age": 5
-    },
-    {
       "message": "Add support for constructing [`SdkBody`] and [`ByteStream`] from `http-body` 1.0 bodies. Note that this is initial support and works via a backwards compatibility shim to http-body 0.4. Hyper 1.0 is not supported.",
       "meta": {
         "bug": false,
@@ -32,7 +18,7 @@
         "aws-sdk-rust#977"
       ],
       "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 3
+      "age": 4
     },
     {
       "message": " Add `PaginationStreamExt` extension trait to `aws-smithy-types-convert` behind the `convert-streams` feature. This makes it possible to treat a paginator as a [`futures_core::Stream`](https://docs.rs/futures-core/latest/futures_core/stream/trait.Stream.html), allowing customers to use stream combinators like [`map`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.map) and [`filter`](https://docs.rs/tokio-stream/latest/tokio_stream/trait.StreamExt.html#method.filter).\n\nExample:\n\n```rust\nuse aws_smithy_types_convert::stream::PaginationStreamExt\nlet stream = s3_client.list_objects_v2().bucket(\"...\").into_paginator().send().into_stream_03x();\n```\n",
@@ -46,7 +32,7 @@
         "smithy-rs#3299"
       ],
       "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Serialize 0/false in query parameters, and ignore actual default value during serialization instead of just 0/false. See [changelog discussion](https://github.com/smithy-lang/smithy-rs/discussions/3312) for details.",
@@ -61,7 +47,7 @@
         "smithy-rs#3312"
       ],
       "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add `as_service_err()` to `SdkError` to allow checking the type of an error is without taking ownership.",
@@ -77,7 +63,7 @@
         "aws-sdk-rust#1010"
       ],
       "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fix bug in `CredentialsProcess` provider where `expiry` was incorrectly treated as a required field.",
@@ -92,7 +78,7 @@
         "aws-sdk-rust#1021"
       ],
       "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 3
+      "age": 4
     },
     {
       "message": "~/.aws/config and ~/.aws/credentials now parse keys in a case-insensitive way. This means the `AWS_SECRET_ACCESS_KEY` is supported in addition to `aws_secret_access_key`.",
@@ -108,7 +94,7 @@
         "smithy-rs#3344"
       ],
       "since-commit": "e235a2fd9ec45335a3b2018028c2d3a2ac13ffdf",
-      "age": 3
+      "age": 4
     },
     {
       "message": "`EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location.",
@@ -122,7 +108,7 @@
         "smithy-rs#3318"
       ],
       "since-commit": "edf6e77bfa991aef9afa5acf293a911f7982511a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix bug where overriding the credentials at the operation level failed if credentials were already set.",
@@ -137,7 +123,7 @@
         "smithy-rs#3363"
       ],
       "since-commit": "edf6e77bfa991aef9afa5acf293a911f7982511a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Add `apply_to_request_http1x` to `aws-sigv4` to enable signing http = 1.0 requests.",
@@ -152,7 +138,7 @@
         "smithy-rs#3366"
       ],
       "since-commit": "edf6e77bfa991aef9afa5acf293a911f7982511a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "The types in the aws-http crate were moved into aws-runtime. Deprecated type aliases were put in place to point to the new locations.",
@@ -166,7 +152,7 @@
         "smithy-rs#3355"
       ],
       "since-commit": "a781be3cd8d22f4ebb5c06a758ddd5f1d6824ded",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add support for `[sso-session]` in AWS config file for AWS Identity Center SSO credentials. Note that this does not include support for AWS Builder ID SSO sessions for services such as Code Catalyst (these lack the `sso_account_id` and `sso_role_name` fields in the profile config). Support for AWS Builder IDs is still being tracked in https://github.com/awslabs/aws-sdk-rust/issues/703.",
@@ -181,7 +167,7 @@
         "smithy-rs#3379"
       ],
       "since-commit": "a781be3cd8d22f4ebb5c06a758ddd5f1d6824ded",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
