@@ -23,14 +23,7 @@ include(":aws:sdk-codegen")
 pluginManagement {
     val smithyGradlePluginVersion: String by settings
     plugins {
-        id("software.amazon.smithy") version smithyGradlePluginVersion
-    }
-}
-
-buildscript {
-    repositories {
-        /* mavenLocal() */
-        mavenCentral()
-        google()
+        id("software.amazon.smithy.gradle.smithy-base") version smithyGradlePluginVersion
+        id("software.amazon.smithy.gradle.smithy-jar") version smithyGradlePluginVersion
     }
 }
