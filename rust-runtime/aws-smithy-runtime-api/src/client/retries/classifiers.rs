@@ -282,17 +282,21 @@ impl ValidateConfig for SharedRetryClassifier {
         runtime_components: &RuntimeComponents,
         _cfg: &ConfigBag,
     ) -> Result<(), BoxError> {
-        let retry_classifiers = runtime_components.retry_classifiers_slice();
-        let out_of_order: Vec<_> = retry_classifiers
-            .windows(2)
-            .filter(|&w| w[0].value().priority() > w[1].value().priority())
-            .collect();
+        #[cfg(debug_assertions)]
+        {
+            // Because this is validating that the implementation is correct rather
+            // than validating user input, we only want to run this in debug builds.
+            let retry_classifiers = runtime_components.retry_classifiers_slice();
+            let out_of_order: Vec<_> = retry_classifiers
+                .windows(2)
+                .filter(|&w| w[0].value().priority() > w[1].value().priority())
+                .collect();
 
-        if out_of_order.is_empty() {
-            Ok(())
-        } else {
-            Err("retry classifiers are mis-ordered; this is a bug".into())
+            if !out_of_order.is_empty() {
+                return Err("retry classifiers are mis-ordered; this is a bug".into());
+            }
         }
+        Ok(())
     }
 }
 
