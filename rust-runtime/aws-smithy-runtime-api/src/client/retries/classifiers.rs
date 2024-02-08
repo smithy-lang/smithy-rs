@@ -12,7 +12,7 @@
 //! specific than others in what they identify as retryable, classifiers are
 //! run in a sequence that is determined by their priority.
 //!
-//! Classifiers that are higher priority should be run **after** classifiers
+//! Classifiers that are higher priority are run **after** classifiers
 //! with a lower priority. The intention is that:
 //!
 //! 1. Generic classifiers that look at things like the HTTP error code run
