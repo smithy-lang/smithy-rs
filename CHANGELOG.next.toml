@@ -46,3 +46,15 @@ message = "Added impl `Display` to Enums."
 references = ["smithy-rs#3336", "smithy-rs#3391"]
 meta = { "breaking" = false, "tada" = false, "bug" = false}
 author = "iampkmone"
+
+[[smithy-rs]]
+message = "Cap the maximum jitter fraction for cache refresh buffer time to 0.5. It was previously 1.0, and if the fraction was randomly set to 1.0, it was equivalent to disregarding the buffer time for cache refresh."
+references = ["smithy-rs#3402"]
+meta = { "breaking" = false, "tada" = false, "bug" = true, "target" = "client" }
+author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Cap the maximum jitter fraction for cache refresh buffer time to 0.5. It was previously 1.0, and if the fraction was randomly set to 1.0, it was equivalent to disregarding the buffer time for cache refresh."
+references = ["smithy-rs#3402"]
+meta = { "breaking" = false, "tada" = false, "bug" = true }
+author = "ysaito1001"
