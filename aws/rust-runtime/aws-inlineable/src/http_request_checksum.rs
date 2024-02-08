@@ -60,13 +60,15 @@ impl Storable for RequestChecksumInterceptorState {
     type Storer = StoreReplace<Self>;
 }
 
+pub(crate) type CustomDefaultFn = Box<
+    dyn Fn(Option<ChecksumAlgorithm>, &ConfigBag) -> Option<ChecksumAlgorithm>
+        + Send
+        + Sync
+        + 'static,
+>;
+
 pub(crate) struct DefaultRequestChecksumOverride {
-    custom_default: Box<
-        dyn Fn(Option<ChecksumAlgorithm>, &ConfigBag) -> Option<ChecksumAlgorithm>
-            + Send
-            + Sync
-            + 'static,
-    >,
+    custom_default: CustomDefaultFn,
 }
 impl fmt::Debug for DefaultRequestChecksumOverride {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
