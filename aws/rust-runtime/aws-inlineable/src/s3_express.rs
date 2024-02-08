@@ -232,7 +232,7 @@ pub(crate) mod identity_provider {
             runtime_components: &'a RuntimeComponents,
             config_bag: &'a ConfigBag,
         ) -> Result<Identity, BoxError> {
-            let bucket_name = self.bucket_name(config_bag);
+            let bucket_name = self.bucket_name(config_bag)?;
 
             let sigv4_identity_resolver = runtime_components
                 .identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID)
@@ -253,14 +253,16 @@ pub(crate) mod identity_provider {
             Ok(Identity::new(data.clone(), data.expiry()))
         }
 
-        fn bucket_name<'a>(&'a self, config_bag: &'a ConfigBag) -> &'a str {
+        fn bucket_name<'a>(&'a self, config_bag: &'a ConfigBag) -> Result<&'a str, BoxError> {
             let params = config_bag
                 .load::<EndpointResolverParams>()
                 .expect("endpoint resolver params must be set");
             let params = params
                 .get::<crate::config::endpoint::Params>()
                 .expect("`Params` should be wrapped in `EndpointResolverParams`");
-            params.bucket().expect("bucket name must be set")
+            params
+                .bucket()
+                .ok_or("A bucket was not set in endpoint params".into())
         }
 
         async fn express_session_credentials<'a>(
