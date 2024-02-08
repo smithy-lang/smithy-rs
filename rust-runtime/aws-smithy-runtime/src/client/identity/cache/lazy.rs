@@ -24,7 +24,7 @@ use tracing::Instrument;
 const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_EXPIRATION: Duration = Duration::from_secs(15 * 60);
 const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
-const DEFAULT_BUFFER_TIME_JITTER_FRACTION: fn() -> f64 = || fastrand::f64 * 0.5;
+const DEFAULT_BUFFER_TIME_JITTER_FRACTION: fn() -> f64 = || fastrand::f64() * 0.5;
 
 /// Builder for lazy identity caching.
 #[derive(Default, Debug)]
