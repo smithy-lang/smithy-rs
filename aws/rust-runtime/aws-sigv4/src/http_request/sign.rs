@@ -296,10 +296,15 @@ fn calculate_signing_params<'a>(
     }
 
     if let Some(security_token) = creds.session_token() {
-        signing_params.push((
-            param::X_AMZ_SECURITY_TOKEN,
-            Cow::Owned(security_token.to_string()),
-        ));
+        if !params
+            .settings()
+            .param_excluded(param::X_AMZ_SECURITY_TOKEN)
+        {
+            signing_params.push((
+                param::X_AMZ_SECURITY_TOKEN,
+                Cow::Owned(security_token.to_string()),
+            ));
+        }
     }
 
     Ok((signing_params, signature))
@@ -368,13 +373,7 @@ fn calculate_signing_headers<'a>(
             if let Some(security_token) = creds.session_token() {
                 if !params
                     .settings
-                    .excluded_headers
-                    .as_ref()
-                    .is_some_and(|headers| {
-                        headers
-                            .iter()
-                            .any(|header| header == header::X_AMZ_SECURITY_TOKEN)
-                    })
+                    .header_excluded(header::X_AMZ_SECURITY_TOKEN)
                 {
                     add_header(
                         &mut headers,

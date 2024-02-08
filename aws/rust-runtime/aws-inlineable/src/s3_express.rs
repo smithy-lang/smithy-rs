@@ -6,9 +6,11 @@
 /// Supporting code for S3 Express auth
 pub(crate) mod auth {
     use std::borrow::Cow;
+    use std::str::FromStr;
 
     use aws_credential_types::Credentials;
     use aws_runtime::auth::sigv4::SigV4Signer;
+    use aws_sigv4::http_request::{SignatureLocation, SigningSettings};
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::auth::{
         AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, Sign,
@@ -68,26 +70,13 @@ pub(crate) mod auth {
         ) -> Result<(), BoxError> {
             let operation_config =
                 SigV4Signer::extract_operation_config(auth_scheme_endpoint_config, config_bag)?;
-
             let mut settings = SigV4Signer::signing_settings(&operation_config);
-            if let Some(excluded) = settings.excluded_headers.as_mut() {
-                excluded.push(Cow::Borrowed("x-amz-security-token"));
-            }
 
             let express_credentials = identity.data::<Credentials>().ok_or(
                 "wrong identity type for SigV4. Expected AWS credentials but got `{identity:?}",
             )?;
-            let mut value = http::HeaderValue::from_str(
-                express_credentials
-                    .session_token()
-                    .expect("S3 session token should be set"),
-            )
-            .unwrap();
-            value.set_sensitive(true);
-            request.headers_mut().insert(
-                http::HeaderName::from_static("x-amz-s3session-token"),
-                value,
-            );
+
+            add_token_to_request(express_credentials, request, &mut settings);
 
             SigV4Signer.sign_http_request(
                 request,
@@ -97,6 +86,82 @@ pub(crate) mod auth {
                 runtime_components,
                 config_bag,
             )
+        }
+    }
+
+    fn add_token_to_request(
+        express_credentials: &Credentials,
+        request: &mut HttpRequest,
+        settings: &mut SigningSettings,
+    ) {
+        match settings.signature_location {
+            SignatureLocation::Headers => {
+                let security_token_header = Cow::Borrowed("x-amz-security-token");
+                match settings.excluded_headers.as_mut() {
+                    Some(excluded) => {
+                        excluded.push(security_token_header);
+                    }
+                    None => {
+                        settings
+                            .excluded_params
+                            .get_or_insert(vec![security_token_header]);
+                    }
+                }
+                let mut value = http::HeaderValue::from_str(
+                    express_credentials
+                        .session_token()
+                        .expect("S3 session token should be set"),
+                )
+                .unwrap();
+                value.set_sensitive(true);
+                request.headers_mut().insert(
+                    http::HeaderName::from_static("x-amz-s3session-token"),
+                    value,
+                );
+            }
+            SignatureLocation::QueryParams => {
+                let security_token_param = Cow::Borrowed("X-Amz-Security-Token");
+                match settings.excluded_params.as_mut() {
+                    Some(excluded) => {
+                        excluded.push(security_token_param);
+                    }
+                    None => {
+                        settings
+                            .excluded_params
+                            .get_or_insert(vec![security_token_param]);
+                    }
+                }
+                let uri = http::Uri::from_str(request.uri()).unwrap();
+                let mut query_params = match uri.query() {
+                    Some(query) => query.split('&').collect(),
+                    None => vec![],
+                };
+                let param = &format!(
+                    "X-Amz-S3session-Token={}",
+                    aws_smithy_http::query::fmt_string(
+                        express_credentials
+                            .session_token()
+                            .expect("S3 session token should be set")
+                    )
+                );
+                query_params.push(param);
+                let uri = http::Uri::builder()
+                    .authority(
+                        uri.authority()
+                            .expect("request URI should have authority set")
+                            .clone(),
+                    )
+                    .scheme(
+                        uri.scheme()
+                            .expect("request URI should have scheme set")
+                            .clone(),
+                    )
+                    .path_and_query(format!("{}?{}", uri.path(), query_params.join("&")))
+                    .build()
+                    .expect("unable to construct new URI");
+                request.set_uri(uri).unwrap();
+            }
+            _ => todo!(),
         }
     }
 }

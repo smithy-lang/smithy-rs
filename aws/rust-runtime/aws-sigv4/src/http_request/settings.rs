@@ -30,6 +30,9 @@ pub struct SigningSettings {
     /// Headers that should be excluded from the signing process
     pub excluded_headers: Option<Vec<Cow<'static, str>>>,
 
+    /// Query params that should be excluded from the signing process
+    pub excluded_params: Option<Vec<Cow<'static, str>>>,
+
     /// Specifies whether the absolute path component of the URI should be normalized during signing.
     pub uri_path_normalization_mode: UriPathNormalizationMode,
 
@@ -37,6 +40,22 @@ pub struct SigningSettings {
     /// canonical request. Other services require only it to be added after
     /// calculating the signature.
     pub session_token_mode: SessionTokenMode,
+}
+
+impl SigningSettings {
+    pub(crate) fn header_excluded(&self, header: impl Into<Cow<'static, str>>) -> bool {
+        let header = header.into();
+        self.excluded_headers
+            .as_ref()
+            .is_some_and(|headers| headers.iter().any(|h| h == &header))
+    }
+
+    pub(crate) fn param_excluded(&self, param: impl Into<Cow<'static, str>>) -> bool {
+        let param = param.into();
+        self.excluded_params
+            .as_ref()
+            .is_some_and(|params| params.iter().any(|p| p == &param))
+    }
 }
 
 /// HTTP payload checksum type
@@ -131,6 +150,7 @@ impl Default for SigningSettings {
             signature_location: SignatureLocation::Headers,
             expires_in: None,
             excluded_headers,
+            excluded_params: None,
             uri_path_normalization_mode: UriPathNormalizationMode::Enabled,
             session_token_mode: SessionTokenMode::Include,
         }
