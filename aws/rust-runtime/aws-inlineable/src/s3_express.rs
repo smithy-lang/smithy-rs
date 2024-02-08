@@ -81,7 +81,11 @@ pub(crate) mod identity_cache {
 /// Supporting code for S3 Express identity provider
 pub(crate) mod identity_provider {
     use crate::s3_express::identity_cache::S3ExpressIdentityCache;
-    use aws_credential_types::provider::ProvideCredentials;
+    use aws_smithy_runtime_api::client::identity::{
+        IdentityCacheLocation, IdentityFuture, ResolveIdentity,
+    };
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+    use aws_smithy_types::config_bag::ConfigBag;
 
     #[derive(Debug)]
     pub(crate) struct DefaultS3ExpressIdentityProvider {
@@ -105,14 +109,17 @@ pub(crate) mod identity_provider {
         }
     }
 
-    impl ProvideCredentials for DefaultS3ExpressIdentityProvider {
-        fn provide_credentials<'a>(
+    impl ResolveIdentity for DefaultS3ExpressIdentityProvider {
+        fn resolve_identity<'a>(
             &'a self,
-        ) -> aws_credential_types::provider::future::ProvideCredentials<'a>
-        where
-            Self: 'a,
-        {
+            _runtime_components: &'a RuntimeComponents,
+            _config_bag: &'a ConfigBag,
+        ) -> IdentityFuture<'a> {
             todo!()
+        }
+
+        fn cache_location(&self) -> IdentityCacheLocation {
+            IdentityCacheLocation::IdentityResolver
         }
     }
 }

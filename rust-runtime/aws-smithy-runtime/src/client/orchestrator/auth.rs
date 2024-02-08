@@ -10,6 +10,7 @@ use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOptionResolverParams,
     ResolveAuthSchemeOptions,
 };
+use aws_smithy_runtime_api::client::identity::ResolveIdentity;
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
