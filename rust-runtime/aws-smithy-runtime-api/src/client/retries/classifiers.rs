@@ -23,12 +23,9 @@
 //!
 //! Put another way:
 //!
-//!
-//!
 //! | large nets target common failures with basic behavior | run before            | small nets target specific failures with special behavior|
 //! |-------------------------------------------------------|-----------------------|----------------------------------------------------------|
 //! | low priority classifiers                              | results overridden by | high priority classifiers                                |
-//! ```
 
 use crate::box_error::BoxError;
 use crate::client::interceptors::context::InterceptorContext;
