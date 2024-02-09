@@ -99,11 +99,37 @@ jobs:
       run_sdk_examples: false
       git_ref: ${{ inputs.commit_sha }}
 
+  check-semver-hazards:
+    name: Check for semver hazards
+    needs:
+    - acquire-base-image
+    # We need `always` here otherwise this job won't run if the previous job has been skipped
+    # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
+    if: always()
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
+        fetch-depth: 0
+    - uses: actions/checkout@v3
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+        fetch-depth: 0
+    - name: Run check-semver-hazards
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver-hazards
+        action-arguments: ${{ inputs.stable_semantic_version }} ${{ inputs.unstable_semantic_version }}
+
   get-or-create-release-branch:
     name: Get or create a release branch
     needs:
-    - release-ci
     - acquire-base-image
+    - check-semver-hazards
+    - release-ci
     # We need `always` here otherwise this job won't run if the previous job has been skipped
     # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
     if: |
