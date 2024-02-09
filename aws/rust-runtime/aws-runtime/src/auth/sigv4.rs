@@ -148,6 +148,10 @@ impl SigV4Signer {
     ///
     /// This is a helper used by [`Sign::sign_http_request`] and will be useful if calling code
     /// needs to pass a configured `settings`.
+    ///
+    /// TODO(S3Express): Make this method more user friendly, possibly returning a builder
+    ///  instead of taking these input parameters. The builder will have a `sign` method that
+    ///  does what this method body currently does.
     pub fn sign_http_request(
         &self,
         request: &mut HttpRequest,
