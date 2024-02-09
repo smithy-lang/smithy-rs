@@ -163,7 +163,8 @@ pub trait ResolveIdentity: Send + Sync + Debug {
     /// Returns the location of an identity cache associated with this identity resolver.
     ///
     /// By default, identity resolvers will use the identity cache stored in runtime components.
-    /// Implementing types can change the cache location if they want to.
+    /// Implementing types can change the cache location if they want to. Refer to [`IdentityCacheLocation`]
+    /// explaining why a concrete identity resolver might want to change the cache location.
     fn cache_location(&self) -> IdentityCacheLocation {
         IdentityCacheLocation::RuntimeComponents
     }
