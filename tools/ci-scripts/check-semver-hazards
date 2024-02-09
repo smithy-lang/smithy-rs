@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# This script patches the new runtime crates into an old AWS SDK and runs tests
+# to check for semver hazards, such as a `Storable` being in an unstable runtime crate.
+
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+if [ "$#" -ne 2 ]; then
+  echo "Usage: check-semver-hazards <stable-crate-version> <unstable-crate-version>"
+  exit 1
+fi
+STABLE_CRATE_VERSION="$1"
+UNSTABLE_CRATE_VERSION="$2"
+echo "Stable crate version: ${STABLE_CRATE_VERSION}"
+echo "Unstable crate version: ${UNSTABLE_CRATE_VERSION}"
+
+# Need to allow warnings since there may be deprecations that the old SDK uses
+unset RUSTFLAGS
+
+set -eux
+
+echo -e "${C_YELLOW}# Patching SDK...${C_RESET}"
+runtime-versioner patch-runtime \
+  --sdk-path "$(pwd)/aws-sdk-rust" \
+  --smithy-rs-path "$(pwd)/smithy-rs" \
+  --stable-crate-version "${STABLE_CRATE_VERSION}" \
+  --unstable-crate-version "${UNSTABLE_CRATE_VERSION}"
+
+# Testing just a small subset of the full SDK to check for semver hazards
+echo -e "${C_YELLOW}# Testing SDK...${C_RESET}"
+for sdk in dynamodb s3; do
+  echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
+  pushd "aws-sdk-rust/sdk/${sdk}" &>/dev/null
+  cargo test --all-features
+  popd &>/dev/null
+done

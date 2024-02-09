@@ -8,7 +8,6 @@ import java.util.Properties
 
 plugins {
     `kotlin-dsl`
-    jacoco
 }
 repositories {
     mavenCentral()
@@ -52,15 +51,3 @@ tasks.test {
         showStandardStreams = true
     }
 }
-
-// Configure jacoco (code coverage) to generate an HTML report
-tasks.jacocoTestReport {
-    reports {
-        xml.required.set(false)
-        csv.required.set(false)
-        html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco"))
-    }
-}
-
-// Always run the jacoco test report after testing.
-tasks["test"].finalizedBy(tasks["jacocoTestReport"])

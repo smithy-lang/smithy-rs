@@ -15,7 +15,9 @@ extra["moduleName"] = "software.amazon.smithy.rust.awssdk"
 tasks["jar"].enabled = false
 
 plugins {
-    id("software.amazon.smithy")
+    java
+    id("software.amazon.smithy.gradle.smithy-base")
+    id("software.amazon.smithy.gradle.smithy-jar")
 }
 
 java {
@@ -38,14 +40,6 @@ val sdkVersionerToolPath = rootProject.projectDir.resolve("tools/ci-build/sdk-ve
 val outputDir = layout.buildDirectory.dir("aws-sdk").get()
 val sdkOutputDir = outputDir.dir("sdk")
 val examplesOutputDir = outputDir.dir("examples")
-
-buildscript {
-    val smithyVersion: String by project
-    dependencies {
-        classpath("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
-        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
-    }
-}
 
 dependencies {
     implementation(project(":aws:sdk-codegen"))
@@ -157,7 +151,7 @@ tasks.register("generateSmithyBuild") {
 }
 
 tasks.register("generateIndexMd") {
-    dependsOn("smithyBuildJar")
+    dependsOn("jar")
 
     inputs.property("servicelist", awsServices.services.toString())
     val indexMd = outputDir.file("index.md").asFile
@@ -169,7 +163,7 @@ tasks.register("generateIndexMd") {
 
 tasks.register("relocateServices") {
     description = "relocate AWS services to their final destination"
-    dependsOn("smithyBuildJar")
+    dependsOn("jar")
 
     doLast {
         awsServices.services.forEach {
@@ -196,7 +190,7 @@ tasks.register("relocateServices") {
 
 tasks.register("relocateExamples") {
     description = "relocate the examples folder & rewrite path dependencies"
-    dependsOn("smithyBuildJar")
+    dependsOn("jar")
 
     doLast {
         if (awsServices.examples.isNotEmpty()) {
@@ -220,7 +214,7 @@ tasks.register("relocateExamples") {
 
 tasks.register("relocateTests") {
     description = "relocate the root integration tests and rewrite path dependencies"
-    dependsOn("smithyBuildJar")
+    dependsOn("jar")
 
     doLast {
         if (awsServices.rootTests.isNotEmpty()) {
@@ -272,7 +266,7 @@ fun rewritePathDependency(line: String): String {
 }
 
 tasks.register<Copy>("copyAllRuntimes") {
-    dependsOn("smithyBuildJar")
+    dependsOn("jar")
     from("$rootDir/aws/rust-runtime") {
         CrateSet.AWS_SDK_RUNTIME.forEach { include("${it.name}/**") }
     }
@@ -309,7 +303,7 @@ tasks.register("relocateRuntime") {
 }
 
 tasks.register<Copy>("relocateChangelog") {
-    dependsOn("smithyBuildJar")
+    dependsOn("jar")
     from("$rootDir/aws")
     include("SDK_CHANGELOG.md")
     into(outputDir)
@@ -413,7 +407,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     }
 }
 
-tasks["smithyBuildJar"].apply {
+tasks["jar"].apply {
     inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
@@ -423,7 +417,7 @@ tasks["smithyBuildJar"].apply {
 tasks["assemble"].apply {
     dependsOn(
         "deleteSdk",
-        "smithyBuildJar",
+        "jar",
         "relocateServices",
         "relocateRuntime",
         "relocateAwsRuntime",
