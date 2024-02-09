@@ -272,65 +272,13 @@ pub(crate) mod identity_provider {
             runtime_components: &'a RuntimeComponents,
             config_bag: &'a ConfigBag,
         ) -> Result<SessionCredentials, BoxError> {
-            let mut config_builder = crate::Config::builder();
-            config_builder.set_accelerate(
-                config_bag
-                    .load::<crate::config::Accelerate>()
-                    .map(|ty| ty.0),
-            );
-            config_builder.set_app_name(config_bag.load::<aws_types::app_name::AppName>().cloned());
-            config_builder.set_disable_multi_region_access_points(
-                config_bag
-                    .load::<crate::config::DisableMultiRegionAccessPoints>()
-                    .map(|ty| ty.0),
-            );
-            config_builder.set_endpoint_url(
-                config_bag
-                    .load::<::aws_types::endpoint_config::EndpointUrl>()
-                    .map(|ty| ty.0.clone()),
-            );
-            config_builder.set_force_path_style(
-                config_bag
-                    .load::<crate::config::ForcePathStyle>()
-                    .map(|ty| ty.0),
-            );
-            config_builder.set_region(config_bag.load::<::aws_types::region::Region>().cloned());
-            config_builder.set_retry_config(
-                config_bag
-                    .load::<aws_smithy_types::retry::RetryConfig>()
-                    .cloned(),
-            );
-            config_builder.set_retry_partition(
-                config_bag
-                    .load::<::aws_smithy_runtime::client::retries::RetryPartition>()
-                    .cloned(),
-            );
-            config_builder.set_timeout_config(
-                config_bag
-                    .load::<::aws_smithy_types::timeout::TimeoutConfig>()
-                    .cloned(),
-            );
-            config_builder.set_use_arn_region(
-                config_bag
-                    .load::<crate::config::UseArnRegion>()
-                    .map(|ty| ty.0),
-            );
-            config_builder.set_use_dual_stack(
-                config_bag
-                    .load::<::aws_types::endpoint_config::UseDualStack>()
-                    .map(|ty| ty.0),
-            );
-            config_builder.set_use_fips(
-                config_bag
-                    .load::<::aws_types::endpoint_config::UseFips>()
-                    .map(|ty| ty.0),
-            );
+            let mut config_builder = crate::config::Builder::from_config_bag(config_bag);
 
             // inherits all runtime components from a current S3 operation but clears out
             // out interceptors configured for that operation
-            let mut builder = runtime_components.to_builder();
-            builder.set_interceptors(std::iter::empty::<SharedInterceptor>());
-            config_builder.runtime_components = builder;
+            let mut rc_builder = runtime_components.to_builder();
+            rc_builder.set_interceptors(std::iter::empty::<SharedInterceptor>());
+            config_builder.runtime_components = rc_builder;
 
             let client = crate::Client::from_conf(config_builder.build());
             let response = client
