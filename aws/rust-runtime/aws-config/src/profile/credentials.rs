@@ -599,3 +599,144 @@ mod test {
     #[cfg(feature = "sso")]
     make_test!(sso_token);
 }
+
+#[cfg(all(test, feature = "sso"))]
+mod sso_tests {
+    use crate::{profile::credentials::Builder, provider_config::ProviderConfig};
+    use aws_credential_types::provider::ProvideCredentials;
+    use aws_sdk_sso::config::RuntimeComponents;
+    use aws_smithy_runtime_api::client::{
+        http::{
+            HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings,
+            SharedHttpConnector,
+        },
+        orchestrator::{HttpRequest, HttpResponse},
+    };
+    use aws_smithy_types::body::SdkBody;
+    use aws_types::os_shim_internal::{Env, Fs};
+    use std::collections::HashMap;
+
+    // In order to preserve the SSO token cache, the inner provider must only
+    // be created once, rather than once per credential resolution.
+    #[tokio::test]
+    async fn create_inner_provider_exactly_once() {
+        #[derive(Debug)]
+        struct ClientInner {
+            expected_token: &'static str,
+        }
+        impl HttpConnector for ClientInner {
+            fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+                assert_eq!(
+                    self.expected_token,
+                    request.headers().get("x-amz-sso_bearer_token").unwrap()
+                );
+                HttpConnectorFuture::ready(Ok(HttpResponse::new(
+                    200.try_into().unwrap(),
+                    SdkBody::from("{\"roleCredentials\":{\"accessKeyId\":\"ASIARTESTID\",\"secretAccessKey\":\"TESTSECRETKEY\",\"sessionToken\":\"TESTSESSIONTOKEN\",\"expiration\": 1651516560000}}"),
+                )))
+            }
+        }
+        #[derive(Debug)]
+        struct Client {
+            inner: SharedHttpConnector,
+        }
+        impl Client {
+            fn new(expected_token: &'static str) -> Self {
+                Self {
+                    inner: SharedHttpConnector::new(ClientInner { expected_token }),
+                }
+            }
+        }
+        impl HttpClient for Client {
+            fn http_connector(
+                &self,
+                _settings: &HttpConnectorSettings,
+                _components: &RuntimeComponents,
+            ) -> SharedHttpConnector {
+                self.inner.clone()
+            }
+        }
+
+        let fs = Fs::from_map({
+            let mut map = HashMap::new();
+            map.insert(
+                "/home/.aws/config".to_string(),
+                br#"
+[profile default]
+sso_session = dev
+sso_account_id = 012345678901
+sso_role_name = SampleRole
+region = us-east-1
+
+[sso-session dev]
+sso_region = us-east-1
+sso_start_url = https://d-abc123.awsapps.com/start
+                "#
+                .to_vec(),
+            );
+            map.insert(
+                "/home/.aws/sso/cache/34c6fceca75e456f25e7e99531e2425c6c1de443.json".to_string(),
+                br#"
+                {
+                    "accessToken": "secret-access-token",
+                    "expiresAt": "2199-11-14T04:05:45Z",
+                    "refreshToken": "secret-refresh-token",
+                    "clientId": "ABCDEFG323242423121312312312312312",
+                    "clientSecret": "ABCDE123",
+                    "registrationExpiresAt": "2199-03-06T19:53:17Z",
+                    "region": "us-east-1",
+                    "startUrl": "https://d-abc123.awsapps.com/start"
+                }
+                "#
+                .to_vec(),
+            );
+            map
+        });
+        let provider_config = ProviderConfig::empty()
+            .with_fs(fs.clone())
+            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_http_client(Client::new("secret-access-token"));
+        let provider = Builder::default().configure(&provider_config).build();
+
+        let first_creds = provider.provide_credentials().await.unwrap();
+
+        // Write to the token cache with an access token that won't match the fake client's
+        // expected access token, and thus, won't return SSO credentials.
+        fs.write(
+            "/home/.aws/sso/cache/34c6fceca75e456f25e7e99531e2425c6c1de443.json",
+            r#"
+            {
+                "accessToken": "NEW!!secret-access-token",
+                "expiresAt": "2199-11-14T04:05:45Z",
+                "refreshToken": "secret-refresh-token",
+                "clientId": "ABCDEFG323242423121312312312312312",
+                "clientSecret": "ABCDE123",
+                "registrationExpiresAt": "2199-03-06T19:53:17Z",
+                "region": "us-east-1",
+                "startUrl": "https://d-abc123.awsapps.com/start"
+            }
+            "#,
+        )
+        .await
+        .unwrap();
+
+        // Loading credentials will still work since the SSOTokenProvider should have only
+        // been created once, and thus, the correct token is still in an in-memory cache.
+        let second_creds = provider
+            .provide_credentials()
+            .await
+            .expect("used cached token instead of loading from the file system");
+        assert_eq!(first_creds, second_creds);
+
+        // Now create a new provider, which should use the new cached token value from the file system
+        // since it won't have the in-memory cache. We do this just to verify that the FS mutation above
+        // actually worked correctly.
+        let provider_config = ProviderConfig::empty()
+            .with_fs(fs.clone())
+            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_http_client(Client::new("NEW!!secret-access-token"));
+        let provider = Builder::default().configure(&provider_config).build();
+        let third_creds = provider.provide_credentials().await.unwrap();
+        assert_eq!(second_creds, third_creds);
+    }
+}
