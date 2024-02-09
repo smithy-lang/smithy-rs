@@ -10,3 +10,39 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The types in the aws-http crate were moved into aws-runtime. Deprecated type aliases were put in place to point to the new locations."
+references = ["smithy-rs#3355"]
+meta = { "breaking" = false, "tada" = false, "bug" = false }
+author = "jdisanti"
+
+[[smithy-rs]]
+message = "Add `try_into_http1x` and `try_from_http1x` to Request and Response container types."
+references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
+meta = { "breaking" = false, "bug" = false, "tada" = false, "target" = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "Add `try_into_http1x` and `try_from_http1x` to Request and Response container types."
+references = ["aws-sdk-rust#977", "smithy-rs#3365", "smithy-rs#3373"]
+meta = { "breaking" = false, "bug" = false, "tada" = false }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "It is now possible to send customized presigned requests. You can now call `.customize().<customizations>.presigned(...).await`. Previously, only normal requests supported customization."
+references = ["smithy-rs#3385", "aws-sdk-rust#1031"]
+meta = { "breaking" = false, "bug" = false, "tada" = true }
+author = "rcoh"
+
+[[smithy-rs]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336","smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false , "target" = "client" }
+author = "iampkmone"
+
+[[aws-sdk-rust]]
+message = "Added impl `Display` to Enums."
+references = ["smithy-rs#3336", "smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false}
+author = "iampkmone"

@@ -1,4 +1,17 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 8th, 2024
+==================
+
+January 24th, 2024
+==================
+
+January 18th, 2024
+==================
+**New this release:**
+- (client, [smithy-rs#3318](https://github.com/smithy-lang/smithy-rs/issues/3318)) `EndpointPrefix` and `apply_endpoint` moved from aws-smithy-http to aws-smithy-runtime-api so that is in a stable (1.x) crate. A deprecated type alias was left in place with a note showing the new location.
+- (client, [smithy-rs#3325](https://github.com/smithy-lang/smithy-rs/issues/3325)) The `Metadata` storable was moved from aws_smithy_http into aws_smithy_runtime_api. A deprecated type alias was left in place with a note showing where the new location is.
+
+
 January 10th, 2024
 ==================
 **New this release:**

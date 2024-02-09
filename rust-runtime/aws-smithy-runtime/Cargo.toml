@@ -53,7 +53,8 @@ pretty_assertions = "1.4.0"
 tokio = { version = "1.25", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
 tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
 tracing-test = "0.2.1"
-hyper_0_14 = { package = "hyper", version = "0.14.27",features = ["client", "server", "tcp", "http1", "http2"] }
+hyper_0_14 = { package = "hyper", version = "0.14.27", features = ["client", "server", "tcp", "http1", "http2"] }
+http1 = { package = "http", version = "1" }
 
 [package.metadata.docs.rs]
 all-features = true
@@ -64,3 +65,8 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.smithy-rs-release-tooling]
 stable = true
+
+# aws-smithy-http is used by the http-auth feature, which is not turned on by the SDK at all.
+# Without ignoring it, the `check-aws-sdk-smoketest-docs-clippy-udeps` CI script fails.
+[package.metadata.cargo-udeps.ignore]
+normal = ["aws-smithy-http"]

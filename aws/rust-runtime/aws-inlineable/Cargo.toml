@@ -13,8 +13,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
 aws-credential-types = { path = "../aws-credential-types" }
-aws-http = { path = "../aws-http" }
-aws-runtime = { path = "../aws-runtime" }
+aws-runtime = { path = "../aws-runtime", features = ["http-02x"] }
 aws-sigv4 = { path = "../aws-sigv4" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }

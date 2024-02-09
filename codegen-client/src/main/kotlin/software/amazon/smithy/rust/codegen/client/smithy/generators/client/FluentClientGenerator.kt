@@ -89,14 +89,10 @@ class FluentClientGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val core = FluentClientCore(model)
 
-    fun render(
-        crate: RustCrate,
-        customizableOperationCustomizations: List<CustomizableOperationCustomization> = emptyList(),
-    ) {
+    fun render(crate: RustCrate) {
         renderFluentClient(crate)
 
-        val customizableOperationGenerator =
-            CustomizableOperationGenerator(codegenContext, customizableOperationCustomizations)
+        val customizableOperationGenerator = CustomizableOperationGenerator(codegenContext)
         operations.forEach { operation ->
             crate.withModule(symbolProvider.moduleForBuilder(operation)) {
                 renderFluentBuilder(operation)
@@ -594,7 +590,7 @@ private fun generateShapeMemberDocs(
     }
 }
 
-internal fun OperationShape.fluentBuilderType(symbolProvider: RustSymbolProvider): RuntimeType =
+fun OperationShape.fluentBuilderType(symbolProvider: RustSymbolProvider): RuntimeType =
     symbolProvider.moduleForBuilder(this).toType()
         .resolve(symbolProvider.toSymbol(this).name + "FluentBuilder")
 

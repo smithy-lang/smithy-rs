@@ -82,10 +82,11 @@ RUN set -eux; \
         cd smithy-rs; \
         git checkout ${smithy_rs_commit_hash}; \
     fi; \
-    cargo install --locked --path tools/ci-build/publisher; \
     cargo install --locked --path tools/ci-build/changelogger; \
     cargo install --locked --path tools/ci-build/crate-hasher; \
     cargo install --locked --path tools/ci-build/difftags; \
+    cargo install --locked --path tools/ci-build/publisher; \
+    cargo install --locked --path tools/ci-build/runtime-versioner; \
     cargo install --locked --path tools/ci-build/sdk-lints; \
     cargo install --locked --path tools/ci-build/sdk-versioner; \
     chmod g+rw -R /opt/cargo/registry
@@ -158,7 +159,8 @@ RUN set -eux; \
         python3 \
         python3-devel \
         python3-pip \
-        shadow-utils; \
+        shadow-utils \
+        tar; \
     yum clean all; \
     rm -rf /var/cache/yum; \
     groupadd build; \

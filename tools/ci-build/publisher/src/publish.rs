@@ -5,9 +5,9 @@
 
 use crate::cargo;
 use crate::package::PackageHandle;
-use crate::retry::{run_with_retry, BoxError, ErrorClass};
 use crates_io_api::{AsyncClient, Error};
 use once_cell::sync::Lazy;
+use smithy_rs_tool_common::retry::{run_with_retry, BoxError, ErrorClass};
 use smithy_rs_tool_common::shell::ShellOperation;
 use std::path::Path;
 use std::time::Duration;
