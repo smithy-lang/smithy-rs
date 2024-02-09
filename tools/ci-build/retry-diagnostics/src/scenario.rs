@@ -3,15 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use serde::Serialize;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub(crate) struct Scenario {
     pub(crate) name: String,
     pub(crate) response: ScenarioResponse,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub(crate) enum ScenarioResponse {
     Timeout,
     Response {

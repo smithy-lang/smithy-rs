@@ -6,7 +6,8 @@
 //! This module defines types that describe timeouts that can be applied to various stages of the
 //! Smithy networking stack.
 
-use crate::config_bag::{Storable, StoreReplace};
+use crate::config_bag::value::Value;
+use crate::config_bag::{ItemIter, Storable, Store, StoreReplace};
 use std::time::Duration;
 
 /// Builder for [`TimeoutConfig`].
@@ -137,7 +138,7 @@ impl TimeoutConfigBuilder {
     /// // A never set an operation timeout so B's value is used
     /// assert_eq!(timeout_config.operation_timeout(), Some(Duration::from_secs(3)));
     /// ```
-    pub fn take_unset_from(self, other: Self) -> Self {
+    pub fn take_unset_from(mut self, other: Self) -> Self {
         Self {
             connect_timeout: self.connect_timeout.or(other.connect_timeout),
             read_timeout: self.read_timeout.or(other.read_timeout),
@@ -146,6 +147,16 @@ impl TimeoutConfigBuilder {
                 .operation_attempt_timeout
                 .or(other.operation_attempt_timeout),
         }
+    }
+
+    pub fn take_defaults_from(&mut self, other: &TimeoutConfig) -> &mut Self {
+        self.connect_timeout = self.connect_timeout.or(other.connect_timeout);
+        self.read_timeout = self.read_timeout.or(other.read_timeout);
+        self.operation_timeout = self.operation_timeout.or(other.operation_timeout);
+        self.operation_attempt_timeout = self
+            .operation_attempt_timeout
+            .or(other.operation_attempt_timeout);
+        self
     }
 
     /// Builds a `TimeoutConfig`.
@@ -211,6 +222,32 @@ pub struct TimeoutConfig {
 
 impl Storable for TimeoutConfig {
     type Storer = StoreReplace<TimeoutConfig>;
+}
+
+/// Merger which merges timeout config settings as part of loading
+#[derive(Debug)]
+pub struct MergeTimeoutConfig;
+
+impl Storable for MergeTimeoutConfig {
+    type Storer = MergeTimeoutConfig;
+}
+impl Store for MergeTimeoutConfig {
+    type ReturnedType<'a> = Option<TimeoutConfig>;
+    type StoredType = <StoreReplace<TimeoutConfig> as Store>::StoredType;
+
+    fn merge_iter(iter: ItemIter<'_, Self>) -> Self::ReturnedType<'_> {
+        let mut result: Option<TimeoutConfigBuilder> = None;
+        for tc in iter {
+            match tc {
+                Value::Set(tc) => {
+                    result = Some(result.unwrap_or_default());
+                    result.as_mut().unwrap().take_defaults_from(tc);
+                }
+                Value::ExplicitlyUnset(_) => result = None,
+            }
+        }
+        result.map(|r| r.build())
+    }
 }
 
 impl TimeoutConfig {
@@ -325,5 +362,33 @@ impl From<&TimeoutConfig> for OperationTimeoutConfig {
 impl From<TimeoutConfig> for OperationTimeoutConfig {
     fn from(cfg: TimeoutConfig) -> Self {
         OperationTimeoutConfig::from(&cfg)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::config_bag::{CloneableLayer, ConfigBag};
+    use crate::timeout::{MergeTimeoutConfig, TimeoutConfig};
+    use std::time::Duration;
+
+    #[test]
+    fn timeout_configs_merged_in_config_bag() {
+        let bag = ConfigBag::base();
+        let mut read_timeout = CloneableLayer::new("timeout");
+        read_timeout.store_put(
+            TimeoutConfig::builder()
+                .read_timeout(Duration::from_secs(3))
+                .build(),
+        );
+        let mut operation_timeout = CloneableLayer::new("timeout");
+        operation_timeout.store_put(
+            TimeoutConfig::builder()
+                .operation_timeout(Duration::from_secs(5))
+                .build(),
+        );
+        let cfg = ConfigBag::of_layers(vec![read_timeout.into(), operation_timeout.into()]);
+        let loaded = cfg.load::<MergeTimeoutConfig>().unwrap();
+        assert_eq!(loaded.read_timeout(), Some(Duration::from_secs(3)));
+        assert_eq!(loaded.operation_timeout(), Some(Duration::from_secs(5)));
     }
 }

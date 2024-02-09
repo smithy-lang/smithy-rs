@@ -18,17 +18,15 @@ async fn main() {
             RetryConfig::standard(), /*.with_max_backoff(Duration::from_secs(1)), */
                                      /*.with_reconnect_mode(ReconnectMode::ReuseAllConnections)*/
         )
-        //.sleep_impl(instant_time_and_sleep(SystemTime::now()).1)
-        .timeout_config(
-            TimeoutConfig::builder()
-                .operation_attempt_timeout(Duration::from_secs(1))
-                .build(),
-        )
         .load()
         .await;
-    let client = aws_sdk_dynamodb::Client::new(&conf);
+    assert_eq!(
+        conf.timeout_config().unwrap().connect_timeout(),
+        Some(Duration::from_millis(3100))
+    );
     let mut id = 0;
     loop {
+        let client = aws_sdk_dynamodb::Client::new(&conf);
         let _err = client
             .get_item()
             .key("k", AttributeValue::N(id.to_string()))

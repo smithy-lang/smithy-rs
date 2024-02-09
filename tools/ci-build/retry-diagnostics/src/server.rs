@@ -7,9 +7,9 @@ use anyhow::{bail, Context};
 use std::fmt::{Display, Formatter};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
-use crate::Args;
+use crate::{Args, Stats};
 use aws_smithy_async::future::never::Never;
 use bytes::Bytes;
 use http::Uri;
@@ -18,6 +18,7 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Request, Response};
 use hyper_util::rt::TokioIo;
+use serde::Serialize;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot::{channel, Receiver, Sender};
 use tokio::sync::Mutex;
@@ -27,7 +28,7 @@ use tracing::debug;
 use crate::scenario::{Scenario, ScenarioResponse};
 
 pub(crate) trait Progress: Send + Sync + 'static {
-    fn scenarios_remaining(&self, in_progress: Option<&str>, num_remaining: usize);
+    fn update_progress(&self, scenario: Option<&str>, num_remaining: usize, stats: Stats);
 }
 
 type SharedProgress = Arc<dyn Progress>;
@@ -62,8 +63,12 @@ impl DiagnosticServer {
     pub async fn handle(&self, req: Request<Bytes>) -> Response<Bytes> {
         let mut inner = self.inner.lock().await;
         match inner.handle(req).await {
-            LogResponse::Response(response) => response,
+            LogResponse::Response(response) => {
+                inner.update_progress();
+                response
+            }
             LogResponse::Timeout => {
+                inner.update_progress();
                 drop(inner);
                 Never::new().await;
                 unreachable!()
@@ -72,14 +77,36 @@ impl DiagnosticServer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 struct TestRun {
     response: Scenario,
+    #[serde(skip)]
     request: FirstRequest,
     num_retries: u32,
     num_reconnects: u32,
     start_time: SystemTime,
     end_time: Option<SystemTime>,
+    log: Vec<Event>,
+}
+
+impl TestRun {
+    fn event(&self, kind: Kind) -> Event {
+        Event {
+            kind,
+            offset_secs: self.start_time.elapsed().expect("time error").as_secs_f64(),
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
+struct Event {
+    kind: Kind,
+    offset_secs: f64,
+}
+#[derive(Serialize, Debug)]
+enum Kind {
+    Attempt,
+    Reconnect,
 }
 
 impl TestRun {
@@ -112,7 +139,7 @@ struct Log {
     progress: SharedProgress,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Report {
     runs: Vec<TestRun>,
 }
@@ -209,11 +236,20 @@ impl Log {
                 },
             },
             start_time: SystemTime::now(),
+            log: vec![],
             end_time: None,
         });
-        self.progress.scenarios_remaining(
+        self.update_progress();
+    }
+
+    fn update_progress(&self) {
+        self.progress.update_progress(
             self.active.as_ref().map(|tr| tr.response.name.as_str()),
             self.scenarios_to_run.len(),
+            Stats {
+                reconnects: self.active.as_ref().map(|s| s.num_reconnects).unwrap_or(0),
+                attempts: self.active.as_ref().map(|s| s.num_retries).unwrap_or(0),
+            },
         );
     }
 
@@ -224,7 +260,9 @@ impl Log {
             debug!("new connection does not need a new scenario");
         }
         if let Some(scenario) = self.active_scenario() {
-            scenario.num_reconnects += 1
+            scenario.num_reconnects += 1;
+            scenario.log.push(scenario.event(Kind::Reconnect));
+            self.update_progress();
         }
     }
 
@@ -244,6 +282,7 @@ impl Log {
                 };
             }
             scenario.num_retries += 1;
+            scenario.log.push(scenario.event(Kind::Attempt));
             match &scenario.response.response {
                 ScenarioResponse::Timeout => LogResponse::Timeout,
                 ScenarioResponse::Response {

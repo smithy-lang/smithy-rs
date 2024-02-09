@@ -5,12 +5,13 @@
 
 use crate::scenario::{dynamodb, s3, set_keepalive};
 use anyhow::bail;
+use chrono::Utc;
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressState, ProgressStyle};
-use std::fmt::Write;
+use std::fmt::{Display, Write};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 mod scenario;
 mod server;
@@ -92,15 +93,26 @@ async fn main() {
     }
     let result = server::start_server(scenarios, Arc::new(progress_bar.clone()), &args).await;
     progress_bar.finish_and_clear();
-    println!("Run complete:\n{}", result.unwrap());
+    let result = result.unwrap();
+    println!("Run complete:\n{}", result);
+    std::fs::write(
+        format!("run-{}.json", Utc::now().format("%Y-%m-%dT%H:%M")),
+        serde_json::to_string_pretty(&result).unwrap(),
+    )
+    .unwrap();
+}
+
+struct Stats {
+    attempts: u32,
+    reconnects: u32,
 }
 
 impl server::Progress for ProgressBar {
-    fn scenarios_remaining(&self, scenario: Option<&str>, num_remaining: usize) {
+    fn update_progress(&self, scenario: Option<&str>, num_remaining: usize, stats: Stats) {
         let scenario = scenario.unwrap_or("done!").to_string();
         self.set_style(
             ProgressStyle::with_template(
-                "{spinner:.green} {pos}/{len} [{elapsed_precise}] [{bar:.cyan/blue}] (eta: {eta}) scenario: {scenario}",
+                "{spinner:.green} {pos}/{len} [{elapsed_precise}] [{bar:.cyan/blue}] ({stats}) scenario: {scenario}",
             )
             .unwrap()
             .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
@@ -109,6 +121,9 @@ impl server::Progress for ProgressBar {
             .with_key("scenario", move |_state: &ProgressState, w: &mut dyn Write| {
                 write!(w, "{}", scenario).unwrap()
             })
+                .with_key("stats", move |_state: &ProgressState, w: &mut dyn Write| {
+                    write!(w, "a: {}, r: {}", stats.attempts, stats.reconnects).unwrap()
+                })
             .progress_chars("#>-"),
         );
         let total = self.length().unwrap();
