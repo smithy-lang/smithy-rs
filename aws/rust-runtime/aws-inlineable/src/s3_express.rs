@@ -76,7 +76,7 @@ pub(crate) mod auth {
                 "wrong identity type for SigV4. Expected AWS credentials but got `{identity:?}",
             )?;
 
-            add_token_to_request(express_credentials, request, &mut settings);
+            add_token_to_request(express_credentials, request, &mut settings)?;
 
             SigV4Signer.sign_http_request(
                 request,
@@ -93,7 +93,7 @@ pub(crate) mod auth {
         express_credentials: &Credentials,
         request: &mut HttpRequest,
         settings: &mut SigningSettings,
-    ) {
+    ) -> Result<(), BoxError> {
         match settings.signature_location {
             SignatureLocation::Headers => {
                 let security_token_header = Cow::Borrowed("x-amz-security-token");
@@ -148,21 +148,22 @@ pub(crate) mod auth {
                 let uri = http::Uri::builder()
                     .authority(
                         uri.authority()
-                            .expect("request URI should have authority set")
+                            .ok_or("request URI should have authority set")?
                             .clone(),
                     )
                     .scheme(
                         uri.scheme()
-                            .expect("request URI should have scheme set")
+                            .ok_or("request URI should have scheme set")?
                             .clone(),
                     )
                     .path_and_query(format!("{}?{}", uri.path(), query_params.join("&")))
-                    .build()
-                    .expect("unable to construct new URI");
-                request.set_uri(uri).unwrap();
+                    .build()?;
+                request.set_uri(uri)?
             }
-            _ => todo!(),
-        }
+            _ => { return Err(BoxError::from("`SignatureLocation` adds a new variant, which needs to be handled in a separate match arm")) },
+        };
+
+        Ok(())
     }
 }
 
