@@ -66,3 +66,23 @@ was added.
 references = ["smithy-rs#3322"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "Velfi"
+
+[[smithy-rs]]
+message = """
+Retry classifiers will now be sorted by priority. This change only affects requests
+that are retried. Some requests that were previously been classified as transient
+errors may now be classified as throttling errors.
+
+If you were
+
+- configuring multiple custom retry classifiers
+- that would disagree on how to classify a response
+- that have differing priorities
+
+you may see a behavior change in that classification for the same response is now
+dependent on the classifier priority instead of the order in which the classifier
+was added.
+"""
+references = ["smithy-rs#3322"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "Velfi"
