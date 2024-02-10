@@ -189,7 +189,7 @@ pub(crate) mod identity_provider {
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
     use aws_smithy_runtime_api::client::identity::{
-        Identity, IdentityFuture, ResolveCachedIdentity, ResolveIdentity,
+        Identity, IdentityCacheLocation, IdentityFuture, ResolveCachedIdentity, ResolveIdentity,
     };
     use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
     use aws_smithy_runtime_api::client::runtime_components::{
@@ -309,6 +309,10 @@ pub(crate) mod identity_provider {
             config_bag: &'a ConfigBag,
         ) -> IdentityFuture<'a> {
             IdentityFuture::new(async move { self.identity(runtime_components, config_bag).await })
+        }
+
+        fn cache_location(&self) -> IdentityCacheLocation {
+            IdentityCacheLocation::IdentityResolver
         }
     }
 }

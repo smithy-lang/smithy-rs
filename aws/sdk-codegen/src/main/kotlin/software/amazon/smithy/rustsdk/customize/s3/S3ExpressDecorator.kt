@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Confi
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -108,15 +107,7 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                             rustTemplate("#{S3_EXPRESS_SCHEME_ID}", *codegenScope)
                         },
                         writable {
-                            rustTemplate(
-                                """
-                                #{SharedIdentityResolver}::new_with_cache_location(
-                                        #{DefaultS3ExpressIdentityProvider}::builder().build(),
-                                        #{IdentityCacheLocation}::IdentityResolver,
-                                )
-                                """,
-                                *codegenScope,
-                            )
+                            rustTemplate("#{DefaultS3ExpressIdentityProvider}::builder().build()", *codegenScope)
                         },
                     )
                 }
@@ -168,33 +159,18 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                         *codegenScope,
                     )
 
-                    rustBlockTemplate(
+                    rustTemplate(
                         """
-                        /// Sets the credentials provider for S3 Express
-                        pub fn set_express_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self
+                        /// Sets the credentials provider for S3 Express One Zone
+                        pub fn set_express_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
+                            if let #{Some}(credentials_provider) = credentials_provider {
+                                self.runtime_components.set_identity_resolver(#{S3_EXPRESS_SCHEME_ID}, credentials_provider);
+                            }
+                            self
+                        }
                         """,
                         *codegenScope,
-                    ) {
-                        rustBlockTemplate(
-                            """
-                            if let #{Some}(credentials_provider) = credentials_provider
-                            """,
-                            *codegenScope,
-                        ) {
-                            rustTemplate(
-                                """
-                                self.runtime_components.set_identity_resolver(
-                                    #{S3_EXPRESS_SCHEME_ID},
-                                    #{SharedIdentityResolver}::new_with_cache_location(
-                                        credentials_provider,
-                                        #{IdentityCacheLocation}::IdentityResolver),
-                                );
-                                """,
-                                *codegenScope,
-                            )
-                        }
-                        rust("self")
-                    }
+                    )
                 }
 
                 else -> emptySection

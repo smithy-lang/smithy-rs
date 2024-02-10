@@ -9,7 +9,9 @@ extra["moduleName"] = "software.amazon.smithy.kotlin.codegen.test"
 tasks["jar"].enabled = false
 
 plugins {
-    id("software.amazon.smithy")
+    java
+    id("software.amazon.smithy.gradle.smithy-base")
+    id("software.amazon.smithy.gradle.smithy-jar")
 }
 
 val smithyVersion: String by project
@@ -19,13 +21,6 @@ fun getSmithyRuntimeMode(): String = properties.get("smithy.runtime.mode") ?: "o
 
 val pluginName = "rust-client-codegen"
 val workingDirUnderBuildDir = "smithyprojections/codegen-client-test/"
-
-buildscript {
-    val smithyVersion: String by project
-    dependencies {
-        classpath("software.amazon.smithy:smithy-cli:$smithyVersion")
-    }
-}
 
 dependencies {
     implementation(project(":codegen-client"))
@@ -123,7 +118,7 @@ project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDir
 
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
-tasks["smithyBuildJar"].dependsOn("generateSmithyBuild")
+tasks["jar"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
