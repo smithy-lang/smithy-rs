@@ -126,9 +126,17 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
     private val model = ctx.model
     private val instantiator = ClientInstantiator(ctx)
 
+    /** tests using S3 Express bucket names need to be disabled until the implementation is in place **/
+    private fun EndpointTestCase.isSigV4S3Express() =
+        expect.endpoint.orNull()?.properties?.get("authSchemes")?.asArrayNode()?.orNull()
+            ?.map { it.expectObjectNode().expectStringMember("name").value }?.contains("sigv4-s3express") == true
+
     fun generateInput(testOperationInput: EndpointTestOperationInput) =
         writable {
             val operationName = testOperationInput.operationName.toSnakeCase()
+            if (test.isSigV4S3Express()) {
+                Attribute.shouldPanic("not yet implemented").render(this)
+            }
             tokioTest(safeName("operation_input_test_$operationName")) {
                 rustTemplate(
                     """
