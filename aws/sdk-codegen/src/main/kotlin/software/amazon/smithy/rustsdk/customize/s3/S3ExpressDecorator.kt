@@ -84,6 +84,11 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
             "SharedAuthScheme" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::auth::SharedAuthScheme"),
+            "SharedCredentialsProvider" to
+                configReexport(
+                    AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                        .resolve("provider::SharedCredentialsProvider"),
+                ),
             "SharedIdentityResolver" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::SharedIdentityResolver"),
