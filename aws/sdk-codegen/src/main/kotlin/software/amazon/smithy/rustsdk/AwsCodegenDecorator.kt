@@ -18,6 +18,7 @@ import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.onlyApplyTo
 import software.amazon.smithy.rustsdk.customize.route53.Route53Decorator
 import software.amazon.smithy.rustsdk.customize.s3.S3Decorator
+import software.amazon.smithy.rustsdk.customize.s3.S3ExpressDecorator
 import software.amazon.smithy.rustsdk.customize.s3.S3ExtendedRequestIdDecorator
 import software.amazon.smithy.rustsdk.customize.s3control.S3ControlDecorator
 import software.amazon.smithy.rustsdk.customize.sso.SSODecorator
@@ -64,6 +65,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
         Route53Decorator().onlyApplyTo("com.amazonaws.route53#AWSDnsV20130401"),
         "com.amazonaws.s3#AmazonS3".applyDecorators(
             S3Decorator(),
+            S3ExpressDecorator(),
             S3ExtendedRequestIdDecorator(),
         ),
         S3ControlDecorator().onlyApplyTo("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
