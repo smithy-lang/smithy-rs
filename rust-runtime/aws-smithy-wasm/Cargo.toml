@@ -10,14 +10,16 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
-[target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
+# [target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
+[dependencies]
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-http = { path = "../aws-smithy-http" }
+aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1"
-http = "0.2.4"
-tower = { version = "0.4.8" }
-tracing = "0.1"
-wasi-preview2-prototype = { version = "0.0.3", features = ["http-client"] }
+http = "1.0.0"
+tower = "0.4.13"
+tracing = "0.1.40"
+wasi = "0.12.0+wasi-0.2.0"
 
 [package.metadata.docs.rs]
 all-features = true
