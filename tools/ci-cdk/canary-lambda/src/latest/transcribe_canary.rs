@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::canary::CanaryError;
 use crate::mk_canary;
 use anyhow::bail;
 use async_stream::stream;
@@ -68,14 +67,15 @@ pub async fn transcribe_canary(
 
     let dist = edit_distance(&expected_transcribe_result, full_message.trim());
     let max_edit_distance = 10;
-    if dist > 5 {
+    if dist > max_edit_distance {
         bail!(
             "Transcription from Transcribe doesn't look right:\n\
             Expected: `{}`\n\
-            Actual:   `{}`\n. The maximum allowed edit distance is 5. This had an edit distance of {}",
+            Actual:   `{}`\n. The maximum allowed edit distance is {}. This had an edit distance of {}",
             expected_transcribe_result,
             full_message.trim(),
-            max_edit_distance
+            max_edit_distance,
+            dist
         )
     }
     Ok(())
