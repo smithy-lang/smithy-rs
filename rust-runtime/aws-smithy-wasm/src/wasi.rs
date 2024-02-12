@@ -15,20 +15,19 @@ use aws_smithy_runtime_api::{
             SharedHttpClient, SharedHttpConnector,
         },
         orchestrator::HttpRequest,
-        result::{ConnectorError, SdkError},
+        result::ConnectorError,
         runtime_components::RuntimeComponents,
     },
     http::Response,
     shared::IntoShared,
 };
 use aws_smithy_types::body::SdkBody;
-use bytes::Bytes;
-// use crate::wasi::{outgoing_handler, types};
-use http::{HeaderName, HeaderValue};
-use wasi::http::{outgoing_handler, types as http_types};
-use wasi::io::poll;
-use wasi::io::streams;
-// use wasi_preview2_prototype::http_client::DefaultClient;
+use bytes::{Bytes, BytesMut};
+use wasi::http::{
+    outgoing_handler,
+    types::{self as http_types, RequestOptions},
+};
+
 /// Creates a connector function that can be used during instantiation of the client SDK
 /// in order to route the HTTP requests through the WebAssembly host. The host must
 /// support the WASI HTTP proposal as defined in the Preview 2 specification.
@@ -83,7 +82,6 @@ impl HttpConnector for WasiHttpConnector {
             None => Bytes::new(),
         });
 
-        // Right now only synchronous calls can be made through WASI
         let fut_result = client.handle(converted_req);
 
         HttpConnectorFuture::new(async move {
@@ -99,7 +97,6 @@ impl HttpConnector for WasiHttpConnector {
 
             let sdk_res = Response::try_from(response)
                 .map_err(|err| ConnectorError::other(err.into(), None))?;
-            // .expect("response from adapter");
 
             Ok(sdk_res)
         })
@@ -121,19 +118,34 @@ impl WasiDefaultClient {
     ) -> Result<http::Response<Bytes>, ConnectorError> {
         let req = WasiRequest::try_from(req).expect("Converting http request");
 
-        let res = outgoing_handler::handle(req.id, self.options).expect("Http response");
+        //RequestOptions doesn't impl Clone or Copy and outgoing_handler::handle takes ownership,
+        //so we need to recreate it
+        let options = if let Some(opts) = &self.options {
+            let new_opts = RequestOptions::new();
+            new_opts.set_between_bytes_timeout(opts.between_bytes_timeout());
+            new_opts.set_connect_timeout(opts.connect_timeout());
+            new_opts.set_first_byte_timeout(opts.first_byte_timeout());
+
+            Some(new_opts)
+        } else {
+            None
+        };
+
+        let res = outgoing_handler::handle(req.id, options).expect("Http response");
+        // Right now only synchronous calls can be made through WASI, so we subscribe and
+        // block on the FutureIncomingResponse
         let subscription = res.subscribe();
         subscription.block();
 
-        //This is pretty ugly because the FutureIncomingResponse .get() method returns a
+        //The FutureIncomingResponse .get() method returns a
         //Option<Result<Result<IncomingResponse, ErrorCode>, ()>>.
-        //The outer Option is the readiness which we know is Some because we .block() waiting for it
+        //The outer Option ensures readiness which we know is Some because we .block() waiting for it
         //The outer Result is just a singleton enforcer so we can only get the response once
         //The inner Result indicates whether the HTTP call was sent/received successfully (not the 200 succes of the call)
         let incoming_res = res
             .get()
-            .unwrap()
-            .unwrap()
+            .expect("http response not ready")
+            .expect("http response accessed more than once")
             .map_err(|err| ConnectorError::other(err.into(), None))?;
 
         let response =
@@ -146,11 +158,11 @@ impl WasiDefaultClient {
 #[derive(Debug)]
 pub struct WasiRequest {
     id: outgoing_handler::OutgoingRequest,
-    body: http_types::OutputStream,
+    body: http_types::OutgoingBody,
 }
 
 impl WasiRequest {
-    pub fn new(id: outgoing_handler::OutgoingRequest, body: http_types::OutputStream) -> Self {
+    pub fn new(id: outgoing_handler::OutgoingRequest, body: http_types::OutgoingBody) -> Self {
         Self { id, body }
     }
 }
@@ -162,56 +174,35 @@ impl TryFrom<http::Request<Bytes>> for WasiRequest {
         let (parts, body) = value.into_parts();
         let method = WasiMethod::try_from(parts.method)
             .map_err(|_| ParseError::new("Invalid http Method"))?;
-        let path_with_query = parts.uri.path_and_query();
-        let headers = WasiHeaders::from(&parts.headers);
+        let path_with_query = parts.uri.path_and_query().map(|path| path.as_str());
+        let headers = WasiHeaders::from(parts.headers);
         let scheme = match parts.uri.scheme_str().unwrap_or("") {
             "http" => Some(&http_types::Scheme::Http),
             "https" => Some(&http_types::Scheme::Https),
             _ => None,
         };
-        let request = http_types::new_outgoing_request(
-            &method,
-            path_with_query.map(|q| q.as_str()),
-            scheme,
-            parts.uri.authority().map(|a| a.as_str()),
-            headers.to_owned(),
-        );
+        let authority = parts.uri.authority().map(|auth| auth.as_str());
 
-        let request2 = http_types::OutgoingRequest::new(&parts.headers);
+        let request = http_types::OutgoingRequest::new(headers.0);
+        request.set_scheme(scheme);
+        request.set_method(&method);
+        request.set_path_with_query(path_with_query);
+        request.set_authority(authority);
 
-        let request_body = http_types::outgoing_request_write(request)
-            .map_err(|_| ParseError::new("outgoing request write failed"))?;
+        let request_body = request.body().expect("body accessed more than once");
 
-        if body.is_empty() {
-            let pollable = streams::subscribe_to_output_stream(request_body);
-            let mut buf = body.as_ref();
-            while !buf.is_empty() {
-                poll::poll_oneoff(&[pollable]);
+        let request_stream = request_body
+            .write()
+            .expect("output stream accessed more than once");
 
-                let permit = match streams::check_write(request_body) {
-                    Ok(n) => usize::try_from(n)?,
-                    Err(_) => return Err(ParseError::new("Output stream error")),
-                };
+        request_stream
+            .blocking_write_and_flush(&body)
+            .expect("failed to write body");
 
-                let len = buf.len().min(permit);
-                let (chunk, rest) = buf.split_at(len);
-                buf = rest;
-
-                if streams::write(request_body, chunk).is_err() {
-                    return Err(ParseError::new("Output stream error"));
-                }
-            }
-
-            if streams::flush(request_body).is_err() {
-                return Err(ParseError::new("Output stream error"));
-            }
-
-            poll::poll_oneoff(&[sub.pollable]);
-
-            if streams::check_write(request_body).is_err() {
-                return Err(ParseError::new("Output stream error"));
-            }
-        }
+        //The OutputStream is a child resource: it must be dropped
+        //before the parent OutgoingBody resource is dropped (or finished),
+        //otherwise the OutgoingBody drop or finish will trap.
+        drop(request_stream);
 
         Ok(WasiRequest::new(request, request_body))
     }
@@ -260,58 +251,34 @@ impl TryFrom<WasiResponse> for http::Response<Bytes> {
     type Error = ParseError;
 
     fn try_from(value: WasiResponse) -> Result<Self, Self::Error> {
-        let future_response = value;
+        let response = value.0;
 
-        let incoming_response = match http_types::future_incoming_response_get(future_response) {
-            Some(result) => result,
-            None => {
-                let pollable = http_types::listen_to_future_incoming_response(future_response);
-                let _ = poll::poll_oneoff(&[pollable]);
-                http_types::future_incoming_response_get(future_response)
-                    .expect("incoming response available")
-            }
-        }
-        .map_err(|e| ParseError::new("incoming response error: {e:?}"))?;
+        let status = response.status();
 
-        let status = http_types::incoming_response_status(incoming_response);
-
-        let body_stream = http_types::incoming_response_consume(incoming_response)
-            .map_err(|_| ParseError::new("consuming incoming response"))?;
+        let body_stream = response
+            .consume()
+            .expect("consume called more than once")
+            .stream()
+            .expect("stream accessed more than once");
 
         let mut body = BytesMut::new();
-        {
-            let pollable = streams::subscribe_to_input_stream(body_stream);
-            poll::poll_oneoff(&[pollable]);
-            let mut eof = streams::StreamStatus::Open;
-            while eof != streams::StreamStatus::Ended {
-                let (body_chunk, stream_status) = streams::read(body_stream, u64::MAX)
-                    .map_err(|e| ParseError::new("reading response body: {e:?}"))?;
-                eof = if body_chunk.is_empty() {
-                    streams::StreamStatus::Ended
-                } else {
-                    stream_status
-                };
-                body.put(body_chunk.as_slice());
-            }
+
+        //blocking_read blocks until at least one byte is available to read
+        while let Ok(stream_bytes) = body_stream.blocking_read(u64::MAX) {
+            body.extend_from_slice(stream_bytes.as_slice())
         }
 
-        let mut res = http::Response::builder()
-            .status(status)
+        let headers = response.headers().entries();
+
+        let res_build = headers
+            .into_iter()
+            .fold(http::Response::builder().status(status), |rb, header| {
+                rb.header(header.0, header.1)
+            });
+
+        let res = res_build
             .body(body.freeze())
             .map_err(|_| ParseError::new("building http response"))?;
-
-        let headers_handle = http_types::incoming_response_headers(incoming_response);
-        if headers_handle > 0 {
-            let headers_map = res.headers_mut();
-            for (name, value) in http_types::fields_entries(headers_handle) {
-                headers_map.insert(
-                    HeaderName::from_bytes(name.as_bytes())
-                        .map_err(|_| ParseError::new("converting response header name"))?,
-                    HeaderValue::from_bytes(value.as_slice())
-                        .map_err(|_| ParseError::new("converting response header value"))?,
-                );
-            }
-        }
 
         Ok(res)
     }
@@ -327,8 +294,8 @@ impl Deref for WasiHeaders {
     }
 }
 
-impl<'a> From<&'a http::HeaderMap> for WasiHeaders {
-    fn from(headers: &'a http::HeaderMap) -> Self {
+impl From<http::HeaderMap> for WasiHeaders {
+    fn from(headers: http::HeaderMap) -> Self {
         let entries = headers
             .iter()
             .map(|(name, value)| {
@@ -337,11 +304,9 @@ impl<'a> From<&'a http::HeaderMap> for WasiHeaders {
                     value.to_str().unwrap().as_bytes().to_vec(),
                 )
             })
-            .collect::<Vec<_>>()
-            .as_slice();
+            .collect::<Vec<_>>();
 
-        //The fields should come from the SDK so we trust that they are valid
-        let fields = http_types::Fields::from_list(entries).expect("Invalid http headers.");
+        let fields = http_types::Fields::from_list(&entries).expect("Invalid http headers.");
 
         Self(fields)
     }
