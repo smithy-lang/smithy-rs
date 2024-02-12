@@ -4,6 +4,7 @@
  */
 
 use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
+use aws_smithy_wasm::wasi::wasi_http_client;
 
 async fn s3_list_objects() -> ListObjectsV2Output {
     use crate::default_config::get_default_config;
@@ -16,11 +17,13 @@ async fn s3_list_objects() -> ListObjectsV2Output {
         .bucket("nara-national-archives-catalog")
         .delimiter("/")
         .prefix("authority-records/organization/")
-        .max_keys(5)
-        .customize()
-        .await
-        .unwrap();
-    operation.send().await.unwrap()
+        .max_keys(5);
+        // .customize()
+        // .await
+        // .unwrap();
+    let blah = operation.send().await;
+    println!("{blah:#?}");
+    blah.expect("successful call")
 }
 
 #[tokio::test]

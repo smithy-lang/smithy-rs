@@ -8,14 +8,14 @@
 
 wit_bindgen::generate!({
     inline: "
-        package aws:component
+        package aws:component;
 
         interface run {
-            run: func() -> result
+            run: func() -> result;
         }
 
         world main {
-            export run
+            export run;
         }
     ",
     exports: {

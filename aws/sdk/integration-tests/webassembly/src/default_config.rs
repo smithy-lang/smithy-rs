@@ -6,6 +6,7 @@
 use crate::http::WasmHttpConnector;
 use aws_config::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_wasm::wasi::wasi_http_client;
 
 pub(crate) async fn get_default_config() -> aws_config::SdkConfig {
     aws_config::from_env()
@@ -13,7 +14,7 @@ pub(crate) async fn get_default_config() -> aws_config::SdkConfig {
         .timeout_config(TimeoutConfig::disabled())
         .retry_config(RetryConfig::disabled())
         .no_credentials()
-        .http_client(WasmHttpConnector::new())
+        .http_client(wasi_http_client())
         .load()
         .await
 }
