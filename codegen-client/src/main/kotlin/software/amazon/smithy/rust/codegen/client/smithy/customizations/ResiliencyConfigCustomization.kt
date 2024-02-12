@@ -237,10 +237,18 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                         *codegenScope,
                     )
 
+                    // A timeout config can be set from SdkConfig. We want to merge that with a timeout config set here.
+                    // Ideally, we would actually preserve `SdkConfig` as a separate layer (probably by converting it into
+                    // its own runtime plugin). In the short term, this functionality accomplishes that for
+                    // timeout configs.
                     rustTemplate(
                         """
                         pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
-                            timeout_config.map(|t| self.config.store_put(t));
+                            let mut timeout_config = timeout_config.unwrap_or_else(||#{TimeoutConfig}::disabled());
+                            if let Some(base) = self.config.load::<#{TimeoutConfig}>() {
+                                timeout_config.take_defaults_from(base);
+                            }
+                            self.config.store_put(timeout_config);
                             self
                         }
                         """,
