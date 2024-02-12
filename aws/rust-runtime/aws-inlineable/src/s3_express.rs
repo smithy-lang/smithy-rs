@@ -124,7 +124,7 @@ pub(crate) mod identity_cache {
     pub(crate) struct CacheKey(String);
 
     impl CacheKey {
-        pub(crate) fn from(bucket_name: &str, creds: &Credentials) -> Self {
+        pub(crate) fn new(bucket_name: &str, creds: &Credentials) -> Self {
             Self({
                 let key = format!("{}{}", creds.access_key_id(), creds.secret_access_key());
                 let mac = Hmac::<Sha256>::new_from_slice(key.as_ref())
@@ -297,7 +297,7 @@ pub(crate) mod identity_cache {
                 Ok(identity_expiring_in(2000)),
             ]);
 
-            let key = CacheKey::from(
+            let key = CacheKey::new(
                 "test-bucket--usw2-az1--x-s3",
                 &Credentials::for_tests_with_session_token(),
             );
@@ -363,7 +363,7 @@ pub(crate) mod identity_cache {
 
             let mut tasks = Vec::new();
             for i in 0..number_of_buckets {
-                let key = CacheKey::from(
+                let key = CacheKey::new(
                     &format!("test-bucket-{i}-usw2-az1--x-s3"),
                     &Credentials::for_tests_with_session_token(),
                 );
@@ -421,7 +421,7 @@ pub(crate) mod identity_cache {
             ]);
 
             let [key1, key2, key3] = [1, 2, 3].map(|i| {
-                CacheKey::from(
+                CacheKey::new(
                     &format!("test-bucket-{i}--usw2-az1--x-s3"),
                     &Credentials::for_tests_with_session_token(),
                 )
@@ -544,7 +544,7 @@ pub(crate) mod identity_provider {
                 "wrong identity type for SigV4. Expected AWS credentials but got `{identity:?}",
             )?;
 
-            let key = CacheKey::from(bucket_name, credentials);
+            let key = CacheKey::new(bucket_name, credentials);
             self.cache
                 .get_or_load(key, || async move {
                     let creds = self
