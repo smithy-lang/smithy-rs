@@ -214,6 +214,7 @@ private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
         CargoDependency.Hex,
         CargoDependency.Hmac,
         CargoDependency.Lru,
+        CargoDependency.Proptest,
         CargoDependency.Sha2,
         CargoDependency.smithyAsync(runtimeConfig),
         CargoDependency.smithyRuntimeApiClient(runtimeConfig),

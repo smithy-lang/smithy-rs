@@ -213,10 +213,19 @@ pub(crate) mod identity_cache {
         use aws_smithy_runtime_api::shared::IntoShared;
         use aws_smithy_types::config_bag::ConfigBag;
         use futures_util::stream::FuturesUnordered;
+        use proptest::proptest;
         use std::num::NonZeroUsize;
         use std::sync::Arc;
         use std::time::{Duration, SystemTime, UNIX_EPOCH};
         use tracing::info;
+
+        proptest! {
+            #[test]
+            fn hmac_takes_varying_size_key(access_key: String, secret_key: String) {
+                let creds = Credentials::new(access_key, secret_key, None, None, "test");
+                CacheKey::new("s3express-test-bucket--usw2-az1--x-s3", &creds);
+            }
+        }
 
         fn epoch_secs(secs: u64) -> SystemTime {
             SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
