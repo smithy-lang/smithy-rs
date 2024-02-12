@@ -54,6 +54,7 @@ uuid = { version = "0.8", features = ["v4"] }
 tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
+edit-distance = "2"
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[

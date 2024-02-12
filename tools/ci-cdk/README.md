@@ -21,7 +21,7 @@ From there, you can just point the `canary-runner` to the `cdk-outputs.json` to 
 
 ```bash
 cd canary-runner
-cargo run -- run --sdk-release-tag <version> --musl --cdk-outputs ../cdk-outputs.json
+cargo run -- run --sdk-release-tag <version> --musl --cdk-output ../cdk-outputs.json
 ```
 
 __NOTE:__ You may want to add a `--profile` to the `deploy` command to select a specific credential

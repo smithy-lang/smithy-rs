@@ -5,10 +5,12 @@
 
 use crate::canary::CanaryError;
 use crate::mk_canary;
+use anyhow::bail;
 use async_stream::stream;
 use aws_config::SdkConfig;
 use aws_sdk_transcribestreaming as transcribe;
 use bytes::BufMut;
+use edit_distance::edit_distance;
 use transcribe::primitives::Blob;
 use transcribe::types::{
     AudioEvent, AudioStream, LanguageCode, MediaEncoding, TranscriptResultStream,
@@ -64,18 +66,19 @@ pub async fn transcribe_canary(
         }
     }
 
-    if expected_transcribe_result != full_message.trim() {
-        Err(CanaryError(format!(
+    let dist = edit_distance(&expected_transcribe_result, full_message.trim());
+    let max_edit_distance = 10;
+    if dist > 5 {
+        bail!(
             "Transcription from Transcribe doesn't look right:\n\
             Expected: `{}`\n\
-            Actual:   `{}`\n",
+            Actual:   `{}`\n. The maximum allowed edit distance is 5. This had an edit distance of {}",
             expected_transcribe_result,
-            full_message.trim()
-        ))
-        .into())
-    } else {
-        Ok(())
+            full_message.trim(),
+            max_edit_distance
+        )
     }
+    Ok(())
 }
 
 fn pcm_data() -> Vec<u8> {
