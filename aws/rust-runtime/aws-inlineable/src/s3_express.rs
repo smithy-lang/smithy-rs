@@ -292,8 +292,10 @@ pub(crate) mod identity_cache {
                 buffer_time: DEFAULT_BUFFER_TIME,
             };
 
-            let identity_resolver =
-                test_identity_resolver(vec![Ok(test_identity(1000)), Ok(test_identity(2000))]);
+            let identity_resolver = test_identity_resolver(vec![
+                Ok(identity_expiring_in(1000)),
+                Ok(identity_expiring_in(2000)),
+            ]);
 
             let key = CacheKey::from(
                 "test-bucket--usw2-az1--x-s3",
@@ -353,10 +355,10 @@ pub(crate) mod identity_cache {
             // such that no matter what order async tasks are executed, it never expires.
             let safe_expiration = number_of_buckets as u64 * 50 + DEFAULT_BUFFER_TIME.as_secs() + 1;
             let identity_resolver = test_identity_resolver(vec![
-                Ok(test_identity(safe_expiration)),
-                Ok(test_identity(safe_expiration)),
-                Ok(test_identity(safe_expiration)),
-                Ok(test_identity(safe_expiration)),
+                Ok(identity_expiring_in(safe_expiration)),
+                Ok(identity_expiring_in(safe_expiration)),
+                Ok(identity_expiring_in(safe_expiration)),
+                Ok(identity_expiring_in(safe_expiration)),
             ]);
 
             let mut tasks = Vec::new();
@@ -412,10 +414,10 @@ pub(crate) mod identity_cache {
             };
 
             let identity_resolver = test_identity_resolver(vec![
-                Ok(test_identity(1000)),
-                Ok(test_identity(2000)),
-                Ok(test_identity(3000)),
-                Ok(test_identity(4000)),
+                Ok(identity_expiring_in(1000)),
+                Ok(identity_expiring_in(2000)),
+                Ok(identity_expiring_in(3000)),
+                Ok(identity_expiring_in(4000)),
             ]);
 
             let [key1, key2, key3] = [1, 2, 3].map(|i| {
