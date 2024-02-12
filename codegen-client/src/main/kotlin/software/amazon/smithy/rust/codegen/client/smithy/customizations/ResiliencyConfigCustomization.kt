@@ -244,7 +244,7 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                     rustTemplate(
                         """
                         pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
-                            let mut timeout_config = timeout_config.unwrap_or_else(||#{TimeoutConfig}::disabled());
+                            let mut timeout_config = timeout_config.unwrap_or_else(#{TimeoutConfig}::disabled);
                             if let Some(base) = self.config.load::<#{TimeoutConfig}>() {
                                 timeout_config.take_defaults_from(base);
                             }
