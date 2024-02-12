@@ -36,7 +36,7 @@ class S3ExpressDecorator : ClientCodegenDecorator {
         writable {
             rust(
                 "#T",
-                inlineModule(runtimeConfig).resolve("auth::SCHEME_ID"),
+                s3ExpressModule(runtimeConfig).resolve("auth::SCHEME_ID"),
             )
         }
 
@@ -69,14 +69,14 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
     private val codegenScope by lazy {
         arrayOf(
             "DefaultS3ExpressIdentityProvider" to
-                inlineModule(runtimeConfig).resolve("identity_provider::DefaultS3ExpressIdentityProvider"),
+                s3ExpressModule(runtimeConfig).resolve("identity_provider::DefaultS3ExpressIdentityProvider"),
             "IdentityCacheLocation" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::IdentityCacheLocation"),
             "S3ExpressAuthScheme" to
-                inlineModule(runtimeConfig).resolve("auth::S3ExpressAuthScheme"),
+                s3ExpressModule(runtimeConfig).resolve("auth::S3ExpressAuthScheme"),
             "S3_EXPRESS_SCHEME_ID" to
-                inlineModule(runtimeConfig).resolve("auth::SCHEME_ID"),
+                s3ExpressModule(runtimeConfig).resolve("auth::SCHEME_ID"),
             "SharedAuthScheme" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::auth::SharedAuthScheme"),
@@ -146,7 +146,7 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::SharedIdentityResolver"),
             "S3_EXPRESS_SCHEME_ID" to
-                inlineModule(runtimeConfig).resolve("auth::SCHEME_ID"),
+                s3ExpressModule(runtimeConfig).resolve("auth::SCHEME_ID"),
         )
 
     override fun section(section: ServiceConfig) =
@@ -198,7 +198,7 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
         }
 }
 
-private fun inlineModule(runtimeConfig: RuntimeConfig) =
+private fun s3ExpressModule(runtimeConfig: RuntimeConfig) =
     RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "s3_express",
