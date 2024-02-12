@@ -114,6 +114,7 @@ pub(crate) mod identity_cache {
     use std::fmt;
     use std::future::Future;
     use std::hash::Hash;
+    use std::num::NonZeroUsize;
     use std::sync::Mutex;
     use std::time::{Duration, SystemTime};
 
@@ -157,6 +158,18 @@ pub(crate) mod identity_cache {
     }
 
     impl S3ExpressIdentityCache {
+        pub(crate) fn new(
+            capacity: usize,
+            time_source: SharedTimeSource,
+            buffer_time: Duration,
+        ) -> Self {
+            Self {
+                inner: Mutex::new(LruCache::new(NonZeroUsize::new(capacity).unwrap())),
+                time_source,
+                buffer_time,
+            }
+        }
+
         pub(crate) async fn get_or_load<F, Fut>(
             &self,
             key: CacheKey,
@@ -214,7 +227,6 @@ pub(crate) mod identity_cache {
         use aws_smithy_types::config_bag::ConfigBag;
         use futures_util::stream::FuturesUnordered;
         use proptest::proptest;
-        use std::num::NonZeroUsize;
         use std::sync::Arc;
         use std::time::{Duration, SystemTime, UNIX_EPOCH};
         use tracing::info;
@@ -295,11 +307,8 @@ pub(crate) mod identity_cache {
                 .build()
                 .unwrap();
 
-            let sut = S3ExpressIdentityCache {
-                inner: Mutex::new(LruCache::new(NonZeroUsize::new(1).unwrap())),
-                time_source: time.clone().into_shared(),
-                buffer_time: DEFAULT_BUFFER_TIME,
-            };
+            let sut =
+                S3ExpressIdentityCache::new(1, time.clone().into_shared(), DEFAULT_BUFFER_TIME);
 
             let identity_resolver = test_identity_resolver(vec![
                 Ok(identity_expiring_in(1000)),
@@ -354,11 +363,11 @@ pub(crate) mod identity_cache {
                 .unwrap();
 
             let number_of_buckets = 4;
-            let sut = Arc::new(S3ExpressIdentityCache {
-                inner: Mutex::new(LruCache::new(NonZeroUsize::new(number_of_buckets).unwrap())),
-                time_source: time.clone().into_shared(),
-                buffer_time: DEFAULT_BUFFER_TIME,
-            });
+            let sut = Arc::new(S3ExpressIdentityCache::new(
+                number_of_buckets,
+                time.clone().into_shared(),
+                DEFAULT_BUFFER_TIME,
+            ));
 
             // Nested for loops below advance time by 200 in total, and each identity has the expiration
             // such that no matter what order async tasks are executed, it never expires.
@@ -416,11 +425,7 @@ pub(crate) mod identity_cache {
                 .unwrap();
 
             // Create a cache of size 2.
-            let sut = S3ExpressIdentityCache {
-                inner: Mutex::new(LruCache::new(NonZeroUsize::new(2).unwrap())),
-                time_source: time.into_shared(),
-                buffer_time: DEFAULT_BUFFER_TIME,
-            };
+            let sut = S3ExpressIdentityCache::new(2, time.into_shared(), DEFAULT_BUFFER_TIME);
 
             let identity_resolver = test_identity_resolver(vec![
                 Ok(identity_expiring_in(1000)),
@@ -482,8 +487,6 @@ pub(crate) mod identity_cache {
 }
 /// Supporting code for S3 Express identity provider
 pub(crate) mod identity_provider {
-    use std::num::NonZeroUsize;
-    use std::sync::Mutex;
     use std::time::{Duration, SystemTime};
 
     use crate::s3_express::identity_cache::{CacheKey, S3ExpressIdentityCache};
@@ -502,7 +505,6 @@ pub(crate) mod identity_provider {
     };
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::config_bag::ConfigBag;
-    use lru::LruCache;
 
     use super::identity_cache::{DEFAULT_BUFFER_TIME, DEFAULT_MAX_CACHE_CAPACITY};
 
@@ -685,13 +687,11 @@ pub(crate) mod identity_provider {
         }
         pub(crate) fn build(self) -> DefaultS3ExpressIdentityProvider {
             DefaultS3ExpressIdentityProvider {
-                cache: S3ExpressIdentityCache {
-                    inner: Mutex::new(LruCache::new(
-                        NonZeroUsize::new(DEFAULT_MAX_CACHE_CAPACITY).unwrap(),
-                    )),
-                    time_source: self.time_source.unwrap_or_default(),
-                    buffer_time: self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
-                },
+                cache: S3ExpressIdentityCache::new(
+                    DEFAULT_MAX_CACHE_CAPACITY,
+                    self.time_source.unwrap_or_default(),
+                    self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
+                ),
             }
         }
     }
