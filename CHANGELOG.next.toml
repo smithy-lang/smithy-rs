@@ -98,3 +98,9 @@ message = "Cap the maximum jitter fraction for credentials cache refresh buffer 
 references = ["smithy-rs#3402"]
 meta = { "breaking" = false, "tada" = false, "bug" = true }
 author = "ysaito1001"
+
+[[aws-sdk-rust]]
+message = "Retain the SSO token cache between calls to `provide_credentials` when using IAM Identity Center SSO via the AWS config file."
+references = ["smithy-rs#3387"]
+meta = { "breaking" = false, "bug" = true, "tada" = false }
+author = "jdisanti"
