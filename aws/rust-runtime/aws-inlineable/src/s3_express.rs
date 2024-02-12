@@ -150,10 +150,15 @@ pub(crate) mod identity_cache {
 
     impl fmt::Debug for S3ExpressIdentityCache {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            f.debug_struct("S3ExpressIdentityCache")
-                .field("time_source", &self.time_source)
-                .field("buffer_time", &self.buffer_time)
-                .finish()
+            let (size, capacity) = {
+                let cache = self.inner.lock().unwrap();
+                (cache.len(), cache.cap())
+            };
+            write!(
+                f,
+                "S3ExpressIdentityCache {{ time_source: {:?}, buffer_time: {:?} }}, with size/capacity: {}/{}",
+                self.time_source, &self.buffer_time, size, capacity,
+            )
         }
     }
 
