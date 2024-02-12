@@ -202,12 +202,12 @@ private fun s3ExpressModule(runtimeConfig: RuntimeConfig) =
     RuntimeType.forInlineDependency(
         InlineAwsDependency.forRustFile(
             "s3_express",
-            additionalDependency = s3ExpressDependencies(runtimeConfig).toTypedArray(),
+            additionalDependency = s3ExpressDependencies(runtimeConfig),
         ),
     )
 
 private fun s3ExpressDependencies(runtimeConfig: RuntimeConfig) =
-    listOf(
+    arrayOf(
         AwsCargoDependency.awsCredentialTypes(runtimeConfig),
         AwsCargoDependency.awsRuntime(runtimeConfig),
         AwsCargoDependency.awsSigv4(runtimeConfig),
