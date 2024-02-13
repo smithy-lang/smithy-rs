@@ -37,14 +37,14 @@ author = "rcoh"
 
 [[smithy-rs]]
 message = "Added impl `Display` to Enums."
-references = ["smithy-rs#3336","smithy-rs#3391"]
-meta = { "breaking" = false, "tada" = false, "bug" = false , "target" = "client" }
+references = ["smithy-rs#3336", "smithy-rs#3391"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client" }
 author = "iampkmone"
 
 [[aws-sdk-rust]]
 message = "Added impl `Display` to Enums."
 references = ["smithy-rs#3336", "smithy-rs#3391"]
-meta = { "breaking" = false, "tada" = false, "bug" = false}
+meta = { "breaking" = false, "tada" = false, "bug" = false }
 author = "iampkmone"
 
 [[aws-sdk-rust]]
@@ -104,3 +104,21 @@ message = "Retain the SSO token cache between calls to `provide_credentials` whe
 references = ["smithy-rs#3387"]
 meta = { "breaking" = false, "bug" = true, "tada" = false }
 author = "jdisanti"
+
+[[smithy-rs]]
+message = """Fix bug where timeout settings where not merged properly. This will add a default connect timeout of 3.1s seconds for most clients.
+
+[**For more details see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3408)."""
+
+references = ["smithy-rs#3405", "smithy-rs#3400", "smithy-rs#3258"]
+meta = { "bug" = true, "breaking" = true, tada = false, target = "client" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = """Fix bug where timeout settings where not merged properly. This will add a default connect timeout of 3.1s seconds for most clients.
+
+[**For more details see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3408)."""
+
+references = ["smithy-rs#3405", "smithy-rs#3400", "smithy-rs#3258"]
+meta = { "bug" = true, "breaking" = true, tada = false }
+author = "rcoh"

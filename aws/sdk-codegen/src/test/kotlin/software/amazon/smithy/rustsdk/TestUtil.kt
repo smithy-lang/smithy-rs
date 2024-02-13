@@ -51,7 +51,7 @@ fun awsSdkIntegrationTest(
 
 fun awsIntegrationTestParams() =
     IntegrationTestParams(
-        cargoCommand = "cargo test --features test-util behavior-version-latest",
+        cargoCommand = "cargo test --features test-util,behavior-version-latest --tests --lib",
         runtimeConfig = AwsTestRuntimeConfig,
         additionalSettings =
             ObjectNode.builder().withMember(
