@@ -18,7 +18,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.config.Servi
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
@@ -80,6 +79,11 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
             "SharedAuthScheme" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::auth::SharedAuthScheme"),
+            "SharedCredentialsProvider" to
+                configReexport(
+                    AwsRuntimeType.awsCredentialTypes(runtimeConfig)
+                        .resolve("provider::SharedCredentialsProvider"),
+                ),
             "SharedIdentityResolver" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::SharedIdentityResolver"),
@@ -105,13 +109,9 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                         writable {
                             rustTemplate(
                                 """
-                                #{SharedIdentityResolver}::new_with_cache_location(
-                                        #{DefaultS3ExpressIdentityProvider}::builder()
-                                            .time_source(${section.serviceConfigName}.time_source().unwrap_or_default())
-
-                                            .build(),
-                                        #{IdentityCacheLocation}::IdentityResolver,
-                                )
+                                #{DefaultS3ExpressIdentityProvider}::builder()
+                                    .time_source(${section.serviceConfigName}.time_source().unwrap_or_default())
+                                    .build()
                                 """,
                                 *codegenScope,
                             )
@@ -164,33 +164,18 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                         *codegenScope,
                     )
 
-                    rustBlockTemplate(
+                    rustTemplate(
                         """
-                        /// Sets the credentials provider for S3 Express
-                        pub fn set_express_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self
+                        /// Sets the credentials provider for S3 Express One Zone
+                        pub fn set_express_credentials_provider(&mut self, credentials_provider: #{Option}<#{SharedCredentialsProvider}>) -> &mut Self {
+                            if let #{Some}(credentials_provider) = credentials_provider {
+                                self.runtime_components.set_identity_resolver(#{S3_EXPRESS_SCHEME_ID}, credentials_provider);
+                            }
+                            self
+                        }
                         """,
                         *codegenScope,
-                    ) {
-                        rustBlockTemplate(
-                            """
-                            if let #{Some}(credentials_provider) = credentials_provider
-                            """,
-                            *codegenScope,
-                        ) {
-                            rustTemplate(
-                                """
-                                self.runtime_components.set_identity_resolver(
-                                    #{S3_EXPRESS_SCHEME_ID},
-                                    #{SharedIdentityResolver}::new_with_cache_location(
-                                        credentials_provider,
-                                        #{IdentityCacheLocation}::IdentityResolver),
-                                );
-                                """,
-                                *codegenScope,
-                            )
-                        }
-                        rust("self")
-                    }
+                    )
                 }
 
                 else -> emptySection

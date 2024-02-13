@@ -159,6 +159,15 @@ pub trait ResolveIdentity: Send + Sync + Debug {
     fn fallback_on_interrupt(&self) -> Option<Identity> {
         None
     }
+
+    /// Returns the location of an identity cache associated with this identity resolver.
+    ///
+    /// By default, identity resolvers will use the identity cache stored in runtime components.
+    /// Implementing types can change the cache location if they want to. Refer to [`IdentityCacheLocation`]
+    /// explaining why a concrete identity resolver might want to change the cache location.
+    fn cache_location(&self) -> IdentityCacheLocation {
+        IdentityCacheLocation::RuntimeComponents
+    }
 }
 
 /// Cache location for identity caching.
@@ -181,25 +190,14 @@ pub enum IdentityCacheLocation {
 pub struct SharedIdentityResolver {
     inner: Arc<dyn ResolveIdentity>,
     cache_partition: IdentityCachePartition,
-    cache_location: IdentityCacheLocation,
 }
 
 impl SharedIdentityResolver {
     /// Creates a new [`SharedIdentityResolver`] from the given resolver.
     pub fn new(resolver: impl ResolveIdentity + 'static) -> Self {
-        Self::new_with_cache_location(resolver, IdentityCacheLocation::RuntimeComponents)
-    }
-
-    /// Creates a new [`SharedIdentityResolver`] from the given resolver with the additional argument
-    /// specifying where the identity cache location is.
-    pub fn new_with_cache_location(
-        resolver: impl ResolveIdentity + 'static,
-        cache_location: IdentityCacheLocation,
-    ) -> Self {
         Self {
             inner: Arc::new(resolver),
             cache_partition: IdentityCachePartition::new(),
-            cache_location,
         }
     }
 
@@ -210,11 +208,6 @@ impl SharedIdentityResolver {
     pub fn cache_partition(&self) -> IdentityCachePartition {
         self.cache_partition
     }
-
-    /// Returns where identities retrieved by this resolver are cached.
-    pub fn cache_location(&self) -> IdentityCacheLocation {
-        self.cache_location
-    }
 }
 
 impl ResolveIdentity for SharedIdentityResolver {
@@ -224,6 +217,10 @@ impl ResolveIdentity for SharedIdentityResolver {
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
         self.inner.resolve_identity(runtime_components, config_bag)
+    }
+
+    fn cache_location(&self) -> IdentityCacheLocation {
+        self.inner.cache_location()
     }
 }
 

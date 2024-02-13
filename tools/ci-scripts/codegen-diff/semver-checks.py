@@ -54,6 +54,7 @@ def main(skip_generation=False):
                                     f'--manifest-path {path}/Cargo.toml '
                                     '-v '
                                     f'-p {pkgid} '
+                                    f'--all-features '
                                     f'--release-type minor', check=False, quiet=True)
             if status == 0:
                 eprint('ok!')

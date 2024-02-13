@@ -56,7 +56,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                     AwsPresignedFluentBuilderMethod(codegenContext),
                     AwsFluentClientDocs(codegenContext),
                 ),
-        ).render(rustCrate, emptyList())
+        ).render(rustCrate)
         rustCrate.withModule(ClientRustModule.client) {
             AwsFluentClientExtensions(codegenContext, types).render(this)
         }

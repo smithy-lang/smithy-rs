@@ -274,6 +274,21 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                     )
                 }
 
+                is ServiceConfig.BuilderFromConfigBag -> {
+                    rustTemplate(
+                        "${section.builder}.set_retry_config(${section.config_bag}.load::<#{RetryConfig}>().cloned());",
+                        *codegenScope,
+                    )
+                    rustTemplate(
+                        "${section.builder}.set_timeout_config(${section.config_bag}.load::<#{TimeoutConfig}>().cloned());",
+                        *codegenScope,
+                    )
+                    rustTemplate(
+                        "${section.builder}.set_retry_partition(${section.config_bag}.load::<#{RetryPartition}>().cloned());",
+                        *codegenScope,
+                    )
+                }
+
                 else -> emptySection
             }
         }

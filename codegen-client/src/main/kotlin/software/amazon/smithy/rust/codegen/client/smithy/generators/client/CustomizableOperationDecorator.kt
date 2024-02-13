@@ -5,12 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.client
 
-import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocSection
 
-sealed class CustomizableOperationSection(name: String) : Section(name) {
+sealed class CustomizableOperationSection(name: String) : AdHocSection(name) {
     /** Write custom code into a customizable operation's impl block */
     object CustomizableOperationImpl : CustomizableOperationSection("CustomizableOperationImpl")
 }
-
-abstract class CustomizableOperationCustomization : NamedCustomization<CustomizableOperationSection>()
