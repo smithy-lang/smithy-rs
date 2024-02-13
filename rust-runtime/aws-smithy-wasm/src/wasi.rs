@@ -256,9 +256,21 @@ impl TryFrom<WasiResponse> for http::Response<Bytes> {
 
         let status = response.status();
 
-        let body_stream = response
-            .consume()
-            .expect("Consume called more than once")
+        let headers = response.headers().entries();
+
+        let res_build = headers
+            .iter()
+            .fold(http::Response::builder().status(status), |rb, header| {
+                rb.header(header.0.clone(), header.1.clone())
+            });
+
+        //The returned headers resource is immutable: set, append, and delete operations will
+        //fail with header-error.immutable.
+        drop(headers);
+
+        let body_incoming = response.consume().expect("Consume called more than once");
+
+        let body_stream = body_incoming
             .stream()
             .expect("Stream accessed more than once");
 
@@ -269,13 +281,9 @@ impl TryFrom<WasiResponse> for http::Response<Bytes> {
             body.extend_from_slice(stream_bytes.as_slice())
         }
 
-        let headers = response.headers().entries();
-
-        let res_build = headers
-            .into_iter()
-            .fold(http::Response::builder().status(status), |rb, header| {
-                rb.header(header.0, header.1)
-            });
+        //The input-stream resource is a child: it must be dropped before the parent
+        //incoming-body is dropped, or consumed by incoming-body.finish.
+        drop(body_stream);
 
         let res = res_build
             .body(body.freeze())
