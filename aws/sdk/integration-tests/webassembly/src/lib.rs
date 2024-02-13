@@ -8,8 +8,6 @@
 #[cfg(target_family = "wasm")]
 mod default_config;
 #[cfg(target_family = "wasm")]
-mod http;
-#[cfg(target_family = "wasm")]
 mod list_objects;
 #[cfg(all(target_family = "wasm", target_os = "wasi"))]
 mod wasi;

@@ -4,13 +4,12 @@
  */
 
 use aws_sdk_s3::operation::list_objects_v2::ListObjectsV2Output;
-use aws_smithy_wasm::wasi::wasi_http_client;
 
 async fn s3_list_objects() -> ListObjectsV2Output {
-    use crate::default_config::get_default_config;
+    use crate::default_config::get_default_wasi_config;
     use aws_sdk_s3::Client;
 
-    let shared_config = get_default_config().await;
+    let shared_config = get_default_wasi_config().await;
     let client = Client::new(&shared_config);
     let operation = client
         .list_objects_v2()
@@ -18,12 +17,8 @@ async fn s3_list_objects() -> ListObjectsV2Output {
         .delimiter("/")
         .prefix("authority-records/organization/")
         .max_keys(5);
-        // .customize()
-        // .await
-        // .unwrap();
-    let blah = operation.send().await;
-    println!("{blah:#?}");
-    blah.expect("successful call")
+    
+    operation.send().await.expect("successful call")
 }
 
 #[tokio::test]

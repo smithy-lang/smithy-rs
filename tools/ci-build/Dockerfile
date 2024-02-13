@@ -125,6 +125,11 @@ ARG cargo_wasmtime_version=17.0.0
 ARG rust_nightly_version
 RUN cargo +${rust_nightly_version} install wasmtime-cli --features="component-model" --locked --version ${cargo_wasmtime_version}
 
+FROM install_rust AS cargo_component
+ARG cargo_component_version=0.7.1
+ARG rust_nightly_version
+RUN cargo install cargo-component --version ${cargo_component_version}
+
 FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.24.1
 RUN cargo install cargo-semver-checks --locked --version ${cargo_semver_checks_version}
@@ -175,6 +180,7 @@ COPY --chown=build:build --from=cargo_check_external_types /opt/cargo/bin/cargo-
 COPY --chown=build:build --from=maturin /opt/cargo/bin/maturin /opt/cargo/bin/maturin
 COPY --chown=build:build --from=wasm_pack /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
 COPY --chown=build:build --from=wasmtime /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
+COPY --chown=build:build --from=cargo_component /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=cargo_semver_checks /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
 COPY --chown=build:build --from=cargo_mdbook /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook

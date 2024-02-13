@@ -10,8 +10,8 @@ edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
 
-# [target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
-[dependencies]
+[target.'cfg(all(target_family = "wasm", target_os = "wasi"))'.dependencies]
+# [dependencies]
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }

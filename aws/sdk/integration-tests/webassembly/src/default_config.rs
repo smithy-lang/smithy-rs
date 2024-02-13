@@ -3,12 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::http::WasmHttpConnector;
 use aws_config::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_wasm::wasi::wasi_http_client;
 
-pub(crate) async fn get_default_config() -> aws_config::SdkConfig {
+pub(crate) async fn get_default_wasi_config() -> aws_config::SdkConfig {
     aws_config::from_env()
         .region("us-east-2")
         .timeout_config(TimeoutConfig::disabled())
@@ -21,7 +20,7 @@ pub(crate) async fn get_default_config() -> aws_config::SdkConfig {
 
 #[tokio::test]
 pub async fn test_default_config() {
-    let shared_config = get_default_config().await;
+    let shared_config = get_default_wasi_config().await;
     let client = aws_sdk_s3::Client::new(&shared_config);
     assert_eq!(client.config().region().unwrap().to_string(), "us-east-2")
 }
