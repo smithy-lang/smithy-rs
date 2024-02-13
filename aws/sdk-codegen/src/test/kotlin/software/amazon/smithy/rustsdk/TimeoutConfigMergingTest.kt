@@ -15,7 +15,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 class TimeoutConfigMergingTest {
     @Test
     fun testTimeoutSettingsProperlyMerged() {
-        // for monday: these tests don't seem to be running
         awsSdkIntegrationTest(SdkCodegenIntegrationTest.model) { ctx, crate ->
             val name = ctx.moduleUseName()
             crate.integrationTest("timeout_settings_properly_merged") {

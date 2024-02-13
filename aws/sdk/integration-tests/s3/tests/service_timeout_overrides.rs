@@ -80,7 +80,6 @@ async fn default_connect_timeout_set() {
                 .build(),
         )
         .retry_config(RetryConfig::disabled())
-        //.http_client(NeverClient::new())
         // ip that
         .endpoint_url(
             // Emulate a connect timeout error by hitting an unroutable IP
