@@ -213,7 +213,11 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                             self
                         }
 
-                        /// Set the timeout_config for the builder
+                        /// Set the timeout_config for the builder.
+                        ///
+                        /// Setting this to `None` has no effect if another source of configuration has set timeouts. If you
+                        /// are attempting to disable timeouts, use [`TimeoutConfig::disabled`](#{TimeoutConfig}::disabled)
+                        ///
                         ///
                         /// ## Examples
                         ///
@@ -244,7 +248,11 @@ class ResiliencyConfigCustomization(codegenContext: ClientCodegenContext) : Conf
                     rustTemplate(
                         """
                         pub fn set_timeout_config(&mut self, timeout_config: #{Option}<#{TimeoutConfig}>) -> &mut Self {
-                            let mut timeout_config = timeout_config.unwrap_or_else(#{TimeoutConfig}::disabled);
+                            // passing None has no impact.
+                            let Some(mut timeout_config) = timeout_config else {
+                                return self
+                            };
+
                             if let Some(base) = self.config.load::<#{TimeoutConfig}>() {
                                 timeout_config.take_defaults_from(base);
                             }

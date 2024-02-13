@@ -67,7 +67,8 @@ async fn timeouts_can_be_set_by_service() {
     assert!(start.elapsed() < Duration::from_millis(500));
 }
 
-/// Use a 5 second operation timeout on SdkConfig and a 0ms operation timeout on the service config
+/// Ensures that a default timeout from aws-config is still persisted even if an operation_timeout
+/// is set.
 #[tokio::test]
 async fn default_connect_timeout_set() {
     let (_guard, _) = capture_test_logs();
@@ -118,7 +119,6 @@ async fn default_connect_timeout_set() {
         "expected DispatchFailure got {}",
         err
     );
-    // there should be a 0ms timeout, we gotta set some stuff up. Just want to make sure
-    // it's shorter than the 5 second timeout if the test is broken
+    // ensure that of the three timeouts, the one we hit is connect timeout.
     assert_elapsed!(start, Duration::from_millis(3100));
 }
