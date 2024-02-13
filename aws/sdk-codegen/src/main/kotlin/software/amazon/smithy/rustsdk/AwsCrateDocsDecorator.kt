@@ -126,7 +126,6 @@ internal class AwsCrateDocGenerator(private val codegenContext: ClientCodegenCon
             check(moduleVersion.isNotEmpty() && moduleVersion[0].isDigit())
 
             val moduleName = codegenContext.settings.moduleName
-            !moduleVersion.startsWith("0.")
             val description =
                 normalizeDescription(
                     codegenContext.moduleName,
