@@ -70,13 +70,7 @@ fn make_context(msrv: &str, versions_manifest: &VersionsManifest) -> serde_json:
 #[cfg(test)]
 mod tests {
     use super::hydrate_template;
-    use crate::subcommand::hydrate_readme::make_context;
     use serde_json::json;
-    use smithy_rs_tool_common::package::PackageCategory;
-    use smithy_rs_tool_common::versions_manifest::{
-        CrateVersion, ManualInterventions, VersionsManifest,
-    };
-    use std::collections::BTreeMap;
 
     #[test]
     fn test_hydrate_template() {
@@ -100,23 +94,5 @@ mod tests {
             ",
             hydrated,
         )
-    }
-
-    fn version(category: PackageCategory, version: &str) -> CrateVersion {
-        CrateVersion {
-            category,
-            version: version.into(),
-            source_hash: "dontcare".into(),
-            model_hash: None,
-        }
-    }
-    fn make_manifest(crates: &BTreeMap<String, CrateVersion>) -> VersionsManifest {
-        VersionsManifest {
-            smithy_rs_revision: "dontcare".into(),
-            aws_doc_sdk_examples_revision: "dontcare".into(),
-            manual_interventions: ManualInterventions::default(),
-            crates: crates.clone(),
-            release: None,
-        }
     }
 }
