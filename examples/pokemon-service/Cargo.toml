@@ -7,10 +7,6 @@ authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "A smithy Rust service to retrieve information about Pokémon."
 
 [dependencies]
-# TODO(https://github.com/smithy-lang/smithy-rs/issues/3398): Unpin the clap dependency once the SDK MSRV is Rust 1.74.
-# Clap was added and pinned to 4.4.x because 4.5.x requires an MSRV of Rust 1.74.
-# Since the SDK MSRV is 1.72, this causes it to fail to compile.
-clap = { version = "~4.4", features = ["derive"] }
 http = "0.2"
 hyper = { version = "0.14.26", features = ["server"] }
 tokio = "1.26.0"
