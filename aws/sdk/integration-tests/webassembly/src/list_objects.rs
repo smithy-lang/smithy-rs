@@ -17,7 +17,7 @@ async fn s3_list_objects() -> ListObjectsV2Output {
         .delimiter("/")
         .prefix("authority-records/organization/")
         .max_keys(5);
-    
+
     operation.send().await.expect("successful call")
 }
 
