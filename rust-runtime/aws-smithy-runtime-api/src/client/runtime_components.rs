@@ -380,26 +380,6 @@ declare_runtime_components! {
     }
 }
 
-impl From<RuntimeComponents> for RuntimeComponentsBuilder {
-    fn from(rc: RuntimeComponents) -> Self {
-        RuntimeComponentsBuilder {
-            builder_name: "converted from RuntimeComponents",
-            auth_scheme_option_resolver: Some(rc.auth_scheme_option_resolver),
-            http_client: rc.http_client,
-            endpoint_resolver: Some(rc.endpoint_resolver),
-            auth_schemes: rc.auth_schemes,
-            identity_cache: Some(rc.identity_cache),
-            identity_resolvers: Some(rc.identity_resolvers),
-            interceptors: rc.interceptors,
-            retry_classifiers: rc.retry_classifiers,
-            retry_strategy: Some(rc.retry_strategy),
-            time_source: rc.time_source,
-            sleep_impl: rc.sleep_impl,
-            config_validators: rc.config_validators,
-        }
-    }
-}
-
 impl RuntimeComponents {
     /// Returns a builder for runtime components.
     pub fn builder(name: &'static str) -> RuntimeComponentsBuilder {
