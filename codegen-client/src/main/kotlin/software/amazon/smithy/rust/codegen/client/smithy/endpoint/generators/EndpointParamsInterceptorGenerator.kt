@@ -63,6 +63,7 @@ class EndpointParamsInterceptorGenerator(
                 "Error" to interceptors.resolve("context::Error"),
                 "InterceptorError" to interceptors.resolve("error::InterceptorError"),
                 "Params" to endpointTypesGenerator.paramsStruct(),
+                "RuntimeComponents" to RuntimeType.runtimeComponents(rc),
             )
         }
 
@@ -83,9 +84,10 @@ class EndpointParamsInterceptorGenerator(
                     ${interceptorName.dq()}
                 }
 
-                fn read_before_execution(
+                fn read_before_serialization(
                     &self,
                     context: &#{BeforeSerializationInterceptorContextRef}<'_, #{Input}, #{Output}, #{Error}>,
+                    _runtime_components: &#{RuntimeComponents},
                     cfg: &mut #{ConfigBag},
                 ) -> #{Result}<(), #{BoxError}> {
                     let _input = context.input()

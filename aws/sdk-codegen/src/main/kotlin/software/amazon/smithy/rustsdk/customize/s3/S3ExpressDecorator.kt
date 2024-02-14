@@ -23,9 +23,12 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rustsdk.AwsCargoDependency
 import software.amazon.smithy.rustsdk.AwsRuntimeType
 import software.amazon.smithy.rustsdk.InlineAwsDependency
+import software.amazon.smithy.rustsdk.SdkConfigSection
 
 class S3ExpressDecorator : ClientCodegenDecorator {
     override val name: String = "S3ExpressDecorator"
@@ -60,6 +63,20 @@ class S3ExpressDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> = baseCustomizations + listOf(S3ExpressIdentityProviderConfig(codegenContext))
+
+    override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> {
+        // TODO(S3Express): Transfer a value of `s3_disable_express_session_auth` from `SdkConfig` and replace `None`
+        //  with that value once aws-sdk-rust#1060 is implemented.
+        return listOf(
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                rustTemplate(
+                    """${section.serviceConfigBuilder}.push_interceptor(#{DisableS3ExpressSessionAuthInterceptor}::new(#{None}).into_shared());""",
+                    *preludeScope,
+                    "DisableS3ExpressSessionAuthInterceptor" to s3ExpressModule(codegenContext.runtimeConfig).resolve("interceptors::DisableS3ExpressSessionAuthInterceptor"),
+                )
+            },
+        )
+    }
 }
 
 private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientCodegenContext) :
@@ -67,8 +84,10 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenScope by lazy {
         arrayOf(
+            *preludeScope,
             "DefaultS3ExpressIdentityProvider" to
                 s3ExpressModule(runtimeConfig).resolve("identity_provider::DefaultS3ExpressIdentityProvider"),
+            "DisableS3ExpressSessionAuthInterceptor" to s3ExpressModule(codegenContext.runtimeConfig).resolve("interceptors::DisableS3ExpressSessionAuthInterceptor"),
             "IdentityCacheLocation" to
                 RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                     .resolve("client::identity::IdentityCacheLocation"),
@@ -117,6 +136,15 @@ private class S3ExpressServiceRuntimePluginCustomization(codegenContext: ClientC
                             )
                         },
                     )
+
+                    // This interceptor may not be set if a user creates an S3 client without going through `SdkConfig`.
+                    // If so, we set it here in a `ServiceRuntimePlugin`, and we deliberately specify `None` here because
+                    // the interceptor created here does not go through `SdkConfig`, i.e. there is no
+                    // `s3_disable_express_session_auth` value from a profile file.
+                    // If the target interceptor has already been registered, we keep it (i.e. allow_duplicate = false).
+                    section.registerInterceptor(this, allow_duplicate = false) {
+                        rustTemplate("#{DisableS3ExpressSessionAuthInterceptor}::new(#{None})", *codegenScope)
+                    }
                 }
 
                 else -> {}

@@ -44,9 +44,13 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
         /** Generates the code to register an interceptor */
         fun registerInterceptor(
             writer: RustWriter,
+            allow_duplicate: Boolean = true,
             interceptor: Writable,
         ) {
-            writer.rust("runtime_components.push_interceptor(#T);", interceptor)
+            when (allow_duplicate) {
+                true -> writer.rust("runtime_components.push_interceptor(#T);", interceptor)
+                false -> writer.rust("runtime_components.maybe_push_interceptor(#T);", interceptor)
+            }
         }
 
         fun registerAuthScheme(

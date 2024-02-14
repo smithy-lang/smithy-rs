@@ -731,3 +731,203 @@ pub(crate) mod identity_provider {
         }
     }
 }
+
+/// Supporting code for S3 Express interceptors
+pub(crate) mod interceptors {
+    use aws_smithy_runtime_api::box_error::BoxError;
+    use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef;
+    use aws_smithy_runtime_api::client::interceptors::Intercept;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
+    use aws_types::os_shim_internal::Env;
+
+    mod env {
+        pub(super) const S3_DISABLE_EXPRESS_SESSION_AUTH: &str =
+            "AWS_S3_DISABLE_EXPRESS_SESSION_AUTH";
+    }
+
+    // Interceptor to disable S3 Express session auth
+    //
+    // It is important for this interceptor to be registered as a client-level interceptor so that
+    // we ensure that it runs before `EndpointParamsInterceptor::read_before_serialization`, which
+    // is an operation-level interceptor.
+    // `DisableS3ExpressSessionAuth` is a single source of truth indicating whether the session auth
+    // is disabled. A customer can disable the session auth through a) s3 client b) an environment
+    // variable, and c) a profile file (in that order of precedence). This interceptor ensures that
+    // those locations are fully reflected in the single source of truth. `EndpointParamsInterceptor`
+    // can then depend upon `DisableS3ExpressSessionAuth` to build endpoint params accordingly.
+    #[derive(Debug)]
+    pub(crate) struct DisableS3ExpressSessionAuthInterceptor {
+        value_in_profile_file: Option<bool>,
+        env: Env,
+    }
+
+    impl DisableS3ExpressSessionAuthInterceptor {
+        pub(crate) fn new(value_in_profile_file: Option<bool>) -> Self {
+            Self::new_with(value_in_profile_file, Env::real())
+        }
+
+        fn new_with(value_in_profile_file: Option<bool>, env: Env) -> Self {
+            Self {
+                value_in_profile_file,
+                env,
+            }
+        }
+    }
+
+    impl Intercept for DisableS3ExpressSessionAuthInterceptor {
+        fn name(&self) -> &'static str {
+            "DisableS3ExpressSessionAuthInterceptor"
+        }
+
+        fn read_before_serialization(
+            &self,
+            _context: &BeforeSerializationInterceptorContextRef<'_>,
+            _runtime_components: &RuntimeComponents,
+            cfg: &mut ConfigBag,
+        ) -> Result<(), BoxError> {
+            // By the time this method runs, `DisableS3ExpressSessionAuth` is stored in `cfg` iif a
+            // user has called `disable_s3_express_session_auth` on an S3 client either at a service
+            // level or at an operation level via `config_override`. Since that takes the highest
+            // precedence to disable the express session auth, we bail out if it's already in `cfg`.
+            if cfg
+                .load::<crate::config::DisableS3ExpressSessionAuth>()
+                .is_some()
+            {
+                return Ok(());
+            }
+
+            let push_disable_session_auth = |value: bool, cfg: &mut ConfigBag| {
+                let mut layer = Layer::new("DisableS3ExpressSessionAuthInterceptor");
+                layer.store_or_unset(Some(crate::config::DisableS3ExpressSessionAuth(value)));
+                cfg.push_layer(layer);
+            };
+
+            // If a boolean flag is set in the specified environment variable, use it as a fallback.
+            match self.env.get(env::S3_DISABLE_EXPRESS_SESSION_AUTH) {
+                Ok(value) if value.eq_ignore_ascii_case("true") => {
+                    push_disable_session_auth(true, cfg);
+                }
+                Ok(value) if value.eq_ignore_ascii_case("false") => {
+                    push_disable_session_auth(false, cfg);
+                }
+                _ => {
+                    // Finally, if a flag is only set in a profile file, use it as the last resort.
+                    if let Some(value) = &self.value_in_profile_file {
+                        push_disable_session_auth(*value, cfg);
+                    }
+                }
+            }
+
+            // No `DisableS3ExpressSessionAuth` is set in the config bag, meaning the S3 Express
+            // session auth will be used since it is an opt out feature.
+            Ok(())
+        }
+    }
+
+    #[cfg(test)]
+
+    mod tests {
+        use super::*;
+        use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
+        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+
+        #[test]
+        fn disable_option_set_from_service_client_should_take_the_highest_precedence() {
+            // Disable option is set from service client.
+            let mut cfg = ConfigBag::base();
+            let mut layer = Layer::new("test");
+            layer.store_put(crate::config::DisableS3ExpressSessionAuth(true));
+            cfg.push_layer(layer);
+
+            let ctx = InterceptorContext::new(Input::doesnt_matter());
+            let ctx = Into::into(&ctx);
+            let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+
+            // Both an environment variable and a profile file say session auth is _not_ disabled,
+            // but they are overruled by what is in `cfg`.
+            let sut = DisableS3ExpressSessionAuthInterceptor::new_with(
+                Some(false),
+                Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
+            );
+
+            sut.read_before_serialization(&ctx, &rc, &mut cfg)
+                .expect("should run successfully");
+
+            assert!(
+                cfg.load::<crate::config::DisableS3ExpressSessionAuth>()
+                    .unwrap()
+                    .0
+            );
+        }
+
+        #[test]
+        fn disable_option_set_from_env_should_take_the_second_highest_precedence() {
+            // No disable option is set from service client.
+            let mut cfg = ConfigBag::base();
+
+            let ctx = InterceptorContext::new(Input::doesnt_matter());
+            let ctx = Into::into(&ctx);
+            let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+
+            // An environment variable says session auth is disabled and a profile file
+            // says it's not. The former overrules the latter.
+            let sut = DisableS3ExpressSessionAuthInterceptor::new_with(
+                Some(false),
+                Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
+            );
+
+            sut.read_before_serialization(&ctx, &rc, &mut cfg)
+                .expect("should run successfully");
+
+            assert!(
+                cfg.load::<crate::config::DisableS3ExpressSessionAuth>()
+                    .unwrap()
+                    .0
+            );
+        }
+
+        #[test]
+        fn disable_option_set_from_profile_file_should_take_the_lowest_precedence() {
+            // No disable option is set from service client.
+            let mut cfg = ConfigBag::base();
+
+            let ctx = InterceptorContext::new(Input::doesnt_matter());
+            let ctx = Into::into(&ctx);
+            let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+
+            // Only profile file says auth session is disabled.
+            let sut =
+                DisableS3ExpressSessionAuthInterceptor::new_with(Some(true), Env::from_slice(&[]));
+
+            sut.read_before_serialization(&ctx, &rc, &mut cfg)
+                .expect("should run successfully");
+
+            assert!(
+                cfg.load::<crate::config::DisableS3ExpressSessionAuth>()
+                    .unwrap()
+                    .0
+            );
+        }
+
+        #[test]
+        fn disable_option_should_be_unspecified_if_unset() {
+            // No disable option is set from service client.
+            let mut cfg = ConfigBag::base();
+
+            let ctx = InterceptorContext::new(Input::doesnt_matter());
+            let ctx = Into::into(&ctx);
+            let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+
+            // An environment variable or a profile file doesn't specify it either.
+            let sut = DisableS3ExpressSessionAuthInterceptor::new_with(None, Env::from_slice(&[]));
+
+            sut.read_before_serialization(&ctx, &rc, &mut cfg)
+                .expect("should run successfully");
+
+            assert!(cfg
+                .load::<crate::config::DisableS3ExpressSessionAuth>()
+                .is_none());
+        }
+    }
+}

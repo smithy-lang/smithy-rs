@@ -717,6 +717,15 @@ impl RuntimeComponentsBuilder {
         self
     }
 
+    /// Adds an interceptor if no interceptor with the same name has been registered in the current
+    /// instance of this builder.
+    pub fn maybe_push_interceptor(&mut self, interceptor: impl Intercept + 'static) -> &mut Self {
+        if !self.interceptors().any(|i| i.name() == interceptor.name()) {
+            self.push_interceptor(interceptor);
+        }
+        self
+    }
+
     /// Adds an interceptor.
     pub fn with_interceptor(mut self, interceptor: impl Intercept + 'static) -> Self {
         self.push_interceptor(interceptor);
