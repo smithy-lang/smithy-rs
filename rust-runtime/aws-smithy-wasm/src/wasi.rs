@@ -100,18 +100,18 @@ impl HttpConnector for WasiHttpConnector {
     }
 }
 
-/// Wasi http client containing the options to pass to the
+/// WASI HTTP client containing the options to pass to the
 struct WasiDefaultClient {
     options: WasiRequestOptions,
 }
 
 impl WasiDefaultClient {
-    /// Create a new Wasi HTTP client.
+    /// Create a new WASI HTTP client.
     fn new(options: WasiRequestOptions) -> Self {
         Self { options }
     }
 
-    /// Make outgoing http request in a Wasi environment
+    /// Make outgoing HTTP request in a WASI environment
     fn handle(&self, req: http::Request<Bytes>) -> Result<http::Response<Bytes>, ConnectorError> {
         let req = WasiRequest::try_from(req).expect("Converting http request");
 
