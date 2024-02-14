@@ -174,6 +174,7 @@ pub(crate) mod identity_cache {
     use aws_smithy_runtime::expiring_cache::ExpiringCache;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::identity::Identity;
+    use fastrand::Rng;
     use hmac::{digest::FixedOutput, Hmac, Mac};
     use lru::LruCache;
     use sha2::Sha256;
@@ -190,28 +191,16 @@ pub(crate) mod identity_cache {
     #[derive(Clone, Eq, PartialEq, Hash)]
     pub(crate) struct CacheKey(String);
 
-    impl CacheKey {
-        pub(crate) fn new(bucket_name: &str, creds: &Credentials) -> Self {
-            Self({
-                let key = format!("{}{}", creds.access_key_id(), creds.secret_access_key());
-                let mac = Hmac::<Sha256>::new_from_slice(key.as_ref())
-                    .expect("HMAC can take key of any size");
-                let mut inner = hex::encode(mac.finalize_fixed());
-                inner.push_str(bucket_name);
-                inner
-            })
-        }
-    }
-
     /// The caching implementation for S3 Express identity.
     ///
     /// While customers can either disable S3 Express itself or provide a custom S3 Express identity
     /// provider, configuring S3 Express identity cache is not supported. Thus, this is _the_
     /// implementation of S3 Express identity cache.
     pub(crate) struct S3ExpressIdentityCache {
-        pub(crate) inner: Mutex<LruCache<CacheKey, ExpiringCache<Identity, BoxError>>>,
-        pub(crate) time_source: SharedTimeSource,
-        pub(crate) buffer_time: Duration,
+        inner: Mutex<LruCache<CacheKey, ExpiringCache<Identity, BoxError>>>,
+        time_source: SharedTimeSource,
+        buffer_time: Duration,
+        random_bytes: [u8; 64],
     }
 
     impl fmt::Debug for S3ExpressIdentityCache {
@@ -234,11 +223,27 @@ pub(crate) mod identity_cache {
             time_source: SharedTimeSource,
             buffer_time: Duration,
         ) -> Self {
+            let mut rng = Rng::default();
+            let mut random_bytes = [0u8; 64];
+            rng.fill(&mut random_bytes);
             Self {
                 inner: Mutex::new(LruCache::new(NonZeroUsize::new(capacity).unwrap())),
                 time_source,
                 buffer_time,
+                random_bytes,
             }
+        }
+
+        pub(crate) fn key(&self, bucket_name: &str, creds: &Credentials) -> CacheKey {
+            CacheKey({
+                let mut mac = Hmac::<Sha256>::new_from_slice(self.random_bytes.as_slice())
+                    .expect("should be created from random 64 bytes");
+                let input = format!("{}{}", creds.access_key_id(), creds.secret_access_key());
+                mac.update(input.as_ref());
+                let mut inner = hex::encode(mac.finalize_fixed());
+                inner.push_str(bucket_name);
+                inner
+            })
         }
 
         pub(crate) async fn get_or_load<F, Fut>(
@@ -297,18 +302,9 @@ pub(crate) mod identity_cache {
         use aws_smithy_runtime_api::shared::IntoShared;
         use aws_smithy_types::config_bag::ConfigBag;
         use futures_util::stream::FuturesUnordered;
-        use proptest::proptest;
         use std::sync::Arc;
         use std::time::{Duration, SystemTime, UNIX_EPOCH};
         use tracing::info;
-
-        proptest! {
-            #[test]
-            fn hmac_takes_varying_size_key(access_key: String, secret_key: String) {
-                let creds = Credentials::new(access_key, secret_key, None, None, "test");
-                CacheKey::new("s3express-test-bucket--usw2-az1--x-s3", &creds);
-            }
-        }
 
         fn epoch_secs(secs: u64) -> SystemTime {
             SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
@@ -386,7 +382,7 @@ pub(crate) mod identity_cache {
                 Ok(identity_expiring_in(2000)),
             ]);
 
-            let key = CacheKey::new(
+            let key = sut.key(
                 "test-bucket--usw2-az1--x-s3",
                 &Credentials::for_tests_with_session_token(),
             );
@@ -452,7 +448,7 @@ pub(crate) mod identity_cache {
 
             let mut tasks = Vec::new();
             for i in 0..number_of_buckets {
-                let key = CacheKey::new(
+                let key = sut.key(
                     &format!("test-bucket-{i}-usw2-az1--x-s3"),
                     &Credentials::for_tests_with_session_token(),
                 );
@@ -506,7 +502,7 @@ pub(crate) mod identity_cache {
             ]);
 
             let [key1, key2, key3] = [1, 2, 3].map(|i| {
-                CacheKey::new(
+                sut.key(
                     &format!("test-bucket-{i}--usw2-az1--x-s3"),
                     &Credentials::for_tests_with_session_token(),
                 )
@@ -560,7 +556,7 @@ pub(crate) mod identity_cache {
 pub(crate) mod identity_provider {
     use std::time::{Duration, SystemTime};
 
-    use crate::s3_express::identity_cache::{CacheKey, S3ExpressIdentityCache};
+    use crate::s3_express::identity_cache::S3ExpressIdentityCache;
     use crate::types::SessionCredentials;
     use aws_credential_types::provider::error::CredentialsError;
     use aws_credential_types::Credentials;
@@ -626,7 +622,7 @@ pub(crate) mod identity_provider {
                 "wrong identity type for SigV4. Expected AWS credentials but got `{identity:?}",
             )?;
 
-            let key = CacheKey::new(bucket_name, credentials);
+            let key = self.cache.key(bucket_name, credentials);
             self.cache
                 .get_or_load(key, || async move {
                     let creds = self
