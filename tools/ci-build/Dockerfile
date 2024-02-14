@@ -128,7 +128,7 @@ RUN cargo +${rust_nightly_version} install wasmtime-cli --features="component-mo
 FROM install_rust AS cargo_component
 ARG cargo_component_version=0.7.1
 ARG rust_nightly_version
-RUN cargo install cargo-component --version ${cargo_component_version}
+RUN cargo +${rust_nightly_version} install cargo-component --version ${cargo_component_version}
 
 FROM install_rust AS cargo_semver_checks
 ARG cargo_semver_checks_version=0.24.1
