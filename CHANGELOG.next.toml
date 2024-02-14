@@ -126,5 +126,5 @@ author = "rcoh"
 [[smithy-rs]]
 message = "Add aws-smithy-wasm crate to enable SDK use in wasi compliant environments"
 references = ["smithy-rs#2087", "smithy-rs#2520", "smithy-rs#3409"]
-meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+meta = { "breaking" = false, "tada" = true, "bug" = false, "target" = "client"}
 author = "landonxjames"
