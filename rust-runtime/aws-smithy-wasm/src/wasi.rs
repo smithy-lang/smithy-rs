@@ -25,7 +25,7 @@ use wasi::http::{
     types::{self as wasi_http, OutgoingBody, RequestOptions},
 };
 
-/// Creates a connector function that can be used during instantiation of the client SDK
+/// Creates a HTTP client that can be used during instantiation of the client SDK
 /// in order to route the HTTP requests through the WebAssembly host. The host must
 /// support the WASI HTTP proposal as defined in the Preview 2 specification.
 pub fn wasi_http_client() -> SharedHttpClient {
