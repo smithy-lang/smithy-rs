@@ -46,3 +46,9 @@ message = "Added impl `Display` to Enums."
 references = ["smithy-rs#3336", "smithy-rs#3391"]
 meta = { "breaking" = false, "tada" = false, "bug" = false}
 author = "iampkmone"
+
+[[smithy-rs]]
+message = "Add aws-smithy-wasm crate to enable SDK use in wasi compliant environments"
+references = ["smithy-rs#2087", "smithy-rs#2520"]
+meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client"}
+author = "landonxjames"
