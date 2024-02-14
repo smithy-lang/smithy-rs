@@ -39,7 +39,7 @@ pub struct WasiHttpClient {
 }
 
 impl WasiHttpClient {
-    /// Create a new Wasi HTTP client.
+    /// Create a new WASI HTTP client.
     pub fn new() -> Self {
         Default::default()
     }
