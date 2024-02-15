@@ -16,5 +16,5 @@
 
 //! Smithy WebAssembly
 
-#[cfg(all(target_family = "wasm", target_os = "wasi"))]
+// #[cfg(all(target_family = "wasm", target_os = "wasi"))]
 pub mod wasi;
