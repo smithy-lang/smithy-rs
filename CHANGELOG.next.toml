@@ -10,3 +10,15 @@
 # references = ["smithy-rs#920"]
 # meta = { "breaking" = false, "tada" = false, "bug" = false, "target" = "client | server | all"}
 # author = "rcoh"
+
+[[smithy-rs]]
+message = "The MSRV has been increase to 1.74.1"
+references = ["smithy-rs#3410"]
+meta = { "bug" = true, "breaking" = false, tada = false, target = "all" }
+author = "rcoh"
+
+[[aws-sdk-rust]]
+message = "The MSRV has been increase to 1.74.1"
+references = ["smithy-rs#3410"]
+meta = { "bug" = true, "breaking" = false, tada = false }
+author = "rcoh"
