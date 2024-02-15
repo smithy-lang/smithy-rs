@@ -250,6 +250,11 @@ impl<'a> CanonicalRequest<'a> {
 
         Self::insert_host_header(&mut canonical_headers, req.uri());
 
+        let token_header_name = params
+            .settings()
+            .session_token_name_override
+            .unwrap_or(header::X_AMZ_SECURITY_TOKEN);
+
         if params.settings().signature_location == SignatureLocation::Headers {
             let creds = params
                 .credentials()
@@ -259,7 +264,7 @@ impl<'a> CanonicalRequest<'a> {
             if let Some(security_token) = creds.session_token() {
                 let mut sec_header = HeaderValue::from_str(security_token)?;
                 sec_header.set_sensitive(true);
-                canonical_headers.insert(header::X_AMZ_SECURITY_TOKEN, sec_header);
+                canonical_headers.insert(token_header_name, sec_header);
             }
 
             if params.settings().payload_checksum_kind == PayloadChecksumKind::XAmzSha256 {
@@ -283,7 +288,7 @@ impl<'a> CanonicalRequest<'a> {
             }
 
             if params.settings().session_token_mode == SessionTokenMode::Exclude
-                && name == HeaderName::from_static(header::X_AMZ_SECURITY_TOKEN)
+                && name == HeaderName::from_static(token_header_name)
             {
                 continue;
             }
@@ -349,9 +354,13 @@ impl<'a> CanonicalRequest<'a> {
             );
 
             if let Some(security_token) = values.security_token {
-                if !settings.param_excluded(param::X_AMZ_SECURITY_TOKEN) {
-                    add_param(&mut params, param::X_AMZ_SECURITY_TOKEN, security_token);
-                }
+                add_param(
+                    &mut params,
+                    settings
+                        .session_token_name_override
+                        .unwrap_or(param::X_AMZ_SECURITY_TOKEN),
+                    security_token,
+                );
             }
         }
         // Sort by param name, and then by param value
