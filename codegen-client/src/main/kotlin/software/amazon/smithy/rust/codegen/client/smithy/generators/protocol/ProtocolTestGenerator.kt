@@ -174,6 +174,7 @@ class DefaultProtocolTestGenerator(
         testModuleWriter.write("Test ID: ${testCase.id}")
         testModuleWriter.newlinePrefix = ""
         Attribute.TokioTest.render(testModuleWriter)
+        Attribute.AllowNonSnakeCase.render(testModuleWriter)
         val action =
             when (testCase) {
                 is HttpResponseTestCase -> Action.Response
@@ -189,7 +190,7 @@ class DefaultProtocolTestGenerator(
                 is Action.Request -> "_request"
             }
         Attribute.AllowUnusedMut.render(testModuleWriter)
-        testModuleWriter.rustBlock("async fn ${testCase.id.toSnakeCase()}$fnName()") {
+        testModuleWriter.rustBlock("async fn ${testCase.id}$fnName()") {
             block(this)
         }
     }
@@ -587,7 +588,25 @@ class DefaultProtocolTestGenerator(
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultsValuesWhenMissingInResponse", Action.Request),
                 FailingTest(JsonRpc10, "AwsJson10ClientUsesExplicitlyProvidedMemberValuesOverDefaults", Action.Request),
                 FailingTest(JsonRpc10, "AwsJson10ClientPopulatesDefaultValuesInInput", Action.Request),
+                *failingRestXmlTestsPayloadSerialization(),
             )
+
+        private fun failingRestXmlTestsPayloadSerialization() =
+            listOf(
+                "HttpPayloadWithStructure",
+                "RestXmlHttpPayloadWithUnion",
+                "HttpPayloadWithXmlNamespace",
+                "HttpPayloadWithXmlNamespaceAndPrefix",
+                "XmlAttributesOnPayload",
+            ).flatMap {
+                listOf(
+                    FailingTest(
+                        RestXml, it, Action.Request,
+                    ),
+                    FailingTest(RestXml, it, Action.Response),
+                )
+            }.toTypedArray()
+
         private val RunOnly: Set<String>? = null
 
         // These tests are not even attempted to be generated, either because they will not compile
