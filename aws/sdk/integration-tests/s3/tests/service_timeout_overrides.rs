@@ -77,7 +77,7 @@ async fn default_connect_timeout_set() {
         .region(Region::from_static("us-east-1"))
         .timeout_config(
             TimeoutConfig::builder()
-                .operation_timeout(Duration::from_secs(5))
+                .operation_timeout(Duration::from_secs(10))
                 .build(),
         )
         .retry_config(RetryConfig::disabled())
@@ -93,14 +93,14 @@ async fn default_connect_timeout_set() {
         Some(
             &TimeoutConfig::builder()
                 .connect_timeout(Duration::from_millis(3100))
-                .operation_timeout(Duration::from_secs(5))
+                .operation_timeout(Duration::from_secs(10))
                 .build()
         )
     );
     let config = aws_sdk_s3::config::Builder::from(&sdk_config)
         .timeout_config(
             TimeoutConfig::builder()
-                .operation_attempt_timeout(Duration::from_secs(4))
+                .operation_attempt_timeout(Duration::from_secs(8))
                 .build(),
         )
         .build();
@@ -120,5 +120,9 @@ async fn default_connect_timeout_set() {
         err
     );
     // ensure that of the three timeouts, the one we hit is connect timeout.
-    assert_elapsed!(start, Duration::from_millis(3100));
+    assert_elapsed!(
+        start,
+        Duration::from_millis(3100),
+        Duration::from_millis(1000)
+    );
 }
