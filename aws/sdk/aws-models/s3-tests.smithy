@@ -259,3 +259,23 @@ apply GetObject @httpRequestTests([
         }
     }
 ])
+
+apply GetObjectRetention @httpResponseTests([{
+                                                 id: "GetObjectRetentionResponse",
+                                                 documentation: "This test validates that parsing respects whitespace",
+                                                 code: 200,
+                                                 bodyMediaType: "application/xml",
+                                                 protocol: "aws.protocols#restXml",
+                                                 body: """
+                                                <Retention xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                                                    <Mode>GOVERNANCE</Mode>
+                                                    <RetainUntilDate>2009-02-13T23:31:30Z</RetainUntilDate>
+                                                </Retention>""",
+                                                 params: {
+                                                     Retention: {
+                                                         Mode: "GOVERNANCE",
+                                                         RetainUntilDate: 1234567890
+                                                     }
+                                                 }
+                                             }
+])

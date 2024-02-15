@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.KnowledgeIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.model.traits.XmlAttributeTrait
 import software.amazon.smithy.model.traits.XmlNameTrait
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
@@ -17,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 /**
@@ -32,7 +34,13 @@ class XmlNameIndex(private val model: Model) : KnowledgeIndex {
     fun payloadShapeName(member: MemberShape): String {
         val payloadShape = model.expectShape(member.target)
         val xmlRename: XmlNameTrait? = member.getTrait() ?: payloadShape.getTrait()
-        return xmlRename?.value ?: payloadShape.id.name
+        // Event stream uses the payload name, but regular requests/responses use the member name
+        val fallback =
+            when (member.isEventStream(model) || member.hasTrait<EventPayloadTrait>()) {
+                false -> member.memberName
+                true -> payloadShape.id.name
+            }
+        return xmlRename?.value ?: fallback
     }
 
     /**
