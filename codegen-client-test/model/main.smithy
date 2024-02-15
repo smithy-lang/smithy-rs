@@ -1,35 +1,42 @@
 $version: "1.0"
+
 namespace example.weather
 
+use aws.protocols#awsJson1_1
 use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
-use aws.protocols#awsJson1_1
-
 
 /// Provides weather forecasts.
 @paginated(inputToken: "nextToken", outputToken: "nextToken", pageSize: "pageSize")
 @awsJson1_1
 service Weather {
-    version: "2006-03-01",
-    resources: [City],
-    operations: [GetCurrentTime]
+    version: "2006-03-01"
+    resources: [
+        City
+    ]
+    operations: [
+        GetCurrentTime
+    ]
 }
 
 resource City {
-    identifiers: { cityId: CityId },
-    read: GetCity,
-    list: ListCities,
-    resources: [Forecast, CityImage],
+    identifiers: { cityId: CityId }
+    read: GetCity
+    list: ListCities
+    resources: [
+        Forecast
+        CityImage
+    ]
 }
 
 resource Forecast {
-    identifiers: { cityId: CityId },
-    read: GetForecast,
+    identifiers: { cityId: CityId }
+    read: GetForecast
 }
 
 resource CityImage {
-    identifiers: { cityId: CityId },
-    read: GetCityImage,
+    identifiers: { cityId: CityId }
+    read: GetCityImage
 }
 
 // "pattern" is a trait.
@@ -39,59 +46,51 @@ string CityId
 @readonly
 @http(method: "GET", uri: "/cities/{cityId}")
 operation GetCity {
-    input: GetCityInput,
-    output: GetCityOutput,
-    errors: [NoSuchResource]
+    input: GetCityInput
+    output: GetCityOutput
+    errors: [
+        NoSuchResource
+    ]
 }
 
 // Tests that HTTP protocol tests are generated.
 apply GetCity @httpRequestTests([
     {
-        id: "WriteGetCityAssertions",
-        documentation: "Does something",
-        protocol: "aws.protocols#awsJson1_1",
-        method: "GET",
-        uri: "/cities/123",
-        body: "",
-        params: {
-            cityId: "123"
-        }
+        id: "WriteGetCityAssertions"
+        documentation: "Does something"
+        protocol: "aws.protocols#awsJson1_1"
+        method: "GET"
+        uri: "/cities/123"
+        body: ""
+        params: { cityId: "123" }
     }
 ])
 
 apply GetCity @httpResponseTests([
     {
-        id: "WriteGetCityResponseAssertions",
-        documentation: "Does something",
-        protocol: "aws.protocols#awsJson1_1",
-        code: 200,
+        id: "WriteGetCityResponseAssertions"
+        documentation: "Does something"
+        protocol: "aws.protocols#awsJson1_1"
+        code: 200
         body: """
             {
-                "name": "Seattle",
-                "coordinates": {
-                    "latitude": 12.34,
-                    "longitude": -56.78
-                },
-                "city": {
-                    "cityId": "123",
-                    "name": "Seattle",
-                    "number": "One",
-                    "case": "Upper"
-                }
-            }""",
-        bodyMediaType: "application/json",
-        params: {
-            name: "Seattle",
-            coordinates: {
-                latitude: 12.34,
-                longitude: -56.78
+            "name": "Seattle",
+            "coordinates": {
+            "latitude": 12.34,
+            "longitude": -56.78
             },
-            city: {
-                cityId: "123",
-                name: "Seattle",
-                number: "One",
-                case: "Upper"
+            "city": {
+            "cityId": "123",
+            "name": "Seattle",
+            "number": "One",
+            "case": "Upper"
             }
+            }"""
+        bodyMediaType: "application/json"
+        params: {
+            name: "Seattle"
+            coordinates: { latitude: 12.34, longitude: -56.78 }
+            city: { cityId: "123", name: "Seattle", number: "One", case: "Upper" }
         }
     }
 ])
@@ -109,21 +108,21 @@ structure GetCityOutput {
     // "required" is used on output to indicate if the service
     // will always provide a value for the member.
     @required
-    name: String,
+    name: String
 
     @required
-    coordinates: CityCoordinates,
+    coordinates: CityCoordinates
 
-    city: CitySummary,
+    city: CitySummary
 }
 
 // This structure is nested within GetCityOutput.
 structure CityCoordinates {
     @required
-    latitude: PrimitiveFloat,
+    latitude: PrimitiveFloat
 
     @required
-    longitude: Float,
+    longitude: Float
 }
 
 /// Error encountered when no resource could be found.
@@ -132,27 +131,24 @@ structure CityCoordinates {
 structure NoSuchResource {
     /// The type of resource that was not found.
     @required
-    resourceType: String,
+    resourceType: String
 
-    message: String,
+    message: String
 }
 
 apply NoSuchResource @httpResponseTests([
     {
-        id: "WriteNoSuchResourceAssertions",
-        documentation: "Does something",
-        protocol: "aws.protocols#awsJson1_1",
-        code: 404,
+        id: "WriteNoSuchResourceAssertions"
+        documentation: "Does something"
+        protocol: "aws.protocols#awsJson1_1"
+        code: 404
         body: """
             {
-                "resourceType": "City",
-                "message": "Your custom message"
-            }""",
-        bodyMediaType: "application/json",
-        params: {
-            resourceType: "City",
-            message: "Your custom message"
-        }
+            "resourceType": "City",
+            "message": "Your custom message"
+            }"""
+        bodyMediaType: "application/json"
+        params: { resourceType: "City", message: "Your custom message" }
     }
 ])
 
@@ -162,39 +158,37 @@ apply NoSuchResource @httpResponseTests([
 @paginated(items: "items")
 @http(method: "GET", uri: "/cities")
 operation ListCities {
-    input: ListCitiesInput,
+    input: ListCitiesInput
     output: ListCitiesOutput
 }
 
 apply ListCities @httpRequestTests([
     {
-        id: "WriteListCitiesAssertions",
-        documentation: "Does something",
-        protocol: "aws.protocols#awsJson1_1",
-        method: "GET",
-        uri: "/cities",
-        body: "",
-        queryParams: ["pageSize=50"],
-        forbidQueryParams: ["nextToken"],
-        params: {
-            pageSize: 50
-        }
+        id: "WriteListCitiesAssertions"
+        documentation: "Does something"
+        protocol: "aws.protocols#awsJson1_1"
+        method: "GET"
+        uri: "/cities"
+        body: ""
+        queryParams: ["pageSize=50"]
+        forbidQueryParams: ["nextToken"]
+        params: { pageSize: 50 }
     }
 ])
 
 structure ListCitiesInput {
     @httpQuery("nextToken")
-    nextToken: String,
+    nextToken: String
 
     @httpQuery("pageSize")
     pageSize: Integer
 }
 
 structure ListCitiesOutput {
-    nextToken: String,
+    nextToken: String
 
     @required
-    items: CitySummaries,
+    items: CitySummaries
 }
 
 // CitySummaries is a list of CitySummary structures.
@@ -203,16 +197,21 @@ list CitySummaries {
 }
 
 // CitySummary contains a reference to a City.
-@references([{resource: City}])
+@references([
+    {
+        resource: City
+    }
+])
 structure CitySummary {
     @required
-    cityId: CityId,
+    cityId: CityId
 
     @required
-    name: String,
+    name: String
 
-    number: String,
-    case: String,
+    number: String
+
+    case: String
 }
 
 @readonly
@@ -229,7 +228,7 @@ structure GetCurrentTimeOutput {
 @readonly
 @http(method: "GET", uri: "/cities/{cityId}/forecast")
 operation GetForecast {
-    input: GetForecastInput,
+    input: GetForecastInput
     output: GetForecastOutput
 }
 
@@ -238,54 +237,73 @@ operation GetForecast {
 structure GetForecastInput {
     @required
     @httpLabel
-    cityId: CityId,
+    cityId: CityId
 }
 
 structure GetForecastOutput {
-    chanceOfRain: Float,
-    snow: SimpleYesNo,
+    chanceOfRain: Float
+    snow: SimpleYesNo
 }
 
 union Precipitation {
-    rain: PrimitiveBoolean,
-    sleet: PrimitiveBoolean,
-    hail: StringMap,
-    snow: SimpleYesNo,
-    mixed: TypedYesNo,
-    other: OtherStructure,
-    blob: Blob,
-    baz: example.weather.nested.more#Baz,
+    rain: PrimitiveBoolean
+    sleet: PrimitiveBoolean
+    hail: StringMap
+    snow: SimpleYesNo
+    mixed: TypedYesNo
+    other: OtherStructure
+    blob: Blob
+    baz: example.weather.nested.more#Baz
 }
 
 structure OtherStructure {}
 
-@enum([{value: "YES"}, {value: "NO"}])
+@enum([
+    {
+        value: "YES"
+    }
+    {
+        value: "NO"
+    }
+])
 string SimpleYesNo
 
-@enum([{value: "Yes", name: "YES"}, {value: "No", name: "NO"}])
+@enum([
+    {
+        value: "Yes"
+        name: "YES"
+    }
+    {
+        value: "No"
+        name: "NO"
+    }
+])
 string TypedYesNo
 
 map StringMap {
-    key: String,
-    value: String,
+    key: String
+    value: String
 }
 
 @readonly
 @http(method: "GET", uri: "/cities/{cityId}/image")
 operation GetCityImage {
-    input: GetCityImageInput,
-    output: GetCityImageOutput,
-    errors: [NoSuchResource]
+    input: GetCityImageInput
+    output: GetCityImageOutput
+    errors: [
+        NoSuchResource
+    ]
 }
 
 structure GetCityImageInput {
-    @required @httpLabel
-    cityId: CityId,
+    @required
+    @httpLabel
+    cityId: CityId
 }
 
 structure GetCityImageOutput {
     @httpPayload
-    image: CityImageData,
+    image: CityImageData
 }
 
 @streaming
