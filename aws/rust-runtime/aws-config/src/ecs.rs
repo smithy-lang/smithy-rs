@@ -461,7 +461,7 @@ async fn validate_full_uri(
     }
 }
 
-// "169.254.170.22"
+// "169.254.170.2"
 const ECS_CONTAINER_IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(169, 254, 170, 2));
 
 // "169.254.170.23"

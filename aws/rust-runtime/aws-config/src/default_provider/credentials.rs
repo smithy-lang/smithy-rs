@@ -296,6 +296,9 @@ mod test {
     make_test!(ecs_credentials);
     make_test!(ecs_credentials_invalid_profile);
 
+    make_test!(eks_pod_identity_credentials);
+    make_test!(eks_pod_identity_no_token_file);
+
     #[cfg(not(feature = "sso"))]
     make_test!(sso_assume_role #[should_panic(expected = "This behavior requires following cargo feature(s) enabled: sso")]);
     #[cfg(not(feature = "sso"))]
