@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -33,6 +34,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViola
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.server.smithy.shapeValueValidationErrorMessage
 
 /**
  * [ConstrainedNumberGenerator] generates a wrapper newtype holding a constrained number primitive.
@@ -150,9 +153,19 @@ class ConstrainedNumberGenerator(
                     impl ${constraintViolation.name} {
                         #{NumberShapeConstraintViolationImplBlock}
                     }
+                    
+                    impl #{Display} for ${constraintViolation.name} {
+                        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                            write!(f, "${rangeInfo.rangeTrait.shapeValueValidationErrorMessage(shape)}")
+                        }
+                    }
+                        
+                    impl #{Error} for ${constraintViolation.name} {}
                     """,
                     "NumberShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.numberShapeConstraintViolationImplBlock(rangeInfo),
-                )
+                    "Error" to RuntimeType.StdError,
+                    "Display" to RuntimeType.Display,
+                    )
             }
         }
     }
