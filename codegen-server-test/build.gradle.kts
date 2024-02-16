@@ -95,7 +95,7 @@ project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
 project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
-tasks["jar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml")
 
 project.registerModifyMtimeTask()

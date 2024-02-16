@@ -30,7 +30,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyProtocolTestHelpers
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntime
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.smithyRuntimeApiTestUtil
-import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -107,11 +106,6 @@ class IntegrationTestDependencies(
                         addDependency(TracingSubscriber)
                     }
                     if (hasBenches) {
-                        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3398): Remove clap dependency once the
-                        // SDK MSRV is 1.74. Clap was added and pinned to 4.4.x because it is pulled in by criterion,
-                        // and 4.5.x requires an MSRV of Rust 1.74. Since the SDK MSRV is 1.72, this causes it to fail
-                        // to compile.
-                        addDependency(CargoDependency("clap", CratesIo("~4.4"), DependencyScope.Dev))
                         addDependency(Criterion)
                     }
                     for (serviceSpecific in serviceSpecificCustomizations()) {
