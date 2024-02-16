@@ -407,7 +407,7 @@ tasks.register<ExecRustBuildTool>("generateVersionManifest") {
     }
 }
 
-tasks["jar"].apply {
+tasks["smithyBuild"].apply {
     inputs.file(layout.buildDirectory.file("smithy-build.json"))
     inputs.dir(projectDir.resolve("aws-models"))
     dependsOn("generateSmithyBuild")
