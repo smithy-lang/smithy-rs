@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! HTTP WASI Adapter
+//! WASI HTTP Adapter
 use aws_smithy_http::header::ParseError;
 use aws_smithy_runtime_api::{
     client::{
@@ -25,54 +25,54 @@ use wasi::http::{
     types::{self as wasi_http, OutgoingBody, RequestOptions},
 };
 
-/// Creates a HTTP client that can be used during instantiation of the client SDK
-/// in order to route the HTTP requests through the WebAssembly host. The host must
-/// support the WASI HTTP proposal as defined in the Preview 2 specification.
-pub fn wasi_http_client() -> SharedHttpClient {
-    WasiHttpClient::new().into_shared()
-}
+/// Builder for [`WasiHttpClient`]. Currently empty, but allows for future
+/// config options to be added in a backwards compatible manner.
+#[derive(Default, Debug)]
+pub struct WasiHttpClientBuilder {}
 
-/// HTTP client used in WASI environment
-#[derive(Debug, Clone)]
-pub struct WasiHttpClient {
-    connector: SharedHttpConnector,
-}
-
-impl WasiHttpClient {
-    /// Create a new WASI HTTP client.
+impl WasiHttpClientBuilder {
+    /// Creates a new builder.
     pub fn new() -> Self {
         Default::default()
     }
-}
 
-impl Default for WasiHttpClient {
-    fn default() -> Self {
-        Self {
-            connector: WasiHttpConnector.into_shared(),
-        }
+    /// Builds the [`WasiHttpClient`].
+    pub fn build(self) -> SharedHttpClient {
+        let client = WasiHttpClient {};
+        client.into_shared()
     }
 }
+
+/// An HTTP client that can be used during instantiation of the client SDK in
+/// order to route the HTTP requests through the WebAssembly host. The host must
+/// support the WASI HTTP proposal as defined in the Preview 2 specification.
+#[derive(Debug, Clone)]
+pub struct WasiHttpClient {}
 
 impl HttpClient for WasiHttpClient {
     fn http_connector(
         &self,
-        _settings: &HttpConnectorSettings,
+        settings: &HttpConnectorSettings,
         _components: &RuntimeComponents,
     ) -> SharedHttpConnector {
-        self.connector.clone()
+        let options = WasiRequestOptions::from(settings);
+        let connector = WasiHttpConnector { options };
+
+        connector.into_shared()
     }
 }
 
 /// HTTP connector used in WASI environment
-#[non_exhaustive]
-#[derive(Debug)]
-pub struct WasiHttpConnector;
+#[derive(Debug, Clone)]
+pub struct WasiHttpConnector {
+    options: WasiRequestOptions,
+}
 
 impl HttpConnector for WasiHttpConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         tracing::trace!("WasiHttpConnector: sending request {request:?}");
-        // TODO(wasi): add connect/read timeouts
-        let client = WasiDefaultClient::new(WasiRequestOptions(None));
+
+        let client = WasiDefaultClient::new(self.options.clone());
         let http_req = request.try_into_http1x().expect("Http request invalid");
         let converted_req = http_req.map(|body| match body.bytes() {
             Some(value) => Bytes::copy_from_slice(value),
@@ -100,7 +100,7 @@ impl HttpConnector for WasiHttpConnector {
     }
 }
 
-/// WASI HTTP client containing the options to pass to the
+/// WASI HTTP client containing the options passed to the outgoing_handler
 struct WasiDefaultClient {
     options: WasiRequestOptions,
 }
@@ -113,9 +113,11 @@ impl WasiDefaultClient {
 
     /// Make outgoing HTTP request in a WASI environment
     fn handle(&self, req: http::Request<Bytes>) -> Result<http::Response<Bytes>, ConnectorError> {
-        let req = WasiRequest::try_from(req).expect("Converting http request");
+        let req =
+            WasiRequest::try_from(req).map_err(|err| ConnectorError::other(err.into(), None))?;
 
-        let res = outgoing_handler::handle(req.0, self.options.clone().0).expect("Http response");
+        let res = outgoing_handler::handle(req.0, self.options.clone().0)
+            .map_err(|err| ConnectorError::other(err.into(), None))?;
 
         // Right now only synchronous calls can be made through WASI, so we subscribe and
         // block on the FutureIncomingResponse
@@ -134,19 +136,45 @@ impl WasiDefaultClient {
             .map_err(|err| ConnectorError::other(err.into(), None))?;
 
         let response = http::Response::try_from(WasiResponse(incoming_res))
-            .expect("Converting to http response");
+            .map_err(|err| ConnectorError::other(err.into(), None))?;
 
         Ok(response)
     }
 }
 
-/// Wrapper for the Wasi RequestOptions type to allow us to impl Clone
+/// Wrapper for the WASI RequestOptions type to allow us to impl Clone
+#[derive(Debug)]
 struct WasiRequestOptions(Option<outgoing_handler::RequestOptions>);
 
-//The Wasi RequestOptions type doesn't impl copy or clone but the outgoing_handler::handle method
+impl From<&HttpConnectorSettings> for WasiRequestOptions {
+    fn from(value: &HttpConnectorSettings) -> Self {
+        //The WASI Duration is nanoseconds represented as u64
+        let connect_timeout = value
+            .connect_timeout()
+            .map(|dur| u64::try_from(dur.as_nanos()).unwrap_or(u64::MAX));
+        let read_timeout = value
+            .read_timeout()
+            .map(|dur| u64::try_from(dur.as_nanos()).unwrap_or(u64::MAX));
+
+        //Note: unable to find any documentation about what timeout values are not supported
+        //so not sure under what circumstances these set operations would actually fail
+        let wasi_http_opts = wasi_http::RequestOptions::new();
+        wasi_http_opts
+            .set_connect_timeout(connect_timeout)
+            .expect("Connect timeout not supported");
+        wasi_http_opts
+            .set_first_byte_timeout(read_timeout)
+            .expect("Read timeout not supported");
+
+        WasiRequestOptions(Some(wasi_http_opts))
+    }
+}
+//The WASI RequestOptions type doesn't impl copy or clone but the outgoing_handler::handle method
 //takes ownership, so we impl it on this wrapper type
 impl Clone for WasiRequestOptions {
     fn clone(&self) -> Self {
+        //Note none of the expects here should ever trigger since all of the values passed in are from
+        //the existing RequestOptions that is being cloned and should be valid
         let new_opts = if let Some(opts) = &self.0 {
             let new_opts = RequestOptions::new();
             new_opts
@@ -168,25 +196,18 @@ impl Clone for WasiRequestOptions {
     }
 }
 
-/// Wrapper to allow converting between http Request types and Wasi Request types
+/// Wrapper to allow converting between HTTP Request types and WASI Request types
 #[derive(Debug)]
 struct WasiRequest(outgoing_handler::OutgoingRequest);
-
-impl WasiRequest {
-    fn new(req: outgoing_handler::OutgoingRequest) -> Self {
-        Self(req)
-    }
-}
 
 impl TryFrom<http::Request<Bytes>> for WasiRequest {
     type Error = ParseError;
 
     fn try_from(value: http::Request<Bytes>) -> Result<Self, Self::Error> {
         let (parts, body) = value.into_parts();
-        let method =
-            WasiMethod::try_from(parts.method).map_err(|err| ParseError::new(err.to_string()))?;
+        let method = WasiMethod::try_from(parts.method)?;
         let path_with_query = parts.uri.path_and_query().map(|path| path.as_str());
-        let headers = WasiHeaders::from(parts.headers);
+        let headers = WasiHeaders::try_from(parts.headers)?;
         let scheme = match parts.uri.scheme_str().unwrap_or("") {
             "http" => Some(&wasi_http::Scheme::Http),
             "https" => Some(&wasi_http::Scheme::Https),
@@ -195,12 +216,18 @@ impl TryFrom<http::Request<Bytes>> for WasiRequest {
         let authority = parts.uri.authority().map(|auth| auth.as_str());
 
         let request = wasi_http::OutgoingRequest::new(headers.0);
-        request.set_scheme(scheme).expect("Set scheme");
-        request.set_method(&method.0).expect("Set method");
+        request
+            .set_scheme(scheme)
+            .map_err(|_| ParseError::new("Failed to set HTTP scheme"))?;
+        request
+            .set_method(&method.0)
+            .map_err(|_| ParseError::new("Failed to set HTTP method"))?;
         request
             .set_path_with_query(path_with_query)
-            .expect("Set path with query");
-        request.set_authority(authority).expect("Set authority");
+            .map_err(|_| ParseError::new("Failed to set HTTP path"))?;
+        request
+            .set_authority(authority)
+            .map_err(|_| ParseError::new("Failed to set HTTP authority"))?;
 
         let request_body = request.body().expect("Body accessed more than once");
 
@@ -210,20 +237,21 @@ impl TryFrom<http::Request<Bytes>> for WasiRequest {
 
         request_stream
             .blocking_write_and_flush(&body)
-            .expect("Failed to write body");
+            .map_err(|_| ParseError::new("Failed to write HTTP body"))?;
 
         //The OutputStream is a child resource: it must be dropped
         //before the parent OutgoingBody resource is dropped (or finished),
         //otherwise the OutgoingBody drop or finish will trap.
         drop(request_stream);
 
-        OutgoingBody::finish(request_body, None).expect("Http body finished");
+        OutgoingBody::finish(request_body, None)
+            .map_err(|_| ParseError::new("Failed to finalize HTTP body"))?;
 
-        Ok(WasiRequest::new(request))
+        Ok(WasiRequest(request))
     }
 }
 
-/// Wrapper to allow converting between http Methods and Wasi Methods
+/// Wrapper to allow converting between HTTP Methods and WASI Methods
 struct WasiMethod(wasi_http::Method);
 
 impl TryFrom<http::Method> for WasiMethod {
@@ -245,7 +273,7 @@ impl TryFrom<http::Method> for WasiMethod {
     }
 }
 
-/// Wrapper to allow converting between http Response types and Wasi Response types
+/// Wrapper to allow converting between HTTP Response types and WASI Response types
 struct WasiResponse(wasi_http::IncomingResponse);
 
 impl TryFrom<WasiResponse> for http::Response<Bytes> {
@@ -292,11 +320,13 @@ impl TryFrom<WasiResponse> for http::Response<Bytes> {
     }
 }
 
-/// Wrapper to allow converting between http headers and Wasi headers
+/// Wrapper to allow converting between HTTP headers and WASI headers
 struct WasiHeaders(wasi_http::Fields);
 
-impl From<http::HeaderMap> for WasiHeaders {
-    fn from(headers: http::HeaderMap) -> Self {
+impl TryFrom<http::HeaderMap> for WasiHeaders {
+    type Error = ParseError;
+
+    fn try_from(headers: http::HeaderMap) -> Result<Self, Self::Error> {
         let entries = headers
             .iter()
             .map(|(name, value)| {
@@ -307,8 +337,9 @@ impl From<http::HeaderMap> for WasiHeaders {
             })
             .collect::<Vec<_>>();
 
-        let fields = wasi_http::Fields::from_list(&entries).expect("Invalid http headers.");
+        let fields = wasi_http::Fields::from_list(&entries)
+            .map_err(|err| ParseError::new(err.to_string()))?;
 
-        Self(fields)
+        Ok(Self(fields))
     }
 }

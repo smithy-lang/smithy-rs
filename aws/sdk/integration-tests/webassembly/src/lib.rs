@@ -6,8 +6,6 @@
 #![allow(dead_code)]
 
 #[cfg(target_family = "wasm")]
-mod default_config;
-#[cfg(target_family = "wasm")]
-mod list_objects;
+mod http_client;
 #[cfg(all(target_family = "wasm", target_os = "wasi"))]
 mod wasi;
