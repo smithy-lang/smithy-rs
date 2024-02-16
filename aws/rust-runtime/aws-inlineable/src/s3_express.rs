@@ -661,3 +661,124 @@ pub(crate) mod identity_provider {
         }
     }
 }
+
+/// Supporting code for S3 Express runtime plugin
+pub(crate) mod runtime_plugin {
+    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+    use aws_smithy_types::config_bag::{CloneableLayer, FrozenLayer, Layer};
+    use aws_types::os_shim_internal::Env;
+
+    mod env {
+        pub(super) const S3_DISABLE_EXPRESS_SESSION_AUTH: &str =
+            "AWS_S3_DISABLE_EXPRESS_SESSION_AUTH";
+    }
+
+    #[derive(Debug)]
+    pub(crate) struct S3ExpressRuntimePlugin {
+        config: FrozenLayer,
+    }
+
+    impl S3ExpressRuntimePlugin {
+        pub(crate) fn new(service_config: &CloneableLayer) -> Self {
+            Self::new_with(service_config, Env::real())
+        }
+
+        fn new_with(service_config: &CloneableLayer, env: Env) -> Self {
+            let mut layer = Layer::new("S3ExpressRuntimePlugin");
+            if service_config
+                .load::<crate::config::DisableS3ExpressSessionAuth>()
+                .is_none()
+            {
+                match env.get(env::S3_DISABLE_EXPRESS_SESSION_AUTH) {
+                    Ok(value)
+                        if value.eq_ignore_ascii_case("true")
+                            || value.eq_ignore_ascii_case("false") =>
+                    {
+                        let value = value
+                            .to_lowercase()
+                            .parse::<bool>()
+                            .expect("just checked to be a bool-valued string");
+                        layer.store_or_unset(Some(crate::config::DisableS3ExpressSessionAuth(
+                            value,
+                        )));
+                    }
+                    _ => {
+                        // TODO(S3Express depending on aws-sdk-rust#1060): Transfer a value of
+                        //  `s3_disable_express_session_auth` from a profile file to `layer`
+                    }
+                }
+            }
+
+            Self {
+                config: layer.freeze(),
+            }
+        }
+    }
+
+    impl RuntimePlugin for S3ExpressRuntimePlugin {
+        fn config(&self) -> Option<FrozenLayer> {
+            Some(self.config.clone())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn disable_option_set_from_service_client_should_take_the_highest_precedence() {
+            // Disable option is set from service client.
+            let mut layer = CloneableLayer::new("test");
+            layer.store_put(crate::config::DisableS3ExpressSessionAuth(true));
+
+            // An environment variable says the session auth is _not_ disabled, but it will be
+            // overruled by what is in `layer`.
+            let sut = S3ExpressRuntimePlugin::new_with(
+                &layer,
+                Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
+            );
+
+            // While this runtime plugin does not contain the config value, `ServiceRuntimePlugin`
+            // will eventually provide it when a config bag is fully set up in the orchestrator.
+            assert!(sut.config().is_some_and(|cfg| cfg
+                .load::<crate::config::DisableS3ExpressSessionAuth>()
+                .is_none()));
+        }
+
+        #[test]
+        fn disable_option_set_from_env_should_take_the_second_highest_precedence() {
+            // No disable option is set from service client.
+            let layer = CloneableLayer::new("test");
+
+            // An environment variable says session auth is disabled
+            let sut = S3ExpressRuntimePlugin::new_with(
+                &layer,
+                Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
+            );
+
+            let cfg = sut.config().unwrap();
+            assert!(
+                cfg.load::<crate::config::DisableS3ExpressSessionAuth>()
+                    .unwrap()
+                    .0
+            );
+        }
+
+        // TODO(S3Express depending on aws-sdk-rust#1060): Add a unit test that only sets
+        //  `s3_disable_express_session_auth` in a profile file
+
+        #[test]
+        fn disable_option_should_be_unspecified_if_unset() {
+            // No disable option is set from service client.
+            let layer = CloneableLayer::new("test");
+
+            // An environment variable says session auth is disabled
+            let sut = S3ExpressRuntimePlugin::new_with(&layer, Env::from_slice(&[]));
+
+            let cfg = sut.config().unwrap();
+            assert!(cfg
+                .load::<crate::config::DisableS3ExpressSessionAuth>()
+                .is_none());
+        }
+    }
+}
