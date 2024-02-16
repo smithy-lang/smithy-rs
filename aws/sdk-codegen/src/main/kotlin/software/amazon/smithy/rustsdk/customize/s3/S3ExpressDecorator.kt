@@ -137,6 +137,7 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                     AwsRuntimeType.awsCredentialTypes(runtimeConfig)
                         .resolve("provider::ProvideCredentials"),
                 ),
+            "S3ExpressRuntimePlugin" to s3ExpressModule(runtimeConfig).resolve("runtime_plugin::S3ExpressRuntimePlugin"),
             "SharedCredentialsProvider" to
                 configReexport(
                     AwsRuntimeType.awsCredentialTypes(runtimeConfig)
@@ -173,6 +174,17 @@ class S3ExpressIdentityProviderConfig(codegenContext: ClientCodegenContext) : Co
                             }
                             self
                         }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                ServiceConfig.BuilderBuild -> {
+                    rustTemplate(
+                        """
+                        self.runtime_plugins.push(
+                            #{S3ExpressRuntimePlugin}::new(&layer).into_shared(),
+                        );
                         """,
                         *codegenScope,
                     )
