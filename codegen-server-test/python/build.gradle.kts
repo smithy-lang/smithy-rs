@@ -116,7 +116,7 @@ tasks.register("stubs") {
     }
 }
 
-tasks["jar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()

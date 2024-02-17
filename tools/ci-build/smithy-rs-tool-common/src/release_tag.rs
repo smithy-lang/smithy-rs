@@ -87,23 +87,20 @@ impl fmt::Display for ReleaseTag {
 
 impl Ord for ReleaseTag {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other)
-            .expect("Tag::partial_cmp never returns None")
+        match (self, other) {
+            (ReleaseTag::Date(_), ReleaseTag::Version(_)) => Ordering::Greater,
+            (ReleaseTag::Version(_), ReleaseTag::Date(_)) => Ordering::Less,
+            (ReleaseTag::Date(lhs), ReleaseTag::Date(rhs)) => {
+                lhs.date.cmp(&rhs.date).then(lhs.suffix.cmp(&rhs.suffix))
+            }
+            (ReleaseTag::Version(lhs), ReleaseTag::Version(rhs)) => lhs.version.cmp(&rhs.version),
+        }
     }
 }
 
 impl PartialOrd for ReleaseTag {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (ReleaseTag::Date(_), ReleaseTag::Version(_)) => Some(Ordering::Greater),
-            (ReleaseTag::Version(_), ReleaseTag::Date(_)) => Some(Ordering::Less),
-            (ReleaseTag::Date(lhs), ReleaseTag::Date(rhs)) => {
-                Some(lhs.date.cmp(&rhs.date).then(lhs.suffix.cmp(&rhs.suffix)))
-            }
-            (ReleaseTag::Version(lhs), ReleaseTag::Version(rhs)) => {
-                Some(lhs.version.cmp(&rhs.version))
-            }
-        }
+        Some(self.cmp(other))
     }
 }
 

@@ -1,4 +1,34 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 15th, 2024
+===================
+**Breaking Changes:**
+- :bug::warning: (client, [smithy-rs#3405](https://github.com/smithy-lang/smithy-rs/issues/3405), [smithy-rs#3400](https://github.com/smithy-lang/smithy-rs/issues/3400), [smithy-rs#3258](https://github.com/smithy-lang/smithy-rs/issues/3258)) Fix bug where timeout settings where not merged properly. This will add a default connect timeout of 3.1s seconds for most clients.
+
+    [**For more details see the long-form changelog discussion**](https://github.com/smithy-lang/smithy-rs/discussions/3408).
+
+**New this release:**
+- (all, [aws-sdk-rust#977](https://github.com/awslabs/aws-sdk-rust/issues/977), [smithy-rs#3365](https://github.com/smithy-lang/smithy-rs/issues/3365), [smithy-rs#3373](https://github.com/smithy-lang/smithy-rs/issues/3373)) Add `try_into_http1x` and `try_from_http1x` to Request and Response container types.
+- (client, [smithy-rs#3336](https://github.com/smithy-lang/smithy-rs/issues/3336), [smithy-rs#3391](https://github.com/smithy-lang/smithy-rs/issues/3391), @iampkmone) Added impl `Display` to Enums.
+- :bug: (all, [smithy-rs#3322](https://github.com/smithy-lang/smithy-rs/issues/3322)) Retry classifiers will now be sorted by priority. This change only affects requests
+    that are retried. Some requests that were previously been classified as transient
+    errors may now be classified as throttling errors.
+
+    If you were
+
+    - configuring multiple custom retry classifiers
+    - that would disagree on how to classify a response
+    - that have differing priorities
+
+    you may see a behavior change in that classification for the same response is now
+    dependent on the classifier priority instead of the order in which the classifier
+    was added.
+- :bug: (client, [smithy-rs#3402](https://github.com/smithy-lang/smithy-rs/issues/3402)) Cap the maximum jitter fraction for identity cache refresh buffer time to 0.5. It was previously 1.0, and if the fraction was randomly set to 1.0, it was equivalent to disregarding the buffer time for cache refresh.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @iampkmone ([smithy-rs#3336](https://github.com/smithy-lang/smithy-rs/issues/3336), [smithy-rs#3391](https://github.com/smithy-lang/smithy-rs/issues/3391))
+
+
 February 8th, 2024
 ==================
 
