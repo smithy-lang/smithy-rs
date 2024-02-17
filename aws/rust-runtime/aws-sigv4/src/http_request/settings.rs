@@ -30,9 +30,6 @@ pub struct SigningSettings {
     /// Headers that should be excluded from the signing process
     pub excluded_headers: Option<Vec<Cow<'static, str>>>,
 
-    /// Query params that should be excluded from the signing process
-    pub excluded_params: Option<Vec<Cow<'static, str>>>,
-
     /// Specifies whether the absolute path component of the URI should be normalized during signing.
     pub uri_path_normalization_mode: UriPathNormalizationMode,
 
@@ -138,7 +135,6 @@ impl Default for SigningSettings {
             signature_location: SignatureLocation::Headers,
             expires_in: None,
             excluded_headers,
-            excluded_params: None,
             uri_path_normalization_mode: UriPathNormalizationMode::Enabled,
             session_token_mode: SessionTokenMode::Include,
             session_token_name_override: None,
