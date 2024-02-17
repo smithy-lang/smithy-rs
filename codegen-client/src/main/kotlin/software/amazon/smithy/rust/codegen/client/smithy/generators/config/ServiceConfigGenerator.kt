@@ -80,6 +80,9 @@ sealed class ServiceConfig(name: String) : Section(name) {
     /** impl block of `ConfigBuilder` **/
     object BuilderImpl : ServiceConfig("BuilderImpl")
 
+    // It is important to ensure through type system that each field added to config implements this injection,
+    // tracked by smithy-rs#3419
+
     /**
      * Load a value from a config bag and store it in ConfigBuilder
      *  e.g.

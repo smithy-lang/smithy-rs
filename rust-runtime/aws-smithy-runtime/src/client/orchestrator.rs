@@ -30,7 +30,7 @@ use aws_smithy_runtime_api::client::ser_de::{
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::timeout::TimeoutConfig;
+use aws_smithy_types::timeout::{MergeTimeoutConfig, TimeoutConfig};
 use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
@@ -192,6 +192,16 @@ fn apply_configuration(
         .merge_from(&client_rc_builder)
         .merge_from(&operation_rc_builder)
         .build()?;
+
+    // In an ideal world, we'd simply update `cfg.load` to behave this way. Unfortunately, we can't
+    // do that without a breaking change. By overwriting the value in the config bag with a merged
+    // version, we can achieve a very similar behavior. `MergeTimeoutConfig`
+    let resolved_timeout_config = cfg.load::<MergeTimeoutConfig>();
+    tracing::debug!(
+        "timeout settings for this operation: {:?}",
+        resolved_timeout_config
+    );
+    cfg.interceptor_state().store_put(resolved_timeout_config);
 
     components.validate_final_config(cfg)?;
     Ok(components)

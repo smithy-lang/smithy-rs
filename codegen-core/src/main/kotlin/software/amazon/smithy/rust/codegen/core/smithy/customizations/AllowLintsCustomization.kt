@@ -45,6 +45,8 @@ private val allowedClippyLints =
         "derive_partial_eq_without_eq",
         // Keeping errors small in a backwards compatible way is challenging
         "result_large_err",
+        // Difficult to avoid in generated code
+        "unnecessary_map_on_constructor",
     )
 
 private val allowedRustdocLints =

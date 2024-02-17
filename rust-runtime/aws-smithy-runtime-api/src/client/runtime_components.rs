@@ -453,6 +453,7 @@ impl RuntimeComponents {
     }
 
     // Needed for `impl ValidateConfig for SharedRetryClassifier {`
+    #[cfg(debug_assertions)]
     pub(crate) fn retry_classifiers_slice(&self) -> &[Tracked<SharedRetryClassifier>] {
         self.retry_classifiers.as_slice()
     }
@@ -931,6 +932,7 @@ impl<T> Tracked<T> {
         }
     }
 
+    #[cfg(debug_assertions)]
     pub(crate) fn value(&self) -> &T {
         &self.value
     }
