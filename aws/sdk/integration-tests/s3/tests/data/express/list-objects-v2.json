@@ -1,0 +1,193 @@
+{
+  "events": [
+    {
+      "connection_id": 0,
+      "action": {
+        "Request": {
+          "request": {
+            "uri": "https://s3express-test-bucket--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com/?session",
+            "headers": {
+              "amz-sdk-request": [
+                "attempt=1; max=1"
+              ],
+              "x-amz-user-agent": [
+                "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0"
+              ],
+              "x-amz-create-session-mode": [
+                "ReadWrite"
+              ],
+              "x-amz-date": [
+                "20090213T233130Z"
+              ],
+              "authorization": [
+                "AWS4-HMAC-SHA256 Credential=ANOTREAL/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-create-session-mode;x-amz-date;x-amz-user-agent, Signature=1f63e649e5433837f97c037489613e036b98bff8cdf8d7bcf24b770d041ac0b9"
+              ],
+              "user-agent": [
+                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+              ]
+            },
+            "method": "GET"
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Request"
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Response": {
+          "response": {
+            "Ok": {
+              "status": 200,
+              "headers": {
+                "x-amz-id-2": [
+                  "TQk2NSay"
+                ],
+                "x-amz-request-id": [
+                  "0033eada6b00018d568cbe9f0509499a7de17df8"
+                ],
+                "date": [
+                  "Mon, 29 Jan 2024 18:48:00 GMT"
+                ],
+                "content-type": [
+                  "application/xml"
+                ],
+                "content-length": [
+                  "333"
+                ],
+                "server": [
+                  "AmazonS3"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Data": {
+          "data": {
+            "Utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<CreateSessionResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Credentials><SessionToken>TESTSESSIONTOKEN</SessionToken><SecretAccessKey>TESTSECRETKEY</SecretAccessKey><AccessKeyId>ASIARTESTID</AccessKeyId><Expiration>2024-01-29T18:53:01Z</Expiration></Credentials></CreateSessionResult>"
+          },
+          "direction": "Response"
+        }
+      }
+    },
+    {
+      "connection_id": 0,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Response"
+        }
+      }
+    },
+    {
+      "connection_id": 1,
+      "action": {
+        "Request": {
+          "request": {
+            "uri": "https://s3express-test-bucket--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com/?list-type=2",
+            "headers": {
+              "authorization": [
+                "AWS4-HMAC-SHA256 Credential=ASIARTESTID/20090213/us-west-2/s3express/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-s3session-token;x-amz-user-agent, Signature=d1765aa7ec005607ba94fdda08c6739228d5ee14eb8316e80264c35649661a19"
+              ],
+              "x-amz-date": [
+                "20090213T233130Z"
+              ],
+              "amz-sdk-request": [
+                "attempt=1; max=3"
+              ],
+              "x-amz-user-agent": [
+                "aws-sdk-rust/0.123.test api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0"
+              ],
+              "x-amz-s3session-token": [
+                "TESTSESSIONTOKEN"
+              ],
+              "user-agent": [
+                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+              ]
+            },
+            "method": "GET"
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 1,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Request"
+        }
+      }
+    },
+    {
+      "connection_id": 1,
+      "action": {
+        "Response": {
+          "response": {
+            "Ok": {
+              "status": 200,
+              "headers": {
+                "content-type": [
+                  "application/xml"
+                ],
+                "date": [
+                  "Mon, 29 Jan 2024 18:48:00 GMT"
+                ],
+                "x-amz-request-id": [
+                  "0033eada6b00018d568cbf350509f775295f94b5"
+                ],
+                "x-amz-id-2": [
+                  "IltTpRJVF1U"
+                ],
+                "server": [
+                  "AmazonS3"
+                ],
+                "content-length": [
+                  "520"
+                ],
+                "x-amz-bucket-region": [
+                  "us-west-2"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "connection_id": 1,
+      "action": {
+        "Data": {
+          "data": {
+            "Utf8": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ListBucketResult xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"><Name>s3express-test-bucket--usw2-az1--x-s3</Name><Prefix/><KeyCount>1</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated><Contents><ChecksumAlgorithm>CRC32</ChecksumAlgorithm><ETag>&quot;b357dc928b454965a8dd11716a37dab8&quot;</ETag><Key>hello-world.txt</Key><LastModified>2024-01-29T18:32:24.000Z</LastModified><Size>14</Size><StorageClass>EXPRESS_ONEZONE</StorageClass></Contents></ListBucketResult>"
+          },
+          "direction": "Response"
+        }
+      }
+    },
+    {
+      "connection_id": 1,
+      "action": {
+        "Eof": {
+          "ok": true,
+          "direction": "Response"
+        }
+      }
+    }
+  ],
+  "docs": "traffic recording of executing list-objects-v2 against an S3 Express One Zone bucket",
+  "version": "V0"
+}
