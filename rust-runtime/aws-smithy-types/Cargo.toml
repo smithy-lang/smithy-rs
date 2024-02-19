@@ -53,7 +53,6 @@ tokio-util = { version = "0.7", optional = true }
 [dev-dependencies]
 base64 = "0.13.0"
 ciborium = { version = "0.2.1" }
-criterion = "0.5"
 lazy_static = "1.4"
 proptest = "1"
 rand = "0.8.4"
@@ -68,6 +67,8 @@ tokio = { version = "1.23.1", features = [
 ] }
 tokio-stream = "0.1.5"
 tempfile = "3.2.0"
+
+criterion = "0.5"
 
 [package.metadata.docs.rs]
 all-features = true

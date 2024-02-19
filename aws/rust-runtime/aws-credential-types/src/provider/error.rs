@@ -12,7 +12,7 @@ use std::time::Duration;
 /// Details for [`CredentialsError::CredentialsNotLoaded`]
 #[derive(Debug)]
 pub struct CredentialsNotLoaded {
-    source: Box<dyn Error + Send + Sync + 'static>,
+    source: Option<Box<dyn Error + Send + Sync + 'static>>,
 }
 
 /// Details for [`CredentialsError::ProviderTimedOut`] or [`AccessTokenError::ProviderTimedOut`]
@@ -86,8 +86,17 @@ impl CredentialsError {
     /// that the provider was configured in some way, but certain settings were invalid.
     pub fn not_loaded(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
         CredentialsError::CredentialsNotLoaded(CredentialsNotLoaded {
-            source: source.into(),
+            source: Some(source.into()),
         })
+    }
+
+    /// The credentials provider did not provide credentials
+    ///
+    /// This error indicates the credentials provider was not enable or no configuration was set.
+    /// This contrasts with [`invalid_configuration`](CredentialsError::InvalidConfiguration), indicating
+    /// that the provider was configured in some way, but certain settings were invalid.
+    pub fn not_loaded_no_source() -> Self {
+        CredentialsError::CredentialsNotLoaded(CredentialsNotLoaded { source: None })
     }
 
     /// An unexpected error occurred loading credentials from this provider
@@ -152,7 +161,9 @@ impl fmt::Display for CredentialsError {
 impl Error for CredentialsError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            CredentialsError::CredentialsNotLoaded(details) => Some(details.source.as_ref() as _),
+            CredentialsError::CredentialsNotLoaded(details) => {
+                details.source.as_ref().map(|s| s.as_ref() as _)
+            }
             CredentialsError::ProviderTimedOut(_) => None,
             CredentialsError::InvalidConfiguration(details) => Some(details.source.as_ref() as _),
             CredentialsError::ProviderError(details) => Some(details.source.as_ref() as _),

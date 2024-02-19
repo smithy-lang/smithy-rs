@@ -8,6 +8,30 @@ use smithy.test#httpRequestTests
 use smithy.test#httpResponseTests
 use smithy.framework#ValidationException
 
+// TODO(https://github.com/smithy-lang/smithy/pull/2132): Remove this test once it's fixed in Smithy
+apply AllQueryStringTypes @httpRequestTests([
+    {
+        id: "RestJsonZeroAndFalseQueryValuesFixed"
+        documentation: "Query values of 0 and false are serialized"
+        protocol: restJson1
+        method: "GET"
+        uri: "/AllQueryStringTypesInput"
+        body: ""
+        queryParams: [
+            "Integer=0"
+            "Boolean=false"
+        ]
+        params: {
+            queryInteger: 0
+            queryBoolean: false
+            queryParamsMapOfStringList: {
+                queryInteger: ["0"]
+                queryBoolean: ["false"]
+            }
+        }
+    }
+])
+
 apply QueryPrecedence @httpRequestTests([
     {
         id: "UrlParamsKeyEncoding",
