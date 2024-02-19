@@ -259,3 +259,128 @@ apply GetObject @httpRequestTests([
         }
     }
 ])
+
+apply ListObjectVersions @httpResponseTests([
+    {
+        id: "OutOfOrderVersions",
+        documentation: "This test validates behavior with flattened elements may appear out-of-order",
+        code: 200,
+        bodyMediaType: "application/xml",
+        protocol: "aws.protocols#restXml",
+        body: """
+        <?xml version="1.0"?>
+        <ListVersionsResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+          <Name>sdk-obj-versions-test</Name>
+          <Prefix/>
+          <KeyMarker/>
+          <VersionIdMarker/>
+          <MaxKeys>1000</MaxKeys>
+          <IsTruncated>false</IsTruncated>
+          <DeleteMarker>
+            <Key>build.gradle.kts</Key>
+            <VersionId>null</VersionId>
+            <IsLatest>true</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+          </DeleteMarker>
+          <Version>
+            <Key>build.gradle.kts</Key>
+            <VersionId>IfK9Z4.H5TLAtMxFrxN_C7rFEZbufF3V</VersionId>
+            <IsLatest>false</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <ETag>"99613b85e3f38b222c4ee548cde1e59d"</ETag>
+            <Size>6903</Size>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+            <StorageClass>STANDARD</StorageClass>
+          </Version>
+          <DeleteMarker>
+            <Key>file-2</Key>
+            <VersionId>o98RL6vmlOYiymftbX7wgy_4XWQG4AmY</VersionId>
+            <IsLatest>true</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+          </DeleteMarker>
+          <Version>
+            <Key>file-2</Key>
+            <VersionId>PSVAbvQihRdsNiktGothjGng7q.5ou9Q</VersionId>
+            <IsLatest>false</IsLatest>
+            <LastModified>2009-02-13T23:31:30Z</LastModified>
+            <ETag>"1727d9cb38dd325d9c12c973ef3675fc"</ETag>
+            <Size>14</Size>
+            <Owner>
+              <ID>c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34</ID>
+              <DisplayName>test-name</DisplayName>
+            </Owner>
+            <StorageClass>STANDARD</StorageClass>
+          </Version>
+        </ListVersionsResult>
+        """,
+            "params": {
+                "Name": "sdk-obj-versions-test",
+                "Prefix": "",
+                "KeyMarker": "",
+                "VersionIdMarker": "",
+                "MaxKeys": 1000,
+                "IsTruncated": false,
+                "DeleteMarkers": [
+                    {
+                        "Key": "build.gradle.kts",
+                        "VersionId": "null",
+                        "IsLatest": true,
+                        "LastModified": 1234567890,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        }
+                    },
+                    {
+                        "Key": "file-2",
+                        "VersionId": "o98RL6vmlOYiymftbX7wgy_4XWQG4AmY",
+                        "IsLatest": true,
+                        "LastModified": 1234567890,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        }
+                    }
+                ],
+                "Versions": [
+                    {
+                        "Key": "build.gradle.kts",
+                        "VersionId": "IfK9Z4.H5TLAtMxFrxN_C7rFEZbufF3V",
+                        "IsLatest": false,
+                        "LastModified": 1234567890,
+                        "ETag": "\"99613b85e3f38b222c4ee548cde1e59d\"",
+                        "Size": 6903,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        },
+                        "StorageClass": "STANDARD"
+                    },
+                    {
+                        "Key": "file-2",
+                        "VersionId": "PSVAbvQihRdsNiktGothjGng7q.5ou9Q",
+                        "IsLatest": false,
+                        "LastModified": 1234567890,
+                        "ETag": "\"1727d9cb38dd325d9c12c973ef3675fc\"",
+                        "Size": 14,
+                        "Owner": {
+                            "ID": "c1665459250c459f1849ddce9b291fc3a72bcf5220dc8f6391a0a1045c683b34",
+                            "DisplayName": "test-name"
+                        },
+                        "StorageClass": "STANDARD"
+                    }
+                ]
+            }
+}]
+)
