@@ -55,6 +55,9 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wasmtime = { version = "16.0.0", features = ["component-model"] }
+wasmtime-wasi = "16.0.0"
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
@@ -62,6 +65,7 @@ const REQUIRED_SDK_CRATES: &[&str] = &[
     "aws-sdk-s3",
     "aws-sdk-ec2",
     "aws-sdk-transcribestreaming",
+    "aws-smithy-wasm",
 ];
 
 // The elements in this `Vec` should be sorted in an ascending order by the release date.
@@ -258,6 +262,11 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
     let crate_manifest_content = generate_crate_manifest(crate_source)?;
     fs::write(&manifest_path, crate_manifest_content).context("failed to write Cargo.toml")?;
 
+    let wasm_manifest_path = std::env::current_dir()
+        .expect("Current dir")
+        .join("../canary-wasm/Cargo.toml");
+
+    println!("MAINFEST PATH: {wasm_manifest_path:#?}");
     if !opt.manifest_only {
         // Compile the canary Lambda
         let mut command = Command::new("cargo");
@@ -271,6 +280,16 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         }
         handle_failure("cargo build", &command.output()?)?;
 
+        // Compile the wasm canary to a .wasm binary
+        let mut wasm_command = Command::new("cargo");
+        wasm_command
+            .arg("component")
+            .arg("build")
+            .arg("--release")
+            .arg("--manifest-path")
+            .arg(&wasm_manifest_path);
+        handle_failure("cargo build", &wasm_command.output()?)?;
+
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
         let target_path = {
@@ -279,6 +298,14 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
                 path = path.join("x86_64-unknown-linux-musl");
             }
             path.join("release")
+        };
+        let wasm_bin_path = {
+            repository_root
+                .join("tools")
+                .join("target")
+                .join("wasm32-wasi")
+                .join("release")
+                .join("aws_sdk_rust_lambda_canary_wasm.wasm")
         };
         let bin_path = target_path.join("bootstrap");
         let bundle_path = target_path.join(name_bundle(
@@ -289,12 +316,22 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
 
         let zip_file = fs::File::create(&bundle_path).context(here!())?;
         let mut zip = zip::ZipWriter::new(zip_file);
+        //Write the canary bin to the zip
         zip.start_file(
             "bootstrap",
             zip::write::FileOptions::default().unix_permissions(0o755),
         )
         .context(here!())?;
         zip.write_all(&fs::read(&bin_path).context(here!("read target"))?)
+            .context(here!())?;
+        
+        // Write the wasm bin to the zip
+        zip.start_file(
+            "aws_sdk_rust_lambda_canary_wasm.wasm",
+            zip::write::FileOptions::default().unix_permissions(0o755),
+        )
+        .context(here!())?;
+        zip.write_all(&fs::read(&wasm_bin_path).context(here!("read wasm bin"))?)
             .context(here!())?;
         zip.finish().context(here!())?;
 
@@ -453,10 +490,12 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3" }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
 aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
+aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
 
 [features]
 latest = []
@@ -518,10 +557,12 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
+wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "0.20.0"
 aws-sdk-ec2 = "0.19.0"
 aws-sdk-transcribestreaming = "0.16.0"
+aws-smithy-wasm = "0.1.0"
 
 [features]
 latest = []
@@ -538,6 +579,7 @@ default = ["latest"]
                         crate_version("aws-sdk-s3", "0.20.0"),
                         crate_version("aws-sdk-ec2", "0.19.0"),
                         crate_version("aws-sdk-transcribestreaming", "0.16.0"),
+                        crate_version("aws-smithy-wasm", "0.1.0"),
                     ]
                     .into_iter()
                     .collect(),
