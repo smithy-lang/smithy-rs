@@ -25,6 +25,9 @@ tempfile = "3.9.0"
 toml = { version = "0.5.8", features = ["preserve_order"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+# why both? cargo_toml can't write out to a file because of a toml_rs longstanding issue/bug
+cargo_toml = "0.19.0"
+toml_edit = "0.22"
 
 [dev-dependencies]
 test-common = { path = "./test-common" }

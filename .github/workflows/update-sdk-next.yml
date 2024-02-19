@@ -45,7 +45,7 @@ jobs:
     - name: Set up Rust
       uses: dtolnay/rust-toolchain@master
       with:
-        toolchain: 1.72.1
+        toolchain: 1.74.1
     - name: Delete old SDK
       run: |
     - name: Generate a fresh SDK

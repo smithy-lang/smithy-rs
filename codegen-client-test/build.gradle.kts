@@ -29,6 +29,11 @@ dependencies {
     implementation("software.amazon.smithy:smithy-aws-traits:$smithyVersion")
 }
 
+// Disabled because the formatter was remove formatting from our `body` sections.
+smithy {
+    format.set(false)
+}
+
 data class ClientTest(
     val serviceShapeName: String,
     val moduleName: String,
@@ -118,7 +123,7 @@ project.registerGenerateCargoConfigTomlTask(layout.buildDirectory.dir(workingDir
 
 tasks["generateSmithyBuild"].inputs.property("smithy.runtime.mode", getSmithyRuntimeMode())
 
-tasks["jar"].dependsOn("generateSmithyBuild")
+tasks["smithyBuild"].dependsOn("generateSmithyBuild")
 tasks["assemble"].finalizedBy("generateCargoWorkspace")
 
 project.registerModifyMtimeTask()
