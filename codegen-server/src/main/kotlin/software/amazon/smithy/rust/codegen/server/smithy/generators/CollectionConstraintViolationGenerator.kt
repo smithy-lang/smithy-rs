@@ -6,9 +6,12 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.model.shapes.CollectionShape
+import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
@@ -80,9 +83,23 @@ class CollectionConstraintViolationGenerator(
                 ${constraintViolationVisibility.toRustQualifier()} enum $constraintViolationName {
                     #{ConstraintViolationVariants:W}
                 }
+                
+                impl #{Display} for $constraintViolationName {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        let message = match self {
+                            #{VariantDisplayMessages:W}
+                        };
+                        write!(f, "{message}")
+                    }
+                }
+                
+                impl #{Error} for $constraintViolationName {}
                 """,
                 "ConstraintViolationVariants" to constraintViolationVariants.join(",\n"),
-            )
+                "Error" to RuntimeType.StdError,
+                "Display" to RuntimeType.Display,
+                "VariantDisplayMessages" to generateDisplayMessageForEachVariant(shape.isReachableFromOperationInput() && isMemberConstrained),
+                )
 
             if (shape.isReachableFromOperationInput()) {
                 rustTemplate(
@@ -96,4 +113,20 @@ class CollectionConstraintViolationGenerator(
             }
         }
     }
+
+    private fun generateDisplayMessageForEachVariant(memberConstraintVariantPresent: Boolean) =
+        writable {
+            collectionConstraintsInfo.forEach {
+                it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+            }
+
+            if (memberConstraintVariantPresent) {
+                rustTemplate(
+                    """
+                    Self::Member(index, failing_member) => format!("Value at index {index} failed to satisfy constraint. {}",
+                       failing_member)
+                    """
+                )
+            }
+        }
 }

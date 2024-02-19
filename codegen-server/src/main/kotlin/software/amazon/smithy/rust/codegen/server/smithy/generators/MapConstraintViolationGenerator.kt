@@ -90,7 +90,7 @@ class MapConstraintViolationGenerator(
                     ${if (keyConstraintViolationExists) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
                     ${if (valueConstraintViolationExists) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
                 }
-            
+                
                 impl #{Display} for $constraintViolationName {
                     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                         return match self {
@@ -99,6 +99,8 @@ class MapConstraintViolationGenerator(
                         };
                     }
                 }
+                
+                impl #{Error} for $constraintViolationName {}
                 """,
                 *constraintViolationCodegenScope,
                 "LengthMatchingArm" to lengthMatchingArm(),
