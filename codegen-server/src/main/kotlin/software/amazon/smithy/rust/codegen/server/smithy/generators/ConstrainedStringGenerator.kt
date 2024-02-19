@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
@@ -30,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
 import software.amazon.smithy.rust.codegen.core.smithy.testModuleForShape
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.PANIC
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
@@ -37,6 +39,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.supportedStringConstraintTraits
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
@@ -126,7 +129,6 @@ class ConstrainedStringGenerator(
                 }
             }
 
-
             impl #{From}<$name> for $inner {
                 fn from(value: $name) -> Self {
                     value.into_inner()
@@ -158,8 +160,22 @@ class ConstrainedStringGenerator(
             pub enum ${constraintViolation.name} {
                 #{Variants:W}
             }
+
+            impl #{Display} for ${constraintViolation.name} {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let message = match self {
+                        #{VariantDisplayMessages:W}
+                    };
+                    write!(f, "{message}")
+                }
+            }
+
+            impl #{Error} for ${constraintViolation.name} {}
             """,
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
+            "Error" to RuntimeType.StdError,
+            "Display" to RuntimeType.Display,
+            "VariantDisplayMessages" to generateDisplayMessageForEachVariant()
         )
 
         if (shape.isReachableFromOperationInput()) {
@@ -171,6 +187,12 @@ class ConstrainedStringGenerator(
                 """,
                 "StringShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.stringShapeConstraintViolationImplBlock(stringConstraintsInfo),
             )
+        }
+    }
+
+    private fun generateDisplayMessageForEachVariant() = writable {
+        stringConstraintsInfo.forEach {
+            it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
         }
     }
 
@@ -191,7 +213,7 @@ class ConstrainedStringGenerator(
     }
 }
 
-data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
+data class Length(val lengthTrait: LengthTrait, val isSensitive: Boolean) : StringTraitInfo() {
     override fun toTraitInfo(): TraitInfo =
         TraitInfo(
             tryFromCheck = { rust("Self::check_length(&value)?;") },
@@ -239,6 +261,16 @@ data class Length(val lengthTrait: LengthTrait) : StringTraitInfo() {
                 """,
             )
         }
+
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) = writable {
+        rustTemplate(
+            """
+            Self::Length(${if (isSensitive) "_" else "length"}) => {
+                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
+            },
+            """
+        )
+    }
 }
 
 data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSensitive: Boolean) : StringTraitInfo() {
@@ -283,7 +315,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         return writable {
             rust(
                 """
-                format!("Value at '{}' failed to satisfy constraint: Member must satisfy regular expression pattern: {}", &path, r##"$pattern"##)
+                format!("${patternTrait.validationErrorMessage()}", &path)
                 """,
             )
         }
@@ -297,7 +329,7 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         constraintViolation: Symbol,
         unconstrainedTypeName: String,
     ): Writable {
-        val pattern = patternTrait.pattern
+        val pattern = patternTrait.pattern.toString().replace("#", "##")
         val errorMessageForUnsupportedRegex =
             """The regular expression $pattern is not supported by the `regex` crate; feel free to file an issue under https://github.com/smithy-lang/smithy-rs/issues for support"""
 
@@ -327,6 +359,16 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
             )
         }
     }
+
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) = writable {
+        rustTemplate(
+            """
+            Self::Pattern(${if (isSensitive) "_" else "pattern"}) => {
+                format!("${patternTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "pattern"})
+            },
+            """
+        )
+    }
 }
 
 sealed class StringTraitInfo {
@@ -341,7 +383,7 @@ sealed class StringTraitInfo {
             }
 
             is LengthTrait -> {
-                Length(trait)
+                Length(trait, isSensitive)
             }
 
             else -> PANIC("StringTraitInfo.fromTrait called with unsupported trait $trait")
@@ -349,4 +391,5 @@ sealed class StringTraitInfo {
     }
 
     abstract fun toTraitInfo(): TraitInfo
+    abstract fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model): Writable
 }

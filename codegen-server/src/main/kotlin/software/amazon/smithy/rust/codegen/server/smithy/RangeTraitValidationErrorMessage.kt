@@ -5,14 +5,13 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.traits.RangeTrait
-import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 
 fun RangeTrait.validationErrorMessage() =
     "Value at '{}' failed to satisfy constraint: Member must be ${this.rangeDescription()}"
-fun RangeTrait.shapeValueValidationErrorMessage(shape: Shape) =
+
+fun RangeTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     "Value for `${shape.id.toString().replace("#", "##")}` is not valid. It must be ${this.rangeDescription()}"
 
 fun RangeTrait.rangeDescription() =

@@ -31,7 +31,7 @@ import software.amazon.smithy.rust.codegen.core.util.shouldRedact
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.shapeValueValidationErrorMessage
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
@@ -134,8 +134,22 @@ class ConstrainedBlobGenerator(
             pub enum ${constraintViolation.name} {
               #{Variants:W}
             }
+
+            impl #{Display} for ${constraintViolation.name} {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    let message = match self {
+                        #{VariantDisplayMessages:W}
+                    };
+                    write!(f, "{message}")
+                }
+            }
+
+            impl #{Error} for ${constraintViolation.name} {}
             """,
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
+            "Error" to RuntimeType.StdError,
+            "Display" to RuntimeType.Display,
+            "VariantDisplayMessages" to generateDisplayMessageForEachVariant()
         )
 
         if (shape.isReachableFromOperationInput()) {
@@ -144,29 +158,15 @@ class ConstrainedBlobGenerator(
                 impl ${constraintViolation.name} {
                     #{BlobShapeConstraintViolationImplBlock}
                 }
-                
-                impl #{Display} for ${constraintViolation.name} {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        let message = match self {
-                            #{VariantDisplayMessages:W}
-                        };
-                        write!(f, "{message}")
-                    }
-                }
-
-                impl #{Error} for ${constraintViolation.name} {}
                 """,
                 "BlobShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.blobShapeConstraintViolationImplBlock(blobConstraintsInfo),
-                "Error" to RuntimeType.StdError,
-                "Display" to RuntimeType.Display,
-                "VariantDisplayMessages" to generateDisplayMessageForEachVariant()
             )
         }
     }
 
     private fun generateDisplayMessageForEachVariant() = writable {
         blobConstraintsInfo.forEach {
-            it.generateShapeValueValidationMessage(shape, model).invoke(this)
+            it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
         }
     }
 }
@@ -174,7 +174,7 @@ class ConstrainedBlobGenerator(
 // Each type of constraint that can be put on a Blob must implement the BlobConstraintGenerator
 // interface. This allows the
 interface BlobConstraintGenerator {
-    fun generateShapeValueValidationMessage(shape: Shape, model: Model) : Writable
+    fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) : Writable
 }
 
 data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : BlobConstraintGenerator {
@@ -186,15 +186,10 @@ data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : 
                 rust("Length(usize)")
             },
             {
-                val (varName, formatParameter) = if (isSensitive) {
-                    "_" to REDACTION
-                } else {
-                    "length" to "length"
-                }
                 rustTemplate(
                     """
-                    Self::Length(${varName}) => crate::model::ValidationExceptionField {
-                        message: format!("${lengthTrait.validationErrorMessage()}", ${formatParameter}, &path),
+                    Self::Length(${if (isSensitive) "_" else "length"}) => crate::model::ValidationExceptionField {
+                        message: format!("${lengthTrait.validationErrorMessage()}", ${if (isSensitive) REDACTION else "length"}, &path),
                         path,
                     },
                     """,
@@ -227,21 +222,13 @@ data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : 
             )
         }
 
-    override fun generateShapeValueValidationMessage(shape: Shape, model: Model) = writable {
+    override fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) = writable {
         rustTemplate(
-            if (isSensitive) {
-                """
-                Self::Length(_) => {
-                    format!("${lengthTrait.shapeValueValidationErrorMessage(shape)}", ${REDACTION})
-                },
-                """
-            } else {
-                """
-                Self::Length(length) => {
-                    format!("${lengthTrait.shapeValueValidationErrorMessage(shape)}", length)
-                },
-                """
-            }
+            """
+            Self::Length(${if (isSensitive) "_" else "length"}) => {
+                format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
+            },
+            """
         )
     }
 }
