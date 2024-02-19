@@ -8,14 +8,20 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.LengthTrait
+import software.amazon.smithy.model.traits.SensitiveTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.makeRustBoxed
+import software.amazon.smithy.rust.codegen.core.util.REDACTION
+import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.ConstraintViolationRustBoxTrait
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 
@@ -84,8 +90,20 @@ class MapConstraintViolationGenerator(
                     ${if (keyConstraintViolationExists) "##[doc(hidden)] Key(#{KeyConstraintViolationSymbol})," else ""}
                     ${if (valueConstraintViolationExists) "##[doc(hidden)] Value(#{KeySymbol}, #{ValueConstraintViolationSymbol})," else ""}
                 }
+            
+                impl #{Display} for $constraintViolationName {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        return match self {
+                            ${if (shape.hasTrait<LengthTrait>()) "#{LengthMatchingArm}" else ""}
+                            ${if ((keyConstraintViolationExists) || (valueConstraintViolationExists)) """other => write!(f, "{}", other),""" else ""}
+                        };
+                    }
+                }
                 """,
                 *constraintViolationCodegenScope,
+                "LengthMatchingArm" to lengthMatchingArm(),
+                "Error" to RuntimeType.StdError,
+                "Display" to RuntimeType.Display,
             )
 
             if (shape.isReachableFromOperationInput()) {
@@ -107,4 +125,18 @@ class MapConstraintViolationGenerator(
             }
         }
     }
+
+    private fun lengthMatchingArm() =
+        writable {
+            shape.getTrait<LengthTrait>()?.let {
+                val isSensitive = shape.hasTrait<SensitiveTrait>()
+                rustTemplate(
+                    """
+                Self::Length(${if (isSensitive) "_" else "length"}) => {
+                    write!(f, "${it.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
+                },
+                """,
+                )
+            }
+        }
 }

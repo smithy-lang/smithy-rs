@@ -31,9 +31,9 @@ import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.server.smithy.InlineModuleCreator
 import software.amazon.smithy.rust.codegen.server.smithy.PubCrateConstraintViolationSymbolProvider
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
-import software.amazon.smithy.rust.codegen.server.smithy.shapeConstraintViolationDisplayMessage
 
 /**
  * [ConstrainedNumberGenerator] generates a wrapper newtype holding a constrained number primitive.
@@ -163,7 +163,7 @@ class ConstrainedNumberGenerator(
                     }
                     """,
                     "NumberShapeConstraintViolationImplBlock" to validationExceptionConversionGenerator.numberShapeConstraintViolationImplBlock(rangeInfo),
-                    )
+                )
             }
         }
     }

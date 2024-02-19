@@ -15,7 +15,7 @@ fun LengthTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     """
     Value with length {} provided for '${shape.id.toString().replace("#", "##")}' failed to 
     satisfy constraint: Member must have length ${this.lengthDescription()}
-    """.trimIndent()
+    """.trimIndent().replace("\n", "")
 
 fun LengthTrait.lengthDescription() =
     if (this.min.isPresent && this.max.isPresent) {
@@ -26,4 +26,3 @@ fun LengthTrait.lengthDescription() =
         check(this.max.isPresent)
         "less than or equal to ${this.max.get()}"
     }
-

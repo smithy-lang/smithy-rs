@@ -149,7 +149,7 @@ class ConstrainedBlobGenerator(
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
             "Error" to RuntimeType.StdError,
             "Display" to RuntimeType.Display,
-            "VariantDisplayMessages" to generateDisplayMessageForEachVariant()
+            "VariantDisplayMessages" to generateDisplayMessageForEachVariant(),
         )
 
         if (shape.isReachableFromOperationInput()) {
@@ -164,17 +164,21 @@ class ConstrainedBlobGenerator(
         }
     }
 
-    private fun generateDisplayMessageForEachVariant() = writable {
-        blobConstraintsInfo.forEach {
-            it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+    private fun generateDisplayMessageForEachVariant() =
+        writable {
+            blobConstraintsInfo.forEach {
+                it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+            }
         }
-    }
 }
 
 // Each type of constraint that can be put on a Blob must implement the BlobConstraintGenerator
 // interface. This allows the
 interface BlobConstraintGenerator {
-    fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) : Writable
+    fun shapeConstraintViolationDisplayMessage(
+        shape: Shape,
+        model: Model,
+    ): Writable
 }
 
 data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : BlobConstraintGenerator {
@@ -222,13 +226,16 @@ data class BlobLength(val lengthTrait: LengthTrait, val isSensitive: Boolean) : 
             )
         }
 
-    override fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) = writable {
+    override fun shapeConstraintViolationDisplayMessage(
+        shape: Shape,
+        model: Model,
+    ) = writable {
         rustTemplate(
             """
             Self::Length(${if (isSensitive) "_" else "length"}) => {
                 format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
             },
-            """
+            """,
         )
     }
 }

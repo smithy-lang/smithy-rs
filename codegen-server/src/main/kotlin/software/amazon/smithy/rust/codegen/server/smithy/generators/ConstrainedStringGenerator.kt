@@ -175,7 +175,7 @@ class ConstrainedStringGenerator(
             "Variants" to constraintsInfo.map { it.constraintViolationVariant }.join(",\n"),
             "Error" to RuntimeType.StdError,
             "Display" to RuntimeType.Display,
-            "VariantDisplayMessages" to generateDisplayMessageForEachVariant()
+            "VariantDisplayMessages" to generateDisplayMessageForEachVariant(),
         )
 
         if (shape.isReachableFromOperationInput()) {
@@ -190,11 +190,12 @@ class ConstrainedStringGenerator(
         }
     }
 
-    private fun generateDisplayMessageForEachVariant() = writable {
-        stringConstraintsInfo.forEach {
-            it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+    private fun generateDisplayMessageForEachVariant() =
+        writable {
+            stringConstraintsInfo.forEach {
+                it.shapeConstraintViolationDisplayMessage(shape, model).invoke(this)
+            }
         }
-    }
 
     private fun renderTests(shape: Shape) {
         val testCases = TraitInfo.testCases(constraintsInfo)
@@ -262,13 +263,16 @@ data class Length(val lengthTrait: LengthTrait, val isSensitive: Boolean) : Stri
             )
         }
 
-    override fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) = writable {
+    override fun shapeConstraintViolationDisplayMessage(
+        shape: Shape,
+        model: Model,
+    ) = writable {
         rustTemplate(
             """
             Self::Length(${if (isSensitive) "_" else "length"}) => {
                 format!("${lengthTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "length"})
             },
-            """
+            """,
         )
     }
 }
@@ -360,13 +364,16 @@ data class Pattern(val symbol: Symbol, val patternTrait: PatternTrait, val isSen
         }
     }
 
-    override fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model) = writable {
+    override fun shapeConstraintViolationDisplayMessage(
+        shape: Shape,
+        model: Model,
+    ) = writable {
         rustTemplate(
             """
             Self::Pattern(${if (isSensitive) "_" else "pattern"}) => {
                 format!("${patternTrait.shapeConstraintViolationDisplayMessage(shape)}", ${if (isSensitive) REDACTION else "pattern"})
             },
-            """
+            """,
         )
     }
 }
@@ -391,5 +398,9 @@ sealed class StringTraitInfo {
     }
 
     abstract fun toTraitInfo(): TraitInfo
-    abstract fun shapeConstraintViolationDisplayMessage(shape: Shape, model: Model): Writable
+
+    abstract fun shapeConstraintViolationDisplayMessage(
+        shape: Shape,
+        model: Model,
+    ): Writable
 }

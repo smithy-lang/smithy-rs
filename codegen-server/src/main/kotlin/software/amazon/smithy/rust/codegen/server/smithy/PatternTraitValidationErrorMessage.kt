@@ -10,9 +10,8 @@ fun PatternTrait.shapeConstraintViolationDisplayMessage(shape: Shape) =
     """
     Value '{}' provided for `${shape.id.toString().replace("#", "##")}` failed to satisfy the constraint: 
     Member must match the regular expression pattern: ${this.patternDescription()}
-    """.trimIndent()
+    """.trimIndent().replace("\n", "")
 
 // A '#' character in the pattern needs to be replaced with "##" for the message to be used
 // as part of `rustTemplate`.
-fun PatternTrait.patternDescription() =
-    this.pattern.toString().replace("#", "##")
+fun PatternTrait.patternDescription() = this.pattern.toString().replace("#", "##")
