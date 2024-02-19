@@ -173,8 +173,8 @@ mod test {
         let expected_retry_config = RetryConfig::standard();
 
         assert_eq!(actual_retry_config, expected_retry_config);
-        // This is redundant but it's really important to make sure that
-        // we're setting these exact values by default so we check twice
+        // This is redundant, but it's really important to make sure that
+        // we're setting these exact values by default, so we check twice
         assert_eq!(actual_retry_config.max_attempts(), 3);
         assert_eq!(actual_retry_config.mode(), RetryMode::Standard);
     }

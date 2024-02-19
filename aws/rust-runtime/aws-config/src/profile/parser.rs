@@ -10,7 +10,7 @@ use aws_types::os_shim_internal::{Env, Fs};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -69,12 +69,34 @@ pub async fn load(
     Ok(ProfileSet::parse(source)?)
 }
 
+type SectionType = String;
+type SectionName = String;
+// One example of what this looks like in practice:
+// ```
+// {
+//   "services": { // section_type
+//     "foo": { // section_name
+//       "ec2": { // sub_properties_name
+//          "endpoint_url": "https://foo.example" // sub-properties
+//        },
+//       "s3": { "endpoint_url": "https://foo.example", "some_other_property": "a value" },
+//     },
+//     "bar": {
+//       "ec2": { "endpoint_url": "https://bar.example" },
+//     }
+// }
+// ```
+// Dictionaries in Rust man... No fun at all.
+type OtherSections =
+    HashMap<SectionType, HashMap<SectionName, HashMap<String, HashMap<String, String>>>>;
+
 /// A top-level configuration source containing multiple named profiles
 #[derive(Debug, Eq, Clone, PartialEq)]
 pub struct ProfileSet {
     profiles: HashMap<String, Profile>,
     selected_profile: Cow<'static, str>,
     sso_sessions: HashMap<String, SsoSession>,
+    other_sections: OtherSections,
 }
 
 impl ProfileSet {
@@ -153,6 +175,44 @@ impl ProfileSet {
         self.sso_sessions.get(name)
     }
 
+    /// Returns a list of all section names and their section type in tuple form e.g. `("profile", "user_a"), ("sso_session", "some_session"), ("services", "local_dev")`
+    ///
+    /// No sort order is guaranteed.
+    ///
+    /// # Example
+    ///
+    /// TODO add example
+    pub fn sections(&self) -> impl Iterator<Item = (&str, &str)> {
+        let other_sections = self
+            .other_sections
+            .iter()
+            .flat_map(|(k1, v)| v.keys().map(|k2| (k1.as_str(), k2.as_str())));
+        let profiles = self.profiles().map(|it| ("profile", it));
+        let sso_sessions = self.sso_sessions().map(|it| ("sso_session", it));
+
+        other_sections.chain(profiles).chain(sso_sessions)
+    }
+
+    /// Given a section type and name, retrieve the corresponding section, if it exists.
+    ///
+    /// # Example
+    ///
+    /// TODO Make this work for profile and sso_session
+    pub fn get_raw_section_with_properties<'a>(
+        &'a self,
+        section_type: &str,
+        section_name: &str,
+    ) -> Option<&HashMap<String, HashMap<String, String>>> {
+        match section_type {
+            "profile" => None,
+            "sso_session" => None,
+            _ => self
+                .other_sections
+                .get(section_type)
+                .and_then(|sections| sections.get(section_name)),
+        }
+    }
+
     fn parse(source: Source) -> Result<Self, ProfileParseError> {
         let mut base = ProfileSet::empty();
         base.selected_profile = source.profile;
@@ -168,6 +228,7 @@ impl ProfileSet {
             profiles: Default::default(),
             selected_profile: "default".into(),
             sso_sessions: Default::default(),
+            other_sections: Default::default(),
         }
     }
 }
@@ -389,7 +450,9 @@ mod test {
     };
     use crate::profile::profile_file::ProfileFileKind;
     use crate::profile::ProfileSet;
+    use crate::provider_config::ProviderConfig;
     use arbitrary::{Arbitrary, Unstructured};
+    use aws_types::os_shim_internal::{Env, Fs};
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;
@@ -595,5 +658,90 @@ mod test {
     struct ParserInput {
         config_file: Option<String>,
         credentials_file: Option<String>,
+    }
+
+    #[tokio::test]
+    async fn zelda_test() {
+        let _ = tracing_subscriber::fmt::try_init();
+        const CFG: &str = r#"[default]
+services = foo
+
+[services foo]
+s3 =
+  endpoint_url = http://localhost:3000
+  setting_a = foo
+  setting_b = bar
+
+ec2 =
+  endpoint_url = http://localhost:2000
+  setting_a = foo
+
+[services bar]
+ec2 =
+  endpoint_url = http://localhost:3000
+  setting_b = bar
+"#;
+        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+        let fs = Fs::from_slice(&[("config", CFG)]);
+
+        let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
+
+        let p = provider_config.try_profile().await.unwrap();
+        let all_sections: Vec<_> = p.sections().collect();
+        // One for the default profile, Two for the two services sections.
+        assert_eq!(all_sections.len(), 3);
+        assert!(all_sections.contains(&("services", "foo")));
+        assert!(all_sections.contains(&("services", "bar")));
+        assert!(all_sections.contains(&("profile", "default")));
+
+        let foo_properties = p
+            .get_raw_section_with_properties("services", "foo")
+            .unwrap();
+        assert_eq!(
+            "http://localhost:3000",
+            foo_properties
+                .get("s3")
+                .unwrap()
+                .get("endpoint_url")
+                .unwrap()
+        );
+        assert_eq!(
+            "foo",
+            foo_properties.get("s3").unwrap().get("setting_a").unwrap()
+        );
+        assert_eq!(
+            "bar",
+            foo_properties.get("s3").unwrap().get("setting_b").unwrap()
+        );
+
+        assert_eq!(
+            "http://localhost:2000",
+            foo_properties
+                .get("ec2")
+                .unwrap()
+                .get("endpoint_url")
+                .unwrap()
+        );
+        assert_eq!(
+            "foo",
+            foo_properties.get("ec2").unwrap().get("setting_a").unwrap()
+        );
+
+        let bar_properties = p
+            .get_raw_section_with_properties("services", "bar")
+            .unwrap();
+
+        assert_eq!(
+            "http://localhost:3000",
+            bar_properties
+                .get("ec2")
+                .unwrap()
+                .get("endpoint_url")
+                .unwrap()
+        );
+        assert_eq!(
+            "bar",
+            bar_properties.get("ec2").unwrap().get("setting_b").unwrap()
+        );
     }
 }

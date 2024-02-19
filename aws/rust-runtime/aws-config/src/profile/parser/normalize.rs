@@ -31,6 +31,11 @@ enum SectionKey<'a> {
     },
     /// `[sso-session name]`
     SsoSession { name: Cow<'a, str> },
+    /// Any other section like `[<key> <name>]`
+    Other {
+        key: Cow<'a, str>,
+        name: Cow<'a, str>,
+    },
 }
 
 impl<'a> SectionKey<'a> {
@@ -40,20 +45,25 @@ impl<'a> SectionKey<'a> {
             return SectionKey::Default { prefixed: false };
         } else if let Some((prefix, suffix)) = input.split_once(WHITESPACE) {
             let suffix = suffix.trim();
-            if prefix == PROFILE_PREFIX {
+            return if prefix == PROFILE_PREFIX {
                 if suffix == "default" {
-                    return SectionKey::Default { prefixed: true };
+                    SectionKey::Default { prefixed: true }
                 } else {
-                    return SectionKey::Profile {
+                    SectionKey::Profile {
                         name: suffix.into(),
                         prefixed: true,
-                    };
+                    }
                 }
             } else if prefix == SSO_SESSION_PREFIX {
-                return SectionKey::SsoSession {
+                SectionKey::SsoSession {
                     name: suffix.into(),
-                };
-            }
+                }
+            } else {
+                SectionKey::Other {
+                    key: prefix.into(),
+                    name: suffix.into(),
+                }
+            };
         }
 
         SectionKey::Profile {
@@ -87,16 +97,28 @@ impl<'a> SectionKey<'a> {
             SectionKey::SsoSession { name } => {
                 if validate_identifier(name).is_err() {
                     return Err(format!(
-                        "sso-session `{}` ignored because `{}` was not a valid identifier",
-                        name, name
+                        "sso-session `{name}` ignored because `{name}` was not a valid identifier",
                     ));
                 }
                 if let ProfileFileKind::Config = kind {
                     Ok(self)
                 } else {
                     Err(format!(
-                        "sso-session `{}` ignored sso-sessions must be in the AWS config file rather than the credentials file",
-                        name
+                        "sso-session `{name}` ignored sso-sessions must be in the AWS config file rather than the credentials file",
+                    ))
+                }
+            }
+            SectionKey::Other { key, name } => {
+                if validate_identifier(name).is_err() {
+                    return Err(format!(
+                        "section [{key} {name}] ignored because `{name}` was not a valid identifier",
+                    ));
+                }
+                if let ProfileFileKind::Config = kind {
+                    Ok(self)
+                } else {
+                    Err(format!(
+                        "section [{key} {name}] ignored; config must be in the AWS config file rather than the credentials file",
                     ))
                 }
             }
@@ -122,7 +144,7 @@ pub(super) fn merge_in(
         .map(|(name, properties)| (SectionKey::parse(name).valid_for(kind), properties));
 
     // remove invalid profiles & emit warning
-    // valid_sections contains only valid profiles but it may contain `[profile default]` and `[default]`
+    // valid_sections contains only valid profiles, but it may contain `[profile default]` and `[default]`
     // which must be filtered later
     let valid_sections = validated_sections
         .filter_map(|(name, properties)| match name {
@@ -161,6 +183,42 @@ pub(super) fn merge_in(
                 .sso_sessions
                 .entry(name.to_string())
                 .or_insert_with(|| SsoSession::new(name, Default::default())),
+            SectionKey::Other {
+                key: section_type,
+                name: section_name,
+            } => {
+                // services section
+                let sections = base
+                    .other_sections
+                    // get section by section type
+                    .entry(section_type.to_string())
+                    // if it doesn't exist, create new hashmap for that section type
+                    .or_default();
+                // get section by section name
+                let named_section = sections
+                    .entry(section_name.to_string())
+                    // if it doesn't exist, create new hashmap for that section name
+                    .or_default();
+
+                for (sub_properties_name, raw_sub_properties) in &raw_profile {
+                    tracing::info!("[{section_type} {section_name}].{sub_properties_name} = {raw_sub_properties}");
+                    // TODO do we need a more-specific validator for service IDs here?
+                    match validate_identifier(sub_properties_name.as_ref()).map(ToOwned::to_owned) {
+                        Ok(sub_properties_name) => {
+                            let sub_properties =
+                                named_section.entry(sub_properties_name).or_default();
+                            let raw_sub_properties = parse_sub_properties(raw_sub_properties);
+                            sub_properties.extend(raw_sub_properties);
+                        }
+                        Err(_) => {
+                            tracing::warn!("`[{section_type} {section_name}].{sub_properties_name} = {raw_sub_properties}` \
+                            ignored because `{sub_properties_name}` was not a valid identifier");
+                        }
+                    }
+                }
+
+                continue;
+            }
         };
         merge_into_base(section, raw_profile)
     }
@@ -173,7 +231,7 @@ fn merge_into_base(target: &mut dyn Section, profile: HashMap<Cow<'_, str>, Cow<
                 target.insert(k.to_owned(), Property::new(k.to_owned(), v.into()));
             }
             Err(_) => {
-                tracing::warn!(profile = %target.name(), key = ?k, "key ignored because `{}` was not a valid identifier", k);
+                tracing::warn!(profile = %target.name(), key = ?k, "key ignored because `{k}` was not a valid identifier");
             }
         }
     }
@@ -193,6 +251,27 @@ fn validate_identifier(input: &str) -> Result<&str, ()> {
         })
         .then_some(input)
         .ok_or(())
+}
+
+fn parse_sub_properties(sub_properties_str: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    for line in sub_properties_str
+        .split('\n')
+        .filter(|line| !line.is_empty())
+    {
+        let mut split = line.split('=');
+        let key = split
+            .next()
+            .map(|it| it.trim_matches(WHITESPACE).to_owned());
+        let value = split
+            .next()
+            .map(|it| it.trim_matches(WHITESPACE).to_owned());
+        if let (Some(key), Some(value)) = (key, value) {
+            map.insert(key, value);
+        }
+    }
+
+    map
 }
 
 #[cfg(test)]
