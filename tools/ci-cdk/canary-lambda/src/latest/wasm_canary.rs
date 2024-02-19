@@ -6,8 +6,9 @@
 use crate::{mk_canary, CanaryEnv};
 
 use wasmtime::component::{bindgen, Component, Linker};
-use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::sync::WasiCtxBuilder;
+use wasmtime::{Engine, Store};
+use wasmtime_wasi::preview2::WasiCtxBuilder;
+use wasmtime_wasi::WasiCtx;
 
 // mk_canary!("wasm", |sdk_config: &SdkConfig, env: &CanaryEnv| {
 //     wasm_canary()
@@ -27,7 +28,46 @@ bindgen!({
         export canary-interface;
     }
 ",
+with: {
+    "wasi:io/error": wasmtime_wasi::preview2::bindings::io::error,
+    "wasi:io/streams": wasmtime_wasi::preview2::bindings::io::streams,
+    "wasi:io/poll": wasmtime_wasi::preview2::bindings::io::poll,
+}
 });
+
+struct WasiHostCtx {
+    preview2_ctx: wasmtime_wasi::preview2::WasiCtx,
+    preview2_table: wasmtime::component::ResourceTable,
+    preview1_adapter: wasmtime_wasi::preview2::preview1::WasiPreview1Adapter,
+}
+
+impl wasmtime_wasi::preview2::WasiView for WasiHostCtx {
+    fn table(&self) -> &wasmtime::component::ResourceTable {
+        &self.preview2_table
+    }
+
+    fn ctx(&self) -> &wasmtime_wasi::preview2::WasiCtx {
+        &self.preview2_ctx
+    }
+
+    fn table_mut(&mut self) -> &mut wasmtime::component::ResourceTable {
+        &mut self.preview2_table
+    }
+
+    fn ctx_mut(&mut self) -> &mut wasmtime_wasi::preview2::WasiCtx {
+        &mut self.preview2_ctx
+    }
+}
+
+impl wasmtime_wasi::preview2::preview1::WasiPreview1View for WasiHostCtx {
+    fn adapter(&self) -> &wasmtime_wasi::preview2::preview1::WasiPreview1Adapter {
+        &self.preview1_adapter
+    }
+
+    fn adapter_mut(&mut self) -> &mut wasmtime_wasi::preview2::preview1::WasiPreview1Adapter {
+        &mut self.preview1_adapter
+    }
+}
 
 pub async fn wasm_canary() -> anyhow::Result<String> {
     let cur_dir = std::env::current_dir().expect("Current dir");
@@ -44,14 +84,27 @@ pub async fn wasm_canary() -> anyhow::Result<String> {
         cur_dir.join("aws_sdk_rust_lambda_canary_wasm.wasm"),
     )
     .expect("Failed to load wasm");
-    let linker = Linker::new(&engine);
-    // wasmtime_wasi::add_to_linker(&mut linker, |cx| cx)?;
+    let mut linker: Linker<WasiHostCtx> = Linker::new(&engine);
+    // wasmtime_wasi::preview2::preview1::add_to_linker_async(&mut linker);
+    // wasmtime_wasi::preview2::bindings::io::poll::add_to_linker(&mut linker, |cx| cx);
 
     // Configure and create a `WasiCtx`, which WASI functions need access to
     // through the host state of the store (which in this case is the host state
     // of the store)
-    let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build();
-    let mut store = Store::new(&engine, wasi_ctx);
+    let wasi_ctx = WasiCtxBuilder::new()
+        .inherit_stdio()
+        .inherit_stderr()
+        .inherit_stdout()
+        .inherit_network()
+        .build();
+
+    let host_ctx = WasiHostCtx {
+        preview2_ctx: wasi_ctx,
+        preview2_table: wasmtime_wasi::preview2::ResourceTable::new(),
+        preview1_adapter: wasmtime_wasi::preview2::preview1::WasiPreview1Adapter::new(),
+    };
+
+    let mut store: Store<WasiHostCtx> = Store::new(&engine, host_ctx);
 
     // Instantiate our module with the bindgen! bindings
     let (bindings, _) = CanaryWorld::instantiate(&mut store, &component, &linker)?;

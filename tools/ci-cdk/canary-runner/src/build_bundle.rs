@@ -56,8 +56,8 @@ tracing-texray = "0.1.1"
 reqwest = { version = "0.11.14", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
 wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
-wasmtime = { version = "16.0.0", features = ["component-model"] }
-wasmtime-wasi = "16.0.0"
+wasmtime = { version = "17.0.1", features = ["component-model"] }
+wasmtime-wasi = "17.0.1"
 "#;
 
 const REQUIRED_SDK_CRATES: &[&str] = &[
@@ -324,7 +324,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         .context(here!())?;
         zip.write_all(&fs::read(&bin_path).context(here!("read target"))?)
             .context(here!())?;
-        
+
         // Write the wasm bin to the zip
         zip.start_file(
             "aws_sdk_rust_lambda_canary_wasm.wasm",
