@@ -263,7 +263,7 @@ apply GetObject @httpRequestTests([
 apply ListObjectVersions @httpResponseTests([
     {
         id: "OutOfOrderVersions",
-        documentation: "This test validates behavior with flattened elements may appear out-of-order",
+        documentation: "Verify that interleaving list elements (DeleteMarker and Version) from different lists works",
         code: 200,
         bodyMediaType: "application/xml",
         protocol: "aws.protocols#restXml",
